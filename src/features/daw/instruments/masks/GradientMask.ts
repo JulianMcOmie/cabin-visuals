@@ -1,0 +1,61 @@
+import { Instrument } from '../types';
+
+export const GradientMask: Instrument = {
+  id: 'gradientMask',
+  name: 'Gradient Mask',
+  description: 'Directional gradient fade for soft wipe transitions',
+  icon: '▰',
+  color: '#d8b4fe',
+  hasAudio: false,
+  hasVisual: false,
+  editorType: 'generic',
+  defaultSettings: {
+    direction: 0,
+    softness: 0.3,
+    position: 0.5,
+    offsetX: 0,
+    offsetY: 0,
+  },
+  settingsSchema: {
+    direction: {
+      type: 'number',
+      label: 'Direction',
+      min: 0,
+      max: 360,
+      step: 1,
+      default: 0,
+    },
+    softness: {
+      type: 'number',
+      label: 'Softness',
+      min: 0.01,
+      max: 1,
+      step: 0.01,
+      default: 0.3,
+    },
+    position: {
+      type: 'number',
+      label: 'Position',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      default: 0.5,
+    },
+    offsetX: {
+      type: 'number',
+      label: 'Offset X',
+      min: -1,
+      max: 1,
+      step: 0.01,
+      default: 0,
+    },
+    offsetY: {
+      type: 'number',
+      label: 'Offset Y',
+      min: -1,
+      max: 1,
+      step: 0.01,
+      default: 0,
+    },
+  },
+};

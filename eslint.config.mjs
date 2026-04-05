@@ -27,7 +27,16 @@ const customRules = {
   },
 };
 
+// Relaxed rules for imported DAW feature code (from excellent-daw)
+const dawOverrides = {
+  files: ["src/features/daw/**/*.{ts,tsx}"],
+  rules: {
+    "react-hooks/rules-of-hooks": "warn",
+    "@typescript-eslint/no-require-imports": "off",
+  },
+};
+
 // Combine base configs and custom rules
-const eslintConfig = [...baseConfigs, customRules];
+const eslintConfig = [...baseConfigs, customRules, dawOverrides];
 
 export default eslintConfig;

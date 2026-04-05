@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useRef, Suspense } from 'react';
 import {
   Panel,
-  PanelGroup,
-  PanelResizeHandle,
-  ImperativePanelHandle
+  Group as PanelGroup,
+  Separator as PanelResizeHandle,
+  usePanelRef,
 } from 'react-resizable-panels';
 import TimelineView from '../../src/components/TimelineView/TimelineView';
 import VisualizerView from '../../src/components/VisualizerView';
@@ -24,7 +24,7 @@ import type { User } from '@supabase/supabase-js';
 function EditorPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const sidebarPanelRef = useRef<ImperativePanelHandle>(null);
+  const sidebarPanelRef = usePanelRef();
   const isInstrumentSidebarVisible = useStore((state) => state.isInstrumentSidebarVisible);
   const loadAudioAction = useStore((state) => state.loadAudio);
   const loadProject = useStore((state) => state.loadProject);
@@ -140,23 +140,23 @@ function EditorPageContent() {
           <PlaybarView user={user} />
         </div>
         
-        <PanelGroup direction="horizontal" className={`${styles.contentPanelGroup} flex-grow`}>
-          <Panel 
-            ref={sidebarPanelRef}
-            defaultSize={20} minSize={15} maxSize={35} 
-            collapsible={true} collapsedSize={0} 
-            id="sidebar-panel" order={1}
-            className={styles.panelStyles} 
+        <PanelGroup orientation="horizontal" className={`${styles.contentPanelGroup} flex-grow`}>
+          <Panel
+            panelRef={sidebarPanelRef}
+            defaultSize={20} minSize={15} maxSize={35}
+            collapsible={true} collapsedSize={0}
+            id="sidebar-panel"
+            className={styles.panelStyles}
           >
             <div className={styles.sidebarArea}>
               <InstrumentSidebar />
             </div>
           </Panel>
           <PanelResizeHandle className={`${styles.resizeHandle} ${styles.horizontalHandle}`} />
-          <Panel id="main-content-panel" order={2} className={styles.panelStyles}>
-            <PanelGroup direction="vertical" className={styles.mainContentPanelGroup}>
+          <Panel id="main-content-panel" className={styles.panelStyles}>
+            <PanelGroup orientation="vertical" className={styles.mainContentPanelGroup}>
               <Panel defaultSize={60} minSize={20} id="top-panel" className={styles.panelStyles}>
-                <PanelGroup direction="horizontal" className={styles.topPanelGroup}>
+                <PanelGroup orientation="horizontal" className={styles.topPanelGroup}>
                   <Panel defaultSize={50} minSize={20} id="detail-panel" className={styles.panelStyles}>
                     <div className={styles.detailContainer}>
                       <DetailView />
