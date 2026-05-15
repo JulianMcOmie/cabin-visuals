@@ -13,9 +13,10 @@ import PlaybarView from '../../src/components/PlaybarView/PlaybarView';
 import DetailView from '../../src/components/DetailView/DetailView';
 import AudioLoader from '../../src/components/AudioLoader/AudioLoader';
 import InstrumentSidebar from '../../src/components/InstrumentSidebar/InstrumentSidebar';
-import useStore from '../../src/store/store';
+import useStore, { initializeStore } from '../../src/store/store';
 import { loadAudioFile } from '../../src/lib/idbHelper';
-import { initializeStore } from '../../src/store/store';
+import BasicSynthesizer from '../../src/lib/synthesizers/BasicSynthesizer';
+import type { Track, MIDIBlock, MIDINote } from '../../src/lib/types';
 import styles from '../editor/editor.module.css';
 
 function AlphaPageContent() {
@@ -39,6 +40,27 @@ function AlphaPageContent() {
       setIsLoading(true);
       try {
         await initializeStore();
+
+        const note: MIDINote = { id: 'alpha-note-1', startBeat: 0, duration: 2, velocity: 100, pitch: 60 };
+        const block: MIDIBlock = { id: 'alpha-block-1', startBeat: 0, endBeat: 4, notes: [note] };
+        const track: Track = {
+          id: 'alpha-track-1',
+          name: 'Track 1',
+          isSoloed: false,
+          isMuted: false,
+          midiBlocks: [block],
+          synthesizer: new BasicSynthesizer(),
+          effects: [],
+        };
+        useStore.setState({
+          tracks: [track],
+          selectedTrackId: track.id,
+          selectedBlockId: null,
+          selectedTrack: track,
+          selectedBlock: null,
+          selectedNotes: null,
+        });
+
         const persistedFile = await loadAudioFile();
         if (persistedFile) {
           const arrayBuffer = await persistedFile.arrayBuffer();
