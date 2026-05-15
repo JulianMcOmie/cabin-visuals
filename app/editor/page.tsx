@@ -143,8 +143,8 @@ function EditorPageContent() {
         <PanelGroup orientation="horizontal" className={`${styles.contentPanelGroup} flex-grow`}>
           <Panel
             panelRef={sidebarPanelRef}
-            defaultSize={20} minSize={15} maxSize={35}
-            collapsible={true} collapsedSize={0}
+            defaultSize="20%" minSize="15%" maxSize="35%"
+            collapsible={true} collapsedSize="0%"
             id="sidebar-panel"
             className={styles.panelStyles}
           >
@@ -155,15 +155,15 @@ function EditorPageContent() {
           <PanelResizeHandle className={`${styles.resizeHandle} ${styles.horizontalHandle}`} />
           <Panel id="main-content-panel" className={styles.panelStyles}>
             <PanelGroup orientation="vertical" className={styles.mainContentPanelGroup}>
-              <Panel defaultSize={60} minSize={20} id="top-panel" className={styles.panelStyles}>
+              <Panel defaultSize="60%" minSize="20%" id="top-panel" className={styles.panelStyles}>
                 <PanelGroup orientation="horizontal" className={styles.topPanelGroup}>
-                  <Panel defaultSize={50} minSize={20} id="detail-panel" className={styles.panelStyles}>
+                  <Panel defaultSize="50%" minSize="20%" id="detail-panel" className={styles.panelStyles}>
                     <div className={styles.detailContainer}>
                       <DetailView />
                     </div>
                   </Panel>
                   <PanelResizeHandle className={`${styles.resizeHandle} ${styles.horizontalHandle}`} />
-                  <Panel minSize={20} id="visualizer-panel" className={styles.panelStyles}>
+                  <Panel minSize="20%" id="visualizer-panel" className={styles.panelStyles}>
                     <div className={styles.visualizerContainer}>
                       <VisualizerView />
                     </div>
@@ -171,7 +171,7 @@ function EditorPageContent() {
                 </PanelGroup>
               </Panel>
               <PanelResizeHandle className={`${styles.resizeHandle} ${styles.verticalHandle}`} />
-              <Panel defaultSize={40} minSize={20} id="timeline-panel" className={styles.panelStyles}>
+              <Panel defaultSize="40%" minSize="20%" id="timeline-panel" className={styles.panelStyles}>
                 <div className={styles.bottomSection}>
                   <div className={styles.timelineViewWrapper}>
                     <TimelineView />
