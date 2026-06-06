@@ -172,11 +172,13 @@ export default function EditorApp() {
       <Header />
       <div className="flex-1 flex min-h-0">
         <LeftSidebar />
-        <TrackEditor />
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 min-h-0 relative">
-            <BeatOverlay />
-            <Scene />
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex min-h-0">
+            <TrackEditor />
+            <div className="flex-1 min-h-0 relative">
+              <BeatOverlay />
+              <Scene />
+            </div>
           </div>
           <TimelineArea />
         </div>
