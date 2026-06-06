@@ -89,8 +89,9 @@ function Header() {
         {formatBeat(currentBeat, beatsPerBar)}
       </div>
 
-      <div className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-zinc-200 pointer-events-none select-none">
-        Cabin Visuals
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
+        <img src="/logo.svg" alt="" className="h-12 w-auto" />
+        <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
