@@ -191,13 +191,13 @@ export default function LandingPage() {
         <section className="container flex flex-col items-center justify-center space-y-12 py-24 text-center md:py-32 mx-auto px-4">
           <div className="space-y-5">
             <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
-              Turn your MIDI into
-              <br />
-              <span className="text-electric-blue">visuals.</span>
+              <span>The </span>
+              <span className="text-electric-blue">visual music</span>
+              <span> workstation</span>
             </h1>
             <p className="mx-auto max-w-[700px] text-lg text-gray-300 md:text-xl">
               {/* eslint-disable-next-line react/no-unescaped-entities */}
-              Create beautiful visuals that match your music perfectly - note-for-note.
+              The first tool dedicated to creating visual music.
             </p>
           </div>
           <div className="w-full max-w-md space-y-8">

@@ -1,3 +1,5 @@
+'use client'
+
 import dynamic from 'next/dynamic'
 
 const EditorApp = dynamic(() => import('@/editor/App'), { ssr: false })
