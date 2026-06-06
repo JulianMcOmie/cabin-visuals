@@ -3,15 +3,16 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
-import { Play, Pause, Square } from 'lucide-react'
+import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
 import { useTimeStore } from './store/timeStore'
 import { useUIStore } from './store/UIStore'
 import { useProjectStore } from './store/ProjectStore'
 import { Cube } from './instruments/Cube'
 import { Track } from './components/Track'
 import { LeftSidebar } from './components/LeftSidebar'
-import { RightPanel } from './components/RightPanel'
+import { TrackEditor } from './components/TrackEditor'
 import { TimelineRuler } from './components/TimelineRuler'
+import { AudioBar } from './components/AudioBar'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -33,6 +34,17 @@ function Scene() {
   )
 }
 
+function BeatOverlay() {
+  const currentBeat = useTimeStore((s) => s.currentBeat)
+  return (
+    <div className="absolute top-2 left-3 z-10 pointer-events-none select-none">
+      <span className="text-xs text-zinc-500 font-mono tabular-nums">
+        Beat: {currentBeat.toFixed(2)}
+      </span>
+    </div>
+  )
+}
+
 function Header() {
   const isPlaying = useUIStore((s) => s.isPlaying)
   const play = useUIStore((s) => s.play)
@@ -43,14 +55,18 @@ function Header() {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   return (
-    <div className="h-14 flex-shrink-0 flex items-center gap-4 px-4 border-b border-zinc-800 bg-zinc-950">
-      <Link href="/" className="flex-shrink-0">
-        <img src="/logo.svg" alt="Cabin Visuals" className="h-9 w-auto" />
+    <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-zinc-950 relative">
+      <Link
+        href="/"
+        className="flex-shrink-0 flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+      >
+        <ChevronLeft size={14} />
+        Projects
       </Link>
 
-      <div className="w-px h-6 bg-zinc-800 flex-shrink-0" />
+      <div className="w-px h-5 bg-zinc-800 flex-shrink-0" />
 
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={stop}
           title="Stop"
@@ -73,8 +89,19 @@ function Header() {
         {formatBeat(currentBeat, beatsPerBar)}
       </div>
 
-      <div className="font-mono text-xs text-zinc-500 flex-shrink-0 select-none tabular-nums">
-        {bpm} BPM
+      <div className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-zinc-200 pointer-events-none select-none">
+        Cabin Visuals
+      </div>
+
+      <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+        <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
+          BPM:{' '}
+          <span className="text-zinc-200">{bpm}</span>
+        </span>
+        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors">
+          <Upload size={12} strokeWidth={2.5} />
+          Export
+        </button>
       </div>
     </div>
   )
@@ -84,7 +111,13 @@ function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
 
   return (
-    <div className="flex flex-col border-t border-zinc-800" style={{ height: '260px' }}>
+    <div className="flex flex-col border-t border-zinc-800" style={{ height: '220px' }}>
+      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
+        <span className="text-xs font-medium text-zinc-300">Tracks</span>
+        <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
+          <Plus size={12} />
+        </button>
+      </div>
       <TimelineRuler />
       <div className="flex-1 overflow-y-auto">
         {tracks.map((track) => (
@@ -139,14 +172,16 @@ export default function EditorApp() {
       <Header />
       <div className="flex-1 flex min-h-0">
         <LeftSidebar />
+        <TrackEditor />
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 relative">
+            <BeatOverlay />
             <Scene />
           </div>
           <TimelineArea />
         </div>
-        <RightPanel />
       </div>
+      <AudioBar />
     </div>
   )
 }

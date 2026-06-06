@@ -1,3 +1,5 @@
+'use client'
+
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -69,14 +71,52 @@ function Section({ title, items }: { title: string; items: InstrumentItem[] }) {
   )
 }
 
+type LibraryTab = 'instruments' | 'effects'
+
 export function LeftSidebar() {
+  const [tab, setTab] = useState<LibraryTab>('instruments')
+
   return (
-    <div className="w-48 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950 overflow-y-auto">
-      <div className="px-3 py-2 border-b border-zinc-800">
-        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Instruments</span>
+    <div className="w-48 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950">
+      <div className="px-3 pt-2 pb-1.5 border-b border-zinc-800">
+        <div className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2">
+          Library
+        </div>
+        <div className="flex gap-0.5 bg-zinc-900 rounded p-0.5">
+          <button
+            onClick={() => setTab('instruments')}
+            className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${
+              tab === 'instruments'
+                ? 'bg-zinc-700 text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            Instruments
+          </button>
+          <button
+            onClick={() => setTab('effects')}
+            className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${
+              tab === 'effects'
+                ? 'bg-zinc-700 text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            Effects
+          </button>
+        </div>
       </div>
-      <Section title="Source" items={SOURCE_INSTRUMENTS} />
-      <Section title="Modifier" items={MODIFIER_INSTRUMENTS} />
+
+      <div className="flex-1 overflow-y-auto">
+        {tab === 'instruments' && (
+          <>
+            <Section title="Source" items={SOURCE_INSTRUMENTS} />
+            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} />
+          </>
+        )}
+        {tab === 'effects' && (
+          <p className="text-xs text-zinc-600 text-center mt-8 px-3">No effects available</p>
+        )}
+      </div>
     </div>
   )
 }
