@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square } from 'lucide-react'
 import { useTimeStore } from './store/timeStore'
@@ -43,9 +44,9 @@ function Header() {
 
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-4 px-4 border-b border-zinc-800 bg-zinc-950">
-      <a href="/" className="flex-shrink-0">
+      <Link href="/" className="flex-shrink-0">
         <img src="/logo.svg" alt="Cabin Visuals" className="h-9 w-auto" />
-      </a>
+      </Link>
 
       <div className="w-px h-6 bg-zinc-800 flex-shrink-0" />
 
