@@ -41,7 +41,7 @@ export function TrackEditor() {
   const track = tracks.find((t) => t.id === selectedTrackId) ?? tracks[0] ?? null
 
   return (
-    <div className="w-72 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950">
+    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-950">
       <div className="border-b border-zinc-800">
         <div className="px-3 pt-2 pb-1">
           <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium">

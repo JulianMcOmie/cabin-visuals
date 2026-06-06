@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useTimeStore } from './store/timeStore'
 import { useUIStore } from './store/UIStore'
 import { useProjectStore } from './store/ProjectStore'
@@ -112,7 +113,7 @@ function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
 
   return (
-    <div className="flex flex-col border-t border-zinc-800" style={{ height: '220px' }}>
+    <div className="flex flex-col h-full border-t border-zinc-800">
       <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
         <span className="text-xs font-medium text-zinc-300">Tracks</span>
         <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
@@ -171,20 +172,57 @@ export default function EditorApp() {
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-zinc-950">
       <Header />
-      <div className="flex-1 flex min-h-0">
-        <LeftSidebar />
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 flex min-h-0">
-            <TrackEditor />
-            <div className="flex-1 min-h-0 relative">
-              <BeatOverlay />
-              <Scene />
+      <div className="flex-1 min-h-0">
+        <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+
+          {/* Library */}
+          <Panel defaultSize="19%" minSize="8%" maxSize="30%">
+            <LeftSidebar />
+          </Panel>
+
+          <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
+
+          {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
+          <Panel>
+            <div className="flex flex-col h-full">
+              <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
+
+                {/* Upper: TrackEditor + Canvas */}
+                <Panel defaultSize="53%" minSize="30%">
+                  <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+
+                    <Panel defaultSize="40%" minSize="15%" maxSize="60%">
+                      <TrackEditor />
+                    </Panel>
+
+                    <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
+
+                    {/* Canvas */}
+                    <Panel>
+                      <div className="relative h-full">
+                        <BeatOverlay />
+                        <Scene />
+                      </div>
+                    </Panel>
+
+                  </PanelGroup>
+                </Panel>
+
+                <PanelResizeHandle className="h-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-row-resize" />
+
+                {/* Tracks */}
+                <Panel defaultSize="47%" minSize="12%">
+                  <TimelineArea />
+                </Panel>
+
+              </PanelGroup>
+
+              <AudioBar />
             </div>
-          </div>
-          <TimelineArea />
-        </div>
+          </Panel>
+
+        </PanelGroup>
       </div>
-      <AudioBar />
     </div>
   )
 }

@@ -77,7 +77,7 @@ export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
 
   return (
-    <div className="w-48 flex-shrink-0 flex flex-col border-r border-zinc-800 bg-zinc-950">
+    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-950 overflow-hidden">
       <div className="px-3 pt-2 pb-1.5 border-b border-zinc-800">
         <div className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2">
           Library
