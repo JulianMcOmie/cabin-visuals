@@ -6,14 +6,14 @@ import { useRef, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowDown, LogOut, ExternalLink } from "lucide-react"
-import { Button } from "../components/ui/button"
+import { Button } from "./ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu"
+} from "./ui/dropdown-menu"
 import { createClient } from "../utils/supabase/client"
 import { logout } from "../../app/(auth)/logout/actions"
 import type { User } from '@supabase/supabase-js'

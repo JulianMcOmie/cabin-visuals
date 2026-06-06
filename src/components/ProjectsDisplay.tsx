@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu"
+} from "./ui/dropdown-menu"
 import styles from '../../app/projects/projects.module.css'
 import type { User } from '@supabase/supabase-js'
 import { logout } from "../../app/(auth)/logout/actions"
