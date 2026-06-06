@@ -90,10 +90,10 @@ function Header() {
         {formatBeat(currentBeat, beatsPerBar)}
       </div>
 
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
+      <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 select-none">
         <img src="/logo.svg" alt="" className="h-12 w-auto" />
         <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
-      </div>
+      </Link>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">

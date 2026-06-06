@@ -81,7 +81,11 @@ export default function ProjectsDisplay({
       </div>
 
       <header className={styles.header}>
-        <h1 className={`${styles.headerTitle} font-extrabold`}>Projects</h1>
+        <a href="/" className="flex items-center gap-2 select-none">
+          <img src="/logo.svg" alt="" className="h-12 w-auto" />
+          <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
+        </a>
+        <h1 className={`${styles.headerTitle} font-extrabold absolute left-1/2 -translate-x-1/2`}>Projects</h1>
         <nav className={styles.headerNav}>
           {user ? (
             <DropdownMenu>
