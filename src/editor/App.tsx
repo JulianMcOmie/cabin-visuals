@@ -15,6 +15,42 @@ import { TrackEditor } from './components/TrackEditor'
 import { TimelineRuler } from './components/TimelineRuler'
 import { AudioBar } from './components/AudioBar'
 
+if (typeof window !== 'undefined') {
+  const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
+  const trackId = crypto.randomUUID()
+  const blockId = crypto.randomUUID()
+
+  addTrack({
+    id: trackId,
+    name: 'Cube',
+    type: 'base' as const,
+    instrumentId: 'cube',
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: [],
+  })
+
+  addBlock(trackId, {
+    id: blockId,
+    startBar: 0,
+    durationBars: 1,
+    loop: false,
+    notes: [],
+  })
+
+  for (let i = 0; i < 4; i++) {
+    addNote(trackId, blockId, {
+      id: crypto.randomUUID(),
+      startBeat: i,
+      durationBeats: 0.5,
+      pitch: 60,
+      velocity: 100,
+    })
+  }
+}
+
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
   const beatInBar = Math.floor(beat % beatsPerBar) + 1
@@ -90,10 +126,10 @@ function Header() {
         {formatBeat(currentBeat, beatsPerBar)}
       </div>
 
-      <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 select-none">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
         <img src="/logo.svg" alt="" className="h-12 w-auto" />
         <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
-      </Link>
+      </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
@@ -131,44 +167,6 @@ function TimelineArea() {
 }
 
 export default function EditorApp() {
-  useEffect(() => {
-    const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
-    if (tracks.length > 0) return
-
-    const trackId = crypto.randomUUID()
-    const blockId = crypto.randomUUID()
-
-    addTrack({
-      id: trackId,
-      name: 'Cube',
-      type: 'base' as const,
-      instrumentId: 'cube',
-      color: '#6366f1',
-      muted: false,
-      solo: false,
-      blocks: [],
-      childIds: [],
-    })
-
-    addBlock(trackId, {
-      id: blockId,
-      startBar: 0,
-      durationBars: 1,
-      loop: false,
-      notes: [],
-    })
-
-    for (let i = 0; i < 4; i++) {
-      addNote(trackId, blockId, {
-        id: crypto.randomUUID(),
-        startBeat: i,
-        durationBeats: 0.5,
-        pitch: 60,
-        velocity: 100,
-      })
-    }
-  }, [])
-
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-zinc-950">
       <Header />
@@ -180,7 +178,7 @@ export default function EditorApp() {
             <LeftSidebar />
           </Panel>
 
-          <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize focus:outline-none" />
+          <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
 
           {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
           <Panel>
@@ -195,7 +193,7 @@ export default function EditorApp() {
                       <TrackEditor />
                     </Panel>
 
-                    <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize focus:outline-none" />
+                    <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
 
                     {/* Canvas */}
                     <Panel>
@@ -208,10 +206,10 @@ export default function EditorApp() {
                   </PanelGroup>
                 </Panel>
 
-                <PanelResizeHandle className="h-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-row-resize focus:outline-none" />
+                <PanelResizeHandle className="h-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-row-resize" />
 
                 {/* Tracks */}
-                <Panel defaultSize="47%" minSize="12%">
+                <Panel defaultSize="28%" minSize="12%">
                   <TimelineArea />
                 </Panel>
 
