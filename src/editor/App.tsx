@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
@@ -14,6 +13,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { TimelineRuler } from './components/TimelineRuler'
 import { AudioBar } from './components/AudioBar'
+import { usePlayback } from './hooks/usePlayback'
 
 if (typeof window !== 'undefined') {
   const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
@@ -84,9 +84,7 @@ function BeatOverlay() {
 
 function Header() {
   const isPlaying = useUIStore((s) => s.isPlaying)
-  const play = useUIStore((s) => s.play)
-  const pause = useUIStore((s) => s.pause)
-  const stop = useUIStore((s) => s.stop)
+  const { play, pause, stop } = usePlayback();
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const bpm = useTimeStore((s) => s.bpm)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
