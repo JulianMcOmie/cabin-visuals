@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useTimeStore } from '../store/timeStore'
-import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 
 function computePulse(currentBeat: number, beatsPerBar: number): number {
@@ -33,23 +32,9 @@ function computePulse(currentBeat: number, beatsPerBar: number): number {
 export function Cube() {
   const meshRef = useRef<Mesh>(null)
 
-  useFrame((_, delta) => {
-    const { currentBeat, bpm, beatsPerBar, totalBars, setCurrentBeat } = useTimeStore.getState()
-    const { isPlaying, pause } = useUIStore.getState()
-
-    if (isPlaying) {
-      const next = currentBeat + delta * (bpm / 60)
-      const maxBeat = totalBars * beatsPerBar
-      if (next >= maxBeat) {
-        setCurrentBeat(maxBeat)
-        pause()
-      } else {
-        setCurrentBeat(next)
-      }
-    }
-
+  useFrame(() => {
     if (!meshRef.current) return
-
+    const { currentBeat, beatsPerBar } = useTimeStore.getState()
     const pulse = computePulse(currentBeat, beatsPerBar)
 
     meshRef.current.rotation.y = currentBeat * 0.22
