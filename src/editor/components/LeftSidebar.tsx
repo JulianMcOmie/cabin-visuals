@@ -33,9 +33,7 @@ const MODIFIER_INSTRUMENTS: InstrumentItem[] = [
   )},
   { id: 'colorShift', name: 'Color Shift', icon: (
     <div className="flex gap-0.5">
-      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
       <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-      <div className="w-1.5 h-1.5 rounded-full bg-pink-400" />
     </div>
   )},
 ]
