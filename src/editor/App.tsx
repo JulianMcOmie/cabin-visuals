@@ -16,38 +16,40 @@ import { AudioBar } from './components/AudioBar'
 import { usePlayback } from './hooks/usePlayback'
 
 if (typeof window !== 'undefined') {
-  const { addTrack, addBlock, addNote } = useProjectStore.getState()
-  const trackId = crypto.randomUUID()
-  const blockId = crypto.randomUUID()
+  const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
+  if (tracks.length === 0) {
+    const trackId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
 
-  addTrack({
-    id: trackId,
-    name: 'Cube',
-    type: 'base' as const,
-    instrumentId: 'cube',
-    color: '#6366f1',
-    muted: false,
-    solo: false,
-    blocks: [],
-    childIds: [],
-  })
-
-  addBlock(trackId, {
-    id: blockId,
-    startBar: 0,
-    durationBars: 1,
-    loop: false,
-    notes: [],
-  })
-
-  for (let i = 0; i < 4; i++) {
-    addNote(trackId, blockId, {
-      id: crypto.randomUUID(),
-      startBeat: i,
-      durationBeats: 0.5,
-      pitch: 60,
-      velocity: 100,
+    addTrack({
+      id: trackId,
+      name: 'Cube',
+      type: 'base' as const,
+      instrumentId: 'cube',
+      color: '#6366f1',
+      muted: false,
+      solo: false,
+      blocks: [],
+      childIds: [],
     })
+
+    addBlock(trackId, {
+      id: blockId,
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [],
+    })
+
+    for (let i = 0; i < 4; i++) {
+      addNote(trackId, blockId, {
+        id: crypto.randomUUID(),
+        startBeat: i,
+        durationBeats: 0.5,
+        pitch: 60,
+        velocity: 100,
+      })
+    }
   }
 }
 
