@@ -16,7 +16,7 @@ import { AudioBar } from './components/AudioBar'
 import { usePlayback } from './hooks/usePlayback'
 
 if (typeof window !== 'undefined') {
-  const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
+  const { addTrack, addBlock, addNote } = useProjectStore.getState()
   const trackId = crypto.randomUUID()
   const blockId = crypto.randomUUID()
 
@@ -146,11 +146,48 @@ function Header() {
 function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
 
+  function insertPopulatedTrack() {
+    const { addTrack, addBlock, addNote } = useProjectStore.getState()
+    const trackId = crypto.randomUUID()
+    const blockId = crypto.randomUUID()
+  
+    addTrack({
+      id: trackId,
+      name: 'Cube',
+      type: 'base' as const,
+      instrumentId: 'cube',
+      color: '#6366f1',
+      muted: false,
+      solo: false,
+      blocks: [],
+      childIds: [],
+    })
+  
+    addBlock(trackId, {
+      id: blockId,
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [],
+    })
+  
+    for (let i = 0; i < 4; i++) {
+      addNote(trackId, blockId, {
+        id: crypto.randomUUID(),
+        startBeat: i,
+        durationBeats: 0.5,
+        pitch: 60,
+        velocity: 100,
+      })
+    }
+  }
+
   return (
     <div className="flex flex-col h-full border-t border-zinc-800">
       <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
         <span className="text-xs font-medium text-zinc-300">Tracks</span>
-        <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
+        <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                onClick={insertPopulatedTrack}>
           <Plus size={12} />
         </button>
       </div>

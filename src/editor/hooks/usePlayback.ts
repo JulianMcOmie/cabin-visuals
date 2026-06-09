@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { getPlaybackEngine } from '../core/playback';
 import { useTimeStore } from '../store/timeStore';
 import { useUIStore } from '../store/UIStore';
@@ -6,13 +6,19 @@ import { useUIStore } from '../store/UIStore';
 export function usePlayback() {
   const { setIsPlaying } = useUIStore();
   const engine = getPlaybackEngine();
-  const { bpm, totalBars, beatsPerBar, setCurrentBeat } = useTimeStore.getState();
-  engine.init({
-    onBeatChange: (beat) => setCurrentBeat(beat),
-    getBpm: () => bpm,
-    getMaxBeat: () => totalBars * beatsPerBar,
-    onEnd: () => setIsPlaying(false)
-  });
+
+  useEffect(() => {
+    engine.init({
+      onBeatChange: (beat) => useTimeStore.getState().setCurrentBeat(beat),
+      getBpm: () => useTimeStore.getState().bpm,
+      getMaxBeat: () => {
+        const { totalBars, beatsPerBar } = useTimeStore.getState()
+        return totalBars * beatsPerBar
+      },
+      onEnd: () => setIsPlaying(false),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const play = useCallback(() => {
     const { currentBeat } = useTimeStore.getState();
