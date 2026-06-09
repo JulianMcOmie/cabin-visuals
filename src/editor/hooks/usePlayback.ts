@@ -4,7 +4,7 @@ import { useTimeStore } from '../store/timeStore';
 import { useUIStore } from '../store/UIStore';
 
 export function usePlayback() {
-  const { setIsPlaying } = useUIStore();
+  const { setIsPlaying } = useTimeStore();
   const engine = getPlaybackEngine();
 
   useEffect(() => {

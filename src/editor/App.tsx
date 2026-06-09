@@ -5,7 +5,6 @@ import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useTimeStore } from './store/timeStore'
-import { useUIStore } from './store/UIStore'
 import { useProjectStore } from './store/ProjectStore'
 import { Cube } from './instruments/Cube'
 import { Track } from './components/Track'
@@ -85,7 +84,7 @@ function BeatOverlay() {
 }
 
 function Header() {
-  const isPlaying = useUIStore((s) => s.isPlaying)
+  const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, stop } = usePlayback();
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const bpm = useTimeStore((s) => s.bpm)
