@@ -618,7 +618,7 @@ export function MidiEditor({
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-auto bg-zinc-950"
+      className="flex-1 overflow-auto no-scrollbar bg-zinc-950"
       style={{ cursor: 'crosshair' }}
       onClick={handleContainerClick}
     >
