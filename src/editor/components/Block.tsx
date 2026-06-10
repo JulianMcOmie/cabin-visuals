@@ -1,13 +1,19 @@
+import { useUIStore } from '../store/UIStore'
 import type { Block as BlockType } from '../types'
 
 interface BlockProps {
   block: BlockType
+  trackId: string
   totalBars: number
   beatsPerBar: number
   color: string
 }
 
-export function Block({ block, totalBars, beatsPerBar, color }: BlockProps) {
+export function Block({ block, trackId, totalBars, beatsPerBar, color }: BlockProps) {
+  const editingBlock = useUIStore((s) => s.editingBlock)
+  const setEditingBlock = useUIStore((s) => s.setEditingBlock)
+  const isEditing = editingBlock?.blockId === block.id
+
   const left = (block.startBar / totalBars) * 100
   const width = (block.durationBars / totalBars) * 100
   const totalBeatsInBlock = block.durationBars * beatsPerBar
@@ -19,8 +25,13 @@ export function Block({ block, totalBars, beatsPerBar, color }: BlockProps) {
         left: `${left}%`,
         width: `${Math.max(width, 0.5)}%`,
         backgroundColor: color + '28',
-        border: `1px solid ${color}66`,
+        border: isEditing ? `1px solid ${color}` : `1px solid ${color}66`,
         borderLeft: `2px solid ${color}`,
+        boxShadow: isEditing ? `0 0 6px ${color}88` : undefined,
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        setEditingBlock({ trackId, blockId: block.id })
       }}
     >
       {block.notes.map((note) => {

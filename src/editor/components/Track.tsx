@@ -78,6 +78,7 @@ export function Track({ track }: TrackProps) {
           <Block
             key={block.id}
             block={block}
+            trackId={track.id}
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             color={track.color}

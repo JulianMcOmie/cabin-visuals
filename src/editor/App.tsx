@@ -12,6 +12,8 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { TimelineRuler } from './components/TimelineRuler'
 import { AudioBar } from './components/AudioBar'
+import { PianoRollPanel } from './components/PianoRollPanel'
+import { useUIStore } from './store/UIStore'
 import { usePlayback } from './hooks/usePlayback'
 
 if (typeof window !== 'undefined') {
@@ -204,6 +206,11 @@ function TimelineArea() {
   )
 }
 
+function BottomArea() {
+  const editingBlock = useUIStore((s) => s.editingBlock)
+  return editingBlock ? <PianoRollPanel /> : <TimelineArea />
+}
+
 export default function EditorApp() {
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-zinc-950">
@@ -246,9 +253,9 @@ export default function EditorApp() {
 
                 <PanelResizeHandle className="h-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-row-resize" />
 
-                {/* Tracks */}
+                {/* Tracks / Piano Roll */}
                 <Panel defaultSize="28%" minSize="12%">
-                  <TimelineArea />
+                  <BottomArea />
                 </Panel>
 
               </PanelGroup>
