@@ -20,6 +20,7 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color }: BlockPr
 
   return (
     <div
+      title="Double-click to edit notes"
       className="absolute top-1 bottom-1 rounded overflow-hidden"
       style={{
         left: `${left}%`,
