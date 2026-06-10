@@ -38,7 +38,11 @@ export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const tracks = useProjectStore((s) => s.tracks)
-  const track = tracks.find((t) => t.id === selectedTrackId) ?? tracks[0] ?? null
+  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
+  const track =
+    (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
+    (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
+    null
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-950">

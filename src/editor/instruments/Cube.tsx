@@ -9,7 +9,7 @@ function computePulse(currentBeat: number, beatsPerBar: number): number {
   const { tracks } = useProjectStore.getState()
   let closestBeatsSinceNote = Infinity
 
-  for (const track of tracks) {
+  for (const track of Object.values(tracks)) {
     if (track.muted || track.instrumentId !== 'cube') continue
     for (const block of track.blocks) {
       const blockStartBeat = block.startBar * beatsPerBar

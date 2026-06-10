@@ -15,8 +15,8 @@ import { AudioBar } from './components/AudioBar'
 import { usePlayback } from './hooks/usePlayback'
 
 if (typeof window !== 'undefined') {
-  const { addTrack, addBlock, addNote, tracks } = useProjectStore.getState()
-  if (tracks.length === 0) {
+  const { addTrack, addBlock, addNote, rootTrackIds } = useProjectStore.getState()
+  if (rootTrackIds.length === 0) {
     const trackId = crypto.randomUUID()
     const blockId = crypto.randomUUID()
 
@@ -146,6 +146,7 @@ function Header() {
 
 function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
+  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
 
   function insertPopulatedTrack() {
     const { addTrack, addBlock, addNote } = useProjectStore.getState()
@@ -194,9 +195,10 @@ function TimelineArea() {
       </div>
       <TimelineRuler />
       <div className="flex-1 overflow-y-auto">
-        {tracks.map((track) => (
-          <Track key={track.id} track={track} />
-        ))}
+        {rootTrackIds.map((id) => {
+          const track = tracks[id]
+          return track ? <Track key={id} track={track} /> : null
+        })}
       </div>
     </div>
   )
