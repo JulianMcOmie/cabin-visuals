@@ -1,4 +1,4 @@
-import { useTimeStore } from '../store/timeStore'
+import { useTimeStore } from '../store/TimeStore'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { Block } from './Block'

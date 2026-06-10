@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTimeStore } from '../../store/timeStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { useUIStore } from '../../store/UIStore'
 import { lighten } from '../../utils/colors'
 import type { Note } from '../../types'

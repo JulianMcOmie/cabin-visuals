@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { useTimeStore } from '../store/timeStore'
+import { useTimeStore } from '../store/TimeStore'
 import { useProjectStore } from '../store/ProjectStore'
 
 function computePulse(currentBeat: number, beatsPerBar: number): number {

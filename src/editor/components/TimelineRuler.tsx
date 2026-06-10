@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { useTimeStore } from '../store/timeStore'
+import { useTimeStore } from '../store/TimeStore'
 import { TRACK_LABEL_WIDTH } from '../constants'
 
 export function TimelineRuler() {

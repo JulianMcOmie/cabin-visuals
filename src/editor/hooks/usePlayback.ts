@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { getPlaybackEngine } from '../core/playback';
-import { useTimeStore } from '../store/timeStore';
+import { useTimeStore } from '../store/TimeStore';
 import { useUIStore } from '../store/UIStore';
 
 export function usePlayback() {
