@@ -105,6 +105,16 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
     <div ref={containerRef} className="flex flex-col h-full border-t border-zinc-800">
       {/* Toolbar */}
       <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
+        <button
+          onClick={onClose}
+          title="Close (Esc)"
+          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+        >
+          <X size={12} />
+        </button>
+
+        <div className="w-px h-4 bg-zinc-800" />
+
         <span className="text-xs font-medium" style={{ color: trackColor }}>
           {trackName}
         </span>
@@ -164,15 +174,6 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
           />
         </div>
 
-        <div className="w-px h-4 bg-zinc-800" />
-
-        <button
-          onClick={onClose}
-          title="Close (Esc)"
-          className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-        >
-          <X size={12} />
-        </button>
       </div>
 
       {/* Piano roll grid */}
