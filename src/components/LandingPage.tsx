@@ -197,7 +197,7 @@ export default function LandingPage() {
             </h1>
             <p className="mx-auto max-w-[700px] text-lg text-gray-300 md:text-xl">
               {/* eslint-disable-next-line react/no-unescaped-entities */}
-              Create beautiful visuals that match your music perfectly - note-for-note.
+              The first tool dedicated to creating visual music.
             </p>
           </div>
           <div className="w-full max-w-md space-y-8">
