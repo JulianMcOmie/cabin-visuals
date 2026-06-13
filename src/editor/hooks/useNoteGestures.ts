@@ -1,6 +1,6 @@
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { Note } from '../types'
-import type { MidiRow } from '../components/midi/MidiEditor'
+import type { MidiRow } from '../components/midi/types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
 
 const NOTE_EDGE_WIDTH = 8

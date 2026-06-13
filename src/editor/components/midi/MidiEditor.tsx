@@ -7,18 +7,7 @@ import { lighten } from '../../utils/colors'
 import type { Note } from '../../types'
 import { useNoteGestures } from '../../hooks/useNoteGestures'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
-
-export interface MidiRow {
-  pitch: number
-  label: string
-  color: string
-}
-
-export interface RangeLabel {
-  startPitch: number
-  endPitch: number
-  label: string
-}
+import type { MidiRow, RangeLabel } from './types'
 
 export interface MidiEditorProps {
   rows: MidiRow[]
