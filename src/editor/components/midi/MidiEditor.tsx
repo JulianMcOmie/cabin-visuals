@@ -246,7 +246,7 @@ export function MidiEditor({
     <div
       ref={containerRef}
       className="flex-1 overflow-auto no-scrollbar bg-zinc-950"
-      style={{ cursor: 'crosshair' }}
+      style={{ cursor: 'default' }}
       onClick={handleContainerClick}
     >
       {/* Sticky ruler row */}
@@ -423,7 +423,7 @@ export function MidiEditor({
           onPointerDown={handleBackgroundPointerDown}
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none') setCursor('crosshair')
+            if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
           {/* Range label background bands */}

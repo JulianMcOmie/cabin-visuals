@@ -80,7 +80,7 @@ export function useNoteGestures({
     if (dragStateRef.current.type !== 'none') return
     if (target === 'noteEdge') setCursor('ew-resize')
     else if (target === 'noteBody') setCursor('grab')
-    else setCursor('crosshair')
+    else setCursor('default')
   }, [setCursor])
 
   // Get notes within marquee bounds (grid-local pixel rect)
@@ -194,7 +194,7 @@ export function useNoteGestures({
       }
 
       setDragState(DRAG_NONE)
-      setCursor('crosshair')
+      setCursor('default')
       didDragRef.current = true
       document.body.style.userSelect = ''
       controller.abort()
