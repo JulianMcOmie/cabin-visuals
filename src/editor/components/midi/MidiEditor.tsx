@@ -254,9 +254,15 @@ export function MidiEditor({
   const getNotesInMarqueeRef = useRef(getNotesInMarquee)
   getNotesInMarqueeRef.current = getNotesInMarquee
 
-  // Start tracking a drag via window-level listeners.
+  // Install the tracking + completion machinery for the gesture that just
+  // started: window-level move/up listeners tied to an AbortController so
+  // they can be removed in one abort() call (on pointerup or unmount).
   // All state is read from refs so closures never go stale.
-  const startWindowDrag = useCallback(() => {
+  const gestureAbortRef = useRef<AbortController | null>(null)
+
+  const beginGestureTracking = useCallback(() => {
+    const controller = new AbortController()
+    gestureAbortRef.current = controller
     document.body.style.userSelect = 'none'
     const handleMove = (e: PointerEvent) => {
       const ds = dragStateRef.current
@@ -330,13 +336,21 @@ export function MidiEditor({
       setCursor('crosshair')
       didDragRef.current = true
       document.body.style.userSelect = ''
-      window.removeEventListener('pointermove', handleMove)
-      window.removeEventListener('pointerup', handleUp)
+      controller.abort()
+      gestureAbortRef.current = null
     }
 
-    window.addEventListener('pointermove', handleMove)
-    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointermove', handleMove, { signal: controller.signal })
+    window.addEventListener('pointerup', handleUp, { signal: controller.signal })
   }, [setCursor])
+
+  // If the component unmounts mid-drag, tear the window listeners down
+  useEffect(() => {
+    return () => {
+      gestureAbortRef.current?.abort()
+      document.body.style.userSelect = ''
+    }
+  }, [])
 
   // Handle note body pointer down -> start moving or resizing
   const handleNotePointerDown = useCallback((e: React.PointerEvent, note: Note) => {
@@ -374,7 +388,7 @@ export function MidiEditor({
         originalDurations,
       })
       setCursor('ew-resize')
-      startWindowDrag()
+      beginGestureTracking()
       return
     }
 
@@ -429,7 +443,7 @@ export function MidiEditor({
         originalPitches,
       })
       setCursor('copy')
-      startWindowDrag()
+      beginGestureTracking()
       return
     }
 
@@ -453,8 +467,8 @@ export function MidiEditor({
       originalPitches,
     })
     setCursor('grabbing')
-    startWindowDrag()
-  }, [selectedNoteIds, notes, onNotesChange, setCursor, startWindowDrag])
+    beginGestureTracking()
+  }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking])
 
   // Handle note hover for cursor changes
   const handleNotePointerMove = useCallback((e: React.PointerEvent) => {
@@ -506,7 +520,7 @@ export function MidiEditor({
             currentX: gridX,
             currentY: gridY,
           })
-          startWindowDrag()
+          beginGestureTracking()
         }
       }
       return
@@ -522,8 +536,8 @@ export function MidiEditor({
       currentY: gridY,
     })
     setCursor('crosshair')
-    startWindowDrag()
-  }, [LABEL_WIDTH, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, startWindowDrag])
+    beginGestureTracking()
+  }, [LABEL_WIDTH, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, beginGestureTracking])
 
   // Keyboard handler
   useEffect(() => {
