@@ -509,13 +509,13 @@ export function MidiEditor({
               height: '100%',
               backgroundColor: '#818cf8',
             }} />
-            {/* Hit area for scrubbing */}
+            {/* Hit area for scrubbing (kept narrow so it barely overlaps notes) */}
             <div
               style={{
                 position: 'absolute',
                 top: 0,
-                left: -8,
-                width: 17,
+                left: -3,
+                width: 7,
                 height: '100%',
                 cursor: 'col-resize',
                 pointerEvents: 'auto',
