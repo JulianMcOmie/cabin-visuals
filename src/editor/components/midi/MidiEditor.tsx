@@ -33,6 +33,8 @@ export interface MidiEditorProps {
   blockStartBeat?: number
 }
 
+// All DragState coordinates are grid-local pixels (converted from viewport
+// coordinates at pointerdown via clientToGrid), regardless of drag type.
 interface DragState {
   type: 'none' | 'drawing' | 'moving' | 'resizing' | 'marquee'
   startX: number
@@ -225,8 +227,8 @@ export function MidiEditor({
 
   // Get notes within marquee bounds
   const getNotesInMarquee = useCallback((x1: number, y1: number, x2: number, y2: number): string[] => {
-    const minX = Math.min(x1, x2) - LABEL_WIDTH
-    const maxX = Math.max(x1, x2) - LABEL_WIDTH
+    const minX = Math.min(x1, x2)
+    const maxX = Math.max(x1, x2)
     const minY = Math.min(y1, y2)
     const maxY = Math.max(y1, y2)
 
@@ -258,10 +260,12 @@ export function MidiEditor({
     document.body.style.userSelect = 'none'
     const handleMove = (e: PointerEvent) => {
       const ds = dragStateRef.current
+      if (!gridRef.current) return
+      const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
       if (ds.type === 'drawing') {
         const dn = drawingNoteRef.current
         if (!dn) return
-        const deltaX = e.clientX - ds.startX
+        const deltaX = grid.x - ds.startX
         const deltaDuration = xToBeat(deltaX, pixelsPerBeatRef.current)
         const baseDuration = snapEnabledRef.current ? quantizeRef.current : 0.25
         let newDuration = snapValueRef.current(baseDuration + deltaDuration)
@@ -271,11 +275,11 @@ export function MidiEditor({
           setDrawingNote(prev => prev ? { ...prev, durationBeats: newDuration } : null)
         }
       } else if (ds.type === 'moving' && ds.originalStartBeats && ds.originalPitches) {
-        const deltaX = e.clientX - ds.startX
+        const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
         const snappedDelta = snapValueRef.current(deltaBeats)
 
-        const deltaY = e.clientY - ds.startY
+        const deltaY = grid.y - ds.startY
         const rowDelta = Math.round(deltaY / rowHeightRef.current)
         const curRows = rowsRef.current
         const curTotalBeats = totalBeatsRef.current
@@ -293,7 +297,7 @@ export function MidiEditor({
           return n
         }))
       } else if (ds.type === 'resizing' && ds.originalDurations) {
-        const deltaX = e.clientX - ds.startX
+        const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
         const snappedDelta = snapValueRef.current(deltaBeats)
 
@@ -305,9 +309,8 @@ export function MidiEditor({
           }
           return n
         }))
-      } else if (ds.type === 'marquee' && gridRef.current) {
-        const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
-        setDragState(prev => ({ ...prev, currentX: grid.x + LABEL_WIDTH, currentY: grid.y }))
+      } else if (ds.type === 'marquee') {
+        setDragState(prev => ({ ...prev, currentX: grid.x, currentY: grid.y }))
       }
     }
 
@@ -338,6 +341,8 @@ export function MidiEditor({
   // Handle note body pointer down -> start moving or resizing
   const handleNotePointerDown = useCallback((e: React.PointerEvent, note: Note) => {
     e.stopPropagation()
+    if (!gridRef.current) return
+    const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
 
     // Check if near right edge (resize)
     const noteEl = e.currentTarget as HTMLDivElement
@@ -361,10 +366,10 @@ export function MidiEditor({
 
       setDragState({
         type: 'resizing',
-        startX: e.clientX,
-        startY: e.clientY,
-        currentX: e.clientX,
-        currentY: e.clientY,
+        startX: grid.x,
+        startY: grid.y,
+        currentX: grid.x,
+        currentY: grid.y,
         noteId: note.id,
         originalDurations,
       })
@@ -415,10 +420,10 @@ export function MidiEditor({
 
       setDragState({
         type: 'moving',
-        startX: e.clientX,
-        startY: e.clientY,
-        currentX: e.clientX,
-        currentY: e.clientY,
+        startX: grid.x,
+        startY: grid.y,
+        currentX: grid.x,
+        currentY: grid.y,
         noteId: oldToNew.get(note.id) || note.id,
         originalStartBeats,
         originalPitches,
@@ -439,10 +444,10 @@ export function MidiEditor({
 
     setDragState({
       type: 'moving',
-      startX: e.clientX,
-      startY: e.clientY,
-      currentX: e.clientX,
-      currentY: e.clientY,
+      startX: grid.x,
+      startY: grid.y,
+      currentX: grid.x,
+      currentY: grid.y,
       noteId: note.id,
       originalStartBeats,
       originalPitches,
@@ -496,10 +501,10 @@ export function MidiEditor({
 
           setDragState({
             type: 'drawing',
-            startX: e.clientX,
-            startY: e.clientY,
-            currentX: e.clientX,
-            currentY: e.clientY,
+            startX: gridX,
+            startY: gridY,
+            currentX: gridX,
+            currentY: gridY,
           })
           startWindowDrag()
         }
@@ -511,9 +516,9 @@ export function MidiEditor({
     if (!e.shiftKey) setSelectedNoteIds(new Set())
     setDragState({
       type: 'marquee',
-      startX: gridX + LABEL_WIDTH,
+      startX: gridX,
       startY: gridY,
-      currentX: gridX + LABEL_WIDTH,
+      currentX: gridX,
       currentY: gridY,
     })
     setCursor('crosshair')
@@ -616,7 +621,7 @@ export function MidiEditor({
   // Marquee overlay
   const marqueeStyle = useMemo(() => {
     if (dragState.type !== 'marquee') return null
-    const x1 = Math.min(dragState.startX, dragState.currentX) - LABEL_WIDTH
+    const x1 = Math.min(dragState.startX, dragState.currentX)
     const y1 = Math.min(dragState.startY, dragState.currentY)
     const w = Math.abs(dragState.currentX - dragState.startX)
     const h = Math.abs(dragState.currentY - dragState.startY)
