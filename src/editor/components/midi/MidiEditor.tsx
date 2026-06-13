@@ -47,6 +47,9 @@ interface DragState {
 
 const DRAG_NONE: DragState = { type: 'none', startX: 0, startY: 0, currentX: 0, currentY: 0 }
 const NOTE_EDGE_WIDTH = 8
+const LABEL_WIDTH = 88
+const RULER_HEIGHT = 24
+const CANVAS_RIGHT_PADDING = 20
 
 export function MidiEditor({
   rows,
@@ -134,8 +137,7 @@ export function MidiEditor({
   quantizeRef.current = quantize
 
   // Canvas dimensions
-  const labelWidth = 88
-  const canvasWidth = totalBeats * pixelsPerBeat + labelWidth + 20
+  const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
@@ -150,11 +152,14 @@ export function MidiEditor({
     images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0px 1px, transparent 1px ${barWidthPx}px)`)
     sizes.push(`${barWidthPx}px 100%`)
 
+    // Skip beat lines when they coincide with bar lines (1 beat per bar),
+    // otherwise the overlapping layers double the line opacity
     if (beatWidthPx !== barWidthPx) {
       images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${beatWidthPx}px)`)
       sizes.push(`${beatWidthPx}px 100%`)
     }
 
+    // Same for subdivision lines when quantize is a full beat
     if (subdivWidthPx !== beatWidthPx) {
       images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.025) 0px 1px, transparent 1px ${subdivWidthPx}px)`)
       sizes.push(`${subdivWidthPx}px 100%`)
@@ -198,8 +203,8 @@ export function MidiEditor({
 
   // Get notes within marquee bounds
   const getNotesInMarquee = useCallback((x1: number, y1: number, x2: number, y2: number): string[] => {
-    const minX = Math.min(x1, x2) - labelWidth
-    const maxX = Math.max(x1, x2) - labelWidth
+    const minX = Math.min(x1, x2) - LABEL_WIDTH
+    const maxX = Math.max(x1, x2) - LABEL_WIDTH
     const minY = Math.min(y1, y2)
     const maxY = Math.max(y1, y2)
 
@@ -220,7 +225,7 @@ export function MidiEditor({
     }
 
     return matchingIds
-  }, [notes, pitchToRowIndex, rowHeight, pixelsPerBeat, labelWidth])
+  }, [notes, pitchToRowIndex, rowHeight, pixelsPerBeat])
 
   const getNotesInMarqueeRef = useRef(getNotesInMarquee)
   getNotesInMarqueeRef.current = getNotesInMarquee
@@ -280,7 +285,7 @@ export function MidiEditor({
         }))
       } else if (ds.type === 'marquee' && gridRef.current) {
         const rect = gridRef.current.getBoundingClientRect()
-        const currentX = e.clientX - rect.left + labelWidth
+        const currentX = e.clientX - rect.left + LABEL_WIDTH
         const currentY = e.clientY - rect.top
         setDragState(prev => ({ ...prev, currentX, currentY }))
       }
@@ -488,14 +493,14 @@ export function MidiEditor({
     if (!e.shiftKey) setSelectedNoteIds(new Set())
     setDragState({
       type: 'marquee',
-      startX: gridX + labelWidth,
+      startX: gridX + LABEL_WIDTH,
       startY: gridY,
-      currentX: gridX + labelWidth,
+      currentX: gridX + LABEL_WIDTH,
       currentY: gridY,
     })
     setCursor('crosshair')
     startWindowDrag()
-  }, [labelWidth, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, startWindowDrag])
+  }, [LABEL_WIDTH, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, startWindowDrag])
 
   // Keyboard handler
   useEffect(() => {
@@ -594,7 +599,7 @@ export function MidiEditor({
   // Marquee overlay
   const marqueeStyle = useMemo(() => {
     if (dragState.type !== 'marquee') return null
-    const x1 = Math.min(dragState.startX, dragState.currentX) - labelWidth
+    const x1 = Math.min(dragState.startX, dragState.currentX) - LABEL_WIDTH
     const y1 = Math.min(dragState.startY, dragState.currentY)
     const w = Math.abs(dragState.currentX - dragState.startX)
     const h = Math.abs(dragState.currentY - dragState.startY)
@@ -610,9 +615,8 @@ export function MidiEditor({
       pointerEvents: 'none' as const,
       zIndex: 10,
     }
-  }, [dragState, labelWidth])
+  }, [dragState])
 
-  const rulerHeight = 24
   const barCount = Math.ceil(totalBeats / beatsPerBar)
 
   return (
@@ -630,12 +634,12 @@ export function MidiEditor({
           zIndex: 20,
           display: 'flex',
           width: canvasWidth,
-          height: rulerHeight,
+          height: RULER_HEIGHT,
           backgroundColor: '#111111',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
-        <div style={{ width: labelWidth, flexShrink: 0, backgroundColor: '#141414' }} />
+        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#141414' }} />
         <div
           style={{
             flex: 1,
@@ -653,7 +657,7 @@ export function MidiEditor({
                 position: 'absolute',
                 left: i * beatsPerBar * pixelsPerBeat,
                 top: 0,
-                height: rulerHeight,
+                height: RULER_HEIGHT,
                 borderLeft: '1px solid rgba(255,255,255,0.15)',
                 display: 'flex',
                 alignItems: 'center',
@@ -674,7 +678,7 @@ export function MidiEditor({
               top: 0,
               left: 0,
               width: 1,
-              height: rulerHeight,
+              height: RULER_HEIGHT,
               pointerEvents: 'none',
               zIndex: 21,
             }}
@@ -705,7 +709,7 @@ export function MidiEditor({
         {/* Labels column */}
         <div
           style={{
-            width: labelWidth,
+            width: LABEL_WIDTH,
             height: canvasHeight,
             flexShrink: 0,
             backgroundColor: '#141414',
@@ -753,7 +757,7 @@ export function MidiEditor({
                 position: 'absolute',
                 top: rl.top,
                 left: 0,
-                width: labelWidth,
+                width: LABEL_WIDTH,
                 height: rl.height,
                 pointerEvents: 'none',
                 borderTop: '1px solid rgba(255,255,255,0.12)',
