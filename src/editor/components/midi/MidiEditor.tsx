@@ -51,6 +51,28 @@ const LABEL_WIDTH = 88
 const RULER_HEIGHT = 24
 const CANVAS_RIGHT_PADDING = 20
 
+// Coordinate conversions between the three spaces the editor deals with:
+// viewport pixels (clientX/Y) -> grid-local pixels -> musical units (beats, rows)
+function clientToGrid(clientX: number, clientY: number, gridRect: DOMRect) {
+  return { x: clientX - gridRect.left, y: clientY - gridRect.top }
+}
+
+function xToBeat(x: number, pixelsPerBeat: number) {
+  return x / pixelsPerBeat
+}
+
+function yToRowIndex(y: number, rowHeight: number) {
+  return Math.floor(y / rowHeight)
+}
+
+function beatToX(beat: number, pixelsPerBeat: number) {
+  return beat * pixelsPerBeat
+}
+
+function rowIndexToY(rowIndex: number, rowHeight: number) {
+  return rowIndex * rowHeight
+}
+
 export function MidiEditor({
   rows,
   notes,
@@ -214,10 +236,10 @@ export function MidiEditor({
       const rowIndex = pitchToRowIndex(note.pitch)
       if (rowIndex === -1) continue
 
-      const noteTop = rowIndex * rowHeight
+      const noteTop = rowIndexToY(rowIndex, rowHeight)
       const noteBottom = noteTop + rowHeight
-      const noteLeft = note.startBeat * pixelsPerBeat
-      const noteRight = noteLeft + note.durationBeats * pixelsPerBeat
+      const noteLeft = beatToX(note.startBeat, pixelsPerBeat)
+      const noteRight = noteLeft + beatToX(note.durationBeats, pixelsPerBeat)
 
       if (maxX >= noteLeft && minX <= noteRight && maxY >= noteTop && minY <= noteBottom) {
         matchingIds.push(note.id)
@@ -240,7 +262,7 @@ export function MidiEditor({
         const dn = drawingNoteRef.current
         if (!dn) return
         const deltaX = e.clientX - ds.startX
-        const deltaDuration = deltaX / pixelsPerBeatRef.current
+        const deltaDuration = xToBeat(deltaX, pixelsPerBeatRef.current)
         const baseDuration = snapEnabledRef.current ? quantizeRef.current : 0.25
         let newDuration = snapValueRef.current(baseDuration + deltaDuration)
         newDuration = Math.max(snapSizeRef.current, Math.min(totalBeatsRef.current - dn.startBeat, newDuration))
@@ -250,7 +272,7 @@ export function MidiEditor({
         }
       } else if (ds.type === 'moving' && ds.originalStartBeats && ds.originalPitches) {
         const deltaX = e.clientX - ds.startX
-        const deltaBeats = deltaX / pixelsPerBeatRef.current
+        const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
         const snappedDelta = snapValueRef.current(deltaBeats)
 
         const deltaY = e.clientY - ds.startY
@@ -272,7 +294,7 @@ export function MidiEditor({
         }))
       } else if (ds.type === 'resizing' && ds.originalDurations) {
         const deltaX = e.clientX - ds.startX
-        const deltaBeats = deltaX / pixelsPerBeatRef.current
+        const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
         const snappedDelta = snapValueRef.current(deltaBeats)
 
         onNotesChangeRef.current(notesRef.current.map(n => {
@@ -284,10 +306,8 @@ export function MidiEditor({
           return n
         }))
       } else if (ds.type === 'marquee' && gridRef.current) {
-        const rect = gridRef.current.getBoundingClientRect()
-        const currentX = e.clientX - rect.left + LABEL_WIDTH
-        const currentY = e.clientY - rect.top
-        setDragState(prev => ({ ...prev, currentX, currentY }))
+        const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
+        setDragState(prev => ({ ...prev, currentX: grid.x + LABEL_WIDTH, currentY: grid.y }))
       }
     }
 
@@ -447,17 +467,15 @@ export function MidiEditor({
   // Handle background pointer down (left-click = marquee selection, right-click = draw note)
   const handleBackgroundPointerDown = useCallback((e: React.PointerEvent) => {
     if (!gridRef.current) return
-    const rect = gridRef.current.getBoundingClientRect()
-    const gridX = e.clientX - rect.left
-    const gridY = e.clientY - rect.top
+    const { x: gridX, y: gridY } = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
 
     // Right-click = draw new note
     if (e.button === 2) {
-      const rowIndex = Math.floor(gridY / rowHeight)
+      const rowIndex = yToRowIndex(gridY, rowHeight)
 
       if (rowIndex >= 0 && rowIndex < rows.length) {
         const pitch = rows[rowIndex].pitch
-        const rawBeat = gridX / pixelsPerBeat
+        const rawBeat = xToBeat(gridX, pixelsPerBeat)
         const startBeat = snapValue(rawBeat)
 
         if (startBeat >= 0 && startBeat < totalBeats) {
@@ -532,7 +550,7 @@ export function MidiEditor({
     const tick = () => {
       const beat = useTimeStore.getState().currentBeat - blockStartBeat
       const visible = beat >= 0 && beat <= totalBeats
-      const px = beat * pixelsPerBeat
+      const px = beatToX(beat, pixelsPerBeat)
       const el = playheadRef.current
       if (el) {
         el.style.transform = `translateX(${px}px)`
@@ -555,8 +573,7 @@ export function MidiEditor({
   const handleScrub = useCallback((clientX: number) => {
     if (!gridRef.current) return
     const rect = gridRef.current.getBoundingClientRect()
-    const gridX = clientX - rect.left
-    const rawBeat = gridX / pixelsPerBeat
+    const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
     const snapped = snapEnabled
       ? Math.round(rawBeat / quantize) * quantize
       : rawBeat
@@ -841,9 +858,9 @@ export function MidiEditor({
             const rowIndex = pitchToRowIndex(note.pitch)
             if (rowIndex === -1) return null
             const row = rows[rowIndex]
-            const x = note.startBeat * pixelsPerBeat
-            const y = rowIndex * rowHeight + 2
-            const w = Math.max(note.durationBeats * pixelsPerBeat, 8)
+            const x = beatToX(note.startBeat, pixelsPerBeat)
+            const y = rowIndexToY(rowIndex, rowHeight) + 2
+            const w = Math.max(beatToX(note.durationBeats, pixelsPerBeat), 8)
             const h = rowHeight - 4
             const isSelected = selectedNoteIds.has(note.id)
             const noteColor = isSelected ? lighten(row.color, 40) : row.color
