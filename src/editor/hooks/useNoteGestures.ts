@@ -8,7 +8,7 @@ const NOTE_EDGE_WIDTH = 8
 // All DragState coordinates are grid-local pixels (converted from viewport
 // coordinates at pointerdown via clientToGrid), regardless of drag type.
 export interface DragState {
-  type: 'none' | 'drawing' | 'moving' | 'resizing' | 'marquee'
+  type: 'none' | 'drawing' | 'moving' | 'resizing' | 'resizing-left' | 'marquee'
   startX: number
   startY: number
   currentX: number
@@ -179,6 +179,23 @@ export function useNoteGestures({
           }
           return n
         }))
+      } else if (ds.type === 'resizing-left' && ds.originalStartBeats && ds.originalDurations) {
+        const deltaX = grid.x - ds.startX
+        const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
+        const snappedDelta = latest.current.snapValue(deltaBeats)
+
+        // Drag the start; keep the end planted. Clamp so start stays >= 0 and
+        // the note never shrinks below one snap step.
+        latest.current.onNotesChange(latest.current.notes.map(n => {
+          const originalStartBeat = ds.originalStartBeats!.get(n.id)
+          const originalDuration = ds.originalDurations!.get(n.id)
+          if (originalStartBeat !== undefined && originalDuration !== undefined) {
+            const end = originalStartBeat + originalDuration
+            const newStartBeat = Math.max(0, Math.min(end - latest.current.snapSize, originalStartBeat + snappedDelta))
+            return { ...n, startBeat: newStartBeat, durationBeats: end - newStartBeat }
+          }
+          return n
+        }))
       } else if (ds.type === 'marquee') {
         setDragState(prev => ({ ...prev, currentX: grid.x, currentY: grid.y }))
         const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, grid.x, grid.y)
@@ -219,11 +236,16 @@ export function useNoteGestures({
     if (!gridRef.current) return
     const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
 
-    // Check if near right edge (resize)
+    // Check if near an edge (resize). Wide enough notes have distinct
+    // left/right resize zones; otherwise the whole note is a move target.
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
     const noteW = noteEl.offsetWidth
-    if (noteW > NOTE_EDGE_WIDTH * 2 && localX > noteW - NOTE_EDGE_WIDTH) {
+    const resizable = noteW > NOTE_EDGE_WIDTH * 2
+    const nearLeft = resizable && localX < NOTE_EDGE_WIDTH
+    const nearRight = resizable && localX > noteW - NOTE_EDGE_WIDTH
+
+    if (nearLeft || nearRight) {
       let newSelectedIds: Set<string>
       if (!selectedNoteIds.has(note.id)) {
         newSelectedIds = new Set([note.id])
@@ -232,20 +254,23 @@ export function useNoteGestures({
         newSelectedIds = selectedNoteIds
       }
 
+      const originalStartBeats = new Map<string, number>()
       const originalDurations = new Map<string, number>()
       for (const n of notes) {
         if (newSelectedIds.has(n.id)) {
+          originalStartBeats.set(n.id, n.startBeat)
           originalDurations.set(n.id, n.durationBeats)
         }
       }
 
       setDragState({
-        type: 'resizing',
+        type: nearLeft ? 'resizing-left' : 'resizing',
         startX: grid.x,
         startY: grid.y,
         currentX: grid.x,
         currentY: grid.y,
         noteId: note.id,
+        originalStartBeats,
         originalDurations,
       })
       setCursor('ew-resize')
@@ -340,7 +365,8 @@ export function useNoteGestures({
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
     const noteW = noteEl.offsetWidth
-    if (noteW > NOTE_EDGE_WIDTH * 2 && localX > noteW - NOTE_EDGE_WIDTH) {
+    const nearEdge = localX < NOTE_EDGE_WIDTH || localX > noteW - NOTE_EDGE_WIDTH
+    if (noteW > NOTE_EDGE_WIDTH * 2 && nearEdge) {
       handleHoverChange('noteEdge')
     } else {
       handleHoverChange('noteBody')
