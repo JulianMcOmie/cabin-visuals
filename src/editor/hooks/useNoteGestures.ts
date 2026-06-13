@@ -61,6 +61,9 @@ export function useNoteGestures({
   const drawingNoteRef = useRef(drawingNote)
   drawingNoteRef.current = drawingNote
   const didDragRef = useRef(false)
+  // Selection that existed when a marquee began (shift-add base); the live
+  // marquee selection is this set unioned with the notes currently boxed.
+  const marqueeBaseRef = useRef<Set<string>>(new Set())
 
   // Direct DOM cursor updates (no re-renders)
   const setCursor = useCallback((cursor: string) => {
@@ -178,6 +181,8 @@ export function useNoteGestures({
         }))
       } else if (ds.type === 'marquee') {
         setDragState(prev => ({ ...prev, currentX: grid.x, currentY: grid.y }))
+        const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, grid.x, grid.y)
+        setSelectedNoteIds(new Set([...marqueeBaseRef.current, ...ids]))
       }
     }
 
@@ -186,11 +191,6 @@ export function useNoteGestures({
       if (ds.type === 'drawing' && drawingNoteRef.current) {
         latest.current.onNotesChange([...latest.current.notes, drawingNoteRef.current])
         setDrawingNote(null)
-      } else if (ds.type === 'marquee') {
-        const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, ds.currentX, ds.currentY)
-        if (ids.length > 0) {
-          setSelectedNoteIds(prev => new Set([...prev, ...ids]))
-        }
       }
 
       setDragState(DRAG_NONE)
@@ -390,8 +390,11 @@ export function useNoteGestures({
       return
     }
 
-    // Left-click = marquee selection
-    if (!e.shiftKey) setSelectedNoteIds(new Set())
+    // Left-click = marquee selection. Capture the base selection (kept on
+    // shift, cleared otherwise) so live updates union against it.
+    const base = e.shiftKey ? new Set(selectedNoteIds) : new Set<string>()
+    marqueeBaseRef.current = base
+    setSelectedNoteIds(base)
     setDragState({
       type: 'marquee',
       startX: gridX,
@@ -401,7 +404,7 @@ export function useNoteGestures({
     })
     setCursor('crosshair')
     beginGestureTracking()
-  }, [rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, beginGestureTracking, gridRef])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
   useEffect(() => {
