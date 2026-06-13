@@ -331,9 +331,12 @@ export function useNoteGestures({
     beginGestureTracking()
   }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef])
 
-  // Handle note hover for cursor changes
+  // Handle note hover for cursor changes. stopPropagation keeps the grid's
+  // own pointermove handler from firing afterward and resetting the cursor
+  // back to default.
   const handleNotePointerMove = useCallback((e: React.PointerEvent) => {
     if (dragStateRef.current.type !== 'none') return
+    e.stopPropagation()
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
     const noteW = noteEl.offsetWidth
