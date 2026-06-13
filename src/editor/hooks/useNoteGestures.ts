@@ -428,7 +428,7 @@ export function useNoteGestures({
       currentX: gridX,
       currentY: gridY,
     })
-    setCursor('crosshair')
+    setCursor('default')
     beginGestureTracking()
   }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, beginGestureTracking, gridRef])
 
