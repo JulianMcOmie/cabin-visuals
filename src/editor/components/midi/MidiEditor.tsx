@@ -138,28 +138,6 @@ export function MidiEditor({
   const snapSize = snapEnabled ? quantize : 1 / 128
   const snapValue = useCallback((v: number) => Math.round(v / snapSize) * snapSize, [snapSize])
 
-  // Refs for values needed by window drag listeners (avoids stale closures)
-  const notesRef = useRef(notes)
-  notesRef.current = notes
-  const onNotesChangeRef = useRef(onNotesChange)
-  onNotesChangeRef.current = onNotesChange
-  const snapValueRef = useRef(snapValue)
-  snapValueRef.current = snapValue
-  const snapSizeRef = useRef(snapSize)
-  snapSizeRef.current = snapSize
-  const snapEnabledRef = useRef(snapEnabled)
-  snapEnabledRef.current = snapEnabled
-  const pixelsPerBeatRef = useRef(pixelsPerBeat)
-  pixelsPerBeatRef.current = pixelsPerBeat
-  const totalBeatsRef = useRef(totalBeats)
-  totalBeatsRef.current = totalBeats
-  const rowHeightRef = useRef(rowHeight)
-  rowHeightRef.current = rowHeight
-  const rowsRef = useRef(rows)
-  rowsRef.current = rows
-  const quantizeRef = useRef(quantize)
-  quantizeRef.current = quantize
-
   // Canvas dimensions
   const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
@@ -251,8 +229,12 @@ export function MidiEditor({
     return matchingIds
   }, [notes, pitchToRowIndex, rowHeight, pixelsPerBeat])
 
-  const getNotesInMarqueeRef = useRef(getNotesInMarquee)
-  getNotesInMarqueeRef.current = getNotesInMarquee
+  // Single ref holding the latest render's values, refreshed every render.
+  // The window drag listeners live across many renders, so they read
+  // everything through latest.current instead of their (stale) closures.
+  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, totalBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latest = useRef(latestValues)
+  latest.current = latestValues
 
   // Install the tracking + completion machinery for the gesture that just
   // started: window-level move/up listeners tied to an AbortController so
@@ -272,25 +254,25 @@ export function MidiEditor({
         const dn = drawingNoteRef.current
         if (!dn) return
         const deltaX = grid.x - ds.startX
-        const deltaDuration = xToBeat(deltaX, pixelsPerBeatRef.current)
-        const baseDuration = snapEnabledRef.current ? quantizeRef.current : 0.25
-        let newDuration = snapValueRef.current(baseDuration + deltaDuration)
-        newDuration = Math.max(snapSizeRef.current, Math.min(totalBeatsRef.current - dn.startBeat, newDuration))
+        const deltaDuration = xToBeat(deltaX, latest.current.pixelsPerBeat)
+        const baseDuration = latest.current.snapEnabled ? latest.current.quantize : 0.25
+        let newDuration = latest.current.snapValue(baseDuration + deltaDuration)
+        newDuration = Math.max(latest.current.snapSize, Math.min(latest.current.totalBeats - dn.startBeat, newDuration))
 
         if (newDuration !== dn.durationBeats) {
           setDrawingNote(prev => prev ? { ...prev, durationBeats: newDuration } : null)
         }
       } else if (ds.type === 'moving' && ds.originalStartBeats && ds.originalPitches) {
         const deltaX = grid.x - ds.startX
-        const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
-        const snappedDelta = snapValueRef.current(deltaBeats)
+        const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
+        const snappedDelta = latest.current.snapValue(deltaBeats)
 
         const deltaY = grid.y - ds.startY
-        const rowDelta = Math.round(deltaY / rowHeightRef.current)
-        const curRows = rowsRef.current
-        const curTotalBeats = totalBeatsRef.current
+        const rowDelta = Math.round(deltaY / latest.current.rowHeight)
+        const curRows = latest.current.rows
+        const curTotalBeats = latest.current.totalBeats
 
-        onNotesChangeRef.current(notesRef.current.map(n => {
+        latest.current.onNotesChange(latest.current.notes.map(n => {
           const originalStartBeat = ds.originalStartBeats!.get(n.id)
           const originalPitch = ds.originalPitches!.get(n.id)
           if (originalStartBeat !== undefined && originalPitch !== undefined) {
@@ -304,13 +286,13 @@ export function MidiEditor({
         }))
       } else if (ds.type === 'resizing' && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
-        const deltaBeats = xToBeat(deltaX, pixelsPerBeatRef.current)
-        const snappedDelta = snapValueRef.current(deltaBeats)
+        const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
+        const snappedDelta = latest.current.snapValue(deltaBeats)
 
-        onNotesChangeRef.current(notesRef.current.map(n => {
+        latest.current.onNotesChange(latest.current.notes.map(n => {
           const originalDuration = ds.originalDurations!.get(n.id)
           if (originalDuration !== undefined) {
-            const newDuration = Math.max(snapSizeRef.current, originalDuration + snappedDelta)
+            const newDuration = Math.max(latest.current.snapSize, originalDuration + snappedDelta)
             return { ...n, durationBeats: newDuration }
           }
           return n
@@ -323,10 +305,10 @@ export function MidiEditor({
     const handleUp = () => {
       const ds = dragStateRef.current
       if (ds.type === 'drawing' && drawingNoteRef.current) {
-        onNotesChangeRef.current([...notesRef.current, drawingNoteRef.current])
+        latest.current.onNotesChange([...latest.current.notes, drawingNoteRef.current])
         setDrawingNote(null)
       } else if (ds.type === 'marquee') {
-        const ids = getNotesInMarqueeRef.current(ds.startX, ds.startY, ds.currentX, ds.currentY)
+        const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, ds.currentX, ds.currentY)
         if (ids.length > 0) {
           setSelectedNoteIds(prev => new Set([...prev, ...ids]))
         }
