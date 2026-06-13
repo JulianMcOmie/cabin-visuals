@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Block, Note } from '../types'
 import { useProjectStore } from '../store/ProjectStore'
 
@@ -46,10 +46,6 @@ export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiE
     setNotes(block.notes)
   }, [block])
 
-  const handleNotesChange = useCallback((newNotes: Note[]) => {
-    setNotes(newNotes)
-  }, [])
-
   // Auto-save when notes change
   useEffect(() => {
     if (notes === block.notes) return
@@ -61,16 +57,10 @@ export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiE
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notes, trackId, block.id, updateBlockNotes])
 
-  const handleClear = useCallback(() => {
-    setNotes([])
-  }, [])
-
   return {
     notes,
     setNotes,
     quantize,
     setQuantize,
-    handleNotesChange,
-    handleClear,
   }
 }

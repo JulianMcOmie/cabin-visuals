@@ -74,7 +74,7 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
   const containerRef = useRef<HTMLDivElement>(null)
   const hasScrolledRef = useRef(false)
 
-  const { notes, quantize, setQuantize, handleNotesChange } = useMidiEditorState({
+  const { notes, setNotes, quantize, setQuantize } = useMidiEditorState({
     trackId,
     block,
     defaultQuantize: DEFAULT_QUANTIZE,
@@ -181,7 +181,7 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
         blockStartBeat={block.startBar * beatsPerBar}
         rows={rows}
         notes={notes}
-        onNotesChange={handleNotesChange}
+        onNotesChange={setNotes}
         totalBeats={totalBeats}
         beatsPerBar={beatsPerBar}
         quantize={quantize}
