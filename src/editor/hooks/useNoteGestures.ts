@@ -237,12 +237,12 @@ export function useNoteGestures({
     const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
 
     // Check if near an edge (resize). Edge zones are capped at NOTE_EDGE_WIDTH
-    // but shrink to a third of the note on thin notes, so the middle third is
+    // but shrink to a quarter of the note on thin notes, so the middle half is
     // always grabbable for moving.
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
     const noteW = noteEl.offsetWidth
-    const edge = Math.min(NOTE_EDGE_WIDTH, noteW / 3)
+    const edge = Math.min(NOTE_EDGE_WIDTH, noteW / 4)
     const nearLeft = localX < edge
     const nearRight = localX > noteW - edge
 
@@ -366,7 +366,7 @@ export function useNoteGestures({
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
     const noteW = noteEl.offsetWidth
-    const edge = Math.min(NOTE_EDGE_WIDTH, noteW / 3)
+    const edge = Math.min(NOTE_EDGE_WIDTH, noteW / 4)
     const nearEdge = localX < edge || localX > noteW - edge
     if (nearEdge) {
       handleHoverChange('noteEdge')
