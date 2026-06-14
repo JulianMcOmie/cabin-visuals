@@ -190,6 +190,7 @@ export function MidiEditor({
 
   const handlePlayheadPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
+    document.body.style.userSelect = 'none'
     scrubRef.current = true
     handleScrub(e.clientX)
 
@@ -199,6 +200,7 @@ export function MidiEditor({
     }
     const onUp = () => {
       scrubRef.current = false
+      document.body.style.userSelect = ''
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
