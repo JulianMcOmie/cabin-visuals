@@ -169,8 +169,8 @@ function TimelineArea() {
   
     addBlock(trackId, {
       id: blockId,
-      startBar: 0,
-      durationBars: 1,
+      startBar: Math.random() * 2,
+      durationBars: Math.round(Math.random() * 3 + 1),
       loop: false,
       notes: [],
     })
