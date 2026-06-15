@@ -234,6 +234,8 @@ export function MidiEditor({
   }, [dragState])
 
   const barCount = Math.ceil(totalBeats / beatsPerBar)
+  const blockStart = beatToX(blockStartBeat, pixelsPerBeat)
+  const blockWidth = beatToX(blockDurationBeats, pixelsPerBeat);
 
   return (
     <div
@@ -436,8 +438,8 @@ export function MidiEditor({
               position: 'absolute',
               backgroundColor: 'green',
               opacity: '70%',
-              left: blockStartBeat * pixelsPerBeat,
-              width: blockDurationBeats * pixelsPerBeat,
+              left: blockStart,
+              width: blockWidth,
               height: '10px'
             }}
           />
@@ -508,7 +510,7 @@ export function MidiEditor({
                 key={note.id}
                 style={{
                   position: 'absolute',
-                  left: x,
+                  left: blockStart + x,
                   top: y,
                   width: w,
                   height: h,
