@@ -428,7 +428,33 @@ export function MidiEditor({
               left: blockStartBeat * pixelsPerBeat,
               width: blockDurationBeats * pixelsPerBeat,
               top: 0,
-              bottom: 0
+              bottom: 0,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              backgroundColor: 'green',
+              opacity: '70%',
+              left: blockStartBeat * pixelsPerBeat,
+              width: blockDurationBeats * pixelsPerBeat,
+              height: '10px'
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              opacity: '70%',
+              borderLeftStyle: 'solid',
+              borderLeftColor: 'green',
+              borderLeftWidth: '1px',
+              borderRightStyle: 'solid',
+              borderRightColor: 'green',
+              borderRightWidth: '1px',
+              left: blockStartBeat * pixelsPerBeat,
+              width: blockDurationBeats * pixelsPerBeat,
+              top: 0,
+              bottom: 0,
             }}
           />
 
