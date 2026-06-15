@@ -101,7 +101,8 @@ export function MidiEditor({
   }, [])
 
   // Canvas dimensions
-  const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
+  // const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
+  const canvasWidth = 10 * beatsPerBar * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
@@ -426,9 +427,9 @@ export function MidiEditor({
             style={{
               position: 'absolute',
               backgroundColor: 'green',
-              opacity: '10%',
-              left: blockStartBeat * pixelsPerBeat,
-              width: blockDurationBeats * pixelsPerBeat,
+              opacity: '9%',
+              left: blockStart,
+              width: blockWidth,
               top: 0,
               bottom: 0,
             }}
@@ -440,7 +441,7 @@ export function MidiEditor({
               opacity: '70%',
               left: blockStart,
               width: blockWidth,
-              height: '10px'
+              height: '7px'
             }}
           />
           <div
@@ -453,8 +454,8 @@ export function MidiEditor({
               borderRightStyle: 'solid',
               borderRightColor: 'green',
               borderRightWidth: '1px',
-              left: blockStartBeat * pixelsPerBeat,
-              width: blockDurationBeats * pixelsPerBeat,
+              left: blockStart,
+              width: blockWidth,
               top: 0,
               bottom: 0,
             }}
