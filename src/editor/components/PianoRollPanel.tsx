@@ -179,6 +179,7 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
       {/* Piano roll grid */}
       <MidiEditor
         blockStartBeat={block.startBar * beatsPerBar}
+        blockDurationBeats={block.durationBars * beatsPerBar}
         rows={rows}
         notes={notes}
         onNotesChange={setNotes}

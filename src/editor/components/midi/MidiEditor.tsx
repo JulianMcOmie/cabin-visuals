@@ -22,6 +22,7 @@ export interface MidiEditorProps {
   rangeLabels?: RangeLabel[]
   /** Beat offset of this block in the project timeline (for playhead positioning) */
   blockStartBeat?: number
+  blockDurationBeats?: number
 }
 
 const LABEL_WIDTH = 88
@@ -40,6 +41,7 @@ export function MidiEditor({
   rowHeight = 28,
   rangeLabels,
   blockStartBeat = 0,
+  blockDurationBeats = 0,
 }: MidiEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -417,6 +419,19 @@ export function MidiEditor({
             if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
+          {/* Midi block outline */}
+          <div
+            style={{
+              position: 'absolute',
+              backgroundColor: 'green',
+              opacity: '10%',
+              left: blockStartBeat * pixelsPerBeat,
+              width: blockDurationBeats * pixelsPerBeat,
+              top: 0,
+              bottom: 0
+            }}
+          />
+
           {/* Range label background bands */}
           {rangeLabelPositions.map((rl, i) => (
             <div
