@@ -2,6 +2,8 @@
 
 import { useRef } from 'react'
 import Link from 'next/link'
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
@@ -166,6 +168,19 @@ function TimelineArea() {
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
+  // Track reordering via dnd-kit (drag the track label). A 5px activation
+  // distance keeps clicks (select / mute / solo) from starting a drag.
+  const reorderRootTracks = useProjectStore((s) => s.reorderRootTracks)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const handleTrackDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const oldIndex = rootTrackIds.indexOf(active.id as string)
+    const newIndex = rootTrackIds.indexOf(over.id as string)
+    if (oldIndex < 0 || newIndex < 0) return
+    reorderRootTracks(arrayMove(rootTrackIds, oldIndex, newIndex))
+  }
+
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
@@ -229,18 +244,22 @@ function TimelineArea() {
       <div className="relative flex-1 flex flex-col min-h-0">
         <TimelineRuler onScrubStart={startScrub} />
         <div className="flex-1 overflow-y-auto">
-          {rootTrackIds.map((id) => {
-            const track = tracks[id]
-            return track ? (
-              <Track
-                key={id}
-                track={track}
-                selectedBlockIds={selectedBlockIds}
-                onBlockPointerDown={handleBlockPointerDown}
-                onLanePointerDown={handleLanePointerDown}
-              />
-            ) : null
-          })}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
+            <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
+              {rootTrackIds.map((id) => {
+                const track = tracks[id]
+                return track ? (
+                  <Track
+                    key={id}
+                    track={track}
+                    selectedBlockIds={selectedBlockIds}
+                    onBlockPointerDown={handleBlockPointerDown}
+                    onLanePointerDown={handleLanePointerDown}
+                  />
+                ) : null
+              })}
+            </SortableContext>
+          </DndContext>
         </div>
 
         {/* Playhead overlay over the lane region (excludes the label column) */}

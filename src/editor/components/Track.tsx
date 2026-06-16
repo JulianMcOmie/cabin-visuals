@@ -1,3 +1,5 @@
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useTimeStore } from '../store/TimeStore'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
@@ -24,16 +26,30 @@ export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePoint
 
   const isSelected = selectedTrackId === track.id
 
+  // Sortable: the label column is the drag handle; reordering is owned by the
+  // DndContext in TimelineArea (separate from block/lane pointer gestures).
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id })
+
   return (
     <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+        zIndex: isDragging ? 20 : undefined,
+        position: 'relative',
+      }}
       className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-pointer transition-colors ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
       }`}
       onClick={() => setSelectedTrackId(isSelected ? null : track.id)}
     >
       <div
+        {...attributes}
+        {...listeners}
         style={{ width: TRACK_LABEL_WIDTH }}
-        className="flex-shrink-0 flex items-center gap-2 px-3 border-r border-zinc-800/60"
+        className="flex-shrink-0 flex items-center gap-2 px-3 border-r border-zinc-800/60 cursor-grab active:cursor-grabbing"
       >
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate" style={{ color: track.color }}>
