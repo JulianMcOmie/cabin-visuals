@@ -13,8 +13,10 @@ interface BlockOrigin {
   durationBars: number
 }
 
+const EDGE_PX = 8
+
 interface DragState {
-  type: 'moving'
+  type: 'moving' | 'resizing-left' | 'resizing-right'
   startX: number
   startY: number
   laneWidthPx: number
@@ -78,6 +80,19 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           }
           store.updateBlock(targetTrackId, blockId, { startBar: newStartBar })
         }
+      } else if (d.type === 'resizing-right') {
+        for (const [blockId, o] of d.origins) {
+          const maxDuration = d.totalBars - o.startBar
+          const newDuration = Math.max(1, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
+          store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
+        }
+      } else if (d.type === 'resizing-left') {
+        for (const [blockId, o] of d.origins) {
+          // Drag the start, keep the end planted; clamp to >= 0 and >= 1 bar long.
+          const end = o.startBar + o.durationBars
+          const newStartBar = Math.max(0, Math.min(end - 1, snapBar(o.startBar + deltaBars)))
+          store.updateBlock(o.trackId, blockId, { startBar: newStartBar, durationBars: end - newStartBar })
+        }
       }
     }
 
@@ -128,8 +143,17 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       return
     }
 
+    // Near an edge → resize that edge; otherwise move. Edge zones shrink on
+    // narrow blocks so the middle stays a move target.
+    const el = e.currentTarget as HTMLDivElement
+    const localX = e.nativeEvent.offsetX
+    const w = el.offsetWidth
+    const edge = Math.min(EDGE_PX, w / 4)
+    const type: DragState['type'] =
+      localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
+
     // Select this block (keep an existing multi-selection it belongs to), then
-    // arm a move drag for the whole selection.
+    // arm the drag for the whole selection.
     let dragSet = selectedBlockIds
     if (!selectedBlockIds.has(blockId)) {
       dragSet = new Set([blockId])
@@ -137,7 +161,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     dragRef.current = {
-      type: 'moving',
+      type,
       startX: e.clientX,
       startY: e.clientY,
       laneWidthPx: laneRef.current?.getBoundingClientRect().width ?? 0,

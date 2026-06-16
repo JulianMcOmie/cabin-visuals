@@ -36,6 +36,13 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
           : isEditing ? `0 0 6px ${color}88` : undefined,
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
+      onPointerMove={(e) => {
+        const el = e.currentTarget
+        const w = el.offsetWidth
+        const edge = Math.min(8, w / 4)
+        const localX = e.nativeEvent.offsetX
+        el.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'grab'
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation()
         setEditingBlock({ trackId, blockId: block.id })
