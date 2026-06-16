@@ -82,7 +82,11 @@ export function useNoteGestures({
 
   // Snap resolution: use quantize grid when enabled, fine resolution when off
   const snapSize = snapEnabled ? quantize : 1 / 128
-  const snapValue = useCallback((v: number) => Math.round((v - snapSize / 2) / snapSize) * snapSize, [snapSize])
+  // Two snap rules over the quantize grid (snapSize). Use roundDownToStep for
+  // an absolute position (a drawn note fills the step it was clicked in) and
+  // roundToNearestStep for a drag distance (symmetric: move once past halfway).
+  const roundDownToStep = useCallback((v: number) => Math.floor(v / snapSize) * snapSize, [snapSize])
+  const roundToNearestStep = useCallback((v: number) => Math.round(v / snapSize) * snapSize, [snapSize])
 
   const pitchToRowIndex = useCallback((pitch: number) => {
     return rows.findIndex(r => r.pitch === pitch)
@@ -110,12 +114,10 @@ export function useNoteGestures({
       const rowIndex = pitchToRowIndex(note.pitch)
       if (rowIndex === -1) continue
 
-      const blockStart = beatToX(block.startBar * beatsPerBar, pixelsPerBeat)
-
-
+      const blockStartPx = beatToX(block.startBar * beatsPerBar, pixelsPerBeat)
       const noteTop = rowIndexToY(rowIndex, rowHeight)
       const noteBottom = noteTop + rowHeight
-      const noteLeft = blockStart + beatToX(note.startBeat, pixelsPerBeat)
+      const noteLeft = blockStartPx + beatToX(note.startBeat, pixelsPerBeat)
       const noteRight = noteLeft + beatToX(note.durationBeats, pixelsPerBeat)
 
       if (maxX >= noteLeft && minX <= noteRight && maxY >= noteTop && minY <= noteBottom) {
@@ -129,7 +131,7 @@ export function useNoteGestures({
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read
   // everything through latest.current instead of their (stale) closures.
-  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latestValues = { notes, onNotesChange, roundToNearestStep, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
   const latest = useRef(latestValues)
   latest.current = latestValues
 
@@ -152,7 +154,7 @@ export function useNoteGestures({
         const deltaX = grid.x - ds.startX
         const deltaDuration = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const baseDuration = latest.current.snapEnabled ? latest.current.quantize : 0.25
-        let newDuration = latest.current.snapValue(baseDuration + deltaDuration)
+        let newDuration = latest.current.roundToNearestStep(baseDuration + deltaDuration)
         // Bound the note's end to the timeline, not the block, so notes can extend past the block.
         const maxDuration = latest.current.initialTotalBeats - (latest.current.blockStartBeat + dn.startBeat)
         newDuration = Math.max(latest.current.snapSize, Math.min(maxDuration, newDuration))
@@ -163,7 +165,7 @@ export function useNoteGestures({
       } else if (ds.type === 'moving' && ds.originalStartBeats && ds.originalPitches) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
-        const snappedDelta = latest.current.snapValue(deltaBeats)
+        const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
 
         const deltaY = grid.y - ds.startY
         const rowDelta = Math.round(deltaY / latest.current.rowHeight)
@@ -191,7 +193,7 @@ export function useNoteGestures({
       } else if (ds.type === 'resizing' && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
-        const snappedDelta = latest.current.snapValue(deltaBeats)
+        const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
 
         latest.current.onNotesChange(latest.current.notes.map(n => {
           const originalDuration = ds.originalDurations!.get(n.id)
@@ -204,7 +206,7 @@ export function useNoteGestures({
       } else if (ds.type === 'resizing-left' && ds.originalStartBeats && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
-        const snappedDelta = latest.current.snapValue(deltaBeats)
+        const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
 
         // Drag the start; keep the end planted. Clamp so start stays >= 0 and
         // the note never shrinks below one snap step.
@@ -413,7 +415,7 @@ export function useNoteGestures({
       if (rowIndex >= 0 && rowIndex < rows.length) {
         const pitch = rows[rowIndex].pitch
         const rawBeat = xToBeat(gridX, pixelsPerBeat)
-        const startBeat = snapValue(rawBeat)
+        const startBeat = roundDownToStep(rawBeat)
 
         // Draw anywhere on the timeline; store the position relative to the block.
         if (startBeat >= 0 && startBeat < initialTotalBeats) {
@@ -459,7 +461,7 @@ export function useNoteGestures({
     })
     setCursor('default')
     beginGestureTracking()
-  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
   useEffect(() => {

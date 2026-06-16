@@ -72,7 +72,7 @@ export function Track({ track }: TrackProps) {
       <div className="flex-1 relative">
         <div
           className="absolute top-0 bottom-0 w-px z-10 pointer-events-none"
-          style={{ left: `${playheadPct}%`, backgroundColor: '#818cf8aa' }}
+          style={{ left: `${playheadPct}%`, backgroundColor: '#ffffffaa' }}
         />
         {track.blocks.map((block) => (
           <Block

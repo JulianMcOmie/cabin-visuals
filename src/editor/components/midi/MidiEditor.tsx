@@ -247,8 +247,8 @@ export function MidiEditor({
   }, [dragState])
 
   const barCount = Math.ceil(initialTotalBeats / beatsPerBar)
-  const blockStart = beatToX(blockStartBeat, pixelsPerBeat)
-  const blockWidth = beatToX(blockDurationBeats, pixelsPerBeat);
+  const blockStartPx = beatToX(blockStartBeat, pixelsPerBeat)
+  const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
   return (
     <div
@@ -320,7 +320,7 @@ export function MidiEditor({
               left: 0,
               width: 1.5,
               height: '100%',
-              backgroundColor: '#818cf8',
+              backgroundColor: '#ffffff',
             }} />
             <div style={{
               position: 'absolute',
@@ -330,7 +330,7 @@ export function MidiEditor({
               height: 0,
               borderLeft: '4.5px solid transparent',
               borderRight: '4.5px solid transparent',
-              borderBottom: '6px solid #818cf8',
+              borderBottom: '6px solid #ffffff',
             }} />
           </div>
         </div>
@@ -439,10 +439,9 @@ export function MidiEditor({
           <div
             style={{
               position: 'absolute',
-              backgroundColor: 'green',
-              opacity: '9%',
-              left: blockStart,
-              width: blockWidth,
+              backgroundColor: 'rgba(129, 140, 248, 0.08)',
+              left: blockStartPx,
+              width: blockWidthPx,
               top: 0,
               bottom: 0,
             }}
@@ -451,26 +450,20 @@ export function MidiEditor({
           <div
             style={{
               position: 'absolute',
-              backgroundColor: 'green',
-              opacity: '70%',
-              left: blockStart,
-              width: blockWidth,
-              height: '7px'
+              backgroundColor: 'rgba(129, 140, 248, 0.6)',
+              left: blockStartPx,
+              width: blockWidthPx,
+              height: '7px',
             }}
           />
           {/* Sides */}
           <div
             style={{
               position: 'absolute',
-              opacity: '70%',
-              borderLeftStyle: 'solid',
-              borderLeftColor: 'green',
-              borderLeftWidth: '1px',
-              borderRightStyle: 'solid',
-              borderRightColor: 'green',
-              borderRightWidth: '1px',
-              left: blockStart,
-              width: blockWidth,
+              borderLeft: '1px solid rgba(129, 140, 248, 0.6)',
+              borderRight: '1px solid rgba(129, 140, 248, 0.6)',
+              left: blockStartPx,
+              width: blockWidthPx,
               top: 0,
               bottom: 0,
             }}
@@ -526,7 +519,7 @@ export function MidiEditor({
                 key={note.id}
                 style={{
                   position: 'absolute',
-                  left: blockStart + x,
+                  left: blockStartPx + x,
                   top: y,
                   width: w,
                   height: h,
@@ -568,7 +561,7 @@ export function MidiEditor({
               left: 0,
               width: 1.5,
               height: '100%',
-              backgroundColor: '#818cf8',
+              backgroundColor: '#ffffff',
             }} />
             {/* Hit area for scrubbing (kept narrow so it barely overlaps notes) */}
             <div

@@ -40,7 +40,7 @@ export function TimelineRuler() {
             </div>
           ))}
         <div
-          className="absolute top-0 bottom-0 w-px bg-indigo-400 z-20 pointer-events-none"
+          className="absolute top-0 bottom-0 w-px bg-white z-20 pointer-events-none"
           style={{ left: `${playheadPct}%` }}
         >
           <div
@@ -48,7 +48,7 @@ export function TimelineRuler() {
             style={{
               borderLeft: '5px solid transparent',
               borderRight: '5px solid transparent',
-              borderTop: '7px solid #818cf8',
+              borderTop: '7px solid #ffffff',
             }}
           />
         </div>
