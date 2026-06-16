@@ -405,8 +405,7 @@ export function useNoteGestures({
   const handleBackgroundPointerDown = useCallback((e: React.PointerEvent) => {
     if (!gridRef.current) return
     const { x: gridX, y: gridY } = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
-    const blockStart = block.startBar * beatsPerBar
-   
+
     // Right-click = draw new note
     if (e.button === 2) {
       const rowIndex = yToRowIndex(gridY, rowHeight)
@@ -416,11 +415,12 @@ export function useNoteGestures({
         const rawBeat = xToBeat(gridX, pixelsPerBeat)
         const startBeat = snapValue(rawBeat)
 
-        if (startBeat >= 0 && startBeat < blockDurationBeats) {
+        // Draw anywhere on the timeline; store the position relative to the block.
+        if (startBeat >= 0 && startBeat < initialTotalBeats) {
           const newNote: Note = {
             id: crypto.randomUUID(),
             pitch,
-            startBeat: startBeat - blockStart,
+            startBeat: startBeat - blockStartBeat,
             durationBeats: snapEnabled ? quantize : 0.25,
             velocity: 100,
           }
@@ -459,7 +459,7 @@ export function useNoteGestures({
     })
     setCursor('default')
     beginGestureTracking()
-  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, blockDurationBeats, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
   useEffect(() => {
