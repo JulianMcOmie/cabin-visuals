@@ -23,6 +23,7 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
 
   return (
     <div
+      data-block-id={block.id}
       title="Double-click to edit notes"
       className="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab"
       style={{

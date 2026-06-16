@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
@@ -15,13 +15,29 @@ interface BlockOrigin {
 
 const EDGE_PX = 8
 
-interface DragState {
-  type: 'moving' | 'resizing-left' | 'resizing-right'
-  startX: number
-  startY: number
-  laneWidthPx: number
-  totalBars: number
-  origins: Map<string, BlockOrigin>
+// moving/resizing carry block origins; marquee carries the pre-drag selection
+// to union against, and works in client coordinates (robust to scroll).
+type DragState =
+  | {
+      type: 'moving' | 'resizing-left' | 'resizing-right'
+      startX: number
+      startY: number
+      laneWidthPx: number
+      totalBars: number
+      origins: Map<string, BlockOrigin>
+    }
+  | {
+      type: 'marquee'
+      startClientX: number
+      startClientY: number
+      base: Set<string>
+    }
+
+interface MarqueeRect {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 interface UseTrackGesturesOptions {
@@ -41,6 +57,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
   const dragRef = useRef<DragState | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
   // Snap a bar position to whole bars (the timeline's grid).
   const snapBar = (bar: number) => Math.round(bar)
@@ -53,6 +70,28 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
       if (!d) return
+
+      if (d.type === 'marquee') {
+        const minX = Math.min(d.startClientX, e.clientX)
+        const maxX = Math.max(d.startClientX, e.clientX)
+        const minY = Math.min(d.startClientY, e.clientY)
+        const maxY = Math.max(d.startClientY, e.clientY)
+        // Hit-test block elements by their client rects (scroll-independent).
+        const ids = new Set(d.base)
+        document.querySelectorAll<HTMLElement>('[data-block-id]').forEach((el) => {
+          const r = el.getBoundingClientRect()
+          if (r.right >= minX && r.left <= maxX && r.bottom >= minY && r.top <= maxY) {
+            if (el.dataset.blockId) ids.add(el.dataset.blockId)
+          }
+        })
+        setSelectedBlockIds(ids)
+        const laneR = laneRef.current?.getBoundingClientRect()
+        if (laneR) {
+          setMarqueeRect({ left: minX - laneR.left, top: minY - laneR.top, width: maxX - minX, height: maxY - minY })
+        }
+        return
+      }
+
       const deltaX = e.clientX - d.startX
       const deltaBars = d.laneWidthPx > 0 ? (deltaX / d.laneWidthPx) * d.totalBars : 0
       const rowDelta = Math.round((e.clientY - d.startY) / ROW_HEIGHT)
@@ -98,6 +137,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
     const handleUp = () => {
       dragRef.current = null
+      setMarqueeRect(null)
       document.body.style.userSelect = ''
       controller.abort()
       abortRef.current = null
@@ -105,7 +145,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
-  }, [])
+  }, [setSelectedBlockIds, laneRef])
 
   // Tear down a drag still in flight if the component unmounts.
   useEffect(() => {
@@ -171,10 +211,19 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     beginGestureTracking()
   }, [selectedBlockIds, setSelectedBlockIds, laneRef, beginGestureTracking])
 
-  // Pointer down on empty lane clears the selection (marquee added later).
+  // Pointer down on empty lane begins a marquee (shift keeps the current
+  // selection as the base; otherwise it starts empty).
   const handleLanePointerDown = useCallback((e: ReactPointerEvent) => {
+    const base = e.shiftKey ? new Set(selectedBlockIds) : new Set<string>()
     if (!e.shiftKey) setSelectedBlockIds(new Set())
-  }, [setSelectedBlockIds])
+    dragRef.current = {
+      type: 'marquee',
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      base,
+    }
+    beginGestureTracking()
+  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking])
 
   // Delete removes selected blocks; Escape clears the selection.
   useEffect(() => {
@@ -200,5 +249,5 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [selectedBlockIds, setSelectedBlockIds])
 
-  return { selectedBlockIds, handleBlockPointerDown, handleLanePointerDown }
+  return { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown }
 }

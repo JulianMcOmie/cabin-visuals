@@ -164,7 +164,7 @@ function TimelineArea() {
   const laneRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
 
-  const { selectedBlockIds, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
+  const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
@@ -249,6 +249,18 @@ function TimelineArea() {
           style={{ left: TRACK_LABEL_WIDTH, right: 0 }}
         >
           <div ref={laneRef} className="relative w-full h-full">
+            {marqueeRect && (
+              <div
+                className="absolute z-20 border border-indigo-400"
+                style={{
+                  left: marqueeRect.left,
+                  top: marqueeRect.top,
+                  width: marqueeRect.width,
+                  height: marqueeRect.height,
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                }}
+              />
+            )}
             <div ref={playheadRef} className="absolute top-0 bottom-0 w-px bg-white z-30" style={{ left: 0 }}>
               <div
                 className="absolute -top-0 -translate-x-1/2 w-0 h-0"
