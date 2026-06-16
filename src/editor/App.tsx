@@ -164,7 +164,7 @@ function TimelineArea() {
   const laneRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
 
-  const { selectedBlockIds, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures()
+  const { selectedBlockIds, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
