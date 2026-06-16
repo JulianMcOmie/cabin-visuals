@@ -223,7 +223,7 @@ export default function EditorApp() {
             <LeftSidebar />
           </Panel>
 
-          <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
+          <PanelResizeHandle className="w-px bg-zinc-800 cursor-col-resize" />
 
           {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
           <Panel>
@@ -238,7 +238,7 @@ export default function EditorApp() {
                       <TrackEditor />
                     </Panel>
 
-                    <PanelResizeHandle className="w-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-col-resize" />
+                    <PanelResizeHandle className="w-px bg-zinc-800 cursor-col-resize" />
 
                     {/* Canvas */}
                     <Panel>
@@ -251,7 +251,7 @@ export default function EditorApp() {
                   </PanelGroup>
                 </Panel>
 
-                <PanelResizeHandle className="h-px bg-zinc-800 hover:bg-indigo-500 transition-colors cursor-row-resize" />
+                <PanelResizeHandle className="h-px bg-zinc-800 cursor-row-resize" />
 
                 {/* Tracks / Piano Roll */}
                 <Panel defaultSize="28%" minSize="12%">
