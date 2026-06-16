@@ -24,6 +24,7 @@ const DRAG_NONE: DragState = { type: 'none', startX: 0, startY: 0, currentX: 0, 
 interface UseNoteGesturesOptions {
   containerRef: RefObject<HTMLDivElement | null>
   gridRef: RefObject<HTMLDivElement | null>
+  scrubbingRef: RefObject<boolean>
   block: Block
   notes: Note[]
   onNotesChange: (notes: Note[]) => void
@@ -48,6 +49,7 @@ interface UseNoteGesturesOptions {
 export function useNoteGestures({
   containerRef,
   gridRef,
+  scrubbingRef,
   block,
   notes,
   onNotesChange,
@@ -86,13 +88,14 @@ export function useNoteGestures({
     return rows.findIndex(r => r.pitch === pitch)
   }, [rows])
 
-  // Hover handler for dynamic cursor
+  // Hover handler for dynamic cursor. Bails during a note drag or a scrub so
+  // those gestures keep their own cursor instead of flickering on note hover.
   const handleHoverChange = useCallback((target: 'noteBody' | 'noteEdge' | null) => {
-    if (dragStateRef.current.type !== 'none') return
+    if (dragStateRef.current.type !== 'none' || scrubbingRef.current) return
     if (target === 'noteEdge') setCursor('ew-resize')
     else if (target === 'noteBody') setCursor('grab')
     else setCursor('default')
-  }, [setCursor])
+  }, [setCursor, scrubbingRef])
 
   // Get notes within marquee bounds (grid-local pixel rect)
   const getNotesInMarquee = useCallback((x1: number, y1: number, x2: number, y2: number): string[] => {
@@ -382,7 +385,9 @@ export function useNoteGestures({
   // own pointermove handler from firing afterward and resetting the cursor
   // back to default.
   const handleNotePointerMove = useCallback((e: React.PointerEvent) => {
-    if (dragStateRef.current.type !== 'none') return
+    // Bail before stopPropagation during a drag or scrub, so the gesture's
+    // window-level pointermove listener keeps firing while the cursor is over a note.
+    if (dragStateRef.current.type !== 'none' || scrubbingRef.current) return
     e.stopPropagation()
     const noteEl = e.currentTarget as HTMLDivElement
     const localX = e.nativeEvent.offsetX
@@ -394,7 +399,7 @@ export function useNoteGestures({
     } else {
       handleHoverChange('noteBody')
     }
-  }, [handleHoverChange])
+  }, [handleHoverChange, scrubbingRef])
 
   // Handle background pointer down (left-click = marquee selection, right-click = draw note)
   const handleBackgroundPointerDown = useCallback((e: React.PointerEvent) => {

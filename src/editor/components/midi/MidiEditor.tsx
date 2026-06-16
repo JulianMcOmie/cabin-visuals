@@ -50,6 +50,7 @@ export function MidiEditor({
   const gridRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
+  const scrubRef = useRef(false)
 
   const {
     selectedNoteIds,
@@ -66,6 +67,7 @@ export function MidiEditor({
   } = useNoteGestures({
     containerRef,
     gridRef,
+    scrubbingRef: scrubRef,
     block,
     notes,
     onNotesChange,
@@ -186,23 +188,24 @@ export function MidiEditor({
   }, [pixelsPerBeat, initialTotalBeats])
 
   // Scrub handler: click/drag on ruler to move playhead
-  const scrubRef = useRef(false)
-
   const handleScrub = useCallback((clientX: number) => {
     if (!gridRef.current) return
     const rect = gridRef.current.getBoundingClientRect()
+    // gridX maps directly to an absolute timeline beat; scrub anywhere from the
+    // start of the timeline to its end, independent of where the block sits.
     const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
     const snapped = snapEnabled
       ? Math.round(rawBeat / quantize) * quantize
       : rawBeat
-    const clamped = Math.max(0, Math.min(blockDurationBeats, snapped))
-    useTimeStore.getState().setCurrentBeat(clamped + blockStartBeat)
-  }, [pixelsPerBeat, snapEnabled, quantize, blockDurationBeats, blockStartBeat])
+    const clamped = Math.max(0, Math.min(initialTotalBeats, snapped))
+    useTimeStore.getState().setCurrentBeat(clamped)
+  }, [pixelsPerBeat, snapEnabled, quantize, initialTotalBeats])
 
   const handlePlayheadPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     document.body.style.userSelect = 'none'
     scrubRef.current = true
+    setCursor('col-resize')
     handleScrub(e.clientX)
 
     const controller = new AbortController()
@@ -212,6 +215,7 @@ export function MidiEditor({
     const onUp = () => {
       scrubRef.current = false
       document.body.style.userSelect = ''
+      setCursor('default')
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
@@ -345,7 +349,7 @@ export function MidiEditor({
             cursor: 'default',
           }}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none') setCursor('default')
+            if (dragStateRef.current.type === 'none' && !scrubRef.current) setCursor('default')
           }}
         >
           {rows.map((row) => (
@@ -427,7 +431,7 @@ export function MidiEditor({
           onPointerDown={handleBackgroundPointerDown}
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none') setCursor('default')
+            if (dragStateRef.current.type === 'none' && !scrubRef.current) setCursor('default')
           }}
         >
           {/* Midi block outline */}
