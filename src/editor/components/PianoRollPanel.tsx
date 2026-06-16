@@ -181,6 +181,7 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={block.durationBars * beatsPerBar}
         rows={rows}
+        block={block}
         notes={notes}
         onNotesChange={setNotes}
         totalBeats={totalBeats}

@@ -1,5 +1,5 @@
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
-import type { Note } from '../types'
+import type { Block, Note } from '../types'
 import type { MidiRow } from '../components/midi/types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
 
@@ -24,11 +24,13 @@ const DRAG_NONE: DragState = { type: 'none', startX: 0, startY: 0, currentX: 0, 
 interface UseNoteGesturesOptions {
   containerRef: RefObject<HTMLDivElement | null>
   gridRef: RefObject<HTMLDivElement | null>
+  block: Block
   notes: Note[]
   onNotesChange: (notes: Note[]) => void
   rows: MidiRow[]
   rowHeight: number
   pixelsPerBeat: number
+  beatsPerBar: number
   totalBeats: number
   quantize: number
   snapEnabled: boolean
@@ -44,11 +46,13 @@ interface UseNoteGesturesOptions {
 export function useNoteGestures({
   containerRef,
   gridRef,
+  block,
   notes,
   onNotesChange,
   rows,
   rowHeight,
   pixelsPerBeat,
+  beatsPerBar,
   totalBeats,
   quantize,
   snapEnabled,
@@ -99,9 +103,12 @@ export function useNoteGestures({
       const rowIndex = pitchToRowIndex(note.pitch)
       if (rowIndex === -1) continue
 
+      const blockStart = beatToX(block.startBar * beatsPerBar, pixelsPerBeat)
+
+
       const noteTop = rowIndexToY(rowIndex, rowHeight)
       const noteBottom = noteTop + rowHeight
-      const noteLeft = beatToX(note.startBeat, pixelsPerBeat)
+      const noteLeft = blockStart + beatToX(note.startBeat, pixelsPerBeat)
       const noteRight = noteLeft + beatToX(note.durationBeats, pixelsPerBeat)
 
       if (maxX >= noteLeft && minX <= noteRight && maxY >= noteTop && minY <= noteBottom) {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTimeStore } from '../../store/TimeStore'
 import { useUIStore } from '../../store/UIStore'
 import { lighten } from '../../utils/colors'
-import type { Note } from '../../types'
+import type { Block, Note } from '../../types'
 import { useNoteGestures } from '../../hooks/useNoteGestures'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
 import type { MidiRow, RangeLabel } from './types'
@@ -12,6 +12,7 @@ import type { MidiRow, RangeLabel } from './types'
 export interface MidiEditorProps {
   rows: MidiRow[]
   notes: Note[]
+  block: Block
   onNotesChange: (notes: Note[]) => void
   totalBeats: number
   beatsPerBar: number
@@ -32,6 +33,7 @@ const CANVAS_RIGHT_PADDING = 20
 export function MidiEditor({
   rows,
   notes,
+  block,
   onNotesChange,
   totalBeats,
   beatsPerBar,
@@ -63,11 +65,13 @@ export function MidiEditor({
   } = useNoteGestures({
     containerRef,
     gridRef,
+    block,
     notes,
     onNotesChange,
     rows,
     rowHeight,
     pixelsPerBeat,
+    beatsPerBar,
     totalBeats,
     quantize,
     snapEnabled,
@@ -101,8 +105,7 @@ export function MidiEditor({
   }, [])
 
   // Canvas dimensions
-  // const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
-  const canvasWidth = 10 * beatsPerBar * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
+  const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
