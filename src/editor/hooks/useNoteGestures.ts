@@ -31,7 +31,9 @@ interface UseNoteGesturesOptions {
   rowHeight: number
   pixelsPerBeat: number
   beatsPerBar: number
+  blockStartBeat: number
   blockDurationBeats: number
+  initialTotalBeats: number
   quantize: number
   snapEnabled: boolean
 }
@@ -53,7 +55,9 @@ export function useNoteGestures({
   rowHeight,
   pixelsPerBeat,
   beatsPerBar,
+  blockStartBeat,
   blockDurationBeats,
+  initialTotalBeats,
   quantize,
   snapEnabled,
 }: UseNoteGesturesOptions) {
@@ -122,7 +126,7 @@ export function useNoteGestures({
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read
   // everything through latest.current instead of their (stale) closures.
-  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, blockDurationBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
   const latest = useRef(latestValues)
   latest.current = latestValues
 
@@ -146,7 +150,9 @@ export function useNoteGestures({
         const deltaDuration = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const baseDuration = latest.current.snapEnabled ? latest.current.quantize : 0.25
         let newDuration = latest.current.snapValue(baseDuration + deltaDuration)
-        newDuration = Math.max(latest.current.snapSize, Math.min(latest.current.blockDurationBeats - dn.startBeat, newDuration))
+        // Bound the note's end to the timeline, not the block, so notes can extend past the block.
+        const maxDuration = latest.current.initialTotalBeats - (latest.current.blockStartBeat + dn.startBeat)
+        newDuration = Math.max(latest.current.snapSize, Math.min(maxDuration, newDuration))
 
         if (newDuration !== dn.durationBeats) {
           setDrawingNote(prev => prev ? { ...prev, durationBeats: newDuration } : null)
@@ -159,7 +165,11 @@ export function useNoteGestures({
         const deltaY = grid.y - ds.startY
         const rowDelta = Math.round(deltaY / latest.current.rowHeight)
         const curRows = latest.current.rows
-        const curBlockDuration = latest.current.blockDurationBeats
+        // Notes may leave the block; bound them to the timeline instead.
+        // startBeat is block-relative, so the absolute range [0, timeline] maps
+        // to the relative range [-blockStartBeat, timeline - blockStartBeat - dur].
+        const curBlockStart = latest.current.blockStartBeat
+        const curTimeline = latest.current.initialTotalBeats
 
         latest.current.onNotesChange(latest.current.notes.map(n => {
           const originalStartBeat = ds.originalStartBeats!.get(n.id)
@@ -168,7 +178,9 @@ export function useNoteGestures({
             const origRowIndex = curRows.findIndex(r => r.pitch === originalPitch)
             const newRowIndex = Math.max(0, Math.min(curRows.length - 1, origRowIndex + rowDelta))
             const newPitch = curRows[newRowIndex].pitch
-            const newStartBeat = Math.max(0, Math.min(curBlockDuration - n.durationBeats, originalStartBeat + snappedDelta))
+            const minStartBeat = -curBlockStart
+            const maxStartBeat = curTimeline - curBlockStart - n.durationBeats
+            const newStartBeat = Math.max(minStartBeat, Math.min(maxStartBeat, originalStartBeat + snappedDelta))
             return { ...n, startBeat: newStartBeat, pitch: newPitch }
           }
           return n
@@ -198,7 +210,9 @@ export function useNoteGestures({
           const originalDuration = ds.originalDurations!.get(n.id)
           if (originalStartBeat !== undefined && originalDuration !== undefined) {
             const end = originalStartBeat + originalDuration
-            const newStartBeat = Math.max(0, Math.min(end - latest.current.snapSize, originalStartBeat + snappedDelta))
+            // Allow the left edge past the block start, down to the timeline start.
+            const minStartBeat = -latest.current.blockStartBeat
+            const newStartBeat = Math.max(minStartBeat, Math.min(end - latest.current.snapSize, originalStartBeat + snappedDelta))
             return { ...n, startBeat: newStartBeat, durationBeats: end - newStartBeat }
           }
           return n

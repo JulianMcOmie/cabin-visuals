@@ -73,7 +73,9 @@ export function MidiEditor({
     rowHeight,
     pixelsPerBeat,
     beatsPerBar,
+    blockStartBeat,
     blockDurationBeats,
+    initialTotalBeats,
     quantize,
     snapEnabled,
   })
