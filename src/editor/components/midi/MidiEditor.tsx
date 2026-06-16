@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useTimeStore } from '../../store/TimeStore'
+import { useEffect, useMemo, useRef } from 'react'
 import { useUIStore } from '../../store/UIStore'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from '../../hooks/useNoteGestures'
+import { usePlayhead } from '../../hooks/usePlayhead'
+import { useScrub } from '../../hooks/useScrub'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
 import type { MidiRow, RangeLabel } from './types'
 
@@ -50,7 +51,19 @@ export function MidiEditor({
   const gridRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
-  const scrubRef = useRef(false)
+
+  // Scrubbing: map a clientX to an absolute beat (snapped, clamped to the timeline)
+  const { scrubbingRef, startScrub } = useScrub({
+    computeBeat: (clientX) => {
+      if (!gridRef.current) return null
+      const rect = gridRef.current.getBoundingClientRect()
+      const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
+      const snapped = snapEnabled ? Math.round(rawBeat / quantize) * quantize : rawBeat
+      return Math.max(0, Math.min(initialTotalBeats, snapped))
+    },
+    onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'col-resize' },
+    onEnd: () => { if (containerRef.current) containerRef.current.style.cursor = 'default' },
+  })
 
   const {
     selectedNoteIds,
@@ -67,7 +80,7 @@ export function MidiEditor({
   } = useNoteGestures({
     containerRef,
     gridRef,
-    scrubbingRef: scrubRef,
+    scrubbingRef,
     block,
     notes,
     onNotesChange,
@@ -165,62 +178,15 @@ export function MidiEditor({
   // Playhead position via RAF (no React re-renders). The canvas is an absolute
   // timeline, so the playhead sits at the absolute currentBeat and is visible
   // anywhere within the timeline (not just over the block).
-  useEffect(() => {
-    let rafId: number
-    const tick = () => {
-      const beat = useTimeStore.getState().currentBeat
-      const visible = beat >= 0 && beat <= initialTotalBeats
-      const px = beatToX(beat, pixelsPerBeat)
-      const el = playheadRef.current
-      if (el) {
-        el.style.transform = `translateX(${px}px)`
-        el.style.display = visible ? '' : 'none'
-      }
-      const rel = rulerPlayheadRef.current
-      if (rel) {
-        rel.style.transform = `translateX(${px}px)`
-        rel.style.display = visible ? '' : 'none'
-      }
-      rafId = requestAnimationFrame(tick)
+  usePlayhead((beat) => {
+    const visible = beat >= 0 && beat <= initialTotalBeats
+    const px = beatToX(beat, pixelsPerBeat)
+    for (const el of [playheadRef.current, rulerPlayheadRef.current]) {
+      if (!el) continue
+      el.style.transform = `translateX(${px}px)`
+      el.style.display = visible ? '' : 'none'
     }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
-  }, [pixelsPerBeat, initialTotalBeats])
-
-  // Scrub handler: click/drag on ruler to move playhead
-  const handleScrub = useCallback((clientX: number) => {
-    if (!gridRef.current) return
-    const rect = gridRef.current.getBoundingClientRect()
-    // gridX maps directly to an absolute timeline beat; scrub anywhere from the
-    // start of the timeline to its end, independent of where the block sits.
-    const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
-    const snapped = snapEnabled
-      ? Math.round(rawBeat / quantize) * quantize
-      : rawBeat
-    const clamped = Math.max(0, Math.min(initialTotalBeats, snapped))
-    useTimeStore.getState().setCurrentBeat(clamped)
-  }, [pixelsPerBeat, snapEnabled, quantize, initialTotalBeats])
-
-  const handlePlayheadPointerDown = (e: React.PointerEvent) => {
-    e.stopPropagation()
-    document.body.style.userSelect = 'none'
-    scrubRef.current = true
-    setCursor('col-resize')
-    handleScrub(e.clientX)
-
-    const controller = new AbortController()
-    const onMove = (ev: PointerEvent) => {
-      if (scrubRef.current) handleScrub(ev.clientX)
-    }
-    const onUp = () => {
-      scrubRef.current = false
-      document.body.style.userSelect = ''
-      setCursor('default')
-      controller.abort()
-    }
-    window.addEventListener('pointermove', onMove, { signal: controller.signal })
-    window.addEventListener('pointerup', onUp, { signal: controller.signal })
-  }
+  })
 
   // All notes including the one being drawn
   const allNotes = drawingNote ? [...notes, drawingNote] : notes
@@ -278,7 +244,7 @@ export function MidiEditor({
             cursor: 'col-resize',
             overflow: 'hidden',
           }}
-          onPointerDown={handlePlayheadPointerDown}
+          onPointerDown={startScrub}
         >
           {/* Bar numbers */}
           {Array.from({ length: barCount }).map((_, i) => (
@@ -349,7 +315,7 @@ export function MidiEditor({
             cursor: 'default',
           }}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none' && !scrubRef.current) setCursor('default')
+            if (dragStateRef.current.type === 'none' && !scrubbingRef.current) setCursor('default')
           }}
         >
           {rows.map((row) => (
@@ -431,7 +397,7 @@ export function MidiEditor({
           onPointerDown={handleBackgroundPointerDown}
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none' && !scrubRef.current) setCursor('default')
+            if (dragStateRef.current.type === 'none' && !scrubbingRef.current) setCursor('default')
           }}
         >
           {/* Midi block outline */}
@@ -575,7 +541,7 @@ export function MidiEditor({
                 pointerEvents: 'auto',
                 zIndex: 16,
               }}
-              onPointerDown={handlePlayheadPointerDown}
+              onPointerDown={startScrub}
             />
           </div>
         </div>
