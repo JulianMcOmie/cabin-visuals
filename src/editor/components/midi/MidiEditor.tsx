@@ -426,6 +426,7 @@ export function MidiEditor({
           }}
         >
           {/* Midi block outline */}
+          {/* Background */}
           <div
             style={{
               position: 'absolute',
@@ -437,6 +438,7 @@ export function MidiEditor({
               bottom: 0,
             }}
           />
+          {/* Top */}
           <div
             style={{
               position: 'absolute',
@@ -447,6 +449,7 @@ export function MidiEditor({
               height: '7px'
             }}
           />
+          {/* Sides */}
           <div
             style={{
               position: 'absolute',

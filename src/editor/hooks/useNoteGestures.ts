@@ -76,7 +76,7 @@ export function useNoteGestures({
 
   // Snap resolution: use quantize grid when enabled, fine resolution when off
   const snapSize = snapEnabled ? quantize : 1 / 128
-  const snapValue = useCallback((v: number) => Math.round(v / snapSize) * snapSize, [snapSize])
+  const snapValue = useCallback((v: number) => Math.round((v - snapSize / 2) / snapSize) * snapSize, [snapSize])
 
   const pitchToRowIndex = useCallback((pitch: number) => {
     return rows.findIndex(r => r.pitch === pitch)
@@ -386,7 +386,8 @@ export function useNoteGestures({
   const handleBackgroundPointerDown = useCallback((e: React.PointerEvent) => {
     if (!gridRef.current) return
     const { x: gridX, y: gridY } = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
-
+    const blockStart = block.startBar * beatsPerBar
+   
     // Right-click = draw new note
     if (e.button === 2) {
       const rowIndex = yToRowIndex(gridY, rowHeight)
@@ -400,7 +401,7 @@ export function useNoteGestures({
           const newNote: Note = {
             id: crypto.randomUUID(),
             pitch,
-            startBeat,
+            startBeat: startBeat,// - blockStart,
             durationBeats: snapEnabled ? quantize : 0.25,
             velocity: 100,
           }
