@@ -318,19 +318,19 @@ export function MidiEditor({
               position: 'absolute',
               top: 0,
               left: 0,
-              width: 1.5,
+              width: 0.5,
               height: '100%',
               backgroundColor: '#ffffff',
             }} />
             <div style={{
               position: 'absolute',
               bottom: 0,
-              left: -4,
+              left: -5.75,
               width: 0,
               height: 0,
-              borderLeft: '4.5px solid transparent',
-              borderRight: '4.5px solid transparent',
-              borderBottom: '6px solid #ffffff',
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '9px solid #ffffff',
             }} />
           </div>
         </div>
@@ -559,7 +559,7 @@ export function MidiEditor({
               position: 'absolute',
               top: 0,
               left: 0,
-              width: 1.5,
+              width: 0.5,
               height: '100%',
               backgroundColor: '#ffffff',
             }} />
