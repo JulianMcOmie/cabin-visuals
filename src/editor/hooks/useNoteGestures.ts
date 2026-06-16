@@ -401,7 +401,7 @@ export function useNoteGestures({
           const newNote: Note = {
             id: crypto.randomUUID(),
             pitch,
-            startBeat: startBeat,// - blockStart,
+            startBeat: startBeat - blockStart,
             durationBeats: snapEnabled ? quantize : 0.25,
             velocity: 100,
           }
