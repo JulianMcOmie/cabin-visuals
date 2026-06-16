@@ -158,12 +158,14 @@ export function MidiEditor({
     }).filter(Boolean) as { label: string; top: number; height: number }[]
   }, [rangeLabels, rows, rowHeight])
 
-  // Playhead position via RAF (no React re-renders)
+  // Playhead position via RAF (no React re-renders). The canvas is an absolute
+  // timeline, so the playhead sits at the absolute currentBeat and is visible
+  // anywhere within the timeline (not just over the block).
   useEffect(() => {
     let rafId: number
     const tick = () => {
-      const beat = useTimeStore.getState().currentBeat - blockStartBeat
-      const visible = beat >= 0 && beat <= blockDurationBeats
+      const beat = useTimeStore.getState().currentBeat
+      const visible = beat >= 0 && beat <= initialTotalBeats
       const px = beatToX(beat, pixelsPerBeat)
       const el = playheadRef.current
       if (el) {
@@ -179,7 +181,7 @@ export function MidiEditor({
     }
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
-  }, [pixelsPerBeat, blockStartBeat, blockDurationBeats])
+  }, [pixelsPerBeat, initialTotalBeats])
 
   // Scrub handler: click/drag on ruler to move playhead
   const scrubRef = useRef(false)
