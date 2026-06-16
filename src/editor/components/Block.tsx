@@ -1,4 +1,5 @@
 import { useUIStore } from '../store/UIStore'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../types'
 
 interface BlockProps {
@@ -7,9 +8,11 @@ interface BlockProps {
   totalBars: number
   beatsPerBar: number
   color: string
+  isSelected: boolean
+  onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, totalBars, beatsPerBar, color }: BlockProps) {
+export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const isEditing = editingBlock?.blockId === block.id
@@ -21,15 +24,18 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color }: BlockPr
   return (
     <div
       title="Double-click to edit notes"
-      className="absolute top-1 bottom-1 rounded overflow-hidden"
+      className="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab"
       style={{
         left: `${left}%`,
         width: `${Math.max(width, 0.5)}%`,
         backgroundColor: color + '28',
-        border: isEditing ? `1px solid ${color}` : `1px solid ${color}66`,
+        border: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
         borderLeft: `2px solid ${color}`,
-        boxShadow: isEditing ? `0 0 6px ${color}88` : undefined,
+        boxShadow: isSelected
+          ? `0 0 0 1px ${color}, 0 0 8px ${color}aa`
+          : isEditing ? `0 0 6px ${color}88` : undefined,
       }}
+      onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onDoubleClick={(e) => {
         e.stopPropagation()
         setEditingBlock({ trackId, blockId: block.id })

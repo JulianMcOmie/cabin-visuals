@@ -3,13 +3,17 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { Block } from './Block'
 import { TRACK_LABEL_WIDTH } from '../constants'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../types'
 
 interface TrackProps {
   track: TrackType
+  selectedBlockIds: Set<string>
+  onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
+  onLanePointerDown: (e: ReactPointerEvent) => void
 }
 
-export function Track({ track }: TrackProps) {
+export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePointerDown }: TrackProps) {
   const totalBars = useTimeStore((s) => s.totalBars)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
@@ -66,7 +70,7 @@ export function Track({ track }: TrackProps) {
         </div>
       </div>
 
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" onPointerDown={onLanePointerDown}>
         {track.blocks.map((block) => (
           <Block
             key={block.id}
@@ -75,6 +79,8 @@ export function Track({ track }: TrackProps) {
             totalBars={totalBars}
             beatsPerBar={beatsPerBar}
             color={track.color}
+            isSelected={selectedBlockIds.has(block.id)}
+            onBlockPointerDown={onBlockPointerDown}
           />
         ))}
       </div>

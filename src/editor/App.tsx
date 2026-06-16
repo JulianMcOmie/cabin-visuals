@@ -18,6 +18,7 @@ import { useUIStore } from './store/UIStore'
 import { usePlayback } from './hooks/usePlayback'
 import { usePlayhead } from './hooks/usePlayhead'
 import { useScrub } from './hooks/useScrub'
+import { useTrackGestures } from './hooks/useTrackGestures'
 import { TRACK_LABEL_WIDTH } from './constants'
 
 if (typeof window !== 'undefined') {
@@ -163,6 +164,8 @@ function TimelineArea() {
   const laneRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
 
+  const { selectedBlockIds, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures()
+
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
@@ -228,7 +231,15 @@ function TimelineArea() {
         <div className="flex-1 overflow-y-auto">
           {rootTrackIds.map((id) => {
             const track = tracks[id]
-            return track ? <Track key={id} track={track} /> : null
+            return track ? (
+              <Track
+                key={id}
+                track={track}
+                selectedBlockIds={selectedBlockIds}
+                onBlockPointerDown={handleBlockPointerDown}
+                onLanePointerDown={handleLanePointerDown}
+              />
+            ) : null
           })}
         </div>
 
