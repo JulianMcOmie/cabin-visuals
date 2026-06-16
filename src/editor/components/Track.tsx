@@ -12,7 +12,6 @@ interface TrackProps {
 export function Track({ track }: TrackProps) {
   const totalBars = useTimeStore((s) => s.totalBars)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
-  const currentBeat = useTimeStore((s) => s.currentBeat)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
@@ -20,8 +19,6 @@ export function Track({ track }: TrackProps) {
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
 
   const isSelected = selectedTrackId === track.id
-  const maxBeat = totalBars * beatsPerBar
-  const playheadPct = maxBeat > 0 ? (currentBeat / maxBeat) * 100 : 0
 
   return (
     <div
@@ -70,10 +67,6 @@ export function Track({ track }: TrackProps) {
       </div>
 
       <div className="flex-1 relative">
-        <div
-          className="absolute top-0 bottom-0 w-px z-30 pointer-events-none"
-          style={{ left: `${playheadPct}%`, backgroundColor: '#ffffffaa' }}
-        />
         {track.blocks.map((block) => (
           <Block
             key={block.id}

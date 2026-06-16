@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
@@ -15,6 +16,9 @@ import { AudioBar } from './components/AudioBar'
 import { PianoRollPanel } from './components/PianoRollPanel'
 import { useUIStore } from './store/UIStore'
 import { usePlayback } from './hooks/usePlayback'
+import { usePlayhead } from './hooks/usePlayhead'
+import { useScrub } from './hooks/useScrub'
+import { TRACK_LABEL_WIDTH } from './constants'
 
 if (typeof window !== 'undefined') {
   const { addTrack, addBlock, addNote, rootTrackIds } = useProjectStore.getState()
@@ -149,6 +153,30 @@ function Header() {
 function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
+  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  const totalBars = useTimeStore((s) => s.totalBars)
+  const maxBeat = totalBars * beatsPerBar
+
+  // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
+  // draggable scrub from the ruler. laneRef measures the lane region (excludes
+  // the track-label column) so a clientX maps to a fraction of the timeline.
+  const laneRef = useRef<HTMLDivElement>(null)
+  const playheadRef = useRef<HTMLDivElement>(null)
+
+  const { startScrub } = useScrub({
+    computeBeat: (clientX) => {
+      if (!laneRef.current) return null
+      const rect = laneRef.current.getBoundingClientRect()
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      return pct * maxBeat
+    },
+  })
+
+  usePlayhead((beat) => {
+    const el = playheadRef.current
+    if (!el) return
+    el.style.left = maxBeat > 0 ? `${(beat / maxBeat) * 100}%` : '0%'
+  })
 
   function insertPopulatedTrack() {
     const { addTrack, addBlock, addNote } = useProjectStore.getState()
@@ -195,12 +223,33 @@ function TimelineArea() {
           <Plus size={12} />
         </button>
       </div>
-      <TimelineRuler />
-      <div className="flex-1 overflow-y-auto">
-        {rootTrackIds.map((id) => {
-          const track = tracks[id]
-          return track ? <Track key={id} track={track} /> : null
-        })}
+      <div className="relative flex-1 flex flex-col min-h-0">
+        <TimelineRuler onScrubStart={startScrub} />
+        <div className="flex-1 overflow-y-auto">
+          {rootTrackIds.map((id) => {
+            const track = tracks[id]
+            return track ? <Track key={id} track={track} /> : null
+          })}
+        </div>
+
+        {/* Playhead overlay over the lane region (excludes the label column) */}
+        <div
+          className="absolute top-0 bottom-0 pointer-events-none"
+          style={{ left: TRACK_LABEL_WIDTH, right: 0 }}
+        >
+          <div ref={laneRef} className="relative w-full h-full">
+            <div ref={playheadRef} className="absolute top-0 bottom-0 w-px bg-white z-30" style={{ left: 0 }}>
+              <div
+                className="absolute -top-0 -translate-x-1/2 w-0 h-0"
+                style={{
+                  borderLeft: '5px solid transparent',
+                  borderRight: '5px solid transparent',
+                  borderTop: '7px solid #ffffff',
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
