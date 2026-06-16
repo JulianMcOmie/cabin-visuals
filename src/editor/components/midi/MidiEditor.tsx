@@ -14,7 +14,6 @@ export interface MidiEditorProps {
   notes: Note[]
   block: Block
   onNotesChange: (notes: Note[]) => void
-  totalBeats: number
   beatsPerBar: number
   quantize: number
   snapEnabled?: boolean
@@ -24,6 +23,8 @@ export interface MidiEditorProps {
   /** Beat offset of this block in the project timeline (for playhead positioning) */
   blockStartBeat?: number
   blockDurationBeats?: number
+  /** Total beats the editor timeline spans (canvas extent). */
+  initialTotalBeats: number
 }
 
 const LABEL_WIDTH = 88
@@ -35,7 +36,6 @@ export function MidiEditor({
   notes,
   block,
   onNotesChange,
-  totalBeats,
   beatsPerBar,
   quantize,
   snapEnabled = true,
@@ -44,6 +44,7 @@ export function MidiEditor({
   rangeLabels,
   blockStartBeat = 0,
   blockDurationBeats = 0,
+  initialTotalBeats,
 }: MidiEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -72,7 +73,7 @@ export function MidiEditor({
     rowHeight,
     pixelsPerBeat,
     beatsPerBar,
-    totalBeats,
+    blockDurationBeats,
     quantize,
     snapEnabled,
   })
@@ -104,8 +105,8 @@ export function MidiEditor({
     return () => container.removeEventListener('wheel', handleWheel)
   }, [])
 
-  // Canvas dimensions
-  const canvasWidth = totalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
+  // Canvas dimensions (the timeline spans initialTotalBeats, not just the block)
+  const canvasWidth = initialTotalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
@@ -162,7 +163,7 @@ export function MidiEditor({
     let rafId: number
     const tick = () => {
       const beat = useTimeStore.getState().currentBeat - blockStartBeat
-      const visible = beat >= 0 && beat <= totalBeats
+      const visible = beat >= 0 && beat <= blockDurationBeats
       const px = beatToX(beat, pixelsPerBeat)
       const el = playheadRef.current
       if (el) {
@@ -178,7 +179,7 @@ export function MidiEditor({
     }
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
-  }, [pixelsPerBeat, blockStartBeat, totalBeats])
+  }, [pixelsPerBeat, blockStartBeat, blockDurationBeats])
 
   // Scrub handler: click/drag on ruler to move playhead
   const scrubRef = useRef(false)
@@ -190,9 +191,9 @@ export function MidiEditor({
     const snapped = snapEnabled
       ? Math.round(rawBeat / quantize) * quantize
       : rawBeat
-    const clamped = Math.max(0, Math.min(totalBeats, snapped))
+    const clamped = Math.max(0, Math.min(blockDurationBeats, snapped))
     useTimeStore.getState().setCurrentBeat(clamped + blockStartBeat)
-  }, [pixelsPerBeat, snapEnabled, quantize, totalBeats, blockStartBeat])
+  }, [pixelsPerBeat, snapEnabled, quantize, blockDurationBeats, blockStartBeat])
 
   const handlePlayheadPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
@@ -237,7 +238,7 @@ export function MidiEditor({
     }
   }, [dragState])
 
-  const barCount = Math.ceil(totalBeats / beatsPerBar)
+  const barCount = Math.ceil(initialTotalBeats / beatsPerBar)
   const blockStart = beatToX(blockStartBeat, pixelsPerBeat)
   const blockWidth = beatToX(blockDurationBeats, pixelsPerBeat);
 

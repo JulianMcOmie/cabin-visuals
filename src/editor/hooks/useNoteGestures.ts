@@ -31,7 +31,7 @@ interface UseNoteGesturesOptions {
   rowHeight: number
   pixelsPerBeat: number
   beatsPerBar: number
-  totalBeats: number
+  blockDurationBeats: number
   quantize: number
   snapEnabled: boolean
 }
@@ -53,7 +53,7 @@ export function useNoteGestures({
   rowHeight,
   pixelsPerBeat,
   beatsPerBar,
-  totalBeats,
+  blockDurationBeats,
   quantize,
   snapEnabled,
 }: UseNoteGesturesOptions) {
@@ -122,7 +122,7 @@ export function useNoteGestures({
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read
   // everything through latest.current instead of their (stale) closures.
-  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, totalBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latestValues = { notes, onNotesChange, snapValue, snapSize, snapEnabled, pixelsPerBeat, blockDurationBeats, rowHeight, rows, quantize, getNotesInMarquee }
   const latest = useRef(latestValues)
   latest.current = latestValues
 
@@ -146,7 +146,7 @@ export function useNoteGestures({
         const deltaDuration = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const baseDuration = latest.current.snapEnabled ? latest.current.quantize : 0.25
         let newDuration = latest.current.snapValue(baseDuration + deltaDuration)
-        newDuration = Math.max(latest.current.snapSize, Math.min(latest.current.totalBeats - dn.startBeat, newDuration))
+        newDuration = Math.max(latest.current.snapSize, Math.min(latest.current.blockDurationBeats - dn.startBeat, newDuration))
 
         if (newDuration !== dn.durationBeats) {
           setDrawingNote(prev => prev ? { ...prev, durationBeats: newDuration } : null)
@@ -159,7 +159,7 @@ export function useNoteGestures({
         const deltaY = grid.y - ds.startY
         const rowDelta = Math.round(deltaY / latest.current.rowHeight)
         const curRows = latest.current.rows
-        const curTotalBeats = latest.current.totalBeats
+        const curBlockDuration = latest.current.blockDurationBeats
 
         latest.current.onNotesChange(latest.current.notes.map(n => {
           const originalStartBeat = ds.originalStartBeats!.get(n.id)
@@ -168,7 +168,7 @@ export function useNoteGestures({
             const origRowIndex = curRows.findIndex(r => r.pitch === originalPitch)
             const newRowIndex = Math.max(0, Math.min(curRows.length - 1, origRowIndex + rowDelta))
             const newPitch = curRows[newRowIndex].pitch
-            const newStartBeat = Math.max(0, Math.min(curTotalBeats - n.durationBeats, originalStartBeat + snappedDelta))
+            const newStartBeat = Math.max(0, Math.min(curBlockDuration - n.durationBeats, originalStartBeat + snappedDelta))
             return { ...n, startBeat: newStartBeat, pitch: newPitch }
           }
           return n
@@ -397,7 +397,7 @@ export function useNoteGestures({
         const rawBeat = xToBeat(gridX, pixelsPerBeat)
         const startBeat = snapValue(rawBeat)
 
-        if (startBeat >= 0 && startBeat < totalBeats) {
+        if (startBeat >= 0 && startBeat < blockDurationBeats) {
           const newNote: Note = {
             id: crypto.randomUUID(),
             pitch,
@@ -440,7 +440,7 @@ export function useNoteGestures({
     })
     setCursor('default')
     beginGestureTracking()
-  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, totalBeats, setCursor, beginGestureTracking, gridRef])
+  }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, snapValue, snapEnabled, quantize, blockDurationBeats, setCursor, beginGestureTracking, gridRef])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)
   useEffect(() => {

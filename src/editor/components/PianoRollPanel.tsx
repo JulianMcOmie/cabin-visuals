@@ -12,6 +12,10 @@ import type { Block } from '../types'
 
 const DEFAULT_QUANTIZE = 0.25
 
+// How many bars the editor timeline spans. This is the initial value of what
+// will eventually be a user-settable "total beats" for the canvas.
+const INITIAL_TOTAL_BARS = 10
+
 const QUANTIZE_OPTIONS = [
   { value: 1, label: '1/4' },
   { value: 0.5, label: '1/8' },
@@ -82,7 +86,8 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
 
   const rows = generateRows()
   const rowHeight = Math.round(28 * midiRowScale)
-  const totalBeats = block.durationBars * beatsPerBar
+  const blockDurationBeats = block.durationBars * beatsPerBar
+  const initialTotalBeats = INITIAL_TOTAL_BARS * beatsPerBar
 
   // Scroll to center on existing notes (or C4) on mount
   useEffect(() => {
@@ -179,12 +184,12 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
       {/* Piano roll grid */}
       <MidiEditor
         blockStartBeat={block.startBar * beatsPerBar}
-        blockDurationBeats={block.durationBars * beatsPerBar}
+        blockDurationBeats={blockDurationBeats}
         rows={rows}
         block={block}
         notes={notes}
         onNotesChange={setNotes}
-        totalBeats={totalBeats}
+        initialTotalBeats={initialTotalBeats}
         beatsPerBar={beatsPerBar}
         quantize={quantize}
         snapEnabled={snapEnabled}
