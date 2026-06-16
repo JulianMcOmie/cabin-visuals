@@ -3,6 +3,9 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 
+// Track rows are h-12 (48px); used to convert vertical drag into a row delta.
+const ROW_HEIGHT = 48
+
 interface BlockOrigin {
   trackId: string
   trackIndex: number
@@ -50,13 +53,30 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       if (!d) return
       const deltaX = e.clientX - d.startX
       const deltaBars = d.laneWidthPx > 0 ? (deltaX / d.laneWidthPx) * d.totalBars : 0
-      const { updateBlock } = useProjectStore.getState()
+      const rowDelta = Math.round((e.clientY - d.startY) / ROW_HEIGHT)
+      const store = useProjectStore.getState()
 
       if (d.type === 'moving') {
         for (const [blockId, o] of d.origins) {
           const maxStart = Math.max(0, d.totalBars - o.durationBars)
           const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
-          updateBlock(o.trackId, blockId, { startBar: newStartBar })
+
+          // Vertical: move to the track at origin index + rowDelta (clamped).
+          const targetIndex = Math.max(0, Math.min(store.rootTrackIds.length - 1, o.trackIndex + rowDelta))
+          const targetTrackId = store.rootTrackIds[targetIndex]
+
+          // The block may have already moved tracks on a previous frame; find it.
+          let currentTrackId = o.trackId
+          for (const tId of store.rootTrackIds) {
+            if (store.tracks[tId]?.blocks.some((b) => b.id === blockId)) {
+              currentTrackId = tId
+              break
+            }
+          }
+          if (currentTrackId !== targetTrackId) {
+            store.moveBlock(currentTrackId, blockId, targetTrackId)
+          }
+          store.updateBlock(targetTrackId, blockId, { startBar: newStartBar })
         }
       }
     }
