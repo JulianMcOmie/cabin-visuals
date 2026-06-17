@@ -30,7 +30,9 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
         left: `${left}%`,
         width: `${Math.max(width, 0.5)}%`,
         backgroundColor: color + '28',
-        border: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        borderTop: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        borderRight: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        borderBottom: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
         borderLeft: `2px solid ${color}`,
         boxShadow: isSelected
           ? `0 0 0 1px ${color}, 0 0 8px ${color}aa`

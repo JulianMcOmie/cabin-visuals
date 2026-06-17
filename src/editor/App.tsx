@@ -158,6 +158,7 @@ function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
   const totalBars = useTimeStore((s) => s.totalBars)
+  const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const maxBeat = totalBars * beatsPerBar
 
   // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
@@ -243,7 +244,7 @@ function TimelineArea() {
       </div>
       <div className="relative flex-1 flex flex-col min-h-0">
         <TimelineRuler onScrubStart={startScrub} />
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
             <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
               {rootTrackIds.map((id) => {
@@ -260,6 +261,14 @@ function TimelineArea() {
               })}
             </SortableContext>
           </DndContext>
+          {/* Empty space below the tracks: deselect track + blocks, start a marquee */}
+          <div
+            className="flex-1"
+            onPointerDown={(e) => {
+              setSelectedTrackId(null)
+              handleLanePointerDown(e)
+            }}
+          />
         </div>
 
         {/* Playhead overlay over the lane region (excludes the label column) */}
@@ -280,12 +289,13 @@ function TimelineArea() {
                 }}
               />
             )}
-            <div ref={playheadRef} className="absolute top-0 bottom-0 w-px bg-white z-30" style={{ left: 0 }}>
+            <div ref={playheadRef} className="absolute top-0 bottom-0 z-30" style={{ left: 0, width: 0.5, backgroundColor: '#ffffff' }}>
               <div
-                className="absolute -top-0 -translate-x-1/2 w-0 h-0"
+                className="absolute top-0 w-0 h-0"
                 style={{
-                  borderLeft: '5px solid transparent',
-                  borderRight: '5px solid transparent',
+                  left: -5.75,
+                  borderLeft: '6px solid transparent',
+                  borderRight: '6px solid transparent',
                   borderTop: '7px solid #ffffff',
                 }}
               />

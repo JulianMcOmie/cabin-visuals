@@ -40,7 +40,7 @@ export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePoint
         zIndex: isDragging ? 20 : undefined,
         position: 'relative',
       }}
-      className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-pointer transition-colors ${
+      className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
       }`}
       onClick={() => setSelectedTrackId(isSelected ? null : track.id)}
