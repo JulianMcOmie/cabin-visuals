@@ -40,11 +40,13 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
-        const el = e.currentTarget
-        const w = el.offsetWidth
+        // Measure relative to the block (currentTarget), not offsetX — offsetX is
+        // relative to whatever child is under the pointer (e.g. a note sliver).
+        const rect = e.currentTarget.getBoundingClientRect()
+        const w = rect.width
         const edge = Math.min(8, w / 4)
-        const localX = e.nativeEvent.offsetX
-        el.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'grab'
+        const localX = e.clientX - rect.left
+        e.currentTarget.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'grab'
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
@@ -58,7 +60,7 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
         return (
           <div
             key={note.id}
-            className="absolute top-1 bottom-1 w-0.5 rounded-full"
+            className="absolute top-1 bottom-1 w-0.5 rounded-full pointer-events-none"
             style={{ left: `${notePct}%`, backgroundColor: color + 'cc' }}
           />
         )

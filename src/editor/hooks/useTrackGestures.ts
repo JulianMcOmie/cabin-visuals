@@ -185,9 +185,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
     // Near an edge → resize that edge; otherwise move. Edge zones shrink on
     // narrow blocks so the middle stays a move target.
-    const el = e.currentTarget as HTMLDivElement
-    const localX = e.nativeEvent.offsetX
-    const w = el.offsetWidth
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+    const localX = e.clientX - rect.left
+    const w = rect.width
     const edge = Math.min(EDGE_PX, w / 4)
     const type: DragState['type'] =
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
