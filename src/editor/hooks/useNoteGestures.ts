@@ -92,14 +92,15 @@ export function useNoteGestures({
     return rows.findIndex(r => r.pitch === pitch)
   }, [rows])
 
-  // Hover handler for dynamic cursor. Bails during a note drag or a scrub so
-  // those gestures keep their own cursor instead of flickering on note hover.
+  // Hover handler for dynamic cursor. Bails during a note drag so the drag keeps
+  // its own cursor instead of flickering on note hover. (Scrubbing forces the
+  // cursor globally via the body.scrubbing class, so no scrub guard is needed.)
   const handleHoverChange = useCallback((target: 'noteBody' | 'noteEdge' | null) => {
-    if (dragStateRef.current.type !== 'none' || scrubbingRef.current) return
+    if (dragStateRef.current.type !== 'none') return
     if (target === 'noteEdge') setCursor('ew-resize')
     else if (target === 'noteBody') setCursor('grab')
     else setCursor('default')
-  }, [setCursor, scrubbingRef])
+  }, [setCursor])
 
   // Get notes within marquee bounds (grid-local pixel rect)
   const getNotesInMarquee = useCallback((x1: number, y1: number, x2: number, y2: number): string[] => {

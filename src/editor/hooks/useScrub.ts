@@ -35,6 +35,9 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     e.stopPropagation()
     scrubbingRef.current = true
     document.body.style.userSelect = 'none'
+    // Force the resize cursor for the whole gesture so it doesn't flicker when the
+    // pointer outruns the RAF-driven playhead and leaves the grab handle.
+    document.body.classList.add('scrubbing')
     onStartRef.current?.()
     scrubTo(e.clientX)
 
@@ -45,6 +48,7 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     const onUp = () => {
       scrubbingRef.current = false
       document.body.style.userSelect = ''
+      document.body.classList.remove('scrubbing')
       onEndRef.current?.()
       controller.abort()
     }

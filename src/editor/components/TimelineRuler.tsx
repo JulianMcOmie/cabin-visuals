@@ -33,7 +33,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
   return (
     <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
       <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 border-r border-zinc-800 bg-zinc-900" />
-      <div className="relative flex-1 overflow-hidden cursor-col-resize bg-zinc-900" onPointerDown={onScrubStart}>
+      <div className="relative flex-1 overflow-hidden cursor-ew-resize bg-zinc-900" onPointerDown={onScrubStart}>
         <div ref={contentRef} className="absolute top-0 bottom-0 left-0" style={{ width: timelineWidthPx }}>
           {/* Darker bottom half */}
           <div className="absolute left-0 right-0 bg-zinc-950/60 border-t border-zinc-800/80" style={{ top: '50%', bottom: 0 }} />

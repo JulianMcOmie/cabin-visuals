@@ -357,7 +357,7 @@ function TimelineArea() {
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
             <div className="absolute top-0 bottom-0" style={{ left: -0.25, width: 0.5, backgroundColor: '#ffffff' }} />
             <div
-              className="absolute top-0 bottom-0 pointer-events-auto cursor-col-resize"
+              className="absolute top-0 bottom-0 pointer-events-auto cursor-ew-resize"
               style={{ left: -5, width: 10 }}
               onPointerDown={startScrub}
             />

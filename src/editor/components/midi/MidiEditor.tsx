@@ -72,7 +72,7 @@ export function MidiEditor({
       const snapped = snapEnabled ? Math.round(rawBeat / quantize) * quantize : rawBeat
       return Math.max(0, Math.min(initialTotalBeats, snapped))
     },
-    onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'col-resize' },
+    onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'ew-resize' },
     onEnd: () => { if (containerRef.current) containerRef.current.style.cursor = 'default' },
   })
 
@@ -251,7 +251,7 @@ export function MidiEditor({
             flex: 1,
             position: 'relative',
             overflow: 'hidden',
-            cursor: 'col-resize',
+            cursor: 'ew-resize',
             backgroundColor: '#18181b',
           }}
           onPointerDown={startScrub}
@@ -311,7 +311,7 @@ export function MidiEditor({
             cursor: 'default',
           }}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none' && !scrubbingRef.current) setCursor('default')
+            if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
           {rows.map((row) => (
@@ -393,7 +393,7 @@ export function MidiEditor({
           onPointerDown={handleBackgroundPointerDown}
           onContextMenu={(e) => e.preventDefault()}
           onPointerMove={() => {
-            if (dragStateRef.current.type === 'none' && !scrubbingRef.current) setCursor('default')
+            if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
           {/* Midi block outline */}
@@ -533,7 +533,7 @@ export function MidiEditor({
                 left: -3,
                 width: 7,
                 height: '100%',
-                cursor: 'col-resize',
+                cursor: 'ew-resize',
                 pointerEvents: 'auto',
                 zIndex: 16,
               }}
