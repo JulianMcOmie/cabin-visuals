@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject, type PointerE
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 // Track rows are h-12 (48px); used to convert vertical drag into a row delta.
 const ROW_HEIGHT = 48
@@ -65,7 +66,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   const beginGestureTracking = useCallback(() => {
     const controller = new AbortController()
     abortRef.current = controller
-    document.body.style.userSelect = 'none'
+    const t = dragRef.current?.type
+    lockCursor(t === 'moving' ? 'grabbing' : t === 'resizing-left' || t === 'resizing-right' ? 'ew-resize' : 'default')
 
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
@@ -138,7 +140,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const handleUp = () => {
       dragRef.current = null
       setMarqueeRect(null)
-      document.body.style.userSelect = ''
+      unlockCursor()
       controller.abort()
       abortRef.current = null
     }

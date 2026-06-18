@@ -2,6 +2,7 @@ import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { Block, Note } from '../types'
 import type { MidiRow } from '../components/midi/types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 const NOTE_EDGE_WIDTH = 8
 
@@ -141,10 +142,13 @@ export function useNoteGestures({
   // they can be removed in one abort() call (on pointerup or unmount).
   const gestureAbortRef = useRef<AbortController | null>(null)
 
-  const beginGestureTracking = useCallback(() => {
+  const beginGestureTracking = useCallback((cursor: string) => {
     const controller = new AbortController()
     gestureAbortRef.current = controller
-    document.body.style.userSelect = 'none'
+    // Lock the cursor for the whole gesture so it doesn't change when the pointer
+    // crosses a note, the playhead, or the grid. The caller passes the cursor since
+    // the drag state ref isn't updated yet at this synchronous point.
+    lockCursor(cursor)
     const handleMove = (e: PointerEvent) => {
       const ds = dragStateRef.current
       if (!gridRef.current) return
@@ -240,7 +244,7 @@ export function useNoteGestures({
       setDragState(DRAG_NONE)
       setCursor('default')
       didDragRef.current = true
-      document.body.style.userSelect = ''
+      unlockCursor()
       controller.abort()
       gestureAbortRef.current = null
     }
@@ -253,7 +257,7 @@ export function useNoteGestures({
   useEffect(() => {
     return () => {
       gestureAbortRef.current?.abort()
-      document.body.style.userSelect = ''
+      unlockCursor()
     }
   }, [])
 
@@ -302,7 +306,7 @@ export function useNoteGestures({
         originalDurations,
       })
       setCursor('ew-resize')
-      beginGestureTracking()
+      beginGestureTracking('ew-resize')
       return
     }
 
@@ -357,7 +361,7 @@ export function useNoteGestures({
         originalPitches,
       })
       setCursor('copy')
-      beginGestureTracking()
+      beginGestureTracking('copy')
       return
     }
 
@@ -381,7 +385,7 @@ export function useNoteGestures({
       originalPitches,
     })
     setCursor('grabbing')
-    beginGestureTracking()
+    beginGestureTracking('grabbing')
   }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef])
 
   // Handle note hover for cursor changes. stopPropagation keeps the grid's
@@ -442,7 +446,7 @@ export function useNoteGestures({
             currentX: gridX,
             currentY: gridY,
           })
-          beginGestureTracking()
+          beginGestureTracking('copy')
         }
       }
       return
@@ -461,7 +465,7 @@ export function useNoteGestures({
       currentY: gridY,
     })
     setCursor('default')
-    beginGestureTracking()
+    beginGestureTracking('default')
   }, [selectedNoteIds, rowHeight, rows, pixelsPerBeat, roundDownToStep, snapEnabled, quantize, blockStartBeat, initialTotalBeats, setCursor, beginGestureTracking, gridRef])
 
   // Keyboard handler (capture phase so editor consumes Delete/Esc before the panel)

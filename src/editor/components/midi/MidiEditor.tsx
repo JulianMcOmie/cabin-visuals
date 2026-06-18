@@ -114,6 +114,8 @@ export function MidiEditor({
   const { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown } = useMidiBlockGestures({
     trackId,
     block,
+    notes,
+    onNotesChange,
     pixelsPerBeat,
     beatsPerBar,
     maxBeats: initialTotalBeats,

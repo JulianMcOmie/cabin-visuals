@@ -232,21 +232,13 @@ html {
   display: none;            /* Chrome, Edge, Safari */
 }
 
-/* While scrubbing the playhead, force the resize cursor everywhere so it doesn't
-   flicker when the pointer outruns the playhead. Wins over inline element cursors. */
-body.scrubbing,
-body.scrubbing * {
-  cursor: ew-resize !important;
-}
-
-/* Force the cursor for the whole block move/resize gesture (no flicker). */
-body.block-moving,
-body.block-moving * {
-  cursor: grabbing !important;
-}
-body.block-resizing,
-body.block-resizing * {
-  cursor: ew-resize !important;
+/* While a drag gesture is active (scrub, block move/resize, note edit), force one
+   cursor for the whole document so it never flickers when the pointer outruns the
+   dragged element or crosses something with its own cursor. The gesture sets
+   --drag-cursor; this wins over inline element cursors via !important. */
+body.cursor-locked,
+body.cursor-locked * {
+  cursor: var(--drag-cursor) !important;
 }
 
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */

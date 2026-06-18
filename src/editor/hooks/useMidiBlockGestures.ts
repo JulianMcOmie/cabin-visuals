@@ -1,10 +1,13 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
-import type { Block } from '../types'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
+import type { Block, Note } from '../types'
 
 interface UseMidiBlockGesturesOptions {
   trackId: string
   block: Block
+  notes: Note[]
+  onNotesChange: (notes: Note[]) => void
   pixelsPerBeat: number
   beatsPerBar: number
   /** Total beats the editor timeline spans (for clamping the block to the canvas). */
@@ -18,23 +21,29 @@ interface DragState {
   startClientX: number
   originStartBar: number
   originDurationBars: number
+  originNotes: Note[]
 }
 
 /**
  * Drag the MIDI block's ruler "clip header" to move it, or its left/right edges to
  * resize — the single-block, horizontal-only analogue of useTrackGestures. Writes
  * continuously to ProjectStore (the block prop flows back from the store, so the
- * header, grid outline, and notes follow the drag live). Snaps to whole bars.
+ * header and grid outline follow the drag live). Snaps to whole bars.
+ *
+ * Notes are stored relative to the block start, so resizing the *left* edge would
+ * otherwise drag the notes along with it. To keep notes anchored in absolute time,
+ * a left-resize offsets every note's startBeat by the opposite of the start shift.
+ * Moving the block intentionally carries its notes; right-resize leaves them be.
  */
-export function useMidiBlockGestures({ trackId, block, pixelsPerBeat, beatsPerBar, maxBeats }: UseMidiBlockGesturesOptions) {
+export function useMidiBlockGestures({ trackId, block, notes, onNotesChange, pixelsPerBeat, beatsPerBar, maxBeats }: UseMidiBlockGesturesOptions) {
   const dragRef = useRef<DragState | null>(null)
 
   // Mirrored for the window listener so it never reads a stale closure.
-  const latest = useRef({ trackId, blockId: block.id, pixelsPerBeat, beatsPerBar, maxBeats })
-  latest.current = { trackId, blockId: block.id, pixelsPerBeat, beatsPerBar, maxBeats }
+  const latest = useRef({ trackId, blockId: block.id, notes, onNotesChange, pixelsPerBeat, beatsPerBar, maxBeats })
+  latest.current = { trackId, blockId: block.id, notes, onNotesChange, pixelsPerBeat, beatsPerBar, maxBeats }
 
   // Hover cursor: resize near the edges, grab in the middle (skipped mid-drag so
-  // the forced body-class cursor wins).
+  // the locked cursor wins).
   const handleHeaderPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) return
     const rect = e.currentTarget.getBoundingClientRect()
@@ -51,10 +60,10 @@ export function useMidiBlockGestures({ trackId, block, pixelsPerBeat, beatsPerBa
       startClientX: clientX,
       originStartBar: block.startBar,
       originDurationBars: block.durationBars,
+      originNotes: latest.current.notes,
     }
 
-    document.body.classList.add(mode === 'moving' ? 'block-moving' : 'block-resizing')
-    document.body.style.userSelect = 'none'
+    lockCursor(mode === 'moving' ? 'grabbing' : 'ew-resize')
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
@@ -75,12 +84,14 @@ export function useMidiBlockGestures({ trackId, block, pixelsPerBeat, beatsPerBa
         const end = d.originStartBar + d.originDurationBars
         const startBar = Math.max(0, Math.min(end - 1, d.originStartBar + deltaBars))
         update(l.trackId, l.blockId, { startBar, durationBars: end - startBar })
+        // Counter-shift notes so they stay put in absolute time as the start moves.
+        const offsetBeats = (d.originStartBar - startBar) * l.beatsPerBar
+        l.onNotesChange(d.originNotes.map((n) => ({ ...n, startBeat: n.startBeat + offsetBeats })))
       }
     }
     const onUp = () => {
       dragRef.current = null
-      document.body.classList.remove('block-moving', 'block-resizing')
-      document.body.style.userSelect = ''
+      unlockCursor()
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })

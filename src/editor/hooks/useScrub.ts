@@ -1,5 +1,6 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTimeStore } from '../store/TimeStore'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 interface UseScrubOptions {
   /** Map a pointer's clientX to an absolute beat, or null to ignore the event. */
@@ -34,10 +35,9 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
   const startScrub = useCallback((e: ReactPointerEvent) => {
     e.stopPropagation()
     scrubbingRef.current = true
-    document.body.style.userSelect = 'none'
-    // Force the resize cursor for the whole gesture so it doesn't flicker when the
-    // pointer outruns the RAF-driven playhead and leaves the grab handle.
-    document.body.classList.add('scrubbing')
+    // Lock the cursor for the whole gesture so it doesn't flicker when the pointer
+    // outruns the RAF-driven playhead and leaves the grab handle.
+    lockCursor('ew-resize')
     onStartRef.current?.()
     scrubTo(e.clientX)
 
@@ -47,8 +47,7 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     }
     const onUp = () => {
       scrubbingRef.current = false
-      document.body.style.userSelect = ''
-      document.body.classList.remove('scrubbing')
+      unlockCursor()
       onEndRef.current?.()
       controller.abort()
     }
