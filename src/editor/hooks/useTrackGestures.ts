@@ -3,6 +3,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
+import type { Note } from '../types'
 
 // Track rows are h-12 (48px); used to convert vertical drag into a row delta.
 const ROW_HEIGHT = 48
@@ -12,6 +13,7 @@ interface BlockOrigin {
   trackIndex: number
   startBar: number
   durationBars: number
+  notes: Note[]
 }
 
 const EDGE_PX = 8
@@ -128,11 +130,16 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
         }
       } else if (d.type === 'resizing-left') {
+        const beatsPerBar = useTimeStore.getState().beatsPerBar
         for (const [blockId, o] of d.origins) {
           // Drag the start, keep the end planted; clamp to >= 0 and >= 1 bar long.
           const end = o.startBar + o.durationBars
           const newStartBar = Math.max(0, Math.min(end - 1, snapBar(o.startBar + deltaBars)))
-          store.updateBlock(o.trackId, blockId, { startBar: newStartBar, durationBars: end - newStartBar })
+          // Counter-shift notes (block-relative) so they stay put in absolute time,
+          // written atomically with the start so they don't move on resize.
+          const offsetBeats = (o.startBar - newStartBar) * beatsPerBar
+          const notes = o.notes.map((n) => ({ ...n, startBeat: n.startBeat + offsetBeats }))
+          store.updateBlock(o.trackId, blockId, { startBar: newStartBar, durationBars: end - newStartBar, notes })
         }
       }
     }
@@ -166,7 +173,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       if (!t) return
       for (const b of t.blocks) {
         if (dragSet.has(b.id)) {
-          origins.set(b.id, { trackId: tId, trackIndex: idx, startBar: b.startBar, durationBars: b.durationBars })
+          origins.set(b.id, { trackId: tId, trackIndex: idx, startBar: b.startBar, durationBars: b.durationBars, notes: b.notes })
         }
       }
     })

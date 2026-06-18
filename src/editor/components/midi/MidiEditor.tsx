@@ -115,7 +115,6 @@ export function MidiEditor({
     trackId,
     block,
     notes,
-    onNotesChange,
     pixelsPerBeat,
     beatsPerBar,
     maxBeats: initialTotalBeats,

@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Block, Note } from '../types'
 import { useProjectStore } from '../store/ProjectStore'
+
+// Layout effect on the client (runs before paint, so re-syncing notes after an
+// atomic block change never shows an intermediate frame); plain effect on the
+// server to avoid the SSR warning.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 interface UseMidiEditorStateOptions {
   trackId: string
@@ -31,7 +36,7 @@ export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiE
   const prevBlockRef = useRef<Block>(block)
   const prevBlockIdRef = useRef(block.id)
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (prevBlockRef.current === block) return
     const blockChanged = prevBlockIdRef.current !== block.id
     prevBlockRef.current = block
