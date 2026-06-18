@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
 import { TRACK_LABEL_WIDTH } from '../constants'
 
@@ -15,6 +15,8 @@ interface TimelineRulerProps {
   contentRef: RefObject<HTMLDivElement | null>
   /** Playhead triangle element (the head), positioned by the RAF loop. */
   playheadHeadRef: RefObject<HTMLDivElement | null>
+  /** Content rendered in the frozen corner (left of the ruler) — e.g. the Tracks header. */
+  corner?: ReactNode
 }
 
 /**
@@ -25,18 +27,21 @@ interface TimelineRulerProps {
  * triangle is clipped to the strip (never drawn over the corner). The playhead
  * line itself lives in the lanes (TimelineArea).
  */
-export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef }: TimelineRulerProps) {
+export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useTimeStore((s) => s.totalBars)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  // Every bar gets a tick line; only every `interval`th bar is numbered.
   const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
-  const bars = Array.from({ length: totalBars }, (_, i) => i).filter((i) => i % interval === 0)
+  const bars = Array.from({ length: totalBars }, (_, i) => i)
   const pixelsPerBeat = beatsPerBar > 0 ? barWidthPx / beatsPerBar : barWidthPx
   // Faint sub-beat ticks (every beat that isn't a bar line).
   const beats = Array.from({ length: totalBars * beatsPerBar }, (_, i) => i).filter((i) => i % beatsPerBar !== 0)
 
   return (
     <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
-      <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 border-r border-zinc-800 bg-zinc-900" />
+      <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-zinc-900">
+        {corner}
+      </div>
       <div className="relative flex-1 overflow-hidden cursor-ew-resize bg-zinc-900" onPointerDown={onScrubStart}>
         <div ref={contentRef} className="absolute top-0 bottom-0 left-0" style={{ width: timelineWidthPx }}>
           {/* Darker bottom half */}
@@ -49,11 +54,13 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
 
           {bars.map((bar) => (
             <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
-              {/* Top half: bar number */}
-              <span className="absolute top-0 left-1 text-[10px] text-zinc-400 leading-none pt-1">
-                {bar + 1}
-              </span>
-              {/* Bottom half: tick line */}
+              {/* Top half: bar number (only every `interval`th bar) */}
+              {bar % interval === 0 && (
+                <span className="absolute top-0 left-1 text-[10px] text-zinc-400 leading-none pt-1">
+                  {bar + 1}
+                </span>
+              )}
+              {/* Bottom half: tick line (every bar) */}
               <div className="absolute bottom-0 w-px bg-zinc-600" style={{ top: '50%' }} />
             </div>
           ))}

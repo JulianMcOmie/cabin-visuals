@@ -202,18 +202,11 @@ function TimelineArea() {
 
   return (
     <div className="flex flex-col h-full border-t border-zinc-800">
-      <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
-        <span className="text-xs font-medium text-zinc-300">Tracks</span>
-        <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                onClick={insertTrack}>
-          <Plus size={12} />
-        </button>
-      </div>
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
           gutter reserves the lanes' scrollbar width so the strip ends where the
-          lanes' content does. */}
+          lanes' content does. The Tracks header lives in the ruler's frozen corner. */}
       <div className="flex-shrink-0">
         <TimelineRuler
           onScrubStart={startScrub}
@@ -222,6 +215,17 @@ function TimelineArea() {
           gutterPx={0}
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
+          corner={
+            <div className="flex items-center gap-2 px-3">
+              <span className="text-xs font-medium text-zinc-300">Tracks</span>
+              <button
+                className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                onClick={insertTrack}
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          }
         />
       </div>
 
