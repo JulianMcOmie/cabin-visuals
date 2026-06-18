@@ -20,6 +20,10 @@ interface UIState {
   setMidiPixelsPerBeat: (pixels: number) => void
   midiRowScale: number
   setMidiRowScale: (scale: number) => void
+
+  // Horizontal zoom for the tracks timeline (pixels per beat).
+  tracksPixelsPerBeat: number
+  setTracksPixelsPerBeat: (pixels: number) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -40,4 +44,8 @@ export const useUIStore = create<UIState>((set) => ({
   midiRowScale: 1.0,
   setMidiRowScale: (scale) =>
     set({ midiRowScale: Math.max(0.5, Math.min(2.0, scale)) }),
+
+  tracksPixelsPerBeat: 16,
+  setTracksPixelsPerBeat: (pixels) =>
+    set({ tracksPixelsPerBeat: Math.max(2, Math.min(100, pixels)) }),
 }));
