@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, type UIEvent as ReactScrollEvent } from 'react'
 import Link from 'next/link'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -159,13 +159,31 @@ function TimelineArea() {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
   const totalBars = useTimeStore((s) => s.totalBars)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
+  const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const maxBeat = totalBars * beatsPerBar
+  const barWidthPx = beatsPerBar * pixelsPerBeat
+  const timelineWidthPx = totalBars * barWidthPx
 
   // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
   // draggable scrub from the ruler. laneRef measures the lane region (excludes
   // the track-label column) so a clientX maps to a fraction of the timeline.
   const laneRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
+  const playheadHeadRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const rulerContentRef = useRef<HTMLDivElement>(null)
+  const clipRef = useRef<HTMLDivElement>(null)
+
+  // Width reserved for the lanes' vertical scrollbar (matches .timeline-scrollbar).
+  const SCROLLBAR_W = 10
+
+  // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
+  // dependence on matching client widths → stays aligned to the far-right edge).
+  const onTimelineScroll = (e: ReactScrollEvent<HTMLDivElement>) => {
+    if (rulerContentRef.current) {
+      rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
+    }
+  }
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
@@ -186,15 +204,27 @@ function TimelineArea() {
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
-      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      return pct * maxBeat
+      const beat = (clientX - rect.left) / pixelsPerBeat
+      return Math.max(0, Math.min(maxBeat, beat))
     },
   })
 
   usePlayhead((beat) => {
-    const el = playheadRef.current
-    if (!el) return
-    el.style.left = maxBeat > 0 ? `${(beat / maxBeat) * 100}%` : '0%'
+    const beatX = beat * pixelsPerBeat
+    const sc = scrollRef.current
+    // Clip the playhead overlay to the scroll container's client area (excludes the
+    // scrollbars) so the line never draws over them.
+    if (sc && clipRef.current) {
+      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - TRACK_LABEL_WIDTH)}px`
+      clipRef.current.style.height = `${sc.clientHeight}px`
+    }
+    // Ruler triangle is positioned in content space (its container mirrors the lane
+    // scroll). The lane line lives in a viewport-space overlay, so offset by scroll.
+    if (playheadHeadRef.current) playheadHeadRef.current.style.transform = `translateX(${beatX}px)`
+    if (playheadRef.current) {
+      const sl = sc?.scrollLeft ?? 0
+      playheadRef.current.style.transform = `translateX(${beatX - sl}px)`
+    }
   })
 
   function insertPopulatedTrack() {
@@ -242,64 +272,99 @@ function TimelineArea() {
           <Plus size={12} />
         </button>
       </div>
-      <div className="relative flex-1 flex flex-col min-h-0">
-        <TimelineRuler onScrubStart={startScrub} />
-        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
-            <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
-              {rootTrackIds.map((id) => {
-                const track = tracks[id]
-                return track ? (
-                  <Track
-                    key={id}
-                    track={track}
-                    selectedBlockIds={selectedBlockIds}
-                    onBlockPointerDown={handleBlockPointerDown}
-                    onLanePointerDown={handleLanePointerDown}
-                  />
-                ) : null
-              })}
-            </SortableContext>
-          </DndContext>
-          {/* Empty space below the tracks: deselect track + blocks, start a marquee */}
+      {/* Ruler in its own row (not inside the lane scroll container) so the lanes
+          own the only scrollbars: the vertical one then ends below the ruler. Its
+          content is translated to mirror the lane scroll (onTimelineScroll); the
+          gutter reserves the lanes' scrollbar width so the strip ends where the
+          lanes' content does. */}
+      <div className="flex-shrink-0">
+        <TimelineRuler
+          onScrubStart={startScrub}
+          barWidthPx={barWidthPx}
+          timelineWidthPx={timelineWidthPx}
+          gutterPx={SCROLLBAR_W}
+          contentRef={rulerContentRef}
+          playheadHeadRef={playheadHeadRef}
+        />
+      </div>
+
+      {/* Lanes: a relative wrapper holds the scroll container plus a viewport-space
+          playhead overlay clipped to the lane region (so the playhead is never drawn
+          over the frozen label column, its dividers, or the empty space — it slides
+          under the label edge when scrolled). */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={scrollRef}
+          className="absolute inset-0 overflow-auto timeline-scrollbar"
+          style={{ scrollbarGutter: 'stable' }}
+          onScroll={onTimelineScroll}
+        >
           <div
-            className="flex-1"
-            onPointerDown={(e) => {
-              setSelectedTrackId(null)
-              handleLanePointerDown(e)
-            }}
-          />
+            className="relative flex flex-col"
+            style={{ width: TRACK_LABEL_WIDTH + timelineWidthPx, minHeight: '100%' }}
+          >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
+              <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
+                {rootTrackIds.map((id) => {
+                  const track = tracks[id]
+                  return track ? (
+                    <Track
+                      key={id}
+                      track={track}
+                      barWidthPx={barWidthPx}
+                      timelineWidthPx={timelineWidthPx}
+                      selectedBlockIds={selectedBlockIds}
+                      onBlockPointerDown={handleBlockPointerDown}
+                      onLanePointerDown={handleLanePointerDown}
+                    />
+                  ) : null
+                })}
+              </SortableContext>
+            </DndContext>
+            {/* Empty space below the tracks: deselect track + blocks, start a marquee */}
+            <div
+              className="flex-1 min-h-0"
+              onPointerDown={(e) => {
+                setSelectedTrackId(null)
+                handleLanePointerDown(e)
+              }}
+            />
+
+            {/* Marquee overlay (content space, so its coords match block rects). */}
+            <div
+              ref={laneRef}
+              className="absolute bottom-0 top-0 z-10 pointer-events-none"
+              style={{ left: TRACK_LABEL_WIDTH, width: timelineWidthPx }}
+            >
+              {marqueeRect && (
+                <div
+                  className="absolute z-20 border border-indigo-400"
+                  style={{
+                    left: marqueeRect.left,
+                    top: marqueeRect.top,
+                    width: marqueeRect.width,
+                    height: marqueeRect.height,
+                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Playhead overlay over the lane region (excludes the label column) */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{ left: TRACK_LABEL_WIDTH, right: 0 }}
-        >
-          <div ref={laneRef} className="relative w-full h-full">
-            {marqueeRect && (
-              <div
-                className="absolute z-20 border border-indigo-400"
-                style={{
-                  left: marqueeRect.left,
-                  top: marqueeRect.top,
-                  width: marqueeRect.width,
-                  height: marqueeRect.height,
-                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                }}
-              />
-            )}
-            <div ref={playheadRef} className="absolute top-0 bottom-0 z-30" style={{ left: 0, width: 0.5, backgroundColor: '#ffffff' }}>
-              <div
-                className="absolute top-0 w-0 h-0"
-                style={{
-                  left: -5.75,
-                  borderLeft: '6px solid transparent',
-                  borderRight: '6px solid transparent',
-                  borderTop: '7px solid #ffffff',
-                }}
-              />
-            </div>
+        {/* Playhead line over the lane region only (clipped). The thin visible line
+            plus a wider transparent grab handle to scrub anywhere along its height.
+            RAF offsets it by the scroll and sizes this clip box to the scroll
+            container's client area, so the line tracks horizontal scroll, hides
+            under the label edge, and never draws over the scrollbars. */}
+        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: TRACK_LABEL_WIDTH }}>
+          <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
+            <div className="absolute top-0 bottom-0" style={{ left: -0.25, width: 0.5, backgroundColor: '#ffffff' }} />
+            <div
+              className="absolute top-0 bottom-0 pointer-events-auto cursor-col-resize"
+              style={{ left: -5, width: 10 }}
+              onPointerDown={startScrub}
+            />
           </div>
         </div>
       </div>

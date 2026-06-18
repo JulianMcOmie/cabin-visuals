@@ -22,7 +22,7 @@ type DragState =
       type: 'moving' | 'resizing-left' | 'resizing-right'
       startX: number
       startY: number
-      laneWidthPx: number
+      barWidthPx: number
       totalBars: number
       origins: Map<string, BlockOrigin>
     }
@@ -93,7 +93,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       }
 
       const deltaX = e.clientX - d.startX
-      const deltaBars = d.laneWidthPx > 0 ? (deltaX / d.laneWidthPx) * d.totalBars : 0
+      const deltaBars = d.barWidthPx > 0 ? deltaX / d.barWidthPx : 0
       const rowDelta = Math.round((e.clientY - d.startY) / ROW_HEIGHT)
       const store = useProjectStore.getState()
 
@@ -204,7 +204,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       type,
       startX: e.clientX,
       startY: e.clientY,
-      laneWidthPx: laneRef.current?.getBoundingClientRect().width ?? 0,
+      barWidthPx: useTimeStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
       totalBars: useTimeStore.getState().totalBars,
       origins: captureOrigins(dragSet),
     }

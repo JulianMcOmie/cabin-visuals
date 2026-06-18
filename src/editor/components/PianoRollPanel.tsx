@@ -12,8 +12,8 @@ import type { Block } from '../types'
 
 const DEFAULT_QUANTIZE = 0.25
 
-// How many bars the editor timeline spans. This is the initial value of what
-// will eventually be a user-settable "total beats" for the canvas.
+// Minimum bars the editor timeline spans, so short projects still have room to
+// work past the block. Longer projects span their full length (TimeStore.totalBars).
 const INITIAL_TOTAL_BARS = 10
 
 const QUANTIZE_OPTIONS = [
@@ -69,6 +69,7 @@ interface PianoRollContentProps {
 
 function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  const totalBars = useTimeStore((s) => s.totalBars)
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
   const midiRowScale = useUIStore((s) => s.midiRowScale)
@@ -87,7 +88,9 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
   const rows = generateRows()
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
-  const initialTotalBeats = INITIAL_TOTAL_BARS * beatsPerBar
+  // Span the full project length so the MIDI editor scrolls to the same end as
+  // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
+  const initialTotalBeats = Math.max(totalBars, INITIAL_TOTAL_BARS) * beatsPerBar
 
   // Scroll to center on existing notes (or C4) on mount
   useEffect(() => {

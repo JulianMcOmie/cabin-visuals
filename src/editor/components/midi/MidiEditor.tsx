@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
@@ -29,7 +29,7 @@ export interface MidiEditorProps {
 }
 
 const LABEL_WIDTH = 88
-const RULER_HEIGHT = 24
+const RULER_HEIGHT = 40
 const CANVAS_RIGHT_PADDING = 20
 
 export function MidiEditor({
@@ -51,6 +51,17 @@ export function MidiEditor({
   const gridRef = useRef<HTMLDivElement>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
+  const rulerContentRef = useRef<HTMLDivElement>(null)
+
+  // Mirror the grid's horizontal scroll onto the ruler via transform (no clamp, no
+  // dependence on matching client widths → stays aligned to the far-right edge).
+  // The grid scroll container owns the only scrollbars (vertical ends below the
+  // ruler; horizontal sits under the grid).
+  const onScrollSync = (e: ReactScrollEvent<HTMLDivElement>) => {
+    if (rulerContentRef.current) {
+      rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
+    }
+  }
 
   // Scrubbing: map a clientX to an absolute beat (snapped, clamped to the timeline)
   const { scrubbingRef, startScrub } = useScrub({
@@ -217,91 +228,76 @@ export function MidiEditor({
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 overflow-auto no-scrollbar bg-zinc-950"
-      style={{ cursor: 'default' }}
-      onClick={handleContainerClick}
-    >
-      {/* Sticky ruler row */}
+    <div className="flex-1 flex flex-col min-h-0 bg-zinc-950">
+      {/* Ruler in its own row (outside the grid scroll container) so the grid owns
+          the only scrollbars: the vertical one then ends below the ruler. Horizontal
+          scroll is synced via onScrollSync; the ruler's own bar is hidden.
+          Two-tone Logic-style: lighter top half with bar numbers, darker bottom half
+          with tick lines and the playhead triangle. The playhead line lives in the grid. */}
+      <div className="flex-shrink-0" style={{ overflow: 'hidden' }}>
       <div
+        ref={rulerContentRef}
         style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
           display: 'flex',
           width: canvasWidth,
           height: RULER_HEIGHT,
-          backgroundColor: '#111111',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid #27272a',
+          willChange: 'transform',
         }}
       >
-        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#141414' }} />
+        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#18181b', borderRight: '1px solid #27272a' }} />
         <div
           style={{
             flex: 1,
             position: 'relative',
-            cursor: 'col-resize',
             overflow: 'hidden',
+            cursor: 'col-resize',
+            backgroundColor: '#18181b',
           }}
           onPointerDown={startScrub}
         >
-          {/* Bar numbers */}
+          {/* Darker bottom half */}
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', bottom: 0, backgroundColor: 'rgba(9,9,11,0.6)', borderTop: '1px solid rgba(39,39,42,0.8)' }} />
+
           {Array.from({ length: barCount }).map((_, i) => (
-            <div
-              key={i}
-              style={{
-                position: 'absolute',
-                left: i * beatsPerBar * pixelsPerBeat,
-                top: 0,
-                height: RULER_HEIGHT,
-                borderLeft: '1px solid rgba(255,255,255,0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 4,
-                fontSize: 10,
-                color: '#555555',
-                fontFamily: 'monospace',
-              }}
-            >
-              {i + 1}
+            <div key={i} style={{ position: 'absolute', left: i * beatsPerBar * pixelsPerBeat, top: 0, bottom: 0 }}>
+              {/* Top half: bar number */}
+              <span style={{ position: 'absolute', top: 0, left: 4, paddingTop: 4, fontSize: 10, lineHeight: 1, color: '#a1a1aa' }}>
+                {i + 1}
+              </span>
+              {/* Bottom half: tick line */}
+              <div style={{ position: 'absolute', top: '50%', bottom: 0, width: 1, backgroundColor: '#52525b' }} />
             </div>
           ))}
-          {/* Ruler playhead */}
+
+          {/* Playhead head: downward triangle filling the bottom half (RAF-positioned).
+              Clipped to the strip so it sits flush at the lane edge at beat 0. */}
           <div
             ref={rulerPlayheadRef}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 1,
-              height: RULER_HEIGHT,
-              pointerEvents: 'none',
-              zIndex: 21,
-            }}
+            style={{ position: 'absolute', top: '50%', bottom: 0, left: 0, width: 0, pointerEvents: 'none', zIndex: 21 }}
           >
             <div style={{
               position: 'absolute',
               top: 0,
-              left: 0,
-              width: 0.5,
-              height: '100%',
-              backgroundColor: '#ffffff',
-            }} />
-            <div style={{
-              position: 'absolute',
-              bottom: 0,
-              left: -5.75,
+              left: -10,
               width: 0,
               height: 0,
-              borderLeft: '6px solid transparent',
-              borderRight: '6px solid transparent',
-              borderBottom: '9px solid #ffffff',
+              borderLeft: '10px solid transparent',
+              borderRight: '10px solid transparent',
+              borderTop: '20px solid #ffffff',
             }} />
           </div>
         </div>
       </div>
+      </div>
 
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto timeline-scrollbar min-h-0"
+        style={{ cursor: 'default', scrollbarGutter: 'stable' }}
+        onClick={handleContainerClick}
+        onScroll={onScrollSync}
+      >
       <div style={{ width: canvasWidth, height: canvasHeight, position: 'relative', display: 'flex' }}>
         {/* Labels column */}
         <div
@@ -545,6 +541,7 @@ export function MidiEditor({
             />
           </div>
         </div>
+      </div>
       </div>
     </div>
   )

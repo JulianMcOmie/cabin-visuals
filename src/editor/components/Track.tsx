@@ -10,13 +10,14 @@ import type { Track as TrackType } from '../types'
 
 interface TrackProps {
   track: TrackType
+  barWidthPx: number
+  timelineWidthPx: number
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
   onLanePointerDown: (e: ReactPointerEvent) => void
 }
 
-export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePointerDown }: TrackProps) {
-  const totalBars = useTimeStore((s) => s.totalBars)
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown }: TrackProps) {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -49,7 +50,9 @@ export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePoint
         {...attributes}
         {...listeners}
         style={{ width: TRACK_LABEL_WIDTH }}
-        className="flex-shrink-0 flex items-center gap-2 px-3 border-r border-zinc-800/60 cursor-grab active:cursor-grabbing"
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-zinc-800/60 cursor-grab active:cursor-grabbing ${
+          isSelected ? 'bg-zinc-900' : 'bg-zinc-950'
+        }`}
       >
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate" style={{ color: track.color }}>
@@ -86,13 +89,13 @@ export function Track({ track, selectedBlockIds, onBlockPointerDown, onLanePoint
         </div>
       </div>
 
-      <div className="flex-1 relative" onPointerDown={onLanePointerDown}>
+      <div className="relative flex-shrink-0" style={{ width: timelineWidthPx }} onPointerDown={onLanePointerDown}>
         {track.blocks.map((block) => (
           <Block
             key={block.id}
             block={block}
             trackId={track.id}
-            totalBars={totalBars}
+            barWidthPx={barWidthPx}
             beatsPerBar={beatsPerBar}
             color={track.color}
             isSelected={selectedBlockIds.has(block.id)}

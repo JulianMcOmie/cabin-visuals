@@ -5,20 +5,20 @@ import type { Block as BlockType } from '../types'
 interface BlockProps {
   block: BlockType
   trackId: string
-  totalBars: number
+  barWidthPx: number
   beatsPerBar: number
   color: string
   isSelected: boolean
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
+export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const isEditing = editingBlock?.blockId === block.id
 
-  const left = (block.startBar / totalBars) * 100
-  const width = (block.durationBars / totalBars) * 100
+  const left = block.startBar * barWidthPx
+  const width = block.durationBars * barWidthPx
   const totalBeatsInBlock = block.durationBars * beatsPerBar
 
   return (
@@ -27,8 +27,8 @@ export function Block({ block, trackId, totalBars, beatsPerBar, color, isSelecte
       title="Double-click to edit notes"
       className="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab"
       style={{
-        left: `${left}%`,
-        width: `${Math.max(width, 0.5)}%`,
+        left: `${left}px`,
+        width: `${Math.max(width, 4)}px`,
         backgroundColor: color + '28',
         borderTop: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
         borderRight: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
