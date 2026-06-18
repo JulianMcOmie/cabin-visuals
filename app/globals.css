@@ -232,6 +232,23 @@ html {
   display: none;            /* Chrome, Edge, Safari */
 }
 
+/* While scrubbing the playhead, force the resize cursor everywhere so it doesn't
+   flicker when the pointer outruns the playhead. Wins over inline element cursors. */
+body.scrubbing,
+body.scrubbing * {
+  cursor: ew-resize !important;
+}
+
+/* Force the cursor for the whole block move/resize gesture (no flicker). */
+body.block-moving,
+body.block-moving * {
+  cursor: grabbing !important;
+}
+body.block-resizing,
+body.block-resizing * {
+  cursor: ew-resize !important;
+}
+
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */
 .timeline-scrollbar {
   scrollbar-width: thin;                                   /* Firefox */

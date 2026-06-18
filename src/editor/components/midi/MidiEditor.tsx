@@ -5,6 +5,7 @@ import { useUIStore } from '../../store/UIStore'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from '../../hooks/useNoteGestures'
+import { useMidiBlockGestures } from '../../hooks/useMidiBlockGestures'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
@@ -13,6 +14,8 @@ import type { MidiRow, RangeLabel } from './types'
 export interface MidiEditorProps {
   rows: MidiRow[]
   notes: Note[]
+  /** Track that owns the block being edited (for block move/resize writes). */
+  trackId: string
   block: Block
   onNotesChange: (notes: Note[]) => void
   beatsPerBar: number
@@ -35,6 +38,7 @@ const CANVAS_RIGHT_PADDING = 20
 export function MidiEditor({
   rows,
   notes,
+  trackId,
   block,
   onNotesChange,
   beatsPerBar,
@@ -104,6 +108,15 @@ export function MidiEditor({
     initialTotalBeats,
     quantize,
     snapEnabled,
+  })
+
+  // Block move/resize via the ruler clip header (separate from note gestures).
+  const { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown } = useMidiBlockGestures({
+    trackId,
+    block,
+    pixelsPerBeat,
+    beatsPerBar,
+    maxBeats: initialTotalBeats,
   })
 
   // Alt+scroll zoom (horizontal = pixelsPerBeat, vertical = rowScale)
@@ -270,6 +283,23 @@ export function MidiEditor({
             </div>
           ))}
 
+          {/* Block clip header: drag the body to move the block, the edges to resize.
+              Sits in the bottom half below the triangle (zIndex 10 < 21). */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              bottom: 0,
+              left: blockStartPx,
+              width: blockWidthPx,
+              backgroundColor: 'rgba(129, 140, 248, 0.6)',
+              zIndex: 10,
+              pointerEvents: 'auto',
+            }}
+            onPointerDown={handleHeaderPointerDown}
+            onPointerMove={handleHeaderPointerMove}
+          />
+
           {/* Playhead head: downward triangle filling the bottom half (RAF-positioned).
               Clipped to the strip so it sits flush at the lane edge at beat 0. */}
           <div
@@ -408,16 +438,6 @@ export function MidiEditor({
               bottom: 0,
             }}
           />
-          {/* Top */}
-          <div
-            style={{
-              position: 'absolute',
-              backgroundColor: 'rgba(129, 140, 248, 0.6)',
-              left: blockStartPx,
-              width: blockWidthPx,
-              height: '7px',
-            }}
-          />
           {/* Sides */}
           <div
             style={{
@@ -429,6 +449,15 @@ export function MidiEditor({
               top: 0,
               bottom: 0,
             }}
+          />
+          {/* Resize handles over the left/right borders (above notes so they grab). */}
+          <div
+            style={{ position: 'absolute', top: 0, bottom: 0, left: blockStartPx - 4, width: 8, cursor: 'ew-resize', zIndex: 4 }}
+            onPointerDown={(e) => handleResizePointerDown(e, 'left')}
+          />
+          <div
+            style={{ position: 'absolute', top: 0, bottom: 0, left: blockStartPx + blockWidthPx - 4, width: 8, cursor: 'ew-resize', zIndex: 4 }}
+            onPointerDown={(e) => handleResizePointerDown(e, 'right')}
           />
 
           {/* Range label background bands */}
