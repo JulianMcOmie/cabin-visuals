@@ -294,7 +294,7 @@ export function MidiEditor({
       <div
         ref={containerRef}
         className="flex-1 overflow-auto timeline-scrollbar min-h-0"
-        style={{ cursor: 'default', scrollbarGutter: 'stable' }}
+        style={{ cursor: 'default' }}
         onClick={handleContainerClick}
         onScroll={onScrollSync}
       >

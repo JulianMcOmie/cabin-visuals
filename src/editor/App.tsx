@@ -174,9 +174,6 @@ function TimelineArea() {
   const rulerContentRef = useRef<HTMLDivElement>(null)
   const clipRef = useRef<HTMLDivElement>(null)
 
-  // Width reserved for the lanes' vertical scrollbar (matches .timeline-scrollbar).
-  const SCROLLBAR_W = 10
-
   // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
   const onTimelineScroll = (e: ReactScrollEvent<HTMLDivElement>) => {
@@ -282,7 +279,7 @@ function TimelineArea() {
           onScrubStart={startScrub}
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
-          gutterPx={SCROLLBAR_W}
+          gutterPx={0}
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
         />
@@ -296,7 +293,6 @@ function TimelineArea() {
         <div
           ref={scrollRef}
           className="absolute inset-0 overflow-auto timeline-scrollbar"
-          style={{ scrollbarGutter: 'stable' }}
           onScroll={onTimelineScroll}
         >
           <div
