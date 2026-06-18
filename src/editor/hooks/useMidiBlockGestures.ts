@@ -70,18 +70,20 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       if (!d) return
       const l = latest.current
       const maxBar = l.maxBeats / l.beatsPerBar
-      const deltaBars = Math.round((ev.clientX - d.startClientX) / l.pixelsPerBeat / l.beatsPerBar)
+      const oneBeat = 1 / l.beatsPerBar
+      // Snap to beats, not whole bars.
+      const deltaBars = Math.round((ev.clientX - d.startClientX) / l.pixelsPerBeat) / l.beatsPerBar
       const update = useProjectStore.getState().updateBlock
 
       if (d.mode === 'moving') {
         const startBar = Math.max(0, Math.min(maxBar - d.originDurationBars, d.originStartBar + deltaBars))
         update(l.trackId, l.blockId, { startBar })
       } else if (d.mode === 'resizing-right') {
-        const durationBars = Math.max(1, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
+        const durationBars = Math.max(oneBeat, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
         update(l.trackId, l.blockId, { durationBars })
       } else {
         const end = d.originStartBar + d.originDurationBars
-        const startBar = Math.max(0, Math.min(end - 1, d.originStartBar + deltaBars))
+        const startBar = Math.max(0, Math.min(end - oneBeat, d.originStartBar + deltaBars))
         // Counter-shift notes so they stay put in absolute time as the start moves,
         // written in the SAME updateBlock call so block + notes change atomically
         // (one store write → one render; no flicker, no re-sync clobber).

@@ -27,8 +27,12 @@ interface TimelineRulerProps {
  */
 export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef }: TimelineRulerProps) {
   const totalBars = useTimeStore((s) => s.totalBars)
+  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
   const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
   const bars = Array.from({ length: totalBars }, (_, i) => i).filter((i) => i % interval === 0)
+  const pixelsPerBeat = beatsPerBar > 0 ? barWidthPx / beatsPerBar : barWidthPx
+  // Faint sub-beat ticks (every beat that isn't a bar line).
+  const beats = Array.from({ length: totalBars * beatsPerBar }, (_, i) => i).filter((i) => i % beatsPerBar !== 0)
 
   return (
     <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
@@ -37,6 +41,11 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
         <div ref={contentRef} className="absolute top-0 bottom-0 left-0" style={{ width: timelineWidthPx }}>
           {/* Darker bottom half */}
           <div className="absolute left-0 right-0 bg-zinc-950/60 border-t border-zinc-800/80" style={{ top: '50%', bottom: 0 }} />
+
+          {/* Faint, short beat ticks */}
+          {beats.map((beat) => (
+            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-zinc-700/60" style={{ left: beat * pixelsPerBeat, top: '72%' }} />
+          ))}
 
           {bars.map((bar) => (
             <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>

@@ -273,6 +273,13 @@ export function MidiEditor({
           {/* Darker bottom half */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', bottom: 0, backgroundColor: 'rgba(9,9,11,0.6)', borderTop: '1px solid rgba(39,39,42,0.8)' }} />
 
+          {/* Faint, short beat ticks (every beat that isn't a bar line) */}
+          {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)
+            .filter((i) => i % beatsPerBar !== 0)
+            .map((i) => (
+              <div key={`beat${i}`} style={{ position: 'absolute', left: i * pixelsPerBeat, top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(82,82,91,0.6)' }} />
+            ))}
+
           {Array.from({ length: barCount }).map((_, i) => (
             <div key={i} style={{ position: 'absolute', left: i * beatsPerBar * pixelsPerBeat, top: 0, bottom: 0 }}>
               {/* Top half: bar number */}

@@ -14,7 +14,7 @@ interface TrackProps {
   timelineWidthPx: number
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
-  onLanePointerDown: (e: ReactPointerEvent) => void
+  onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
 }
 
 export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown }: TrackProps) {
@@ -89,7 +89,12 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         </div>
       </div>
 
-      <div className="relative flex-shrink-0" style={{ width: timelineWidthPx }} onPointerDown={onLanePointerDown}>
+      <div
+        className="relative flex-shrink-0"
+        style={{ width: timelineWidthPx }}
+        onPointerDown={(e) => onLanePointerDown(e, track.id)}
+        onContextMenu={(e) => e.preventDefault()}
+      >
         {track.blocks.map((block) => (
           <Block
             key={block.id}

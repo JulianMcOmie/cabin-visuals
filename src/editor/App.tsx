@@ -23,44 +23,6 @@ import { useScrub } from './hooks/useScrub'
 import { useTrackGestures } from './hooks/useTrackGestures'
 import { TRACK_LABEL_WIDTH } from './constants'
 
-if (typeof window !== 'undefined') {
-  const { addTrack, addBlock, addNote, rootTrackIds } = useProjectStore.getState()
-  if (rootTrackIds.length === 0) {
-    const trackId = crypto.randomUUID()
-    const blockId = crypto.randomUUID()
-
-    addTrack({
-      id: trackId,
-      name: 'Cube',
-      type: 'base' as const,
-      instrumentId: 'cube',
-      color: '#6366f1',
-      muted: false,
-      solo: false,
-      blocks: [],
-      childIds: [],
-    })
-
-    addBlock(trackId, {
-      id: blockId,
-      startBar: 0,
-      durationBars: 1,
-      loop: false,
-      notes: [],
-    })
-
-    for (let i = 0; i < 4; i++) {
-      addNote(trackId, blockId, {
-        id: crypto.randomUUID(),
-        startBeat: i,
-        durationBeats: 0.5,
-        pitch: 60,
-        velocity: 100,
-      })
-    }
-  }
-}
-
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
   const beatInBar = Math.floor(beat % beatsPerBar) + 1
@@ -224,13 +186,9 @@ function TimelineArea() {
     }
   })
 
-  function insertPopulatedTrack() {
-    const { addTrack, addBlock, addNote } = useProjectStore.getState()
-    const trackId = crypto.randomUUID()
-    const blockId = crypto.randomUUID()
-  
-    addTrack({
-      id: trackId,
+  function insertTrack() {
+    useProjectStore.getState().addTrack({
+      id: crypto.randomUUID(),
       name: 'Cube',
       type: 'base' as const,
       instrumentId: 'cube',
@@ -240,24 +198,6 @@ function TimelineArea() {
       blocks: [],
       childIds: [],
     })
-  
-    addBlock(trackId, {
-      id: blockId,
-      startBar: Math.random() * 2,
-      durationBars: Math.round(Math.random() * 3 + 1),
-      loop: false,
-      notes: [],
-    })
-  
-    for (let i = 0; i < 4; i++) {
-      addNote(trackId, blockId, {
-        id: crypto.randomUUID(),
-        startBeat: i,
-        durationBeats: 0.5,
-        pitch: 60,
-        velocity: 100,
-      })
-    }
   }
 
   return (
@@ -265,7 +205,7 @@ function TimelineArea() {
       <div className="flex items-center gap-2 h-8 px-3 bg-zinc-900/60 border-b border-zinc-800 flex-shrink-0">
         <span className="text-xs font-medium text-zinc-300">Tracks</span>
         <button className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                onClick={insertPopulatedTrack}>
+                onClick={insertTrack}>
           <Plus size={12} />
         </button>
       </div>
@@ -320,6 +260,7 @@ function TimelineArea() {
             {/* Empty space below the tracks: deselect track + blocks, start a marquee */}
             <div
               className="flex-1 min-h-0"
+              onContextMenu={(e) => e.preventDefault()}
               onPointerDown={(e) => {
                 setSelectedTrackId(null)
                 handleLanePointerDown(e)

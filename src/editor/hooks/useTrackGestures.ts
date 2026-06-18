@@ -35,6 +35,14 @@ type DragState =
       startClientY: number
       base: Set<string>
     }
+  | {
+      type: 'drawing'
+      trackId: string
+      blockId: string
+      startBar: number
+      pixelsPerBeat: number
+      beatsPerBar: number
+    }
 
 interface MarqueeRect {
   left: number
@@ -62,14 +70,17 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   const abortRef = useRef<AbortController | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
-  // Snap a bar position to whole bars (the timeline's grid).
-  const snapBar = (bar: number) => Math.round(bar)
+  // Snap a bar position to the nearest beat (blocks snap to beats, not whole bars).
+  const snapBar = (bar: number) => {
+    const bpb = useTimeStore.getState().beatsPerBar
+    return Math.round(bar * bpb) / bpb
+  }
 
   const beginGestureTracking = useCallback(() => {
     const controller = new AbortController()
     abortRef.current = controller
     const t = dragRef.current?.type
-    lockCursor(t === 'moving' ? 'grabbing' : t === 'resizing-left' || t === 'resizing-right' ? 'ew-resize' : 'default')
+    lockCursor(t === 'moving' ? 'grabbing' : t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
 
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
@@ -93,6 +104,17 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         if (laneR) {
           setMarqueeRect({ left: minX - laneR.left, top: minY - laneR.top, width: maxX - minX, height: maxY - minY })
         }
+        return
+      }
+
+      if (d.type === 'drawing') {
+        const laneR = laneRef.current?.getBoundingClientRect()
+        if (!laneR) return
+        const beat = (e.clientX - laneR.left) / d.pixelsPerBeat
+        const oneBeat = 1 / d.beatsPerBar
+        const endBar = snapBar(beat / d.beatsPerBar)
+        const durationBars = Math.max(oneBeat, endBar - d.startBar)
+        useProjectStore.getState().updateBlock(d.trackId, d.blockId, { durationBars })
         return
       }
 
@@ -124,17 +146,19 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           store.updateBlock(targetTrackId, blockId, { startBar: newStartBar })
         }
       } else if (d.type === 'resizing-right') {
+        const oneBeat = 1 / useTimeStore.getState().beatsPerBar
         for (const [blockId, o] of d.origins) {
           const maxDuration = d.totalBars - o.startBar
-          const newDuration = Math.max(1, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
+          const newDuration = Math.max(oneBeat, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
           store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
         }
       } else if (d.type === 'resizing-left') {
         const beatsPerBar = useTimeStore.getState().beatsPerBar
+        const oneBeat = 1 / beatsPerBar
         for (const [blockId, o] of d.origins) {
-          // Drag the start, keep the end planted; clamp to >= 0 and >= 1 bar long.
+          // Drag the start, keep the end planted; clamp to >= 0 and >= 1 beat long.
           const end = o.startBar + o.durationBars
-          const newStartBar = Math.max(0, Math.min(end - 1, snapBar(o.startBar + deltaBars)))
+          const newStartBar = Math.max(0, Math.min(end - oneBeat, snapBar(o.startBar + deltaBars)))
           // Counter-shift notes (block-relative) so they stay put in absolute time,
           // written atomically with the start so they don't move on resize.
           const offsetBeats = (o.startBar - newStartBar) * beatsPerBar
@@ -181,6 +205,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   }
 
   const handleBlockPointerDown = useCallback((e: ReactPointerEvent, _trackId: string, blockId: string) => {
+    // Let right-click fall through to the lane (block drawing) instead of moving.
+    if (e.button !== 0) return
     e.stopPropagation()
 
     // Shift toggles selection without starting a drag.
@@ -220,9 +246,27 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     beginGestureTracking()
   }, [selectedBlockIds, setSelectedBlockIds, laneRef, beginGestureTracking])
 
-  // Pointer down on empty lane begins a marquee (shift keeps the current
-  // selection as the base; otherwise it starts empty).
-  const handleLanePointerDown = useCallback((e: ReactPointerEvent) => {
+  // Pointer down on a lane: right-click draws a new block on that track; left-click
+  // begins a marquee (shift keeps the current selection as the base).
+  const handleLanePointerDown = useCallback((e: ReactPointerEvent, trackId?: string) => {
+    // Right-click on a track lane = draw a new block (snapped to beats).
+    if (e.button === 2 && trackId) {
+      const laneR = laneRef.current?.getBoundingClientRect()
+      if (!laneR) return
+      const pixelsPerBeat = useUIStore.getState().tracksPixelsPerBeat
+      const beatsPerBar = useTimeStore.getState().beatsPerBar
+      const oneBeat = 1 / beatsPerBar
+      const startBeat = Math.max(0, Math.floor((e.clientX - laneR.left) / pixelsPerBeat))
+      const startBar = startBeat / beatsPerBar
+      const blockId = crypto.randomUUID()
+      useProjectStore.getState().addBlock(trackId, { id: blockId, startBar, durationBars: oneBeat, loop: false, notes: [] })
+      setSelectedBlockIds(new Set([blockId]))
+      dragRef.current = { type: 'drawing', trackId, blockId, startBar, pixelsPerBeat, beatsPerBar }
+      beginGestureTracking()
+      return
+    }
+
+    if (e.button !== 0) return
     const base = e.shiftKey ? new Set(selectedBlockIds) : new Set<string>()
     if (!e.shiftKey) setSelectedBlockIds(new Set())
     dragRef.current = {
@@ -232,7 +276,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       base,
     }
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking])
+  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking, laneRef])
 
   // Delete removes selected blocks; Escape clears the selection.
   useEffect(() => {
