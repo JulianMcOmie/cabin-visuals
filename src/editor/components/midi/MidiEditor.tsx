@@ -257,10 +257,18 @@ export function MidiEditor({
             flex: 1,
             position: 'relative',
             overflow: 'hidden',
-            cursor: 'ew-resize',
             backgroundColor: '#18181b',
           }}
-          onPointerDown={startScrub}
+          onPointerDown={(e) => {
+            // Scrub only from the bottom half (where the ticks + triangle are).
+            const r = e.currentTarget.getBoundingClientRect()
+            if (e.clientY - r.top < r.height / 2) return
+            startScrub(e)
+          }}
+          onPointerMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect()
+            e.currentTarget.style.cursor = e.clientY - r.top >= r.height / 2 ? 'ew-resize' : 'default'
+          }}
         >
           <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
           {/* Darker bottom half */}

@@ -42,7 +42,19 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
       <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-zinc-900">
         {corner}
       </div>
-      <div className="relative flex-1 overflow-hidden cursor-ew-resize bg-zinc-900" onPointerDown={onScrubStart}>
+      <div
+        className="relative flex-1 overflow-hidden bg-zinc-900"
+        onPointerDown={(e) => {
+          // Scrub only from the bottom half (where the ticks + triangle are).
+          const r = e.currentTarget.getBoundingClientRect()
+          if (e.clientY - r.top < r.height / 2) return
+          onScrubStart(e)
+        }}
+        onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          e.currentTarget.style.cursor = e.clientY - r.top >= r.height / 2 ? 'ew-resize' : 'default'
+        }}
+      >
         <div ref={contentRef} className="absolute top-0 bottom-0 left-0" style={{ width: timelineWidthPx }}>
           {/* Darker bottom half */}
           <div className="absolute left-0 right-0 bg-zinc-950/60 border-t border-zinc-800/80" style={{ top: '50%', bottom: 0 }} />
