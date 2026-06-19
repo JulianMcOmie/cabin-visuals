@@ -446,7 +446,7 @@ export function useNoteGestures({
             currentX: gridX,
             currentY: gridY,
           })
-          beginGestureTracking('copy')
+          beginGestureTracking('default')
         }
       }
       return
