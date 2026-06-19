@@ -6,7 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { useMidiEditorState } from '../hooks/useMidiEditorState'
-import { MidiEditor } from './midi/MidiEditor'
+import { MidiEditor, LABEL_WIDTH } from './midi/MidiEditor'
 import { generateRows } from './midi/generateRows'
 import type { Block } from '../types'
 
@@ -92,19 +92,27 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
   // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
   const initialTotalBeats = Math.max(totalBars, INITIAL_TOTAL_BARS) * beatsPerBar
 
-  // Scroll to center on existing notes (or C4) on mount
+  // On open: scroll horizontally to just before the block starts, and vertically
+  // to the block's first note (the earliest by time), or C4 if the block is empty.
   useEffect(() => {
     if (hasScrolledRef.current || !containerRef.current) return
     const scrollContainer = containerRef.current.querySelector('.overflow-auto')
     if (!scrollContainer) return
 
-    const centerPitch = notes.length > 0
-      ? Math.round(notes.reduce((sum, n) => sum + n.pitch, 0) / notes.length)
-      : 60
-    const centerIdx = rows.findIndex((r) => r.pitch <= centerPitch)
-    const targetIdx = centerIdx === -1 ? Math.floor(rows.length / 2) : centerIdx
-    const visibleHeight = scrollContainer.clientHeight
-    scrollContainer.scrollTop = Math.max(0, targetIdx * rowHeight - visibleHeight / 2)
+    // Vertical: center on the first note's pitch (or C4 when empty).
+    const firstNote = notes.length > 0
+      ? notes.reduce((earliest, n) => (n.startBeat < earliest.startBeat ? n : earliest))
+      : null
+    const targetPitch = firstNote ? firstNote.pitch : 60
+    const pitchIdx = rows.findIndex((r) => r.pitch <= targetPitch)
+    const targetIdx = pitchIdx === -1 ? Math.floor(rows.length / 2) : pitchIdx
+    scrollContainer.scrollTop = Math.max(0, targetIdx * rowHeight - scrollContainer.clientHeight / 2)
+
+    // Horizontal: place the block start a one-bar lead-in from the left edge.
+    const blockStartPx = LABEL_WIDTH + block.startBar * beatsPerBar * midiPixelsPerBeat
+    const leadInPx = beatsPerBar * midiPixelsPerBeat
+    scrollContainer.scrollLeft = Math.max(0, blockStartPx - leadInPx)
+
     hasScrolledRef.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

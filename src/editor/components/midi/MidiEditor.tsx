@@ -31,7 +31,7 @@ export interface MidiEditorProps {
   initialTotalBeats: number
 }
 
-const LABEL_WIDTH = 88
+export const LABEL_WIDTH = 88
 const RULER_HEIGHT = 40
 const CANVAS_RIGHT_PADDING = 20
 
@@ -304,8 +304,19 @@ export function MidiEditor({
               zIndex: 10,
               pointerEvents: 'auto',
             }}
-            onPointerDown={handleHeaderPointerDown}
-            onPointerMove={handleHeaderPointerMove}
+            onPointerDown={(e) => {
+              // Clicking on/near the playhead triangle scrubs instead of grabbing
+              // the block (gives the playhead priority without a moving hit target).
+              const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
+              if (ph != null && Math.abs(e.clientX - ph) <= 10) { startScrub(e); return }
+              handleHeaderPointerDown(e)
+            }}
+            onPointerMove={(e) => {
+              // Show the scrub cursor where a click would scrub (near the playhead).
+              const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
+              if (ph != null && Math.abs(e.clientX - ph) <= 10) { e.currentTarget.style.cursor = 'ew-resize'; return }
+              handleHeaderPointerMove(e)
+            }}
           />
 
           {/* Playhead head: downward triangle filling the bottom half (RAF-positioned).
