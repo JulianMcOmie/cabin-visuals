@@ -248,18 +248,10 @@ export function MidiEditor({
           scroll is synced via onScrollSync; the ruler's own bar is hidden.
           Two-tone Logic-style: lighter top half with bar numbers, darker bottom half
           with tick lines and the playhead triangle. The playhead line lives in the grid. */}
-      <div className="flex-shrink-0" style={{ overflow: 'hidden' }}>
-      <div
-        ref={rulerContentRef}
-        style={{
-          display: 'flex',
-          width: canvasWidth,
-          height: RULER_HEIGHT,
-          borderBottom: '1px solid #27272a',
-          willChange: 'transform',
-        }}
-      >
-        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#18181b', borderRight: '1px solid #27272a' }} />
+      <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
+        {/* Frozen corner — stays put on horizontal scroll, aligned with the sticky labels. */}
+        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#18181b', borderRight: '1px solid #27272a', zIndex: 2 }} />
+        {/* Strip viewport clips the translated inner content (mirrors the grid scroll). */}
         <div
           style={{
             flex: 1,
@@ -270,6 +262,7 @@ export function MidiEditor({
           }}
           onPointerDown={startScrub}
         >
+          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
           {/* Darker bottom half */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', bottom: 0, backgroundColor: 'rgba(9,9,11,0.6)', borderTop: '1px solid rgba(39,39,42,0.8)' }} />
 
@@ -348,15 +341,18 @@ export function MidiEditor({
         onScroll={onScrollSync}
       >
       <div style={{ width: canvasWidth, height: canvasHeight, position: 'relative', display: 'flex' }}>
-        {/* Labels column */}
+        {/* Labels column — frozen on horizontal scroll (sticky left), like the ruler
+            is frozen on vertical scroll. zIndex above notes + playhead so grid content
+            slides under it instead of showing through. */}
         <div
           style={{
             width: LABEL_WIDTH,
             height: canvasHeight,
             flexShrink: 0,
             backgroundColor: '#141414',
-            position: 'relative',
-            zIndex: 2,
+            position: 'sticky',
+            left: 0,
+            zIndex: 20,
             cursor: 'default',
           }}
           onPointerMove={() => {
