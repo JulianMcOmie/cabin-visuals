@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type UIEvent as ReactScrollEvent } from 'react'
+import { useRef, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
 import Link from 'next/link'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -142,6 +142,9 @@ function TimelineArea() {
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
+    // Persist continuously so the position survives unmount (the ref may already be
+    // detached by the time an unmount cleanup would run).
+    useUIStore.getState().setTracksScroll(e.currentTarget.scrollLeft, e.currentTarget.scrollTop)
   }
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
@@ -167,6 +170,17 @@ function TimelineArea() {
       return Math.max(0, Math.min(maxBeat, beat))
     },
   })
+
+  // Restore the saved scroll on mount (before paint), and save it on unmount, so
+  // returning from the MIDI editor lands you where you left off.
+  useLayoutEffect(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const { tracksScrollLeft, tracksScrollTop } = useUIStore.getState()
+    sc.scrollLeft = tracksScrollLeft
+    sc.scrollTop = tracksScrollTop
+    if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
+  }, [])
 
   usePlayhead((beat) => {
     const beatX = beat * pixelsPerBeat

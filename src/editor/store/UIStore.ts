@@ -24,6 +24,11 @@ interface UIState {
   // Horizontal zoom for the tracks timeline (pixels per beat).
   tracksPixelsPerBeat: number
   setTracksPixelsPerBeat: (pixels: number) => void
+
+  // Saved tracks-timeline scroll, so returning from the MIDI editor restores the view.
+  tracksScrollLeft: number
+  tracksScrollTop: number
+  setTracksScroll: (left: number, top: number) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -48,4 +53,8 @@ export const useUIStore = create<UIState>((set) => ({
   tracksPixelsPerBeat: 16,
   setTracksPixelsPerBeat: (pixels) =>
     set({ tracksPixelsPerBeat: Math.max(2, Math.min(100, pixels)) }),
+
+  tracksScrollLeft: 0,
+  tracksScrollTop: 0,
+  setTracksScroll: (left, top) => set({ tracksScrollLeft: left, tracksScrollTop: top }),
 }));
