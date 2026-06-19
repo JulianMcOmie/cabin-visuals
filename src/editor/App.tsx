@@ -18,6 +18,7 @@ import { AudioBar } from './components/AudioBar'
 import { PianoRollPanel } from './components/PianoRollPanel'
 import { useUIStore } from './store/UIStore'
 import { usePlayback } from './hooks/usePlayback'
+import { useTransportKeys } from './hooks/useTransportKeys'
 import { usePlayhead } from './hooks/usePlayhead'
 import { useScrub } from './hooks/useScrub'
 import { useTrackGestures } from './hooks/useTrackGestures'
@@ -57,6 +58,7 @@ function BeatOverlay() {
 function Header() {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, stop } = usePlayback();
+  useTransportKeys({ play, pause })
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const bpm = useTimeStore((s) => s.bpm)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
