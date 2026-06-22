@@ -40,12 +40,6 @@ class PlaybackEngine {
     Tone.getTransport().seconds = 0
   }
 
-  stop() {
-    Tone.getTransport().stop()
-    this.cancelBeatTracking()
-    this.callbacks?.onBeatChange(0)
-  }
-
   private startBeatTracking() {
     const tick = () => {
       if (!this.callbacks) return
