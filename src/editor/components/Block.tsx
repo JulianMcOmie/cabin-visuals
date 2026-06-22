@@ -25,7 +25,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
     <div
       data-block-id={block.id}
       title="Double-click to edit notes"
-      className="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab"
+      className="absolute top-1 bottom-1 rounded overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${Math.max(width, 4)}px`,
@@ -46,7 +46,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         const w = rect.width
         const edge = Math.min(8, w / 4)
         const localX = e.clientX - rect.left
-        e.currentTarget.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'grab'
+        e.currentTarget.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'default'
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()

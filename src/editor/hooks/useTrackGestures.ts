@@ -80,7 +80,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const controller = new AbortController()
     abortRef.current = controller
     const t = dragRef.current?.type
-    lockCursor(t === 'moving' ? 'grabbing' : t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
+    lockCursor(t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
 
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
