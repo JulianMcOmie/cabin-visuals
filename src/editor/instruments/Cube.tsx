@@ -18,6 +18,8 @@ export const cubeInstrument: InstrumentDef = {
 
 function computePulse(currentBeat: number, beatsPerBar: number): number {
   const DECAY_BEATS = 0.45
+  const LOWEST_MIDI_PITCH = 24
+  const PULSE_DAMPENER = 20
   const { tracks } = useProjectStore.getState()
   let closestBeatsSinceNote = Infinity
   let pulseIntensity = 1
@@ -33,7 +35,7 @@ function computePulse(currentBeat: number, beatsPerBar: number): number {
         if (absNoteBeat <= currentBeat) {
           const beatsSince = currentBeat - absNoteBeat
           if (beatsSince < closestBeatsSinceNote) {
-            pulseIntensity = note.pitch - 23
+            pulseIntensity = note.pitch - LOWEST_MIDI_PITCH + 1
             closestBeatsSinceNote = beatsSince
           }
         }
@@ -44,7 +46,7 @@ function computePulse(currentBeat: number, beatsPerBar: number): number {
   console.log("pulseIntensity: " + pulseIntensity)
 
   if (closestBeatsSinceNote === Infinity) return 0
-  return Math.max(0, pulseIntensity / 50 * (1 - closestBeatsSinceNote / DECAY_BEATS))
+  return Math.max(0, pulseIntensity / PULSE_DAMPENER * (1 - closestBeatsSinceNote / DECAY_BEATS))
 }
 
 export function Cube() {
