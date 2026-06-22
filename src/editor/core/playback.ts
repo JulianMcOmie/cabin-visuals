@@ -34,6 +34,12 @@ class PlaybackEngine {
     this.cancelBeatTracking()
   }
 
+  /** Jump the playing transport to a new beat without stopping it. */
+  seek(beat: number) {
+    this.startBeat = beat
+    Tone.getTransport().seconds = 0
+  }
+
   stop() {
     Tone.getTransport().stop()
     this.cancelBeatTracking()

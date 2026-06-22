@@ -57,8 +57,8 @@ function BeatOverlay() {
 
 function Header() {
   const isPlaying = useTimeStore((s) => s.isPlaying)
-  const { play, pause, stop } = usePlayback();
-  useTransportKeys({ play, pause })
+  const { play, pause, reset } = usePlayback();
+  useTransportKeys({ play, pause, reset })
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const bpm = useTimeStore((s) => s.bpm)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
@@ -77,8 +77,8 @@ function Header() {
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
-          onClick={stop}
-          title="Stop"
+          onClick={reset}
+          title="Return to start (Enter)"
           className="flex items-center justify-center w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
         >
           <Square size={10} fill="currentColor" />

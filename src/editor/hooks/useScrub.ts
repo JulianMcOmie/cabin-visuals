@@ -1,5 +1,6 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTimeStore } from '../store/TimeStore'
+import { getPlaybackEngine } from '../core/playback'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 interface UseScrubOptions {
@@ -30,6 +31,9 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     const beat = computeRef.current(clientX)
     if (beat == null) return
     useTimeStore.getState().setCurrentBeat(beat)
+    // If playing, move the transport too so it keeps playing from the new spot
+    // (otherwise the engine's next tick would snap currentBeat back).
+    if (useTimeStore.getState().isPlaying) getPlaybackEngine().seek(beat)
   }, [])
 
   const startScrub = useCallback((e: ReactPointerEvent) => {

@@ -31,14 +31,16 @@ export function usePlayback() {
     setIsPlaying(false);
   }, []);
 
-  const stop = useCallback(() => {
-    engine.stop();
-    setIsPlaying(false);
+  // Return to the start. Doesn't pause: if currently playing, it keeps playing
+  // from beat 0; if paused, it just moves the playhead to 0.
+  const reset = useCallback(() => {
+    useTimeStore.getState().setCurrentBeat(0);
+    if (useTimeStore.getState().isPlaying) engine.play(0);
   }, []);
 
   return {
     play,
     pause,
-    stop
+    reset
   }
 }
