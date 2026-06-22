@@ -1,7 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { getPlaybackEngine } from '../core/playback';
 import { useTimeStore } from '../store/TimeStore';
-import { useUIStore } from '../store/UIStore';
 
 export function usePlayback() {
   const { setIsPlaying } = useTimeStore();
@@ -21,8 +20,12 @@ export function usePlayback() {
   }, []);
 
   const play = useCallback(() => {
-    const { currentBeat } = useTimeStore.getState();
-    engine.play(currentBeat);
+    const { currentBeat, totalBars, beatsPerBar } = useTimeStore.getState();
+    const maxBeat = totalBars * beatsPerBar;
+    // If parked at (or past) the end, start over from 0 instead of no-op'ing.
+    const start = currentBeat >= maxBeat ? 0 : currentBeat;
+    useTimeStore.getState().setCurrentBeat(start);
+    engine.play(start);
     setIsPlaying(true);
   }, []);
 
