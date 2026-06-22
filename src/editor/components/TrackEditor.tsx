@@ -1,12 +1,12 @@
 'use client'
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sliders, Sparkles } from 'lucide-react'
+import { Music2, Sparkles } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 
-type Tab = 'instrument' | 'midi' | 'effects'
+type Tab = 'instrument' | 'effects'
 
 function ParamSlider({
   label, value, min, max, step, onChange,
@@ -65,15 +65,12 @@ function ParamSlider({
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'instrument', label: 'Instrument', icon: <Music2 size={11} /> },
-  { id: 'midi', label: 'MIDI', icon: <Sliders size={11} /> },
   { id: 'effects', label: 'Effects', icon: <Sparkles size={11} /> },
 ]
 
 export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
-  const editingBlock = useUIStore((s) => s.editingBlock)
-  const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
@@ -138,37 +135,6 @@ export function TrackEditor() {
               </>
             ) : (
               <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>
-            )}
-          </>
-        )}
-        {tab === 'midi' && (
-          <>
-            {track && track.blocks.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                {track.blocks.map((block) => (
-                  <button
-                    key={block.id}
-                    onClick={() => setEditingBlock({ trackId: track.id, blockId: block.id })}
-                    className={`flex items-center justify-between px-2.5 py-2 rounded border text-left transition-colors ${
-                      editingBlock?.blockId === block.id
-                        ? 'border-indigo-500 bg-indigo-500/10'
-                        : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs text-zinc-300">
-                        Bar {block.startBar + 1} · {block.durationBars} bar{block.durationBars !== 1 ? 's' : ''}
-                      </div>
-                      <div className="text-[10px] text-zinc-600 mt-0.5">
-                        {block.notes.length} note{block.notes.length !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                    <Music2 size={12} className="text-zinc-600 flex-shrink-0" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-zinc-600 text-center mt-8">No MIDI data</p>
             )}
           </>
         )}
