@@ -11,6 +11,8 @@ export const cubeInstrument: InstrumentDef = {
   name: 'Cube',
   params: [
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
+    // Color as a hue slider (0–360) — keeps every param numeric.
+    { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
   ],
 }
 
@@ -47,9 +49,10 @@ export function Cube() {
     const { currentBeat, beatsPerBar } = useTimeStore.getState()
     const pulse = computePulse(currentBeat, beatsPerBar)
 
-    // Base Size param from the cube track (falls back to the schema default).
+    // Instrument params from the cube track (fall back to the schema defaults).
     const cubeTrack = Object.values(useProjectStore.getState().tracks).find((t) => t.instrumentId === 'cube')
     const baseSize = cubeTrack?.params?.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
+    const baseHue = cubeTrack?.params?.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
 
     meshRef.current.rotation.y = currentBeat * 0.22
     meshRef.current.rotation.x = currentBeat * 0.09
@@ -58,6 +61,7 @@ export function Cube() {
     meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + pulse * 0.35))
 
     const mat = meshRef.current.material as MeshStandardMaterial
+    mat.color.setHSL(baseHue / 360, 0.65, 0.6)
     mat.emissiveIntensity = 0.2 + pulse * 1.2
   })
 
