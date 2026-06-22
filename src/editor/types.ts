@@ -23,6 +23,8 @@ export interface Track {
   name: string
   type: TrackType
   instrumentId: string
+  /** User-set instrument parameter values (keys defined by the instrument schema). */
+  params?: Record<string, number>
   color: string
   muted: boolean
   solo: boolean

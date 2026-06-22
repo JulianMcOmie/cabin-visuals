@@ -1,27 +1,62 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Music2, Sliders, Sparkles } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
+import { getInstrument } from '../instruments'
 
 type Tab = 'instrument' | 'midi' | 'effects'
 
-function ParamSlider({ label, value }: { label: string; value: number }) {
+function ParamSlider({
+  label, value, min, max, step, onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const pct = ((value - min) / (max - min)) * 100
+
+  const setFromClientX = (clientX: number) => {
+    const el = trackRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    const raw = min + t * (max - min)
+    const snapped = Math.max(min, Math.min(max, Math.round(raw / step) * step))
+    onChange(snapped)
+  }
+
+  const onPointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault()
+    setFromClientX(e.clientX)
+    const controller = new AbortController()
+    window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
+    window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
+  }
+
   return (
     <div className="mb-4">
       <div className="flex justify-between items-center mb-1.5">
         <span className="text-xs text-zinc-300">{label}</span>
-        <span className="text-xs text-zinc-500 tabular-nums">{value}%</span>
+        <span className="text-xs text-zinc-500 tabular-nums">{value.toFixed(2)}</span>
       </div>
-      <div className="relative h-1 bg-zinc-800 rounded-full">
+      <div
+        ref={trackRef}
+        onPointerDown={onPointerDown}
+        className="relative h-1 bg-zinc-800 rounded-full cursor-pointer select-none"
+      >
         <div
           className="absolute left-0 top-0 h-full rounded-full bg-cyan-500"
-          style={{ width: `${value}%` }}
+          style={{ width: `${pct}%` }}
         />
         <div
           className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-cyan-400 border-2 border-zinc-900"
-          style={{ left: `calc(${value}% - 5px)` }}
+          style={{ left: `calc(${pct}% - 5px)` }}
         />
       </div>
     </div>
@@ -41,6 +76,7 @@ export function TrackEditor() {
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
+  const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
@@ -82,10 +118,23 @@ export function TrackEditor() {
                   {track.type} · {track.instrumentId}
                 </p>
                 <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
-                <ParamSlider label="Base Size" value={59} />
-                <ParamSlider label="Compression Amount" value={25} />
-                <ParamSlider label="Min Size Factor" value={18} />
-                <ParamSlider label="X Position" value={50} />
+                {(() => {
+                  const def = getInstrument(track.instrumentId)
+                  if (!def || def.params.length === 0) {
+                    return <p className="text-[11px] text-zinc-600">No parameters</p>
+                  }
+                  return def.params.map((p) => (
+                    <ParamSlider
+                      key={p.key}
+                      label={p.label}
+                      min={p.min}
+                      max={p.max}
+                      step={p.step}
+                      value={track.params?.[p.key] ?? p.default}
+                      onChange={(v) => setTrackParam(track.id, p.key, v)}
+                    />
+                  ))
+                })()}
               </>
             ) : (
               <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>

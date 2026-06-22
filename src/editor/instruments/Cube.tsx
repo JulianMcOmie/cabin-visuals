@@ -3,6 +3,16 @@ import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useTimeStore } from '../store/TimeStore'
 import { useProjectStore } from '../store/ProjectStore'
+import { paramDefault, type InstrumentDef } from './types'
+
+// The cube's definition lives next to its visual — schema and component can't drift.
+export const cubeInstrument: InstrumentDef = {
+  id: 'cube',
+  name: 'Cube',
+  params: [
+    { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
+  ],
+}
 
 function computePulse(currentBeat: number, beatsPerBar: number): number {
   const DECAY_BEATS = 0.45
@@ -37,11 +47,15 @@ export function Cube() {
     const { currentBeat, beatsPerBar } = useTimeStore.getState()
     const pulse = computePulse(currentBeat, beatsPerBar)
 
+    // Base Size param from the cube track (falls back to the schema default).
+    const cubeTrack = Object.values(useProjectStore.getState().tracks).find((t) => t.instrumentId === 'cube')
+    const baseSize = cubeTrack?.params?.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
+
     meshRef.current.rotation.y = currentBeat * 0.22
     meshRef.current.rotation.x = currentBeat * 0.09
 
     const breathe = 1.15 + Math.sin(currentBeat * 0.9) * 0.2
-    meshRef.current.scale.setScalar(breathe * (1 + pulse * 0.35))
+    meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + pulse * 0.35))
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.emissiveIntensity = 0.2 + pulse * 1.2

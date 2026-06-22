@@ -14,6 +14,7 @@ interface ProjectState {
   reorderRootTracks: (orderedIds: string[]) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
+  setTrackParam: (trackId: string, key: string, value: number) => void
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -145,6 +146,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
       if (!track) return s
       return {
         tracks: { ...s.tracks, [trackId]: { ...track, solo: !track.solo } },
+      }
+    }),
+
+  setTrackParam: (trackId, key, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, params: { ...track.params, [key]: value } },
+        },
       }
     }),
 }))
