@@ -10,6 +10,7 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
 import { Cube } from './instruments/Cube'
+import { CabinLogo } from '../components/CabinLogo'
 import { Track } from './components/Track'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
@@ -99,7 +100,7 @@ function Header() {
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
-        <img src="/logo.svg" alt="" className="h-12 w-auto" />
+        <CabinLogo className="h-12 w-auto" />
         <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
       </div>
 

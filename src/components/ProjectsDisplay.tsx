@@ -14,6 +14,7 @@ import type { User } from '@supabase/supabase-js'
 import { logout } from "../../app/(auth)/logout/actions"
 import { createClient } from "../utils/supabase/client"
 import LogInButton from "./AuthButtons/LogInButton"
+import { CabinLogo } from "./CabinLogo"
 import SignUpButton from "./AuthButtons/SignUpButton"
 
 export interface ProjectMetadata {
@@ -83,7 +84,7 @@ export default function ProjectsDisplay({
 
       <header className={styles.header}>
         <Link href="/" className="flex items-center gap-2 select-none">
-          <img src="/logo.svg" alt="" className="h-12 w-auto" />
+          <CabinLogo className="h-12 w-auto" />
           <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
         </Link>
         <h1 className={`${styles.headerTitle} font-extrabold absolute left-1/2 -translate-x-1/2`}>Projects</h1>

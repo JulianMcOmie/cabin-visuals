@@ -223,6 +223,30 @@ html {
   box-shadow: 0 0 15px rgba(0, 168, 255, 0.5); /* Add glow effect */
 }
 
+/* Cabin logo: smoke puffs billow on hover. overflow:visible lets them rise past
+   the SVG box; each puff is staggered so the smoke reads as rhythmic. */
+.cabin-logo {
+  overflow: visible;
+}
+.cabin-logo .puff {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.cabin-logo:hover .puff {
+  animation: cabin-billow 1.8s ease-out infinite;
+}
+.cabin-logo:hover .puff-2 {
+  animation-delay: 0.6s;
+}
+.cabin-logo:hover .puff-3 {
+  animation-delay: 1.2s;
+}
+@keyframes cabin-billow {
+  0%   { opacity: 0.2; transform: translateY(250px) scale(0.5); }
+  30%  { opacity: 1;   transform: translateY(0) scale(1.1); }
+  100% { opacity: 0;   transform: translateY(-700px) scale(1.8); }
+}
+
 /* Hide scrollbars in editor panels (scrolling still works) */
 .no-scrollbar {
   scrollbar-width: none;    /* Firefox */
