@@ -190,6 +190,7 @@ export default function LandingPage() {
       <main className="flex-1 relative z-10">
         <section className="container flex flex-col items-center justify-center space-y-12 py-24 text-center md:py-32 mx-auto px-4">
           <div className="space-y-5">
+            <img src="/logo.svg" alt="" className="block mx-auto h-32 w-auto md:h-40" />
             <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl">
               <span>The </span>
               <span className="text-electric-blue">visual music</span>
