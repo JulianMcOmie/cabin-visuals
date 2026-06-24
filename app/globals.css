@@ -233,10 +233,19 @@ html {
   transform-origin: center;
 }
 .cabin-logo:hover .puff {
-  animation: cabin-billow 1.5s ease-out infinite;
+  animation: 
+    cabin-billow-initial-hover 0.75s ease-out 0s forwards,
+    cabin-billow 1.5s ease-out 0.75s infinite;
 }
 .cabin-logo:hover .puff-2 {
-  animation: cabin-billow 1.5s ease-out infinite;
+  animation: 
+    cabin-billow-initial-hover 0.75s ease-out 0s forwards,
+    cabin-billow 1.5s ease-out 0.75s infinite;
+}
+
+@keyframes cabin-billow-initial-hover {
+  0%  { opacity: 1;   transform: translateY(0)}
+  100% { opacity: 0;   transform: translateY(-500px) }
 }
 
 @keyframes cabin-billow {
