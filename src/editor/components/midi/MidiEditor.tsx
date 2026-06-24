@@ -243,7 +243,7 @@ export function MidiEditor({
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-zinc-950">
+    <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e21]">
       {/* Ruler in its own row (outside the grid scroll container) so the grid owns
           the only scrollbars: the vertical one then ends below the ruler. Horizontal
           scroll is synced via onScrollSync; the ruler's own bar is hidden.
@@ -358,7 +358,7 @@ export function MidiEditor({
             width: LABEL_WIDTH,
             height: canvasHeight,
             flexShrink: 0,
-            backgroundColor: '#141414',
+            backgroundColor: '#202024',
             position: 'sticky',
             left: 0,
             zIndex: 20,
@@ -436,7 +436,7 @@ export function MidiEditor({
 
         {/* Gutter (half a triangle wide) between the labels and the grid so the
             ruler playhead triangle has room to show its left half at beat 0. */}
-        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: '#0e0e0e' }} />
+        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: '#18181b' }} />
 
         {/* Grid area */}
         <div
@@ -445,7 +445,7 @@ export function MidiEditor({
             flex: 1,
             height: canvasHeight,
             position: 'relative',
-            backgroundColor: '#0e0e0e',
+            backgroundColor: '#18181b',
             ...gridBackground,
           }}
           onPointerDown={handleBackgroundPointerDown}

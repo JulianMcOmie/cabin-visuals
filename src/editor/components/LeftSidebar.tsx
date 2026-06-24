@@ -75,12 +75,12 @@ export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
 
   return (
-    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-950 overflow-hidden">
+    <div className="flex flex-col h-full border-r border-zinc-800 bg-[#1e1e21] overflow-hidden">
       <div className="px-3 pt-2 pb-1.5 border-b border-zinc-800">
         <div className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2">
           Library
         </div>
-        <div className="flex gap-0.5 bg-zinc-900 rounded p-0.5">
+        <div className="flex gap-0.5 bg-zinc-800 rounded p-0.5">
           <button
             onClick={() => setTab('instruments')}
             className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${

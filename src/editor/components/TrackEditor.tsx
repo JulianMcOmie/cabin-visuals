@@ -80,7 +80,7 @@ export function TrackEditor() {
     null
 
   return (
-    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-950">
+    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-900">
       <div className="border-b border-zinc-800">
         <div className="px-3 pt-2 pb-1">
           <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium">

@@ -65,7 +65,7 @@ function Header() {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   return (
-    <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-zinc-950 relative">
+    <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
       <Link
         href="/"
         className="flex-shrink-0 flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -221,7 +221,7 @@ function TimelineArea() {
   }
 
   return (
-    <div className="flex flex-col h-full border-t border-zinc-800">
+    <div className="flex flex-col h-full border-t border-zinc-800 bg-zinc-900">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -348,7 +348,7 @@ function BottomArea() {
 
 export default function EditorApp() {
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-zinc-950">
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#1e1e21]">
       <Header />
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }}>

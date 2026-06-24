@@ -13,7 +13,7 @@ export function AudioBar() {
   }
 
   return (
-    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-4 border-t border-zinc-800 bg-zinc-950 select-none">
+    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-4 border-t border-zinc-800 bg-[#1e1e21] select-none">
       <span className="text-xs text-zinc-500">Audio:</span>
 
       {audioFile ? (

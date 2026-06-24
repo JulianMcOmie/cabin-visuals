@@ -53,9 +53,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         {...listeners}
         style={{ width: TRACK_LABEL_WIDTH }}
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 cursor-grab active:cursor-grabbing ${
-          isLast ? '' : 'border-b border-b-black'
+          isLast ? '' : 'border-b border-b-zinc-900'
         } ${
-          isSelected ? 'bg-zinc-700' : 'bg-zinc-800'
+          isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
         }`}
       >
         <div className="flex-1 min-w-0">
