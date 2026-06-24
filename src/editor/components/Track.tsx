@@ -4,7 +4,7 @@ import { useTimeStore } from '../store/TimeStore'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { Block } from './Block'
-import { TRACK_LABEL_WIDTH } from '../constants'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../types'
 
@@ -88,6 +88,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           </button>
         </div>
       </div>
+
+      {/* Gutter (half a triangle wide) between the label and the lane so the ruler
+          playhead triangle has room to show its left half at beat 0. */}
+      <div className="flex-shrink-0" style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
         className="relative flex-shrink-0"

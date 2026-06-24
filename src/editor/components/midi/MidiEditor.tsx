@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from '../../hooks/useNoteGestures'
@@ -148,7 +149,7 @@ export function MidiEditor({
   }, [])
 
   // Canvas dimensions (the timeline spans initialTotalBeats, not just the block)
-  const canvasWidth = initialTotalBeats * pixelsPerBeat + LABEL_WIDTH + CANVAS_RIGHT_PADDING
+  const canvasWidth = initialTotalBeats * pixelsPerBeat + LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
@@ -260,17 +261,15 @@ export function MidiEditor({
             backgroundColor: '#18181b',
           }}
           onPointerDown={(e) => {
-            // Scrub only from the bottom half (where the ticks + triangle are).
-            const r = e.currentTarget.getBoundingClientRect()
-            if (e.clientY - r.top < r.height / 2) return
+            // Whole ruler scrubs here — the toolbar above (part of the editor) owns
+            // the panel-resize edge, so the ruler top doesn't double as a resizer.
             startScrub(e)
           }}
           onPointerMove={(e) => {
-            const r = e.currentTarget.getBoundingClientRect()
-            e.currentTarget.style.cursor = e.clientY - r.top >= r.height / 2 ? 'ew-resize' : 'default'
+            e.currentTarget.style.cursor = 'ew-resize'
           }}
         >
-          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
+          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
           {/* Darker bottom half */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', bottom: 0, backgroundColor: 'rgba(9,9,11,0.6)', borderTop: '1px solid rgba(39,39,42,0.8)' }} />
 
@@ -329,11 +328,11 @@ export function MidiEditor({
             <div style={{
               position: 'absolute',
               top: 0,
-              left: -10,
+              left: -PLAYHEAD_TRIANGLE_HALF,
               width: 0,
               height: 0,
-              borderLeft: '10px solid transparent',
-              borderRight: '10px solid transparent',
+              borderLeft: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
+              borderRight: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
               borderTop: '20px solid #ffffff',
             }} />
           </div>
@@ -432,6 +431,10 @@ export function MidiEditor({
             </div>
           ))}
         </div>
+
+        {/* Gutter (half a triangle wide) between the labels and the grid so the
+            ruler playhead triangle has room to show its left half at beat 0. */}
+        <div style={{ width: PLAYHEAD_TRIANGLE_HALF, flexShrink: 0, backgroundColor: '#0e0e0e' }} />
 
         {/* Grid area */}
         <div

@@ -23,7 +23,7 @@ import { useTransportKeys } from './hooks/useTransportKeys'
 import { usePlayhead } from './hooks/usePlayhead'
 import { useScrub } from './hooks/useScrub'
 import { useTrackGestures } from './hooks/useTrackGestures'
-import { TRACK_LABEL_WIDTH } from './constants'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, PANEL_RESIZE_HIT } from './constants'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -191,7 +191,7 @@ function TimelineArea() {
     // Clip the playhead overlay to the scroll container's client area (excludes the
     // scrollbars) so the line never draws over them.
     if (sc && clipRef.current) {
-      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - TRACK_LABEL_WIDTH)}px`
+      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - TRACK_LABEL_WIDTH - PLAYHEAD_TRIANGLE_HALF)}px`
       clipRef.current.style.height = `${sc.clientHeight}px`
     }
     // Ruler triangle is positioned in content space (its container mirrors the lane
@@ -265,7 +265,7 @@ function TimelineArea() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: TRACK_LABEL_WIDTH + timelineWidthPx, minHeight: '100%' }}
+            style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
               <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
@@ -299,7 +299,7 @@ function TimelineArea() {
             <div
               ref={laneRef}
               className="absolute bottom-0 top-0 z-10 pointer-events-none"
-              style={{ left: TRACK_LABEL_WIDTH, width: timelineWidthPx }}
+              style={{ left: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}
             >
               {marqueeRect && (
                 <div
@@ -322,7 +322,7 @@ function TimelineArea() {
             RAF offsets it by the scroll and sizes this clip box to the scroll
             container's client area, so the line tracks horizontal scroll, hides
             under the label edge, and never draws over the scrollbars. */}
-        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: TRACK_LABEL_WIDTH }}>
+        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
             <div className="absolute top-0 bottom-0" style={{ left: -0.25, width: 0.5, backgroundColor: '#ffffff' }} />
             <div
@@ -359,7 +359,7 @@ export default function EditorApp() {
           {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
           <Panel>
             <div className="flex flex-col h-full">
-              <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }}>
+              <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }} resizeTargetMinimumSize={{ coarse: 2 * PANEL_RESIZE_HIT, fine: PANEL_RESIZE_HIT }}>
 
                 {/* Upper: TrackEditor + Canvas */}
                 <Panel defaultSize="53%" minSize="30%">

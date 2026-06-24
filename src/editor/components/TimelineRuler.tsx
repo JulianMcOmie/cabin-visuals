@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
-import { TRACK_LABEL_WIDTH } from '../constants'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
@@ -45,17 +45,18 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
       <div
         className="relative flex-1 overflow-hidden bg-zinc-900"
         onPointerDown={(e) => {
-          // Scrub only from the bottom half (where the ticks + triangle are).
+          // Scrub from anywhere on the ruler except the thin top strip, which is
+          // reserved for the panel-resize handle so the two can't fire at once.
           const r = e.currentTarget.getBoundingClientRect()
-          if (e.clientY - r.top < r.height / 2) return
+          if (e.clientY - r.top < RULER_SCRUB_TOP_INSET) return
           onScrubStart(e)
         }}
         onPointerMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          e.currentTarget.style.cursor = e.clientY - r.top >= r.height / 2 ? 'ew-resize' : 'default'
+          e.currentTarget.style.cursor = e.clientY - r.top >= RULER_SCRUB_TOP_INSET ? 'ew-resize' : 'default'
         }}
       >
-        <div ref={contentRef} className="absolute top-0 bottom-0 left-0" style={{ width: timelineWidthPx }}>
+        <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
           {/* Darker bottom half */}
           <div className="absolute left-0 right-0 bg-zinc-950/60 border-t border-zinc-800/80" style={{ top: '50%', bottom: 0 }} />
 
@@ -88,11 +89,11 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
             <div
               className="absolute top-0"
               style={{
-                left: -10,
+                left: -PLAYHEAD_TRIANGLE_HALF,
                 width: 0,
                 height: 0,
-                borderLeft: '10px solid transparent',
-                borderRight: '10px solid transparent',
+                borderLeft: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
+                borderRight: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
                 borderTop: '20px solid #ffffff',
               }}
             />

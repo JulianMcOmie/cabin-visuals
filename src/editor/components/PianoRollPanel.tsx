@@ -7,6 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { useMidiEditorState } from '../hooks/useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './midi/MidiEditor'
+import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { generateRows } from './midi/generateRows'
 import type { Block } from '../types'
 
@@ -109,7 +110,7 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
     scrollContainer.scrollTop = Math.max(0, targetIdx * rowHeight - scrollContainer.clientHeight / 2)
 
     // Horizontal: place the block start a one-bar lead-in from the left edge.
-    const blockStartPx = LABEL_WIDTH + block.startBar * beatsPerBar * midiPixelsPerBeat
+    const blockStartPx = LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + block.startBar * beatsPerBar * midiPixelsPerBeat
     const leadInPx = beatsPerBar * midiPixelsPerBeat
     scrollContainer.scrollLeft = Math.max(0, blockStartPx - leadInPx)
 
