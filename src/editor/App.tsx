@@ -354,7 +354,7 @@ export default function EditorApp() {
         <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
 
           {/* Library */}
-          <Panel defaultSize="19%" minSize="8%" maxSize="30%">
+          <Panel defaultSize="15%" minSize="8%" maxSize="30%">
             <LeftSidebar />
           </Panel>
 
@@ -366,10 +366,10 @@ export default function EditorApp() {
               <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }} resizeTargetMinimumSize={{ coarse: 2 * PANEL_RESIZE_HIT, fine: PANEL_RESIZE_HIT }}>
 
                 {/* Upper: TrackEditor + Canvas */}
-                <Panel defaultSize="53%" minSize="30%">
+                <Panel defaultSize="45%" minSize="30%">
                   <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
 
-                    <Panel defaultSize="40%" minSize="15%" maxSize="60%">
+                    <Panel defaultSize="55%" minSize="15%" maxSize="60%">
                       <TrackEditor />
                     </Panel>
 
@@ -389,7 +389,7 @@ export default function EditorApp() {
                 <PanelResizeHandle className="h-px bg-zinc-800 cursor-row-resize outline-none focus:outline-none" />
 
                 {/* Tracks / Piano Roll */}
-                <Panel defaultSize="28%" minSize="12%">
+                <Panel defaultSize="55%" minSize="12%">
                   <BottomArea />
                 </Panel>
 
