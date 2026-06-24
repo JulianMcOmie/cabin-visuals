@@ -69,7 +69,7 @@ export function Cube() {
 
     const breathe = 1.15 + Math.sin(currentBeat * 0.9) * 0.2
     meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + pulse * 0.35))
-    meshRef.current.position.x = baseXPosition
+    meshRef.current.position.setX(baseXPosition)
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
