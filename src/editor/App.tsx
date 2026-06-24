@@ -186,7 +186,10 @@ function TimelineArea() {
   }, [])
 
   usePlayhead((beat) => {
-    const beatX = beat * pixelsPerBeat
+    // Snap to a pixel *center* (whole px + 0.5) so the 1px-wide lane line renders
+    // crisp on a single column while the triangle apex sits exactly on that
+    // column's center — otherwise the crisp line lands ~0.5px off the apex.
+    const beatX = Math.round(beat * pixelsPerBeat) + 0.5
     const sc = scrollRef.current
     // Clip the playhead overlay to the scroll container's client area (excludes the
     // scrollbars) so the line never draws over them.
@@ -324,7 +327,7 @@ function TimelineArea() {
             under the label edge, and never draws over the scrollbars. */}
         <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
-            <div className="absolute top-0 bottom-0" style={{ left: -0.25, width: 0.5, backgroundColor: '#ffffff' }} />
+            <div className="absolute top-0 bottom-0" style={{ left: -0.5, width: 1, backgroundColor: '#ffffff' }} />
             <div
               className="absolute top-0 bottom-0 pointer-events-auto cursor-ew-resize"
               style={{ left: -5, width: 10 }}

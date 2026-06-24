@@ -56,27 +56,37 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
           e.currentTarget.style.cursor = e.clientY - r.top >= RULER_SCRUB_TOP_INSET ? 'ew-resize' : 'default'
         }}
       >
+        {/* Thin near-black divider separating the top (numbers) and bottom (ticks)
+            halves — spans the whole strip including the gutter left of the lanes. */}
+        <div className="absolute left-0 right-0 h-px bg-zinc-950 pointer-events-none" style={{ top: '50%' }} />
+
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
-          {/* Darker bottom half */}
-          <div className="absolute left-0 right-0 bg-zinc-950/60 border-t border-zinc-800/80" style={{ top: '50%', bottom: 0 }} />
 
           {/* Faint, short beat ticks */}
           {beats.map((beat) => (
             <div key={`b${beat}`} className="absolute bottom-0 w-px bg-zinc-700/60" style={{ left: beat * pixelsPerBeat, top: '72%' }} />
           ))}
 
-          {bars.map((bar) => (
-            <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
-              {/* Top half: bar number (only every `interval`th bar) */}
-              {bar % interval === 0 && (
-                <span className="absolute top-0 left-1 text-[10px] text-zinc-400 leading-none pt-1">
-                  {bar + 1}
-                </span>
-              )}
-              {/* Bottom half: tick line (every bar) */}
-              <div className="absolute bottom-0 w-px bg-zinc-600" style={{ top: '50%' }} />
-            </div>
-          ))}
+          {bars.map((bar) => {
+            const numbered = bar % interval === 0
+            return (
+              <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
+                {numbered ? (
+                  <>
+                    {/* Top half: bar number */}
+                    <span className="absolute top-0 left-1 text-[10px] text-zinc-400 leading-none pt-1">
+                      {bar + 1}
+                    </span>
+                    {/* Full-height tick line beside the number */}
+                    <div className="absolute top-0 bottom-0 w-px bg-zinc-600" />
+                  </>
+                ) : (
+                  /* Blank bar: short grey tick, same as the beat ticks */
+                  <div className="absolute bottom-0 w-px bg-zinc-700/60" style={{ top: '72%' }} />
+                )}
+              </div>
+            )
+          })}
 
           {/* Playhead head: a downward triangle filling the bottom half (RAF-positioned).
               Clipped to the strip, so at beat 0 it sits flush at the lane edge rather
@@ -84,7 +94,10 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
           <div
             ref={playheadHeadRef}
             className="absolute pointer-events-none"
-            style={{ top: '50%', bottom: 0, left: 0, width: 0 }}
+            // left: 0.5 nudges the apex to sit on the lane playhead line — the line
+            // lives in a separate viewport-space overlay, so the ruler triangle
+            // otherwise renders ~0.5px to its left.
+            style={{ top: '50%', bottom: 0, left: 0.5, width: 0 }}
           >
             <div
               className="absolute top-0"

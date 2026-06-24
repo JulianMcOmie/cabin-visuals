@@ -269,9 +269,11 @@ export function MidiEditor({
             e.currentTarget.style.cursor = 'ew-resize'
           }}
         >
+          {/* Thin near-black divider separating the top (numbers) and bottom (ticks)
+              halves — spans the whole strip including the gutter left of the grid. */}
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: '#09090b', pointerEvents: 'none' }} />
+
           <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
-          {/* Darker bottom half */}
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', bottom: 0, backgroundColor: 'rgba(9,9,11,0.6)', borderTop: '1px solid rgba(39,39,42,0.8)' }} />
 
           {/* Faint, short beat ticks (every beat that isn't a bar line) */}
           {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)
@@ -286,8 +288,8 @@ export function MidiEditor({
               <span style={{ position: 'absolute', top: 0, left: 4, paddingTop: 4, fontSize: 10, lineHeight: 1, color: '#a1a1aa' }}>
                 {i + 1}
               </span>
-              {/* Bottom half: tick line */}
-              <div style={{ position: 'absolute', top: '50%', bottom: 0, width: 1, backgroundColor: '#52525b' }} />
+              {/* Full-height tick line beside the number */}
+              <div style={{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#52525b' }} />
             </div>
           ))}
 
