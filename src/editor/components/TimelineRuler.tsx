@@ -39,7 +39,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
 
   return (
     <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
-      <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-zinc-900">
+      <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-zinc-800">
         {corner}
       </div>
       <div
@@ -58,7 +58,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
       >
         {/* Thin near-black divider separating the top (numbers) and bottom (ticks)
             halves — spans the whole strip including the gutter left of the lanes. */}
-        <div className="absolute left-0 right-0 h-px bg-zinc-950 pointer-events-none" style={{ top: '50%' }} />
+        <div className="absolute left-0 right-0 h-px bg-black pointer-events-none" style={{ top: '50%' }} />
 
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
 

@@ -15,9 +15,11 @@ interface TrackProps {
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
+  /** Last track in the list — suppresses the label-section divider, like the grid. */
+  isLast?: boolean
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast }: TrackProps) {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -50,12 +52,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         {...attributes}
         {...listeners}
         style={{ width: TRACK_LABEL_WIDTH }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-zinc-800/60 cursor-grab active:cursor-grabbing ${
-          isSelected ? 'bg-zinc-900' : 'bg-zinc-950'
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 cursor-grab active:cursor-grabbing ${
+          isLast ? '' : 'border-b border-b-black'
+        } ${
+          isSelected ? 'bg-zinc-700' : 'bg-zinc-800'
         }`}
       >
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium truncate" style={{ color: track.color }}>
+          <div className="text-xs font-medium truncate text-white">
             {track.name}
           </div>
           {track.targets && track.targets.length > 0 && (

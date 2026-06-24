@@ -272,12 +272,13 @@ function TimelineArea() {
           >
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
               <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
-                {rootTrackIds.map((id) => {
+                {rootTrackIds.map((id, i) => {
                   const track = tracks[id]
                   return track ? (
                     <Track
                       key={id}
                       track={track}
+                      isLast={i === rootTrackIds.length - 1}
                       barWidthPx={barWidthPx}
                       timelineWidthPx={timelineWidthPx}
                       selectedBlockIds={selectedBlockIds}
