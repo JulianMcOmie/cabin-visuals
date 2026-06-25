@@ -56,11 +56,13 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
           e.currentTarget.style.cursor = e.clientY - r.top >= RULER_SCRUB_TOP_INSET ? 'ew-resize' : 'default'
         }}
       >
-        {/* Thin near-black divider separating the top (numbers) and bottom (ticks)
-            halves — spans the whole strip including the gutter left of the lanes. */}
-        <div className="absolute left-0 right-0 h-px bg-zinc-950 pointer-events-none" style={{ top: '50%' }} />
+        
+        
 
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
+
+          {/* dark divider between bottom and top half of ruler */}
+          <div className="absolute left-0 right-0 h-px bg-zinc-950 pointer-events-none" style={{ top: '50%' }} />
 
           {/* Faint, short beat ticks */}
           {beats.map((beat) => (
