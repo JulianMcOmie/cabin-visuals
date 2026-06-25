@@ -43,7 +43,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         zIndex: isDragging ? 20 : undefined,
         position: 'relative',
       }}
-      className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors ${
+      className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
       }`}
       onClick={() => setSelectedTrackId(isSelected ? null : track.id)}
@@ -52,7 +52,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         {...attributes}
         {...listeners}
         style={{ width: TRACK_LABEL_WIDTH }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 cursor-grab active:cursor-grabbing ${
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 cursor-grab active:cursor-grabbing transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'
         } ${
           isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
