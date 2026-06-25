@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { getPlaybackEngine } from '../core/playback';
 import { useTimeStore } from '../store/TimeStore';
+import { useAudioStore } from '../store/AudioStore';
 
 export function usePlayback() {
   const { setIsPlaying } = useTimeStore();
@@ -10,6 +11,7 @@ export function usePlayback() {
     engine.init({
       onBeatChange: (beat) => useTimeStore.getState().setCurrentBeat(beat),
       getBpm: () => useTimeStore.getState().bpm,
+      getBeatsPerBar: () => useTimeStore.getState().beatsPerBar,
       getMaxBeat: () => {
         const { totalBars, beatsPerBar } = useTimeStore.getState()
         return totalBars * beatsPerBar
@@ -19,11 +21,14 @@ export function usePlayback() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const play = useCallback(() => {
+  const play = useCallback(async () => {
     const { currentBeat, totalBars, beatsPerBar } = useTimeStore.getState();
     const maxBeat = totalBars * beatsPerBar;
     // If parked at (or past) the end, start over from 0 instead of no-op'ing.
     const start = currentBeat >= maxBeat ? 0 : currentBeat;
+    // Make sure the buffer is decoded before we start the transport.
+    const clip = useAudioStore.getState().clip;
+    await engine.loadAudio(clip ? clip.ref : null);
     useTimeStore.getState().setCurrentBeat(start);
     engine.play(start);
     setIsPlaying(true);
