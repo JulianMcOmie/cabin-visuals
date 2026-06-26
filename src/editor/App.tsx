@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Canvas } from '@react-three/fiber'
-import { Play, Pause, Square, Upload, ChevronLeft, Plus } from 'lucide-react'
+import { Play, Pause, Square, Upload, ChevronLeft, Plus, Magnet } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
@@ -122,6 +122,8 @@ function TimelineArea() {
   const totalBars = useTimeStore((s) => s.totalBars)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
+  const timelineSnap = useUIStore((s) => s.timelineSnap)
+  const setTimelineSnap = useUIStore((s) => s.setTimelineSnap)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const timelineWidthPx = totalBars * barWidthPx
@@ -166,7 +168,8 @@ function TimelineArea() {
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
-      const beat = (clientX - rect.left) / pixelsPerBeat
+      let beat = (clientX - rect.left) / pixelsPerBeat
+      if (timelineSnap) beat = Math.round(beat) // snap to nearest beat
       return Math.max(0, Math.min(maxBeat, beat))
     },
   })
@@ -233,13 +236,24 @@ function TimelineArea() {
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
           corner={
-            <div className="flex items-center gap-2 px-3">
+            <div className="flex items-center gap-2 px-3 w-full">
               <span className="text-xs font-medium text-zinc-300">Tracks</span>
               <button
                 className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
                 onClick={insertTrack}
               >
                 <Plus size={12} />
+              </button>
+              <button
+                onClick={() => setTimelineSnap(!timelineSnap)}
+                title={`Snap playhead to beats (${timelineSnap ? 'on' : 'off'})`}
+                className={`ml-auto flex items-center justify-center w-5 h-5 rounded transition-colors ${
+                  timelineSnap
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                }`}
+              >
+                <Magnet size={12} />
               </button>
             </div>
           }

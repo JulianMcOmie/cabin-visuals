@@ -25,6 +25,10 @@ interface UIState {
   tracksPixelsPerBeat: number
   setTracksPixelsPerBeat: (pixels: number) => void
 
+  // When on, dragging the timeline playhead snaps to the nearest beat.
+  timelineSnap: boolean
+  setTimelineSnap: (on: boolean) => void
+
   // Saved tracks-timeline scroll, so returning from the MIDI editor restores the view.
   tracksScrollLeft: number
   tracksScrollTop: number
@@ -53,6 +57,9 @@ export const useUIStore = create<UIState>((set) => ({
   tracksPixelsPerBeat: 16,
   setTracksPixelsPerBeat: (pixels) =>
     set({ tracksPixelsPerBeat: Math.max(2, Math.min(100, pixels)) }),
+
+  timelineSnap: false,
+  setTimelineSnap: (on) => set({ timelineSnap: on }),
 
   tracksScrollLeft: 0,
   tracksScrollTop: 0,
