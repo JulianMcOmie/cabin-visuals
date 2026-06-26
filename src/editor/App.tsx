@@ -16,6 +16,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { TimelineRuler } from './components/TimelineRuler'
 import { AudioBar } from './components/AudioBar'
+import { BpmControl } from './components/BpmControl'
 import { PianoRollPanel } from './components/PianoRollPanel'
 import { useUIStore } from './store/UIStore'
 import { usePlayback } from './hooks/usePlayback'
@@ -61,7 +62,6 @@ function Header() {
   const { play, pause, reset } = usePlayback();
   useTransportKeys({ play, pause, reset })
   const currentBeat = useTimeStore((s) => s.currentBeat)
-  const bpm = useTimeStore((s) => s.bpm)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   return (
@@ -105,10 +105,7 @@ function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-        <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
-          BPM:{' '}
-          <span className="text-zinc-200">{bpm}</span>
-        </span>
+        <BpmControl />
         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors">
           <Upload size={12} strokeWidth={2.5} />
           Export

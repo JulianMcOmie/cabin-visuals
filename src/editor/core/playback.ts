@@ -77,6 +77,11 @@ class PlaybackEngine {
     this.cancelBeatTracking()
   }
 
+  /** Live tempo change — affects future advancement, keeps the current position. */
+  setBpm(bpm: number) {
+    Tone.getTransport().bpm.value = bpm
+  }
+
   /** Jump the (possibly playing) transport to a new beat, re-arming audio if live. */
   seek(beat: number) {
     if (!this.callbacks) return
