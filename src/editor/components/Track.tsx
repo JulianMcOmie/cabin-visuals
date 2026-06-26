@@ -17,9 +17,11 @@ interface TrackProps {
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
   /** Last track in the list — suppresses the label-section divider, like the grid. */
   isLast?: boolean
+  /** An Alt (copy) drag is in flight — keep this row visually static. */
+  copyDrag?: boolean
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, copyDrag }: TrackProps) {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -37,11 +39,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
+        // During an Alt-copy drag the original stays exactly where it is; a clone
+        // is dropped at the release point instead of reordering.
+        transform: isDragging && copyDrag ? undefined : CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.6 : 1,
+        opacity: isDragging && !copyDrag ? 0.6 : 1,
         zIndex: isDragging ? 20 : undefined,
         position: 'relative',
+        cursor: isDragging && copyDrag ? 'copy' : undefined,
       }}
       className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'

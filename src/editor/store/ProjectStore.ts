@@ -29,6 +29,7 @@ interface ProjectState {
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   deleteTrack: (trackId: string) => void
+  duplicateTrack: (srcId: string, atIndex?: number) => void
   reorderRootTracks: (orderedIds: string[]) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -187,6 +188,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
         tracks,
         rootTrackIds: s.rootTrackIds.filter((id) => id !== trackId),
       }
+    }),
+
+  duplicateTrack: (srcId, atIndex) =>
+    set((s) => {
+      const src = s.tracks[srcId]
+      if (!src) return s
+      const copy = cloneTrack(src)
+      const tracks = { ...s.tracks, [copy.id]: copy }
+      if (copy.parentId) return { tracks }
+      const rootTrackIds = [...s.rootTrackIds]
+      if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(copy.id)
+      else rootTrackIds.splice(atIndex, 0, copy.id)
+      return { tracks, rootTrackIds }
     }),
 
   reorderRootTracks: (orderedIds) =>
