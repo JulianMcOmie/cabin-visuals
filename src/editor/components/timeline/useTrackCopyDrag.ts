@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import { useProjectStore } from '../store/ProjectStore'
+import { useProjectStore } from '../../store/ProjectStore'
 
 // Track rows are h-12 (48px), stacked. Used to map pointer Y → row index.
 export const TRACK_ROW_HEIGHT = 48

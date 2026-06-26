@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
-import { useUIStore } from '../store/UIStore'
-import { useProjectStore, cloneBlock, cloneTrack } from '../store/ProjectStore'
-import { useTimeStore } from '../store/TimeStore'
-import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { useClipboardStore } from '../store/ClipboardStore'
-import type { Note, Block } from '../types'
+import { useUIStore } from '../../store/UIStore'
+import { useProjectStore, cloneBlock, cloneTrack } from '../../store/ProjectStore'
+import { useTimeStore } from '../../store/TimeStore'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { useClipboardStore } from '../../store/ClipboardStore'
+import type { Note, Block } from '../../types'
 
 // Track rows are h-12 (48px); used to convert vertical drag into a row delta.
 const ROW_HEIGHT = 48
