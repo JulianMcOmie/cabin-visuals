@@ -154,17 +154,15 @@ function TimelineArea() {
   // Track reordering via dnd-kit (drag the track label). A 5px activation
   // distance keeps clicks (select / mute / solo) from starting a drag.
   const reorderRootTracks = useProjectStore((s) => s.reorderRootTracks)
-  const duplicateTrack = useProjectStore((s) => s.duplicateTrack)
+  const altDuplicateTrack = useProjectStore((s) => s.altDuplicateTrack)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // Alt-drag = duplicate: as soon as the drag starts, drop a clone right below the
-  // original, then the normal drag repositions the original. Since the rows are
-  // identical it reads as dragging the copy out — and there's no commit-on-end snap.
+  // Alt-drag = duplicate: on drag start a copy is split out under the dragged id
+  // (the original is parked in place), so dnd-kit drags the *copy* and it lands
+  // where the drag ends. No commit-on-end snap.
   const handleTrackDragStart = (e: DragStartEvent) => {
     if ((e.activatorEvent as PointerEvent)?.altKey) {
-      const ids = useProjectStore.getState().rootTrackIds
-      const idx = ids.indexOf(e.active.id as string)
-      if (idx >= 0) duplicateTrack(e.active.id as string, idx + 1)
+      altDuplicateTrack(e.active.id as string)
     }
   }
   const handleTrackDragEnd = (e: DragEndEvent) => {

@@ -325,10 +325,6 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
             sourceTrackId: earliest.trackId,
             blocks: picked.map((p) => ({ ...p.block, startBar: p.block.startBar - base })),
           })
-          // Teleport the playhead to the end of the last copied block.
-          const bpb = useTimeStore.getState().beatsPerBar
-          const endBeat = Math.max(...picked.map((p) => p.block.startBar + p.block.durationBars)) * bpb
-          useTimeStore.getState().setCurrentBeat(endBeat)
         } else {
           const trackId = useUIStore.getState().selectedTrackId
           const track = trackId ? useProjectStore.getState().tracks[trackId] : null

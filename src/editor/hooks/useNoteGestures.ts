@@ -487,9 +487,6 @@ export function useNoteGestures({
           kind: 'notes',
           notes: sel.map(n => ({ ...n, startBeat: n.startBeat - base })),
         })
-        // Teleport the playhead to the end of the last copied note (global beats).
-        const endBeat = blockStartBeat + Math.max(...sel.map(n => n.startBeat + n.durationBeats))
-        useTimeStore.getState().setCurrentBeat(endBeat)
         return
       }
 

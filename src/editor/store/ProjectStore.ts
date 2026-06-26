@@ -29,7 +29,7 @@ interface ProjectState {
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   deleteTrack: (trackId: string) => void
-  duplicateTrack: (srcId: string, atIndex?: number) => void
+  altDuplicateTrack: (srcId: string) => void
   reorderRootTracks: (orderedIds: string[]) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -190,17 +190,23 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  duplicateTrack: (srcId, atIndex) =>
+  // Alt-drag duplicate. To make dnd-kit drag the *copy* (so it lands at the drop)
+  // while the original stays put, we keep the dragged id (srcId) as the moving
+  // copy — fresh block/note ids, "copy" name — and re-key the original under a new
+  // id parked right after it. The end-of-drag reorder then settles the original
+  // back into srcId's original slot.
+  altDuplicateTrack: (srcId) =>
     set((s) => {
       const src = s.tracks[srcId]
       if (!src) return s
-      const copy = cloneTrack(src)
-      const tracks = { ...s.tracks, [copy.id]: copy }
-      if (copy.parentId) return { tracks }
+      const stayId = crypto.randomUUID()
+      const staying: Track = { ...src, id: stayId }
+      const moving: Track = { ...src, name: `${src.name} copy`, blocks: src.blocks.map(cloneBlock) }
+      const idx = s.rootTrackIds.indexOf(srcId)
       const rootTrackIds = [...s.rootTrackIds]
-      if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(copy.id)
-      else rootTrackIds.splice(atIndex, 0, copy.id)
-      return { tracks, rootTrackIds }
+      if (idx >= 0) rootTrackIds.splice(idx + 1, 0, stayId)
+      else rootTrackIds.push(stayId)
+      return { tracks: { ...s.tracks, [srcId]: moving, [stayId]: staying }, rootTrackIds }
     }),
 
   reorderRootTracks: (orderedIds) =>
