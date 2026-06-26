@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
+import { useRef, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
 import Link from 'next/link'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
@@ -157,28 +157,24 @@ function TimelineArea() {
   const duplicateTrack = useProjectStore((s) => s.duplicateTrack)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // True while an Alt-drag is in flight — the original row stays put (Track
-  // suppresses its drag transform) and a clone is dropped at the release point.
-  const [copyDrag, setCopyDrag] = useState(false)
+  // Alt-drag = duplicate: as soon as the drag starts, drop a clone right below the
+  // original, then the normal drag repositions the original. Since the rows are
+  // identical it reads as dragging the copy out — and there's no commit-on-end snap.
   const handleTrackDragStart = (e: DragStartEvent) => {
-    setCopyDrag(!!(e.activatorEvent as PointerEvent)?.altKey)
+    if ((e.activatorEvent as PointerEvent)?.altKey) {
+      const ids = useProjectStore.getState().rootTrackIds
+      const idx = ids.indexOf(e.active.id as string)
+      if (idx >= 0) duplicateTrack(e.active.id as string, idx + 1)
+    }
   }
   const handleTrackDragEnd = (e: DragEndEvent) => {
-    const wasCopy = copyDrag
-    setCopyDrag(false)
     const { active, over } = e
-    if (!over) return
-    if (wasCopy) {
-      // Insert a clone just after the hovered track; the original is untouched.
-      const overIndex = rootTrackIds.indexOf(over.id as string)
-      duplicateTrack(active.id as string, overIndex >= 0 ? overIndex + 1 : undefined)
-      return
-    }
-    if (active.id === over.id) return
-    const oldIndex = rootTrackIds.indexOf(active.id as string)
-    const newIndex = rootTrackIds.indexOf(over.id as string)
+    if (!over || active.id === over.id) return
+    const ids = useProjectStore.getState().rootTrackIds
+    const oldIndex = ids.indexOf(active.id as string)
+    const newIndex = ids.indexOf(over.id as string)
     if (oldIndex < 0 || newIndex < 0) return
-    reorderRootTracks(arrayMove(rootTrackIds, oldIndex, newIndex))
+    reorderRootTracks(arrayMove(ids, oldIndex, newIndex))
   }
 
   const { startScrub } = useScrub({
@@ -299,7 +295,7 @@ function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleTrackDragStart} onDragEnd={handleTrackDragEnd} onDragCancel={() => setCopyDrag(false)}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleTrackDragStart} onDragEnd={handleTrackDragEnd}>
               <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
                 {rootTrackIds.map((id, i) => {
                   const track = tracks[id]
@@ -308,7 +304,6 @@ function TimelineArea() {
                       key={id}
                       track={track}
                       isLast={i === rootTrackIds.length - 1}
-                      copyDrag={copyDrag}
                       barWidthPx={barWidthPx}
                       timelineWidthPx={timelineWidthPx}
                       selectedBlockIds={selectedBlockIds}

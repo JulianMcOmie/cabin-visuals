@@ -236,6 +236,26 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       setSelectedBlockIds(dragSet)
     }
 
+    // Alt-drag = duplicate: clone the drag set in place (originals stay put) and
+    // drag the clones. Only for moving, not edge-resize.
+    if (e.altKey && type === 'moving') {
+      const store = useProjectStore.getState()
+      const cloneIds = new Set<string>()
+      store.rootTrackIds.forEach((tId) => {
+        const t = store.tracks[tId]
+        if (!t) return
+        for (const b of t.blocks) {
+          if (dragSet.has(b.id)) {
+            const clone = cloneBlock(b)
+            store.addBlock(tId, clone)
+            cloneIds.add(clone.id)
+          }
+        }
+      })
+      dragSet = cloneIds
+      setSelectedBlockIds(cloneIds)
+    }
+
     dragRef.current = {
       type,
       startX: e.clientX,
@@ -305,6 +325,10 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
             sourceTrackId: earliest.trackId,
             blocks: picked.map((p) => ({ ...p.block, startBar: p.block.startBar - base })),
           })
+          // Teleport the playhead to the end of the last copied block.
+          const bpb = useTimeStore.getState().beatsPerBar
+          const endBeat = Math.max(...picked.map((p) => p.block.startBar + p.block.durationBars)) * bpb
+          useTimeStore.getState().setCurrentBeat(endBeat)
         } else {
           const trackId = useUIStore.getState().selectedTrackId
           const track = trackId ? useProjectStore.getState().tracks[trackId] : null
@@ -330,6 +354,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           const positioned = clip.blocks.map((b) => cloneBlock({ ...b, startBar: targetBar + b.startBar }))
           store.addBlocks(targetTrackId, positioned)
           setSelectedBlockIds(new Set(positioned.map((b) => b.id)))
+          // Teleport the playhead to the end of the last pasted block.
+          const endBeat = Math.max(...positioned.map((b) => b.startBar + b.durationBars)) * beatsPerBar
+          useTimeStore.getState().setCurrentBeat(endBeat)
         } else if (clip.kind === 'track') {
           e.preventDefault()
           const selId = useUIStore.getState().selectedTrackId
