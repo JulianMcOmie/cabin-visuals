@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { X, Magnet } from 'lucide-react'
-import { useUIStore } from '../store/UIStore'
-import { useProjectStore } from '../store/ProjectStore'
-import { useTimeStore } from '../store/TimeStore'
-import { useMidiEditorState } from './midi/useMidiEditorState'
-import { MidiEditor, LABEL_WIDTH } from './midi/MidiEditor'
-import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
-import { generateRows } from './midi/generateRows'
-import type { Block } from '../types'
+import { useUIStore } from '../../store/UIStore'
+import { useProjectStore } from '../../store/ProjectStore'
+import { useTimeStore } from '../../store/TimeStore'
+import { useMidiEditorState } from './useMidiEditorState'
+import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { generateRows } from './generateRows'
+import type { Block } from '../../types'
 
 const DEFAULT_QUANTIZE = 0.25
 

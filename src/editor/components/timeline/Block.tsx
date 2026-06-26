@@ -1,6 +1,6 @@
-import { useUIStore } from '../store/UIStore'
+import { useUIStore } from '../../store/UIStore'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { Block as BlockType } from '../types'
+import type { Block as BlockType } from '../../types'
 
 interface BlockProps {
   block: BlockType

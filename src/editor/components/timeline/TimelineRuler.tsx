@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
-import { useTimeStore } from '../store/TimeStore'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../constants'
+import { useTimeStore } from '../../store/TimeStore'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */

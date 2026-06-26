@@ -1,12 +1,12 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useTimeStore } from '../store/TimeStore'
-import { useUIStore } from '../store/UIStore'
-import { useProjectStore } from '../store/ProjectStore'
+import { useTimeStore } from '../../store/TimeStore'
+import { useUIStore } from '../../store/UIStore'
+import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import type { Track as TrackType } from '../types'
+import type { Track as TrackType } from '../../types'
 
 interface TrackProps {
   track: TrackType
