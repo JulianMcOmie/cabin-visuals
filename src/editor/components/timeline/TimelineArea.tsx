@@ -170,8 +170,10 @@ export function TimelineArea() {
       {/* Lanes: a relative wrapper holds the scroll container plus a viewport-space
           playhead overlay clipped to the lane region (so the playhead is never drawn
           over the frozen label column, its dividers, or the empty space — it slides
-          under the label edge when scrolled). */}
-      <div className="relative flex-1 min-h-0">
+          under the label edge when scrolled). overflow-hidden clips the playhead
+          overlay to the lane region, so a resize frame where its imperatively-set
+          width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
+      <div className="relative flex-1 min-h-0 overflow-hidden">
         {rootTrackIds.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <p className="text-xs text-zinc-600 text-center px-4">
