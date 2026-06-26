@@ -11,7 +11,6 @@ export const cloneBlock = (b: Block): Block => ({
 export const cloneTrack = (t: Track): Track => ({
   ...t,
   id: crypto.randomUUID(),
-  name: `${t.name} copy`,
   blocks: t.blocks.map(cloneBlock),
   childIds: [],
 })
@@ -29,7 +28,7 @@ interface ProjectState {
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   deleteTrack: (trackId: string) => void
-  altDuplicateTrack: (srcId: string) => void
+  insertTrackCopy: (srcId: string, index: number) => void
   reorderRootTracks: (orderedIds: string[]) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -190,23 +189,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  // Alt-drag duplicate. To make dnd-kit drag the *copy* (so it lands at the drop)
-  // while the original stays put, we keep the dragged id (srcId) as the moving
-  // copy — fresh block/note ids, "copy" name — and re-key the original under a new
-  // id parked right after it. The end-of-drag reorder then settles the original
-  // back into srcId's original slot.
-  altDuplicateTrack: (srcId) =>
+  // Insert an identical copy of a track at a given root index (Alt-drag commit).
+  // The original is left untouched.
+  insertTrackCopy: (srcId, index) =>
     set((s) => {
       const src = s.tracks[srcId]
       if (!src) return s
-      const stayId = crypto.randomUUID()
-      const staying: Track = { ...src, id: stayId }
-      const moving: Track = { ...src, name: `${src.name} copy`, blocks: src.blocks.map(cloneBlock) }
-      const idx = s.rootTrackIds.indexOf(srcId)
+      const copy = cloneTrack(src)
       const rootTrackIds = [...s.rootTrackIds]
-      if (idx >= 0) rootTrackIds.splice(idx + 1, 0, stayId)
-      else rootTrackIds.push(stayId)
-      return { tracks: { ...s.tracks, [srcId]: moving, [stayId]: staying }, rootTrackIds }
+      const i = Math.max(0, Math.min(rootTrackIds.length, index))
+      rootTrackIds.splice(i, 0, copy.id)
+      return { tracks: { ...s.tracks, [copy.id]: copy }, rootTrackIds }
     }),
 
   reorderRootTracks: (orderedIds) =>

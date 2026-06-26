@@ -17,9 +17,14 @@ interface TrackProps {
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
   /** Last track in the list — suppresses the label-section divider, like the grid. */
   isLast?: boolean
+  /** During an Alt copy-drag: vertical shift (px) to open the insertion gap.
+   *  `undefined` = no copy-drag in progress (use the normal dnd transform). */
+  liftOffset?: number
+  /** Begin an Alt copy-drag from this track's label. */
+  onCopyDragStart?: (e: ReactPointerEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, liftOffset, onCopyDragStart }: TrackProps) {
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -33,12 +38,18 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   // DndContext in TimelineArea (separate from block/lane pointer gestures).
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id })
 
+  // While a copy-drag is in progress, rows shift via liftOffset (with a smooth
+  // transition) to open the insertion gap; otherwise the dnd-kit transform applies.
+  const inCopyDrag = liftOffset !== undefined
+
   return (
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
+        transform: inCopyDrag
+          ? `translateY(${liftOffset}px) ${CSS.Transform.toString(transform) ?? ''}`.trim()
+          : CSS.Transform.toString(transform),
+        transition: inCopyDrag ? 'transform 0.15s ease' : transition,
         opacity: isDragging ? 0.6 : 1,
         zIndex: isDragging ? 20 : undefined,
         position: 'relative',
@@ -51,6 +62,15 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div
         {...attributes}
         {...listeners}
+        onPointerDownCapture={(e) => {
+          // Alt+drag on the label runs the custom copy gesture; intercept before
+          // dnd-kit's sensor sees it so the two never both start.
+          if (e.altKey && e.button === 0) {
+            e.stopPropagation()
+            e.preventDefault()
+            onCopyDragStart?.(e, track.id)
+          }
+        }}
         style={{ width: TRACK_LABEL_WIDTH }}
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 cursor-grab active:cursor-grabbing transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'

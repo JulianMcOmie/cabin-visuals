@@ -2,7 +2,7 @@
 
 import { useRef, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
 import Link from 'next/link'
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft, Plus, Magnet } from 'lucide-react'
@@ -24,6 +24,7 @@ import { useTransportKeys } from './hooks/useTransportKeys'
 import { usePlayhead } from './hooks/usePlayhead'
 import { useScrub } from './hooks/useScrub'
 import { useTrackGestures } from './hooks/useTrackGestures'
+import { useTrackCopyDrag, TRACK_ROW_HEIGHT } from './hooks/useTrackCopyDrag'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, PANEL_RESIZE_HIT } from './constants'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
@@ -154,17 +155,12 @@ function TimelineArea() {
   // Track reordering via dnd-kit (drag the track label). A 5px activation
   // distance keeps clicks (select / mute / solo) from starting a drag.
   const reorderRootTracks = useProjectStore((s) => s.reorderRootTracks)
-  const altDuplicateTrack = useProjectStore((s) => s.altDuplicateTrack)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  // Alt-drag = duplicate: on drag start a copy is split out under the dragged id
-  // (the original is parked in place), so dnd-kit drags the *copy* and it lands
-  // where the drag ends. No commit-on-end snap.
-  const handleTrackDragStart = (e: DragStartEvent) => {
-    if ((e.activatorEvent as PointerEvent)?.altKey) {
-      altDuplicateTrack(e.active.id as string)
-    }
-  }
+  // Alt copy-drag is a hand-rolled gesture intercepted before dnd-kit ever sees
+  // the pointerdown (Track's onPointerDownCapture), so dnd-kit only handles plain
+  // reordering here.
+  const { copyDrag, ghostRef, startTrackCopyDrag } = useTrackCopyDrag(scrollRef)
   const handleTrackDragEnd = (e: DragEndEvent) => {
     const { active, over } = e
     if (!over || active.id === over.id) return
@@ -293,7 +289,7 @@ function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleTrackDragStart} onDragEnd={handleTrackDragEnd}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
               <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
                 {rootTrackIds.map((id, i) => {
                   const track = tracks[id]
@@ -302,6 +298,8 @@ function TimelineArea() {
                       key={id}
                       track={track}
                       isLast={i === rootTrackIds.length - 1}
+                      liftOffset={copyDrag ? (copyDrag.insertIndex != null && i >= copyDrag.insertIndex ? TRACK_ROW_HEIGHT : 0) : undefined}
+                      onCopyDragStart={startTrackCopyDrag}
                       barWidthPx={barWidthPx}
                       timelineWidthPx={timelineWidthPx}
                       selectedBlockIds={selectedBlockIds}
@@ -360,6 +358,17 @@ function TimelineArea() {
           </div>
         </div>
       </div>
+
+      {/* Floating ghost of the row being Alt-copy-dragged (top set imperatively). */}
+      {copyDrag && (
+        <div
+          ref={ghostRef}
+          className="fixed z-50 pointer-events-none flex items-center px-3 rounded border border-zinc-700 shadow-xl shadow-black/50"
+          style={{ left: copyDrag.labelLeft, width: TRACK_LABEL_WIDTH, height: TRACK_ROW_HEIGHT, backgroundColor: '#27272a', opacity: 0.95 }}
+        >
+          <span className="text-xs font-medium text-white truncate">{copyDrag.name}</span>
+        </div>
+      )}
     </div>
   )
 }
