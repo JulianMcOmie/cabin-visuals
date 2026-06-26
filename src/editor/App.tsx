@@ -258,6 +258,7 @@ function TimelineArea() {
               <button
                 className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
                 onClick={insertTrack}
+                title={`Add track`}
               >
                 <Plus size={12} />
               </button>
