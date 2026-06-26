@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Block, Note } from '../types'
-import { useProjectStore } from '../store/ProjectStore'
+import type { Block, Note } from '../../types'
+import { useProjectStore } from '../../store/ProjectStore'
 
 // Layout effect on the client (runs before paint, so re-syncing notes after an
 // atomic block change never shows an intermediate frame); plain effect on the

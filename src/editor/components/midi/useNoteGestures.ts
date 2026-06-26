@@ -1,10 +1,10 @@
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
-import type { Block, Note } from '../types'
-import type { MidiRow } from '../components/midi/types'
-import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
-import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { useClipboardStore } from '../store/ClipboardStore'
-import { useTimeStore } from '../store/TimeStore'
+import type { Block, Note } from '../../types'
+import type { MidiRow } from './types'
+import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from './coords'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { useClipboardStore } from '../../store/ClipboardStore'
+import { useTimeStore } from '../../store/TimeStore'
 
 const NOTE_EDGE_WIDTH = 8
 

@@ -1,7 +1,7 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
-import { useProjectStore } from '../store/ProjectStore'
-import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Block, Note } from '../types'
+import { useProjectStore } from '../../store/ProjectStore'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import type { Block, Note } from '../../types'
 
 interface UseMidiBlockGesturesOptions {
   trackId: string
