@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import { useUIStore } from '../store/UIStore'
-import { useProjectStore } from '../store/ProjectStore'
+import { useProjectStore, cloneBlock, cloneTrack } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { useClipboardStore } from '../store/ClipboardStore'
@@ -311,6 +311,32 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (!track) return
           e.preventDefault()
           useClipboardStore.getState().setClip({ kind: 'track', track })
+        }
+        return
+      }
+
+      // Paste: dispatch on what was copied. Lands exactly at the playhead (no snap).
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
+        const clip = useClipboardStore.getState().clip
+        if (!clip) return
+        const store = useProjectStore.getState()
+        const { currentBeat, beatsPerBar } = useTimeStore.getState()
+
+        if (clip.kind === 'blocks') {
+          const targetTrackId = useUIStore.getState().selectedTrackId ?? clip.sourceTrackId
+          if (!store.tracks[targetTrackId]) return
+          e.preventDefault()
+          const targetBar = currentBeat / beatsPerBar // fractional bar is fine
+          const positioned = clip.blocks.map((b) => cloneBlock({ ...b, startBar: targetBar + b.startBar }))
+          store.addBlocks(targetTrackId, positioned)
+          setSelectedBlockIds(new Set(positioned.map((b) => b.id)))
+        } else if (clip.kind === 'track') {
+          e.preventDefault()
+          const selId = useUIStore.getState().selectedTrackId
+          const idx = selId ? store.rootTrackIds.indexOf(selId) : -1
+          const copy = cloneTrack(clip.track)
+          store.addTrack(copy, idx >= 0 ? idx + 1 : undefined)
+          useUIStore.getState().setSelectedTrackId(copy.id)
         }
         return
       }

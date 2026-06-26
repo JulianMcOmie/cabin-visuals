@@ -1,11 +1,27 @@
 import { create } from 'zustand'
 import type { Track, Block, Note } from '../types'
 
+// Deep-clone with fresh IDs at every level (used by paste + alt-drag duplicate).
+const cloneNote = (n: Note): Note => ({ ...n, id: crypto.randomUUID() })
+export const cloneBlock = (b: Block): Block => ({
+  ...b,
+  id: crypto.randomUUID(),
+  notes: b.notes.map(cloneNote),
+})
+export const cloneTrack = (t: Track): Track => ({
+  ...t,
+  id: crypto.randomUUID(),
+  name: `${t.name} copy`,
+  blocks: t.blocks.map(cloneBlock),
+  childIds: [],
+})
+
 interface ProjectState {
   tracks: Record<string, Track>
   rootTrackIds: string[]
-  addTrack: (track: Track) => void
+  addTrack: (track: Track, atIndex?: number) => void
   addBlock: (trackId: string, block: Block) => void
+  addBlocks: (trackId: string, blocks: Block[]) => void
   addNote: (trackId: string, blockId: string, note: Note) => void
   updateBlockNotes: (trackId: string, blockId: string, notes: Note[]) => void
   updateBlock: (trackId: string, blockId: string, updates: Partial<Block>) => void
@@ -23,11 +39,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
   tracks: {},
   rootTrackIds: [],
 
-  addTrack: (track) =>
-    set((s) => ({
-      tracks: { ...s.tracks, [track.id]: track },
-      rootTrackIds: track.parentId ? s.rootTrackIds : [...s.rootTrackIds, track.id],
-    })),
+  addTrack: (track, atIndex) =>
+    set((s) => {
+      const tracks = { ...s.tracks, [track.id]: track }
+      if (track.parentId) return { tracks }
+      const rootTrackIds = [...s.rootTrackIds]
+      if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(track.id)
+      else rootTrackIds.splice(atIndex, 0, track.id)
+      return { tracks, rootTrackIds }
+    }),
 
   addBlock: (trackId, block) =>
     set((s) => {
@@ -37,6 +57,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
         tracks: {
           ...s.tracks,
           [trackId]: { ...track, blocks: [...track.blocks, block] },
+        },
+      }
+    }),
+
+  addBlocks: (trackId, blocks) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || blocks.length === 0) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, blocks: [...track.blocks, ...blocks] },
         },
       }
     }),

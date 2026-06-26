@@ -4,6 +4,7 @@ import type { MidiRow } from '../components/midi/types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { useClipboardStore } from '../store/ClipboardStore'
+import { useTimeStore } from '../store/TimeStore'
 
 const NOTE_EDGE_WIDTH = 8
 
@@ -489,6 +490,23 @@ export function useNoteGestures({
         return
       }
 
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
+        const clip = useClipboardStore.getState().clip
+        if (clip?.kind !== 'notes') return
+        e.preventDefault()
+        // Land at the playhead, block-local. No clamp/snap: notes may sit before
+        // the block (negative) or overflow its end, by design.
+        const playheadLocal = useTimeStore.getState().currentBeat - blockStartBeat
+        const pasted = clip.notes.map(n => ({
+          ...n,
+          id: crypto.randomUUID(),
+          startBeat: playheadLocal + n.startBeat,
+        }))
+        onNotesChange([...notes, ...pasted])
+        setSelectedNoteIds(new Set(pasted.map(n => n.id)))
+        return
+      }
+
       if (selectedNoteIds.size > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault()
         e.stopImmediatePropagation()
@@ -503,7 +521,7 @@ export function useNoteGestures({
 
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [selectedNoteIds, notes, onNotesChange])
+  }, [selectedNoteIds, notes, onNotesChange, blockStartBeat])
 
   // Click on background deselects (if not dragging)
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
