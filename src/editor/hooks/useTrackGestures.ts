@@ -3,7 +3,8 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Note } from '../types'
+import { useClipboardStore } from '../store/ClipboardStore'
+import type { Note, Block } from '../types'
 
 // Track rows are h-12 (48px); used to convert vertical drag into a row delta.
 const ROW_HEIGHT = 48
@@ -286,6 +287,33 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+
+      // Copy: selected blocks win; with none selected, copy the selected track.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
+        if (selectedBlockIds.size > 0) {
+          const { tracks } = useProjectStore.getState()
+          const picked: { trackId: string; block: Block }[] = []
+          for (const [tId, t] of Object.entries(tracks)) {
+            for (const b of t.blocks) if (selectedBlockIds.has(b.id)) picked.push({ trackId: tId, block: b })
+          }
+          if (picked.length === 0) return
+          e.preventDefault()
+          const base = Math.min(...picked.map((p) => p.block.startBar))
+          const earliest = picked.reduce((a, b) => (b.block.startBar < a.block.startBar ? b : a))
+          useClipboardStore.getState().setClip({
+            kind: 'blocks',
+            sourceTrackId: earliest.trackId,
+            blocks: picked.map((p) => ({ ...p.block, startBar: p.block.startBar - base })),
+          })
+        } else {
+          const trackId = useUIStore.getState().selectedTrackId
+          const track = trackId ? useProjectStore.getState().tracks[trackId] : null
+          if (!track) return
+          e.preventDefault()
+          useClipboardStore.getState().setClip({ kind: 'track', track })
+        }
+        return
+      }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedBlockIds.size > 0) {

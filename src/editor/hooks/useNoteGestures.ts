@@ -3,6 +3,7 @@ import type { Block, Note } from '../types'
 import type { MidiRow } from '../components/midi/types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from '../components/midi/coords'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
+import { useClipboardStore } from '../store/ClipboardStore'
 
 const NOTE_EDGE_WIDTH = 8
 
@@ -473,6 +474,18 @@ export function useNoteGestures({
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
+        if (selectedNoteIds.size === 0) return
+        e.preventDefault()
+        const sel = notes.filter(n => selectedNoteIds.has(n.id))
+        const base = Math.min(...sel.map(n => n.startBeat))
+        useClipboardStore.getState().setClip({
+          kind: 'notes',
+          notes: sel.map(n => ({ ...n, startBeat: n.startBeat - base })),
+        })
         return
       }
 
