@@ -209,15 +209,26 @@ export function TimelineArea() {
                 })}
               </SortableContext>
             </DndContext>
-            {/* Empty space below the tracks: deselect track + blocks, start a marquee */}
-            <div
-              className="flex-1 min-h-0"
-              onContextMenu={(e) => e.preventDefault()}
-              onPointerDown={(e) => {
-                setSelectedTrackId(null)
-                handleLanePointerDown(e)
-              }}
-            />
+            {/* Empty space below the tracks. The label-column portion belongs to the
+                label section — it deselects but is otherwise inert (no marquee); only
+                the lane portion behaves like the grid. */}
+            <div className="flex-1 min-h-0 flex">
+              <div
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-zinc-800/60 bg-[#202024] ${
+                  rootTrackIds.length > 0 ? 'border-t border-t-zinc-900' : ''
+                }`}
+                style={{ width: TRACK_LABEL_WIDTH }}
+                onPointerDown={() => setSelectedTrackId(null)}
+              />
+              <div
+                className="flex-1"
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={(e) => {
+                  setSelectedTrackId(null)
+                  handleLanePointerDown(e)
+                }}
+              />
+            </div>
 
             {/* Marquee overlay (content space, so its coords match block rects). */}
             <div
