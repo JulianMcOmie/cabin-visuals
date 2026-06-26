@@ -29,6 +29,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
+  const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const toggleMute = useProjectStore((s) => s.toggleMute)
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
 
@@ -51,10 +52,13 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           : CSS.Transform.toString(transform),
         transition: inCopyDrag ? 'transform 0.15s ease' : transition,
         opacity: isDragging ? 0.6 : 1,
-        zIndex: isDragging ? 20 : undefined,
+        // During a copy-drag the shifted rows must sit above the empty label box
+        // below them (z-10), or the bottom row hides under it as it reflows down.
+        zIndex: isDragging ? 20 : inCopyDrag ? 15 : undefined,
         position: 'relative',
+        height: rowHeight,
       }}
-      className={`flex items-stretch h-12 border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
+      className={`flex items-stretch border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
       }`}
       onClick={() => setSelectedTrackId(isSelected ? null : track.id)}

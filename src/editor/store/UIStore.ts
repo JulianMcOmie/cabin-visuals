@@ -25,6 +25,10 @@ interface UIState {
   tracksPixelsPerBeat: number
   setTracksPixelsPerBeat: (pixels: number) => void
 
+  // Vertical zoom for the tracks timeline (track row height in px).
+  tracksRowHeight: number
+  setTracksRowHeight: (px: number) => void
+
   // When on, dragging the timeline playhead snaps to the nearest beat.
   timelineSnap: boolean
   setTimelineSnap: (on: boolean) => void
@@ -57,6 +61,10 @@ export const useUIStore = create<UIState>((set) => ({
   tracksPixelsPerBeat: 16,
   setTracksPixelsPerBeat: (pixels) =>
     set({ tracksPixelsPerBeat: Math.max(2, Math.min(100, pixels)) }),
+
+  tracksRowHeight: 48,
+  setTracksRowHeight: (px) =>
+    set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
 
   timelineSnap: false,
   setTimelineSnap: (on) => set({ timelineSnap: on }),

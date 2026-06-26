@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
+import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Plus, Magnet } from 'lucide-react'
@@ -12,7 +12,7 @@ import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
-import { useTrackCopyDrag, TRACK_ROW_HEIGHT } from './useTrackCopyDrag'
+import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 
 export function TimelineArea() {
@@ -89,6 +89,28 @@ export function TimelineArea() {
     sc.scrollLeft = tracksScrollLeft
     sc.scrollTop = tracksScrollTop
     if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
+  }, [])
+
+  // Alt+scroll over the lanes zooms: deltaY → row height (vertical zoom), deltaX →
+  // pixels-per-beat (horizontal zoom). Mirrors the MIDI editor's alt-scroll.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.altKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (Math.abs(e.deltaY) > 2) {
+        const cur = useUIStore.getState().tracksRowHeight
+        useUIStore.getState().setTracksRowHeight(cur - e.deltaY * 0.15)
+      }
+      if (Math.abs(e.deltaX) > 2) {
+        const cur = useUIStore.getState().tracksPixelsPerBeat
+        useUIStore.getState().setTracksPixelsPerBeat(cur - e.deltaX * 0.5)
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
   usePlayhead((beat) => {
@@ -190,7 +212,7 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTrackDragEnd}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} onDragEnd={handleTrackDragEnd}>
               <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
                 {rootTrackIds.map((id, i) => {
                   const track = tracks[id]
@@ -199,7 +221,7 @@ export function TimelineArea() {
                       key={id}
                       track={track}
                       isLast={i === rootTrackIds.length - 1}
-                      liftOffset={copyDrag ? (copyDrag.insertIndex != null && i >= copyDrag.insertIndex ? TRACK_ROW_HEIGHT : 0) : undefined}
+                      liftOffset={copyDrag ? (copyDrag.insertIndex != null && i >= copyDrag.insertIndex ? copyDrag.rowHeight : 0) : undefined}
                       onCopyDragStart={startTrackCopyDrag}
                       barWidthPx={barWidthPx}
                       timelineWidthPx={timelineWidthPx}
@@ -271,14 +293,21 @@ export function TimelineArea() {
         </div>
       </div>
 
-      {/* Floating ghost of the row being Alt-copy-dragged (top set imperatively). */}
+      {/* Floating ghost of the row being Alt-copy-dragged — mirrors the label box so
+          it reads like the lifted row of a normal drag (top set imperatively). */}
       {copyDrag && (
         <div
           ref={ghostRef}
-          className="fixed z-50 pointer-events-none flex items-center px-3 rounded border border-zinc-700 shadow-xl shadow-black/50"
-          style={{ left: copyDrag.labelLeft, width: TRACK_LABEL_WIDTH, height: TRACK_ROW_HEIGHT, backgroundColor: '#27272a', opacity: 0.95 }}
+          className="fixed z-50 pointer-events-none flex items-center gap-2 px-3 border-r border-r-zinc-800/60 shadow-lg shadow-black/40"
+          style={{ left: copyDrag.labelLeft, width: TRACK_LABEL_WIDTH, height: copyDrag.rowHeight, backgroundColor: '#202024', opacity: 0.8 }}
         >
-          <span className="text-xs font-medium text-white truncate">{copyDrag.name}</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium truncate text-white">{copyDrag.name}</div>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            <div className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${copyDrag.muted ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>M</div>
+            <div className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${copyDrag.solo ? 'bg-green-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>S</div>
+          </div>
         </div>
       )}
     </div>

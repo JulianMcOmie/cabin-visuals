@@ -6,9 +6,6 @@ import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import type { Note, Block } from '../../types'
 
-// Track rows are h-12 (48px); used to convert vertical drag into a row delta.
-const ROW_HEIGHT = 48
-
 interface BlockOrigin {
   trackId: string
   trackIndex: number
@@ -121,7 +118,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
       const deltaX = e.clientX - d.startX
       const deltaBars = d.barWidthPx > 0 ? deltaX / d.barWidthPx : 0
-      const rowDelta = Math.round((e.clientY - d.startY) / ROW_HEIGHT)
+      const rowDelta = Math.round((e.clientY - d.startY) / useUIStore.getState().tracksRowHeight)
       const store = useProjectStore.getState()
 
       if (d.type === 'moving') {

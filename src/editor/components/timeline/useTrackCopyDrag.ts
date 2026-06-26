@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
-
-// Track rows are h-12 (48px), stacked. Used to map pointer Y → row index.
-export const TRACK_ROW_HEIGHT = 48
+import { useUIStore } from '../../store/UIStore'
 
 interface CopyDragState {
   srcIndex: number
@@ -10,8 +8,12 @@ interface CopyDragState {
   insertIndex: number | null
   name: string
   color: string
+  muted: boolean
+  solo: boolean
   /** Screen-x of the frozen label column, for positioning the floating ghost. */
   labelLeft: number
+  /** Track row height (px) captured at drag start — for the gap + ghost sizing. */
+  rowHeight: number
 }
 
 /**
@@ -23,7 +25,7 @@ interface CopyDragState {
 export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
   const [copyDrag, setCopyDrag] = useState<CopyDragState | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
-  const sessionRef = useRef<{ srcId: string; srcIndex: number; grabOffsetY: number; listTop: number; insertIndex: number | null } | null>(null)
+  const sessionRef = useRef<{ srcId: string; srcIndex: number; grabOffsetY: number; listTop: number; insertIndex: number | null; rowHeight: number } | null>(null)
 
   const startTrackCopyDrag = useCallback((e: ReactPointerEvent, trackId: string) => {
     const sc = scrollRef.current
@@ -32,13 +34,14 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const srcIndex = rootTrackIds.indexOf(trackId)
     const track = tracks[trackId]
     if (srcIndex < 0 || !track) return
+    const rowHeight = useUIStore.getState().tracksRowHeight
 
     const scRect = sc.getBoundingClientRect()
     const listTop = scRect.top - sc.scrollTop // screen-y of row 0's top
-    const grabOffsetY = e.clientY - (listTop + srcIndex * TRACK_ROW_HEIGHT)
+    const grabOffsetY = e.clientY - (listTop + srcIndex * rowHeight)
 
-    sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null }
-    setCopyDrag({ srcIndex, insertIndex: null, name: track.name, color: track.color, labelLeft: scRect.left })
+    sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null, rowHeight }
+    setCopyDrag({ srcIndex, insertIndex: null, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
 
     const moveGhost = (clientY: number) => {
       if (ghostRef.current) ghostRef.current.style.top = `${clientY - grabOffsetY}px`
@@ -57,8 +60,8 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       // The row the dragged ghost sits majority-over (by its center) gets displaced
       // down, along with everything below it; hovering the original's row is the
       // no-op zone. Measured against the static (un-shifted) row positions.
-      const ghostCenter = ev.clientY - s.listTop - s.grabOffsetY + TRACK_ROW_HEIGHT / 2
-      const row = Math.max(0, Math.min(n, Math.floor(ghostCenter / TRACK_ROW_HEIGHT)))
+      const ghostCenter = ev.clientY - s.listTop - s.grabOffsetY + s.rowHeight / 2
+      const row = Math.max(0, Math.min(n, Math.floor(ghostCenter / s.rowHeight)))
       const insertIndex = row === s.srcIndex ? null : row
       if (s.insertIndex !== insertIndex) {
         s.insertIndex = insertIndex
