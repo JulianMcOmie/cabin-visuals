@@ -11,6 +11,8 @@ interface ProjectState {
   updateBlock: (trackId: string, blockId: string, updates: Partial<Block>) => void
   moveBlock: (fromTrackId: string, blockId: string, toTrackId: string) => void
   deleteBlock: (trackId: string, blockId: string) => void
+  deleteBlocks: (blockIds: Set<string>) => void
+  deleteTrack: (trackId: string) => void
   reorderRootTracks: (orderedIds: string[]) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -125,6 +127,33 @@ export const useProjectStore = create<ProjectState>((set) => ({
             blocks: track.blocks.filter((b) => b.id !== blockId),
           },
         },
+      }
+    }),
+
+  deleteBlocks: (blockIds) =>
+    set((s) => {
+      const tracks: Record<string, Track> = {}
+      for (const [id, t] of Object.entries(s.tracks)) {
+        const blocks = t.blocks.filter((b) => !blockIds.has(b.id))
+        tracks[id] = blocks.length === t.blocks.length ? t : { ...t, blocks }
+      }
+      return { tracks }
+    }),
+
+  deleteTrack: (trackId) =>
+    set((s) => {
+      if (!s.tracks[trackId]) return s
+      const tracks: Record<string, Track> = {}
+      for (const [id, t] of Object.entries(s.tracks)) {
+        if (id === trackId) continue
+        // Drop any routing/automation targets that pointed at the deleted track.
+        tracks[id] = t.targets?.some((tg) => tg.targetTrackId === trackId)
+          ? { ...t, targets: t.targets.filter((tg) => tg.targetTrackId !== trackId) }
+          : t
+      }
+      return {
+        tracks,
+        rootTrackIds: s.rootTrackIds.filter((id) => id !== trackId),
       }
     }),
 

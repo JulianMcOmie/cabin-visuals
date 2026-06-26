@@ -278,23 +278,29 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     beginGestureTracking()
   }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking, laneRef])
 
-  // Delete removes selected blocks; Escape clears the selection.
+  // Delete: selected blocks win (their track stays); with no blocks selected,
+  // a selected track is deleted along with its blocks. Escape clears selection.
+  // (This hook is only mounted with the timeline, so it never fires while the
+  // MIDI editor is open.)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-      if (selectedBlockIds.size === 0) return
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault()
-        const { tracks, deleteBlock } = useProjectStore.getState()
-        for (const [trackId, track] of Object.entries(tracks)) {
-          for (const block of track.blocks) {
-            if (selectedBlockIds.has(block.id)) deleteBlock(trackId, block.id)
+        if (selectedBlockIds.size > 0) {
+          e.preventDefault()
+          useProjectStore.getState().deleteBlocks(selectedBlockIds)
+          setSelectedBlockIds(new Set())
+        } else {
+          const trackId = useUIStore.getState().selectedTrackId
+          if (trackId) {
+            e.preventDefault()
+            useProjectStore.getState().deleteTrack(trackId)
+            useUIStore.getState().setSelectedTrackId(null)
           }
         }
-        setSelectedBlockIds(new Set())
-      } else if (e.key === 'Escape') {
+      } else if (e.key === 'Escape' && selectedBlockIds.size > 0) {
         setSelectedBlockIds(new Set())
       }
     }
