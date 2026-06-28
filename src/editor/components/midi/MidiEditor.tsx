@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
@@ -77,7 +77,8 @@ export function MidiEditor({
       if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
       const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
-      const snapped = snapEnabled ? Math.round(rawBeat / quantize) * quantize : rawBeat
+      // Playhead always snaps to 1/4 beat, independent of the note-snap toggle.
+      const snapped = Math.round(rawBeat / PLAYHEAD_SNAP_BEATS) * PLAYHEAD_SNAP_BEATS
       return Math.max(0, Math.min(initialTotalBeats, snapped))
     },
     onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'ew-resize' },

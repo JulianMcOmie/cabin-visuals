@@ -1,5 +1,8 @@
 export const TRACK_LABEL_WIDTH = 160
 
+/** Playhead scrubbing snaps to this beat resolution (1/4 beat) everywhere. */
+export const PLAYHEAD_SNAP_BEATS = 0.25
+
 /**
  * Half-width (px) of the ruler playhead triangle. The grid reserves a gutter of
  * this width to the left of the timeline (right of the label column) so the

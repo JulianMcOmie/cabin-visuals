@@ -3,7 +3,7 @@
 import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { Plus, Magnet } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -12,7 +12,7 @@ import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -21,8 +21,6 @@ export function TimelineArea() {
   const totalBars = useProjectStore((s) => s.totalBars)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
-  const timelineSnap = useUIStore((s) => s.timelineSnap)
-  const setTimelineSnap = useUIStore((s) => s.setTimelineSnap)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const timelineWidthPx = totalBars * barWidthPx
@@ -73,8 +71,8 @@ export function TimelineArea() {
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
-      let beat = (clientX - rect.left) / pixelsPerBeat
-      if (timelineSnap) beat = Math.round(beat) // snap to nearest beat
+      const raw = (clientX - rect.left) / pixelsPerBeat
+      const beat = Math.round(raw / PLAYHEAD_SNAP_BEATS) * PLAYHEAD_SNAP_BEATS // snap to 1/4 beat
       return Math.max(0, Math.min(maxBeat, beat))
     },
   })
@@ -171,17 +169,6 @@ export function TimelineArea() {
                 title={`Add track`}
               >
                 <Plus size={12} />
-              </button>
-              <button
-                onClick={() => setTimelineSnap(!timelineSnap)}
-                title={`Snap playhead to beats (${timelineSnap ? 'on' : 'off'})`}
-                className={`ml-auto flex items-center justify-center w-5 h-5 rounded transition-colors ${
-                  timelineSnap
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                }`}
-              >
-                <Magnet size={12} />
               </button>
             </div>
           }

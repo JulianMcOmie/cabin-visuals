@@ -29,10 +29,6 @@ interface UIState {
   tracksRowHeight: number
   setTracksRowHeight: (px: number) => void
 
-  // When on, dragging the timeline playhead snaps to the nearest beat.
-  timelineSnap: boolean
-  setTimelineSnap: (on: boolean) => void
-
   // Saved tracks-timeline scroll, so returning from the MIDI editor restores the view.
   tracksScrollLeft: number
   tracksScrollTop: number
@@ -65,9 +61,6 @@ export const useUIStore = create<UIState>((set) => ({
   tracksRowHeight: 48,
   setTracksRowHeight: (px) =>
     set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
-
-  timelineSnap: false,
-  setTimelineSnap: (on) => set({ timelineSnap: on }),
 
   tracksScrollLeft: 0,
   tracksScrollTop: 0,
