@@ -1,6 +1,5 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useTimeStore } from '../../store/TimeStore'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
@@ -25,7 +24,7 @@ interface TrackProps {
 }
 
 export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, liftOffset, onCopyDragStart }: TrackProps) {
-  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)

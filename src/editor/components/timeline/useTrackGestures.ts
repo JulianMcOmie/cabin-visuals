@@ -70,7 +70,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
   // Snap a bar position to the nearest beat (blocks snap to beats, not whole bars).
   const snapBar = (bar: number) => {
-    const bpb = useTimeStore.getState().beatsPerBar
+    const bpb = useProjectStore.getState().beatsPerBar
     return Math.round(bar * bpb) / bpb
   }
 
@@ -144,14 +144,14 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           store.updateBlock(targetTrackId, blockId, { startBar: newStartBar })
         }
       } else if (d.type === 'resizing-right') {
-        const oneBeat = 1 / useTimeStore.getState().beatsPerBar
+        const oneBeat = 1 / useProjectStore.getState().beatsPerBar
         for (const [blockId, o] of d.origins) {
           const maxDuration = d.totalBars - o.startBar
           const newDuration = Math.max(oneBeat, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
           store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
         }
       } else if (d.type === 'resizing-left') {
-        const beatsPerBar = useTimeStore.getState().beatsPerBar
+        const beatsPerBar = useProjectStore.getState().beatsPerBar
         const oneBeat = 1 / beatsPerBar
         for (const [blockId, o] of d.origins) {
           // Drag the start, keep the end planted; clamp to >= 0 and >= 1 beat long.
@@ -257,8 +257,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       type,
       startX: e.clientX,
       startY: e.clientY,
-      barWidthPx: useTimeStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
-      totalBars: useTimeStore.getState().totalBars,
+      barWidthPx: useProjectStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
+      totalBars: useProjectStore.getState().totalBars,
       origins: captureOrigins(dragSet),
     }
     beginGestureTracking()
@@ -272,7 +272,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       const laneR = laneRef.current?.getBoundingClientRect()
       if (!laneR) return
       const pixelsPerBeat = useUIStore.getState().tracksPixelsPerBeat
-      const beatsPerBar = useTimeStore.getState().beatsPerBar
+      const beatsPerBar = useProjectStore.getState().beatsPerBar
       const oneBeat = 1 / beatsPerBar
       const startBeat = Math.max(0, Math.floor((e.clientX - laneR.left) / pixelsPerBeat))
       const startBar = startBeat / beatsPerBar
@@ -337,7 +337,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         const clip = useClipboardStore.getState().clip
         if (!clip) return
         const store = useProjectStore.getState()
-        const { currentBeat, beatsPerBar } = useTimeStore.getState()
+        const { currentBeat } = useTimeStore.getState()
+        const { beatsPerBar } = useProjectStore.getState()
 
         if (clip.kind === 'blocks') {
           const targetTrackId = useUIStore.getState().selectedTrackId ?? clip.sourceTrackId

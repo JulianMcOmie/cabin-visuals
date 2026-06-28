@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
-import { useTimeStore } from '../../store/TimeStore'
+import { useProjectStore } from '../../store/ProjectStore'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../../constants'
 
 interface TimelineRulerProps {
@@ -28,8 +28,8 @@ interface TimelineRulerProps {
  * line itself lives in the lanes (TimelineArea).
  */
 export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
-  const totalBars = useTimeStore((s) => s.totalBars)
-  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  const totalBars = useProjectStore((s) => s.totalBars)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   // Every bar gets a tick line; only every `interval`th bar is numbered.
   const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
   const bars = Array.from({ length: totalBars }, (_, i) => i)

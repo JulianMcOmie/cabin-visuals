@@ -4,7 +4,6 @@ import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent } 
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Plus, Magnet } from 'lucide-react'
-import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -18,8 +17,8 @@ import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
-  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
-  const totalBars = useTimeStore((s) => s.totalBars)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const totalBars = useProjectStore((s) => s.totalBars)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const timelineSnap = useUIStore((s) => s.timelineSnap)

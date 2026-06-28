@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { Play, Pause, Square, Upload, ChevronLeft } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useTimeStore } from './store/TimeStore'
+import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { Cube } from './instruments/Cube'
 import { CabinLogo } from '../components/CabinLogo'
@@ -56,7 +57,7 @@ function Header() {
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
-  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">

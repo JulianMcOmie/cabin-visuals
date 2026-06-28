@@ -55,7 +55,8 @@ export function Cube() {
 
   useFrame(() => {
     if (!meshRef.current) return
-    const { currentBeat, beatsPerBar } = useTimeStore.getState()
+    const { currentBeat } = useTimeStore.getState()
+    const { beatsPerBar } = useProjectStore.getState()
     const pulse = computePulse(currentBeat, beatsPerBar)
 
     // Instrument params from the cube track (fall back to the schema defaults).

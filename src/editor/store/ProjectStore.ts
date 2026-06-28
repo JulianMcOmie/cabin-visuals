@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type { Track, Block, Note } from '../types'
 
+export const MIN_BPM = 20
+export const MAX_BPM = 300
+
 // Deep-clone with fresh IDs at every level (used by paste + alt-drag duplicate).
 const cloneNote = (n: Note): Note => ({ ...n, id: crypto.randomUUID() })
 export const cloneBlock = (b: Block): Block => ({
@@ -18,6 +21,11 @@ export const cloneTrack = (t: Track): Track => ({
 interface ProjectState {
   tracks: Record<string, Track>
   rootTrackIds: string[]
+  // Project-level musical settings. Here (not TimeStore) so they're part of the
+  // undoable document; currentBeat/isPlaying stay in TimeStore (ephemeral transport).
+  bpm: number
+  beatsPerBar: number
+  totalBars: number
   addTrack: (track: Track, atIndex?: number) => void
   addBlock: (trackId: string, block: Block) => void
   addBlocks: (trackId: string, blocks: Block[]) => void
@@ -33,11 +41,15 @@ interface ProjectState {
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
+  setBpm: (bpm: number) => void
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
   tracks: {},
   rootTrackIds: [],
+  bpm: 120,
+  beatsPerBar: 4,
+  totalBars: 32,
 
   addTrack: (track, atIndex) =>
     set((s) => {
@@ -234,4 +246,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
         },
       }
     }),
+
+  setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),
 }))

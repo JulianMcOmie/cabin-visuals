@@ -1,8 +1,7 @@
 'use client'
 
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useTimeStore, MIN_BPM, MAX_BPM } from '../store/TimeStore'
-import { getPlaybackEngine } from '../core/playback'
+import { useProjectStore, MIN_BPM, MAX_BPM } from '../store/ProjectStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 // Vertical drag sensitivity: bpm change per pixel (up = faster).
@@ -10,15 +9,16 @@ const BPM_PER_PX = 0.5
 
 /**
  * Tempo readout that doubles as a vertical drag scrubber — drag up to raise the
- * BPM, down to lower it. Updates the store, and the live transport while playing.
+ * BPM, down to lower it. Writes the project store; the live transport follows via
+ * the bpm subscription in usePlayback (which also covers undo/redo while playing).
  */
 export function BpmControl() {
-  const bpm = useTimeStore((s) => s.bpm)
+  const bpm = useProjectStore((s) => s.bpm)
 
   const onPointerDown = (e: ReactPointerEvent) => {
     e.preventDefault()
     const startY = e.clientY
-    const startBpm = useTimeStore.getState().bpm
+    const startBpm = useProjectStore.getState().bpm
     lockCursor('ns-resize')
 
     const controller = new AbortController()
@@ -27,8 +27,7 @@ export function BpmControl() {
         MIN_BPM,
         Math.min(MAX_BPM, Math.round(startBpm + (startY - ev.clientY) * BPM_PER_PX)),
       )
-      useTimeStore.getState().setBpm(next)
-      if (useTimeStore.getState().isPlaying) getPlaybackEngine().setBpm(next)
+      useProjectStore.getState().setBpm(next)
     }
     const onUp = () => {
       unlockCursor()

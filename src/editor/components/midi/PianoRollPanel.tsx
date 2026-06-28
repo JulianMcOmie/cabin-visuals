@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Magnet } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
-import { useTimeStore } from '../../store/TimeStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -69,8 +68,8 @@ interface PianoRollContentProps {
 }
 
 function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: PianoRollContentProps) {
-  const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
-  const totalBars = useTimeStore((s) => s.totalBars)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const totalBars = useProjectStore((s) => s.totalBars)
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
   const midiRowScale = useUIStore((s) => s.midiRowScale)
