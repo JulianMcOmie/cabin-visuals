@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
-import { Play, Pause, Square, Upload, ChevronLeft } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
@@ -73,20 +73,24 @@ function Header() {
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
-          onClick={reset}
-          title="Return to start (Enter)"
+          onClick={isPlaying ? pause : reset}
+          title={isPlaying ? 'Pause' : 'Return to start'}
           className="flex items-center justify-center w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
         >
-          <Square size={10} fill="currentColor" />
+          {isPlaying
+            ? <Square size={10} fill="currentColor" />
+            : <SkipBack size={12} fill="currentColor" />}
         </button>
         <button
-          onClick={isPlaying ? pause : play}
-          title={isPlaying ? 'Pause' : 'Play'}
-          className="flex items-center justify-center w-8 h-8 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-colors shadow-lg shadow-indigo-950/60"
+          onClick={isPlaying ? reset : play}
+          title={isPlaying ? 'Restart from beginning' : 'Play'}
+          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
+            isPlaying
+              ? 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300'
+          }`}
         >
-          {isPlaying
-            ? <Pause size={13} fill="currentColor" />
-            : <Play size={13} fill="currentColor" />}
+          <Play size={13} fill="currentColor" />
         </button>
       </div>
 
