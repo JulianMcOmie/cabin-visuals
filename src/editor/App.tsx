@@ -69,37 +69,39 @@ function Header() {
         Projects
       </Link>
 
-      <div className="w-px h-5 bg-zinc-800 flex-shrink-0" />
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
+        <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" />
 
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <button
-          onClick={isPlaying ? pause : reset}
-          title={isPlaying ? 'Pause' : 'Return to start'}
-          className="flex items-center justify-center w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          {isPlaying
-            ? <Square size={10} fill="currentColor" />
-            : <SkipBack size={12} fill="currentColor" />}
-        </button>
-        <button
-          onClick={isPlaying ? reset : play}
-          title={isPlaying ? 'Restart from beginning' : 'Play'}
-          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
-            isPlaying
-              ? 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60'
-              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          <Play size={13} fill="currentColor" />
-        </button>
-      </div>
+        {/* Transport + beat readout — its own group, right of centre with a gap from
+            the logo (which sits left of centre), so the pair straddles the page centre. */}
+        <div className="flex items-center gap-2.5 pointer-events-auto">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={isPlaying ? pause : reset}
+              title={isPlaying ? 'Pause' : 'Return to start'}
+              className="flex items-center justify-center w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              {isPlaying
+                ? <Square size={10} fill="currentColor" />
+                : <SkipBack size={12} fill="currentColor" />}
+            </button>
+            <button
+              onClick={isPlaying ? reset : play}
+              title={isPlaying ? 'Restart from beginning' : 'Play'}
+              className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
+                isPlaying
+                  ? 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Play size={13} fill="currentColor" />
+            </button>
+          </div>
 
-      <div className="font-mono text-sm text-indigo-300 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 min-w-[72px] text-center tabular-nums flex-shrink-0 select-none">
-        {formatBeat(currentBeat, beatsPerBar)}
-      </div>
-
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
-        <CabinLogo className="h-12 w-auto pointer-events-auto" />
+          <div className="font-mono text-sm text-indigo-300 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 min-w-[72px] text-center tabular-nums whitespace-nowrap">
+            {formatBeat(currentBeat, beatsPerBar)}
+          </div>
+        </div>
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
