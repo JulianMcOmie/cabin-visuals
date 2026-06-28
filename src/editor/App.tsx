@@ -16,6 +16,7 @@ import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
+import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { PANEL_RESIZE_HIT } from './constants'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
@@ -53,6 +54,7 @@ function Header() {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, reset } = usePlayback();
   useTransportKeys({ play, pause, reset })
+  useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useTimeStore((s) => s.beatsPerBar)
 
