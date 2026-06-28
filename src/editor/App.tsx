@@ -70,7 +70,7 @@ function Header() {
       </Link>
 
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
-        <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" />
+        <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" strokeWidth={95} />
 
         {/* Transport + beat readout — its own group, right of centre with a gap from
             the logo (which sits left of centre), so the pair straddles the page centre. */}
