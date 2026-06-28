@@ -30,7 +30,10 @@ interface UseNoteGesturesOptions {
   scrubbingRef: RefObject<boolean>
   block: Block
   notes: Note[]
+  /** Transient local update (per drag frame). */
   onNotesChange: (notes: Note[]) => void
+  /** Persist to the store as one undo step. Called at gesture end + discrete edits. */
+  onCommit: (notes: Note[]) => void
   rows: MidiRow[]
   rowHeight: number
   pixelsPerBeat: number
@@ -56,6 +59,7 @@ export function useNoteGestures({
   block,
   notes,
   onNotesChange,
+  onCommit,
   rows,
   rowHeight,
   pixelsPerBeat,
@@ -74,6 +78,10 @@ export function useNoteGestures({
   const drawingNoteRef = useRef(drawingNote)
   drawingNoteRef.current = drawingNote
   const didDragRef = useRef(false)
+  // Notes to persist when the current gesture ends. Set during drag frames
+  // (move/resize) and on alt-duplicate; committed once on pointer-up so the
+  // whole gesture is a single store write = a single undo step.
+  const pendingCommitRef = useRef<Note[] | null>(null)
   // Selection that existed when a marquee began (shift-add base); the live
   // marquee selection is this set unioned with the notes currently boxed.
   const marqueeBaseRef = useRef<Set<string>>(new Set())
@@ -135,7 +143,7 @@ export function useNoteGestures({
   // Single ref holding the latest render's values, refreshed every render.
   // The window drag listeners live across many renders, so they read
   // everything through latest.current instead of their (stale) closures.
-  const latestValues = { notes, onNotesChange, roundToNearestStep, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
+  const latestValues = { notes, onNotesChange, onCommit, roundToNearestStep, snapSize, snapEnabled, pixelsPerBeat, blockStartBeat, blockDurationBeats, initialTotalBeats, rowHeight, rows, quantize, getNotesInMarquee }
   const latest = useRef(latestValues)
   latest.current = latestValues
 
@@ -183,7 +191,7 @@ export function useNoteGestures({
         const curBlockStart = latest.current.blockStartBeat
         const curTimeline = latest.current.initialTotalBeats
 
-        latest.current.onNotesChange(latest.current.notes.map(n => {
+        const next = latest.current.notes.map(n => {
           const originalStartBeat = ds.originalStartBeats!.get(n.id)
           const originalPitch = ds.originalPitches!.get(n.id)
           if (originalStartBeat !== undefined && originalPitch !== undefined) {
@@ -196,20 +204,24 @@ export function useNoteGestures({
             return { ...n, startBeat: newStartBeat, pitch: newPitch }
           }
           return n
-        }))
+        })
+        latest.current.onNotesChange(next)
+        pendingCommitRef.current = next
       } else if (ds.type === 'resizing' && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
         const snappedDelta = latest.current.roundToNearestStep(deltaBeats)
 
-        latest.current.onNotesChange(latest.current.notes.map(n => {
+        const next = latest.current.notes.map(n => {
           const originalDuration = ds.originalDurations!.get(n.id)
           if (originalDuration !== undefined) {
             const newDuration = Math.max(latest.current.snapSize, originalDuration + snappedDelta)
             return { ...n, durationBeats: newDuration }
           }
           return n
-        }))
+        })
+        latest.current.onNotesChange(next)
+        pendingCommitRef.current = next
       } else if (ds.type === 'resizing-left' && ds.originalStartBeats && ds.originalDurations) {
         const deltaX = grid.x - ds.startX
         const deltaBeats = xToBeat(deltaX, latest.current.pixelsPerBeat)
@@ -217,7 +229,7 @@ export function useNoteGestures({
 
         // Drag the start; keep the end planted. Clamp so start stays >= 0 and
         // the note never shrinks below one snap step.
-        latest.current.onNotesChange(latest.current.notes.map(n => {
+        const next = latest.current.notes.map(n => {
           const originalStartBeat = ds.originalStartBeats!.get(n.id)
           const originalDuration = ds.originalDurations!.get(n.id)
           if (originalStartBeat !== undefined && originalDuration !== undefined) {
@@ -228,7 +240,9 @@ export function useNoteGestures({
             return { ...n, startBeat: newStartBeat, durationBeats: end - newStartBeat }
           }
           return n
-        }))
+        })
+        latest.current.onNotesChange(next)
+        pendingCommitRef.current = next
       } else if (ds.type === 'marquee') {
         setDragState(prev => ({ ...prev, currentX: grid.x, currentY: grid.y }))
         const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, grid.x, grid.y)
@@ -238,10 +252,16 @@ export function useNoteGestures({
 
     const handleUp = () => {
       const ds = dragStateRef.current
+      // Commit the gesture as a single store write (one undo step). Drawing adds
+      // the in-flight note; move/resize/alt-duplicate commit the pending result.
+      // marquee selects only, so it leaves pendingCommitRef null and commits nothing.
       if (ds.type === 'drawing' && drawingNoteRef.current) {
-        latest.current.onNotesChange([...latest.current.notes, drawingNoteRef.current])
+        latest.current.onCommit([...latest.current.notes, drawingNoteRef.current])
         setDrawingNote(null)
+      } else if (pendingCommitRef.current) {
+        latest.current.onCommit(pendingCommitRef.current)
       }
+      pendingCommitRef.current = null
 
       setDragState(DRAG_NONE)
       setCursor('default')
@@ -338,9 +358,12 @@ export function useNoteGestures({
         }
       }
 
-      // Add duplicates to notes (originals stay, copies will be dragged)
+      // Add duplicates to notes (originals stay, copies will be dragged). This is
+      // a transient local update; arm pendingCommitRef so even a no-drag alt-click
+      // still persists the duplicates when the gesture ends.
       const updatedNotes = [...notes, ...duplicates]
       onNotesChange(updatedNotes)
+      pendingCommitRef.current = updatedNotes
 
       const copyIds = new Set(oldToNew.values())
       setSelectedNoteIds(copyIds)
@@ -502,7 +525,7 @@ export function useNoteGestures({
           id: crypto.randomUUID(),
           startBeat: playheadLocal + n.startBeat,
         }))
-        onNotesChange([...notes, ...pasted])
+        onCommit([...notes, ...pasted])
         setSelectedNoteIds(new Set(pasted.map(n => n.id)))
         // Teleport the playhead to the end of the last pasted note (global beats).
         const endBeat = blockStartBeat + Math.max(...pasted.map(n => n.startBeat + n.durationBeats))
@@ -513,7 +536,7 @@ export function useNoteGestures({
       if (selectedNoteIds.size > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault()
         e.stopImmediatePropagation()
-        onNotesChange(notes.filter(n => !selectedNoteIds.has(n.id)))
+        onCommit(notes.filter(n => !selectedNoteIds.has(n.id)))
         setSelectedNoteIds(new Set())
       } else if (e.key === 'Escape' && selectedNoteIds.size > 0) {
         // Consume Esc to deselect; only when nothing selected does Esc close the panel
@@ -524,7 +547,7 @@ export function useNoteGestures({
 
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [selectedNoteIds, notes, onNotesChange, blockStartBeat])
+  }, [selectedNoteIds, notes, onCommit, blockStartBeat])
 
   // Click on background deselects (if not dragging)
   const handleContainerClick = useCallback((e: React.MouseEvent) => {

@@ -3,7 +3,12 @@ import { useProjectStore } from './ProjectStore'
 
 type Snapshot = Record<string, unknown>
 const LIMIT = 100          // cap the stack; oldest entries fall off
-const DEBOUNCE_MS = 200    // burst window: drags coalesce, deliberate edits don't
+// Burst window, just above one render frame. A continuous drag (block move,
+// param slider, …) writes the store every ~16ms, so its frames fall inside one
+// window and collapse to a single entry. Deliberate edits — including note
+// gestures, which now commit once per gesture — are spaced well beyond this, so
+// each stays its own undo step even when made quickly.
+const DEBOUNCE_MS = 80
 
 // The undoable document = every non-function field of the project store.
 // Generic on purpose: add track.effects / a project name later and it's covered.

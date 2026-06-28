@@ -19,6 +19,8 @@ export interface MidiEditorProps {
   trackId: string
   block: Block
   onNotesChange: (notes: Note[]) => void
+  /** Persist a gesture's result to the store as one undo step. */
+  onCommit: (notes: Note[]) => void
   beatsPerBar: number
   quantize: number
   snapEnabled?: boolean
@@ -42,6 +44,7 @@ export function MidiEditor({
   trackId,
   block,
   onNotesChange,
+  onCommit,
   beatsPerBar,
   quantize,
   snapEnabled = true,
@@ -100,6 +103,7 @@ export function MidiEditor({
     block,
     notes,
     onNotesChange,
+    onCommit,
     rows,
     rowHeight,
     pixelsPerBeat,
