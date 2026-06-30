@@ -1,5 +1,6 @@
 import type { Track } from '../../types'
-import type { ResolvedGraph, ResolvedObject, ResolvedNote } from './types'
+import { getInstrument } from '../../instruments'
+import type { ResolvedGraph, ResolvedObject, ResolvedNote, ModulatorInstance } from './types'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -43,9 +44,26 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       instrumentId: track.instrumentId,
       muted: track.muted,
       params: track.params ?? {},
+      ports: getInstrument(track.instrumentId)?.ports ?? [],
       notes,
     })
   }
 
-  return { objects }
+  // Built-in modulation: each non-muted object pulses from its own notes into its
+  // `energy` port (reproducing the Cube's old self-pulse, now through the matrix).
+  // Explicit modulator tracks routed to ports arrive in the next commit.
+  const modulators: ModulatorInstance[] = []
+  for (const obj of objects) {
+    if (!obj.muted && obj.notes.length > 0) {
+      modulators.push({
+        id: `${obj.trackId}:pulse`,
+        kind: 'pulse',
+        triggers: obj.notes,
+        targetObjectId: obj.trackId,
+        targetPort: 'energy',
+      })
+    }
+  }
+
+  return { objects, modulators }
 }

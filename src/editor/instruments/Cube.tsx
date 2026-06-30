@@ -36,7 +36,8 @@ export function Cube({ trackId }: { trackId: string }) {
     if (!meshRef.current) return
     const { currentBeat } = useTimeStore.getState()
     const state = getObjectState(trackId)
-    const pulse = state?.pulse ?? 0
+    // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
+    const energy = state?.portValues.energy ?? 0
 
     const baseSize = state?.params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseHue = state?.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
@@ -46,12 +47,12 @@ export function Cube({ trackId }: { trackId: string }) {
     meshRef.current.rotation.x = currentBeat * 0.09
 
     const breathe = 1.15 + Math.sin(currentBeat * 0.9) * 0.2
-    meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + pulse * 0.35))
+    meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + energy * 0.35))
     meshRef.current.position.setX(baseXPosition)
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
-    mat.emissiveIntensity = 0.2 + pulse * 1.2
+    mat.emissiveIntensity = 0.2 + energy * 1.2
   })
 
   return (
