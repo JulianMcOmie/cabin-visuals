@@ -225,17 +225,17 @@
 
 <!-- B -->
 <h2 id="scope">B · Scope &amp; the phase ladder</h2>
-<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc — but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive.</p>
+<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc — but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive. <strong>Status: phases 1–4 are built; phase 5 (nested hierarchy) is next.</strong></p>
 
 <figure class="fig">
   <div class="figtitle">The phase ladder — and roughly where each lands in the tree</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Phase ladder">
     <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <g font-size="11" fill="#141414">
-      <rect x="20" y="24" width="250" height="30" rx="5" fill="#141414"/><text x="32" y="44" fill="#fff" font-weight="700">1 · Engine skeleton</text>
-      <rect x="20" y="62" width="250" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="82" font-weight="700">2 · Object defs + params + ports + automation</text>
-      <rect x="20" y="100" width="250" height="30" rx="5" fill="#141414"/><text x="32" y="120" fill="#fff" font-weight="700">3 · Modulators + matrix ★ keystone</text>
-      <rect x="20" y="138" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Tags + group routing</text>
+      <rect x="20" y="24" width="250" height="30" rx="5" fill="#141414"/><text x="32" y="44" fill="#fff" font-weight="700">1 · Engine skeleton</text><text x="252" y="44" fill="#fff" font-weight="700">✓</text>
+      <rect x="20" y="62" width="250" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="82" font-weight="700">2 · Object defs + params + ports + automation</text><text x="252" y="82" font-weight="700">✓</text>
+      <rect x="20" y="100" width="250" height="30" rx="5" fill="#141414"/><text x="32" y="120" fill="#fff" font-weight="700">3 · Modulators + matrix ★ keystone</text><text x="252" y="120" fill="#fff" font-weight="700">✓</text>
+      <rect x="20" y="138" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Tags + group routing</text><text x="252" y="158" font-weight="700">✓</text>
       <rect x="20" y="176" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="196" font-weight="700">5 · Nested hierarchy</text>
       <rect x="20" y="214" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="234" font-weight="700">6 · Ability lanes &amp; 7 · event modifiers</text>
       <rect x="20" y="252" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="272" font-weight="700">8 · Effects · 9 · RenderSpec · 10 · English</text>
@@ -257,7 +257,7 @@
     <path d="M145,206 V214" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
     <path d="M145,244 V252" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
   </svg>
-  <figcaption>Black = build, grey = borrow-heavy. Phases 1–3 build the engine + matrix; everything else extends it. The full per-phase file lists are §F.</figcaption>
+  <figcaption>Black = build, grey = borrow-heavy. <strong>✓ = shipped</strong> (phases 1–4). Phases 1–3 build the engine + matrix; everything else extends it. The full per-phase file lists are §F.</figcaption>
 </figure>
 
 <div class="rec"><strong>In scope here:</strong> the data model, the engine module, the renderer, the instrument model, and a phased build down to the matrix (phase 3) in detail, with file lists for all phases. <strong>Deferred (named, not detailed):</strong> the Web-worker/OffscreenCanvas escalation (we settled on incremental + deferred resolve instead), and English→spec (phase 10) which only becomes viable once the RenderSpec is stable.</p></div>
@@ -309,11 +309,11 @@
 <span class="k">interface</span> <span class="f">Track</span> {
   id; name; instrumentId; params?; color; muted; solo; blocks;   <span class="c">// (today)</span>
   parentId?; childIds;            <span class="c">// nested hierarchy — becomes functional in phase 5</span>
-  tags: <span class="k">string</span>[];                <span class="c">// NEW — cross-cutting modulation targeting (phase 4)</span>
-  targets?: Routing[];            <span class="c">// modulator-only: a LIST → one modulator can drive MANY ports (phase 3)</span>
+  tags?: <span class="k">string</span>[];               <span class="c">// ✓ phase 4 — cross-cutting modulation targeting (shipped optional)</span>
+  targets?: Routing[];            <span class="c">// ✓ modulator-only: a LIST of Routings → one modulator drives MANY ports/groups</span>
   lanes?: Block[];                <span class="c">// abilities — a PARALLEL array on the track, NOT child tracks (phase 6)</span>
 }
-<span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// NEW</span>
+<span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// ✓ shipped (phase 4) exactly as below</span>
   port: <span class="k">string</span>;
   scope: { kind: <span class="s">'track'</span>; id } | { kind: <span class="s">'tag'</span>; tag } | { kind: <span class="s">'subtree'</span>; id };
   amount: <span class="k">number</span>;
@@ -331,6 +331,7 @@
   portValues: Record&lt;<span class="k">string</span>,<span class="k">number</span>&gt;;  finalProps: Record&lt;<span class="k">string</span>, unknown&gt;;  <span class="c">// filled per frame</span>
 }</code></pre>
 <div class="note"><strong>Mental model:</strong> <span class="file">types.ts</span> = "what the user owns," <span class="file">core/engine/types.ts</span> = "what the engine derives." If you ever see the engine importing the <em>document</em> types that's fine; the document never imports the <em>graph</em> types — the dependency points one way (engine → document), which is what keeps the editor independent of the engine.</div>
+<div class="note"><strong>Shipped shape (through phase 4):</strong> the block above is the north-star target (it includes phase-6/8 fields). What's built today: <code>ResolvedObject</code> = <code>{ trackId; instrumentId; muted; params; ports; notes; tags }</code> — no <code>abilityEvents</code> (phase 6) or <code>finalProps</code> (phase 8) yet. And <code>ModulatorInstance</code> was split into a pure <em>signal</em> (<code>{ id; kind; triggers }</code>) plus a separate <code>ResolvedRouting</code> (<code>{ modulatorId; targetObjectId; targetPort; amount }</code>); <code>routingsByPort</code> buckets the latter. So one signal is evaluated once per frame and fanned out to every object its scopes resolved to. <code>tagIndex</code> (tag → objectIds) is built in <span class="file">resolve.ts</span> exactly as drawn.</div>
 
 <!-- D -->
 <h2 id="engine">D · Infrastructure: the engine module</h2>
@@ -458,28 +459,32 @@
 <!-- F -->
 <h2 id="phases">F · Phase-by-phase build (with files)</h2>
 
-<h3>Phase 1 — Engine skeleton <span class="badge b-new">5 new</span> <span class="badge b-edit">2 edit</span></h3>
+<h3>Phase 1 — Engine skeleton <span class="badge b-new">✓ shipped</span></h3>
 <p>Stand up resolve → compute → pull with <em>zero behavior change</em>: the Cube still pulses, but now the engine drives it.</p>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/engine/types.ts</span>, <span class="file">core/engine/resolve.ts</span> (non-incremental first), <span class="file">core/engine/VisualEngine.ts</span>, <span class="file">core/engine/VisualBeatSync.tsx</span>, <span class="file">components/visual/VisualScene.tsx</span> + <span class="file">ObjectRenderer.tsx</span>.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> (mount the scene), <span class="file">instruments/Cube.tsx</span> (read <code>finalProps</code>, drop the scan).</li>
 </ul>
 
-<h3>Phase 2 — Object defs + params + ports + automation <span class="badge b-new">3 new</span> <span class="badge b-edit">3 edit</span></h3>
+<h3>Phase 2 — Object defs + params + ports <span class="badge b-new">✓ shipped</span> <span class="badge b-edit">automation deferred</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">instruments/types.ts</span> (def types), <span class="badge b-new">new</span> <span class="file">instruments/registry.ts</span>, <span class="badge b-new">new</span> <span class="file">core/engine/automation.ts</span>.</li>
   <li>Give Cube <code>params</code> (size/hue) + <code>ports</code> (scale/energy/hue) and the <code>resolveProps</code> binding. <span class="badge b-edit">edit</span> <span class="file">TrackEditor.tsx</span> so its sliders read <code>def.params</code>; <span class="badge b-edit">edit</span> <span class="file">resolve.ts</span> to attach automation lanes. Ports rest at defaults — nothing drives them yet.</li>
 </ul>
 
-<h3>Phase 3 — Modulators + the matrix ★ keystone <span class="badge b-new">3 new</span> <span class="badge b-edit">2 edit</span></h3>
+<h3>Phase 3 — Modulators + the matrix ★ keystone <span class="badge b-new">✓ shipped</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/engine/matrix.ts</span>, <span class="file">core/engine/modulators.ts</span>, <span class="file">instruments/modulators/Pulse.ts</span>.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">VisualEngine.ts</span> (call <code>runMatrix</code> in <code>computeAtBeat</code>), <span class="file">ProjectStore.ts</span> (a <code>setRoutings</code> action). First real "drop a Size-Pulse on a shape" (drives the <code>scale</code> port). The routing UI is a small inspector add (defer polish).</li>
 </ul>
+<div class="note"><strong>As-built deltas (phases 1–3):</strong> a few names landed differently than drawn above. The registry is <span class="file">instruments/index.ts</span> (not <code>registry.ts</code>); the routing store action is <code>setTrackTargets</code> (not <code>setRoutings</code>); the Cube reads per-frame values from <code>getObjectState().portValues</code>/<code>params</code> (the <code>finalProps</code> name arrives with the RenderSpec, phase 8); and <span class="file">automation.ts</span> isn't built yet (no automation lanes shipped). Behavior matches the plan; only these labels differ.</div>
 
-<h3>Phase 4 — Tags + group routing <span class="badge b-edit">3 edit</span></h3>
+<h3>Phase 4 — Tags + group routing <span class="badge b-new">✓ shipped</span></h3>
 <ul class="small">
-  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span> (<code>Track.tags</code>), <span class="file">ProjectStore.ts</span> (<code>setTrackTags</code>), <span class="file">resolve.ts</span> (build <code>tagIndex</code>; routings resolve over tags). Now one pulse drives a tagged group.</li>
+  <li><strong>Shipped as 3 commits.</strong> Now one pulse drives a tagged group.</li>
+  <li><span class="badge b-edit">1 · redesign target model</span> <span class="file">types.ts</span>: <code>Track.targets</code> moved from the flat <code>{targetTrackId, targetPort}[]</code> to the planned <code>Routing[]</code> (<code>{ port; scope: track|tag|subtree; amount }</code>, §C.1). Readers updated: <span class="file">resolve.ts</span>, <code>deleteTrack</code> cleanup, the target picker.</li>
+  <li><span class="badge b-edit">2 · resolution + routing</span> <span class="file">types.ts</span> (<code>Track.tags?</code>), <span class="file">ProjectStore.ts</span> (<code>setTrackTags</code>), <span class="file">resolve.ts</span> (build <code>tagIndex</code>; expand each routing's scope to concrete objects, deduped per object+port), <span class="file">matrix.ts</span> (keys on <code>routingsByPort</code>, honors <code>amount</code>). The resolved <code>ModulatorInstance</code> was split into a <em>signal</em> (triggers only) plus <code>ResolvedRouting</code> links — see §C.2 note. <code>subtree</code> scope is a phase-5 stub (resolves to no objects yet).</li>
+  <li><span class="badge b-edit">3 · tagging UI</span> <span class="file">TrackEditor.tsx</span>: a tag combobox on object tracks (type a new tag or pick an existing project tag); the modulator's target picker lists tags alongside individual tracks.</li>
 </ul>
 
 <h3>Phase 5 — Nested hierarchy <span class="badge b-edit">timeline + resolve</span></h3>
