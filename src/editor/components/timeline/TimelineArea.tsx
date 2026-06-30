@@ -48,8 +48,10 @@ export function TimelineArea() {
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
-  // Tracks render as a flattened tree (DFS order, indented by depth).
-  const flatTracks = flattenTracks(tracks, rootTrackIds)
+  // Tracks render as a flattened tree (DFS order, indented by depth); collapsed
+  // parents hide their descendant rows.
+  const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
+  const flatTracks = flattenTracks(tracks, rootTrackIds, collapsedTrackIds)
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.

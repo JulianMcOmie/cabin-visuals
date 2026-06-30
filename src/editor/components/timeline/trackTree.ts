@@ -6,9 +6,14 @@ export interface FlatTrack {
   depth: number
 }
 
-/** Tracks in depth-first order (each root, then its descendants), tagged with depth.
- *  This is the visual row order for the timeline. A visited set guards malformed data. */
-export function flattenTracks(tracks: Record<string, Track>, rootTrackIds: string[]): FlatTrack[] {
+/** Tracks in depth-first order (each root, then its descendants), tagged with depth —
+ *  the visual row order for the timeline. A collapsed node is still listed, but its
+ *  descendants are skipped (hidden). A visited set guards malformed data. */
+export function flattenTracks(
+  tracks: Record<string, Track>,
+  rootTrackIds: string[],
+  collapsed?: Set<string>,
+): FlatTrack[] {
   const out: FlatTrack[] = []
   const seen = new Set<string>()
   const visit = (id: string, depth: number) => {
@@ -17,6 +22,7 @@ export function flattenTracks(tracks: Record<string, Track>, rootTrackIds: strin
     if (!t) return
     seen.add(id)
     out.push({ id, depth })
+    if (collapsed?.has(id)) return
     for (const childId of t.childIds ?? []) visit(childId, depth + 1)
   }
   for (const id of rootTrackIds) visit(id, 0)

@@ -9,6 +9,11 @@ interface UIState {
   selectedTrackId: string | null;
   setSelectedTrackId: (id: string | null) => void;
 
+  // Parent tracks collapsed in the timeline (their descendant rows are hidden). Pure
+  // view state — collapsed tracks still resolve and render in the 3D scene.
+  collapsedTrackIds: Set<string>
+  setTrackCollapsed: (id: string, collapsed: boolean) => void
+
   // Block selection in the tracks timeline (by block id; ids are globally unique)
   selectedBlockIds: Set<string>
   setSelectedBlockIds: (ids: Set<string>) => void
@@ -46,6 +51,15 @@ export const useUIStore = create<UIState>((set) => ({
   selectedTrackId: null,
 
   setSelectedTrackId: (id) => set({ selectedTrackId: id }),
+
+  collapsedTrackIds: new Set(),
+  setTrackCollapsed: (id, collapsed) =>
+    set((s) => {
+      const next = new Set(s.collapsedTrackIds)
+      if (collapsed) next.add(id)
+      else next.delete(id)
+      return { collapsedTrackIds: next }
+    }),
 
   selectedBlockIds: new Set(),
   setSelectedBlockIds: (ids) => set({ selectedBlockIds: ids }),

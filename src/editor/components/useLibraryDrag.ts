@@ -75,7 +75,7 @@ export function useLibraryDrag() {
           const { tracks, rootTrackIds } = useProjectStore.getState()
           drop = computeDropTarget({
             tracks, rootTrackIds,
-            flat: flattenTracks(tracks, rootTrackIds),
+            flat: flattenTracks(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds),
             listTop: r.top - sc.scrollTop,
             rowHeight: useUIStore.getState().tracksRowHeight,
             clientY: ev.clientY,
@@ -95,6 +95,8 @@ export function useLibraryDrag() {
         const track = makeTrack(item, target.parentId)
         useProjectStore.getState().addTrack(track, target.index)
         useUIStore.getState().setSelectedTrackId(track.id)
+        // Reveal the drop: expand the parent if it was collapsed.
+        if (target.parentId) useUIStore.getState().setTrackCollapsed(target.parentId, false)
       }
     }
 

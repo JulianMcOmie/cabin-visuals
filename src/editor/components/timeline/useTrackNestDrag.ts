@@ -31,7 +31,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
     const rowHeight = useUIStore.getState().tracksRowHeight
-    const flat = flattenTracks(tracks, rootTrackIds)
+    const flat = flattenTracks(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     if (flat.findIndex((f) => f.id === trackId) < 0) return
 
     const scRect = sc.getBoundingClientRect()
@@ -83,6 +83,8 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       }
       if (started && s?.target) {
         useProjectStore.getState().setTrackParent(s.activeId, s.target.parentId, s.target.index)
+        // Reveal the drop: expand the parent if it was collapsed.
+        if (s.target.parentId) useUIStore.getState().setTrackCollapsed(s.target.parentId, false)
       }
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })

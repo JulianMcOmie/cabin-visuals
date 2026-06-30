@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
@@ -35,10 +36,13 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
+  const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
+  const isCollapsed = useUIStore((s) => s.collapsedTrackIds.has(track.id))
   const toggleMute = useProjectStore((s) => s.toggleMute)
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
 
   const isSelected = selectedTrackId === track.id
+  const hasChildren = track.childIds.length > 0
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
@@ -83,10 +87,19 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           dropInto ? 'bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
         }`}
       >
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium truncate text-white">
-            {track.name}
-          </div>
+        {/* Name + its collapse toggle, grouped so the chevron hugs the name text
+            (the empty space sits to their right, not between them). */}
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          <span className="text-xs font-medium truncate text-white">{track.name}</span>
+          {hasChildren && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setTrackCollapsed(track.id, !isCollapsed) }}
+              className="flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-zinc-200"
+              aria-label={isCollapsed ? 'Expand track' : 'Collapse track'}
+            >
+              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )}
         </div>
 
         <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
