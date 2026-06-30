@@ -23,20 +23,34 @@ export interface ResolvedObject {
   /** The instrument's ports (from its def), so the matrix knows what to fill. */
   ports: PortDef[]
   notes: ResolvedNote[]
+  /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
+  tags: string[]
 }
 
-/** A modulator's resolved form: a signal source routed to one object port. */
+/** A modulator's resolved signal source. Its output is computed once per frame;
+ *  ResolvedRoutings fan it out to object ports (one signal → many ports). */
 export interface ModulatorInstance {
   id: string
   kind: 'pulse'
   triggers: ResolvedNote[]
+}
+
+/** A resolved connection: a modulator's signal drives one object's port, scaled by
+ *  `amount`. Scopes (track/tag/subtree) are already expanded to concrete objects. */
+export interface ResolvedRouting {
+  modulatorId: string
   targetObjectId: string
   targetPort: string
+  amount: number
 }
 
 export interface ResolvedGraph {
   objects: ResolvedObject[]
   modulators: ModulatorInstance[]
+  /** Routings bucketed by target port key (the matrix's per-port input). */
+  routingsByPort: Map<string, ResolvedRouting[]>
+  /** tag → object trackIds, so tag-scoped routings expand to a group. */
+  tagIndex: Map<string, string[]>
 }
 
 /** Per-frame state the renderer pulls for one object. */

@@ -6,7 +6,7 @@ import type { ResolvedGraph, ObjectState } from './types'
 // state must never trigger React re-renders. Renderers read it imperatively from
 // useFrame. The only React-visible signal is the object LIST (see below).
 
-let graph: ResolvedGraph = { objects: [], modulators: [] }
+let graph: ResolvedGraph = { objects: [], modulators: [], routingsByPort: new Map(), tagIndex: new Map() }
 const states = new Map<string, ObjectState>()
 
 // External-store signal for the object list, so VisualScene reconciles the scene

@@ -17,9 +17,12 @@ export function runMatrix(graph: ResolvedGraph, beat: number, out: Map<string, P
     const portValues: PortValues = {}
     for (const port of obj.ports) {
       let v = port.default
-      for (const mod of graph.modulators) {
-        if (mod.targetObjectId !== obj.trackId || mod.targetPort !== port.key) continue
-        v = combine(port.combine, v, modOutput.get(mod.id) ?? 0)
+      const routings = graph.routingsByPort.get(port.key)
+      if (routings) {
+        for (const r of routings) {
+          if (r.targetObjectId !== obj.trackId) continue
+          v = combine(port.combine, v, (modOutput.get(r.modulatorId) ?? 0) * r.amount)
+        }
       }
       portValues[port.key] = port.range ? clamp(v, port.range[0], port.range[1]) : v
     }

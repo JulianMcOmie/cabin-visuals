@@ -1,7 +1,13 @@
 import type { Track } from '../../types'
 import { getInstrument } from '../../instruments'
 import { getModulator } from '../../instruments/modulators'
-import type { ResolvedGraph, ResolvedObject, ResolvedNote, ModulatorInstance } from './types'
+import type {
+  ResolvedGraph,
+  ResolvedObject,
+  ResolvedNote,
+  ModulatorInstance,
+  ResolvedRouting,
+} from './types'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -32,39 +38,33 @@ function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
 }
 
 /**
- * Flatten the project into objects + modulators. A track is a modulator if its
- * instrumentId is in the modulator registry (its notes become triggers routed to
- * the ports of the object tracks it targets); otherwise it's an object track.
+ * Flatten the project into objects + modulator signals + routings. A track is a
+ * modulator if its instrumentId is in the modulator registry (its notes become a
+ * signal, fanned out by routings to the ports of the objects its scopes resolve to);
+ * otherwise it's an object track. Resolution is two-pass: objects (and the tag
+ * index) first, so tag-scoped routings can expand to the objects carrying that tag.
  * Non-incremental skeleton — resolve is trivially cheap at this scale.
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
   const modulators: ModulatorInstance[] = []
+  const routings: ResolvedRouting[] = []
+  const tagIndex = new Map<string, string[]>()
+  // Defer modulator tracks to a second pass — the tag index isn't built until all
+  // objects are known.
+  const modTracks: { id: string; track: Track }[] = []
 
   for (const id of p.rootTrackIds) {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
 
-    // Modulator track: notes → triggers, routed to each target's port.
-    const modDef = getModulator(track.instrumentId)
-    if (modDef) {
-      if (track.muted) continue
-      const triggers = flattenNotes(track, p.beatsPerBar)
-      for (const routing of track.targets ?? []) {
-        // Only track-scope resolves today; tag/subtree scopes land in later phases.
-        if (routing.scope.kind !== 'track') continue
-        modulators.push({
-          id: `${id}->${routing.scope.id}.${routing.port}`,
-          kind: modDef.signal,
-          triggers,
-          targetObjectId: routing.scope.id,
-          targetPort: routing.port,
-        })
-      }
+    if (getModulator(track.instrumentId)) {
+      if (!track.muted) modTracks.push({ id, track })
       continue
     }
 
     // Object track.
+    const tags = track.tags ?? []
     objects.push({
       trackId: id,
       instrumentId: track.instrumentId,
@@ -72,22 +72,57 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       params: track.params ?? {},
       ports: getInstrument(track.instrumentId)?.ports ?? [],
       notes: flattenNotes(track, p.beatsPerBar),
+      tags,
     })
+    for (const tag of tags) {
+      const list = tagIndex.get(tag)
+      if (list) list.push(id)
+      else tagIndex.set(tag, [id])
+    }
+  }
+
+  // Expand a routing's scope to the concrete object trackIds it hits.
+  const objectsForScope = (scope: NonNullable<Track['targets']>[number]['scope']): string[] => {
+    switch (scope.kind) {
+      case 'track': return [scope.id]
+      case 'tag': return tagIndex.get(scope.tag) ?? []
+      case 'subtree': return [] // nested hierarchy — resolved in phase 5
+    }
+  }
+
+  // Second pass: each modulator track is one signal; its routings fan that signal
+  // out to every object their scope resolves to (deduped per object+port).
+  for (const { id, track } of modTracks) {
+    const triggers = flattenNotes(track, p.beatsPerBar)
+    modulators.push({ id, kind: 'pulse', triggers })
+    const seen = new Set<string>()
+    for (const routing of track.targets ?? []) {
+      for (const targetObjectId of objectsForScope(routing.scope)) {
+        const key = `${targetObjectId}.${routing.port}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        routings.push({ modulatorId: id, targetObjectId, targetPort: routing.port, amount: routing.amount })
+      }
+    }
   }
 
   // Built-in: each non-muted object pulses from its own notes into its `energy`
   // port (the Cube's original self-pulse). Explicit modulator tracks add on top.
   for (const obj of objects) {
     if (!obj.muted && obj.notes.length > 0) {
-      modulators.push({
-        id: `${obj.trackId}:pulse`,
-        kind: 'pulse',
-        triggers: obj.notes,
-        targetObjectId: obj.trackId,
-        targetPort: 'energy',
-      })
+      const modId = `${obj.trackId}:pulse`
+      modulators.push({ id: modId, kind: 'pulse', triggers: obj.notes })
+      routings.push({ modulatorId: modId, targetObjectId: obj.trackId, targetPort: 'energy', amount: 1 })
     }
   }
 
-  return { objects, modulators }
+  // Bucket routings by port — the matrix's per-port lookup.
+  const routingsByPort = new Map<string, ResolvedRouting[]>()
+  for (const r of routings) {
+    const list = routingsByPort.get(r.targetPort)
+    if (list) list.push(r)
+    else routingsByPort.set(r.targetPort, [r])
+  }
+
+  return { objects, modulators, routingsByPort, tagIndex }
 }

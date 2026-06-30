@@ -46,6 +46,8 @@ export interface Track {
   blocks: Block[]
   parentId?: string
   childIds: string[]
+  /** Cross-cutting labels for group modulation — a modulator can target a tag. */
+  tags?: string[]
   /** Modulator-only: the ports this modulator drives (one modulator → many ports). */
   targets?: Routing[]
   targetParam?: string

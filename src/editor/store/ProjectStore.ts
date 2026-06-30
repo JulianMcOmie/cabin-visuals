@@ -43,6 +43,7 @@ interface ProjectState {
   setTrackParam: (trackId: string, key: string, value: number) => void
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
+  setTrackTags: (trackId: string, tags: string[]) => void
   setBpm: (bpm: number) => void
 }
 
@@ -270,6 +271,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, targets } } }
+    }),
+
+  setTrackTags: (trackId, tags) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
     }),
 
   setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),
