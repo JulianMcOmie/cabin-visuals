@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
+import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
@@ -12,7 +12,8 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenTracks } from './trackTree'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -21,6 +22,7 @@ export function TimelineArea() {
   const totalBars = useProjectStore((s) => s.totalBars)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
+  const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const timelineWidthPx = totalBars * barWidthPx
@@ -119,7 +121,8 @@ export function TimelineArea() {
     // Clip the playhead overlay to the scroll container's client area (excludes the
     // scrollbars) so the line never draws over them.
     if (sc && clipRef.current) {
-      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - TRACK_LABEL_WIDTH - PLAYHEAD_TRIANGLE_HALF)}px`
+      const lw = useUIStore.getState().tracksLabelWidth
+      clipRef.current.style.width = `${Math.max(0, sc.clientWidth - lw - PLAYHEAD_TRIANGLE_HALF)}px`
       clipRef.current.style.height = `${sc.clientHeight}px`
     }
     // Ruler triangle is positioned in content space (its container mirrors the lane
@@ -145,8 +148,23 @@ export function TimelineArea() {
     })
   }
 
+  // Drag the label column's right edge to resize it (spans the ruler corner, every
+  // track label, and the empty space below — one handle along the whole edge).
+  function startLabelResize(e: ReactPointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = useUIStore.getState().tracksLabelWidth
+    lockCursor('col-resize')
+    const controller = new AbortController()
+    window.addEventListener('pointermove', (ev) => {
+      useUIStore.getState().setTracksLabelWidth(startW + (ev.clientX - startX))
+    }, { signal: controller.signal })
+    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+  }
+
   return (
-    <div className="flex flex-col h-full border-t border-zinc-800 bg-zinc-900">
+    <div className="relative flex flex-col h-full border-t border-zinc-800 bg-zinc-900">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -197,7 +215,7 @@ export function TimelineArea() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
+            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
             {flatTracks.map((f, i) => {
               const track = tracks[f.id]
@@ -240,7 +258,7 @@ export function TimelineArea() {
                 className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-zinc-800/60 bg-[#202024] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-zinc-900' : ''
                 }`}
-                style={{ width: TRACK_LABEL_WIDTH }}
+                style={{ width: labelWidth }}
                 onPointerDown={() => setSelectedTrackId(null)}
               />
               <div
@@ -257,7 +275,7 @@ export function TimelineArea() {
             <div
               ref={laneRef}
               className="absolute bottom-0 top-0 z-10 pointer-events-none"
-              style={{ left: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}
+              style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}
             >
               {marqueeRect && (
                 <div
@@ -280,7 +298,7 @@ export function TimelineArea() {
             RAF offsets it by the scroll and sizes this clip box to the scroll
             container's client area, so the line tracks horizontal scroll, hides
             under the label edge, and never draws over the scrollbars. */}
-        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF }}>
+        <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
             <div className="absolute top-0 bottom-0" style={{ left: -0.5, width: 1, backgroundColor: '#ffffff' }} />
             <div
@@ -298,7 +316,7 @@ export function TimelineArea() {
         <div
           ref={ghostRef}
           className="fixed z-50 pointer-events-none flex items-center gap-2 px-3 border-r border-r-zinc-800/60 shadow-lg shadow-black/40"
-          style={{ left: copyDrag.labelLeft, width: TRACK_LABEL_WIDTH, height: copyDrag.rowHeight, backgroundColor: '#202024', opacity: 0.8 }}
+          style={{ left: copyDrag.labelLeft, width: labelWidth, height: copyDrag.rowHeight, backgroundColor: '#202024', opacity: 0.8 }}
         >
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium truncate text-white">{copyDrag.name}</div>
@@ -309,6 +327,16 @@ export function TimelineArea() {
           </div>
         </div>
       )}
+
+      {/* Resize handle along the label column's right edge — spans the full height
+          (ruler corner, every track label, the empty space below). */}
+      <div
+        onPointerDown={startLabelResize}
+        className="absolute top-0 bottom-0 z-40 cursor-col-resize group"
+        style={{ left: labelWidth - 3, width: 6 }}
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent group-hover:bg-indigo-400/60" />
+      </div>
     </div>
   )
 }

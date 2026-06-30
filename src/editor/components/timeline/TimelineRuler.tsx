@@ -1,6 +1,7 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../../constants'
+import { useUIStore } from '../../store/UIStore'
+import { PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
@@ -30,6 +31,7 @@ interface TimelineRulerProps {
 export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   // Every bar gets a tick line; only every `interval`th bar is numbered.
   const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
   const bars = Array.from({ length: totalBars }, (_, i) => i)
@@ -39,7 +41,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
 
   return (
     <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
-      <div style={{ width: TRACK_LABEL_WIDTH }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-[#202024]">
+      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-[#202024]">
         {corner}
       </div>
       <div

@@ -3,7 +3,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { flattenTracks } from './timeline/trackTree'
 import { computeDropTarget } from './timeline/trackDrop'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
 function makeTrack(item: { id: string; name: string }, parentId: string | null): Track {
@@ -68,7 +68,7 @@ export function useLibraryDrag() {
         const r = sc.getBoundingClientRect()
         const overLabels =
           ev.clientX >= r.left &&
-          ev.clientX <= r.left + TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF &&
+          ev.clientX <= r.left + useUIStore.getState().tracksLabelWidth + PLAYHEAD_TRIANGLE_HALF &&
           ev.clientY >= r.top &&
           ev.clientY <= r.bottom
         if (overLabels) {

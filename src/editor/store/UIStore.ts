@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { TRACK_LABEL_WIDTH } from '../constants'
 
 interface EditingBlockRef {
   trackId: string
@@ -33,6 +34,10 @@ interface UIState {
   // Vertical zoom for the tracks timeline (track row height in px).
   tracksRowHeight: number
   setTracksRowHeight: (px: number) => void
+
+  // Width of the frozen track-label column (drag its right edge to resize).
+  tracksLabelWidth: number
+  setTracksLabelWidth: (px: number) => void
 
   // Saved tracks-timeline scroll, so returning from the MIDI editor restores the view.
   tracksScrollLeft: number
@@ -82,6 +87,10 @@ export const useUIStore = create<UIState>((set) => ({
   tracksRowHeight: 48,
   setTracksRowHeight: (px) =>
     set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
+
+  tracksLabelWidth: TRACK_LABEL_WIDTH,
+  setTracksLabelWidth: (px) =>
+    set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
 
   tracksScrollLeft: 0,
   tracksScrollTop: 0,

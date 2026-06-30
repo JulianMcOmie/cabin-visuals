@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
-import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../../types'
@@ -36,6 +36,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
+  const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
   const isCollapsed = useUIStore((s) => s.collapsedTrackIds.has(track.id))
   const toggleMute = useProjectStore((s) => s.toggleMute)
@@ -80,7 +81,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onNestDragStart?.(e, track.id)
           }
         }}
-        style={{ width: TRACK_LABEL_WIDTH, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
+        style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'
         } ${
