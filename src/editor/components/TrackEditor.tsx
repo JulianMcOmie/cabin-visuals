@@ -183,14 +183,20 @@ export function TrackEditor() {
                     const objectTracks = Object.values(tracks).filter(
                       (t) => getInstrument(t.instrumentId) && t.id !== track.id,
                     )
-                    const selected = new Set(track.targets?.map((t) => t.targetTrackId))
+                    const selected = new Set(
+                      track.targets?.filter((r) => r.scope.kind === 'track').map((r) => (r.scope as { id: string }).id),
+                    )
                     const toggle = (targetTrackId: string) => {
                       const next = new Set(selected)
                       if (next.has(targetTrackId)) next.delete(targetTrackId)
                       else next.add(targetTrackId)
                       setTrackTargets(
                         track.id,
-                        [...next].map((id) => ({ targetTrackId: id, targetPort: modDef.port })),
+                        [...next].map((id) => ({
+                          port: modDef.port,
+                          scope: { kind: 'track' as const, id },
+                          amount: 1,
+                        })),
                       )
                     }
                     return (

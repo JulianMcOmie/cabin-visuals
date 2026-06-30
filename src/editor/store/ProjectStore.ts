@@ -192,9 +192,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const tracks: Record<string, Track> = {}
       for (const [id, t] of Object.entries(s.tracks)) {
         if (id === trackId) continue
-        // Drop any routing/automation targets that pointed at the deleted track.
-        tracks[id] = t.targets?.some((tg) => tg.targetTrackId === trackId)
-          ? { ...t, targets: t.targets.filter((tg) => tg.targetTrackId !== trackId) }
+        // Drop any track-scoped routings that pointed at the deleted track.
+        tracks[id] = t.targets?.some((r) => r.scope.kind === 'track' && r.scope.id === trackId)
+          ? { ...t, targets: t.targets.filter((r) => !(r.scope.kind === 'track' && r.scope.id === trackId)) }
           : t
       }
       return {

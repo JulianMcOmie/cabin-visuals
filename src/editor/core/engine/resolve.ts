@@ -50,13 +50,15 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     if (modDef) {
       if (track.muted) continue
       const triggers = flattenNotes(track, p.beatsPerBar)
-      for (const target of track.targets ?? []) {
+      for (const routing of track.targets ?? []) {
+        // Only track-scope resolves today; tag/subtree scopes land in later phases.
+        if (routing.scope.kind !== 'track') continue
         modulators.push({
-          id: `${id}->${target.targetTrackId}.${target.targetPort}`,
+          id: `${id}->${routing.scope.id}.${routing.port}`,
           kind: modDef.signal,
           triggers,
-          targetObjectId: target.targetTrackId,
-          targetPort: target.targetPort,
+          targetObjectId: routing.scope.id,
+          targetPort: routing.port,
         })
       }
       continue
