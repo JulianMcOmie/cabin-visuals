@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Undo / Redo — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#0f0f11; --bg2:#141417; --panel:#17171b; --panel2:#1b1b20;
+    --line:#26262c; --line2:#2e2e36;
+    --text:#ECECEE; --muted:#9a9aa6; --dim:#6b6b76;
+    --violet:#a78bfa; --violet2:#8b5cf6; --iris:#818cf8;
+    --green:#5ee0a0; --amber:#f5c451; --red:#f97a7a; --cyan:#56d4e6;
+    --code:#0c0c0e; --radius:14px;
+    --maxw:880px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;color:var(--text);
+    background:
+      radial-gradient(900px 520px at 78% -8%, rgba(139,92,246,.13), transparent 60%),
+      radial-gradient(700px 480px at 8% 4%, rgba(129,140,248,.08), transparent 55%),
+      var(--bg);
+    font:15.5px/1.7 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;letter-spacing:.005em;
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:84px 28px 160px}
+  ::selection{background:rgba(139,92,246,.28)}
+
+  header.hero{margin-bottom:54px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--violet);font-weight:600;margin-bottom:20px}
+  .eyebrow::before{content:"";width:22px;height:1px;background:linear-gradient(90deg,var(--violet),transparent)}
+  h1{font-size:46px;line-height:1.05;margin:0 0 16px;letter-spacing:-.035em;font-weight:650;
+     background:linear-gradient(180deg,#fff,#c9c9d4);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .deck{color:var(--muted);font-size:18px;line-height:1.6;max-width:60ch;margin:0;font-weight:400}
+
+  h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:600;margin:64px 0 6px}
+  h2 .num{color:var(--violet);font-variant-numeric:tabular-nums}
+  .h2rule{height:1px;background:linear-gradient(90deg,var(--line2),transparent);margin:0 0 22px}
+  h3{font-size:20px;margin:30px 0 8px;letter-spacing:-.01em;font-weight:600;color:#fafafb}
+  h4{font-size:12px;margin:16px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+  p{margin:12px 0;color:#d9d9e0}
+  strong{color:#fff;font-weight:600}
+  em{color:#e7e3ff;font-style:normal;background:linear-gradient(transparent 62%, rgba(139,92,246,.22) 0);padding:0 1px}
+  a{color:var(--violet);text-decoration:none;border-bottom:1px solid rgba(167,139,250,.3)}
+  a:hover{border-bottom-color:var(--violet)}
+  ul,ol{margin:12px 0;padding-left:22px}li{margin:8px 0;color:#d9d9e0}
+  li::marker{color:var(--dim)}
+
+  code{font-family:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.86em;background:#1c1c22;padding:2px 6px;border-radius:6px;border:1px solid var(--line);color:#d7d2f0}
+  pre{background:linear-gradient(180deg,#0d0d10,var(--code));border:1px solid var(--line);border-radius:var(--radius);
+      padding:20px 22px;overflow-x:auto;margin:16px 0;font-size:13px;line-height:1.62;
+      box-shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 18px 40px -28px rgba(0,0,0,.9)}
+  pre code{background:none;border:none;padding:0;color:#c6c9d4;font-size:13px}
+  .k{color:#c4a6ff}.f{color:#82aaff}.s{color:#9fe6a0}.c{color:#5f6070;font-style:italic}.n{color:#f0a36b}.t{color:#56d4e6}.p{color:#8a8a96}
+  .filehead{display:flex;align-items:center;gap:9px;margin:26px 0 -6px;font-size:12.5px;color:var(--muted);font-family:"SF Mono",Menlo,monospace}
+  .filehead .dot{width:7px;height:7px;border-radius:50%;background:var(--violet2);box-shadow:0 0 10px var(--violet2)}
+  .filehead.new .dot{background:var(--green);box-shadow:0 0 10px var(--green)}
+  .filehead.edit .dot{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+  .filehead .tag{margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:var(--radius);padding:6px 24px 20px;margin:20px 0;
+        box-shadow:0 24px 60px -44px rgba(0,0,0,.9)}
+  .decision{position:relative;overflow:hidden}
+  .decision::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(180deg,var(--violet),var(--iris))}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:#fff;font-weight:500;white-space:nowrap}
+
+  .badge{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--line);margin-right:5px;white-space:nowrap;letter-spacing:.02em}
+  .b-yes{color:var(--green);border-color:#14532d;background:#04221440}
+  .b-no{color:var(--red);border-color:#5b1d1d;background:#3a090940}
+  .b-new{color:var(--green);border-color:#14532d;background:#04221440}
+  .b-edit{color:var(--amber);border-color:#5c3a0d;background:#3a250640}
+  .b-later{color:var(--cyan);border-color:#13505c;background:#06303840}
+
+  .kbd{display:inline-block;font-family:"SF Mono",Menlo,monospace;font-size:12px;padding:2px 9px;border-radius:7px;border:1px solid var(--line2);border-bottom-width:2px;background:#202027;color:#ECECEE;white-space:nowrap}
+
+  .steps{counter-reset:step;margin:8px 0;padding:0;list-style:none}
+  .step{position:relative;padding:2px 0 2px 0;margin:0}
+  .step .stepnum{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
+    background:linear-gradient(180deg,var(--violet2),#6d28d9);color:#fff;font-size:12.5px;font-weight:700;margin-right:10px;vertical-align:middle;
+    box-shadow:0 4px 14px -6px var(--violet2)}
+
+  .note{border-left:3px solid var(--iris);background:linear-gradient(90deg,rgba(129,140,248,.10),transparent 80%);padding:11px 18px;border-radius:0 10px 10px 0;margin:16px 0;color:#cfd2e6}
+  .good{border-left:3px solid var(--green);background:linear-gradient(90deg,rgba(94,224,160,.09),transparent 80%);padding:11px 18px;border-radius:0 10px 10px 0;margin:16px 0;color:#cdeedd}
+  .warn{border-left:3px solid var(--amber);background:linear-gradient(90deg,rgba(245,196,81,.09),transparent 80%);padding:11px 18px;border-radius:0 10px 10px 0;margin:16px 0;color:#ecdcb4}
+
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0;font-size:13.5px}
+  .flow .node{border:1px solid var(--line2);background:var(--panel2);border-radius:10px;padding:8px 13px;color:#e6e6ec}
+  .flow .node b{color:var(--violet)}
+  .flow .arrow{color:var(--dim)}
+  .muted{color:var(--muted)}.small{font-size:13px}
+  hr{border:none;border-top:1px solid var(--line);margin:44px 0}
+  .foot{color:var(--dim);font-size:12.5px}
+  .foot .file{color:var(--muted);font-family:"SF Mono",Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Cabin Visuals · Editor</div>
+  <h1>Undo &amp; Redo</h1>
+  <p class="deck">A snapshot-based history that records the project document, coalesces drags automatically, and never asks a single action to know how to reverse itself. Roughly seventy lines, zero dependencies, zero changes to existing code.</p>
+</header>
+
+<!-- DECISION -->
+<h2><span class="num">01</span> &nbsp;The decision</h2>
+<div class="h2rule"></div>
+<div class="card decision">
+  <table>
+    <thead><tr><th>Dimension</th><th>Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Representation</td><td><strong>Snapshot (memento)</strong></td><td>The store is already immutable — snapshots structurally-share and cost ~the diff. Bulletproof; restore is one assignment.</td></tr>
+      <tr><td>Granularity</td><td><strong>The project store, whole</strong></td><td>One history for the whole document, not per-action reverse logic. Actions stay oblivious.</td></tr>
+      <tr><td>What's captured</td><td><strong>Every non-function field</strong></td><td>Generic — instrument settings (in <code>tracks</code>) and future effects come along for free, no history edits.</td></tr>
+      <tr><td>Recording</td><td><strong>Store subscription</strong></td><td>No middleware, no zustand-mutator type gymnastics. Fires on every change; a cheap filter ignores no-ops.</td></tr>
+      <tr><td>Coalescing</td><td><strong>~200ms debounce</strong></td><td>A drag's frames are &lt;16ms apart → one entry; deliberate edits are spaced → separate. No gesture-hook changes.</td></tr>
+      <tr><td>Surface</td><td><strong>Keyboard only</strong></td><td><span class="kbd">⌘/Ctrl Z</span> · <span class="kbd">⌘/Ctrl ⇧ Z</span> · <span class="kbd">Ctrl Y</span>. No buttons.</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="small muted">Considered &amp; rejected for v1: immer forward/inverse <strong>patches</strong> (Tyler's approach). Strictly more machinery — an immer dep, a typed <code>set</code> middleware, and a rewrite of all ~15 actions into draft-mutation style just to get granular patches — for a benefit (memory at huge scale, collab/OT) you don't need yet. And the public API is identical, so it's a <em>low-regret</em> swap later if you ever do.</p>
+
+<!-- SCOPE -->
+<h2><span class="num">02</span> &nbsp;What's undoable</h2>
+<div class="h2rule"></div>
+<p>The rule that makes the whole thing hold: <strong>the ProjectStore is the serializable project document.</strong> Undo snapshots it wholesale; anything ephemeral stays out.</p>
+<table>
+  <thead><tr><th>State</th><th>Lives in</th><th>Undoable?</th></tr></thead>
+  <tbody>
+    <tr><td>Tracks, blocks, notes, hierarchy</td><td><code>ProjectStore.tracks / rootTrackIds</code></td><td><span class="badge b-yes">yes</span></td></tr>
+    <tr><td>Instrument settings</td><td><code>track.params</code> — inside <code>tracks</code></td><td><span class="badge b-yes">yes</span> <span class="muted small">already covered</span></td></tr>
+    <tr><td>Effects <span class="muted small">(when added)</span></td><td>put on <code>track</code>, like <code>track.effects[]</code></td><td><span class="badge b-yes">automatic</span></td></tr>
+    <tr><td>Selection · zoom · scroll</td><td><code>UIStore</code></td><td><span class="badge b-no">no</span> <span class="muted small">ephemeral</span></td></tr>
+    <tr><td>Playhead position</td><td><code>TimeStore.currentBeat</code></td><td><span class="badge b-no">no</span></td></tr>
+    <tr><td>BPM · total bars · beats/bar</td><td><code>TimeStore</code></td><td><span class="badge b-later">later</span> <span class="muted small">move into ProjectStore to include</span></td></tr>
+  </tbody>
+</table>
+<div class="good"><strong>Already covered, for free:</strong> instrument settings live at <code>track.params</code> and <code>setTrackParam</code> writes them immutably (new track → new <code>tracks</code>). Because the snapshot grabs <em>every non-function field</em>, the day you add <code>track.effects</code> it's captured with no change to the history code.</div>
+
+<!-- HOW -->
+<h2><span class="num">03</span> &nbsp;How it works</h2>
+<div class="h2rule"></div>
+<div class="flow">
+  <span class="node">edit → <b>ProjectStore</b></span>
+  <span class="arrow">→</span>
+  <span class="node">subscribe fires<br><span class="muted small">capture the <b>pre</b>-edit doc</span></span>
+  <span class="arrow">→</span>
+  <span class="node">debounce 200ms<br><span class="muted small">burst → one entry</span></span>
+  <span class="arrow">→</span>
+  <span class="node">push to <b>past</b>, clear <b>future</b></span>
+</div>
+<p>Three mechanics carry the whole design:</p>
+<ul>
+  <li><strong>Capture the <em>previous</em> document, not the next.</strong> Undo means "go back," so each entry stores the state as it was <em>before</em> a burst of edits began. The store subscription hands you <code>(state, prev)</code> — <code>prev</code> is exactly that.</li>
+  <li><strong>One burst = one entry.</strong> The first change in a burst stashes its <code>prev</code> as the restore point; subsequent changes within 200ms only reset the timer. When it goes quiet, that single restore point is committed. A 60fps drag collapses to one undo step without any gesture-hook involvement.</li>
+  <li><strong>Guard the restores.</strong> Undo/redo write the store too — an <code>applying</code> flag makes the subscription ignore those writes so they don't record themselves.</li>
+</ul>
+
+<!-- BUILD -->
+<h2><span class="num">04</span> &nbsp;The build</h2>
+<div class="h2rule"></div>
+
+<ol class="steps">
+<li class="step"><span class="stepnum">1</span><strong>The history engine</strong> — one new file. The store, the subscription, the debounce.</li>
+</ol>
+
+<div class="filehead new"><span class="dot"></span>src/editor/store/HistoryStore.ts<span class="tag">new</span></div>
+<pre><code><span class="k">import</span> { create } <span class="k">from</span> <span class="s">'zustand'</span>
+<span class="k">import</span> { useProjectStore } <span class="k">from</span> <span class="s">'./ProjectStore'</span>
+
+<span class="k">type</span> <span class="t">Snapshot</span> = <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;
+<span class="k">const</span> LIMIT = <span class="n">100</span>          <span class="c">// cap the stack; oldest entries fall off</span>
+<span class="k">const</span> DEBOUNCE_MS = <span class="n">200</span>   <span class="c">// burst window: drags coalesce, deliberate edits don't</span>
+
+<span class="c">// The undoable document = every non-function field of the project store.</span>
+<span class="c">// Generic on purpose: add track.effects / a project name later and it's covered.</span>
+<span class="k">const</span> <span class="f">pick</span> = (s: <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;): <span class="t">Snapshot</span> =&gt; {
+  <span class="k">const</span> out: <span class="t">Snapshot</span> = {}
+  <span class="k">for</span> (<span class="k">const</span> k <span class="k">in</span> s) <span class="k">if</span> (<span class="k">typeof</span> s[k] !== <span class="s">'function'</span>) out[k] = s[k]
+  <span class="k">return</span> out
+}
+<span class="k">const</span> <span class="f">snapshot</span> = () =&gt; <span class="f">pick</span>(useProjectStore.<span class="f">getState</span>() <span class="k">as</span> <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;)
+<span class="k">const</span> <span class="f">changed</span> = (a: <span class="t">Snapshot</span>, b: <span class="t">Snapshot</span>) =&gt; {
+  <span class="k">for</span> (<span class="k">const</span> k <span class="k">in</span> a) <span class="k">if</span> (a[k] !== b[k]) <span class="k">return</span> <span class="k">true</span>   <span class="c">// reference compare — immutable store</span>
+  <span class="k">return</span> <span class="k">false</span>
+}
+
+<span class="k">interface</span> <span class="t">HistoryState</span> {
+  past: <span class="t">Snapshot</span>[]; future: <span class="t">Snapshot</span>[]
+  undo: () =&gt; <span class="k">void</span>; redo: () =&gt; <span class="k">void</span>; clear: () =&gt; <span class="k">void</span>
+}
+
+<span class="c">// Module-level transient state (not reactive — it's plumbing).</span>
+<span class="k">let</span> applying = <span class="k">false</span>                  <span class="c">// true while a restore is in flight</span>
+<span class="k">let</span> pendingBase: <span class="t">Snapshot</span> | <span class="k">null</span> = <span class="k">null</span> <span class="c">// pre-burst restore point</span>
+<span class="k">let</span> timer: <span class="t">ReturnType</span>&lt;<span class="k">typeof</span> setTimeout&gt; | <span class="k">null</span> = <span class="k">null</span>
+
+<span class="k">export const</span> useHistoryStore = create&lt;<span class="t">HistoryState</span>&gt;((set, get) =&gt; {
+  <span class="k">const</span> <span class="f">flush</span> = () =&gt; {            <span class="c">// commit the in-flight burst as one entry</span>
+    <span class="k">if</span> (timer) { <span class="f">clearTimeout</span>(timer); timer = <span class="k">null</span> }
+    <span class="k">if</span> (!pendingBase) <span class="k">return</span>
+    <span class="k">const</span> base = pendingBase; pendingBase = <span class="k">null</span>
+    <span class="k">const</span> past = [...<span class="f">get</span>().past, base]
+    <span class="k">if</span> (past.length &gt; LIMIT) past.<span class="f">shift</span>()
+    <span class="f">set</span>({ past, future: [] })
+  }
+
+  <span class="k">const</span> <span class="f">restore</span> = (snap: <span class="t">Snapshot</span>) =&gt; {
+    applying = <span class="k">true</span>
+    useProjectStore.<span class="f">setState</span>(snap)   <span class="c">// shallow-merges data back; actions untouched</span>
+    applying = <span class="k">false</span>
+  }
+
+  <span class="c">// Record: the subscription is the only writer of `past`.</span>
+  useProjectStore.<span class="f">subscribe</span>((state, prev) =&gt; {
+    <span class="k">if</span> (applying) <span class="k">return</span>
+    <span class="k">const</span> a = <span class="f">pick</span>(state <span class="k">as</span> <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;)
+    <span class="k">const</span> b = <span class="f">pick</span>(prev  <span class="k">as</span> <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;)
+    <span class="k">if</span> (!<span class="f">changed</span>(a, b)) <span class="k">return</span>
+    <span class="k">if</span> (!pendingBase) pendingBase = b        <span class="c">// stash PRE-edit doc at burst start</span>
+    <span class="k">if</span> (<span class="f">get</span>().future.length) <span class="f">set</span>({ future: [] }) <span class="c">// any edit kills redo</span>
+    <span class="k">if</span> (timer) <span class="f">clearTimeout</span>(timer)
+    timer = <span class="f">setTimeout</span>(flush, DEBOUNCE_MS)
+  })
+
+  <span class="k">return</span> {
+    past: [], future: [],
+    undo: () =&gt; {
+      <span class="f">flush</span>()                              <span class="c">// commit any in-flight edit first</span>
+      <span class="k">const</span> { past, future } = <span class="f">get</span>()
+      <span class="k">if</span> (!past.length) <span class="k">return</span>
+      <span class="k">const</span> current = <span class="f">snapshot</span>()
+      <span class="f">restore</span>(past[past.length - <span class="n">1</span>])
+      <span class="f">set</span>({ past: past.<span class="f">slice</span>(<span class="n">0</span>, -<span class="n">1</span>), future: [...future, current] })
+    },
+    redo: () =&gt; {
+      <span class="f">flush</span>()
+      <span class="k">const</span> { past, future } = <span class="f">get</span>()
+      <span class="k">if</span> (!future.length) <span class="k">return</span>
+      <span class="k">const</span> current = <span class="f">snapshot</span>()
+      <span class="f">restore</span>(future[future.length - <span class="n">1</span>])
+      <span class="f">set</span>({ past: [...past, current], future: future.<span class="f">slice</span>(<span class="n">0</span>, -<span class="n">1</span>) })
+    },
+    clear: () =&gt; <span class="f">set</span>({ past: [], future: [] }),
+  }
+})</code></pre>
+<div class="note">The subscription is wired <em>inside</em> the store initializer, so it activates the moment anything imports <code>useHistoryStore</code> — there's no separate "init" call to forget. <code>canUndo</code>/<code>canRedo</code> aren't methods because you don't need them (no buttons); if you ever do, they're <code>useHistoryStore(s =&gt; s.past.length &gt; 0)</code>.</div>
+
+<ol class="steps">
+<li class="step"><span class="stepnum">2</span><strong>The shortcuts</strong> — one small hook. Guards text fields; handles both redo conventions.</li>
+</ol>
+
+<div class="filehead new"><span class="dot"></span>src/editor/hooks/useUndoRedoKeys.ts<span class="tag">new</span></div>
+<pre><code><span class="k">import</span> { useEffect } <span class="k">from</span> <span class="s">'react'</span>
+<span class="k">import</span> { useHistoryStore } <span class="k">from</span> <span class="s">'../store/HistoryStore'</span>
+
+<span class="c">// ⌘/Ctrl+Z = undo · ⌘/Ctrl+Shift+Z = redo · Ctrl+Y = redo (Windows). Mount once.</span>
+<span class="k">export function</span> <span class="f">useUndoRedoKeys</span>() {
+  <span class="f">useEffect</span>(() =&gt; {
+    <span class="k">const</span> <span class="f">onKey</span> = (e: <span class="t">KeyboardEvent</span>) =&gt; {
+      <span class="k">const</span> t = e.target <span class="k">as</span> <span class="t">HTMLElement</span> | <span class="k">null</span>
+      <span class="k">if</span> (t &amp;&amp; (t.tagName === <span class="s">'INPUT'</span> || t.tagName === <span class="s">'TEXTAREA'</span> || t.isContentEditable)) <span class="k">return</span>
+      <span class="k">if</span> (!(e.metaKey || e.ctrlKey)) <span class="k">return</span>
+      <span class="k">const</span> { undo, redo } = useHistoryStore.<span class="f">getState</span>()
+      <span class="k">if</span> (e.key === <span class="s">'z'</span> || e.key === <span class="s">'Z'</span>) { e.<span class="f">preventDefault</span>(); e.shiftKey ? <span class="f">redo</span>() : <span class="f">undo</span>() }
+      <span class="k">else if</span> (e.key === <span class="s">'y'</span> || e.key === <span class="s">'Y'</span>) { e.<span class="f">preventDefault</span>(); <span class="f">redo</span>() }
+    }
+    <span class="f">window</span>.<span class="f">addEventListener</span>(<span class="s">'keydown'</span>, onKey)
+    <span class="k">return</span> () =&gt; <span class="f">window</span>.<span class="f">removeEventListener</span>(<span class="s">'keydown'</span>, onKey)
+  }, [])
+}</code></pre>
+
+<ol class="steps">
+<li class="step"><span class="stepnum">3</span><strong>Mount it</strong> — one line. Anywhere that renders once for the editor's life (next to <code>useTransportKeys</code>).</li>
+</ol>
+
+<div class="filehead edit"><span class="dot"></span>src/editor/App.tsx<span class="tag">edit · Header()</span></div>
+<pre><code>  useTransportKeys({ play, pause, reset })
+<span class="n">+ </span><span class="f">useUndoRedoKeys</span>()              <span class="c">// importing the hook activates the history subscription too</span></code></pre>
+
+<div class="good"><strong>That's the whole feature.</strong> Two new files, one import line. No middleware, no immer, no changes to any of the ~15 ProjectStore actions, and no edits to the gesture hooks — the debounce does the drag-grouping that explicit transactions would otherwise require.</div>
+
+<!-- EDGES -->
+<h2><span class="num">05</span> &nbsp;Edge cases — already handled</h2>
+<div class="h2rule"></div>
+<ul>
+  <li><strong>Undo with the MIDI editor open.</strong> Undo restores the store's block; <code>useMidiEditorState</code> already detects a block change that isn't its own save and re-syncs the local notes — the piano roll updates on undo with no extra work.</li>
+  <li><strong>Drags.</strong> Timeline block move/resize/draw and the MIDI block-header drag write the store every frame; the 200ms debounce folds each into a single entry. Note edits are already debounced to one store write by <code>useMidiEditorState</code> (500ms), so they're one entry too.</li>
+  <li><strong>Undo mid-burst.</strong> <code>undo()</code> flushes the pending burst first, so an edit you just made (still within its debounce) commits and then immediately undoes — no lost or doubled step.</li>
+  <li><strong>Re-recording on restore.</strong> The <code>applying</code> flag makes the subscription skip undo/redo's own writes.</li>
+  <li><strong>Typing.</strong> The shortcut bails inside inputs/textareas, and <code>preventDefault</code> stops the browser's native undo from fighting it.</li>
+</ul>
+
+<!-- OUT OF SCOPE -->
+<h2><span class="num">06</span> &nbsp;Deliberately out of scope — and the upgrade paths</h2>
+<div class="h2rule"></div>
+<table>
+  <thead><tr><th>Not now</th><th>If you want it later</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Per-action precision</strong> — fast back-to-back discrete edits (&lt;200ms) can merge into one undo.</td><td>Add explicit <code>begin()/end()</code> transactions around the two continuous drag flows. Slots in <em>behind the same API</em>; no call-site churn elsewhere.</td></tr>
+    <tr><td><strong>BPM / timeline settings undo.</strong></td><td>Relocate those few fields into ProjectStore (they're "project" data) — then they're captured automatically. Or have the snapshot read both stores.</td></tr>
+    <tr><td><strong>Patches</strong> (memory at huge scale, collaborative editing / OT, compact persisted history).</td><td>Swap the entry representation from snapshot to immer patch-pairs. <code>undo/redo/clear</code> and the coalescing seam are unchanged — internal-only.</td></tr>
+    <tr><td><strong>Undo labels / a history panel.</strong></td><td>Store a <code>label</code> alongside each entry (derive from which fields changed); the stacks are already in a reactive store.</td></tr>
+  </tbody>
+</table>
+
+<hr/>
+<p class="foot">Implementation plan · Cabin Visuals editor. New: <span class="file">store/HistoryStore.ts</span>, <span class="file">hooks/useUndoRedoKeys.ts</span>. Touch: <span class="file">App.tsx</span> (one line). Snapshot/memento on the ProjectStore document; ~200ms debounce coalescing; keyboard-only. No dependencies.</p>
+
+</div>
+</body>
+</html>
