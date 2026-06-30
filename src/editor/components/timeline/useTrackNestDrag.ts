@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenTracks, subtreeIds, type FlatTrack } from './trackTree'
 
 /** One indent level (px) — also the label's left-padding step (see Track). */
@@ -114,6 +115,9 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       if (!started) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return
         started = true
+        // Suppress text selection (and lock the cursor) for the duration of the drag;
+        // the plain pointer-down path doesn't preventDefault so a click can still select.
+        lockCursor('grabbing')
         setNestDrag({ activeId: trackId, line: null, intoId: null })
       }
       computeTarget(ev)
@@ -122,6 +126,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       const s = sessionRef.current
       controller.abort()
       sessionRef.current = null
+      if (started) unlockCursor()
       if (started && s?.target) {
         useProjectStore.getState().setTrackParent(s.activeId, s.target.parentId, s.target.index)
       }
