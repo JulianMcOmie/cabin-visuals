@@ -53,15 +53,17 @@ export function TimelineArea() {
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
-  const { nestDrag, startNestDrag } = useTrackNestDrag(scrollRef)
+  const { startNestDrag } = useTrackNestDrag(scrollRef)
   const { copyDrag, ghostRef, startTrackCopyDrag } = useTrackCopyDrag(scrollRef)
 
-  // Reflow rows for either drag: alt-copy of an existing track, or dragging a new
-  // instrument in from the library. Both open a gap at their live insertion index.
-  const libraryDrag = useUIStore((s) => s.libraryDrag)
-  const dragActive = !!copyDrag || !!libraryDrag
-  const dragInsertIndex = copyDrag ? copyDrag.insertIndex : libraryDrag?.insertIndex ?? null
-  const dragRowHeight = copyDrag ? copyDrag.rowHeight : libraryDrag?.rowHeight ?? 0
+  // The shared drop indicator (nest-drag and library drag both write it): a row to
+  // dim (the dragged source), a row to highlight (nest-into), or an insertion line.
+  const trackDrop = useUIStore((s) => s.trackDrop)
+
+  // Alt copy-drag still reflows rows to open a gap at its live insertion index.
+  const dragActive = !!copyDrag
+  const dragInsertIndex = copyDrag?.insertIndex ?? null
+  const dragRowHeight = copyDrag?.rowHeight ?? 0
 
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
@@ -204,8 +206,8 @@ export function TimelineArea() {
                   depth={f.depth}
                   isLast={i === flatTracks.length - 1}
                   liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
-                  dimmed={nestDrag?.activeId === f.id}
-                  dropInto={nestDrag?.intoId === f.id}
+                  dimmed={trackDrop?.activeId === f.id}
+                  dropInto={trackDrop?.intoId === f.id}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
                   barWidthPx={barWidthPx}
@@ -217,15 +219,15 @@ export function TimelineArea() {
               ) : null
             })}
 
-            {/* Drag-to-nest insertion line (sibling drop). Content-space, full width
-                so it stays visible through horizontal scroll; indented to the target
-                depth. Nesting *into* a row is shown by that row's highlight instead. */}
-            {nestDrag?.line && (
+            {/* Shared drop insertion line (nest-drag + library drag). Content-space,
+                full width so it stays visible through horizontal scroll; indented to
+                the target depth. Nesting *into* a row shows that row's highlight. */}
+            {trackDrop?.line && (
               <div
                 className="absolute z-30 pointer-events-none"
-                style={{ top: nestDrag.line.top - 1, left: 0, right: 0, height: 2 }}
+                style={{ top: trackDrop.line.top - 1, left: 0, right: 0, height: 2 }}
               >
-                <div className="h-full bg-indigo-400" style={{ marginLeft: nestDrag.line.left }} />
+                <div className="h-full bg-indigo-400" style={{ marginLeft: trackDrop.line.left }} />
               </div>
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the

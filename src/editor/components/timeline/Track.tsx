@@ -2,7 +2,7 @@ import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { INDENT_PX, LABEL_BASE_PX } from './useTrackNestDrag'
+import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 

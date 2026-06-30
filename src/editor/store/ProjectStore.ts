@@ -60,7 +60,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addTrack: (track, atIndex) =>
     set((s) => {
       const tracks = { ...s.tracks, [track.id]: track }
-      if (track.parentId) return { tracks }
+      // Nested under a parent: insert into the parent's childIds at atIndex.
+      if (track.parentId) {
+        const parent = tracks[track.parentId]
+        if (parent) {
+          const childIds = [...parent.childIds]
+          const i = atIndex == null || atIndex < 0 || atIndex > childIds.length ? childIds.length : atIndex
+          childIds.splice(i, 0, track.id)
+          tracks[track.parentId] = { ...parent, childIds }
+        }
+        return { tracks }
+      }
       const rootTrackIds = [...s.rootTrackIds]
       if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(track.id)
       else rootTrackIds.splice(atIndex, 0, track.id)

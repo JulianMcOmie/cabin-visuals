@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
+import { flattenTracks } from './timeline/trackTree'
+import { computeDropTarget } from './timeline/trackDrop'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
-function makeTrack(item: { id: string; name: string }): Track {
+function makeTrack(item: { id: string; name: string }, parentId: string | null): Track {
   return {
     id: crypto.randomUUID(),
     name: item.name,
@@ -15,16 +17,16 @@ function makeTrack(item: { id: string; name: string }): Track {
     solo: false,
     blocks: [],
     childIds: [],
+    parentId: parentId ?? undefined,
   }
 }
 
 /**
- * Drag a library instrument into the track label column to add a track there.
- * Mirrors the alt-copy-drag: a floating ghost follows the cursor and the track rows
- * reflow to open a gap at the live insertion point; the new track is inserted on
- * drop (no-op if released away from the label column). A pure click does nothing —
- * the drag only begins past a small movement threshold. The live insertion gap is
- * published to UIStore so the timeline (a sibling) can reflow its rows.
+ * Drag a library instrument into the track label column to add a track there. Uses
+ * the exact same drop logic as the in-timeline nest-drag (computeDropTarget) so you
+ * can drop a new instrument as a sibling, nested into a track, or at the top level —
+ * the shared drop indicator (UIStore.trackDrop) shows where it'll land. A floating
+ * ghost follows the cursor; a pure click does nothing (a movement threshold gates it).
  */
 export function useLibraryDrag() {
   const ghostRef = useRef<HTMLDivElement>(null)
@@ -35,7 +37,7 @@ export function useLibraryDrag() {
     const startX = e.clientX
     const startY = e.clientY
     let started = false
-    let lastIndex: number | null | undefined
+    let target: { parentId: string | null; index: number | undefined } | null = null
 
     // The ghost is centered on the cursor (translate(-50%,-50%) in the markup), so
     // left/top track the cursor directly rather than trailing it.
@@ -61,8 +63,7 @@ export function useLibraryDrag() {
       moveGhost(ev.clientX, ev.clientY)
 
       const sc = document.querySelector('[data-tracks-scroll]') as HTMLElement | null
-      const rowHeight = useUIStore.getState().tracksRowHeight
-      let index: number | null = null
+      let drop: ReturnType<typeof computeDropTarget> = null
       if (sc) {
         const r = sc.getBoundingClientRect()
         const overLabels =
@@ -71,26 +72,28 @@ export function useLibraryDrag() {
           ev.clientY >= r.top &&
           ev.clientY <= r.bottom
         if (overLabels) {
-          const n = useProjectStore.getState().rootTrackIds.length
-          const listTop = r.top - sc.scrollTop
-          index = Math.max(0, Math.min(n, Math.round((ev.clientY - listTop) / rowHeight)))
+          const { tracks, rootTrackIds } = useProjectStore.getState()
+          drop = computeDropTarget({
+            tracks, rootTrackIds,
+            flat: flattenTracks(tracks, rootTrackIds),
+            listTop: r.top - sc.scrollTop,
+            rowHeight: useUIStore.getState().tracksRowHeight,
+            clientY: ev.clientY,
+          })
         }
       }
-      if (index !== lastIndex) {
-        lastIndex = index
-        useUIStore.getState().setLibraryDrag({ insertIndex: index, rowHeight })
-      }
+      target = drop ? { parentId: drop.parentId, index: drop.index } : null
+      useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
     }
 
     const onUp = () => {
       controller.abort()
       if (!started) return
-      const insertIndex = useUIStore.getState().libraryDrag?.insertIndex ?? null
-      useUIStore.getState().setLibraryDrag(null)
+      useUIStore.getState().setTrackDrop(null)
       setGhostName(null)
-      if (insertIndex != null) {
-        const track = makeTrack(item)
-        useProjectStore.getState().addTrack(track, insertIndex)
+      if (target) {
+        const track = makeTrack(item, target.parentId)
+        useProjectStore.getState().addTrack(track, target.index)
         useUIStore.getState().setSelectedTrackId(track.id)
       }
     }

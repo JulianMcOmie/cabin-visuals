@@ -81,7 +81,7 @@ export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
-  const droppable = useUIStore((s) => s.libraryDrag?.insertIndex != null)
+  const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click swaps the selected track's instrument (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const onItemDoubleClick = (item: InstrumentItem) => {

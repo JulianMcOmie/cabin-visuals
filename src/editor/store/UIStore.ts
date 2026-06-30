@@ -34,11 +34,12 @@ interface UIState {
   tracksScrollTop: number
   setTracksScroll: (left: number, top: number) => void
 
-  // Dragging a library instrument into the track list: the live insertion gap,
-  // bridged from the library (which owns the drag) to the timeline (which reflows
-  // its rows). null = not dragging; insertIndex null = not over a valid drop slot.
-  libraryDrag: { insertIndex: number | null; rowHeight: number } | null
-  setLibraryDrag: (v: { insertIndex: number | null; rowHeight: number } | null) => void
+  // Live drop indicator for a track drag — shared by the in-timeline nest-drag and a
+  // library instrument being dragged in (which is owned by a sibling component, so the
+  // indicator is bridged here for the timeline to render). null = no drag in progress.
+  // `activeId` is the row being moved (dimmed); only set for an existing-track drag.
+  trackDrop: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null
+  setTrackDrop: (v: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -72,6 +73,6 @@ export const useUIStore = create<UIState>((set) => ({
   tracksScrollTop: 0,
   setTracksScroll: (left, top) => set({ tracksScrollLeft: left, tracksScrollTop: top }),
 
-  libraryDrag: null,
-  setLibraryDrag: (v) => set({ libraryDrag: v }),
+  trackDrop: null,
+  setTrackDrop: (v) => set({ trackDrop: v }),
 }));
