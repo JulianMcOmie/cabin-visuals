@@ -57,6 +57,13 @@ export function TimelineArea() {
   // the pointerdown (Track's onPointerDownCapture), so dnd-kit only handles plain
   // reordering here.
   const { copyDrag, ghostRef, startTrackCopyDrag } = useTrackCopyDrag(scrollRef)
+
+  // Reflow rows for either drag: alt-copy of an existing track, or dragging a new
+  // instrument in from the library. Both open a gap at their live insertion index.
+  const libraryDrag = useUIStore((s) => s.libraryDrag)
+  const dragActive = !!copyDrag || !!libraryDrag
+  const dragInsertIndex = copyDrag ? copyDrag.insertIndex : libraryDrag?.insertIndex ?? null
+  const dragRowHeight = copyDrag ? copyDrag.rowHeight : libraryDrag?.rowHeight ?? 0
   const handleTrackDragEnd = (e: DragEndEvent) => {
     const { active, over } = e
     if (!over || active.id === over.id) return
@@ -191,6 +198,7 @@ export function TimelineArea() {
         )}
         <div
           ref={scrollRef}
+          data-tracks-scroll
           className="absolute inset-0 overflow-auto timeline-scrollbar"
           onScroll={onTimelineScroll}
         >
@@ -207,7 +215,7 @@ export function TimelineArea() {
                       key={id}
                       track={track}
                       isLast={i === rootTrackIds.length - 1}
-                      liftOffset={copyDrag ? (copyDrag.insertIndex != null && i >= copyDrag.insertIndex ? copyDrag.rowHeight : 0) : undefined}
+                      liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
                       onCopyDragStart={startTrackCopyDrag}
                       barWidthPx={barWidthPx}
                       timelineWidthPx={timelineWidthPx}

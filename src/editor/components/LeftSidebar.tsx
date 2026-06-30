@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useProjectStore } from '../store/ProjectStore'
+import { useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { useLibraryDrag } from './useLibraryDrag'
 import { useUIStore } from '../store/UIStore'
-import type { Track } from '../types'
 
 interface InstrumentItem {
   id: string
@@ -41,7 +40,7 @@ const MODIFIER_INSTRUMENTS: InstrumentItem[] = [
   )},
 ]
 
-function Section({ title, items, onAdd }: { title: string; items: InstrumentItem[]; onAdd: (item: InstrumentItem) => void }) {
+function Section({ title, items, onItemPointerDown }: { title: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -58,9 +57,9 @@ function Section({ title, items, onAdd }: { title: string; items: InstrumentItem
           {items.map((item) => (
             <div
               key={item.id}
-              onClick={() => onAdd(item)}
-              title={`Add ${item.name} track`}
-              className="flex items-center gap-2.5 px-4 py-1.5 cursor-pointer hover:bg-zinc-800/60 transition-colors select-none"
+              onPointerDown={(e) => onItemPointerDown(e, item)}
+              title={`Drag ${item.name} into the track list to add it`}
+              className="flex items-center gap-2.5 px-4 py-1.5 cursor-grab active:cursor-grabbing hover:bg-zinc-800/60 transition-colors select-none"
             >
               <span className="flex-shrink-0 flex items-center justify-center w-4">
                 {item.icon}
@@ -78,26 +77,9 @@ type LibraryTab = 'instruments' | 'effects'
 
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
-  const addTrack = useProjectStore((s) => s.addTrack)
-  const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
-
-  // Clicking a library item adds a track for that instrument and selects it.
-  // (Object vs modulator is resolved later by which registry the id is in.)
-  function handleAdd(item: InstrumentItem) {
-    const track: Track = {
-      id: crypto.randomUUID(),
-      name: item.name,
-      type: 'base',
-      instrumentId: item.id,
-      color: '#6366f1',
-      muted: false,
-      solo: false,
-      blocks: [],
-      childIds: [],
-    }
-    addTrack(track)
-    setSelectedTrackId(track.id)
-  }
+  const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
+  // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
+  const droppable = useUIStore((s) => s.libraryDrag?.insertIndex != null)
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-[#1e1e21] overflow-hidden">
@@ -132,14 +114,28 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Source" items={SOURCE_INSTRUMENTS} onAdd={handleAdd} />
-            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onAdd={handleAdd} />
+            <Section title="Source" items={SOURCE_INSTRUMENTS} onItemPointerDown={startLibraryDrag} />
+            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} />
           </>
         )}
         {tab === 'effects' && (
           <p className="text-xs text-zinc-600 text-center mt-8 px-3">No effects available</p>
         )}
       </div>
+
+      {/* Floating ghost while dragging a library item into the track list. Centered
+          on the cursor (translate -50%/-50%); left/top are set imperatively, so
+          re-renders never reset its position. */}
+      {ghostName && (
+        <div
+          ref={ghostRef}
+          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-zinc-700 bg-[#202024] text-xs font-medium text-white shadow-lg shadow-black/40"
+          style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
+        >
+          {droppable && <Plus size={13} className="text-green-400" strokeWidth={2.5} />}
+          {ghostName}
+        </div>
+      )}
     </div>
   )
 }
