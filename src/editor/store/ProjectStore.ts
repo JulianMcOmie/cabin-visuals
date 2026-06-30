@@ -41,6 +41,7 @@ interface ProjectState {
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
+  setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setBpm: (bpm: number) => void
 }
@@ -244,6 +245,22 @@ export const useProjectStore = create<ProjectState>((set) => ({
         tracks: {
           ...s.tracks,
           [trackId]: { ...track, params: { ...track.params, [key]: value } },
+        },
+      }
+    }),
+
+  // Swap a track's instrument (double-click in the library). Params are instrument-
+  // specific, so they reset to the new instrument's defaults rather than carrying
+  // stale keys across; the track is renamed to match (tracks are named after their
+  // instrument), unless a name isn't supplied.
+  setTrackInstrument: (trackId, instrumentId, name) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.instrumentId === instrumentId) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, instrumentId, params: {}, name: name ?? track.name },
         },
       }
     }),

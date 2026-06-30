@@ -4,6 +4,7 @@ import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useUIStore } from '../store/UIStore'
+import { useProjectStore } from '../store/ProjectStore'
 
 interface InstrumentItem {
   id: string
@@ -40,7 +41,7 @@ const MODIFIER_INSTRUMENTS: InstrumentItem[] = [
   )},
 ]
 
-function Section({ title, items, onItemPointerDown }: { title: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void }) {
+function Section({ title, items, onItemPointerDown, onItemDoubleClick }: { title: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -58,8 +59,9 @@ function Section({ title, items, onItemPointerDown }: { title: string; items: In
             <div
               key={item.id}
               onPointerDown={(e) => onItemPointerDown(e, item)}
-              title={`Drag ${item.name} into the track list to add it`}
-              className="flex items-center gap-2.5 px-4 py-1.5 cursor-grab active:cursor-grabbing hover:bg-zinc-800/60 transition-colors select-none"
+              onDoubleClick={() => onItemDoubleClick(item)}
+              title={`Drag ${item.name} into the track list to add it, or double-click to set the selected track's instrument`}
+              className="flex items-center gap-2.5 px-4 py-1.5 cursor-default hover:bg-zinc-800/60 transition-colors select-none"
             >
               <span className="flex-shrink-0 flex items-center justify-center w-4">
                 {item.icon}
@@ -80,6 +82,12 @@ export function LeftSidebar() {
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => s.libraryDrag?.insertIndex != null)
+  // Double-click swaps the selected track's instrument (no-op if nothing selected).
+  const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
+  const onItemDoubleClick = (item: InstrumentItem) => {
+    const selectedTrackId = useUIStore.getState().selectedTrackId
+    if (selectedTrackId) setTrackInstrument(selectedTrackId, item.id, item.name)
+  }
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-[#1e1e21] overflow-hidden">
@@ -114,8 +122,8 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Source" items={SOURCE_INSTRUMENTS} onItemPointerDown={startLibraryDrag} />
-            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} />
+            <Section title="Source" items={SOURCE_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
         {tab === 'effects' && (

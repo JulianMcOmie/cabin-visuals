@@ -25,6 +25,21 @@ export function setProject(p: ProjectSnapshot) {
   publishList()
 }
 
+/**
+ * Refresh just the base params on the already-resolved objects, in place. Called
+ * synchronously on every edit (not debounced) so slider drags are reactive at
+ * 60fps, while the expensive structural resolve stays debounced. Reads params from
+ * the same source as resolve (`track.params`), so the engine remains the sole owner
+ * of params — `computeAtBeat`/renderers are unchanged. Tracks not yet (or no longer)
+ * in the graph are skipped; the debounced setProject reconciles structure shortly.
+ */
+export function syncParams(p: ProjectSnapshot) {
+  for (const obj of graph.objects) {
+    const track = p.tracks[obj.trackId]
+    if (track) obj.params = track.params ?? {}
+  }
+}
+
 /** Per frame (runs first, from VisualBeatSync): run the matrix, then stash each
  *  object's params + port values for the renderer to pull. */
 export function computeAtBeat(beat: number) {

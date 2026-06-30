@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
-import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
@@ -54,7 +53,6 @@ export function useLibraryDrag() {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 3) return
         started = true
         setGhostName(item.name)
-        lockCursor('grabbing')
         // Ghost mounts on this render; position it once it exists (next frame).
         const px = ev.clientX
         const py = ev.clientY
@@ -81,15 +79,12 @@ export function useLibraryDrag() {
       if (index !== lastIndex) {
         lastIndex = index
         useUIStore.getState().setLibraryDrag({ insertIndex: index, rowHeight })
-        // Over a valid slot → "copy" cursor (a + badge); otherwise plain grab.
-        lockCursor(index != null ? 'copy' : 'grabbing')
       }
     }
 
     const onUp = () => {
       controller.abort()
       if (!started) return
-      unlockCursor()
       const insertIndex = useUIStore.getState().libraryDrag?.insertIndex ?? null
       useUIStore.getState().setLibraryDrag(null)
       setGhostName(null)
