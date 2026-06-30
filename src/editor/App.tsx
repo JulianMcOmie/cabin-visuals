@@ -7,7 +7,8 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
-import { Cube } from './instruments/Cube'
+import { VisualScene } from './components/visual/VisualScene'
+import { VisualBeatSync } from './core/engine/VisualBeatSync'
 import { CabinLogo } from '../components/CabinLogo'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
@@ -34,7 +35,8 @@ function Scene() {
       <directionalLight position={[4, 6, 4]} intensity={1.4} castShadow />
       <pointLight position={[-4, -2, 3]} color="#818cf8" intensity={3} />
       <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
-      <Cube />
+      <VisualBeatSync />
+      <VisualScene />
       <gridHelper args={[24, 24, '#27272a', '#18181b']} position={[0, -2.2, 0]} />
     </Canvas>
   )
