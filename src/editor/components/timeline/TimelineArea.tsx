@@ -155,7 +155,7 @@ export function TimelineArea() {
     e.stopPropagation()
     const startX = e.clientX
     const startW = useUIStore.getState().tracksLabelWidth
-    lockCursor('col-resize')
+    lockCursor('ew-resize')
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => {
       useUIStore.getState().setTracksLabelWidth(startW + (ev.clientX - startX))
@@ -329,14 +329,13 @@ export function TimelineArea() {
       )}
 
       {/* Resize handle along the label column's right edge — spans the full height
-          (ruler corner, every track label, the empty space below). */}
+          (ruler corner, every track label, the empty space below). Invisible; the
+          cursor is the only affordance. */}
       <div
         onPointerDown={startLabelResize}
-        className="absolute top-0 bottom-0 z-40 cursor-col-resize group"
+        className="absolute top-0 bottom-0 z-40 cursor-ew-resize"
         style={{ left: labelWidth - 3, width: 6 }}
-      >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent group-hover:bg-indigo-400/60" />
-      </div>
+      />
     </div>
   )
 }

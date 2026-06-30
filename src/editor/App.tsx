@@ -1,9 +1,11 @@
 'use client'
 
+import { useState, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import { lockCursor, unlockCursor } from './utils/dragCursor'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
@@ -19,7 +21,6 @@ import { TimelineArea } from './components/timeline/TimelineArea'
 import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
-import { PANEL_RESIZE_HIT } from './constants'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -123,6 +124,28 @@ function BottomArea() {
 }
 
 export default function EditorApp() {
+  // Hand-rolled vertical split (upper canvas/editor vs lower tracks) — the same
+  // real-element approach as the track-label-column resize, so its grab pad sits ON
+  // TOP of the ruler and stops propagation: grabbing it resizes only (never also
+  // scrubs), with no dead strip between resize and scrub.
+  const [topFrac, setTopFrac] = useState(0.45)
+  const vSplitRef = useRef<HTMLDivElement>(null)
+
+  function startVerticalResize(e: ReactPointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    lockCursor('ns-resize')
+    const controller = new AbortController()
+    window.addEventListener('pointermove', (ev) => {
+      const c = vSplitRef.current
+      if (!c) return
+      const r = c.getBoundingClientRect()
+      const frac = (ev.clientY - r.top) / r.height
+      setTopFrac(Math.max(0.3, Math.min(0.85, frac)))
+    }, { signal: controller.signal })
+    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+  }
+
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#1e1e21]">
       <Header />
@@ -139,10 +162,10 @@ export default function EditorApp() {
           {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
           <Panel>
             <div className="flex flex-col h-full">
-              <PanelGroup orientation="vertical" style={{ flex: 1, minHeight: 0 }} resizeTargetMinimumSize={{ coarse: 2 * PANEL_RESIZE_HIT, fine: PANEL_RESIZE_HIT }}>
+              <div ref={vSplitRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TrackEditor + Canvas */}
-                <Panel defaultSize="45%" minSize="30%">
+                <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
                   <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
 
                     <Panel defaultSize="55%" minSize="15%" maxSize="60%">
@@ -160,16 +183,24 @@ export default function EditorApp() {
                     </Panel>
 
                   </PanelGroup>
-                </Panel>
+                </div>
 
-                <PanelResizeHandle className="h-px bg-zinc-800 cursor-row-resize outline-none focus:outline-none" />
+                {/* Window-resize divider: a 1px line (unchanged look) with an invisible
+                    grab pad on top of its neighbours — see note above. */}
+                <div className="relative h-px bg-zinc-800/60 shrink-0">
+                  <div
+                    onPointerDown={startVerticalResize}
+                    className="absolute inset-x-0 z-50 cursor-ns-resize"
+                    style={{ top: -5, bottom: -5 }}
+                  />
+                </div>
 
                 {/* Tracks / Piano Roll */}
-                <Panel defaultSize="55%" minSize="12%">
+                <div className="flex-1 min-h-0">
                   <BottomArea />
-                </Panel>
+                </div>
 
-              </PanelGroup>
+              </div>
 
               <AudioBar />
             </div>

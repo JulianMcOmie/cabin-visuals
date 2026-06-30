@@ -1,7 +1,7 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
-import { PLAYHEAD_TRIANGLE_HALF, RULER_SCRUB_TOP_INSET } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
@@ -45,18 +45,8 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
         {corner}
       </div>
       <div
-        className="relative flex-1 overflow-hidden bg-zinc-900"
-        onPointerDown={(e) => {
-          // Scrub from anywhere on the ruler except the thin top strip, which is
-          // reserved for the panel-resize handle so the two can't fire at once.
-          const r = e.currentTarget.getBoundingClientRect()
-          if (e.clientY - r.top < RULER_SCRUB_TOP_INSET) return
-          onScrubStart(e)
-        }}
-        onPointerMove={(e) => {
-          const r = e.currentTarget.getBoundingClientRect()
-          e.currentTarget.style.cursor = e.clientY - r.top >= RULER_SCRUB_TOP_INSET ? 'ew-resize' : 'default'
-        }}
+        className="relative flex-1 overflow-hidden bg-zinc-900 cursor-ew-resize"
+        onPointerDown={onScrubStart}
       >
         
         
