@@ -38,6 +38,9 @@ interface ProjectState {
   deleteTrack: (trackId: string) => void
   insertTrackCopy: (srcId: string, index: number) => void
   reorderRootTracks: (orderedIds: string[]) => void
+  /** Re-parent a track: parentId=null makes it a root. `index` positions it among
+   *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
+  setTrackParent: (trackId: string, parentId: string | null, index?: number) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
@@ -189,19 +192,38 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   deleteTrack: (trackId) =>
     set((s) => {
-      if (!s.tracks[trackId]) return s
+      const target = s.tracks[trackId]
+      if (!target) return s
+      // The deleted node's children take its place — promoted to its parent (or root).
+      const promoted = target.childIds ?? []
+      const parentId = target.parentId
+
       const tracks: Record<string, Track> = {}
       for (const [id, t] of Object.entries(s.tracks)) {
         if (id === trackId) continue
+        let nt = t
+        if (promoted.includes(id)) nt = { ...nt, parentId }
+        if (id === parentId) {
+          const idx = nt.childIds.indexOf(trackId)
+          const childIds = nt.childIds.filter((c) => c !== trackId)
+          childIds.splice(idx < 0 ? childIds.length : idx, 0, ...promoted)
+          nt = { ...nt, childIds }
+        }
         // Drop any track-scoped routings that pointed at the deleted track.
-        tracks[id] = t.targets?.some((r) => r.scope.kind === 'track' && r.scope.id === trackId)
-          ? { ...t, targets: t.targets.filter((r) => !(r.scope.kind === 'track' && r.scope.id === trackId)) }
-          : t
+        if (nt.targets?.some((r) => r.scope.kind === 'track' && r.scope.id === trackId)) {
+          nt = { ...nt, targets: nt.targets.filter((r) => !(r.scope.kind === 'track' && r.scope.id === trackId)) }
+        }
+        tracks[id] = nt
       }
-      return {
-        tracks,
-        rootTrackIds: s.rootTrackIds.filter((id) => id !== trackId),
+
+      // If the deleted track was a root, its promoted children take its slot.
+      let rootTrackIds = s.rootTrackIds
+      if (parentId == null) {
+        const idx = rootTrackIds.indexOf(trackId)
+        rootTrackIds = rootTrackIds.filter((id) => id !== trackId)
+        if (promoted.length) rootTrackIds.splice(idx < 0 ? rootTrackIds.length : idx, 0, ...promoted)
       }
+      return { tracks, rootTrackIds }
     }),
 
   // Insert an identical copy of a track at a given root index (Alt-drag commit).
@@ -219,6 +241,44 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   reorderRootTracks: (orderedIds) =>
     set({ rootTrackIds: orderedIds }),
+
+  setTrackParent: (trackId, parentId, index) =>
+    set((s) => {
+      const child = s.tracks[trackId]
+      if (!child) return s
+      if (parentId === trackId) return s
+      if (parentId != null && !s.tracks[parentId]) return s
+      // Cycle guard: the new parent must not sit inside trackId's own subtree.
+      for (let cur: string | undefined = parentId ?? undefined; cur != null; cur = s.tracks[cur]?.parentId) {
+        if (cur === trackId) return s
+      }
+
+      const tracks = { ...s.tracks }
+      let rootTrackIds = [...s.rootTrackIds]
+
+      // Detach from current location.
+      const oldParentId = child.parentId
+      if (oldParentId != null) {
+        const op = tracks[oldParentId]
+        if (op) tracks[oldParentId] = { ...op, childIds: op.childIds.filter((c) => c !== trackId) }
+      } else {
+        rootTrackIds = rootTrackIds.filter((id) => id !== trackId)
+      }
+
+      // Attach to the new location at `index` (default: end of the sibling list).
+      tracks[trackId] = { ...child, parentId: parentId ?? undefined }
+      if (parentId != null) {
+        const np = tracks[parentId]
+        const childIds = np.childIds.filter((c) => c !== trackId)
+        const i = index == null ? childIds.length : Math.max(0, Math.min(childIds.length, index))
+        childIds.splice(i, 0, trackId)
+        tracks[parentId] = { ...np, childIds }
+      } else {
+        const i = index == null ? rootTrackIds.length : Math.max(0, Math.min(rootTrackIds.length, index))
+        rootTrackIds.splice(i, 0, trackId)
+      }
+      return { tracks, rootTrackIds }
+    }),
 
   toggleMute: (trackId) =>
     set((s) => {

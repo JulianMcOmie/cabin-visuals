@@ -17,6 +17,25 @@ export interface ProjectSnapshot {
   beatsPerBar: number
 }
 
+/** Track ids in depth-first order across the whole forest (roots, then each one's
+ *  descendants). The engine treats nested and top-level tracks uniformly — nesting
+ *  only adds transform inheritance (later); every object/modulator still resolves.
+ *  A visited set guards against malformed cyclic data. */
+function flattenTree(p: ProjectSnapshot): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const visit = (id: string) => {
+    if (seen.has(id)) return
+    const track = p.tracks[id]
+    if (!track) return
+    seen.add(id)
+    out.push(id)
+    for (const childId of track.childIds ?? []) visit(childId)
+  }
+  for (const id of p.rootTrackIds) visit(id)
+  return out
+}
+
 /** Flatten a track's notes to absolute project beats (with block bounds). */
 function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
   const notes: ResolvedNote[] = []
@@ -54,7 +73,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   // objects are known.
   const modTracks: { id: string; track: Track }[] = []
 
-  for (const id of p.rootTrackIds) {
+  for (const id of flattenTree(p)) {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
 
