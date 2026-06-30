@@ -425,7 +425,7 @@
   tags: <span class="k">string</span>[];                <span class="c">// cross-cutting groups</span>
   instrumentId: <span class="k">string</span>;         <span class="c">// → ObjectInstrumentDef | ModulatorInstrumentDef</span>
   params?: <span class="f">Record</span>&lt;<span class="k">string</span>,<span class="k">number</span>&gt;;   <span class="c">// per-track param values (override def defaults; automation drives these)</span>
-  lanes: Block[];                 <span class="c">// one block/stream per ability lane; each renders as a nested sub-track (§4.4)</span>
+  lanes: Block[];                 <span class="c">// abilities — a PARALLEL array (not child tracks); each is its own editor (§4.4)</span>
   targets?: Routing[];            <span class="c">// modulator-only: ports this drives — may be MANY (one modulator → several ports)</span>
 }
 
@@ -535,7 +535,7 @@
     <text x="76" y="185" font-size="11.5" font-weight="700" fill="#141414">↳ flash</text>
     <rect x="220" y="176" width="20" height="24" rx="3" fill="#141414"/><rect x="600" y="176" width="20" height="24" rx="3" fill="#141414"/>
   </svg>
-  <figcaption>A “lane” is a whole editor, not a row: abilities appear as indented sub-tracks, each with its own notes — riding on the same nesting as the hierarchy.</figcaption>
+  <figcaption>A “lane” is a whole editor, not a row: abilities appear as indented sub-rows, each with its own notes — a parallel <code>lanes[]</code> on the instrument, not child tracks in the hierarchy.</figcaption>
 </figure>
 
 <div class="note"><strong>Lanes and editor-kind are orthogonal — keep both.</strong> The clarification is only about <em>lanes</em>: each special ability gets its own editor (its own nested sub-track), rather than being a row in a shared grid. It is <em>not</em> a rejection of Tyler's drum-style rows — those stay, as an editor <em>kind</em> (<code>editorType</code>/<code>rangeLabels</code>) you choose per lane. A drum-like instrument can absolutely use multi-row pads inside one of its editors. Err unrestrictive: an ability is its own editor; <em>what kind</em> of editor (pitched, drum-rows, trigger…) is a separate, free choice.</div>
@@ -546,9 +546,9 @@
   <span class="c">// what a trigger does — declarative effect, or handled by the render spec</span>
 }</code></pre>
 <ul>
-  <li>Each entry in the object def's <code>abilities[]</code> becomes <strong>its own nested sub-track</strong> in the timeline (indented under the instrument track), with <strong>its own MIDI editor</strong> and its own block/stream — not a relabelled row in a shared grid.</li>
-  <li>A modulator's <code>trigger</code> is the degenerate case — a single ability lane ("when do I fire"), i.e. one nested editor.</li>
-  <li><strong>Reuse the hierarchy machinery:</strong> rendering an ability lane <em>is</em> rendering a child track one level down, so this rides on the same nested-track work (§4 phase 5) rather than a separate multi-row widget.</li>
+  <li>Each entry in the object def's <code>abilities[]</code> becomes <strong>an indented sub-row</strong> under the instrument track, with <strong>its own MIDI editor</strong> and its own block/stream — not a relabelled row in a shared grid.</li>
+  <li>A modulator's <code>trigger</code> is the degenerate case — a single ability lane ("when do I fire"), i.e. one such editor.</li>
+  <li><strong>A parallel structure, not child tracks (decided).</strong> The lanes live as a <code>lanes[]</code> array <em>on</em> the instrument track — their own little structure — drawn by a dedicated indented-row widget. They are <em>not</em> modelled as entries in the general nested-track hierarchy, so they don't depend on that hierarchy's data model: they borrow the indented <em>look</em>, not the machinery.</li>
 </ul>
 
 <h3 id="spec">4.5 — Declarative specs &amp; "design in English"</h3>
@@ -640,7 +640,7 @@
 
 <ul>
   <li><strong>Where they sit in the pipeline:</strong> the event-transform modifiers (suppress / transpose / gate / rhythm / swing…) run in <em>resolve</em> (§4.3, "apply modifier children to event streams") — they reshape the note stream <em>before</em> anything is interpreted. <code>mute</code>'s blackout is read in the <em>compute / render</em> pass. Neither touches the port matrix — they're an orthogonal layer.</li>
-  <li><strong>They ride on the nested hierarchy:</strong> a modifier is a child of the track it modifies — another reason the hierarchy is functional, not decorative (the same machinery as inherited transforms and ability lanes).</li>
+  <li><strong>They ride on the nested hierarchy:</strong> a modifier is a child of the track it modifies — another reason the hierarchy is functional, not decorative (the same machinery as inherited transforms down a subtree).</li>
   <li><strong>Cleanest possible import from Tyler:</strong> these are pure event-stream functions (<code>combine(parent, self) → events</code>) with no rendering, so they lift over almost verbatim.</li>
 </ul>
 
@@ -656,7 +656,7 @@
     <tr><td>Modulator targets (ports)</td><td>mapper closures</td><td>any <code>settingsSchema</code> key</td><td>curated <strong>ports</strong> (scale/energy/density…), shared vocab mapping onto params</td></tr>
     <tr><td>Routing</td><td>n/a (hard-wired)</td><td>child automates parent (tree-bound)</td><td><strong>Routing</strong> over track / <strong>tag</strong> / subtree scope</td></tr>
     <tr><td>Grouping</td><td>nesting via generators</td><td>nested tracks + modifiers</td><td>hierarchy (organize) <strong>+ tags</strong> (modulate)</td></tr>
-    <tr><td>Abilities</td><td>multiple <code>defineObject</code> chains</td><td><code>editorType</code> / drum pads / <code>rangeLabels</code> (rows in one editor)</td><td><code>AbilityLaneDef[]</code> → one <strong>full editor per ability</strong>, each a nested sub-track</td></tr>
+    <tr><td>Abilities</td><td>multiple <code>defineObject</code> chains</td><td><code>editorType</code> / drum pads / <code>rangeLabels</code> (rows in one editor)</td><td><code>AbilityLaneDef[]</code> → one <strong>full editor per ability</strong>; a parallel <code>lanes[]</code> (indented sub-rows, not child tracks)</td></tr>
     <tr><td>Effects (plugins)</td><td>n/a</td><td>plugin chain: transform/clone/shader/mask</td><td>same — borrow as the effects/plugin layer (distinct from modulator/shaper <em>instruments</em>)</td></tr>
     <tr><td>Event modifiers</td><td>n/a</td><td><code>'modifier'</code> tracks: mute, suppress, transpose, gate, rhythm, swing…</td><td>same — borrow wholesale; child tracks that reshape the note stream at resolve, or blackout at render (§4.7)</td></tr>
     <tr><td>Engine loop</td><td><code>getObjectsAtTime()</code> per frame</td><td>resolve → <code>computeStatesAtBeat</code> → pull</td><td>same + a modulation pass</td></tr>
@@ -673,8 +673,8 @@
   <li><span class="badge b-build">build</span><strong>Object defs + params + ports (static).</strong> Define <code>ObjectInstrumentDef</code> / <code>ParamDef</code> / <code>PortDef</code>. Give Cube its params (size, hue, …) — all <em>automation-targetable</em>, EDAW-style — and ports (<code>scale</code>, <code>energy</code>, <code>hue</code>) that map onto them. A registry + library panel (Tyler's pattern). Ports resting at defaults — nothing drives them yet.</li>
   <li><span class="badge b-build">build</span><strong>Modulators + the matrix (direct routing).</strong> <code>ModulatorInstrumentDef</code>, a built-in <code>Pulse</code> (the Cube's inline math, generalized), and the per-frame matrix for <em>single-track</em> routings. First real "drag a Size-Pulse onto a shape" (it drives the <code>scale</code> port internally). This is the keystone phase.</li>
   <li><span class="badge b-build">build</span><strong>Tags + group routing.</strong> Add <code>track.tags</code>, the <code>tag → [object]</code> index, and tag-scoped routings. Now one pulse drives a whole tagged group (your 04/10 "lead vocal").</li>
-  <li><span class="badge b-build">build</span><strong>Nested hierarchy + inheritance.</strong> Build nested tracks in the timeline (today it's <em>top-level only</em> — net-new), then wire inherited transforms/context down a subtree, plus <code>subtree</code> routing scope. The ability lanes (next) ride on this same nesting.</li>
-  <li><span class="badge b-build">build</span><strong>Ability lanes.</strong> <code>AbilityLaneDef[]</code> → each ability rendered as its <strong>own nested sub-track with a full MIDI editor</strong> (reusing the nested-track work from phase 5). Triggers fire abilities.</li>
+  <li><span class="badge b-build">build</span><strong>Nested hierarchy + inheritance.</strong> Build nested tracks in the timeline (today it's <em>top-level only</em> — net-new), then wire inherited transforms/context down a subtree, plus <code>subtree</code> routing scope.</li>
+  <li><span class="badge b-build">build</span><strong>Ability lanes.</strong> <code>AbilityLaneDef[]</code> → a parallel <code>lanes[]</code> on the track, each rendered as an <strong>indented sub-row with a full MIDI editor</strong> (a dedicated widget — <em>not</em> the child-track hierarchy, so largely independent of phase 5). Triggers fire abilities.</li>
   <li><span class="badge b-borrow">borrow</span><strong>Effects (plugins) + pools.</strong> Bring in Tyler's transform/clone/shader/mask plugins (the effects layer) and the managed instancing pools once you have multiple objects / tagged groups needing scale.</li>
   <li><span class="badge b-build">build</span><strong>Declarative <code>RenderSpec</code> + interpreter.</strong> Replace one or two built-in objects with spec-driven ones; ship the safe expression vocabulary. Most new instruments become specs; built-ins keep the code hatch.</li>
   <li><span class="badge b-future">later</span><strong>English → spec.</strong> Once <code>RenderSpec</code> is stable and a handful of instruments are specs, add LLM generation that emits + validates a spec. (Only viable <em>because</em> of the phase-8 substrate — don't attempt before it.)</li>
@@ -689,7 +689,7 @@
   <li><span class="badge b-risk">risk</span><strong>Resolve cost at scale.</strong> A full <code>resolveProject()</code> on every edit is O(whole project) and lags big projects (EDAW's exact failure mode). Fix: make resolve <strong>deferred</strong> (a debounced observer, off the edit's synchronous tick) and <strong>incremental</strong> (cache per-track outputs; dirty-diff by reference equality — <code>tracks[id] !== prev.tracks[id]</code> — and re-resolve only the changed track + its dependents). Turns per-edit cost from O(project) into O(change). See §4.3.</li>
   <li><span class="badge b-risk">risk</span><strong>Build-vs-borrow boundary.</strong> Tyler's renderer + pools + plugin chain + resolution are worth lifting; his <em>conceptual</em> model (no ports/modulators/tags) is not. Be deliberate: borrow mechanics, not metaphors — and budget for adapting his code to your data model.</li>
   <li><span class="badge b-risk">open</span><strong>Port combine semantics.</strong> Is "energy" additive and "opacity" multiplicative by default? Who sets it — the port (recommended) or the routing? Get this right early; it shapes how stacking <em>feels</em>.</li>
-  <li><span class="badge b-risk">open</span><strong>Abilities = nested sub-tracks.</strong> Settled direction: each ability is its <em>own</em> editor/stream surfaced as a sub-track nested under the instrument (not labelled rows in one grid). Open: model them as real child tracks (reusing the hierarchy wholesale) vs a dedicated <code>lanes[]</code> on the parent; and how deep nesting + looping/reference blocks read in the tracks UI.</li>
+  <li><span class="badge b-rec">decided</span><strong>Abilities are a parallel <code>lanes[]</code> structure.</strong> Their own array on the instrument track — <em>not</em> child tracks in the hierarchy — rendered as indented sub-rows (the look, not the hierarchy data model), so this is independent of the nesting work. Each lane is its own editor/stream (not labelled rows in one grid). Remaining: how looping/reference blocks read inside a lane.</li>
   <li><span class="badge b-risk">open</span><strong>Modulator output typing &amp; reaching effects.</strong> Scalars and colors are clear; vectors (position offsets) need a type. Decide whether <em>effects</em> (plugins) also expose ports — if a plugin's params are port-backed, a modulator can drive them too, and the one matrix covers both instruments and effects.</li>
   <li><span class="badge b-risk">open</span><strong>Can effects (plugins) be tag-scoped?</strong> e.g. "apply this kaleidoscope effect to the lead-vocal tag." Likely yes — let effect application reuse the same tag/subtree scoping as modulator routing.</li>
 </ul>
