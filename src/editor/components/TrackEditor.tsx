@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { Music2, Sparkles, ChevronDown, Check } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
@@ -60,6 +60,65 @@ function ParamSlider({
           style={{ left: `calc(${pct}% - 5px)` }}
         />
       </div>
+    </div>
+  )
+}
+
+/** A select-styled dropdown that allows checking multiple object tracks. */
+function TargetSelect({
+  options, selected, onToggle,
+}: {
+  options: { id: string; name: string }[]
+  selected: Set<string>
+  onToggle: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const chosen = options.filter((o) => selected.has(o.id))
+  const label = chosen.length === 0 ? '— none —' : chosen.map((o) => o.name).join(', ')
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full h-7 px-2 flex items-center justify-between gap-2 rounded bg-zinc-800 text-[11px] border border-zinc-700 outline-none hover:border-zinc-600"
+      >
+        <span className={`truncate ${chosen.length === 0 ? 'text-zinc-500' : 'text-zinc-300'}`}>{label}</span>
+        <ChevronDown size={13} className="flex-shrink-0 text-zinc-500" />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-zinc-800 border border-zinc-700 shadow-lg shadow-black/40 py-1">
+          {options.map((o) => {
+            const isChecked = selected.has(o.id)
+            return (
+              <button
+                key={o.id}
+                onClick={() => onToggle(o.id)}
+                className="w-full px-2 h-7 flex items-center gap-2 text-[11px] text-zinc-300 hover:bg-zinc-700"
+              >
+                <span
+                  className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
+                    isChecked ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+                  }`}
+                >
+                  {isChecked && <Check size={11} className="text-white" strokeWidth={3} />}
+                </span>
+                <span className="truncate">{o.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -124,27 +183,24 @@ export function TrackEditor() {
                     const objectTracks = Object.values(tracks).filter(
                       (t) => getInstrument(t.instrumentId) && t.id !== track.id,
                     )
-                    const current = track.targets?.[0]?.targetTrackId ?? ''
+                    const selected = new Set(track.targets?.map((t) => t.targetTrackId))
+                    const toggle = (targetTrackId: string) => {
+                      const next = new Set(selected)
+                      if (next.has(targetTrackId)) next.delete(targetTrackId)
+                      else next.add(targetTrackId)
+                      setTrackTargets(
+                        track.id,
+                        [...next].map((id) => ({ targetTrackId: id, targetPort: modDef.port })),
+                      )
+                    }
                     return (
                       <>
                         <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
-                        <select
-                          value={current}
-                          onChange={(e) =>
-                            setTrackTargets(
-                              track.id,
-                              e.target.value
-                                ? [{ targetTrackId: e.target.value, targetPort: modDef.port }]
-                                : [],
-                            )
-                          }
-                          className="w-full h-7 px-2 rounded bg-zinc-800 text-[11px] text-zinc-300 border border-zinc-700 outline-none"
-                        >
-                          <option value="">— none —</option>
-                          {objectTracks.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
+                        {objectTracks.length === 0 ? (
+                          <p className="text-[11px] text-zinc-600">No objects to target</p>
+                        ) : (
+                          <TargetSelect options={objectTracks} selected={selected} onToggle={toggle} />
+                        )}
                       </>
                     )
                   }
