@@ -281,8 +281,11 @@ export function TrackEditor() {
                       (t) => getInstrument(t.instrumentId) && t.id !== track.id,
                     )
                     const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
-                    // A target can be a tag (a group) or a single track. Each maps to a
-                    // routing; we key options so selection survives the tag/track mix.
+                    // Tracks with children can be targeted as a whole branch (subtree).
+                    const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
+                    // A target can be a tag (a group), a whole branch (subtree), or a
+                    // single track. Each maps to a routing; we key options so selection
+                    // survives the mix.
                     const keyOf = (r: Routing) =>
                       r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
                       : r.scope.kind === 'track' ? `track:${r.scope.id}`
@@ -292,6 +295,11 @@ export function TrackEditor() {
                         key: `tag:${tag}`,
                         label: `#${tag}`,
                         routing: { port: modDef.port, scope: { kind: 'tag' as const, tag }, amount: 1 },
+                      })),
+                      ...branchTracks.map((t) => ({
+                        key: `subtree:${t.id}`,
+                        label: `${t.name} (branch)`,
+                        routing: { port: modDef.port, scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
                       })),
                       ...objectTracks.map((t) => ({
                         key: `track:${t.id}`,

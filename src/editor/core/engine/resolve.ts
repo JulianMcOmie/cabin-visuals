@@ -100,12 +100,27 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
+  const objectIds = new Set(objects.map((o) => o.trackId))
+
+  // The scope root and all its descendants that are objects (depth-first).
+  const objectsInSubtree = (rootId: string): string[] => {
+    const ids: string[] = []
+    const visit = (id: string) => {
+      const track = p.tracks[id]
+      if (!track) return
+      if (objectIds.has(id)) ids.push(id)
+      for (const childId of track.childIds ?? []) visit(childId)
+    }
+    visit(rootId)
+    return ids
+  }
+
   // Expand a routing's scope to the concrete object trackIds it hits.
   const objectsForScope = (scope: NonNullable<Track['targets']>[number]['scope']): string[] => {
     switch (scope.kind) {
       case 'track': return [scope.id]
       case 'tag': return tagIndex.get(scope.tag) ?? []
-      case 'subtree': return [] // nested hierarchy — resolved in phase 5
+      case 'subtree': return objectsInSubtree(scope.id)
     }
   }
 
