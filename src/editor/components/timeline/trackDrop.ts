@@ -42,7 +42,7 @@ export function computeDropTarget(args: {
   // Below every row → top level, last position (drag to the bottom = un-nest to root).
   if (rawIndex >= n) {
     const rootSiblings = rootTrackIds.filter((id) => !excludeSubtree?.has(id))
-    return { parentId: null, index: rootSiblings.length, line: { top: n * rowHeight, left: LABEL_BASE_PX }, intoId: null }
+    return { parentId: null, index: rootSiblings.length, line: { top: n * rowHeight, left: 0 }, intoId: null }
   }
 
   const overIndex = Math.max(0, Math.min(n - 1, rawIndex))
@@ -76,5 +76,5 @@ export function computeDropTarget(args: {
     while (j < n && flat[j].depth > over.depth) j++
     top = j * rowHeight
   }
-  return { parentId, index, line: { top, left: LABEL_BASE_PX + over.depth * INDENT_PX }, intoId: null }
+  return { parentId, index, line: { top, left: over.depth * INDENT_PX }, intoId: null }
 }
