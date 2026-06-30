@@ -1,9 +1,8 @@
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { INDENT_PX, LABEL_BASE_PX } from './useTrackNestDrag'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
@@ -16,14 +15,21 @@ interface TrackProps {
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
   /** Last track in the list — suppresses the label-section divider, like the grid. */
   isLast?: boolean
-  /** During an Alt copy-drag: vertical shift (px) to open the insertion gap.
-   *  `undefined` = no copy-drag in progress (use the normal dnd transform). */
+  /** Nesting depth (0 = root) — indents the label by INDENT_PX per level. */
+  depth?: number
+  /** During an Alt copy-drag / library drag: vertical shift (px) to open the gap. */
   liftOffset?: number
+  /** This row is the source of an in-progress nest-drag (dim it). */
+  dimmed?: boolean
+  /** This row is the live nest-into target (highlight it). */
+  dropInto?: boolean
   /** Begin an Alt copy-drag from this track's label. */
   onCopyDragStart?: (e: ReactPointerEvent, trackId: string) => void
+  /** Begin a drag-to-nest from this track's label. */
+  onNestDragStart?: (e: ReactPointerEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, liftOffset, onCopyDragStart }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -34,26 +40,19 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const isSelected = selectedTrackId === track.id
 
-  // Sortable: the label column is the drag handle; reordering is owned by the
-  // DndContext in TimelineArea (separate from block/lane pointer gestures).
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id })
-
-  // While a copy-drag is in progress, rows shift via liftOffset (with a smooth
-  // transition) to open the insertion gap; otherwise the dnd-kit transform applies.
+  // While a copy/library drag is in progress, rows shift via liftOffset (with a
+  // smooth transition) to open the insertion gap.
   const inCopyDrag = liftOffset !== undefined
 
   return (
     <div
-      ref={setNodeRef}
       style={{
-        transform: inCopyDrag
-          ? `translateY(${liftOffset}px) ${CSS.Transform.toString(transform) ?? ''}`.trim()
-          : CSS.Transform.toString(transform),
-        transition: inCopyDrag ? 'transform 0.15s ease' : transition,
-        opacity: isDragging ? 0.6 : 1,
+        transform: inCopyDrag ? `translateY(${liftOffset}px)` : undefined,
+        transition: inCopyDrag ? 'transform 0.15s ease' : undefined,
+        opacity: dimmed ? 0.4 : 1,
         // During a copy-drag the shifted rows must sit above the empty label box
         // below them (z-10), or the bottom row hides under it as it reflows down.
-        zIndex: isDragging ? 20 : inCopyDrag ? 15 : undefined,
+        zIndex: inCopyDrag ? 15 : undefined,
         position: 'relative',
         height: rowHeight,
       }}
@@ -63,22 +62,25 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       onClick={() => setSelectedTrackId(isSelected ? null : track.id)}
     >
       <div
-        {...attributes}
-        {...listeners}
         onPointerDownCapture={(e) => {
-          // Alt+drag on the label runs the custom copy gesture; intercept before
-          // dnd-kit's sensor sees it so the two never both start.
-          if (e.altKey && e.button === 0) {
+          if (e.button !== 0) return
+          // The M/S buttons are not drag handles.
+          if ((e.target as HTMLElement).closest('button')) return
+          // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the
+          // plain path, so a click without movement still selects the row.
+          if (e.altKey) {
             e.stopPropagation()
             e.preventDefault()
             onCopyDragStart?.(e, track.id)
+          } else {
+            onNestDragStart?.(e, track.id)
           }
         }}
-        style={{ width: TRACK_LABEL_WIDTH }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 px-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
+        style={{ width: TRACK_LABEL_WIDTH, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'
         } ${
-          isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
+          dropInto ? 'bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
         }`}
       >
         <div className="flex-1 min-w-0">

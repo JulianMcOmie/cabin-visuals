@@ -1,8 +1,6 @@
 'use client'
 
 import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent } from 'react'
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
@@ -12,6 +10,8 @@ import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
+import { useTrackNestDrag } from './useTrackNestDrag'
+import { flattenTracks } from './trackTree'
 import { TRACK_LABEL_WIDTH, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
 export function TimelineArea() {
@@ -48,14 +48,12 @@ export function TimelineArea() {
 
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
-  // Track reordering via dnd-kit (drag the track label). A 5px activation
-  // distance keeps clicks (select / mute / solo) from starting a drag.
-  const reorderRootTracks = useProjectStore((s) => s.reorderRootTracks)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  // Tracks render as a flattened tree (DFS order, indented by depth).
+  const flatTracks = flattenTracks(tracks, rootTrackIds)
 
-  // Alt copy-drag is a hand-rolled gesture intercepted before dnd-kit ever sees
-  // the pointerdown (Track's onPointerDownCapture), so dnd-kit only handles plain
-  // reordering here.
+  // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
+  // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
+  const { nestDrag, startNestDrag } = useTrackNestDrag(scrollRef)
   const { copyDrag, ghostRef, startTrackCopyDrag } = useTrackCopyDrag(scrollRef)
 
   // Reflow rows for either drag: alt-copy of an existing track, or dragging a new
@@ -64,15 +62,6 @@ export function TimelineArea() {
   const dragActive = !!copyDrag || !!libraryDrag
   const dragInsertIndex = copyDrag ? copyDrag.insertIndex : libraryDrag?.insertIndex ?? null
   const dragRowHeight = copyDrag ? copyDrag.rowHeight : libraryDrag?.rowHeight ?? 0
-  const handleTrackDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e
-    if (!over || active.id === over.id) return
-    const ids = useProjectStore.getState().rootTrackIds
-    const oldIndex = ids.indexOf(active.id as string)
-    const newIndex = ids.indexOf(over.id as string)
-    if (oldIndex < 0 || newIndex < 0) return
-    reorderRootTracks(arrayMove(ids, oldIndex, newIndex))
-  }
 
   const { startScrub } = useScrub({
     computeBeat: (clientX) => {
@@ -206,27 +195,39 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: TRACK_LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} autoScroll={false} onDragEnd={handleTrackDragEnd}>
-              <SortableContext items={rootTrackIds} strategy={verticalListSortingStrategy}>
-                {rootTrackIds.map((id, i) => {
-                  const track = tracks[id]
-                  return track ? (
-                    <Track
-                      key={id}
-                      track={track}
-                      isLast={i === rootTrackIds.length - 1}
-                      liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
-                      onCopyDragStart={startTrackCopyDrag}
-                      barWidthPx={barWidthPx}
-                      timelineWidthPx={timelineWidthPx}
-                      selectedBlockIds={selectedBlockIds}
-                      onBlockPointerDown={handleBlockPointerDown}
-                      onLanePointerDown={handleLanePointerDown}
-                    />
-                  ) : null
-                })}
-              </SortableContext>
-            </DndContext>
+            {flatTracks.map((f, i) => {
+              const track = tracks[f.id]
+              return track ? (
+                <Track
+                  key={f.id}
+                  track={track}
+                  depth={f.depth}
+                  isLast={i === flatTracks.length - 1}
+                  liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
+                  dimmed={nestDrag?.activeId === f.id}
+                  dropInto={nestDrag?.intoId === f.id}
+                  onCopyDragStart={startTrackCopyDrag}
+                  onNestDragStart={startNestDrag}
+                  barWidthPx={barWidthPx}
+                  timelineWidthPx={timelineWidthPx}
+                  selectedBlockIds={selectedBlockIds}
+                  onBlockPointerDown={handleBlockPointerDown}
+                  onLanePointerDown={handleLanePointerDown}
+                />
+              ) : null
+            })}
+
+            {/* Drag-to-nest insertion line (sibling drop). Content-space, full width
+                so it stays visible through horizontal scroll; indented to the target
+                depth. Nesting *into* a row is shown by that row's highlight instead. */}
+            {nestDrag?.line && (
+              <div
+                className="absolute z-30 pointer-events-none"
+                style={{ top: nestDrag.line.top - 1, left: 0, right: 0, height: 2 }}
+              >
+                <div className="h-full bg-indigo-400" style={{ marginLeft: nestDrag.line.left }} />
+              </div>
+            )}
             {/* Empty space below the tracks. The label-column portion belongs to the
                 label section — it deselects but is otherwise inert (no marquee); only
                 the lane portion behaves like the grid. */}
