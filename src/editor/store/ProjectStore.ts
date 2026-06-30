@@ -41,6 +41,7 @@ interface ProjectState {
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
+  setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setBpm: (bpm: number) => void
 }
 
@@ -245,6 +246,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
           [trackId]: { ...track, params: { ...track.params, [key]: value } },
         },
       }
+    }),
+
+  setTrackTargets: (trackId, targets) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, targets } } }
     }),
 
   setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),

@@ -1,4 +1,15 @@
 import type { ResolvedNote } from '../../core/engine/types'
+import type { ModulatorInstrumentDef } from '../types'
+
+// The library def: a Pulse modulator drives the (internal) `energy` port of
+// whatever object track it's routed to. Its own notes are the triggers.
+export const pulseModulator: ModulatorInstrumentDef = {
+  id: 'pulse',
+  name: 'Pulse',
+  kind: 'modulator',
+  signal: 'pulse',
+  port: 'energy',
+}
 
 // Pulse modulator: a decaying envelope from the most recent trigger note at or
 // before the current beat (intensity scaled by pitch). This is the Cube's old

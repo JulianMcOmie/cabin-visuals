@@ -5,6 +5,7 @@ import { Music2, Sparkles } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
+import { getModulator } from '../instruments/modulators'
 
 type Tab = 'instrument' | 'effects'
 
@@ -74,6 +75,7 @@ export function TrackEditor() {
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
+  const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
@@ -114,23 +116,60 @@ export function TrackEditor() {
                 <p className="text-[11px] text-zinc-600 mb-4 capitalize">
                   {track.type} · {track.instrumentId}
                 </p>
-                <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
                 {(() => {
+                  // Modulator track → a target picker (which object it drives).
+                  // The port is internal (from the modulator's def), never shown.
+                  const modDef = getModulator(track.instrumentId)
+                  if (modDef) {
+                    const objectTracks = Object.values(tracks).filter(
+                      (t) => getInstrument(t.instrumentId) && t.id !== track.id,
+                    )
+                    const current = track.targets?.[0]?.targetTrackId ?? ''
+                    return (
+                      <>
+                        <p className="text-[11px] text-zinc-500 mb-2">Drives:</p>
+                        <select
+                          value={current}
+                          onChange={(e) =>
+                            setTrackTargets(
+                              track.id,
+                              e.target.value
+                                ? [{ targetTrackId: e.target.value, targetPort: modDef.port }]
+                                : [],
+                            )
+                          }
+                          className="w-full h-7 px-2 rounded bg-zinc-800 text-[11px] text-zinc-300 border border-zinc-700 outline-none"
+                        >
+                          <option value="">— none —</option>
+                          {objectTracks.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </>
+                    )
+                  }
+
+                  // Object track → its param sliders.
                   const def = getInstrument(track.instrumentId)
                   if (!def || def.params.length === 0) {
                     return <p className="text-[11px] text-zinc-600">No parameters</p>
                   }
-                  return def.params.map((p) => (
-                    <ParamSlider
-                      key={p.key}
-                      label={p.label}
-                      min={p.min}
-                      max={p.max}
-                      step={p.step}
-                      value={track.params?.[p.key] ?? p.default}
-                      onChange={(v) => setTrackParam(track.id, p.key, v)}
-                    />
-                  ))
+                  return (
+                    <>
+                      <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
+                      {def.params.map((p) => (
+                        <ParamSlider
+                          key={p.key}
+                          label={p.label}
+                          min={p.min}
+                          max={p.max}
+                          step={p.step}
+                          value={track.params?.[p.key] ?? p.default}
+                          onChange={(v) => setTrackParam(track.id, p.key, v)}
+                        />
+                      ))}
+                    </>
+                  )
                 })()}
               </>
             ) : (

@@ -39,6 +39,17 @@ export interface ObjectInstrumentDef {
   component: FC<{ trackId: string }>
 }
 
+/** A modulator / shaper instrument — renders nothing; its trigger notes drive a
+ *  port on the object(s) it's routed to. `kind` selects the engine's evaluate fn;
+ *  `port` is the (internal, never user-visible) port it drives. */
+export interface ModulatorInstrumentDef {
+  id: string
+  name: string
+  kind: 'modulator'
+  signal: 'pulse'
+  port: string
+}
+
 /** A param's schema default (no track/registry lookup). */
 export function paramDefault(def: ObjectInstrumentDef, key: string): number {
   return def.params.find((p) => p.key === key)?.default ?? 0

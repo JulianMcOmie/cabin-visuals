@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useProjectStore } from '../store/ProjectStore'
+import { useUIStore } from '../store/UIStore'
+import type { Track } from '../types'
 
 interface InstrumentItem {
   id: string
@@ -38,7 +41,7 @@ const MODIFIER_INSTRUMENTS: InstrumentItem[] = [
   )},
 ]
 
-function Section({ title, items }: { title: string; items: InstrumentItem[] }) {
+function Section({ title, items, onAdd }: { title: string; items: InstrumentItem[]; onAdd: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -55,6 +58,8 @@ function Section({ title, items }: { title: string; items: InstrumentItem[] }) {
           {items.map((item) => (
             <div
               key={item.id}
+              onClick={() => onAdd(item)}
+              title={`Add ${item.name} track`}
               className="flex items-center gap-2.5 px-4 py-1.5 cursor-pointer hover:bg-zinc-800/60 transition-colors select-none"
             >
               <span className="flex-shrink-0 flex items-center justify-center w-4">
@@ -73,6 +78,26 @@ type LibraryTab = 'instruments' | 'effects'
 
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
+  const addTrack = useProjectStore((s) => s.addTrack)
+  const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
+
+  // Clicking a library item adds a track for that instrument and selects it.
+  // (Object vs modulator is resolved later by which registry the id is in.)
+  function handleAdd(item: InstrumentItem) {
+    const track: Track = {
+      id: crypto.randomUUID(),
+      name: item.name,
+      type: 'base',
+      instrumentId: item.id,
+      color: '#6366f1',
+      muted: false,
+      solo: false,
+      blocks: [],
+      childIds: [],
+    }
+    addTrack(track)
+    setSelectedTrackId(track.id)
+  }
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-[#1e1e21] overflow-hidden">
@@ -107,8 +132,8 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Source" items={SOURCE_INSTRUMENTS} />
-            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} />
+            <Section title="Source" items={SOURCE_INSTRUMENTS} onAdd={handleAdd} />
+            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onAdd={handleAdd} />
           </>
         )}
         {tab === 'effects' && (
