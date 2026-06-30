@@ -1,7 +1,6 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { useTimeStore } from '../store/TimeStore'
 import { getObjectState } from '../core/engine/VisualEngine'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
@@ -23,32 +22,39 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
     { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
   ],
+  // The cube's transform as data, so the engine can compose it with its parent's:
+  // position from the X param, a steady spin from the beat, and a breathing scale
+  // boosted by the energy port. The engine writes the composed world matrix to state.
+  localTransform: ({ params, ports, beat }) => {
+    const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
+    const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
+    const energy = ports.energy ?? 0
+    const breathe = 1.15 + Math.sin(beat * 0.9) * 0.2
+    return {
+      position: [baseXPosition, 0, 0],
+      rotation: [beat * 0.09, beat * 0.22, 0],
+      scale: (baseSize / 1.6) * breathe * (1 + energy * 0.35),
+    }
+  },
   component: Cube,
 }
 
-// One cube per cube track. Per-frame pulse + params now come from the engine
-// (getObjectState) instead of scanning the project; rotation/breathe stay here as
-// the object's intrinsic render math.
+// One cube per cube track. The transform (position/spin/scale) is computed by the
+// engine — composed with any parent's transform — and arrives as a world matrix in
+// state; the component just decomposes it onto the mesh. Appearance (color/emissive)
+// stays here as the object's intrinsic render math.
 export function Cube({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
 
   useFrame(() => {
     if (!meshRef.current) return
-    const { currentBeat } = useTimeStore.getState()
     const state = getObjectState(trackId)
     // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
     const energy = state?.portValues.energy ?? 0
-
-    const baseSize = state?.params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseHue = state?.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
-    const baseXPosition = state?.params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
 
-    meshRef.current.rotation.y = currentBeat * 0.22
-    meshRef.current.rotation.x = currentBeat * 0.09
-
-    const breathe = 1.15 + Math.sin(currentBeat * 0.9) * 0.2
-    meshRef.current.scale.setScalar((baseSize / 1.6) * breathe * (1 + energy * 0.35))
-    meshRef.current.position.setX(baseXPosition)
+    // World transform from the engine (already includes parent inheritance).
+    if (state) state.world.decompose(meshRef.current.position, meshRef.current.quaternion, meshRef.current.scale)
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)

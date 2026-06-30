@@ -28,6 +28,22 @@ export interface PortDef {
   range?: [number, number]
 }
 
+/** An object's transform relative to its parent (identity-ish defaults). Position in
+ *  world units, rotation as XYZ Euler radians, scale uniform or per-axis. The engine
+ *  composes these down the hierarchy into a world transform (see core/engine). */
+export interface LocalTransform {
+  position?: [number, number, number]
+  rotation?: [number, number, number]
+  scale?: number | [number, number, number]
+}
+
+/** Per-frame inputs an instrument's transform derives from. */
+export interface TransformCtx {
+  params: Record<string, number>
+  ports: Record<string, number>
+  beat: number
+}
+
 /** An object / source / shape instrument — renders something. */
 export interface ObjectInstrumentDef {
   id: string
@@ -35,6 +51,10 @@ export interface ObjectInstrumentDef {
   kind: 'object'
   params: ParamDef[]
   ports: PortDef[]
+  /** This object's transform relative to its parent, per frame. The engine composes
+   *  it with its ancestors' transforms; the component renders at the result. Omit for
+   *  a non-transforming object (identity). */
+  localTransform?: (ctx: TransformCtx) => LocalTransform
   /** The R3F visual; pulls its per-frame state by trackId from the engine. */
   component: FC<{ trackId: string }>
 }

@@ -2,7 +2,8 @@
 // types (Track/Block/Note) live in src/editor/types.ts; the dependency points one
 // way (engine → document), which keeps the editor independent of the engine.
 
-import type { PortDef } from '../../instruments/types'
+import type { Matrix4 } from 'three'
+import type { PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
 
 /** One of a track's notes, flattened to absolute project beats, carrying the
  *  bounds of its containing block so the engine can tell which notes are "live". */
@@ -18,10 +19,14 @@ export interface ResolvedNote {
 export interface ResolvedObject {
   trackId: string
   instrumentId: string
+  /** Hierarchy parent (a track id), for composing transforms down the tree. */
+  parentId?: string
   muted: boolean
   params: Record<string, number>
   /** The instrument's ports (from its def), so the matrix knows what to fill. */
   ports: PortDef[]
+  /** The instrument's local-transform fn (from its def), composed by the engine. */
+  localTransform?: (ctx: TransformCtx) => LocalTransform
   notes: ResolvedNote[]
   /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
   tags: string[]
@@ -57,4 +62,7 @@ export interface ResolvedGraph {
 export interface ObjectState {
   params: Record<string, number>
   portValues: Record<string, number>
+  /** World transform (local composed with all ancestors). Reused across frames —
+   *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
+  world: Matrix4
 }

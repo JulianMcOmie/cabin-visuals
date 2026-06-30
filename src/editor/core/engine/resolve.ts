@@ -84,12 +84,15 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
 
     // Object track.
     const tags = track.tags ?? []
+    const def = getInstrument(track.instrumentId)
     objects.push({
       trackId: id,
       instrumentId: track.instrumentId,
+      parentId: track.parentId,
       muted: track.muted,
       params: track.params ?? {},
-      ports: getInstrument(track.instrumentId)?.ports ?? [],
+      ports: def?.ports ?? [],
+      localTransform: def?.localTransform,
       notes: flattenNotes(track, p.beatsPerBar),
       tags,
     })

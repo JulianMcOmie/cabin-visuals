@@ -1,5 +1,7 @@
+import { Matrix4 } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { runMatrix } from './matrix'
+import { composeLocal } from './transforms'
 import type { ResolvedGraph, ObjectState } from './types'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
@@ -8,6 +10,10 @@ import type { ResolvedGraph, ObjectState } from './types'
 
 let graph: ResolvedGraph = { objects: [], modulators: [], routingsByPort: new Map(), tagIndex: new Map() }
 const states = new Map<string, ObjectState>()
+// World transforms, reused across frames (one Matrix4 per object). Also the source
+// of each object's parent transform during composition.
+const worldMatrices = new Map<string, Matrix4>()
+const _local = new Matrix4()
 
 // External-store signal for the object list, so VisualScene reconciles the scene
 // tree when objects appear/disappear (on resolve) — never per frame.
@@ -22,6 +28,10 @@ function publishList() {
 /** Re-derive the graph from the project (called debounced, off the edit path). */
 export function setProject(p: ProjectSnapshot) {
   graph = resolveProject(p)
+  // Drop per-object caches for tracks that no longer resolve to an object.
+  const live = new Set(graph.objects.map((o) => o.trackId))
+  for (const id of states.keys()) if (!live.has(id)) states.delete(id)
+  for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
   publishList()
 }
 
@@ -40,16 +50,25 @@ export function syncParams(p: ProjectSnapshot) {
   }
 }
 
-/** Per frame (runs first, from VisualBeatSync): run the matrix, then stash each
- *  object's params + port values for the renderer to pull. */
+/** Per frame (runs first, from VisualBeatSync): run the matrix, compose each object's
+ *  world transform down the hierarchy, then stash state for the renderer to pull.
+ *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
+ *  parent's world is always ready when its children compose. */
 export function computeAtBeat(beat: number) {
   const portValuesByObject = new Map<string, Record<string, number>>()
   runMatrix(graph, beat, portValuesByObject)
   for (const obj of graph.objects) {
-    states.set(obj.trackId, {
-      params: obj.params,
-      portValues: portValuesByObject.get(obj.trackId) ?? {},
-    })
+    const portValues = portValuesByObject.get(obj.trackId) ?? {}
+    const local = obj.localTransform ? obj.localTransform({ params: obj.params, ports: portValues, beat }) : {}
+    composeLocal(local, _local)
+
+    let world = worldMatrices.get(obj.trackId)
+    if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
+    const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
+    if (parentWorld) world.multiplyMatrices(parentWorld, _local)
+    else world.copy(_local)
+
+    states.set(obj.trackId, { params: obj.params, portValues, world })
   }
 }
 
