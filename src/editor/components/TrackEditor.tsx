@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles, ChevronDown, Check } from 'lucide-react'
+import { Music2, Sparkles, ChevronDown, Check, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
+import type { Routing } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -64,13 +65,13 @@ function ParamSlider({
   )
 }
 
-/** A select-styled dropdown that allows checking multiple object tracks. */
+/** A select-styled dropdown for checking multiple targets (tags and/or tracks). */
 function TargetSelect({
   options, selected, onToggle,
 }: {
-  options: { id: string; name: string }[]
+  options: { key: string; label: string }[]
   selected: Set<string>
-  onToggle: (id: string) => void
+  onToggle: (key: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -84,8 +85,8 @@ function TargetSelect({
     return () => window.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const chosen = options.filter((o) => selected.has(o.id))
-  const label = chosen.length === 0 ? '— none —' : chosen.map((o) => o.name).join(', ')
+  const chosen = options.filter((o) => selected.has(o.key))
+  const summary = chosen.length === 0 ? '— none —' : chosen.map((o) => o.label).join(', ')
 
   return (
     <div ref={ref} className="relative">
@@ -93,17 +94,17 @@ function TargetSelect({
         onClick={() => setOpen((v) => !v)}
         className="w-full h-7 px-2 flex items-center justify-between gap-2 rounded bg-zinc-800 text-[11px] border border-zinc-700 outline-none hover:border-zinc-600"
       >
-        <span className={`truncate ${chosen.length === 0 ? 'text-zinc-500' : 'text-zinc-300'}`}>{label}</span>
+        <span className={`truncate ${chosen.length === 0 ? 'text-zinc-500' : 'text-zinc-300'}`}>{summary}</span>
         <ChevronDown size={13} className="flex-shrink-0 text-zinc-500" />
       </button>
       {open && (
         <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-zinc-800 border border-zinc-700 shadow-lg shadow-black/40 py-1">
           {options.map((o) => {
-            const isChecked = selected.has(o.id)
+            const isChecked = selected.has(o.key)
             return (
               <button
-                key={o.id}
-                onClick={() => onToggle(o.id)}
+                key={o.key}
+                onClick={() => onToggle(o.key)}
                 className="w-full px-2 h-7 flex items-center gap-2 text-[11px] text-zinc-300 hover:bg-zinc-700"
               >
                 <span
@@ -113,12 +114,54 @@ function TargetSelect({
                 >
                   {isChecked && <Check size={11} className="text-white" strokeWidth={3} />}
                 </span>
-                <span className="truncate">{o.name}</span>
+                <span className="truncate">{o.label}</span>
               </button>
             )
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Add/remove a track's tags (chips + an input). Tags are the group labels a
+ *  modulator can route to. */
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const t = draft.trim()
+    if (t && !tags.includes(t)) onChange([...tags, t])
+    setDraft('')
+  }
+  return (
+    <div className="mt-5">
+      <p className="text-[11px] text-zinc-500 mb-2">Tags:</p>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {tags.length === 0 && <span className="text-[11px] text-zinc-600">No tags</span>}
+        {tags.map((t) => (
+          <span
+            key={t}
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-300"
+          >
+            #{t}
+            <button
+              onClick={() => onChange(tags.filter((x) => x !== t))}
+              className="text-zinc-500 hover:text-zinc-200"
+              aria-label={`Remove tag ${t}`}
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+        onBlur={add}
+        placeholder="Add a tag…"
+        className="w-full h-7 px-2 rounded bg-zinc-800 text-[11px] text-zinc-300 border border-zinc-700 outline-none focus:border-zinc-600 placeholder:text-zinc-600"
+      />
     </div>
   )
 }
@@ -135,6 +178,7 @@ export function TrackEditor() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
+  const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
@@ -183,53 +227,71 @@ export function TrackEditor() {
                     const objectTracks = Object.values(tracks).filter(
                       (t) => getInstrument(t.instrumentId) && t.id !== track.id,
                     )
-                    const selected = new Set(
-                      track.targets?.filter((r) => r.scope.kind === 'track').map((r) => (r.scope as { id: string }).id),
-                    )
-                    const toggle = (targetTrackId: string) => {
-                      const next = new Set(selected)
-                      if (next.has(targetTrackId)) next.delete(targetTrackId)
-                      else next.add(targetTrackId)
-                      setTrackTargets(
-                        track.id,
-                        [...next].map((id) => ({
-                          port: modDef.port,
-                          scope: { kind: 'track' as const, id },
-                          amount: 1,
-                        })),
-                      )
+                    const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
+                    // A target can be a tag (a group) or a single track. Each maps to a
+                    // routing; we key options so selection survives the tag/track mix.
+                    const keyOf = (r: Routing) =>
+                      r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
+                      : r.scope.kind === 'track' ? `track:${r.scope.id}`
+                      : `subtree:${r.scope.id}`
+                    const options = [
+                      ...allTags.map((tag) => ({
+                        key: `tag:${tag}`,
+                        label: `#${tag}`,
+                        routing: { port: modDef.port, scope: { kind: 'tag' as const, tag }, amount: 1 },
+                      })),
+                      ...objectTracks.map((t) => ({
+                        key: `track:${t.id}`,
+                        label: t.name,
+                        routing: { port: modDef.port, scope: { kind: 'track' as const, id: t.id }, amount: 1 },
+                      })),
+                    ]
+                    const selected = new Set(track.targets?.map(keyOf))
+                    const toggle = (key: string) => {
+                      const next = (track.targets ?? []).slice()
+                      const idx = next.findIndex((r) => keyOf(r) === key)
+                      if (idx >= 0) next.splice(idx, 1)
+                      else {
+                        const opt = options.find((o) => o.key === key)
+                        if (opt) next.push(opt.routing)
+                      }
+                      setTrackTargets(track.id, next)
                     }
                     return (
                       <>
                         <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
-                        {objectTracks.length === 0 ? (
+                        {options.length === 0 ? (
                           <p className="text-[11px] text-zinc-600">No objects to target</p>
                         ) : (
-                          <TargetSelect options={objectTracks} selected={selected} onToggle={toggle} />
+                          <TargetSelect options={options} selected={selected} onToggle={toggle} />
                         )}
                       </>
                     )
                   }
 
-                  // Object track → its param sliders.
+                  // Object track → its param sliders, then its tags.
                   const def = getInstrument(track.instrumentId)
-                  if (!def || def.params.length === 0) {
-                    return <p className="text-[11px] text-zinc-600">No parameters</p>
-                  }
                   return (
                     <>
-                      <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
-                      {def.params.map((p) => (
-                        <ParamSlider
-                          key={p.key}
-                          label={p.label}
-                          min={p.min}
-                          max={p.max}
-                          step={p.step}
-                          value={track.params?.[p.key] ?? p.default}
-                          onChange={(v) => setTrackParam(track.id, p.key, v)}
-                        />
-                      ))}
+                      {!def || def.params.length === 0 ? (
+                        <p className="text-[11px] text-zinc-600">No parameters</p>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
+                          {def.params.map((p) => (
+                            <ParamSlider
+                              key={p.key}
+                              label={p.label}
+                              min={p.min}
+                              max={p.max}
+                              step={p.step}
+                              value={track.params?.[p.key] ?? p.default}
+                              onChange={(v) => setTrackParam(track.id, p.key, v)}
+                            />
+                          ))}
+                        </>
+                      )}
+                      <TagEditor tags={track.tags ?? []} onChange={(tags) => setTrackTags(track.id, tags)} />
                     </>
                   )
                 })()}

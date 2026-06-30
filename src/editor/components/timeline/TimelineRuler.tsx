@@ -62,7 +62,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
 
           {/* dark divider between bottom and top half of ruler */}
-          <div className="absolute left-0 right-0 h-px bg-zinc-600 opacity-50% pointer-events-none" style={{ top: '50%' }} />
+          <div className="absolute left-0 right-0 h-px bg-zinc-700 opacity-40 pointer-events-none" style={{ top: '50%' }} />
 
           {/* Faint, short beat ticks */}
           {beats.map((beat) => (
