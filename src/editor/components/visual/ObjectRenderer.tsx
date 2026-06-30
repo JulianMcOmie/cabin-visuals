@@ -1,14 +1,10 @@
-import type { FC } from 'react'
-import { Cube } from '../../instruments/Cube'
+import { getInstrument } from '../../instruments'
 
-// Maps an instrument id to its visual component. Commit 2 moves this into the
-// instrument registry / def; for the skeleton a tiny map keeps it concrete.
-const OBJECT_COMPONENTS: Record<string, FC<{ trackId: string }>> = {
-  cube: Cube,
-}
-
-/** Renders one object's visual; the component pulls its per-frame state by trackId. */
+/** Renders one object's visual, resolved from the instrument registry by id. The
+ *  component pulls its per-frame state by trackId from the engine. */
 export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; instrumentId: string }) {
-  const Component = OBJECT_COMPONENTS[instrumentId]
-  return Component ? <Component trackId={trackId} /> : null
+  const def = getInstrument(instrumentId)
+  if (!def) return null
+  const Component = def.component
+  return <Component trackId={trackId} />
 }

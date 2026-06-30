@@ -1,16 +1,17 @@
-// Registry: collects every instrument's definition into one map. Adding an
-// instrument = one new file + one import/entry here. Nothing else hardcodes the list.
+// Registry: collects every object instrument's definition into one map. Adding an
+// instrument = one new file + one import/entry here. Nothing else hardcodes the
+// list, and renderers resolve the visual component via the def (def.component).
 
 import { cubeInstrument } from './Cube'
-import { paramDefault, type InstrumentDef } from './types'
+import { paramDefault, type ObjectInstrumentDef } from './types'
 
-export type { InstrumentDef, ParamDef } from './types'
+export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
-export const INSTRUMENTS: Record<string, InstrumentDef> = {
+export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cubeInstrument.id]: cubeInstrument,
 }
 
-export function getInstrument(id: string): InstrumentDef | undefined {
+export function getInstrument(id: string): ObjectInstrumentDef | undefined {
   return INSTRUMENTS[id]
 }
 

@@ -3,18 +3,27 @@ import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useTimeStore } from '../store/TimeStore'
 import { getObjectState } from '../core/engine/VisualEngine'
-import { paramDefault, type InstrumentDef } from './types'
+import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The cube's definition lives next to its visual — schema and component can't drift.
-export const cubeInstrument: InstrumentDef = {
+export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
   name: 'Cube',
+  kind: 'object',
   params: [
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
     // Color as a hue slider (0–360) — keeps every param numeric.
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
     { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 }
   ],
+  // Modulation inputs modulators target (resting at default until the matrix wires
+  // them up). `energy` is what the Cube's pulse becomes; scale/hue are headroom.
+  ports: [
+    { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
+    { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
+    { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
+  ],
+  component: Cube,
 }
 
 // One cube per cube track. Per-frame pulse + params now come from the engine

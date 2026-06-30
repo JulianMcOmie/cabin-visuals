@@ -1,7 +1,9 @@
 // Instrument schema types. Kept separate from the core project types.ts (Track/
 // Block/Note) since "what an instrument exposes" is a different concern from "what
-// a project is". Each instrument owns its own InstrumentDef, colocated with its
-// visual component; the registry (./index) just collects them.
+// a project is". Each instrument owns its own def, colocated with its visual
+// component; the registry (./index) just collects them.
+
+import type { FC } from 'react'
 
 export interface ParamDef {
   key: string
@@ -12,13 +14,32 @@ export interface ParamDef {
   default: number
 }
 
-export interface InstrumentDef {
+/**
+ * A modulation input on an object — a curated, shared vocabulary (scale, energy,
+ * hue…) that modulator instruments target. NOT a user-facing knob: it's internal
+ * plumbing, bound onto the render in code. `combine` decides how multiple
+ * modulators stack on the same port. Unused until the matrix lands.
+ */
+export interface PortDef {
+  key: string
+  label: string
+  combine: 'add' | 'multiply' | 'max' | 'replace'
+  default: number
+  range?: [number, number]
+}
+
+/** An object / source / shape instrument — renders something. */
+export interface ObjectInstrumentDef {
   id: string
   name: string
+  kind: 'object'
   params: ParamDef[]
+  ports: PortDef[]
+  /** The R3F visual; pulls its per-frame state by trackId from the engine. */
+  component: FC<{ trackId: string }>
 }
 
 /** A param's schema default (no track/registry lookup). */
-export function paramDefault(def: InstrumentDef, key: string): number {
+export function paramDefault(def: ObjectInstrumentDef, key: string): number {
   return def.params.find((p) => p.key === key)?.default ?? 0
 }
