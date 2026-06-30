@@ -41,7 +41,7 @@ export interface ObjectInstrumentDef {
 
 /** A modulator / shaper instrument — renders nothing; its trigger notes drive a
  *  port on the object(s) it's routed to. `kind` selects the engine's evaluate fn;
- *  `port` is the (internal, never user-visible) port it drives. */
+ *  `port` is the (internal, never user-visible) port it targets. */
 export interface ModulatorInstrumentDef {
   id: string
   name: string

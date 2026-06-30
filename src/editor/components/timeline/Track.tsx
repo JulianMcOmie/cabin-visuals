@@ -85,11 +85,6 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           <div className="text-xs font-medium truncate text-white">
             {track.name}
           </div>
-          {track.targets && track.targets.length > 0 && (
-            <div className="text-[10px] text-zinc-500 truncate mt-0.5">
-              → {track.targets.map((t) => t.targetPort).join(', ')}
-            </div>
-          )}
         </div>
 
         <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>

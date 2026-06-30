@@ -117,7 +117,7 @@ export function TrackEditor() {
                   {track.type} · {track.instrumentId}
                 </p>
                 {(() => {
-                  // Modulator track → a target picker (which object it drives).
+                  // Modulator track → a target picker (which object it targets).
                   // The port is internal (from the modulator's def), never shown.
                   const modDef = getModulator(track.instrumentId)
                   if (modDef) {
@@ -127,7 +127,7 @@ export function TrackEditor() {
                     const current = track.targets?.[0]?.targetTrackId ?? ''
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-2">Drives:</p>
+                        <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
                         <select
                           value={current}
                           onChange={(e) =>
