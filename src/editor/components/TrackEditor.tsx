@@ -124,15 +124,40 @@ function TargetSelect({
   )
 }
 
-/** Add/remove a track's tags (chips + an input). Tags are the group labels a
- *  modulator can route to. */
-function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+/** Add/remove a track's tags. Tags are the group labels a modulator can route to.
+ *  The add box is a combobox: type a new tag, or pick an existing project tag from
+ *  the dropdown (`suggestions` = every tag used elsewhere in the project). */
+function TagEditor({
+  tags, suggestions, onChange,
+}: {
+  tags: string[]
+  suggestions: string[]
+  onChange: (tags: string[]) => void
+}) {
   const [draft, setDraft] = useState('')
-  const add = () => {
-    const t = draft.trim()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const addTag = (value: string) => {
+    const t = value.trim()
     if (t && !tags.includes(t)) onChange([...tags, t])
     setDraft('')
+    setOpen(false)
   }
+
+  // Existing project tags not already on this track, narrowed by what's typed.
+  const q = draft.trim().toLowerCase()
+  const matches = suggestions.filter((s) => !tags.includes(s) && s.toLowerCase().includes(q))
+
   return (
     <div className="mt-5">
       <p className="text-[11px] text-zinc-500 mb-2">Tags:</p>
@@ -143,7 +168,7 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string
             key={t}
             className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-300"
           >
-            #{t}
+            {t}
             <button
               onClick={() => onChange(tags.filter((x) => x !== t))}
               className="text-zinc-500 hover:text-zinc-200"
@@ -154,14 +179,42 @@ function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string
           </span>
         ))}
       </div>
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-        onBlur={add}
-        placeholder="Add a tag…"
-        className="w-full h-7 px-2 rounded bg-zinc-800 text-[11px] text-zinc-300 border border-zinc-700 outline-none focus:border-zinc-600 placeholder:text-zinc-600"
-      />
+      <div ref={ref} className="relative">
+        <div className="flex items-center gap-1 h-7 pl-2 pr-1 rounded bg-zinc-800 border border-zinc-700 focus-within:border-zinc-600">
+          <input
+            value={draft}
+            onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(draft) } }}
+            placeholder="Add a tag…"
+            className="flex-1 min-w-0 bg-transparent text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
+          />
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="flex-shrink-0 text-zinc-500 hover:text-zinc-300"
+            aria-label="Show existing tags"
+          >
+            <ChevronDown size={13} />
+          </button>
+        </div>
+        {open && matches.length > 0 && (
+          <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-zinc-800 border border-zinc-700 shadow-lg shadow-black/40 py-1">
+            {matches.map((s) => (
+              <button
+                key={s}
+                onClick={() => addTag(s)}
+                className="w-full px-2 h-7 flex items-center text-[11px] text-zinc-300 hover:bg-zinc-700 truncate"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* While open, reserve flow space below the input so the absolutely-positioned
+          list isn't clipped against the panel's bottom edge and can scroll into view
+          (the panel's pb keeps a gap beneath it). */}
+      {open && matches.length > 0 && <div aria-hidden className="h-36" />}
     </div>
   )
 }
@@ -210,7 +263,7 @@ export function TrackEditor() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar p-3">
+      <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
         {tab === 'instrument' && (
           <>
             {track ? (
@@ -271,6 +324,7 @@ export function TrackEditor() {
 
                   // Object track → its param sliders, then its tags.
                   const def = getInstrument(track.instrumentId)
+                  const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
                   return (
                     <>
                       {!def || def.params.length === 0 ? (
@@ -291,7 +345,11 @@ export function TrackEditor() {
                           ))}
                         </>
                       )}
-                      <TagEditor tags={track.tags ?? []} onChange={(tags) => setTrackTags(track.id, tags)} />
+                      <TagEditor
+                        tags={track.tags ?? []}
+                        suggestions={projectTags}
+                        onChange={(tags) => setTrackTags(track.id, tags)}
+                      />
                     </>
                   )
                 })()}
