@@ -64,16 +64,17 @@ const MODULATOR_INSTRUMENTS = withKind('modulator', [
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
   const [infoOpen, setInfoOpen] = useState(false)
-  const infoRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!infoOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (infoRef.current && !infoRef.current.contains(e.target as Node)) setInfoOpen(false)
-    }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [infoOpen])
+  // Show the info popup after a short hover dwell; hide immediately on leave.
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const openAfterDelay = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setInfoOpen(true), 250)
+  }
+  const cancelHover = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    setInfoOpen(false)
+  }
+  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current) }, [])
 
   return (
     <div>
@@ -86,9 +87,12 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
           {open ? <ChevronDown size={11} className="text-zinc-500" /> : <ChevronRight size={11} className="text-zinc-500" />}
         </button>
         <div className="flex-1" />
-        <div ref={infoRef} className="relative flex items-center">
+        <div
+          className="relative flex items-center"
+          onMouseEnter={openAfterDelay}
+          onMouseLeave={cancelHover}
+        >
           <button
-            onClick={() => setInfoOpen((v) => !v)}
             className={`transition-colors ${infoOpen ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-300'}`}
             aria-label={`About ${title}`}
           >
