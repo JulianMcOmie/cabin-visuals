@@ -65,6 +65,9 @@ interface ProjectState {
   addAbilityLane: (trackId: string, laneKey: string) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
+  /** Toggle mute/solo on one ability lane (keyed by ability key). */
+  toggleLaneMuted: (trackId: string, laneKey: string) => void
+  toggleLaneSolo: (trackId: string, laneKey: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   // Visual effects (plugins) on a track.
@@ -426,6 +429,32 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
+    }),
+
+  toggleLaneMuted: (trackId, laneKey) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const cur = track.laneMeta?.[laneKey] ?? {}
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, laneMeta: { ...track.laneMeta, [laneKey]: { ...cur, muted: !cur.muted } } },
+        },
+      }
+    }),
+
+  toggleLaneSolo: (trackId, laneKey) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const cur = track.laneMeta?.[laneKey] ?? {}
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, laneMeta: { ...track.laneMeta, [laneKey]: { ...cur, solo: !cur.solo } } },
+        },
+      }
     }),
 
   setTrackTargets: (trackId, targets) =>

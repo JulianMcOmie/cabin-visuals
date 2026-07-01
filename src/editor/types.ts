@@ -68,4 +68,8 @@ export interface Track {
    * on the object track — deliberately NOT child tracks in the hierarchy.
    */
   lanes?: Record<string, Block[]>
+  /** Per-ability-lane mute/solo (keyed by ability key). Additive to `lanes` so the
+   *  block-editing path is untouched. Mute stops the ability firing; solo is cosmetic
+   *  (mirrors track solo, which the engine doesn't honor). */
+  laneMeta?: Record<string, { muted?: boolean; solo?: boolean }>
 }

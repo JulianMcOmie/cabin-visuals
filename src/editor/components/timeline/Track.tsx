@@ -51,6 +51,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const modColor = modifierColor(track)
   const isModifier = modColor != null
   const blockColor = modColor ?? track.color
+  // Automation tracks read as attached sub-rows — same darkened shade as ability lanes.
+  const isAutomation = track.type === 'automation'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
@@ -93,7 +95,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'
         } ${
-          dropInto ? 'bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : isSelected ? 'bg-zinc-700' : 'bg-[#202024]'
+          dropInto ? 'bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : isSelected ? 'bg-zinc-700' : isAutomation ? 'bg-[#1d1d21]' : 'bg-[#202024]'
         }`}
       >
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
@@ -143,7 +145,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div className="flex-shrink-0" style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
-        className="relative flex-shrink-0"
+        className={`relative flex-shrink-0 ${isAutomation ? 'bg-black/10' : ''}`}
         style={{ width: timelineWidthPx }}
         onPointerDown={(e) => onLanePointerDown(e, track.id)}
         onContextMenu={(e) => e.preventDefault()}
