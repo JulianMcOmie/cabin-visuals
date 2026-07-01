@@ -39,6 +39,10 @@ export interface ResolvedObject {
   notes: ResolvedNote[]
   /** Blackout spans from `mute` child modifiers — the object is hidden inside them. */
   blackouts: BlackoutRegion[]
+  /** This object's ability-lane notes, keyed by the instrument's ability key. The
+   *  instrument's own render consumes these (the code escape hatch). Empty if the
+   *  instrument declares no abilities or none have been played. */
+  abilityEvents: Map<string, ResolvedNote[]>
   /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
   tags: string[]
 }
@@ -78,4 +82,7 @@ export interface ObjectState {
   /** World transform (local composed with all ancestors). Reused across frames —
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
+  /** The object's ability-lane notes (absolute beats), keyed by ability key. The
+   *  instrument samples these against the current beat to drive its signature move. */
+  abilityEvents: Map<string, ResolvedNote[]>
 }

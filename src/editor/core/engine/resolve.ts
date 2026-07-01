@@ -1,4 +1,4 @@
-import type { Track } from '../../types'
+import type { Track, Block } from '../../types'
 import { getInstrument } from '../../instruments'
 import { getModulator } from '../../instruments/modulators'
 import type {
@@ -38,10 +38,10 @@ function flattenTree(p: ProjectSnapshot): string[] {
   return out
 }
 
-/** Flatten a track's notes to absolute project beats (with block bounds). */
-function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
+/** Flatten a list of blocks to absolute project beats (with block bounds). */
+function flattenBlocks(blocks: Block[], beatsPerBar: number): ResolvedNote[] {
   const notes: ResolvedNote[] = []
-  for (const block of track.blocks) {
+  for (const block of blocks) {
     const blockStartBeat = block.startBar * beatsPerBar
     const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
     for (const note of block.notes) {
@@ -57,6 +57,21 @@ function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
   }
   notes.sort((a, b) => a.beat - b.beat)
   return notes
+}
+
+/** Flatten a track's own notes (its `blocks`) to absolute project beats. */
+function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
+  return flattenBlocks(track.blocks, beatsPerBar)
+}
+
+/** Resolve a track's ability lanes into per-key note streams (absolute beats). */
+function resolveAbilityEvents(track: Track, beatsPerBar: number): Map<string, ResolvedNote[]> {
+  const events = new Map<string, ResolvedNote[]>()
+  if (!track.lanes) return events
+  for (const [key, blocks] of Object.entries(track.lanes)) {
+    events.set(key, flattenBlocks(blocks, beatsPerBar))
+  }
+  return events
 }
 
 /** Fold a track's event-modifier children into its note stream (in child order) and
@@ -121,6 +136,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       localTransform: def?.localTransform,
       notes,
       blackouts,
+      abilityEvents: resolveAbilityEvents(track, p.beatsPerBar),
       tags,
     })
     for (const tag of tags) {
