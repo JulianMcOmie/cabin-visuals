@@ -4,8 +4,10 @@ import { Group } from 'three'
 import { getInstrument } from '../../instruments'
 import { getObjectState } from '../../core/engine/VisualEngine'
 import { useProjectStore } from '../../store/ProjectStore'
+import { getPlugin } from '../../plugins'
 import { TransformWrapper } from './TransformWrapper'
 import { CloneWrapper } from './CloneWrapper'
+import { ShaderWrapper } from './ShaderWrapper'
 
 /**
  * Renders one object. A placement group carries the object's world transform (composed
@@ -16,7 +18,8 @@ import { CloneWrapper } from './CloneWrapper'
 export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; instrumentId: string }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
-  const plugins = useProjectStore((s) => s.tracks[trackId]?.visualPlugins)
+  const plugins = useProjectStore((s) => s.tracks[trackId]?.visualPlugins) ?? []
+  const shaderInstances = plugins.filter((p) => p.enabled && getPlugin(p.pluginId)?.category === 'shader')
 
   useFrame(() => {
     const g = groupRef.current
@@ -28,13 +31,19 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
 
   if (!def) return null
   const Component = def.component
-  return (
-    <group ref={groupRef}>
-      <CloneWrapper plugins={plugins ?? []}>
-        <TransformWrapper plugins={plugins ?? []}>
-          <Component trackId={trackId} />
-        </TransformWrapper>
-      </CloneWrapper>
-    </group>
+  const content = (
+    <CloneWrapper plugins={plugins}>
+      <TransformWrapper plugins={plugins}>
+        <Component trackId={trackId} />
+      </TransformWrapper>
+    </CloneWrapper>
   )
+
+  // Shader path: the object is rendered offscreen (with its world transform) and drawn
+  // back as a post-processed full-frame overlay — so no in-scene placement group here.
+  if (shaderInstances.length > 0) {
+    return <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{content}</ShaderWrapper>
+  }
+
+  return <group ref={groupRef}>{content}</group>
 }
