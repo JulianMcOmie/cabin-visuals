@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Persistence — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#f2f2f2; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .b-new{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-edit{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-del{background:#fff;color:#111;border-style:dashed}
+  .b-store{background:#fff;color:#111;border-color:#111}
+  .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
+  .pill-row{margin:10px 0 4px}
+  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .toc{columns:2;gap:28px;margin:8px 0 0}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .muted{color:var(--muted)}.small{font-size:13px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
+  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:10px}
+  .tg-edit{color:#111;background:#dcdcdc;border-radius:4px;padding:0 4px;font-size:10px}
+  .tg-del{color:#111;border:1px dashed #777;border-radius:4px;padding:0 4px;font-size:10px}
+  .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#fbfbfb}
+  .comp h4{color:var(--ink);font-size:14px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
+    figure.fig,pre,table,.card,.keystone,.note,.warn,.rec,.tree,.comp{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Persistence</span>
+  <h1>Persistence — Implementation Plan</h1>
+  <p class="sub">Turning <span class="file">persistence-architecture.html</span> into specific files, types, and functions: what gets added, what gets touched, and why — building on the auth + project-list that already ship.</p>
+</header>
+
+<div class="card">
+  <h3 style="margin-top:18px">Contents</h3>
+  <nav class="toc">
+    <a href="#components">A · Architectural components (start here)</a>
+    <a href="#scope">B · Scope &amp; the phase ladder</a>
+    <a href="#model">C · Data model — types &amp; where they live</a>
+    <a href="#module">D · Infrastructure: the persistence module</a>
+    <a href="#wiring">E · Wiring autosave &amp; load to the editor</a>
+    <a href="#phases">F · Phase-by-phase build (with files)</a>
+    <a href="#inventory">G · Master file inventory</a>
+    <a href="#risks">H · Risks &amp; open questions</a>
+  </nav>
+</div>
+
+<p class="muted small">This plan introduces <strong>two new directories</strong> — <span class="file">src/persistence/</span> (the document repo + autosave) and <span class="file">db/</span> (Drizzle schema + migrations) — plus a small edit to <span class="file">editor/App.tsx</span> and one new column-and-policies migration. The <em>account</em> layer (<span class="file">utils/supabase/*</span>, <span class="file">app/(auth)/*</span>, <span class="file">app/projects/*</span>) already ships and is barely touched. Every section names the files it creates / edits / deletes so the file-level mental model is always in view.</p>
+
+<!-- A -->
+<h2 id="components">A · Architectural components — what gets added, and one layer down</h2>
+<p>The highest level first, then a peek at the key function / effect inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span> <span class="badge b-del">delete</span>.</p>
+
+<figure class="fig">
+  <div class="figtitle">Where the new pieces live and how they connect</div>
+  <svg viewBox="0 0 900 360" role="img" aria-label="Module layout">
+    <defs><marker id="aL" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="150" width="160" height="76" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="100" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
+    <text x="100" y="192" text-anchor="middle" font-size="10" fill="#565656">the document</text>
+    <text x="100" y="210" text-anchor="middle" font-size="10" fill="#565656">(tracks · blocks · notes)</text>
+    <rect x="250" y="40" width="380" height="280" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="440" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">persistence/  ★ new module</text>
+    <rect x="270" y="74" width="150" height="56" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="345" y="96" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">projectRepo.ts</text>
+    <text x="345" y="113" text-anchor="middle" font-size="9" fill="#565656">load/save/list/create</text>
+    <rect x="270" y="142" width="150" height="56" rx="6" fill="#141414"/>
+    <text x="345" y="164" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">autosave.ts</text>
+    <text x="345" y="181" text-anchor="middle" font-size="9" fill="#dcdcdc">debounced subscribe</text>
+    <rect x="270" y="210" width="150" height="50" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="345" y="232" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">serialize.ts</text>
+    <text x="345" y="248" text-anchor="middle" font-size="9" fill="#565656">store ⇄ document</text>
+    <rect x="440" y="74" width="170" height="56" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="525" y="96" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">upgrade.ts</text>
+    <text x="525" y="113" text-anchor="middle" font-size="9" fill="#565656">schemaVersion chain</text>
+    <rect x="440" y="142" width="170" height="56" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="525" y="161" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">supabase.ts</text>
+    <text x="525" y="178" text-anchor="middle" font-size="9" fill="#565656">re-export client</text>
+    <rect x="440" y="210" width="170" height="50" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="525" y="229" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">hooks/useAuth · useProjectList</text>
+    <text x="525" y="245" text-anchor="middle" font-size="9" fill="#565656">session · list state</text>
+    <rect x="700" y="40" width="180" height="86" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="790" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">db/  ★ new</text>
+    <text x="790" y="82" text-anchor="middle" font-size="10" fill="#565656">schema.ts (Drizzle)</text>
+    <text x="790" y="100" text-anchor="middle" font-size="10" fill="#565656">migrations/*.sql</text>
+    <text x="790" y="118" text-anchor="middle" font-size="10" fill="#565656">RLS policies</text>
+    <rect x="700" y="200" width="180" height="86" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="790" y="224" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Supabase</text>
+    <text x="790" y="242" text-anchor="middle" font-size="10" fill="#565656">projects (+data JSONB)</text>
+    <text x="790" y="260" text-anchor="middle" font-size="10" fill="#565656">auth · RLS enforced</text>
+    <text x="790" y="278" text-anchor="middle" font-size="10" fill="#565656">(existing + 1 migration)</text>
+    <path d="M180,182 C212,182 220,150 264,140" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#aL)"/>
+    <text x="186" y="150" font-size="9" fill="#565656">subscribe (debounced)</text>
+    <path d="M630,150 C660,150 668,200 696,220" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#aL)"/>
+    <text x="636" y="176" font-size="9" fill="#565656">supabase-js</text>
+    <path d="M790,126 V196" stroke="#141414" stroke-width="1.3" marker-end="url(#aL)"/>
+    <text x="796" y="164" font-size="9" fill="#565656">migrate</text>
+  </svg>
+  <figcaption>The persistence module sits between the project document (left) and Supabase (right); <span class="file">db/</span> defines the schema that Supabase runs. The editor writes the store; autosave observes it; the repo mirrors it. No edit ever calls Supabase directly.</figcaption>
+</figure>
+
+<div class="comp">
+  <h4>1 · The project repo <span class="badge b-new">new</span> <span class="file">persistence/projectRepo.ts</span></h4>
+  <p><strong>Adds the one door for document CRUD.</strong> It's the only file that names the <code>projects</code> table for the document. One layer down:</p>
+  <ul class="small">
+    <li>a <code>list()</code> that selects the <em>spine</em> columns only (<code>id, name, updated_at</code>) — never pulls a blob;</li>
+    <li>a <code>load(id)</code> that selects <code>data</code>, runs it through <code>upgradeDocument()</code> (§8 of the architecture doc), and returns a current-shape <code>ProjectDocument</code>;</li>
+    <li>a <code>save(id, doc)</code> that UPSERTs the blob plus the projected columns (<code>name</code>, <code>schema_version</code>, <code>updated_at</code>) in one write — RLS guarantees it's the caller's row;</li>
+    <li><code>create(name)</code> / <code>remove(id)</code> that reuse the flow already in <span class="file">app/projects/page.tsx</span> (moved here so both the browser and the editor share it).</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>2 · The autosave loop <span class="badge b-new">new</span> <span class="file">persistence/autosave.ts</span></h4>
+  <p><strong>Adds a debounced subscription that mirrors the store to Supabase.</strong> Deeper:</p>
+  <ul class="small">
+    <li><code>startAutosave(projectId)</code> — registers <code>useProjectStore.subscribe</code>, diffs by reference (immutable store, so <code>state !== prev</code> is exact), and schedules a debounced <code>flush</code> (~1s idle);</li>
+    <li><code>flush()</code> — non-overlapping (one write in flight), failure-safe (a network error leaves the doc <code>dirty</code> and retries, never touches memory), and status-emitting (<code>saving / saved / error</code>) for a UI indicator;</li>
+    <li>flush-on-exit — a <code>beforeunload</code>/<code>visibilitychange</code> handler forces a final save so the debounce window can't eat the last edit.</li>
+  </ul>
+  <p class="small muted">Deliberately the same mechanism <span class="file">HistoryStore</span> already uses (a store subscription with a burst window) — aimed at Supabase instead of an undo stack.</p>
+</div>
+
+<div class="comp">
+  <h4>3 · Serialize + upgrade <span class="badge b-new">new</span> <span class="file">persistence/serialize.ts</span> · <span class="file">persistence/upgrade.ts</span></h4>
+  <ul class="small">
+    <li><code>serialize(state) → ProjectDocument</code> — picks the non-function, non-ephemeral fields of <span class="file">ProjectStore</span> (the exact set <span class="file">HistoryStore</span> snapshots) and stamps <code>schemaVersion</code>; <code>hydrate(doc)</code> is the inverse (<code>setState</code>);</li>
+    <li><code>upgradeDocument(raw)</code> — walks the append-only <code>vN → vN+1</code> chain until the blob matches <code>CURRENT_VERSION</code>, so the editor only ever sees the latest shape.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>4 · The Supabase client re-export <span class="badge b-new">new</span> <span class="file">persistence/supabase.ts</span></h4>
+  <p><strong>A one-line re-export of the existing browser client</strong> (<span class="file">utils/supabase/client.ts</span>), so the persistence module has a single import point and nothing here re-implements auth. The session cookie rides along automatically, so RLS sees <code>auth.uid()</code>.</p>
+</div>
+
+<div class="comp">
+  <h4>5 · Auth &amp; list hooks <span class="badge b-new">new</span> <span class="file">persistence/hooks/useAuth.ts</span> · <span class="file">useProjectList.ts</span></h4>
+  <ul class="small">
+    <li><code>useAuth()</code> — wraps <code>supabase.auth.getUser()</code> + <code>onAuthStateChange</code>; returns <code>{ user, loading }</code>. Guards "save requires a session" and gives the owner id;</li>
+    <li><code>useProjectList()</code> — <code>projectRepo.list()</code> as a hook with create/delete actions, so <span class="file">app/projects/page.tsx</span> stops calling Supabase inline and goes through the repo.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>6 · The schema, as code <span class="badge b-new">new</span> <span class="file">db/schema.ts</span> · <span class="file">db/migrations/*</span> · <span class="file">drizzle.config.ts</span></h4>
+  <ul class="small">
+    <li><span class="file">schema.ts</span> — the <code>projects</code> table in Drizzle, including the new <code>data JSONB</code>, <code>schema_version</code>, and <code>updated_at</code> columns; typed with <code>.$type&lt;ProjectDocument&gt;()</code>;</li>
+    <li><span class="file">migrations/0001_add_project_document.sql</span> — the generated migration that adds those columns, enables RLS, and creates the four owner policies (§6);</li>
+    <li><span class="file">drizzle.config.ts</span> — points <code>drizzle-kit</code> at the Supabase connection string.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>7 · Editor wiring <span class="badge b-edit">edit</span> <span class="file">editor/App.tsx</span> · <span class="badge b-new">new</span> <span class="file">editor/hooks/useProjectPersistence.ts</span></h4>
+  <ul class="small">
+    <li><span class="file">useProjectPersistence.ts</span> — reads <code>?project=&lt;id&gt;</code>, calls <code>projectRepo.load(id)</code>, hydrates the store, then arms <code>startAutosave(id)</code> (in that order, so hydrate doesn't trigger a redundant save);</li>
+    <li><span class="file">App.tsx</span> — mounts the hook and a small save-status indicator in the header; otherwise untouched.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>8 · Project browser goes through the repo <span class="badge b-edit">edit</span> <span class="file">app/projects/page.tsx</span></h4>
+  <ul class="small">
+    <li>Swaps its inline <code>supabase.from('projects')…</code> calls for <code>projectRepo.list/create/remove</code> — same behavior, single source of truth. Create now inserts a default <code>ProjectDocument</code> at <code>CURRENT_VERSION</code> so the editor can load it like any other.</li>
+  </ul>
+</div>
+
+<!-- B -->
+<h2 id="scope">B · Scope &amp; the phase ladder</h2>
+<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors the architecture doc — but here every phase is pinned to files. Phase 1 is the schema, phase 2 the repo, phase 3 the autosave/load wiring (which proves the whole thesis: reload and your project is still there); 4–5 are additive polish and safety.</p>
+
+<figure class="fig">
+  <div class="figtitle">The phase ladder — and roughly where each lands</div>
+  <svg viewBox="0 0 900 270" role="img" aria-label="Phase ladder">
+    <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
+    <g font-size="11" fill="#141414">
+      <rect x="20" y="24" width="260" height="30" rx="5" fill="#141414"/><text x="32" y="44" fill="#fff" font-weight="700">1 · Schema: data JSONB + RLS + Drizzle</text>
+      <rect x="20" y="62" width="260" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="82" font-weight="700">2 · persistence module + projectRepo</text>
+      <rect x="20" y="100" width="260" height="30" rx="5" fill="#141414"/><text x="32" y="120" fill="#fff" font-weight="700">3 · Autosave + load wiring ★ keystone</text>
+      <rect x="20" y="138" width="260" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Project browser through the repo</text>
+      <rect x="20" y="176" width="260" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="196" font-weight="700">5 · Doc-versioning + conflict safety</text>
+      <rect x="20" y="214" width="260" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="234" font-weight="700">6 · Audio bytes → Storage (deferred)</text>
+    </g>
+    <text x="330" y="20" font-size="11" font-weight="700" fill="#141414">touches mostly…</text>
+    <g font-size="10.5" fill="#565656">
+      <text x="330" y="44">db/schema.ts · db/migrations/* · drizzle.config.ts</text>
+      <text x="330" y="82">persistence/{supabase,projectRepo,serialize} · types</text>
+      <text x="330" y="120">persistence/autosave · editor/hooks · editor/App.tsx</text>
+      <text x="330" y="158">app/projects/page.tsx · persistence/hooks/useProjectList</text>
+      <text x="330" y="196">persistence/upgrade.ts · projectRepo (updated_at check)</text>
+      <text x="330" y="234">persistence/audioRepo · Storage bucket + RLS</text>
+    </g>
+    <path d="M150,54 V62" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M150,92 V100" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M150,130 V138" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M150,168 V176" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M150,206 V214" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+  </svg>
+  <figcaption>Black = build, grey = light. Phases 1–3 make a project actually persist (schema → repo → wiring); everything else hardens it. The full per-phase file lists are §F.</figcaption>
+</figure>
+
+<div class="rec"><strong>In scope here:</strong> the schema migration, the persistence module, autosave + load wiring, routing the browser through the repo, doc-versioning, and conflict safety — with file lists for all phases. <strong>Out of scope (named, not detailed):</strong> audio-byte storage (phase 6, deferred — the clip <em>metadata</em> already rides in the blob), real-time multi-user collaboration (needs CRDT/OT — a product decision, not a persistence one), and any change to the auth flows, which already ship.</p></div>
+
+<!-- C -->
+<h2 id="model">C · Data model — the types and where they live</h2>
+<p>Two kinds of types: the <strong>document</strong> (what the user edits, in <span class="file">ProjectStore</span>, serialized into the blob) and the <strong>row</strong> (the relational spine the database queries). Keeping them separate is what lets the blob change freely while the columns stay stable.</p>
+
+<figure class="fig">
+  <div class="figtitle">Document type vs row type — one is edited, one is queried</div>
+  <svg viewBox="0 0 900 290" role="img" aria-label="Data model">
+    <defs><marker id="aM" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="30" y="22" font-size="12" font-weight="700" fill="#141414">DOCUMENT — edited in memory, serialized into the blob  (editor/types.ts + persistence/types.ts)</text>
+    <rect x="30" y="34" width="200" height="104" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="44" y="54" font-size="11" font-weight="700" fill="#141414">ProjectStore state</text>
+    <text x="44" y="72" font-size="9.5" fill="#565656">tracks {} · rootTrackIds</text>
+    <text x="44" y="88" font-size="9.5" fill="#565656">bpm · beatsPerBar · totalBars</text>
+    <text x="44" y="104" font-size="9.5" fill="#565656">(+ actions — excluded)</text>
+    <text x="44" y="122" font-size="9.5" fill="#565656">the non-function fields</text>
+    <rect x="255" y="34" width="200" height="104" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="269" y="54" font-size="11" font-weight="700" fill="#141414">ProjectDocument</text>
+    <text x="269" y="72" font-size="9.5" fill="#565656">schemaVersion</text>
+    <text x="269" y="88" font-size="9.5" fill="#565656">bpm · beatsPerBar · totalBars</text>
+    <text x="269" y="104" font-size="9.5" fill="#565656">tracks · rootTrackIds</text>
+    <text x="269" y="120" font-size="9.5" fill="#565656">audioClip?</text>
+    <rect x="360" y="160" width="180" height="34" rx="6" fill="#141414"/>
+    <text x="450" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">serialize() / hydrate()</text>
+    <path d="M130,138 C150,152 300,152 358,166" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aM)"/>
+    <text x="30" y="232" font-size="12" font-weight="700" fill="#141414">ROW — stored &amp; queried in Postgres  (db/schema.ts)</text>
+    <rect x="30" y="244" width="260" height="40" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="44" y="264" font-size="10.5" font-weight="700" fill="#141414">ProjectRow — the spine</text><text x="44" y="279" font-size="9" fill="#565656">id · owner · name · updated_at · schema_version</text>
+    <rect x="310" y="244" width="260" height="40" rx="6" fill="#e6e6e6" stroke="#141414"/>
+    <text x="324" y="264" font-size="10.5" font-weight="700" fill="#141414">data JSONB</text><text x="324" y="279" font-size="9" fill="#565656">= ProjectDocument (the blob)</text>
+    <rect x="590" y="244" width="220" height="40" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="604" y="264" font-size="10.5" font-weight="700" fill="#141414">upgradeDocument(raw)</text><text x="604" y="279" font-size="9" fill="#565656">old blob → current shape (on load)</text>
+    <path d="M450,194 V240" stroke="#141414" stroke-width="1.4" marker-end="url(#aM)"/>
+  </svg>
+  <figcaption>The editor owns the top row; <code>serialize()</code> turns it into a <code>ProjectDocument</code> that becomes the <code>data</code> blob; the spine columns are a projection alongside it. On the way back, <code>upgradeDocument()</code> normalizes old blobs. The row's columns are Drizzle's job; the blob's shape is <code>schemaVersion</code>'s.</figcaption>
+</figure>
+
+<h3>C.1 — Document type <span class="badge b-new">new persistence/types.ts</span></h3>
+<pre><code><span class="c">// persistence/types.ts — the serialized project (= projects.data)</span>
+<span class="k">interface</span> <span class="f">ProjectDocument</span> {
+  schemaVersion: <span class="k">number</span>;               <span class="c">// stamped by serialize(); drives upgrade() on load</span>
+  bpm: <span class="k">number</span>; beatsPerBar: <span class="k">number</span>; totalBars: <span class="k">number</span>;   <span class="c">// (from ProjectStore)</span>
+  tracks: <span class="f">Record</span>&lt;<span class="k">string</span>, Track&gt;;          <span class="c">// Track already carries blocks·notes·params·tags·targets·lanes·effects</span>
+  rootTrackIds: <span class="k">string</span>[];
+  audioClip?: AudioClip;                 <span class="c">// {ref, fileName, duration} — metadata only (§phase 6)</span>
+}</code></pre>
+<p><code>Track</code>, <code>Block</code>, <code>Note</code>, <code>AudioClip</code> are reused verbatim from <span class="file">editor/types.ts</span> / <span class="file">editor/store/AudioStore.ts</span> — the document type is a thin envelope over the model that already exists. Nothing about the editor's model changes; persistence just adds the <em>envelope</em> and the <code>schemaVersion</code>.</p>
+
+<h3>C.2 — Row type <span class="badge b-new">new db/schema.ts</span> <span class="badge b-edit">edit the projects table</span></h3>
+<pre><code><span class="c">// db/schema.ts — the spine (Drizzle). The columns Postgres/RLS/the browser touch.</span>
+<span class="k">export const</span> projects = pgTable(<span class="s">'projects'</span>, {
+  id:            uuid(<span class="s">'id'</span>).primaryKey().defaultRandom(),   <span class="c">// (exists)</span>
+  owner:         uuid(<span class="s">'owner'</span>).notNull(),                    <span class="c">// today: user_id — the RLS anchor</span>
+  name:          text(<span class="s">'name'</span>).notNull().default(<span class="s">'Untitled Project'</span>), <span class="c">// (exists)</span>
+  schemaVersion: integer(<span class="s">'schema_version'</span>).notNull().default(<span class="n">1</span>), <span class="c">// NEW</span>
+  data:          jsonb(<span class="s">'data'</span>).notNull().$type&lt;ProjectDocument&gt;(),  <span class="c">// NEW — the blob</span>
+  createdAt:     timestamp(<span class="s">'created_at'</span>).notNull().defaultNow(),  <span class="c">// (exists)</span>
+  updatedAt:     timestamp(<span class="s">'updated_at'</span>).notNull().defaultNow(),  <span class="c">// NEW — bumped every save</span>
+});</code></pre>
+<div class="note"><strong>Mental model:</strong> <span class="file">persistence/types.ts</span> = "what the user owns" (the blob's shape, versioned by <code>schemaVersion</code>); <span class="file">db/schema.ts</span> = "what the database queries" (the columns, versioned by Drizzle migrations). The dependency points one way — <span class="file">db/schema.ts</span> imports <code>ProjectDocument</code> to type the <code>data</code> column, but the document type knows nothing about Postgres. That's what keeps the editor free of any storage concept.</div>
+<div class="note"><strong>Naming reality:</strong> today's column is <code>user_id</code>, not <code>owner</code>; the architecture doc uses <code>owner</code> generically. Either rename it in the migration (cleaner) or keep <code>user_id</code> and alias it in the schema (zero-risk). Pick one and be consistent in the RLS policies — the policy compares whatever the column is against <code>auth.uid()</code>.</div>
+
+<!-- D -->
+<h2 id="module">D · Infrastructure: the persistence module</h2>
+<p class="pill-row"><span class="badge b-new">persistence/supabase.ts</span><span class="badge b-new">persistence/projectRepo.ts</span><span class="badge b-new">persistence/serialize.ts</span><span class="badge b-new">persistence/upgrade.ts</span><span class="badge b-new">persistence/autosave.ts</span><span class="badge b-new">persistence/types.ts</span><span class="badge b-new">persistence/hooks/*</span></p>
+
+<figure class="fig">
+  <div class="figtitle">Runtime data-flow — and which file owns each step</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Runtime data flow">
+    <defs><marker id="aD" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="30" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="95" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">user edits a note</text>
+    <text x="95" y="66" text-anchor="middle" font-size="9" fill="#565656">piano roll → ProjectStore</text>
+    <path d="M95,76 V104" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <text x="104" y="96" font-size="9" fill="#565656">subscribe, debounced</text>
+    <rect x="20" y="108" width="150" height="46" rx="6" fill="#fff" stroke="#141414" stroke-width="1.4"/>
+    <text x="95" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">autosave.flush()</text>
+    <text x="95" y="144" text-anchor="middle" font-size="9" fill="#565656">autosave.ts</text>
+    <path d="M170,131 H214" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="216" y="100" width="180" height="62" rx="6" fill="#fff" stroke="#141414" stroke-width="1.4"/>
+    <text x="306" y="122" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">serialize(state)</text>
+    <text x="306" y="139" text-anchor="middle" font-size="9" fill="#565656">serialize.ts — pick non-</text>
+    <text x="306" y="153" text-anchor="middle" font-size="9" fill="#565656">function fields + version</text>
+    <path d="M396,131 H440" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="442" y="100" width="150" height="62" rx="6" fill="#141414"/>
+    <text x="517" y="126" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">projectRepo.save</text>
+    <text x="517" y="143" text-anchor="middle" font-size="9" fill="#dcdcdc">one UPSERT · RLS-scoped</text>
+    <path d="M592,131 H636" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="638" y="100" width="150" height="62" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="713" y="126" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">Supabase</text>
+    <text x="713" y="143" text-anchor="middle" font-size="9" fill="#565656">projects.data written</text>
+    <rect x="216" y="210" width="572" height="100" rx="8" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <text x="232" y="230" font-size="11" font-weight="700" fill="#141414">ON OPEN (once, useProjectPersistence)</text>
+    <rect x="232" y="242" width="150" height="52" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="307" y="264" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">projectRepo.load(id)</text>
+    <text x="307" y="280" text-anchor="middle" font-size="9" fill="#565656">SELECT data</text>
+    <path d="M382,268 H418" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="420" y="242" width="150" height="52" rx="6" fill="#141414"/>
+    <text x="495" y="264" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">upgradeDocument()</text>
+    <text x="495" y="280" text-anchor="middle" font-size="9" fill="#dcdcdc">upgrade.ts</text>
+    <path d="M570,268 H606" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="608" y="242" width="156" height="52" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="686" y="264" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">hydrate → setState</text>
+    <text x="686" y="280" text-anchor="middle" font-size="9" fill="#565656">then arm autosave</text>
+  </svg>
+  <figcaption>Top row = the autosave path (debounced, off the edit's critical path). Dashed band = the load path (once, on open). The two meet only at <span class="file">ProjectStore</span> — the freshest copy is always in memory.</figcaption>
+</figure>
+
+<h3>D.1 — <span class="file">serialize.ts</span> — the exact boundary <span class="file">HistoryStore</span> already draws</h3>
+<p>The set of fields to persist is <em>already defined</em> in the codebase: <span class="file">HistoryStore</span>'s <code>pick()</code> keeps "every non-function field of the project store." Persistence reuses that boundary, adds a <code>schemaVersion</code>, and drops nothing UI-ephemeral (there's nothing ephemeral in <span class="file">ProjectStore</span> by design — transport lives in <span class="file">TimeStore</span>, view state in <span class="file">UIStore</span>).</p>
+<pre><code><span class="c">// persistence/serialize.ts</span>
+<span class="k">export function</span> <span class="f">serialize</span>(s: ProjectState): ProjectDocument {
+  <span class="k">const</span> { tracks, rootTrackIds, bpm, beatsPerBar, totalBars } = s;   <span class="c">// non-function fields</span>
+  <span class="k">return</span> { schemaVersion: CURRENT_VERSION, tracks, rootTrackIds, bpm, beatsPerBar, totalBars };
+}
+<span class="k">export function</span> <span class="f">hydrate</span>(doc: ProjectDocument) {
+  <span class="k">const</span> { schemaVersion, ...fields } = doc;
+  useProjectStore.setState(fields);   <span class="c">// same shape HistoryStore restores into on undo</span>
+}</code></pre>
+<div class="warn"><strong>Keep the serialization boundary honest as the store grows.</strong> The reason <span class="file">HistoryStore</span> uses a generic <code>pick()</code> (not a hand-listed set of keys) is precisely so a new field is covered automatically. Persistence should do the same — a field added to <span class="file">ProjectStore</span> is part of the document by default, and part of the undo snapshot by default, with no extra wiring. If a field ever should <em>not</em> persist (a genuinely transient one), that's the exception that justifies moving it to <span class="file">UIStore</span>/<span class="file">TimeStore</span> instead.</div>
+
+<h3>D.2 — <span class="file">autosave.ts</span> — a module singleton, not React state</h3>
+<p>Autosave is plumbing, not UI — a module-level subscription and timers, exactly like <span class="file">HistoryStore</span>'s recorder. The only React-visible surface is a save-status signal for an indicator.</p>
+<pre><code><span class="c">// persistence/autosave.ts (elided — full version in the architecture doc §4.1)</span>
+<span class="k">export function</span> <span class="f">startAutosave</span>(projectId) {
+  <span class="k">return</span> useProjectStore.subscribe((state, prev) =&gt; {
+    <span class="k">if</span> (state === prev) <span class="k">return</span>;               <span class="c">// reference diff — immutable store</span>
+    schedule(() =&gt; projectRepo.save(projectId, <span class="f">serialize</span>(state)));  <span class="c">// ~1s debounce, non-overlapping</span>
+  });
+}</code></pre>
+<div class="note"><strong>Files this leans on, and why:</strong> <span class="file">ProjectStore</span> (the document — subscribe only, no writes), <span class="file">projectRepo</span> (the one door to Supabase), and a browser lifecycle event (<code>beforeunload</code>) for the final flush. Nothing in the editor's edit path changes — autosave is pure observation, the same relationship <span class="file">HistoryStore</span> already has with the store.</div>
+
+<!-- E -->
+<h2 id="wiring">E · Wiring autosave &amp; load to the editor</h2>
+<p class="pill-row"><span class="badge b-new">editor/hooks/useProjectPersistence.ts</span><span class="badge b-edit">editor/App.tsx</span></p>
+
+<figure class="fig">
+  <div class="figtitle">One hook: load on mount, arm autosave, show status</div>
+  <svg viewBox="0 0 900 200" role="img" aria-label="Editor persistence hook">
+    <defs><marker id="aR" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="80" width="170" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="105" y="100" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">App.tsx (editor)</text>
+    <text x="105" y="116" text-anchor="middle" font-size="9" fill="#565656">mounts the hook</text>
+    <path d="M190,103 H226" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
+    <rect x="228" y="72" width="200" height="62" rx="6" fill="#fff" stroke="#141414" stroke-width="1.4"/>
+    <text x="328" y="94" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">useProjectPersistence</text>
+    <text x="328" y="110" text-anchor="middle" font-size="9" fill="#565656">read ?project=id</text>
+    <text x="328" y="124" text-anchor="middle" font-size="9" fill="#565656">load → hydrate → arm</text>
+    <path d="M428,90 C462,84 462,44 494,44" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <path d="M428,103 H494" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <path d="M428,116 C462,122 462,162 494,162" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <rect x="496" y="24" width="200" height="40" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="596" y="48" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">projectRepo.load(id)</text>
+    <rect x="496" y="83" width="200" height="40" rx="6" fill="#e6e6e6" stroke="#141414"/><text x="596" y="107" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">hydrate(doc) → setState</text>
+    <rect x="496" y="142" width="200" height="40" rx="6" fill="#141414"/><text x="596" y="166" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">startAutosave(id)</text>
+    <path d="M696,103 H732" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <rect x="734" y="83" width="150" height="40" rx="6" fill="#fff" stroke="#141414"/><text x="809" y="103" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">save-status chip</text><text x="809" y="117" text-anchor="middle" font-size="8.5" fill="#565656">saving / saved / error</text>
+  </svg>
+  <figcaption>A single hook owns the whole lifecycle: it reads the id from the URL the browser already sets, loads and hydrates, then arms autosave — in that order so the hydrate itself doesn't fire a save. Everything else in <span class="file">App.tsx</span> stays as-is.</figcaption>
+</figure>
+<pre><code><span class="c">// editor/hooks/useProjectPersistence.ts</span>
+<span class="k">export function</span> <span class="f">useProjectPersistence</span>() {
+  <span class="k">const</span> id = useSearchParams().get(<span class="s">'project'</span>);
+  useEffect(() =&gt; {
+    <span class="k">if</span> (!id) <span class="k">return</span>;
+    <span class="k">let</span> stop;
+    (<span class="k">async</span> () =&gt; {
+      <span class="k">const</span> doc = <span class="k">await</span> projectRepo.load(id);   <span class="c">// SELECT + upgradeDocument()</span>
+      <span class="f">hydrate</span>(doc);                             <span class="c">// setState the store</span>
+      stop = <span class="f">startAutosave</span>(id);                  <span class="c">// arm AFTER hydrate</span>
+    })();
+    <span class="k">return</span> () =&gt; stop?.();                       <span class="c">// unsubscribe + final flush on unmount</span>
+  }, [id]);
+}</code></pre>
+<ul>
+  <li><span class="badge b-edit">edit</span> <span class="file">editor/App.tsx</span> — call <code>useProjectPersistence()</code> near the top of the editor tree; add a small save-status chip to the header (reads the autosave status signal). The Canvas, timeline, piano roll — untouched.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">app/editor/page.tsx</span> — already loads the editor <code>ssr:false</code>; no change needed beyond the query param it already receives.</li>
+</ul>
+
+<!-- F -->
+<h2 id="phases">F · Phase-by-phase build (with files)</h2>
+
+<h3>Phase 1 — Schema: <code>data JSONB</code> + RLS + Drizzle <span class="badge b-new">db/</span></h3>
+<p>Stand up the storage shape with <em>zero app behavior change</em>: the editor still runs in-memory, but the column, the policies, and the migration tooling exist.</p>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">db/schema.ts</span> (the <code>projects</code> table, incl. new <code>data</code>, <code>schema_version</code>, <code>updated_at</code>), <span class="file">drizzle.config.ts</span>, <span class="file">db/migrations/0001_add_project_document.sql</span> (generated: add columns + <code>enable row level security</code> + the four owner policies).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">package.json</span> — add <code>drizzle-orm</code>, <code>drizzle-kit</code> and <code>db:generate</code> / <code>db:migrate</code> scripts.</li>
+  <li>Reconcile <code>user_id</code> vs <code>owner</code> (rename or alias — §C.2). Existing rows get a default empty document at <code>schema_version = 1</code>.</li>
+</ul>
+
+<h3>Phase 2 — persistence module + <code>projectRepo</code> <span class="badge b-new">persistence/</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">persistence/supabase.ts</span> (re-export the existing browser client), <span class="file">persistence/types.ts</span> (<code>ProjectDocument</code>), <span class="file">persistence/serialize.ts</span>, <span class="file">persistence/upgrade.ts</span> (<code>CURRENT_VERSION = 1</code>, empty chain), <span class="file">persistence/projectRepo.ts</span> (<code>list/load/save/create/remove</code>).</li>
+  <li>No editor wiring yet — the repo is exercised by a throwaway script / test (save a doc, load it back, assert equality). Proves round-trip serialization before touching the UI.</li>
+</ul>
+
+<h3>Phase 3 — Autosave + load wiring ★ keystone <span class="badge b-new">autosave</span> <span class="badge b-edit">App.tsx</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">persistence/autosave.ts</span>, <span class="file">editor/hooks/useProjectPersistence.ts</span>.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">editor/App.tsx</span> — mount the hook + a save-status chip. First real "edit, reload, it's still there." This is the phase that proves the whole thesis; everything after hardens it.</li>
+</ul>
+<div class="note"><strong>The keystone test:</strong> open a project, add a track and some notes, wait ~1s (chip flips to <em>saved</em>), reload the tab — the track and notes are back. If that round-trips, the document layer works; if not, it's the serialize boundary or the RLS policy (a save silently filtered to zero rows). Those two are the usual first bugs.</div>
+
+<h3>Phase 4 — Project browser through the repo <span class="badge b-edit">app/projects</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">persistence/hooks/useAuth.ts</span>, <span class="file">persistence/hooks/useProjectList.ts</span>.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">app/projects/page.tsx</span> — replace inline <code>supabase.from('projects')…</code> with <code>projectRepo.list/create/remove</code>; create now inserts a default <code>ProjectDocument</code>. <span class="badge b-edit">edit</span> <span class="file">src/components/ProjectsDisplay.tsx</span> if the summary shape changes (add <code>updated_at</code> for a "last edited" sort). Behavior identical; source of truth unified.</li>
+</ul>
+
+<h3>Phase 5 — Doc-versioning + conflict safety <span class="badge b-new">upgrade chain</span></h3>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">persistence/upgrade.ts</span> — as the model changes, append <code>vN → vN+1</code> steps (each pure, immutable, fixture-tested). Bump <code>CURRENT_VERSION</code>.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">persistence/projectRepo.ts</span> — add an optimistic-concurrency check on <code>save</code>: pass the loaded <code>updated_at</code>, and if the row moved since, surface a conflict instead of clobbering (§4.3 of the architecture doc). Optional: a Supabase Realtime "open elsewhere" flag.</li>
+</ul>
+
+<h3>Phase 6 — Audio bytes → Storage <span class="badge b-new">deferred</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">persistence/audioRepo.ts</span> — upload/download the clip bytes to a Supabase Storage bucket (RLS-scoped like the table), referenced by the doc's <code>audioClip.ref</code>. <span class="badge b-edit">edit</span> <span class="file">editor/audioSource.ts</span> to resolve <code>ref</code> through the bucket instead of in-memory. The clip <em>metadata</em> already persists in the blob today — this only moves the bytes. Deferred until audio persistence is a priority.</li>
+</ul>
+
+<!-- G -->
+<h2 id="inventory">G · Master file inventory</h2>
+<p>Every file this plan touches, and why. Read it as "persistence is a new island next to the editor; the account layer already ships and barely moves."</p>
+
+<div class="tree">cabin-visuals/
+├─ <span class="tg-new">NEW</span> db/                          ★ schema-as-code (Drizzle)
+│  ├─ schema.ts                projects table (+ data JSONB, schema_version, updated_at)
+│  └─ migrations/
+│     └─ 0001_add_project_document.sql   add columns · enable RLS · 4 owner policies
+├─ <span class="tg-new">NEW</span> drizzle.config.ts            points drizzle-kit at Supabase
+├─ src/
+│  ├─ <span class="tg-new">NEW</span> persistence/              ★ the document layer (new island)
+│  │  ├─ supabase.ts           re-export the existing browser client
+│  │  ├─ types.ts              ProjectDocument (the blob's shape)
+│  │  ├─ serialize.ts          store ⇄ document (same boundary HistoryStore snapshots)
+│  │  ├─ upgrade.ts            schemaVersion chain: vN → vN+1 (append-only)
+│  │  ├─ projectRepo.ts        list · load · save · create · remove  (the one door)
+│  │  ├─ autosave.ts           debounced store subscription → projectRepo.save
+│  │  └─ hooks/
+│  │     ├─ useAuth.ts         session + owner id (wraps supabase.auth)
+│  │     └─ useProjectList.ts  list + create/delete for the browser
+│  ├─ utils/supabase/
+│  │  ├─ <span class="tg-edit">KEEP</span> client.ts             existing browser client (persistence re-exports it)
+│  │  ├─ <span class="tg-edit">KEEP</span> server.ts             existing server client
+│  │  └─ <span class="tg-edit">KEEP</span> middleware.ts         existing session refresh + route gate
+│  ├─ <span class="tg-edit">KEEP</span> middleware.ts             existing — unchanged
+│  ├─ components/
+│  │  └─ <span class="tg-edit">EDIT</span> ProjectsDisplay.tsx   (minor) show "last edited" from updated_at
+│  └─ editor/
+│     ├─ <span class="tg-edit">EDIT</span> App.tsx               mount useProjectPersistence + save-status chip
+│     ├─ <span class="tg-new">NEW</span>  hooks/useProjectPersistence.ts   load ?project=id · hydrate · arm autosave
+│     ├─ <span class="tg-edit">KEEP</span> store/ProjectStore.ts  the document — subscribed, never edited by persistence
+│     ├─ <span class="tg-edit">KEEP</span> store/HistoryStore.ts  already defines the serialization boundary we reuse
+│     ├─ <span class="tg-edit">KEEP</span> store/AudioStore.ts    AudioClip is JSON-friendly by design (rides in the blob)
+│     └─ <span class="tg-edit">EDIT</span> audioSource.ts         resolve clip ref via Storage            (phase 6)
+├─ app/
+│  ├─ <span class="tg-edit">EDIT</span> projects/page.tsx        route list/create/delete through projectRepo
+│  ├─ <span class="tg-edit">KEEP</span> editor/page.tsx          already loads editor ssr:false with ?project
+│  └─ <span class="tg-edit">KEEP</span> (auth)/*                 login/signup/reset — already ship, untouched
+└─ <span class="tg-edit">EDIT</span> package.json                + drizzle-orm, drizzle-kit, db:* scripts</div>
+
+<table>
+  <thead><tr><th>Already ships (and why that's the point)</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">utils/supabase/*</span>, <span class="file">middleware.ts</span>, <span class="file">app/(auth)/*</span></td><td>Auth — session, refresh, route gating, all the login flows — is built and correct. Persistence <em>uses</em> the session (<code>auth.uid()</code>); it doesn't rebuild any of it.</td></tr>
+    <tr><td><span class="file">ProjectsDisplay.tsx</span>, <span class="file">app/projects/page.tsx</span></td><td>The project browser (list/create/delete + routing to the editor) already works on the metadata. The only change is going through the repo and carrying a document.</td></tr>
+    <tr><td><span class="file">ProjectStore</span>, <span class="file">HistoryStore</span>, <span class="file">TimeStore</span>, <span class="file">UIStore</span></td><td>The document is already cleanly separated from transport/view state, and <span class="file">HistoryStore</span> already snapshots exactly the serialization boundary a save needs. Persistence observes; it doesn't restructure the stores.</td></tr>
+  </tbody>
+</table>
+<div class="rec"><strong>The one-sentence mental model:</strong> you're adding a self-contained <span class="file">persistence/</span> island that <em>observes</em> the project store and mirrors it into one JSONB blob via <span class="file">projectRepo</span>, plus a <span class="file">db/</span> island that defines the column + RLS as migrations; the only edits to existing files are (a) mounting one hook in <span class="file">App.tsx</span>, (b) routing the browser through the repo, and (c) adding the storage column — the auth and stores are untouched.</p></div>
+
+<!-- H -->
+<h2 id="risks">H · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>RLS policy is the silent failure.</strong> A wrong or missing policy makes every save/load return zero rows with no error — the classic "why isn't it saving?" Mitigation: policies ship in the phase-1 migration and are tested (a save-then-load round-trip in phase 3 is the canary). Watch <code>user_id</code> vs <code>owner</code> naming. (§6, §C.2)</li>
+  <li><span class="badge b-risk">risk</span> <strong>Serialization boundary drift.</strong> If persistence hand-lists fields instead of reusing <span class="file">HistoryStore</span>'s generic <code>pick()</code>, a new store field silently stops saving. Mitigation: reuse the same generic boundary; a persisted field and an undoable field are the same set by construction. (§D.1)</li>
+  <li><span class="badge b-risk">risk</span> <strong>Hydrate triggers a save.</strong> Arming autosave before hydrating fires a redundant (or looping) save on load. Mitigation: arm strictly after <code>hydrate</code>; the reference diff also short-circuits an identical state. (§E)</li>
+  <li><span class="badge b-risk">risk</span> <strong>Upgrade-step correctness.</strong> A buggy/edited <code>vN → vN+1</code> corrupts old blobs on load. Mitigation: steps are pure, append-only, and fixture-tested against captured old-version documents; never mutate a shipped step. (§phase 5)</li>
+  <li><span class="badge b-risk">open</span> <strong>Concurrency floor.</strong> Two tabs clobber (last-write-wins). Decide the minimum: an <code>updated_at</code> conflict check (a where-clause) vs a Realtime "open elsewhere" flag. Ship the check; defer collaboration. (§4.3 arch)</li>
+  <li><span class="badge b-risk">open</span> <strong>Autosave debounce vs data loss.</strong> An edit in the debounce window before a crash is lost. Mitigation: flush on <code>beforeunload</code>/<code>visibilitychange</code> and explicit close; keep the window ~1s.</li>
+  <li><span class="badge b-risk">open</span> <strong>Audio bytes.</strong> The clip metadata persists today; the bytes need a Storage bucket + RLS. Decide the bucket model before shipping phase 6.</li>
+  <li><span class="badge b-store">decided</span> <strong>Local-first blob, thin spine, RLS + Drizzle.</strong> Zustand authoritative; one JSONB document mirrored debounced; ownership enforced in Postgres; schema (columns + policies) in git. This is the recommended shape and everything above builds on it.</li>
+</ul>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Mirrors <span class="file">visual-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">persistence-architecture.html</span>. Existing references: <span class="file">src/utils/supabase/*</span>, <span class="file">app/(auth)/*</span>, <span class="file">app/projects/page.tsx</span>, <span class="file">src/editor/store/{ProjectStore,HistoryStore,AudioStore}.ts</span>. Greyscale, print-ready.</p>
+
+</div>
+</body>
+</html>
