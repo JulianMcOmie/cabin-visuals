@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audio Track — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#f2f2f2; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .b-new{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-edit{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-del{background:#fff;color:#111;border-style:dashed}
+  .b-store{background:#fff;color:#111;border-color:#111}
+  .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
+  .pill-row{margin:10px 0 4px}
+  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .toc{columns:2;gap:28px;margin:8px 0 0}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .muted{color:var(--muted)}.small{font-size:13px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
+  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:10px}
+  .tg-edit{color:#111;background:#dcdcdc;border-radius:4px;padding:0 4px;font-size:10px}
+  .tg-del{color:#111;border:1px dashed #777;border-radius:4px;padding:0 4px;font-size:10px}
+  .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#fbfbfb}
+  .comp h4{color:var(--ink);font-size:14px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
+    figure.fig,pre,table,.card,.keystone,.note,.warn,.rec,.tree,.comp{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Editor</span>
+  <h1>Audio Track — Implementation Plan</h1>
+  <p class="sub">Turning <span class="file">audio-track-architecture.html</span> into specific files, types, and functions: what gets added, what gets touched, and why — from the single global clip to a draggable audio block.</p>
+</header>
+
+<div class="card">
+  <h3 style="margin-top:18px">Contents</h3>
+  <nav class="toc">
+    <a href="#components">A · Components that change (start here)</a>
+    <a href="#scope">B · Scope &amp; the phase ladder</a>
+    <a href="#model">C · Data model — types &amp; where they live</a>
+    <a href="#engine">D · The scheduling core (playback.ts)</a>
+    <a href="#render">E · The renderer — block + waveform</a>
+    <a href="#phases">F · Phase-by-phase build (with files)</a>
+    <a href="#inventory">G · Master file inventory</a>
+    <a href="#risks">H · Risks &amp; open questions</a>
+  </nav>
+</div>
+
+<p class="muted small">This plan touches <strong>three existing seams</strong> — the <span class="file">store/</span> (clip library + audio blocks), <span class="file">core/playback.ts</span> (per-block scheduling), and <span class="file">components/timeline/</span> (an audio track row) — plus one small new module for waveforms. The visual engine (<span class="file">core/engine/</span>) is not touched at all: audio scheduling lives entirely in the transport engine, and the beat clock is unchanged. Every section names the files it creates / edits / deletes.</p>
+
+<!-- A -->
+<h2 id="components">A · Components that change — and one layer down</h2>
+<p>The highest level first, then a peek at the key function inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span> <span class="badge b-del">delete</span>.</p>
+
+<figure class="fig">
+  <div class="figtitle">Where the new pieces live and how they connect</div>
+  <svg viewBox="0 0 900 350" role="img" aria-label="Module layout">
+    <defs><marker id="aL" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="40" width="170" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="105" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">AudioStore</text>
+    <text x="105" y="82" text-anchor="middle" font-size="10" fill="#565656">clip → clips library</text>
+    <text x="105" y="99" text-anchor="middle" font-size="10" fill="#565656">(Record&lt;ref, AudioClip&gt;)</text>
+    <rect x="20" y="150" width="170" height="76" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="105" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
+    <text x="105" y="192" text-anchor="middle" font-size="10" fill="#565656">audio track + AudioBlock[]</text>
+    <text x="105" y="209" text-anchor="middle" font-size="10" fill="#565656">(startBar · trim · gestures)</text>
+
+    <rect x="250" y="60" width="360" height="230" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="430" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">core/  (transport + audio bytes)</text>
+    <rect x="270" y="96" width="160" height="60" rx="6" fill="#f6f6f6" stroke="#141414" stroke-width="1.5"/>
+    <text x="350" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">playback.ts</text>
+    <text x="350" y="137" text-anchor="middle" font-size="9" fill="#565656">1 player → per-block pool</text>
+    <text x="350" y="150" text-anchor="middle" font-size="9" fill="#565656">armBlock() · loadClips()</text>
+    <rect x="450" y="96" width="140" height="60" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="520" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">audioSource.ts</text>
+    <text x="520" y="137" text-anchor="middle" font-size="9" fill="#565656">ref → bytes (as-is)</text>
+    <text x="520" y="150" text-anchor="middle" font-size="9" fill="#565656">getPlayableUrl()</text>
+    <rect x="270" y="172" width="160" height="56" rx="6" fill="#141414"/>
+    <text x="350" y="194" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">waveform.ts</text>
+    <text x="350" y="211" text-anchor="middle" font-size="9" fill="#dcdcdc">decode-cache + peaks</text>
+    <rect x="450" y="172" width="140" height="56" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="520" y="194" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">usePlayback.ts</text>
+    <text x="520" y="211" text-anchor="middle" font-size="9" fill="#565656">loadClips before play</text>
+
+    <rect x="670" y="70" width="200" height="90" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="770" y="94" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">components/timeline/</text>
+    <text x="770" y="112" text-anchor="middle" font-size="10" fill="#565656">AudioTrack row</text>
+    <text x="770" y="129" text-anchor="middle" font-size="10" fill="#565656">AudioBlockView + waveform</text>
+    <text x="770" y="146" text-anchor="middle" font-size="10" fill="#565656">move / trim gestures</text>
+    <rect x="670" y="188" width="200" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <text x="770" y="212" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">TimeStore</text>
+    <text x="770" y="230" text-anchor="middle" font-size="10" fill="#565656">currentBeat — the clock</text>
+    <text x="770" y="247" text-anchor="middle" font-size="10" fill="#565656">★ UNCHANGED</text>
+
+    <path d="M190,180 C215,160 220,140 266,124" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#aL)"/>
+    <text x="196" y="150" font-size="9" fill="#565656">read blocks (play/seek)</text>
+    <path d="M190,80 C215,90 230,100 266,110" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aL)"/>
+    <text x="196" y="98" font-size="9" fill="#565656">clips</text>
+    <path d="M610,120 C640,110 645,100 666,100" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aL)"/>
+    <text x="616" y="94" font-size="9" fill="#565656">waveform</text>
+    <path d="M770,160 C770,175 770,180 770,186" stroke="#141414" stroke-width="1.3" marker-end="url(#aL)"/>
+  </svg>
+  <figcaption>The audio work is a triangle: the stores hold the material + placement, <span class="file">playback.ts</span> schedules it against the clock, and the timeline draws + edits it. The visual engine and TimeStore are untouched.</figcaption>
+</figure>
+
+<div class="comp">
+  <h4>1 · The scheduling core <span class="badge b-edit">edit</span> <span class="file">core/playback.ts</span></h4>
+  <p><strong>Generalizes the single <code>Tone.Player</code> into a per-block pool, armed on beat windows.</strong> One layer down:</p>
+  <ul class="small">
+    <li><code>setAudioBlocks(blocks)</code> — hand the engine the current audio blocks (called on play/seek/store-change); it keeps a <code>Map&lt;blockId, Tone.Player&gt;</code>, creating/disposing as the set changes;</li>
+    <li><code>armBlock(block, atBeat, when)</code> — the shared three-case helper (mid-clip / future / past → <code>start(when, offset)</code>) that both <code>play</code> and <code>seek</code> call, so they can't diverge;</li>
+    <li><code>play</code> / <code>seek</code> loop <code>armBlock</code> over every block instead of touching one global player; the <code>AUDIO_LOOKAHEAD</code> alignment and <code>beatToPosition</code> conversion carry over verbatim.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>2 · The clip library <span class="badge b-edit">edit</span> <span class="file">store/AudioStore.ts</span></h4>
+  <p><strong>Grows the single <code>clip</code> slot into a keyed library</strong> so a project can hold many clips. Deeper:</p>
+  <ul class="small">
+    <li><code>clips: Record&lt;ref, AudioClip&gt;</code> replacing <code>clip: AudioClip | null</code>; <code>addClip(clip)</code> / <code>removeClip(ref)</code>;</li>
+    <li><code>AudioClip</code> itself is unchanged (<code>ref · fileName · duration</code>) — already serializable and IndexedDB-ready.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>3 · The placement model <span class="badge b-edit">edit</span> <span class="file">types.ts</span> · <span class="file">store/ProjectStore.ts</span></h4>
+  <p><strong>Adds the audio track type and the <code>AudioBlock</code> that references a clip at a position.</strong> Deeper:</p>
+  <ul class="small">
+    <li><span class="file">types.ts</span> — <code>AudioBlock { id; clipRef; startBar; trimStart; trimEnd; gain?; fades? }</code>, <code>'audio'</code> added to <code>TrackType</code>, <code>Track.audioBlocks?</code>;</li>
+    <li><span class="file">ProjectStore.ts</span> — <code>addAudioBlock</code>, <code>updateAudioBlock</code> (drag → <code>startBar</code>; trim → <code>trimStart</code>/<code>trimEnd</code>), <code>deleteAudioBlock</code>; an <code>addAudioTrack</code> helper. No scheduling logic here — the store is document-only.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>4 · The waveform module <span class="badge b-new">new</span> <span class="file">core/waveform.ts</span></h4>
+  <p><strong>Decode-once, size-independent peak extraction, cached per ref.</strong> Deeper:</p>
+  <ul class="small">
+    <li><code>getBuffer(ref)</code> — decode the file (reusing <span class="file">AudioBar</span>'s existing <code>decodeAudioData</code>) and cache the <code>AudioBuffer</code> per ref, shared by the waveform and the <code>Tone.Player</code>;</li>
+    <li><code>getPeaks(ref, buckets)</code> — a fixed-resolution min/max array computed once; the canvas draw samples from it at any pixel width (zoom = redraw, not re-analyze).</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>5 · The audio track row <span class="badge b-new">new</span> <span class="file">components/timeline/AudioBlockView.tsx</span> · <span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> · <span class="file">TimelineArea.tsx</span></h4>
+  <ul class="small">
+    <li><span class="file">AudioBlockView.tsx</span> — draws a block at <code>startBar * barWidthPx</code> (like <span class="file">Block.tsx</span>) with a <code>&lt;canvas&gt;</code> waveform and trim-edge handles;</li>
+    <li><span class="file">Track.tsx</span> — when <code>track.type === 'audio'</code>, render <code>audioBlocks</code> instead of MIDI blocks; <span class="file">TimelineArea.tsx</span> wires the audio move/trim gestures.</li>
+  </ul>
+</div>
+
+<div class="comp">
+  <h4>6 · Load + play wiring <span class="badge b-edit">edit</span> <span class="file">hooks/usePlayback.ts</span> · <span class="file">components/AudioBar.tsx</span></h4>
+  <ul class="small">
+    <li><span class="file">usePlayback.ts</span> — <code>play()</code> gathers the project's audio blocks, awaits <code>engine.loadClips(refs)</code> (was <code>loadAudio(ref)</code>), then <code>engine.play(start)</code>; a store subscription pushes block edits to the engine while playing;</li>
+    <li><span class="file">AudioBar.tsx</span> — the file-load path calls <code>addClip</code> (library) instead of <code>setClip</code> (single slot); becomes the entry point for dropping a clip onto an audio track.</li>
+  </ul>
+</div>
+
+<!-- B -->
+<h2 id="scope">B · Scope &amp; the phase ladder</h2>
+<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors the architecture doc — Phase 1 is the data model + a static block, Phase 2 makes it play at its position (the keystone), Phase 3 adds the waveform + drag, Phase 4 adds multiple clips + trim. Everything after Phase 2 is additive.</p>
+
+<figure class="fig">
+  <div class="figtitle">The phase ladder — and roughly where each lands</div>
+  <svg viewBox="0 0 900 250" role="img" aria-label="Phase ladder">
+    <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
+    <g font-size="11" fill="#141414">
+      <rect x="20" y="24" width="270" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="44" font-weight="700">1 · Audio-block data model + type</text>
+      <rect x="20" y="62" width="270" height="30" rx="5" fill="#141414"/><text x="32" y="82" fill="#fff" font-weight="700">2 · Transport scheduling ★ keystone</text>
+      <rect x="20" y="100" width="270" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="120" font-weight="700">3 · Waveform block + drag</text>
+      <rect x="20" y="138" width="270" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Multiple clips + trim</text>
+      <rect x="20" y="176" width="270" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="196" font-weight="700">5 · Polish: split, fades, scrub (later)</text>
+    </g>
+    <text x="330" y="20" font-size="11" font-weight="700" fill="#141414">touches mostly…</text>
+    <g font-size="10.5" fill="#565656">
+      <text x="330" y="44">types.ts · AudioStore · ProjectStore (audio actions)</text>
+      <text x="330" y="82">core/playback.ts (armBlock loop) · usePlayback (loadClips)</text>
+      <text x="330" y="120">core/waveform.ts · AudioBlockView · Track/TimelineArea gestures</text>
+      <text x="330" y="158">AudioStore library · trim gestures · playback trim clamp</text>
+      <text x="330" y="196">split action · fade nodes · grain-scrub (deferred)</text>
+    </g>
+    <path d="M155,54 V62" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M155,92 V100" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M155,130 V138" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M155,168 V176" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+  </svg>
+  <figcaption>Black = the keystone (scheduling), grey = data-model foundation. Phases 1–2 prove the whole thesis (a block that plays at its position); 3–5 are additive. Full per-phase file lists are §F.</figcaption>
+</figure>
+
+<div class="rec"><strong>In scope here:</strong> the audio-block data model, the per-block scheduling in <span class="file">core/playback.ts</span>, the waveform module + block renderer, drag + trim, and multiple clips — with file lists for all phases. <strong>Deferred (named, not detailed):</strong> audio scrubbing while paused (grain playback), block split, edge fades, and audio-reactive visuals (a future bridge into the visual engine's port matrix — out of scope entirely here).</p></div>
+
+<!-- C -->
+<h2 id="model">C · Data model — the types and where they live</h2>
+<p>Two kinds of state: the <strong>material</strong> (clips — bytes + descriptor, in <span class="file">AudioStore</span>/<span class="file">audioSource.ts</span>) and the <strong>placement</strong> (audio blocks — position + trim, in the project document). The beat window each block occupies is <em>derived</em>, never stored — recomputed from <code>startBar</code> + trim + tempo, exactly like the visual engine's resolved graph.</p>
+
+<figure class="fig">
+  <div class="figtitle">Material vs placement vs derived</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Data model layers">
+    <defs><marker id="aM" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="30" y="22" font-size="12" font-weight="700" fill="#141414">MATERIAL — the clip library  (AudioStore.ts + audioSource.ts)</text>
+    <rect x="30" y="34" width="200" height="70" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="44" y="54" font-size="11" font-weight="700" fill="#141414">AudioClip</text>
+    <text x="44" y="72" font-size="9.5" fill="#565656">ref · fileName · duration</text>
+    <text x="44" y="88" font-size="9.5" fill="#565656">(unchanged shape)</text>
+    <rect x="250" y="34" width="200" height="70" rx="6" fill="#f6f6f6" stroke="#141414" stroke-dasharray="3 2"/>
+    <text x="264" y="54" font-size="10.5" font-weight="700" fill="#141414">decoded AudioBuffer</text>
+    <text x="264" y="72" font-size="9" fill="#565656">cached per ref (waveform.ts)</text>
+    <text x="264" y="88" font-size="9" fill="#565656">feeds peaks + Tone.Player</text>
+
+    <text x="30" y="146" font-size="12" font-weight="700" fill="#141414">PLACEMENT — edited, persisted, undoable  (types.ts + ProjectStore)</text>
+    <rect x="30" y="158" width="200" height="86" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="44" y="178" font-size="11" font-weight="700" fill="#141414">Track (type: 'audio')</text>
+    <text x="44" y="196" font-size="9.5" fill="#565656">name · color · muted · solo</text>
+    <text x="44" y="212" font-size="9.5" fill="#565656">parentId · childIds</text>
+    <text x="44" y="228" font-size="9.5" fill="#565656">audioBlocks: AudioBlock[]</text>
+    <rect x="250" y="158" width="230" height="86" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="264" y="178" font-size="11" font-weight="700" fill="#141414">AudioBlock</text>
+    <text x="264" y="196" font-size="9.5" fill="#565656">clipRef → AudioClip.ref</text>
+    <text x="264" y="212" font-size="9.5" fill="#565656">startBar</text>
+    <text x="264" y="228" font-size="9.5" fill="#565656">trimStart · trimEnd</text>
+
+    <rect x="560" y="120" width="310" height="40" rx="6" fill="#141414"/>
+    <text x="715" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">derived at schedule time (playback.ts)</text>
+    <path d="M480,200 C540,190 560,170 566,160" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aM)"/>
+    <rect x="560" y="170" width="310" height="76" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="576" y="192" font-size="9.5" fill="#565656">startBeat = startBar · beatsPerBar</text>
+    <text x="576" y="210" font-size="9.5" fill="#565656">durBeats  = (trimEnd − trimStart) · bpm/60</text>
+    <text x="576" y="228" font-size="9.5" fill="#565656">endBeat   = startBeat + durBeats</text>
+    <text x="576" y="243" font-size="9" fill="#565656">→ never persisted, always recomputable</text>
+  </svg>
+  <figcaption>The user edits the placement (top-left / middle-left). The engine derives the beat window on the fly. Storing bars (not beats) keeps the block's on-screen width honest as the ruler zooms and matches the MIDI <code>Block</code> exactly.</figcaption>
+</figure>
+
+<h3>C.1 — Material types <span class="badge b-edit">edit AudioStore.ts</span></h3>
+<pre><code><span class="c">// store/AudioStore.ts</span>
+<span class="k">interface</span> <span class="f">AudioClip</span> { ref: <span class="k">string</span>; fileName: <span class="k">string</span>; duration: <span class="k">number</span>; }  <span class="c">// unchanged</span>
+<span class="k">interface</span> <span class="f">AudioState</span> {
+  clips: <span class="f">Record</span>&lt;<span class="k">string</span>, AudioClip&gt;;   <span class="c">// was: clip | null</span>
+  addClip: (c: AudioClip) =&gt; <span class="k">void</span>;
+  removeClip: (ref: <span class="k">string</span>) =&gt; <span class="k">void</span>;
+}</code></pre>
+
+<h3>C.2 — Placement types <span class="badge b-edit">edit types.ts</span></h3>
+<pre><code><span class="c">// types.ts</span>
+<span class="k">type</span> <span class="f">TrackType</span> = <span class="s">'base'</span> | <span class="s">'add'</span> | <span class="s">'mute'</span> | <span class="s">'suppress'</span> | <span class="s">'override'</span>
+  | <span class="s">'automation'</span> | <span class="s">'ability'</span> | <span class="s">'audio'</span>;   <span class="c">// + one member</span>
+
+<span class="k">interface</span> <span class="f">AudioBlock</span> {
+  id: <span class="k">string</span>;
+  clipRef: <span class="k">string</span>;        <span class="c">// → AudioClip.ref</span>
+  startBar: <span class="k">number</span>;       <span class="c">// timeline position (mirrors Block.startBar)</span>
+  trimStart: <span class="k">number</span>;      <span class="c">// seconds into the clip (default 0)</span>
+  trimEnd: <span class="k">number</span>;        <span class="c">// seconds (default = clip.duration)</span>
+  gain?: <span class="k">number</span>;          <span class="c">// per-block volume</span>
+  fadeIn?: <span class="k">number</span>; fadeOut?: <span class="k">number</span>;   <span class="c">// seconds (phase 5)</span>
+}
+
+<span class="k">interface</span> <span class="f">Track</span> {          <span class="c">// existing shell, one optional field</span>
+  … type; name; color; muted; solo; parentId; childIds; blocks;
+  audioBlocks?: AudioBlock[];   <span class="c">// present only when type === 'audio'</span>
+}</code></pre>
+<div class="note"><strong>Mental model:</strong> <span class="file">AudioStore</span> = "the sounds the project owns" (material), <span class="file">ProjectStore</span> = "where they're placed" (edits). The placement is undoable (it's an edit, like moving a MIDI block); whether adding a clip to the library is undoable is an open call (§H). The engine reads both on play/seek; neither store knows about the engine.</div>
+<div class="warn"><strong>Reuse <code>blocks</code> or add <code>audioBlocks</code>?</strong> Two options. <strong>(a)</strong> a parallel <code>audioBlocks: AudioBlock[]</code> (drawn above) — clean separation, audio never enters MIDI-block code paths. <strong>(b)</strong> put audio blocks in the existing <code>blocks</code> array with a discriminant — reuses the block gesture/selection plumbing wholesale (marquee, copy/paste, alt-drag) but forces every MIDI-block reader to guard against audio payloads. Recommendation: start with <strong>(a)</strong> for isolation; if the trim/move gestures end up wanting the full block gesture system, migrate to <strong>(b)</strong>. This mirrors the visual engine's own "parallel structure vs. child tracks" decision (abilities), which ultimately unified on shared plumbing — so <strong>(b)</strong> may win long-term.</div>
+
+<!-- D -->
+<h2 id="engine">D · The scheduling core — <span class="file">core/playback.ts</span></h2>
+<p class="pill-row"><span class="badge b-edit">core/playback.ts</span><span class="badge b-edit">hooks/usePlayback.ts</span><span class="badge b-store">core/audioSource.ts (as-is)</span></p>
+<p>Today's engine owns one <code>Tone.Player</code> and pins it to beat 0. The change is mechanical: a player <em>pool</em> keyed by block id, and a single shared <code>armBlock</code> helper that both <code>play</code> and <code>seek</code> call.</p>
+
+<figure class="fig">
+  <div class="figtitle">Runtime data-flow — which function owns each step</div>
+  <svg viewBox="0 0 900 320" role="img" aria-label="Audio runtime flow">
+    <defs><marker id="aD" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="30" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="95" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">user hits play / seeks</text>
+    <text x="95" y="66" text-anchor="middle" font-size="9" fill="#565656">or drags a block</text>
+    <path d="M170,53 H214" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="216" y="26" width="170" height="54" rx="6" fill="#fff" stroke="#141414" stroke-width="1.4"/>
+    <text x="301" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">usePlayback.play()</text>
+    <text x="301" y="65" text-anchor="middle" font-size="9" fill="#565656">gather audioBlocks + refs</text>
+    <path d="M301,80 V104" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <text x="312" y="97" font-size="9" fill="#565656">await loadClips(refs)</text>
+    <rect x="216" y="108" width="170" height="50" rx="6" fill="#f6f6f6" stroke="#141414" stroke-width="1.4"/>
+    <text x="301" y="130" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">loadClips()</text>
+    <text x="301" y="146" text-anchor="middle" font-size="9" fill="#565656">pool: create/dispose players</text>
+    <path d="M386,133 H440" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+    <rect x="442" y="26" width="180" height="132" rx="8" fill="#fff" stroke="#141414" stroke-width="1.5"/>
+    <text x="532" y="48" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">engine.play(startBeat)</text>
+    <text x="458" y="68" font-size="9" fill="#565656">when = now + LOOKAHEAD</text>
+    <text x="458" y="84" font-size="9" fill="#565656">transport.start(when)</text>
+    <text x="458" y="104" font-size="9" fill="#141414">for each block:</text>
+    <text x="458" y="120" font-size="9" fill="#141414">  armBlock(b, startBeat, when)</text>
+    <text x="458" y="140" font-size="9" fill="#565656">(shared by seek() too)</text>
+
+    <rect x="680" y="60" width="200" height="64" rx="8" fill="#141414"/>
+    <text x="780" y="84" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">armBlock(block, atBeat, when)</text>
+    <text x="780" y="102" text-anchor="middle" font-size="9" fill="#dcdcdc">3 cases: mid / future / past</text>
+    <text x="780" y="116" text-anchor="middle" font-size="9" fill="#dcdcdc">player.start(when[+delay], offset)</text>
+    <path d="M622,110 C645,110 655,100 676,96" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
+
+    <rect x="216" y="200" width="664" height="90" rx="8" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <text x="232" y="220" font-size="11" font-weight="700" fill="#141414">STEADY STATE — no per-frame audio work</text>
+    <rect x="232" y="232" width="200" height="48" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="332" y="254" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">RAF tracker (existing)</text>
+    <text x="332" y="270" text-anchor="middle" font-size="9" fill="#565656">position → setCurrentBeat</text>
+    <rect x="452" y="232" width="200" height="48" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="552" y="254" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">block window closes</text>
+    <text x="552" y="270" text-anchor="middle" font-size="9" fill="#565656">player stops itself at trimEnd</text>
+    <rect x="672" y="232" width="196" height="48" rx="6" fill="#fff" stroke="#141414"/>
+    <text x="770" y="254" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">end-of-project</text>
+    <text x="770" y="270" text-anchor="middle" font-size="9" fill="#565656">stop ALL block players</text>
+  </svg>
+  <figcaption>Everything happens at transport events (play / seek / block-edit). In steady state Tone's own scheduler carries the armed players; the RAF only advances the beat and detects the end. No polling to start blocks.</figcaption>
+</figure>
+
+<h3>D.1 — the shared <code>armBlock</code> helper</h3>
+<pre><code><span class="c">// core/playback.ts — the one place beat⟷second math lives</span>
+<span class="k">private</span> <span class="f">armBlock</span>(b: AudioBlock, atBeat: <span class="k">number</span>, when: <span class="k">number</span>) {
+  <span class="k">const</span> bpm = <span class="k">this</span>.callbacks.getBpm();
+  <span class="k">const</span> bpb = <span class="k">this</span>.callbacks.getBeatsPerBar();
+  <span class="k">const</span> startBeat = b.startBar * bpb;
+  <span class="k">const</span> endBeat   = startBeat + (b.trimEnd - b.trimStart) * bpm / 60;
+  <span class="k">const</span> player    = <span class="k">this</span>.players.get(b.id);
+  <span class="k">if</span> (!player) <span class="k">return</span>;
+  player.stop(when);
+  <span class="k">if</span> (atBeat &gt;= endBeat) <span class="k">return</span>;                    <span class="c">// past — idle</span>
+  <span class="k">if</span> (atBeat &lt;= startBeat)                            <span class="c">// future — schedule ahead</span>
+    player.start(when + (startBeat - atBeat) * 60 / bpm, b.trimStart);
+  <span class="k">else</span>                                               <span class="c">// mid-clip — join with an offset</span>
+    player.start(when, b.trimStart + (atBeat - startBeat) * 60 / bpm);
+}</code></pre>
+<p><code>play(beat)</code> and <code>seek(beat)</code> both reduce to "set the transport position, pick a shared <code>when</code>, then <code>armBlock(b, beat, when)</code> for every block." Today's single-player call — <code>start(when, startBeat*60/bpm)</code> — <em>is</em> the mid-clip branch for a block anchored at beat 0; adding <code>startBar</code> shifts the anchor and introduces the future/past cases.</p>
+<div class="warn"><strong>Player pool lifecycle.</strong> <code>loadClips(refs)</code> replaces <code>loadAudio(ref)</code>: it disposes players whose block is gone, creates a <code>Tone.Player</code> per <em>block</em> (two blocks of the same clip may overlap → distinct players sharing one decoded <code>ToneAudioBuffer</code> per ref), and awaits <code>Tone.loaded()</code>. Buffers come from <span class="file">core/waveform.ts</span>'s per-ref cache, so audio and waveform share one decode. Never leak a player on block delete — key the map by block id and reconcile against the current block set.</div>
+<div class="note"><strong>Live bpm change.</strong> <code>setBpm</code> today just sets <code>transport.bpm</code>. With positioned audio, a live change moves every block's beat window (seconds fixed, beats not). Simplest correct behavior: on a live bpm change while playing, re-arm all blocks (a <code>seek(currentBeat)</code>-style pass). Audio never time-stretches — it re-anchors.</div>
+
+<!-- E -->
+<h2 id="render">E · The renderer — audio block + waveform</h2>
+<p class="pill-row"><span class="badge b-new">core/waveform.ts</span><span class="badge b-new">components/timeline/AudioBlockView.tsx</span><span class="badge b-edit">timeline/Track.tsx</span><span class="badge b-edit">timeline/TimelineArea.tsx</span><span class="badge b-edit">components/AudioBar.tsx</span></p>
+
+<figure class="fig">
+  <div class="figtitle">Render + gesture path for an audio block</div>
+  <svg viewBox="0 0 900 220" role="img" aria-label="Audio block render">
+    <defs><marker id="aR" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="86" width="160" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="100" y="106" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">Track.tsx</text>
+    <text x="100" y="122" text-anchor="middle" font-size="9" fill="#565656">type==='audio' branch</text>
+    <path d="M180,109 H224" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
+    <rect x="226" y="80" width="180" height="58" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/>
+    <text x="316" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioBlockView</text>
+    <text x="316" y="118" text-anchor="middle" font-size="9" fill="#565656">left = startBar·barWidthPx</text>
+    <text x="316" y="131" text-anchor="middle" font-size="9" fill="#565656">width from trimmed length</text>
+    <path d="M406,98 C440,92 440,58 472,58" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <path d="M406,120 C440,126 440,162 472,162" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
+    <rect x="474" y="34" width="200" height="46" rx="6" fill="#141414"/>
+    <text x="574" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">&lt;canvas&gt; waveform</text>
+    <text x="574" y="71" text-anchor="middle" font-size="9" fill="#dcdcdc">getPeaks(ref) → draw</text>
+    <rect x="474" y="140" width="200" height="46" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="574" y="162" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">move / trim gestures</text>
+    <text x="574" y="177" text-anchor="middle" font-size="9" fill="#565656">→ updateAudioBlock()</text>
+    <rect x="710" y="140" width="170" height="46" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="795" y="162" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">ProjectStore</text>
+    <text x="795" y="177" text-anchor="middle" font-size="9" fill="#565656">startBar / trim change</text>
+    <path d="M674,163 H706" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
+    <rect x="710" y="34" width="170" height="46" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="795" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">waveform.ts</text>
+    <text x="795" y="71" text-anchor="middle" font-size="9" fill="#565656">decode-cache + peaks</text>
+    <path d="M674,57 H706" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
+  </svg>
+  <figcaption>An audio block draws like a MIDI block (positioned at <code>startBar·barWidthPx</code>) with a canvas waveform and trim handles. Its gestures write <code>startBar</code>/<code>trim</code> to the store; the engine (§D) reacts. Peaks come from the shared decode cache.</figcaption>
+</figure>
+
+<ul>
+  <li><span class="badge b-new">new</span> <span class="file">core/waveform.ts</span> — <code>getBuffer(ref)</code> (decode-cache, reused by the player pool) + <code>getPeaks(ref, buckets)</code> (size-independent min/max array). Zoom/resize is a redraw, not a re-analysis.</li>
+  <li><span class="badge b-new">new</span> <span class="file">components/timeline/AudioBlockView.tsx</span> — the audio analogue of <span class="file">Block.tsx</span>: positions at <code>startBar * barWidthPx</code>, draws the waveform canvas, exposes left/right trim handles.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> — render <code>audioBlocks</code> when <code>type === 'audio'</code>; <span class="badge b-edit">edit</span> <span class="file">TimelineArea.tsx</span> — wire audio move/trim into the existing gesture dispatch (branch on track type).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">components/AudioBar.tsx</span> — load path calls <code>addClip</code> (library) not <code>setClip</code>; the library-drag-to-add-track gesture (recent commit) becomes the way to drop a clip onto an audio track.</li>
+</ul>
+
+<!-- F -->
+<h2 id="phases">F · Phase-by-phase build (with files)</h2>
+
+<h3>Phase 1 — Audio-block data model + type <span class="badge b-edit">data</span></h3>
+<p>Stand up the types and store actions with <em>no playback change</em>: you can create an audio track and place a block; it just doesn't sound yet.</p>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span> (<code>AudioBlock</code>, <code>'audio'</code> in <code>TrackType</code>, <code>Track.audioBlocks?</code>), <span class="file">store/AudioStore.ts</span> (<code>clips</code> library + <code>addClip</code>/<code>removeClip</code>).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">store/ProjectStore.ts</span> — <code>addAudioTrack</code>, <code>addAudioBlock</code>, <code>updateAudioBlock</code>, <code>deleteAudioBlock</code>. Follow the existing block-action shape; no scheduling logic here.</li>
+</ul>
+
+<h3>Phase 2 — Transport scheduling from block position ★ keystone <span class="badge b-new">the thesis</span></h3>
+<p>Make a placed block play at its position. This is the whole feature.</p>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">core/playback.ts</span> — player pool (<code>Map&lt;blockId, Tone.Player&gt;</code>), <code>loadClips(refs)</code>, the shared <code>armBlock</code> helper, and <code>play</code>/<code>seek</code> looping it. <code>AUDIO_LOOKAHEAD</code> + <code>beatToPosition</code> unchanged.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">hooks/usePlayback.ts</span> — <code>play()</code> gathers audio blocks + refs, awaits <code>engine.loadClips</code>, then <code>engine.play</code>. A store subscription pushes block edits to the engine while playing (so dragging a block reschedules it live).</li>
+</ul>
+<div class="note"><strong>Canary:</strong> a block placed at bar 0 must sound <em>identical</em> to today's global clip (the mid-clip branch at beat 0). If it doesn't, the beat⟷second math is wrong — the same "reproduce the old behavior exactly" check the visual-engine plan used for the Cube.</div>
+
+<h3>Phase 3 — Waveform block rendering + drag <span class="badge b-new">renderer</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">core/waveform.ts</span> (decode-cache + peaks, shared with the player pool), <span class="file">components/timeline/AudioBlockView.tsx</span> (canvas waveform + position).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> (render audio blocks), <span class="file">TimelineArea.tsx</span> (move gesture → <code>updateAudioBlock(startBar)</code>), <span class="file">AudioBar.tsx</span> (→ <code>addClip</code>).</li>
+</ul>
+
+<h3>Phase 4 — Multiple clips + trim <span class="badge b-edit">additive</span></h3>
+<ul class="small">
+  <li>Multiple clips is free once the library + per-block pool exist — the §D loop already iterates all blocks. Add a clip picker / library panel drawing from <code>AudioStore.clips</code>.</li>
+  <li>Trim: <span class="badge b-edit">edit</span> <span class="file">AudioBlockView.tsx</span> (edge handles) + <span class="file">TimelineArea.tsx</span> (right edge → <code>trimEnd</code>; left edge → <code>trimStart</code> + <code>startBar</code> together). Scheduling honors trim automatically (<code>armBlock</code> already uses both).</li>
+</ul>
+
+<h3>Phase 5 — Polish: split, fades, scrub <span class="badge b-new">later</span></h3>
+<ul class="small">
+  <li><strong>Split</strong> — cut at the playhead into two blocks sharing the ref (complementary trim/startBar). Free once trim exists.</li>
+  <li><strong>Fades</strong> — <code>fadeIn</code>/<code>fadeOut</code> via a per-player gain node; drawn as a corner ramp on the waveform.</li>
+  <li><strong>Audio scrubbing while paused</strong> — a throttled short-lived grain player at the scrub position. Ship silent-scrub (today's behavior) first; this is a real feature with real cost. <span class="badge b-risk">deferred</span></li>
+</ul>
+
+<!-- G -->
+<h2 id="inventory">G · Master file inventory</h2>
+<p>Every file this plan touches, and why. The audio track is a small, contained change to the transport + timeline seams — the visual engine is entirely untouched.</p>
+
+<div class="tree">src/editor/
+├─ core/
+│  ├─ <span class="tg-edit">EDIT</span> playback.ts        1 Tone.Player → per-block pool; armBlock(); loadClips(); play/seek loop
+│  ├─ <span class="tg-new">NEW</span>  waveform.ts        decode-cache (getBuffer) + size-independent peaks (getPeaks)
+│  └─ <span class="tg-edit">KEEP</span> audioSource.ts     ref → bytes seam — unchanged (getPlayableUrl still resolves clipRef)
+├─ store/
+│  ├─ <span class="tg-edit">EDIT</span> AudioStore.ts      clip: AudioClip|null  →  clips: Record&lt;ref, AudioClip&gt; (+ add/removeClip)
+│  ├─ <span class="tg-edit">EDIT</span> ProjectStore.ts    + addAudioTrack, addAudioBlock, updateAudioBlock, deleteAudioBlock
+│  └─ <span class="tg-edit">KEEP</span> TimeStore.ts       currentBeat / isPlaying — THE CLOCK, untouched
+├─ hooks/
+│  └─ <span class="tg-edit">EDIT</span> usePlayback.ts     play(): gather blocks + refs, await loadClips, then play; push edits while playing
+├─ components/
+│  ├─ <span class="tg-edit">EDIT</span> AudioBar.tsx       load → addClip (library) instead of setClip (single slot)
+│  └─ timeline/
+│     ├─ <span class="tg-new">NEW</span>  AudioBlockView.tsx   block at startBar·barWidthPx + &lt;canvas&gt; waveform + trim handles
+│     ├─ <span class="tg-edit">EDIT</span> Track.tsx            render audioBlocks when type === 'audio'
+│     ├─ <span class="tg-edit">EDIT</span> TimelineArea.tsx     wire audio move / trim gestures (branch on track type)
+│     └─ <span class="tg-edit">KEEP</span> Block.tsx            the MIDI block — the shape AudioBlockView mirrors
+└─ <span class="tg-edit">EDIT</span> types.ts               + AudioBlock, TrackType 'audio', Track.audioBlocks?</div>
+
+<table>
+  <thead><tr><th>Untouched (and why that's the point)</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/engine/*</span> (the visual engine), <span class="file">components/visual/*</span></td><td>Audio scheduling lives in the transport engine only. The visual engine reads <code>currentBeat</code>, which doesn't change — it never learns about audio (until a future audio-reactive bridge, out of scope).</td></tr>
+    <tr><td><span class="file">TimeStore</span>, the RAF beat tracker in <span class="file">playback.ts</span></td><td>The clock is the invariant. Audio is scheduled <em>relative</em> to <code>currentBeat</code>; the beat is never derived from audio.</td></tr>
+    <tr><td><span class="file">midi/*</span>, <span class="file">useNoteGestures</span>, MIDI <span class="file">Block.tsx</span></td><td>Audio lives in its own track type with its own block view; keeping the audio payload out of the MIDI <code>blocks</code> array (data-model option (a), §C.2) keeps the piano-roll and note gestures unaware of audio.</td></tr>
+    <tr><td><span class="file">core/audioSource.ts</span></td><td>Already the right seam — a block's <code>clipRef</code> resolves through the same <code>getPlayableUrl(ref)</code>; the IndexedDB/Supabase swap stays a one-file change.</td></tr>
+  </tbody>
+</table>
+<div class="rec"><strong>The one-sentence mental model:</strong> you're teaching <span class="file">core/playback.ts</span> to schedule <em>N players at N beat offsets</em> instead of one player at beat 0, backing that with an audio-block placement in the project document and a waveform-drawing block on a new audio track — and touching nothing in the visual engine or the clock.</p></div>
+
+<!-- H -->
+<h2 id="risks">H · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">semantics</span> <strong>Seconds vs. beats under tempo change.</strong> The load-bearing decision. Recommended: no time-stretch; the block's width follows tempo and a live bpm change re-windows all blocks (§D.1). Nail this before building the renderer, or trim widths and drag math will fight the schedule.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Player pool leaks.</strong> One player per block; reconcile the <code>Map&lt;blockId, Player&gt;</code> against the block set on every <code>loadClips</code>, disposing orphans. The current single-player <code>dispose()</code> must generalize, not just repeat.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Load latency at the downbeat.</strong> <code>play()</code> awaits decode. With many clips, pre-decode on <em>insert</em> (via <span class="file">waveform.ts</span>'s cache) so the first beat isn't gated on decoding — otherwise a big project stutters at play.</li>
+  <li><span class="badge b-risk">open</span> <strong>Parallel <code>audioBlocks</code> vs. shared <code>blocks</code> array.</strong> §C.2's (a) vs (b). Start isolated (a); the visual engine's abilities story suggests (b)'s unified gesture plumbing may win — revisit after trim lands.</li>
+  <li><span class="badge b-risk">open</span> <strong>Is the clip library undoable?</strong> Placement (blocks) clearly belongs in the undoable <span class="file">ProjectStore</span>. Adding clip <em>bytes</em> is more like <span class="file">AudioStore</span>'s current ephemeral role — decide whether "load a file" is an undo step.</li>
+  <li><span class="badge b-risk">open</span> <strong>Scrub-while-paused.</strong> Silent first (matches today). Grain-scrub is a genuine feature — a throttled short-lived player — deferred to phase 5.</li>
+  <li><span class="badge b-future">later</span> <strong>Audio-reactive visuals.</strong> Positioned audio is the substrate: a clip at a known beat window could feed analyzed amplitude/FFT into a visual-engine modulator port. Explicitly out of scope here — keep the audio track independent of <span class="file">core/engine/</span> for now.</li>
+</ul>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Mirrors <span class="file">visual-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">audio-track-architecture.html</span>. File paths are under <span class="file">src/editor/</span>. Greyscale, print-ready.</p>
+
+</div>
+</body>
+</html>
