@@ -1,4 +1,4 @@
-// Registry of modulator instruments (the "Modifier" library items). A track whose
+// Registry of modulator instruments (the "Modulator" library items). A track whose
 // instrumentId is in here is a modulator track: its notes are triggers, routed to
 // an object's port. Distinct from the object registry (../index).
 

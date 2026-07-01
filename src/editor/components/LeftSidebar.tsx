@@ -12,7 +12,7 @@ interface InstrumentItem {
   icon: React.ReactNode
 }
 
-const SOURCE_INSTRUMENTS: InstrumentItem[] = [
+const OBJECT_INSTRUMENTS: InstrumentItem[] = [
   { id: 'cube', name: 'Cube', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'circle', name: 'Circle', icon: <div className="w-3 h-3 border border-indigo-400 rounded-full" /> },
   { id: 'triangle', name: 'Triangle', icon: (
@@ -22,7 +22,7 @@ const SOURCE_INSTRUMENTS: InstrumentItem[] = [
   )},
 ]
 
-const MODIFIER_INSTRUMENTS: InstrumentItem[] = [
+const MODULATOR_INSTRUMENTS: InstrumentItem[] = [
   { id: 'pulse', name: 'Pulse', icon: (
     <svg width="14" height="10" viewBox="0 0 14 10">
       <polyline points="0,5 3,5 4,1 5,9 6,5 10,5" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -122,8 +122,8 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Source" items={SOURCE_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Object" items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modulator" items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
         {tab === 'effects' && (
