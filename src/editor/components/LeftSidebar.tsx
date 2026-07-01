@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles } from 'lucide-react'
+import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles, Info } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
@@ -61,18 +61,46 @@ const MODULATOR_INSTRUMENTS = withKind('modulator', [
   )},
 ])
 
-function Section({ title, items, onItemPointerDown, onItemDoubleClick }: { title: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
+function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const infoRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!infoOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) setInfoOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [infoOpen])
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors select-none"
-      >
-        {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-        {title}
-      </button>
+      <div className="flex items-center px-3 py-1.5 text-xs font-medium text-zinc-400 select-none">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1 hover:text-zinc-200 transition-colors"
+        >
+          {title}
+          {open ? <ChevronDown size={11} className="text-zinc-500" /> : <ChevronRight size={11} className="text-zinc-500" />}
+        </button>
+        <div className="flex-1" />
+        <div ref={infoRef} className="relative flex items-center">
+          <button
+            onClick={() => setInfoOpen((v) => !v)}
+            className={`transition-colors ${infoOpen ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-300'}`}
+            aria-label={`About ${title}`}
+          >
+            <Info size={12} />
+          </button>
+          {infoOpen && (
+            <div className="absolute right-0 top-full mt-1.5 z-40 w-52 p-2.5 rounded border border-zinc-700 bg-[#202024] text-[11px] font-normal leading-relaxed text-zinc-300 shadow-lg shadow-black/50">
+              {description}
+            </div>
+          )}
+        </div>
+      </div>
       {open && (
         <div>
           {items.map((item) => (
@@ -146,9 +174,9 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Object" items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modulator" items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Object" description="A visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modulator" description="Drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modifier" description="A child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
         {tab === 'effects' && (

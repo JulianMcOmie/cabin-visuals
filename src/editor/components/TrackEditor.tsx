@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles, ChevronDown, Check, X } from 'lucide-react'
+import { Music2, Sparkles, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
-import { getPlugin } from '../plugins'
+import { getPlugin, type VisualPlugin } from '../plugins'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Routing } from '../types'
+import type { Routing, PluginInstance } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -222,6 +222,61 @@ function TagEditor({
   )
 }
 
+/** One effect in the Effects tab: header (enable / name / remove) with collapsible
+ *  param sliders. Collapse is local per instance, so it persists across re-renders. */
+function EffectItem({
+  plugin, inst, onToggle, onRemove, onSetSetting,
+}: {
+  plugin: VisualPlugin
+  inst: PluginInstance
+  onToggle: () => void
+  onRemove: () => void
+  onSetSetting: (key: string, value: number) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button
+            onClick={onToggle}
+            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
+              inst.enabled ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+            }`}
+            aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
+          >
+            {inst.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
+          </button>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex items-center gap-1 min-w-0"
+            aria-label={collapsed ? 'Expand settings' : 'Collapse settings'}
+          >
+            <span className={`text-xs font-semibold truncate ${inst.enabled ? 'text-zinc-200' : 'text-zinc-500'}`}>
+              {plugin.name}
+            </span>
+            {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-zinc-500" /> : <ChevronDown size={12} className="flex-shrink-0 text-zinc-500" />}
+          </button>
+        </div>
+        <button onClick={onRemove} className="flex-shrink-0 text-zinc-500 hover:text-zinc-200" aria-label="Remove effect">
+          <X size={12} />
+        </button>
+      </div>
+      {!collapsed && plugin.params.map((p) => (
+        <ParamSlider
+          key={p.key}
+          label={p.label}
+          min={p.min}
+          max={p.max}
+          step={p.step}
+          value={inst.settings[p.key] ?? p.default}
+          onChange={(v) => onSetSetting(p.key, v)}
+        />
+      ))}
+    </div>
+  )
+}
+
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'instrument', label: 'Instrument', icon: <Music2 size={11} /> },
   { id: 'effects', label: 'Effects', icon: <Sparkles size={11} /> },
@@ -393,42 +448,14 @@ export function TrackEditor() {
                   const plugin = getPlugin(inst.pluginId)
                   if (!plugin) return null
                   return (
-                    <div key={inst.id} className="mb-5">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <button
-                            onClick={() => toggleEffect(track.id, inst.id)}
-                            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
-                              inst.enabled ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
-                            }`}
-                            aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
-                          >
-                            {inst.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
-                          </button>
-                          <span className={`text-xs font-semibold truncate ${inst.enabled ? 'text-zinc-200' : 'text-zinc-500'}`}>
-                            {plugin.name}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => removeEffect(track.id, inst.id)}
-                          className="flex-shrink-0 text-zinc-500 hover:text-zinc-200"
-                          aria-label="Remove effect"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                      {plugin.params.map((p) => (
-                        <ParamSlider
-                          key={p.key}
-                          label={p.label}
-                          min={p.min}
-                          max={p.max}
-                          step={p.step}
-                          value={inst.settings[p.key] ?? p.default}
-                          onChange={(v) => setEffectSetting(track.id, inst.id, p.key, v)}
-                        />
-                      ))}
-                    </div>
+                    <EffectItem
+                      key={inst.id}
+                      plugin={plugin}
+                      inst={inst}
+                      onToggle={() => toggleEffect(track.id, inst.id)}
+                      onRemove={() => removeEffect(track.id, inst.id)}
+                      onSetSetting={(key, value) => setEffectSetting(track.id, inst.id, key, value)}
+                    />
                   )
                 })
               )}
