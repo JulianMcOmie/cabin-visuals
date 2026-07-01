@@ -64,7 +64,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       {!hasAny && <div className="px-3 py-1.5 text-zinc-500">Nothing to add</div>}
 
       {abilities.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('ability')}>
+        <div className="relative" onMouseEnter={() => setOpenSub('ability')} onMouseLeave={() => setOpenSub(null)}>
           <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
             <span>Add ability track</span>
             <ChevronRight size={12} className="text-zinc-500" />
@@ -96,7 +96,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       )}
 
       {params.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('automation')}>
+        <div className="relative" onMouseEnter={() => setOpenSub('automation')} onMouseLeave={() => setOpenSub(null)}>
           <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
             <span>Add automation track</span>
             <ChevronRight size={12} className="text-zinc-500" />
