@@ -5,6 +5,7 @@ import { getInstrument } from '../../instruments'
 import { getObjectState } from '../../core/engine/VisualEngine'
 import { useProjectStore } from '../../store/ProjectStore'
 import { TransformWrapper } from './TransformWrapper'
+import { CloneWrapper } from './CloneWrapper'
 
 /**
  * Renders one object. A placement group carries the object's world transform (composed
@@ -29,9 +30,11 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   const Component = def.component
   return (
     <group ref={groupRef}>
-      <TransformWrapper plugins={plugins ?? []}>
-        <Component trackId={trackId} />
-      </TransformWrapper>
+      <CloneWrapper plugins={plugins ?? []}>
+        <TransformWrapper plugins={plugins ?? []}>
+          <Component trackId={trackId} />
+        </TransformWrapper>
+      </CloneWrapper>
     </group>
   )
 }
