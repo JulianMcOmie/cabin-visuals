@@ -48,6 +48,12 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M2.5 9 A3.5 1.3 0 0 0 9.5 9" fill="none" stroke="#ec4899" strokeWidth="1.1" />
     </svg>
   )},
+  { id: 'sun', name: 'Sun', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="2.5" fill="none" stroke="#ff9d00" strokeWidth="1.2" />
+      <path d="M6 0.5V2 M6 10V11.5 M0.5 6H2 M10 6H11.5 M2.3 2.3L3.3 3.3 M8.7 8.7L9.7 9.7 M9.7 2.3L8.7 3.3 M3.3 8.7L2.3 9.7" stroke="#ff9d00" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
