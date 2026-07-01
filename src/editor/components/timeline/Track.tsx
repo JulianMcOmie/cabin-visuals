@@ -4,8 +4,18 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
+import { isModifierType } from '../../core/engine/trackTypes'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../../types'
+
+// Event-modifier rows are colour-coded by what they do, so they read as control
+// tracks (not visual objects) at a glance.
+const MODIFIER_COLORS: Record<string, string> = {
+  suppress: '#dc2626', // removes
+  mute: '#71717a',     // hides
+  add: '#16a34a',      // layers
+  override: '#d97706', // replaces
+}
 
 interface TrackProps {
   track: TrackType
@@ -44,6 +54,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const isSelected = selectedTrackId === track.id
   const hasChildren = track.childIds.length > 0
+  // A no-instrument track whose type is a modifier is an event-modifier (control) row.
+  const isModifier = !track.instrumentId && isModifierType(track.type)
+  const blockColor = isModifier ? (MODIFIER_COLORS[track.type] ?? '#71717a') : track.color
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
@@ -90,8 +103,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       >
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        <div className="flex-1 min-w-0 flex items-center gap-1">
-          <span className="text-xs font-medium truncate text-white">{track.name}</span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          {isModifier && (
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: blockColor }} />
+          )}
+          <span className={`text-xs font-medium truncate ${isModifier ? 'text-zinc-300' : 'text-white'}`}>{track.name}</span>
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); setTrackCollapsed(track.id, !isCollapsed) }}
@@ -144,7 +160,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             trackId={track.id}
             barWidthPx={barWidthPx}
             beatsPerBar={beatsPerBar}
-            color={track.color}
+            color={blockColor}
             isSelected={selectedBlockIds.has(block.id)}
             onBlockPointerDown={onBlockPointerDown}
           />
