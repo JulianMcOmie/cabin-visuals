@@ -49,6 +49,8 @@ export function Cube({ trackId }: { trackId: string }) {
   useFrame(() => {
     if (!meshRef.current) return
     const state = getObjectState(trackId)
+    // A mute modifier blacks the object out during its regions.
+    meshRef.current.visible = !state?.blackedOut
     // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
     const energy = state?.portValues.energy ?? 0
     const baseHue = state?.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')

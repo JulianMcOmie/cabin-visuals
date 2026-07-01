@@ -68,7 +68,8 @@ export function computeAtBeat(beat: number) {
     if (parentWorld) world.multiplyMatrices(parentWorld, _local)
     else world.copy(_local)
 
-    states.set(obj.trackId, { params: obj.params, portValues, world })
+    const blackedOut = obj.blackouts.some((r) => beat >= r.start && beat < r.end)
+    states.set(obj.trackId, { params: obj.params, portValues, world, blackedOut })
   }
 }
 

@@ -13,6 +13,14 @@ export interface ResolvedNote {
   blockEndBeat: number
   pitch: number
   velocity: number
+  /** Note length in beats — a modifier note's [beat, beat+durationBeats) is its region. */
+  durationBeats: number
+}
+
+/** A time span (beats) during which a muted object is hidden at render. */
+export interface BlackoutRegion {
+  start: number
+  end: number
 }
 
 /** A renderable object instance derived from a track. */
@@ -27,7 +35,10 @@ export interface ResolvedObject {
   ports: PortDef[]
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
+  /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
   notes: ResolvedNote[]
+  /** Blackout spans from `mute` child modifiers — the object is hidden inside them. */
+  blackouts: BlackoutRegion[]
   /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
   tags: string[]
 }
@@ -62,6 +73,8 @@ export interface ResolvedGraph {
 export interface ObjectState {
   params: Record<string, number>
   portValues: Record<string, number>
+  /** True this frame if a mute modifier's region covers the current beat (hide it). */
+  blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames —
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4

@@ -7,7 +7,9 @@ import type {
   ResolvedNote,
   ModulatorInstance,
   ResolvedRouting,
+  BlackoutRegion,
 } from './types'
+import { isModifierType, combineModifier } from './trackTypes'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -49,11 +51,34 @@ function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
         blockEndBeat,
         pitch: note.pitch,
         velocity: note.velocity,
+        durationBeats: note.durationBeats,
       })
     }
   }
   notes.sort((a, b) => a.beat - b.beat)
   return notes
+}
+
+/** Fold a track's event-modifier children into its note stream (in child order) and
+ *  collect blackout regions from `mute` children. A modifier is a no-instrument child
+ *  whose type is a modifier type — consumed here, never resolved as its own object. */
+function applyModifiers(
+  track: Track,
+  baseNotes: ResolvedNote[],
+  p: ProjectSnapshot,
+): { notes: ResolvedNote[]; blackouts: BlackoutRegion[] } {
+  let notes = baseNotes
+  const blackouts: BlackoutRegion[] = []
+  for (const childId of track.childIds ?? []) {
+    const child = p.tracks[childId]
+    if (!child || child.instrumentId || !isModifierType(child.type) || child.muted) continue
+    const self = flattenNotes(child, p.beatsPerBar)
+    if (child.type === 'mute') {
+      for (const n of self) blackouts.push({ start: n.beat, end: n.beat + (n.durationBeats || 0.25) })
+    }
+    notes = combineModifier(child.type, notes, self, p.beatsPerBar)
+  }
+  return { notes, blackouts }
 }
 
 /**
@@ -82,9 +107,10 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       continue
     }
 
-    // Object track.
+    // Object track — fold its event-modifier children into its note stream.
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
+    const { notes, blackouts } = applyModifiers(track, flattenNotes(track, p.beatsPerBar), p)
     objects.push({
       trackId: id,
       instrumentId: track.instrumentId,
@@ -93,7 +119,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       params: track.params ?? {},
       ports: def?.ports ?? [],
       localTransform: def?.localTransform,
-      notes: flattenNotes(track, p.beatsPerBar),
+      notes,
+      blackouts,
       tags,
     })
     for (const tag of tags) {
