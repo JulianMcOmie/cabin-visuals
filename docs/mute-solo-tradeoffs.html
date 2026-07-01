@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mute / Solo in a Nested Hierarchy — Cabin Visuals</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#f2f2f2; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}.t{color:#000}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
+  .b-rec{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-borrow{background:#fff;color:#111;border-color:#111}
+  .b-build{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-risk{background:#fff;color:#111;border-style:dashed}
+  .b-future{background:#fff;color:#555;border-style:dotted;border-color:#888}
+  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .toc{columns:2;gap:28px;margin:8px 0 0}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .muted{color:var(--muted)}.small{font-size:13px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
+  .lead{font-size:16px;color:#2a2a2a}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .keystone h3{margin-top:18px}
+  .keystone ol{padding-left:20px}.keystone li{margin:11px 0}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}
+    .wrap{max-width:none;padding:0 6px}
+    a{color:#000}
+    figure.fig,pre,table,.card,.keystone,.note,.warn,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Interaction Design</span>
+  <h1>Mute &amp; Solo in a Nested Hierarchy</h1>
+  <p class="sub">What "solo" should mean when objects can nest inside objects and carry automation / ability / modifier / modulator children. The design space, the DAW conventions, and a recommended rule set.</p>
+</header>
+
+<div class="rec"><strong>The one-line answer:</strong> keep <em>object solo global</em> (only soloed objects render), but make it <strong>hierarchy-aware</strong> — soloing an object also keeps its <strong>ancestors</strong> and its <strong>own shaping children</strong> (automation / ability / modifier / modulators targeting it) audible, so it renders in context and fully shaped. <strong>Mute</strong> hides a whole subtree. Child-track solo stays local (among siblings). This is DAW "solo = only soloed tracks play" plus folder-solo semantics, mapped onto a scene graph where "audible" means "contributes to the render."</p>
+
+<div class="card">
+  <h3 style="margin-top:18px">Contents</h3>
+  <nav class="toc">
+    <a href="#terms">1 · What "audible" means here</a>
+    <a href="#current">2 · What the code does today</a>
+    <a href="#space">3 · The solo design space</a>
+    <a href="#children">4 · Children of a soloed track</a>
+    <a href="#ancestors">5 · Ancestors of a soloed object</a>
+    <a href="#mute">6 · Mute down a subtree</a>
+    <a href="#daw">7 · DAW conventions mapped</a>
+    <a href="#rec">8 · Recommendation + decision table</a>
+  </nav>
+</div>
+
+<p class="lead">In a DAW, "solo" is simple because tracks are a flat list: solo one, the rest go silent. Cabin's tracks are a <em>tree</em> — an object can nest under another object, and each object carries <strong>automation</strong>, <strong>ability</strong>, <strong>modifier</strong>, and <strong>modulator</strong> children that don't render on their own but <em>shape</em> the object. "Silence everything else" is now ambiguous: does soloing a cube also silence the automation that drives its size? The modulator pulsing it? Its parent group it inherits transforms from? This doc picks answers that stay predictable.</p>
+
+<!-- 1 -->
+<h2 id="terms">1 · What "audible" means here</h2>
+<p>Port the audio metaphor cleanly and the rest falls out. A track is one of two things:</p>
+<ul>
+  <li><strong>An object</strong> — renders something (a cube, a circle). "Audible" = <em>it contributes pixels to the frame.</em></li>
+  <li><strong>A shaper</strong> — an <code>automation</code>, <code>ability</code>, <code>modifier</code>, or <code>modulator</code> child. It renders nothing; it only changes how some object renders. "Audible" for a shaper means <em>its effect is applied.</em></li>
+</ul>
+<div class="note">This split is the whole game. Muting an <em>object</em> removes something you can see. Muting a <em>shaper</em> removes an <em>influence</em> on something else you can see. So "solo this object" and "solo this automation lane" are fundamentally different verbs — and conflating them is the trap. Solo among objects is about <em>which things appear</em>; solo among a shaper's siblings is about <em>which influence wins</em>.</div>
+
+<!-- 2 -->
+<h2 id="current">2 · What the code does today</h2>
+<p>The resolver (<span class="file">src/editor/core/engine/resolve.ts</span>) already makes a defensible set of choices. Worth stating them plainly, because the recommendation is mostly "keep these, add hierarchy-awareness."</p>
+
+<table>
+  <thead><tr><th>Rule</th><th>Where</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Object solo is global</strong></td>
+      <td><code>anyObjectSolo</code>, <code>objectOff</code></td>
+      <td>If <em>any</em> object anywhere is soloed, every non-soloed object is muted. Solo scans the whole flattened forest, not siblings. <span class="badge b-borrow">DAW-standard</span></td>
+    </tr>
+    <tr>
+      <td><strong>Muted/soloed-out objects are hidden</strong></td>
+      <td><code>objectOff</code> → <code>blackedOut</code> <span class="file">(VisualEngine.ts:82)</span></td>
+      <td><code>blackedOut = obj.muted || …blackout span…</code>. A muted object stops contributing pixels.</td>
+    </tr>
+    <tr>
+      <td><strong>Solo doesn't touch a soloed object's own shapers</strong></td>
+      <td>comment above <code>anyObjectSolo</code></td>
+      <td>"Modulators + children keep their own mute, so soloing an object never disables its own automation, its modifiers, or a modulator that targets it." <span class="badge b-rec">correct</span></td>
+    </tr>
+    <tr>
+      <td><strong>Ability-child solo is per-object</strong></td>
+      <td><code>resolveAbilityEvents</code></td>
+      <td>Among one object's <code>ability</code> children: if any is soloed, its non-soloed siblings go silent. Scoped to that object.</td>
+    </tr>
+    <tr>
+      <td><strong>Automation-child solo is per-object</strong></td>
+      <td><code>resolveAutomations</code> (<code>anyAutoSolo</code>)</td>
+      <td>Same pattern, among an object's <code>automation</code> children.</td>
+    </tr>
+    <tr>
+      <td><strong>Modifier-child solo is per-object</strong></td>
+      <td><code>applyModifiers</code> (<code>anyModSolo</code>)</td>
+      <td>Same pattern, among an object's <code>mute</code>/<code>add</code>/<code>suppress</code>/… modifier children.</td>
+    </tr>
+    <tr>
+      <td><strong>A <code>mute</code> modifier blacks out its span</strong></td>
+      <td><code>applyModifiers</code> → <code>blackouts</code></td>
+      <td>Different mechanism from track mute: it hides the object only during the modifier note's time range.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="warn"><strong>Where it's debatable.</strong> Two gaps, both about <em>hierarchy</em>, because the resolver flattens the tree (<code>flattenTree</code>) and solo currently ignores nesting entirely:
+<ul style="margin-top:6px">
+  <li><strong>Solo a nested object → its parent group disappears.</strong> If a cube nested under a "Scene" object group is soloed, the group is a non-soloed object, so <code>objectOff</code> mutes it. But the cube inherits the group's world transform (<code>composeLocal</code>, parent-before-child). Muting the parent can move/hide the very object you soloed. The transform still composes off <code>worldMatrices</code>, but a hidden parent is conceptually "not playing," which is a smell.</li>
+  <li><strong>Solo a parent group → its child objects disappear.</strong> Soloing the group solos only the group; its child objects aren't soloed, so they mute. You soloed a container and got an empty container. Almost never what anyone wants.</li>
+</ul>
+These are the two cases the recommendation fixes with an <em>ancestor + descendant pass</em>.</div>
+
+<!-- 3 -->
+<h2 id="space">3 · The solo design space</h2>
+<p>When you solo a track, "what gets muted" has four candidate answers. They differ only in <em>scope</em>.</p>
+
+<table>
+  <thead><tr><th>Option</th><th>Solo mutes…</th><th>Pros</th><th>Cons</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>(a) Global</strong></td>
+      <td>everything else, everywhere</td>
+      <td>Dead simple, matches Ableton/Logic default. "Show me only this." One mental model.</td>
+      <td>Naïvely applied, kills a nested object's parent context and a parent's children (the two smells above).</td>
+    </tr>
+    <tr>
+      <td><strong>(b) Siblings only</strong></td>
+      <td>tracks with the same parent</td>
+      <td>Local, composable; solo inside a group doesn't blank the rest of the show.</td>
+      <td>Not what "solo" means to anyone from a DAW. Soloing a leaf still leaves unrelated top-level objects on screen — confusing "why is that still here?"</td>
+    </tr>
+    <tr>
+      <td><strong>(c) Global, but keep ancestors + descendants</strong></td>
+      <td>everything <em>except</em> the soloed track's chain up and its subtree down</td>
+      <td>Global clarity ("only this thing") <em>plus</em> renders in context and fully populated. Matches folder-solo in DAWs.</td>
+      <td>Slightly more to explain; needs an ancestor/descendant pass in resolve. (Cheap — the tree is tiny.)</td>
+    </tr>
+    <tr>
+      <td><strong>(d) Solo-in-place</strong></td>
+      <td>only within the soloed track's own subtree</td>
+      <td>Powerful for auditioning one branch of a big scene without disturbing others.</td>
+      <td>A second, different solo verb. Great as a <em>modifier</em> (Alt-solo), bad as the default — two behaviors on one button is a footgun.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>Pick (c) as the default</strong> — global solo that spares the soloed object's ancestors and descendants. It's the only option that is both "only this thing" (what solo <em>means</em>) and "this thing rendered correctly" (in its parent's transform, with its own shapers intact). Keep <strong>(d) solo-in-place</strong> available later as a modifier gesture for auditioning a branch.</div>
+
+<!-- 4 -->
+<h2 id="children">4 · Children of a soloed track — keep the shapers</h2>
+<p>Soloing an object must <em>not</em> silence the children that shape it. An automation lane driving its size, an ability lane it fires, a modulator pulsing it — these are the object's voice, not separate voices. Silencing them would "solo" a hollow version of the thing.</p>
+<p>The code already gets this right: the comment on <code>anyObjectSolo</code> is explicit that modulators and children keep their own mute regardless of object solo. So a soloed object keeps its automation (<code>resolveAutomations</code> runs unconditionally on it), its modifiers (<code>applyModifiers</code>), and any modulator whose routing targets it (modulators are resolved independently, gated only by their own <code>muted</code> flag).</p>
+
+<figure class="fig">
+  <div class="figtitle">Solo a leaf object — its shapers stay live</div>
+  <svg viewBox="0 0 780 210" role="img" aria-label="Soloing a leaf keeps its shaper children">
+    <text x="20" y="24" font-size="12" font-weight="700" fill="#141414">Solo ▶ Cube</text>
+    <!-- Circle (muted) -->
+    <rect x="30" y="44" width="150" height="30" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
+    <text x="105" y="64" text-anchor="middle" font-size="11.5" fill="#999">Circle · muted</text>
+    <!-- Cube (soloed) -->
+    <rect x="30" y="94" width="150" height="30" rx="5" fill="#141414" stroke="#141414"/>
+    <text x="105" y="114" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Cube · SOLO ●</text>
+    <!-- Cube children -->
+    <rect x="210" y="80" width="180" height="26" rx="4" fill="#fff" stroke="#141414"/>
+    <text x="300" y="98" text-anchor="middle" font-size="11" fill="#141414">↳ automation (size) · live</text>
+    <rect x="210" y="112" width="180" height="26" rx="4" fill="#fff" stroke="#141414"/>
+    <text x="300" y="130" text-anchor="middle" font-size="11" fill="#141414">↳ ability lane · live</text>
+    <path d="M180,102 H208" stroke="#141414" stroke-width="1.2"/>
+    <path d="M180,125 H208" stroke="#141414" stroke-width="1.2"/>
+    <!-- modulator routing -->
+    <rect x="470" y="94" width="180" height="30" rx="5" fill="#f0f0f0" stroke="#141414"/>
+    <text x="560" y="114" text-anchor="middle" font-size="11" fill="#141414">Modulator → Cube.scale</text>
+    <defs><marker id="ms1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <path d="M468,109 H184" stroke="#141414" stroke-width="1.3" marker-end="url(#ms1)"/>
+    <text x="560" y="140" text-anchor="middle" font-size="10.5" fill="#565656">still targets the soloed object</text>
+    <text x="105" y="164" text-anchor="middle" font-size="10.5" fill="#565656">only the OBJECT is soloed;</text>
+    <text x="105" y="180" text-anchor="middle" font-size="10.5" fill="#565656">its shapers ride along</text>
+  </svg>
+  <figcaption>Solo scopes over <em>objects</em>. A soloed object's automation, ability lanes, modifiers, and inbound modulators all keep running — they define the object, so muting them would defeat the solo.</figcaption>
+</figure>
+
+<!-- 5 -->
+<h2 id="ancestors">5 · Ancestors of a soloed nested object — keep the chain</h2>
+<p>An object nested under a group <em>inherits</em> that group's world transform (<code>composeLocal</code> multiplies parent world × local, parent-before-child in <span class="file">VisualEngine.ts</span>). If solo mutes the parent group, you're soloing an object while yanking the coordinate frame it lives in. The soloed object might jump to origin, or — if the parent itself renders geometry that positions it — lose its context entirely.</p>
+<p><strong>Fix:</strong> when computing global solo, treat a soloed object's <em>ancestor chain</em> as implicitly soloed (kept audible). They stay on screen so the soloed descendant renders where it belongs.</p>
+
+<figure class="fig">
+  <div class="figtitle">Solo a nested object — ancestors ride along, siblings mute</div>
+  <svg viewBox="0 0 780 250" role="img" aria-label="Soloing a nested object keeps ancestors">
+    <defs><marker id="ms2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="20" y="24" font-size="12" font-weight="700" fill="#141414">Solo ▶ Star (nested)</text>
+    <!-- Scene group (ancestor, kept) -->
+    <rect x="40" y="42" width="180" height="30" rx="5" fill="#d7d7d7" stroke="#141414" stroke-width="1.6"/>
+    <text x="130" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">Scene group · kept</text>
+    <text x="228" y="61" font-size="10" fill="#565656">ancestor → audible for context</text>
+    <!-- Star (soloed) -->
+    <rect x="90" y="92" width="180" height="30" rx="5" fill="#141414" stroke="#141414"/>
+    <text x="180" y="112" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">↳ Star · SOLO ●</text>
+    <!-- Cube sibling (muted) -->
+    <rect x="90" y="134" width="180" height="30" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
+    <text x="180" y="154" text-anchor="middle" font-size="11.5" fill="#999">↳ Cube (sibling) · muted</text>
+    <path d="M70,72 V107 H88" fill="none" stroke="#141414" stroke-width="1.2"/>
+    <path d="M70,107 V149 H88" fill="none" stroke="#bbb" stroke-width="1.2"/>
+    <!-- unrelated top-level (muted) -->
+    <rect x="470" y="92" width="200" height="30" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
+    <text x="570" y="112" text-anchor="middle" font-size="11.5" fill="#999">Unrelated Blob · muted</text>
+    <text x="570" y="140" text-anchor="middle" font-size="10.5" fill="#565656">global solo mutes everything</text>
+    <text x="570" y="156" text-anchor="middle" font-size="10.5" fill="#565656">off the soloed chain</text>
+    <!-- transform arrow -->
+    <path d="M180,122 V132" stroke="#141414" stroke-width="0"/>
+    <path d="M300,57 C360,57 360,107 272,107" fill="none" stroke="#141414" stroke-width="1.1" stroke-dasharray="3 3" marker-end="url(#ms2)"/>
+    <text x="330" y="88" font-size="10" fill="#565656">inherited transform</text>
+    <text x="130" y="200" text-anchor="middle" font-size="10.5" fill="#565656">Kept: the soloed Star + its ancestor chain.</text>
+    <text x="130" y="216" text-anchor="middle" font-size="10.5" fill="#565656">Muted: the Cube sibling and every unrelated object.</text>
+  </svg>
+  <figcaption>Ancestors are kept because the soloed object <em>needs</em> their transform to render correctly. Siblings and unrelated objects mute as normal — this is still global solo, just with the chain spared.</figcaption>
+</figure>
+
+<div class="note"><strong>Subtlety — does a kept ancestor render its <em>own</em> geometry?</strong> If the "Scene group" is a pure container (no visible mesh, only a transform), keeping it is free. If it also draws something, keeping it means that geometry shows too. That's acceptable and honest: the soloed object lives inside that thing, so seeing the container is context, not clutter. If you later want "transform-only, don't draw the ancestor," that's a per-object <em>renders-geometry</em> flag, not a solo concern.</div>
+
+<!-- 6 -->
+<h2 id="mute">6 · Mute down a subtree</h2>
+<p>Mute is the easy half, and its rule is a hard invariant: <strong>a muted parent hides its entire subtree.</strong> If a group is muted, nothing inside it can render — a child object has no visible effect when its coordinate frame is gone. This is the exact dual of the ancestor rule: solo keeps the chain <em>up</em>, mute cuts the chain <em>down</em>.</p>
+
+<figure class="fig">
+  <div class="figtitle">Mute a parent — the whole subtree goes dark</div>
+  <svg viewBox="0 0 780 190" role="img" aria-label="Muting a parent hides its subtree">
+    <text x="20" y="24" font-size="12" font-weight="700" fill="#141414">Mute ▶ Scene group</text>
+    <!-- Scene group muted -->
+    <rect x="40" y="42" width="180" height="30" rx="5" fill="#3a3a3a" stroke="#141414"/>
+    <text x="130" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">Scene group · MUTED ✕</text>
+    <!-- children forced off -->
+    <rect x="90" y="92" width="180" height="28" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
+    <text x="180" y="111" text-anchor="middle" font-size="11" fill="#999">↳ Star · hidden (inherited)</text>
+    <rect x="90" y="128" width="180" height="28" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
+    <text x="180" y="147" text-anchor="middle" font-size="11" fill="#999">↳ Cube · hidden (inherited)</text>
+    <rect x="300" y="110" width="180" height="28" rx="5" fill="#f2f2f2" stroke="#ccc" stroke-dasharray="4 3"/>
+    <text x="390" y="129" text-anchor="middle" font-size="10.5" fill="#999">↳↳ Cube's automation — moot</text>
+    <path d="M70,72 V106 H88" fill="none" stroke="#bbb" stroke-width="1.2"/>
+    <path d="M70,106 V142 H88" fill="none" stroke="#bbb" stroke-width="1.2"/>
+    <path d="M270,142 H298" stroke="#ccc" stroke-width="1.2"/>
+    <text x="560" y="126" font-size="10.5" fill="#565656">nothing under a hidden</text>
+    <text x="560" y="142" font-size="10.5" fill="#565656">parent can contribute pixels</text>
+  </svg>
+  <figcaption>Muting a parent is transitive downward. The children's own mute state, automation, and modulators become irrelevant — there's no frame to render into. (Muting a leaf object hides just that object, as today.)</figcaption>
+</figure>
+
+<div class="warn"><strong>Today this transitivity isn't enforced.</strong> <code>objectOff</code> only reads a track's own <code>muted</code> flag; it doesn't walk ancestors. Because transforms compose off <code>worldMatrices</code> and a muted parent still gets a world matrix computed, a child of a muted parent will currently still render (just possibly mis-placed). The fix is a one-line ancestor check in the mute test: an object is hidden if it <em>or any ancestor</em> is muted.</div>
+
+<!-- 7 -->
+<h2 id="daw">7 · DAW conventions, mapped to a visual tree</h2>
+<table>
+  <thead><tr><th>DAW behavior</th><th>Audio meaning</th><th>Cabin mapping</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Solo = only soloed tracks play</strong> (Ableton, Logic)</td><td>Everything un-soloed goes silent.</td><td>Global object solo — <em>keep</em> (matches <code>anyObjectSolo</code>).</td></tr>
+    <tr><td><strong>Solo-safe / solo a group</strong> (folder solo)</td><td>Soloing a folder plays the folder <em>and its contents</em>; the folder's own sends stay routed.</td><td>Soloing a parent keeps its <strong>descendant subtree</strong> audible; soloing a child keeps its <strong>ancestor chain</strong> audible. This is options (c) — the net-new behavior.</td></tr>
+    <tr><td><strong>Mute a folder</strong></td><td>Mutes the folder and everything in it.</td><td>Muted parent hides its whole subtree — a hard invariant.</td></tr>
+    <tr><td><strong>An instrument's inserts/sends don't have their own solo vs. the track</strong></td><td>You solo the <em>track</em>, not its EQ.</td><td>A soloed object keeps its shapers (automation / ability / modifier / modulator). Child-track solo is a <em>separate, local</em> verb among siblings — "which of my automation lanes wins," not "which object plays."</td></tr>
+    <tr><td><strong>Solo-in-place vs. AFL/PFL</strong></td><td>Some consoles audition a channel without cutting the mix.</td><td>Option (d), a future Alt-solo for auditioning one branch in isolation.</td></tr>
+  </tbody>
+</table>
+<p class="small muted">The key translation: in audio, "audible" is literal loudness; here it's "contributes to the rendered frame." Everything else about DAW solo/mute survives the port intact — including the folder rules, which are exactly the ancestor/descendant passes the current flattened solo is missing.</p>
+
+<!-- 8 -->
+<h2 id="rec">8 · Recommendation</h2>
+
+<div class="keystone">
+  <h3>The rule set — five lines, no exceptions</h3>
+  <ol>
+    <li><strong>Object solo is global.</strong> If any object is soloed, un-soloed objects are muted. (Keep today's <code>anyObjectSolo</code>.)</li>
+    <li><strong>Solo spares the chain up and the subtree down.</strong> A soloed object's <em>ancestors</em> stay audible (so it renders in its inherited frame) and its <em>descendant objects</em> stay audible (so soloing a group isn't an empty box). <span class="badge b-build">to build</span></li>
+    <li><strong>Solo never touches shapers.</strong> A soloed object keeps its own automation, ability lanes, modifiers, and every modulator targeting it. (Already true.)</li>
+    <li><strong>Mute is transitive downward.</strong> An object is hidden if it — or any ancestor — is muted. <span class="badge b-build">to build</span></li>
+    <li><strong>Child-track solo stays local.</strong> Solo among an object's automation / ability / modifier children mutes only its non-soloed siblings. (Already true, per-object.)</li>
+  </ol>
+</div>
+
+<h3>Decision table</h3>
+<table>
+  <thead><tr><th>You do this…</th><th>Renders</th><th>Hidden</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Solo a top-level leaf object</td><td>that object + its shapers</td><td>all other objects</td><td>works today</td></tr>
+    <tr><td>Solo a nested object</td><td>that object + its ancestors + its shapers</td><td>siblings, unrelated objects</td><td><span class="badge b-build">add ancestor pass</span></td></tr>
+    <tr><td>Solo a parent group</td><td>the group + its whole subtree + shapers</td><td>everything outside the subtree</td><td><span class="badge b-build">add descendant pass</span></td></tr>
+    <tr><td>Mute a leaf object</td><td>—</td><td>that object</td><td>works today</td></tr>
+    <tr><td>Mute a parent group</td><td>—</td><td>the group + its entire subtree</td><td><span class="badge b-build">add ancestor check</span></td></tr>
+    <tr><td>Solo one automation / ability / modifier child</td><td>that child's influence</td><td>its non-soloed siblings on the same object</td><td>works today</td></tr>
+    <tr><td>Mute an automation / ability / modifier child</td><td>the object, minus that influence</td><td>that one influence</td><td>works today</td></tr>
+    <tr><td>Alt-solo a branch (future)</td><td>only within that subtree; the rest of the scene untouched</td><td>non-soloed tracks inside the subtree only</td><td><span class="badge b-future">later</span></td></tr>
+  </tbody>
+</table>
+
+<h3>What actually changes in code</h3>
+<p>Small, and localized to <span class="file">resolve.ts</span> — the tree is tiny, so an extra walk is free.</p>
+<pre><code><span class="c">// In resolveProject, replace the flat objectOff with a hierarchy-aware version.</span>
+
+<span class="c">// 1. Solo set = soloed objects, PLUS their ancestor chains, PLUS their subtrees.</span>
+<span class="k">const</span> soloRoots = objectTrackIds.filter(id =&gt; p.tracks[id]?.solo)
+<span class="k">const</span> keptBySolo = <span class="k">new</span> Set&lt;<span class="k">string</span>&gt;()
+<span class="k">for</span> (<span class="k">const</span> id <span class="k">of</span> soloRoots) {
+  addAncestors(id, keptBySolo)   <span class="c">// walk parentId up — render in context</span>
+  addSubtreeObjects(id, keptBySolo) <span class="c">// walk childIds down — don't solo an empty box</span>
+}
+<span class="k">const</span> anySolo = soloRoots.length &gt; 0
+
+<span class="c">// 2. Mute is transitive: hidden if self or any ancestor is muted.</span>
+<span class="k">const</span> mutedByAncestor = (id: <span class="k">string</span>) =&gt; {
+  <span class="k">for</span> (<span class="k">let</span> t = p.tracks[id]; t; t = t.parentId ? p.tracks[t.parentId] : undefined)
+    <span class="k">if</span> (t.muted) <span class="k">return</span> <span class="k">true</span>
+  <span class="k">return</span> <span class="k">false</span>
+}
+
+<span class="c">// 3. The new object-off test.</span>
+<span class="k">const</span> objectOff = (id: <span class="k">string</span>) =&gt;
+  mutedByAncestor(id) || (anySolo &amp;&amp; !keptBySolo.has(id))
+</code></pre>
+<div class="note">Everything else — shaper children keeping their own mute, per-object child solo, the <code>mute</code>-modifier blackout spans — stays exactly as written. The change is purely: <em>solo and mute now respect nesting.</em> Ports over cleanly because <code>flattenTree</code> already exposes <code>parentId</code>/<code>childIds</code>, and <code>computeAtBeat</code> already composes parent-before-child, so a kept ancestor's world matrix is ready when its soloed descendant renders.</div>
+
+<div class="rec"><strong>In one breath:</strong> global solo (only the soloed thing), but spare its parent chain so it renders in context and its subtree so a group-solo isn't empty; never silence a soloed object's own shapers; mute hides the whole subtree beneath it; child-lane solo stays a local "which influence wins" among siblings. It's DAW solo/mute with folder rules — mapped onto "audible = contributes to the frame."</div>
+
+</div>
+</body>
+</html>
