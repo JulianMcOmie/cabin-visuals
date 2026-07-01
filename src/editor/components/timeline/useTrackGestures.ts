@@ -251,13 +251,12 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     // Alt-drag = duplicate: clone the drag set in place (originals stay put) and
-    // drag the clones. Only for moving, not edge-resize.
+    // drag the clones. Scans ALL tracks (root + child: nested/automation/ability), so
+    // blocks on child tracks duplicate too. Only for moving, not edge-resize.
     if (e.altKey && type === 'moving') {
       const store = useProjectStore.getState()
       const cloneIds = new Set<string>()
-      store.rootTrackIds.forEach((tId) => {
-        const t = store.tracks[tId]
-        if (!t) return
+      for (const [tId, t] of Object.entries(store.tracks)) {
         for (const b of t.blocks) {
           if (dragSet.has(b.id)) {
             const clone = cloneBlock(b)
@@ -265,7 +264,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
             cloneIds.add(clone.id)
           }
         }
-      })
+      }
       dragSet = cloneIds
       setSelectedBlockIds(cloneIds)
     }
