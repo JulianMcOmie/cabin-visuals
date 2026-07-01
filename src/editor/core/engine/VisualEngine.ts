@@ -1,6 +1,7 @@
 import { Matrix4 } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { runMatrix } from './matrix'
+import { sampleLane } from './automation'
 import { composeLocal } from './transforms'
 import type { ResolvedGraph, ObjectState } from './types'
 
@@ -59,7 +60,16 @@ export function computeAtBeat(beat: number) {
   runMatrix(graph, beat, portValuesByObject)
   for (const obj of graph.objects) {
     const portValues = portValuesByObject.get(obj.trackId) ?? {}
-    const local = obj.localTransform ? obj.localTransform({ params: obj.params, ports: portValues, beat }) : {}
+    // Automation drives params over time: overlay each lane's sampled value onto the
+    // base params for this frame (a pure function of the beat, so scrub == playback).
+    let params = obj.params
+    if (obj.automations.length) {
+      params = { ...obj.params }
+      for (const auto of obj.automations) {
+        if (auto.keyframes.length) params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
+      }
+    }
+    const local = obj.localTransform ? obj.localTransform({ params, ports: portValues, beat }) : {}
     composeLocal(local, _local)
 
     let world = worldMatrices.get(obj.trackId)
@@ -69,7 +79,7 @@ export function computeAtBeat(beat: number) {
     else world.copy(_local)
 
     const blackedOut = obj.blackouts.some((r) => beat >= r.start && beat < r.end)
-    states.set(obj.trackId, { params: obj.params, portValues, world, blackedOut, abilityEvents: obj.abilityEvents })
+    states.set(obj.trackId, { params, portValues, world, blackedOut, abilityEvents: obj.abilityEvents })
   }
 }
 

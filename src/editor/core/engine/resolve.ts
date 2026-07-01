@@ -5,11 +5,14 @@ import type {
   ResolvedGraph,
   ResolvedObject,
   ResolvedNote,
+  ResolvedAutomation,
   ModulatorInstance,
   ResolvedRouting,
   BlackoutRegion,
 } from './types'
 import { isModifierType, combineModifier } from './trackTypes'
+import { extractKeyframes } from './automation'
+import type { ObjectInstrumentDef } from '../../instruments/types'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -62,6 +65,29 @@ function flattenBlocks(blocks: Block[], beatsPerBar: number): ResolvedNote[] {
 /** Flatten a track's own notes (its `blocks`) to absolute project beats. */
 function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
   return flattenBlocks(track.blocks, beatsPerBar)
+}
+
+/** Gather an object track's `automation` child tracks into resolved keyframe lanes.
+ *  Each maps one of the object's params (its note pitch → the param's [min,max]); the
+ *  engine samples them per frame. Children with no target param or an unknown param are
+ *  skipped. Muted automation children are ignored (a quick disable). */
+function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
+  const out: ResolvedAutomation[] = []
+  if (!def) return out
+  for (const childId of track.childIds ?? []) {
+    const child = p.tracks[childId]
+    if (!child || child.instrumentId || child.type !== 'automation' || child.muted) continue
+    const param = child.targetParam
+    if (!param) continue
+    const pdef = def.params.find((pd) => pd.key === param)
+    if (!pdef) continue
+    out.push({
+      param,
+      mode: child.interpolation ?? 'linear',
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max),
+    })
+  }
+  return out
 }
 
 /** Resolve a track's ability lanes into per-key note streams (absolute beats). */
@@ -137,6 +163,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       notes,
       blackouts,
       abilityEvents: resolveAbilityEvents(track, p.beatsPerBar),
+      automations: resolveAutomations(track, def, p),
       tags,
     })
     for (const tag of tags) {

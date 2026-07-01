@@ -1,26 +1,22 @@
 'use client'
 
-import { useRef, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
 import { AbilityLaneRow } from './AbilityLaneRow'
+import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
-import { getInstrument } from '../../instruments'
-import type { Track as TrackType } from '../../types'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
+import { abilityLanesOf } from './abilityLanes'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
-
-/** An object track's ability lanes (from its instrument def), for the row flattener. */
-const lanesOf = (t: TrackType) =>
-  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -61,7 +57,10 @@ export function TimelineArea() {
   // parents hide their descendant rows. Each object track's ability lanes are
   // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
-  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds, lanesOf)
+  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds, abilityLanesOf)
+
+  // Right-click-a-track menu (add ability / automation), positioned at the cursor.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null)
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
@@ -258,6 +257,7 @@ export function TimelineArea() {
                   dropInto={trackDrop?.intoId === row.id}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
+                  onLabelContextMenu={(e, id) => setCtxMenu({ x: e.clientX, y: e.clientY, trackId: id })}
                   barWidthPx={barWidthPx}
                   timelineWidthPx={timelineWidthPx}
                   selectedBlockIds={selectedBlockIds}
@@ -364,6 +364,15 @@ export function TimelineArea() {
         className="absolute top-0 bottom-0 z-40 cursor-ew-resize"
         style={{ left: labelWidth - 3, width: 6 }}
       />
+
+      {ctxMenu && (
+        <TrackContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          trackId={ctxMenu.trackId}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   )
 }

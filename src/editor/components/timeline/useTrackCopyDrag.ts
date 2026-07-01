@@ -3,11 +3,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows } from './trackTree'
-import { getInstrument } from '../../instruments'
-import type { Track } from '../../types'
-
-const lanesOf = (t: Track) =>
-  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
+import { abilityLanesOf } from './abilityLanes'
 
 interface CopyDragState {
   srcIndex: number
@@ -48,7 +44,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
 
     // Visual row of each root track (they're spread apart by their lanes + nested
     // descendants), so the ghost maps to the real layout, not `index * rowHeight`.
-    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, lanesOf)
+    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, abilityLanesOf)
     const rootTops: number[] = []
     rows.forEach((r, i) => { if (r.kind === 'track' && r.depth === 0) rootTops.push(i) })
     const n = rows.length

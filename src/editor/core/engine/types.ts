@@ -4,6 +4,16 @@
 
 import type { Matrix4 } from 'three'
 import type { PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
+import type { InterpolationMode } from '../../types'
+import type { AutomationKeyframe } from './automation'
+
+/** A resolved automation lane: keyframes (pitch→value, absolute beats) driving one of
+ *  the object's params, interpolated per `mode`. Sampled per frame in computeAtBeat. */
+export interface ResolvedAutomation {
+  param: string
+  mode: InterpolationMode
+  keyframes: AutomationKeyframe[]
+}
 
 /** One of a track's notes, flattened to absolute project beats, carrying the
  *  bounds of its containing block so the engine can tell which notes are "live". */
@@ -43,6 +53,9 @@ export interface ResolvedObject {
    *  instrument's own render consumes these (the code escape hatch). Empty if the
    *  instrument declares no abilities or none have been played. */
   abilityEvents: Map<string, ResolvedNote[]>
+  /** Automation lanes (from `automation` child tracks) driving this object's params
+   *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
+  automations: ResolvedAutomation[]
   /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
   tags: string[]
 }
