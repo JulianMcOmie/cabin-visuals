@@ -21,6 +21,11 @@ import { neonPolarInstrument } from './NeonPolar'
 import { hopfFibrationInstrument } from './HopfFibration'
 import { particleStreamsInstrument } from './ParticleStreams'
 import { particleBassRingInstrument } from './ParticleBassRing'
+import { shapeFlightInstrument } from './ShapeFlight'
+import { dotFieldInstrument } from './DotField'
+import { metronomeBallsInstrument } from './MetronomeBalls'
+import { folderFlightInstrument } from './FolderFlight'
+import { emojiDisplayInstrument } from './EmojiDisplay'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -46,6 +51,11 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [hopfFibrationInstrument.id]: hopfFibrationInstrument,
   [particleStreamsInstrument.id]: particleStreamsInstrument,
   [particleBassRingInstrument.id]: particleBassRingInstrument,
+  [shapeFlightInstrument.id]: shapeFlightInstrument,
+  [dotFieldInstrument.id]: dotFieldInstrument,
+  [metronomeBallsInstrument.id]: metronomeBallsInstrument,
+  [folderFlightInstrument.id]: folderFlightInstrument,
+  [emojiDisplayInstrument.id]: emojiDisplayInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

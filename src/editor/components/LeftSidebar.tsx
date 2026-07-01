@@ -141,6 +141,37 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'shapeFlight', name: 'Shape Flight', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#f59e0b" strokeWidth="1">
+      <polygon points="6,1 10,6 6,11 2,6" /><polygon points="6,3.5 8,6 6,8.5 4,6" />
+    </svg>
+  )},
+  { id: 'dotField', name: 'Dot Field', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#38bdf8">
+        <circle cx="6" cy="6" r="1.1" /><circle cx="6" cy="2" r="0.8" /><circle cx="9.5" cy="4.5" r="0.8" /><circle cx="8.5" cy="8.5" r="0.8" /><circle cx="3.5" cy="8.5" r="0.8" /><circle cx="2.5" cy="4.5" r="0.8" />
+      </g>
+    </svg>
+  )},
+  { id: 'metronomeBalls', name: 'Metronome Balls', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="#94a3b8">
+      <path d="M6 6 L10 3 M6 6 L2 3 M6 6 L3 10 M6 6 L9 10" stroke="#94a3b8" strokeWidth="0.6" fill="none" />
+      <circle cx="6" cy="6" r="1" /><circle cx="10" cy="3" r="1" /><circle cx="2" cy="3" r="1" /><circle cx="3" cy="10" r="1" /><circle cx="9" cy="10" r="1" />
+    </svg>
+  )},
+  { id: 'folderFlight', name: 'Folder Flight', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M1 3.5 L4.5 3.5 L5.5 2.5 L1 2.5 Z" fill="#f7d774" stroke="#d4a840" strokeWidth="0.3" />
+      <rect x="1" y="3.5" width="9" height="6" rx="0.6" fill="#f7d774" stroke="#d4a840" strokeWidth="0.3" />
+    </svg>
+  )},
+  { id: 'emojiDisplay', name: 'Emoji Display', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5.5" fill="#ffcc00" />
+      <circle cx="4" cy="5" r="1" fill="#000" /><circle cx="8" cy="5" r="1" fill="#000" />
+      <path d="M3.5 7.5 Q6 10 8.5 7.5" fill="none" stroke="#000" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
