@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getPlugin } from '../plugins'
-import type { Track, TrackType, Block, Note, PluginInstance } from '../types'
+import type { Track, TrackType, Block, Note, PluginInstance, InterpolationMode } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -63,6 +63,8 @@ interface ProjectState {
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
   /** Reveal an instrument ability's lane on a track (opt-in). No-op if already added. */
   addAbilityLane: (trackId: string, laneKey: string) => void
+  /** Set an automation track's interpolation mode between keyframes. */
+  setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   // Visual effects (plugins) on a track.
@@ -417,6 +419,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
           [trackId]: { ...track, lanes: { ...track.lanes, [laneKey]: [] } },
         },
       }
+    }),
+
+  setTrackInterpolation: (trackId, mode) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
     }),
 
   setTrackTargets: (trackId, targets) =>
