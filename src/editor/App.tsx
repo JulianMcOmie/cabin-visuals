@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
-import { lockCursor, unlockCursor } from './utils/dragCursor'
+import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
@@ -124,27 +123,7 @@ function BottomArea() {
 }
 
 export default function EditorApp() {
-  // Hand-rolled vertical split (upper canvas/editor vs lower tracks) — the same
-  // real-element approach as the track-label-column resize, so its grab pad sits ON
-  // TOP of the ruler and stops propagation: grabbing it resizes only (never also
-  // scrubs), with no dead strip between resize and scrub.
-  const [topFrac, setTopFrac] = useState(0.45)
-  const vSplitRef = useRef<HTMLDivElement>(null)
-
-  function startVerticalResize(e: ReactPointerEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    lockCursor('ns-resize')
-    const controller = new AbortController()
-    window.addEventListener('pointermove', (ev) => {
-      const c = vSplitRef.current
-      if (!c) return
-      const r = c.getBoundingClientRect()
-      const frac = (ev.clientY - r.top) / r.height
-      setTopFrac(Math.max(0.3, Math.min(0.85, frac)))
-    }, { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
-  }
+  const { topFrac, containerRef, startResize } = useVerticalSplit()
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#1e1e21]">
@@ -162,7 +141,7 @@ export default function EditorApp() {
           {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
           <Panel>
             <div className="flex flex-col h-full">
-              <div ref={vSplitRef} className="flex flex-col flex-1 min-h-0">
+              <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TrackEditor + Canvas */}
                 <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
@@ -189,9 +168,9 @@ export default function EditorApp() {
                     grab pad on top of its neighbours — see note above. */}
                 <div className="relative h-px bg-zinc-800/60 shrink-0">
                   <div
-                    onPointerDown={startVerticalResize}
+                    onPointerDown={startResize}
                     className="absolute inset-x-0 z-50 cursor-ns-resize"
-                    style={{ top: -5, bottom: -5 }}
+                    style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
                   />
                 </div>
 

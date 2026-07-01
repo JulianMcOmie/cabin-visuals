@@ -39,6 +39,11 @@ interface UIState {
   tracksLabelWidth: number
   setTracksLabelWidth: (px: number) => void
 
+  // Fraction (0–1) of the right section's height given to the upper (editor + canvas)
+  // region; the rest goes to the tracks/piano-roll below. Drag the divider to set it.
+  topPanelFraction: number
+  setTopPanelFraction: (fraction: number) => void
+
   // Saved tracks-timeline scroll, so returning from the MIDI editor restores the view.
   tracksScrollLeft: number
   tracksScrollTop: number
@@ -91,6 +96,11 @@ export const useUIStore = create<UIState>((set) => ({
   tracksLabelWidth: TRACK_LABEL_WIDTH,
   setTracksLabelWidth: (px) =>
     set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
+
+  topPanelFraction: 0.45,
+  // Clamp ≈ the panels' old min sizes (top ≥ 30%, bottom ≥ 15%).
+  setTopPanelFraction: (f) =>
+    set({ topPanelFraction: Math.max(0.3, Math.min(0.85, f)) }),
 
   tracksScrollLeft: 0,
   tracksScrollTop: 0,
