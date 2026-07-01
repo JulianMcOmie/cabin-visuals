@@ -64,8 +64,8 @@ export function computeDropTarget(args: {
   const frac = (contentY - overIndex * rowHeight) / rowHeight
 
   // Middle band of a *track* row → nest into it (append as its last child). A lane
-  // sub-row is never a nest target.
-  if (over.kind === 'track' && frac >= 0.25 && frac <= 0.75) {
+  // sub-row is never a nest target, nor is an automation track (it can't own children).
+  if (over.kind === 'track' && overTrack.type !== 'automation' && frac >= 0.25 && frac <= 0.75) {
     return { parentId: over.id, index: undefined, line: null, intoId: over.id }
   }
 
