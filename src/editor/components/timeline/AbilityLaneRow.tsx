@@ -24,10 +24,10 @@ interface AbilityLaneRowProps {
 }
 
 /**
- * One ability lane, rendered as an indented, track-like sub-row under its object
- * track (so the object track reads as a taller, grouped block). A parallel structure
- * — NOT a child track. Right-click the lane to draw a block; double-click a block to
- * edit its notes in the MIDI editor (both scoped to this lane via `laneKey`).
+ * One ability lane, rendered as an indented sub-row that looks and behaves like a child
+ * track (sticky label + mute/solo), so it reads uniformly with automation tracks. A
+ * PARALLEL structure though — NOT a child track. Right-click the lane to draw a block;
+ * double-click a block to edit its notes (scoped to this lane via `laneKey`).
  */
 export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidthPx, timelineWidthPx, isLast, liftOffset }: AbilityLaneRowProps) {
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -35,11 +35,15 @@ export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidth
   const selectedBlockIds = useUIStore((s) => s.selectedBlockIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const blocks = useProjectStore((s) => s.tracks[trackId]?.lanes?.[laneKey])
+  const meta = useProjectStore((s) => s.tracks[trackId]?.laneMeta?.[laneKey])
+  const toggleLaneMuted = useProjectStore((s) => s.toggleLaneMuted)
+  const toggleLaneSolo = useProjectStore((s) => s.toggleLaneSolo)
+  const muted = meta?.muted ?? false
+  const solo = meta?.solo ?? false
   const dot = color ?? '#818cf8'
 
   const laneRef = useRef<HTMLDivElement>(null)
   const { onLanePointerDown, onBlockPointerDown } = useLaneGestures(trackId, laneKey, laneRef)
-
   const inCopyDrag = liftOffset !== undefined
 
   return (
@@ -55,12 +59,33 @@ export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidth
     >
       <div
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-1.5 pr-3 border-r border-r-zinc-800/60 bg-[#1b1b1f] ${
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 bg-[#1d1d21] ${
           isLast ? '' : 'border-b border-b-zinc-900'
         }`}
       >
-        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dot }} />
-        <span className="text-[11px] font-medium truncate text-zinc-400">{label}</span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: dot }} />
+          <span className={`text-xs font-medium truncate ${muted ? 'text-zinc-500' : 'text-zinc-200'}`}>{label}</span>
+        </div>
+
+        <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => toggleLaneMuted(trackId, laneKey)}
+            className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
+              muted ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            M
+          </button>
+          <button
+            onClick={() => toggleLaneSolo(trackId, laneKey)}
+            className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
+              solo ? 'bg-green-500 text-black' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            S
+          </button>
+        </div>
       </div>
 
       {/* Gutter, matching the track row so lanes line up under it. */}
@@ -68,7 +93,7 @@ export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidth
 
       <div
         ref={laneRef}
-        className="relative flex-shrink-0 bg-black/15"
+        className="relative flex-shrink-0 bg-black/10"
         style={{ width: timelineWidthPx }}
         onPointerDown={onLanePointerDown}
         onContextMenu={(e) => e.preventDefault()}

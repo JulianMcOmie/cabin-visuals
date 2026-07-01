@@ -95,7 +95,8 @@ function resolveAbilityEvents(track: Track, beatsPerBar: number): Map<string, Re
   const events = new Map<string, ResolvedNote[]>()
   if (!track.lanes) return events
   for (const [key, blocks] of Object.entries(track.lanes)) {
-    events.set(key, flattenBlocks(blocks, beatsPerBar))
+    // A muted ability lane resolves to no events, so its ability doesn't fire.
+    events.set(key, track.laneMeta?.[key]?.muted ? [] : flattenBlocks(blocks, beatsPerBar))
   }
   return events
 }
