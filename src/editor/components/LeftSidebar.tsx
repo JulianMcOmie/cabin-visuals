@@ -87,6 +87,35 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'circleGrid', name: 'Circle Grid', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#14b8a6">
+        <circle cx="3" cy="3" r="1.2" /><circle cx="6" cy="3" r="1.2" /><circle cx="9" cy="3" r="1.2" />
+        <circle cx="3" cy="6" r="1.2" /><circle cx="6" cy="6" r="1.2" /><circle cx="9" cy="6" r="1.2" />
+        <circle cx="3" cy="9" r="1.2" /><circle cx="6" cy="9" r="1.2" /><circle cx="9" cy="9" r="1.2" />
+      </g>
+    </svg>
+  )},
+  { id: 'silkSymmetry', name: 'Silk Symmetry', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="none" stroke="#8b5cf6" strokeWidth="1">
+        <circle cx="6" cy="6" r="4.5" /><path d="M6 1.5 Q9 6 6 10.5 Q3 6 6 1.5" /><path d="M1.5 6 Q6 9 10.5 6 Q6 3 1.5 6" />
+      </g>
+    </svg>
+  )},
+  { id: 'fractalTunnel', name: 'Fractal Tunnel', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="none" stroke="#8b5cf6" strokeWidth="1">
+        <circle cx="6" cy="6" r="1.5" /><circle cx="6" cy="6" r="3.5" /><circle cx="6" cy="6" r="5.5" />
+      </g>
+    </svg>
+  )},
+  { id: 'diamondLattice', name: 'Diamond Lattice', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <polygon points="6,1 9,6 6,11 3,6" fill="none" stroke="#ec4899" strokeWidth="1.2" />
+      <polygon points="6,3.5 7.5,6 6,8.5 4.5,6" fill="none" stroke="#ec4899" strokeWidth="1" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve

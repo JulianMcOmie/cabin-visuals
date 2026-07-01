@@ -13,6 +13,10 @@ import { textDisplayInstrument } from './TextDisplay'
 import { squareInstrument } from './Square'
 import { starsInstrument } from './Stars'
 import { particleBurstInstrument } from './ParticleBurst'
+import { circleGridInstrument } from './CircleGrid'
+import { silkSymmetryInstrument } from './SilkSymmetry'
+import { fractalTunnelInstrument } from './FractalTunnel'
+import { diamondLatticeInstrument } from './DiamondLattice'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -30,6 +34,10 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [squareInstrument.id]: squareInstrument,
   [starsInstrument.id]: starsInstrument,
   [particleBurstInstrument.id]: particleBurstInstrument,
+  [circleGridInstrument.id]: circleGridInstrument,
+  [silkSymmetryInstrument.id]: silkSymmetryInstrument,
+  [fractalTunnelInstrument.id]: fractalTunnelInstrument,
+  [diamondLatticeInstrument.id]: diamondLatticeInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
