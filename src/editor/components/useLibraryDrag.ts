@@ -3,6 +3,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { flattenTracks } from './timeline/trackTree'
 import { computeDropTarget } from './timeline/trackDrop'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
@@ -54,6 +55,8 @@ export function useLibraryDrag() {
       if (!started) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 3) return
         started = true
+        // Keep the default arrow throughout and suppress hover/interactions elsewhere.
+        lockCursor('default')
         setGhostName(item.name)
         // Ghost mounts on this render; position it once it exists (next frame).
         const px = ev.clientX
@@ -89,6 +92,7 @@ export function useLibraryDrag() {
     const onUp = () => {
       controller.abort()
       if (!started) return
+      unlockCursor()
       useUIStore.getState().setTrackDrop(null)
       setGhostName(null)
       if (target) {

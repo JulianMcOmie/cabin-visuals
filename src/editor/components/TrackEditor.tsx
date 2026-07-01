@@ -6,6 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
+import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { Routing } from '../types'
 
 type Tab = 'instrument' | 'effects'
@@ -35,10 +36,11 @@ function ParamSlider({
 
   const onPointerDown = (e: ReactPointerEvent) => {
     e.preventDefault()
+    lockCursor('grabbing')
     setFromClientX(e.clientX)
     const controller = new AbortController()
     window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    window.addEventListener('pointerup', () => controller.abort(), { signal: controller.signal })
+    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
   }
 
   return (

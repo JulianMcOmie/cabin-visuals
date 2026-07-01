@@ -244,6 +244,8 @@ export function MidiEditor({
   }, [dragState])
 
   const barCount = Math.ceil(initialTotalBeats / beatsPerBar)
+  // Only every `barInterval`th bar is numbered (matches the track ruler's thinning).
+  const barInterval = barCount <= 16 ? 1 : barCount <= 64 ? 2 : 4
   const blockStartPx = beatToX(blockStartBeat, pixelsPerBeat)
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
@@ -255,8 +257,9 @@ export function MidiEditor({
           Two-tone Logic-style: lighter top half with bar numbers, darker bottom half
           with tick lines and the playhead triangle. The playhead line lives in the grid. */}
       <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
-        {/* Frozen corner — stays put on horizontal scroll, aligned with the sticky labels. */}
-        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#18181b', borderRight: '1px solid #27272a', zIndex: 2 }} />
+        {/* Frozen corner — stays put on horizontal scroll, aligned with the sticky labels.
+            Distinct box colour (matching the track ruler + the label column below). */}
+        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2 }} />
         {/* Strip viewport clips the translated inner content (mirrors the grid scroll). */}
         <div
           style={{
@@ -274,9 +277,9 @@ export function MidiEditor({
             e.currentTarget.style.cursor = 'ew-resize'
           }}
         >
-          {/* Thin near-black divider separating the top (numbers) and bottom (ticks)
-              halves — spans the whole strip including the gutter left of the grid. */}
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: '#09090b', pointerEvents: 'none' }} />
+          {/* Subtle divider separating the top (numbers) and bottom (ticks) halves —
+              matches the track ruler (zinc-700 @ 40%). */}
+          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(63,63,70,0.4)', pointerEvents: 'none' }} />
 
           <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
 
@@ -284,19 +287,28 @@ export function MidiEditor({
           {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)
             .filter((i) => i % beatsPerBar !== 0)
             .map((i) => (
-              <div key={`beat${i}`} style={{ position: 'absolute', left: i * pixelsPerBeat, top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(82,82,91,0.6)' }} />
+              <div key={`beat${i}`} style={{ position: 'absolute', left: i * pixelsPerBeat, top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(63,63,70,0.6)' }} />
             ))}
 
-          {Array.from({ length: barCount }).map((_, i) => (
-            <div key={i} style={{ position: 'absolute', left: i * beatsPerBar * pixelsPerBeat, top: 0, bottom: 0 }}>
-              {/* Top half: bar number */}
-              <span style={{ position: 'absolute', top: 0, left: 4, paddingTop: 4, fontSize: 10, lineHeight: 1, color: '#a1a1aa' }}>
-                {i + 1}
-              </span>
-              {/* Full-height tick line beside the number */}
-              <div style={{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#52525b' }} />
-            </div>
-          ))}
+          {Array.from({ length: barCount }).map((_, i) => {
+            const numbered = i % barInterval === 0
+            return (
+              <div key={i} style={{ position: 'absolute', left: i * beatsPerBar * pixelsPerBeat, top: 0, bottom: 0 }}>
+                {numbered ? (
+                  <>
+                    {/* Top half: bar number + full-height tick line */}
+                    <span style={{ position: 'absolute', top: 0, left: 4, paddingTop: 4, fontSize: 10, lineHeight: 1, color: '#a1a1aa' }}>
+                      {i + 1}
+                    </span>
+                    <div style={{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#52525b' }} />
+                  </>
+                ) : (
+                  /* Blank bar: short faint tick, same as the beat ticks */
+                  <div style={{ position: 'absolute', top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(63,63,70,0.6)' }} />
+                )}
+              </div>
+            )
+          })}
 
           {/* Block clip header: drag the body to move the block, the edges to resize.
               Sits in the bottom half below the triangle (zIndex 10 < 21). */}

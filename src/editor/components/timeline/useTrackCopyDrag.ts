@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
+import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 
 interface CopyDragState {
   srcIndex: number
@@ -42,6 +43,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
 
     sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null, rowHeight }
     setCopyDrag({ srcIndex, insertIndex: null, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {
       if (ghostRef.current) ghostRef.current.style.top = `${clientY - grabOffsetY}px`
@@ -72,6 +74,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       const s = sessionRef.current
       controller.abort()
       sessionRef.current = null
+      unlockCursor()
       if (s && s.insertIndex != null) {
         useProjectStore.getState().insertTrackCopy(s.srcId, s.insertIndex)
       }
