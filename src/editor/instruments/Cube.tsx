@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { getObjectState } from '../core/engine/VisualEngine'
+import { useTimeStore } from '../store/TimeStore'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The cube's definition lives next to its visual — schema and component can't drift.
@@ -22,6 +23,12 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
     { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
   ],
+  // The Cube's signature ability: play a note on its Shatter lane and the cube bursts
+  // into fragments that fly out and reassemble over the note's length (its velocity
+  // sets the blast radius). Bespoke, intrinsic — it IS how a cube performs.
+  abilities: [
+    { key: 'shatter', label: 'Shatter', color: '#f472b6' },
+  ],
   // The cube's transform as data, so the engine can compose it with its parent's:
   // position from the X param, a steady spin from the beat, and a breathing scale
   // boosted by the energy port. The engine writes the composed world matrix to state.
@@ -39,11 +46,18 @@ export const cubeInstrument: ObjectInstrumentDef = {
   component: Cube,
 }
 
+// The eight cube-corner directions the fragments fly along.
+const CORNERS: [number, number, number][] = [
+  [1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1],
+  [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1],
+]
+
 // One cube per cube track. The transform (world matrix) and mute blackout are applied
-// by ObjectRenderer's placement group; this draws the mesh at local origin and only
-// owns appearance (color/emissive) as the object's intrinsic render math.
+// by ObjectRenderer's placement group; this draws the mesh at local origin and owns
+// appearance (color/emissive) plus its signature Shatter ability.
 export function Cube({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
+  const fragRefs = useRef<(Mesh | null)[]>([])
 
   useFrame(() => {
     if (!meshRef.current) return
@@ -55,18 +69,62 @@ export function Cube({ trackId }: { trackId: string }) {
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
     mat.emissiveIntensity = 0.2 + energy * 1.2
+
+    // Shatter: sample this track's Shatter lane at the current beat. A note's window
+    // is [beat, beat+duration); the burst rises then falls (sin) over that window, so
+    // the cube flies apart and reassembles. Overlapping notes take the strongest.
+    const beat = useTimeStore.getState().currentBeat
+    const events = state?.abilityEvents.get('shatter') ?? []
+    let a = 0
+    let vel = 0
+    for (const n of events) {
+      const dur = n.durationBeats || 0.5
+      if (beat >= n.beat && beat < n.beat + dur) {
+        const env = Math.sin(Math.PI * ((beat - n.beat) / dur))
+        if (env > a) { a = env; vel = n.velocity }
+      }
+    }
+    const nvel = vel <= 1 ? vel : vel / 127 // tolerate 0–1 or 0–127 velocity scales
+    const spread = 1.4 + Math.min(1, nvel) * 2.2
+
+    // The core shrinks as it shatters; fragments grow from nothing and fly outward.
+    meshRef.current.scale.setScalar(Math.max(0.001, 1 - 0.85 * a))
+    for (let i = 0; i < CORNERS.length; i++) {
+      const frag = fragRefs.current[i]
+      if (!frag) continue
+      const [dx, dy, dz] = CORNERS[i]
+      const dist = a * spread
+      frag.position.set(dx * dist, dy * dist, dz * dist)
+      frag.scale.setScalar(0.45 * a)
+      frag.rotation.set(beat * 0.6 + i, beat * 0.8 + i, 0)
+      frag.visible = a > 0.001
+    }
   })
 
   return (
-    <mesh ref={meshRef}>
-      <boxGeometry args={[1.6, 1.6, 1.6]} />
-      <meshStandardMaterial
-        color="#6366f1"
-        metalness={0.4}
-        roughness={0.35}
-        emissive="#312e81"
-        emissiveIntensity={0.2}
-      />
-    </mesh>
+    <group>
+      <mesh ref={meshRef}>
+        <boxGeometry args={[1.6, 1.6, 1.6]} />
+        <meshStandardMaterial
+          color="#6366f1"
+          metalness={0.4}
+          roughness={0.35}
+          emissive="#312e81"
+          emissiveIntensity={0.2}
+        />
+      </mesh>
+      {CORNERS.map((_, i) => (
+        <mesh key={i} ref={(el) => { fragRefs.current[i] = el }} visible={false}>
+          <boxGeometry args={[1.6, 1.6, 1.6]} />
+          <meshStandardMaterial
+            color="#f472b6"
+            metalness={0.4}
+            roughness={0.3}
+            emissive="#be185d"
+            emissiveIntensity={0.9}
+          />
+        </mesh>
+      ))}
+    </group>
   )
 }
