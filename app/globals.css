@@ -263,13 +263,23 @@ html {
   display: none;            /* Chrome, Edge, Safari */
 }
 
-/* While a drag gesture is active (scrub, block move/resize, note edit), force one
-   cursor for the whole document so it never flickers when the pointer outruns the
-   dragged element or crosses something with its own cursor. The gesture sets
-   --drag-cursor; this wins over inline element cursors via !important. */
+/* While a drag gesture is active (scrub, block move/resize, note edit, any drag),
+   force one cursor for the whole document so it never flickers when the pointer
+   outruns the dragged element or crosses something with its own cursor. The gesture
+   sets --drag-cursor; this wins over inline element cursors via !important. */
 body.cursor-locked,
 body.cursor-locked * {
   cursor: var(--drag-cursor) !important;
+}
+
+/* ...and swallow every other pointer interaction while a drag is actually MOVING —
+   hover states, cursor changes, hover-triggered animations, clicks — so a drag can
+   never collaterally trigger unrelated UI (the play button, the logo, a slider).
+   Gated on `drag-moving` (added on the first real movement, see dragCursor.ts) rather
+   than `cursor-locked`, so a plain press — a click / double-click — is left untouched.
+   Drags themselves run on window-level listeners, so they keep working. */
+body.drag-moving * {
+  pointer-events: none !important;
 }
 
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */
