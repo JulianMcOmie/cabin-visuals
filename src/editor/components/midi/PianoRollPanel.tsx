@@ -8,6 +8,7 @@ import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { generateRows } from './generateRows'
+import { modifierColor } from '../../utils/modifierColors'
 import type { Block } from '../../types'
 
 const DEFAULT_QUANTIZE = 0.25
@@ -47,12 +48,17 @@ export function PianoRollPanel() {
 
   if (!editingBlock || !track || !block) return null
 
+  // For a modifier its blocks hold regions/patterns, not pitched notes — colour the
+  // editor by the modifier so it reads consistently with its timeline row.
+  const modColor = modifierColor(track)
+
   return (
     <PianoRollContent
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={track.color}
+      trackColor={modColor ?? track.color}
+      noteColor={modColor ?? undefined}
       block={block}
       onClose={() => setEditingBlock(null)}
     />
@@ -63,11 +69,13 @@ interface PianoRollContentProps {
   trackId: string
   trackName: string
   trackColor: string
+  /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
+  noteColor?: string
   block: Block
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, trackName, trackColor, noteColor, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
@@ -85,7 +93,8 @@ function PianoRollContent({ trackId, trackName, trackColor, block, onClose }: Pi
     defaultQuantize: DEFAULT_QUANTIZE,
   })
 
-  const rows = generateRows()
+  // Modifiers get flat-coloured rows (pitch is a region axis, not a rainbow of notes).
+  const rows = noteColor ? generateRows().map((r) => ({ ...r, color: noteColor })) : generateRows()
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as

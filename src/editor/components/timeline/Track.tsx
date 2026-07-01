@@ -4,18 +4,9 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
-import { isModifierType } from '../../core/engine/trackTypes'
+import { modifierColor } from '../../utils/modifierColors'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Track as TrackType } from '../../types'
-
-// Event-modifier rows are colour-coded by what they do, so they read as control
-// tracks (not visual objects) at a glance.
-const MODIFIER_COLORS: Record<string, string> = {
-  suppress: '#dc2626', // removes
-  mute: '#71717a',     // hides
-  add: '#16a34a',      // layers
-  override: '#d97706', // replaces
-}
 
 interface TrackProps {
   track: TrackType
@@ -55,8 +46,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const isSelected = selectedTrackId === track.id
   const hasChildren = track.childIds.length > 0
   // A no-instrument track whose type is a modifier is an event-modifier (control) row.
-  const isModifier = !track.instrumentId && isModifierType(track.type)
-  const blockColor = isModifier ? (MODIFIER_COLORS[track.type] ?? '#71717a') : track.color
+  const modColor = modifierColor(track)
+  const isModifier = modColor != null
+  const blockColor = modColor ?? track.color
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
