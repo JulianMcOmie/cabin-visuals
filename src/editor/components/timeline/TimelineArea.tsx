@@ -236,6 +236,7 @@ export function TimelineArea() {
                     label={row.label}
                     color={row.color}
                     depth={row.depth}
+                    barWidthPx={barWidthPx}
                     timelineWidthPx={timelineWidthPx}
                     isLast={isLast}
                   />

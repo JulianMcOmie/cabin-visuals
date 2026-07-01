@@ -17,6 +17,8 @@ export interface MidiEditorProps {
   notes: Note[]
   /** Track that owns the block being edited (for block move/resize writes). */
   trackId: string
+  /** Set when the block lives in an ability lane, so writes target that lane. */
+  laneKey?: string
   block: Block
   onNotesChange: (notes: Note[]) => void
   /** Persist a gesture's result to the store as one undo step. */
@@ -42,6 +44,7 @@ export function MidiEditor({
   rows,
   notes,
   trackId,
+  laneKey,
   block,
   onNotesChange,
   onCommit,
@@ -119,6 +122,7 @@ export function MidiEditor({
   // Block move/resize via the ruler clip header (separate from note gestures).
   const { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown } = useMidiBlockGestures({
     trackId,
+    laneKey,
     block,
     notes,
     pixelsPerBeat,

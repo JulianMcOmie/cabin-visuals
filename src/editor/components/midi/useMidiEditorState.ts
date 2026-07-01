@@ -11,6 +11,8 @@ interface UseMidiEditorStateOptions {
   trackId: string
   block: Block
   defaultQuantize: number
+  /** Set when editing a block in an ability lane, so commits write to the lane. */
+  laneKey?: string
 }
 
 /**
@@ -29,7 +31,7 @@ interface UseMidiEditorStateOptions {
  * never clobbered. Change detection uses block object identity: the store
  * creates a new block object on every change, so `prevBlockRef !== block` is exact.
  */
-export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiEditorStateOptions) {
+export function useMidiEditorState({ trackId, block, defaultQuantize, laneKey }: UseMidiEditorStateOptions) {
   const updateBlockNotes = useProjectStore((s) => s.updateBlockNotes)
 
   const [quantize, setQuantize] = useState(defaultQuantize)
@@ -66,8 +68,8 @@ export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiE
     setNotes(next)
     if (next === blockRef.current.notes) return
     localEditRef.current = true
-    updateBlockNotes(trackId, blockRef.current.id, next)
-  }, [trackId, updateBlockNotes])
+    updateBlockNotes(trackId, blockRef.current.id, next, laneKey)
+  }, [trackId, laneKey, updateBlockNotes])
 
   return {
     notes,

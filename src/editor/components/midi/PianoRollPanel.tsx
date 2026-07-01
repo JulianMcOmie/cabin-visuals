@@ -30,7 +30,9 @@ export function PianoRollPanel() {
   const tracks = useProjectStore((s) => s.tracks)
 
   const track = editingBlock ? tracks[editingBlock.trackId] : undefined
-  const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
+  // A lane block lives in track.lanes[laneKey]; a normal block in track.blocks.
+  const blockList = editingBlock?.laneKey ? track?.lanes?.[editingBlock.laneKey] : track?.blocks
+  const block = blockList?.find((b) => b.id === editingBlock?.blockId)
 
   // Auto-close if the block disappeared (track/block deleted)
   useEffect(() => {
@@ -56,6 +58,7 @@ export function PianoRollPanel() {
     <PianoRollContent
       key={block.id}
       trackId={track.id}
+      laneKey={editingBlock.laneKey}
       trackName={track.name}
       trackColor={modColor ?? track.color}
       noteColor={modColor ?? undefined}
@@ -67,6 +70,7 @@ export function PianoRollPanel() {
 
 interface PianoRollContentProps {
   trackId: string
+  laneKey?: string
   trackName: string
   trackColor: string
   /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
@@ -75,7 +79,7 @@ interface PianoRollContentProps {
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, trackName, trackColor, noteColor, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
@@ -91,6 +95,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, block, on
     trackId,
     block,
     defaultQuantize: DEFAULT_QUANTIZE,
+    laneKey,
   })
 
   // Modifiers get flat-coloured rows (pitch is a region axis, not a rainbow of notes).
@@ -204,6 +209,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, block, on
       {/* Piano roll grid */}
       <MidiEditor
         trackId={trackId}
+        laneKey={laneKey}
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}

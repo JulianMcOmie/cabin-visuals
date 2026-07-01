@@ -1,17 +1,21 @@
+import { useRef } from 'react'
 import { useUIStore } from '../../store/UIStore'
+import { useProjectStore } from '../../store/ProjectStore'
+import { Block } from './Block'
+import { useLaneGestures } from './useLaneGestures'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 
 interface AbilityLaneRowProps {
   /** The object track this ability lane belongs to. */
   trackId: string
-  /** The instrument's ability key — indexes `track.lanes[laneKey]` (wired in the
-   *  next commit, when the MIDI editor targets a lane). */
+  /** The instrument's ability key — indexes `track.lanes[laneKey]`. */
   laneKey: string
   label: string
   color?: string
   /** Indent depth — one level under the owning track. */
   depth: number
+  barWidthPx: number
   timelineWidthPx: number
   /** Last row overall — suppresses the label divider, like a track. */
   isLast?: boolean
@@ -20,13 +24,19 @@ interface AbilityLaneRowProps {
 /**
  * One ability lane, rendered as an indented, track-like sub-row under its object
  * track (so the object track reads as a taller, grouped block). A parallel structure
- * — NOT a child track. The lane region is inert for now; block drawing + MIDI editing
- * on lanes lands with the editor lane-targeting commit.
+ * — NOT a child track. Right-click the lane to draw a block; double-click a block to
+ * edit its notes in the MIDI editor (both scoped to this lane via `laneKey`).
  */
-export function AbilityLaneRow({ trackId, laneKey, label, color, depth, timelineWidthPx, isLast }: AbilityLaneRowProps) {
+export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidthPx, timelineWidthPx, isLast }: AbilityLaneRowProps) {
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
+  const selectedBlockIds = useUIStore((s) => s.selectedBlockIds)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const blocks = useProjectStore((s) => s.tracks[trackId]?.lanes?.[laneKey])
   const dot = color ?? '#818cf8'
+
+  const laneRef = useRef<HTMLDivElement>(null)
+  const { onLanePointerDown, onBlockPointerDown } = useLaneGestures(trackId, laneKey, laneRef)
 
   return (
     <div
@@ -47,11 +57,26 @@ export function AbilityLaneRow({ trackId, laneKey, label, color, depth, timeline
       <div className="flex-shrink-0" style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
+        ref={laneRef}
         className="relative flex-shrink-0 bg-black/15"
         style={{ width: timelineWidthPx }}
-        data-lane-track={trackId}
-        data-lane-key={laneKey}
-      />
+        onPointerDown={onLanePointerDown}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {(blocks ?? []).map((block) => (
+          <Block
+            key={block.id}
+            block={block}
+            trackId={trackId}
+            laneKey={laneKey}
+            barWidthPx={barWidthPx}
+            beatsPerBar={beatsPerBar}
+            color={dot}
+            isSelected={selectedBlockIds.has(block.id)}
+            onBlockPointerDown={onBlockPointerDown}
+          />
+        ))}
+      </div>
     </div>
   )
 }

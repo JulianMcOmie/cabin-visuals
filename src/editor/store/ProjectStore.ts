@@ -19,6 +19,14 @@ export const cloneTrack = (t: Track): Track => ({
   childIds: [],
 })
 
+// Block reads/writes are polymorphic over "which list": the track's own `blocks`, or
+// one of its ability lanes (`lanes[laneKey]`). These two helpers localise that choice
+// so every block action stays a one-liner.
+const laneBlocks = (track: Track, laneKey?: string): Block[] =>
+  laneKey ? track.lanes?.[laneKey] ?? [] : track.blocks
+const withLaneBlocks = (track: Track, laneKey: string | undefined, blocks: Block[]): Track =>
+  laneKey ? { ...track, lanes: { ...track.lanes, [laneKey]: blocks } } : { ...track, blocks }
+
 interface ProjectState {
   tracks: Record<string, Track>
   rootTrackIds: string[]
@@ -28,13 +36,15 @@ interface ProjectState {
   beatsPerBar: number
   totalBars: number
   addTrack: (track: Track, atIndex?: number) => void
-  addBlock: (trackId: string, block: Block) => void
+  // `laneKey` targets an ability lane (`track.lanes[laneKey]`) instead of the track's
+  // own `blocks`. Omit it for the main track lane.
+  addBlock: (trackId: string, block: Block, laneKey?: string) => void
   addBlocks: (trackId: string, blocks: Block[]) => void
-  addNote: (trackId: string, blockId: string, note: Note) => void
-  updateBlockNotes: (trackId: string, blockId: string, notes: Note[]) => void
-  updateBlock: (trackId: string, blockId: string, updates: Partial<Block>) => void
+  addNote: (trackId: string, blockId: string, note: Note, laneKey?: string) => void
+  updateBlockNotes: (trackId: string, blockId: string, notes: Note[], laneKey?: string) => void
+  updateBlock: (trackId: string, blockId: string, updates: Partial<Block>, laneKey?: string) => void
   moveBlock: (fromTrackId: string, blockId: string, toTrackId: string) => void
-  deleteBlock: (trackId: string, blockId: string) => void
+  deleteBlock: (trackId: string, blockId: string, laneKey?: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   deleteTrack: (trackId: string) => void
   insertTrackCopy: (srcId: string, index: number) => void
@@ -85,14 +95,14 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks, rootTrackIds }
     }),
 
-  addBlock: (trackId, block) =>
+  addBlock: (trackId, block, laneKey) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, blocks: [...track.blocks, block] },
+          [trackId]: withLaneBlocks(track, laneKey, [...laneBlocks(track, laneKey), block]),
         },
       }
     }),
@@ -109,53 +119,44 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  addNote: (trackId, blockId, note) =>
+  addNote: (trackId, blockId, note, laneKey) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            blocks: track.blocks.map((b) =>
-              b.id === blockId ? { ...b, notes: [...b.notes, note] } : b
-            ),
-          },
+          [trackId]: withLaneBlocks(track, laneKey, laneBlocks(track, laneKey).map((b) =>
+            b.id === blockId ? { ...b, notes: [...b.notes, note] } : b
+          )),
         },
       }
     }),
 
-  updateBlockNotes: (trackId, blockId, notes) =>
+  updateBlockNotes: (trackId, blockId, notes, laneKey) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            blocks: track.blocks.map((b) =>
-              b.id === blockId ? { ...b, notes } : b
-            ),
-          },
+          [trackId]: withLaneBlocks(track, laneKey, laneBlocks(track, laneKey).map((b) =>
+            b.id === blockId ? { ...b, notes } : b
+          )),
         },
       }
     }),
 
-  updateBlock: (trackId, blockId, updates) =>
+  updateBlock: (trackId, blockId, updates, laneKey) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            blocks: track.blocks.map((b) =>
-              b.id === blockId ? { ...b, ...updates } : b
-            ),
-          },
+          [trackId]: withLaneBlocks(track, laneKey, laneBlocks(track, laneKey).map((b) =>
+            b.id === blockId ? { ...b, ...updates } : b
+          )),
         },
       }
     }),
@@ -183,17 +184,14 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  deleteBlock: (trackId, blockId) =>
+  deleteBlock: (trackId, blockId, laneKey) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            blocks: track.blocks.filter((b) => b.id !== blockId),
-          },
+          [trackId]: withLaneBlocks(track, laneKey, laneBlocks(track, laneKey).filter((b) => b.id !== blockId)),
         },
       }
     }),
@@ -203,7 +201,20 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const tracks: Record<string, Track> = {}
       for (const [id, t] of Object.entries(s.tracks)) {
         const blocks = t.blocks.filter((b) => !blockIds.has(b.id))
-        tracks[id] = blocks.length === t.blocks.length ? t : { ...t, blocks }
+        let changed = blocks.length !== t.blocks.length
+        // Also purge from any ability lanes, so a selected lane block deletes too.
+        let lanes = t.lanes
+        if (lanes) {
+          let lanesChanged = false
+          const next: Record<string, Block[]> = {}
+          for (const [key, laneBlk] of Object.entries(lanes)) {
+            const filtered = laneBlk.filter((b) => !blockIds.has(b.id))
+            if (filtered.length !== laneBlk.length) lanesChanged = true
+            next[key] = filtered
+          }
+          if (lanesChanged) { lanes = next; changed = true }
+        }
+        tracks[id] = changed ? { ...t, blocks, lanes } : t
       }
       return { tracks }
     }),
