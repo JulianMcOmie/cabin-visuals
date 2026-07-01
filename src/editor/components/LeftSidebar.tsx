@@ -1,18 +1,26 @@
 'use client'
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 
-interface InstrumentItem {
+/** What dragging an item creates: an object/modulator instrument track, or an
+ *  event-modifier child track (whose `id` is the modifier's track type). */
+export type LibraryKind = 'object' | 'modulator' | 'modifier'
+
+export interface InstrumentItem {
   id: string
   name: string
   icon: React.ReactNode
+  kind: LibraryKind
 }
 
-const OBJECT_INSTRUMENTS: InstrumentItem[] = [
+const withKind = (kind: LibraryKind, items: Omit<InstrumentItem, 'kind'>[]): InstrumentItem[] =>
+  items.map((i) => ({ ...i, kind }))
+
+const OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: 'Cube', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'circle', name: 'Circle', icon: <div className="w-3 h-3 border border-indigo-400 rounded-full" /> },
   { id: 'triangle', name: 'Triangle', icon: (
@@ -20,9 +28,18 @@ const OBJECT_INSTRUMENTS: InstrumentItem[] = [
       <polygon points="6,1 11,11 1,11" fill="none" stroke="#818cf8" strokeWidth="1.2" />
     </svg>
   )},
-]
+])
 
-const MODULATOR_INSTRUMENTS: InstrumentItem[] = [
+// Event modifiers — dropped into an object, they transform its note stream at resolve
+// (their `id` is the track type). No instrument; edited as MIDI regions.
+const MODIFIER_INSTRUMENTS = withKind('modifier', [
+  { id: 'suppress', name: 'Suppress', icon: <Ban size={12} className="text-zinc-400" /> },
+  { id: 'mute', name: 'Mute', icon: <EyeOff size={12} className="text-zinc-400" /> },
+  { id: 'add', name: 'Add', icon: <Plus size={12} className="text-zinc-400" /> },
+  { id: 'override', name: 'Override', icon: <Replace size={12} className="text-zinc-400" /> },
+])
+
+const MODULATOR_INSTRUMENTS = withKind('modulator', [
   { id: 'pulse', name: 'Pulse', icon: (
     <svg width="14" height="10" viewBox="0 0 14 10">
       <polyline points="0,5 3,5 4,1 5,9 6,5 10,5" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -39,7 +56,7 @@ const MODULATOR_INSTRUMENTS: InstrumentItem[] = [
       <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
     </div>
   )},
-]
+])
 
 function Section({ title, items, onItemPointerDown, onItemDoubleClick }: { title: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
@@ -85,6 +102,8 @@ export function LeftSidebar() {
   // Double-click swaps the selected track's instrument (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const onItemDoubleClick = (item: InstrumentItem) => {
+    // Double-click swaps an object/modulator instrument; modifiers are added by drag only.
+    if (item.kind === 'modifier') return
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (selectedTrackId) setTrackInstrument(selectedTrackId, item.id, item.name)
   }
@@ -124,6 +143,7 @@ export function LeftSidebar() {
           <>
             <Section title="Object" items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modulator" items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modifier" items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
         {tab === 'effects' && (

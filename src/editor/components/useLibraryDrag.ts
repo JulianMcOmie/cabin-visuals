@@ -5,14 +5,19 @@ import { flattenTracks } from './timeline/trackTree'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
-import type { Track } from '../types'
+import type { Track, TrackType } from '../types'
 
-function makeTrack(item: { id: string; name: string }, parentId: string | null): Track {
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' }
+
+function makeTrack(item: LibraryItem, parentId: string | null): Track {
+  // A modifier is a no-instrument child track whose type IS the modifier (its id);
+  // objects/modulators carry an instrumentId and the default 'base' type.
+  const isModifier = item.kind === 'modifier'
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: 'base',
-    instrumentId: item.id,
+    type: isModifier ? (item.id as TrackType) : 'base',
+    instrumentId: isModifier ? '' : item.id,
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -33,7 +38,7 @@ export function useLibraryDrag() {
   const ghostRef = useRef<HTMLDivElement>(null)
   const [ghostName, setGhostName] = useState<string | null>(null)
 
-  const startLibraryDrag = useCallback((e: ReactPointerEvent, item: { id: string; name: string }) => {
+  const startLibraryDrag = useCallback((e: ReactPointerEvent, item: LibraryItem) => {
     e.preventDefault()
     const startX = e.clientX
     const startY = e.clientY
