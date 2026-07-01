@@ -5,7 +5,7 @@ import { Block } from './Block'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { modifierColor } from '../../utils/modifierColors'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
 interface TrackProps {
@@ -29,9 +29,11 @@ interface TrackProps {
   onCopyDragStart?: (e: ReactPointerEvent, trackId: string) => void
   /** Begin a drag-to-nest from this track's label. */
   onNestDragStart?: (e: ReactPointerEvent, trackId: string) => void
+  /** Right-click on the label — opens the add-ability / add-automation menu. */
+  onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -86,6 +88,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onNestDragStart?.(e, track.id)
           }
         }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-zinc-900'

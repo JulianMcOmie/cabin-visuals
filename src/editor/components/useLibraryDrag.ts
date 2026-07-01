@@ -3,13 +3,10 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { flattenVisualRows } from './timeline/trackTree'
 import { computeDropTarget } from './timeline/trackDrop'
-import { getInstrument } from '../instruments'
+import { abilityLanesOf } from './timeline/abilityLanes'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
-
-const lanesOf = (t: Track) =>
-  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' }
 
@@ -87,7 +84,7 @@ export function useLibraryDrag() {
           const { tracks, rootTrackIds } = useProjectStore.getState()
           drop = computeDropTarget({
             tracks, rootTrackIds,
-            rows: flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, lanesOf),
+            rows: flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, abilityLanesOf),
             listTop: r.top - sc.scrollTop,
             rowHeight: useUIStore.getState().tracksRowHeight,
             clientY: ev.clientY,

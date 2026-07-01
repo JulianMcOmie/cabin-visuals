@@ -61,6 +61,8 @@ interface ProjectState {
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
+  /** Reveal an instrument ability's lane on a track (opt-in). No-op if already added. */
+  addAbilityLane: (trackId: string, laneKey: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   // Visual effects (plugins) on a track.
@@ -401,6 +403,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
           ...s.tracks,
           [id]: track,
           [parentId]: { ...parent, childIds: [...parent.childIds, id] },
+        },
+      }
+    }),
+
+  addAbilityLane: (trackId, laneKey) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || (track.lanes && laneKey in track.lanes)) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, lanes: { ...track.lanes, [laneKey]: [] } },
         },
       }
     }),
