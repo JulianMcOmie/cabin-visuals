@@ -37,7 +37,6 @@ function Scene() {
       <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
       <VisualBeatSync />
       <VisualScene />
-      <gridHelper args={[24, 24, '#27272a', '#18181b']} position={[0, -2.2, 0]} />
     </Canvas>
   )
 }
