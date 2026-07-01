@@ -141,7 +141,6 @@ function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, 
     : noteColor
       ? generateRows().map((r) => ({ ...r, color: noteColor }))
       : generateRows()
-  const rangeLabels = auto?.rangeLabels
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
@@ -272,7 +271,7 @@ function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, 
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}
-        rangeLabels={rangeLabels}
+        cornerLabel={automation?.paramLabel}
         block={block}
         notes={notes}
         onNotesChange={setNotes}

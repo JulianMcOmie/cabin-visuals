@@ -29,6 +29,9 @@ export interface MidiEditorProps {
   pixelsPerBeat?: number
   rowHeight?: number
   rangeLabels?: RangeLabel[]
+  /** Text for the frozen top-left corner (left of the ruler) — e.g. an automation
+   *  track's param name. */
+  cornerLabel?: string
   /** Beat offset of this block in the project timeline (for playhead positioning) */
   blockStartBeat?: number
   blockDurationBeats?: number
@@ -54,6 +57,7 @@ export function MidiEditor({
   pixelsPerBeat = 40,
   rowHeight = 28,
   rangeLabels,
+  cornerLabel,
   blockStartBeat = 0,
   blockDurationBeats = 0,
   initialTotalBeats,
@@ -263,7 +267,11 @@ export function MidiEditor({
       <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
         {/* Frozen corner — stays put on horizontal scroll, aligned with the sticky labels.
             Distinct box colour (matching the track ruler + the label column below). */}
-        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2 }} />
+        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2, display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+          {cornerLabel && (
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: '#a1a1aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cornerLabel}</span>
+          )}
+        </div>
         {/* Strip viewport clips the translated inner content (mirrors the grid scroll). */}
         <div
           style={{
