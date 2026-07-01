@@ -225,7 +225,7 @@
 
 <!-- B -->
 <h2 id="scope">B · Scope &amp; the phase ladder</h2>
-<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc — but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive. <strong>Status: phases 1–4 are built; phase 5 (nested hierarchy) is next.</strong></p>
+<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc — but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive. <strong>Status: phases 1–5 and 7 are built; phase 6 (ability lanes) is deferred until the RenderSpec (phase 9) exists — an ability's <em>effect</em> is exactly what the spec describes.</strong></p>
 
 <figure class="fig">
   <div class="figtitle">The phase ladder — and roughly where each lands in the tree</div>
@@ -236,8 +236,8 @@
       <rect x="20" y="62" width="250" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="82" font-weight="700">2 · Object defs + params + ports + automation</text><text x="252" y="82" font-weight="700">✓</text>
       <rect x="20" y="100" width="250" height="30" rx="5" fill="#141414"/><text x="32" y="120" fill="#fff" font-weight="700">3 · Modulators + matrix ★ keystone</text><text x="252" y="120" fill="#fff" font-weight="700">✓</text>
       <rect x="20" y="138" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Tags + group routing</text><text x="252" y="158" font-weight="700">✓</text>
-      <rect x="20" y="176" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="196" font-weight="700">5 · Nested hierarchy</text>
-      <rect x="20" y="214" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="234" font-weight="700">6 · Ability lanes &amp; 7 · event modifiers</text>
+      <rect x="20" y="176" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="196" font-weight="700">5 · Nested hierarchy</text><text x="252" y="196" font-weight="700">✓</text>
+      <rect x="20" y="214" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="234" font-weight="700">7 · Event modifiers ✓ · 6 · abilities deferred</text>
       <rect x="20" y="252" width="250" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="272" font-weight="700">8 · Effects · 9 · RenderSpec · 10 · English</text>
     </g>
     <text x="320" y="20" font-size="11" font-weight="700" fill="#141414">touches mostly…</text>
@@ -257,7 +257,7 @@
     <path d="M145,206 V214" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
     <path d="M145,244 V252" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
   </svg>
-  <figcaption>Black = build, grey = borrow-heavy. <strong>✓ = shipped</strong> (phases 1–4). Phases 1–3 build the engine + matrix; everything else extends it. The full per-phase file lists are §F.</figcaption>
+  <figcaption>Black = build, grey = borrow-heavy. <strong>✓ = shipped</strong> (phases 1–5 and 7; phase 6 abilities deferred until the RenderSpec). Phases 1–3 build the engine + matrix; everything else extends it. The full per-phase file lists are §F.</figcaption>
 </figure>
 
 <div class="rec"><strong>In scope here:</strong> the data model, the engine module, the renderer, the instrument model, and a phased build down to the matrix (phase 3) in detail, with file lists for all phases. <strong>Deferred (named, not detailed):</strong> the Web-worker/OffscreenCanvas escalation (we settled on incremental + deferred resolve instead), and English→spec (phase 10) which only becomes viable once the RenderSpec is stable.</p></div>
@@ -308,10 +308,11 @@
 <pre><code><span class="c">// src/editor/types.ts — extend the existing Track</span>
 <span class="k">interface</span> <span class="f">Track</span> {
   id; name; instrumentId; params?; color; muted; solo; blocks;   <span class="c">// (today)</span>
-  parentId?; childIds;            <span class="c">// nested hierarchy — becomes functional in phase 5</span>
+  type;                           <span class="c">// ✓ phase 7 — a no-instrument child of a modifier type (suppress/mute/add/override) is an event modifier</span>
+  parentId?; childIds;            <span class="c">// ✓ phase 5 — nested hierarchy (functional: transforms inherit down)</span>
   tags?: <span class="k">string</span>[];               <span class="c">// ✓ phase 4 — cross-cutting modulation targeting (shipped optional)</span>
   targets?: Routing[];            <span class="c">// ✓ modulator-only: a LIST of Routings → one modulator drives MANY ports/groups</span>
-  lanes?: Block[];                <span class="c">// abilities — a PARALLEL array on the track, NOT child tracks (phase 6)</span>
+  lanes?: Block[];                <span class="c">// abilities — a PARALLEL array on the track, NOT child tracks (phase 6, deferred)</span>
 }
 <span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// ✓ shipped (phase 4) exactly as below</span>
   port: <span class="k">string</span>;
@@ -331,7 +332,7 @@
   portValues: Record&lt;<span class="k">string</span>,<span class="k">number</span>&gt;;  finalProps: Record&lt;<span class="k">string</span>, unknown&gt;;  <span class="c">// filled per frame</span>
 }</code></pre>
 <div class="note"><strong>Mental model:</strong> <span class="file">types.ts</span> = "what the user owns," <span class="file">core/engine/types.ts</span> = "what the engine derives." If you ever see the engine importing the <em>document</em> types that's fine; the document never imports the <em>graph</em> types — the dependency points one way (engine → document), which is what keeps the editor independent of the engine.</div>
-<div class="note"><strong>Shipped shape (through phase 4):</strong> the block above is the north-star target (it includes phase-6/8 fields). What's built today: <code>ResolvedObject</code> = <code>{ trackId; instrumentId; muted; params; ports; notes; tags }</code> — no <code>abilityEvents</code> (phase 6) or <code>finalProps</code> (phase 8) yet. And <code>ModulatorInstance</code> was split into a pure <em>signal</em> (<code>{ id; kind; triggers }</code>) plus a separate <code>ResolvedRouting</code> (<code>{ modulatorId; targetObjectId; targetPort; amount }</code>); <code>routingsByPort</code> buckets the latter. So one signal is evaluated once per frame and fanned out to every object its scopes resolved to. <code>tagIndex</code> (tag → objectIds) is built in <span class="file">resolve.ts</span> exactly as drawn.</div>
+<div class="note"><strong>Shipped shape (through phase 7):</strong> the block above is the north-star target (it includes phase-6/9 fields). What's built today: <code>ResolvedObject</code> = <code>{ trackId; instrumentId; parentId; muted; params; ports; localTransform; notes; blackouts; tags }</code> — no <code>abilityEvents</code> (phase 6) or <code>finalProps</code> (phase 9) yet. <code>parentId</code> + <code>localTransform</code> came with phase-5 transform inheritance (the engine composes a world <code>Matrix4</code> per object); <code>notes</code> are post-modifier and <code>blackouts</code> are the mute regions (phase 7); <code>ResolvedNote</code> also gained <code>durationBeats</code>. <code>ModulatorInstance</code> was split into a pure <em>signal</em> (<code>{ id; kind; triggers }</code>) plus a separate <code>ResolvedRouting</code> (<code>{ modulatorId; targetObjectId; targetPort; amount }</code>); <code>routingsByPort</code> buckets the latter. So one signal is evaluated once per frame and fanned out to every object its scopes resolved to. <code>tagIndex</code> (tag → objectIds) is built in <span class="file">resolve.ts</span> exactly as drawn.</div>
 
 <!-- D -->
 <h2 id="engine">D · Infrastructure: the engine module</h2>
@@ -487,15 +488,25 @@
   <li><span class="badge b-edit">3 · tagging UI</span> <span class="file">TrackEditor.tsx</span>: a tag combobox on object tracks (type a new tag or pick an existing project tag); the modulator's target picker lists tags alongside individual tracks.</li>
 </ul>
 
-<h3>Phase 5 — Nested hierarchy <span class="badge b-edit">timeline + resolve</span></h3>
+<h3>Phase 5 — Nested hierarchy <span class="badge b-new">✓ shipped</span></h3>
 <ul class="small">
-  <li>Net-new (today: top-level only). <span class="badge b-edit">edit</span> the timeline (<span class="file">TimelineArea.tsx</span>, <span class="file">Track.tsx</span>) to render nested rows; <span class="file">resolve.ts</span> to inherit transforms/context down a subtree; <span class="file">ProjectStore.ts</span> for re-parenting. Unlocks <code>subtree</code> routing scope <em>and</em> ability lanes.</li>
+  <li><strong>Shipped as 4 commits.</strong> Tracks nest <em>functionally</em> — a parent's transform flows down to its children.</li>
+  <li><span class="badge b-edit">1 · data model</span> <span class="file">ProjectStore.ts</span> <code>setTrackParent</code> (with a cycle guard); <code>deleteTrack</code> promotes a deleted node's children into its slot; <span class="file">resolve.ts</span> walks the full tree so nested tracks still resolve.</li>
+  <li><span class="badge b-edit">2 · nested rows</span> <span class="file">TimelineArea.tsx</span>/<span class="file">Track.tsx</span> render the flattened tree with depth indentation; a hand-rolled <strong>drag-to-nest</strong> gesture replaced the flat dnd-kit reorder (top/bottom edge = sibling, middle = nest, below everything = top level).</li>
+  <li><span class="badge b-edit">3 · subtree scope</span> <span class="file">resolve.ts</span> expands <code>{kind:'subtree'}</code> routings to a branch's descendant objects; the target picker lists branches.</li>
+  <li><span class="badge b-edit">4 · transform inheritance</span> objects expose a <code>localTransform</code> (position/rotation/scale as data); the engine composes <code>world = parent ∘ local</code> down the tree each frame (a reused <code>Matrix4</code> per object) and the Cube decomposes it onto its mesh. <strong>Engine-composed, NOT R3F scene-graph nesting</strong> — the rendered scene stays flat.</li>
 </ul>
 
-<h3>Phase 6 — Ability lanes &nbsp;·&nbsp; Phase 7 — Event modifiers <span class="badge b-new">trackTypes</span> <span class="badge b-edit">midi editors</span></h3>
+<h3>Phase 7 — Event modifiers <span class="badge b-new">✓ shipped</span> <span class="badge b-new">core/engine/trackTypes.ts</span></h3>
 <ul class="small">
-  <li><strong>Abilities:</strong> each ability = an entry in the parent's <strong>parallel <code>lanes[]</code> array</strong> (decided — <em>not</em> a child track), rendered as an indented sub-row with its own editor. Because the data is a parallel structure rather than the child-track hierarchy, this is <strong>largely independent of phase 5</strong> (it borrows the indented-row look, not the hierarchy data model). <span class="badge b-edit">edit</span> <span class="file">PianoRollPanel.tsx</span> / the midi components to host per-lane editors.</li>
-  <li><strong>Event modifiers:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> (the <code>combine</code> family — suppress/mute/transpose/…) wired into <span class="file">resolve.ts</span>; <span class="badge b-new">new</span> small editors for mute/suppress regions. mute sets a <code>blackedOut</code> flag read in <span class="file">ObjectRenderer</span>.</li>
+  <li><strong>Shipped as 4 commits, ported from Excellent DAW.</strong> A modifier is a <strong>no-instrument child track</strong> whose <code>type</code> is the modifier; <span class="file">resolve.ts</span> folds each modifier child into its parent object's note stream (which becomes the pulse).</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> — the <code>combine(parent, self)</code> family: <code>add</code> / <code>override</code> / <code>suppress</code> / <code>mute</code> (base/transpose/gate/… omitted for now). <code>mute</code> passes events through but emits <strong>blackout intervals</strong>; <code>computeAtBeat</code> sets <code>ObjectState.blackedOut</code> so the Cube hides during them. <code>ResolvedNote</code> gained <code>durationBeats</code> so suppress/mute regions have a span.</li>
+  <li><span class="badge b-edit">UI</span> a "Modifier" library section — dragged <em>into</em> an object via the phase-5 nest-drag (or double-click to convert the selected track); rows colour-coded by type; edited in the existing MIDI editor (generic <code>generateRows</code>, flat-coloured for modifiers since pitch is a region axis, not a note).</li>
+</ul>
+
+<h3>Phase 6 — Ability lanes <span class="badge b-edit">deferred</span></h3>
+<ul class="small">
+  <li><strong>Deferred until the RenderSpec (phase 9)</strong> and built after phase 7. An ability's <em>effect</em> ("emit 12 points, radial, 0.5s") is exactly what the spec describes, and no current instrument declares abilities — so the big per-lane MIDI-editor UI would drive nothing yet. Each ability = an entry in the parent's <strong>parallel <code>lanes[]</code> array</strong> (decided — <em>not</em> a child track), an indented sub-row with its own editor. <span class="badge b-edit">edit</span> <span class="file">PianoRollPanel.tsx</span> / the midi components when it lands.</li>
 </ul>
 
 <h3>Phases 8–10 — Effects, RenderSpec, English <span class="badge b-new">later</span></h3>
