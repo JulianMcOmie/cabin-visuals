@@ -5,15 +5,22 @@ import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
+import { AbilityLaneRow } from './AbilityLaneRow'
 import { TimelineRuler } from './TimelineRuler'
+import { getInstrument } from '../../instruments'
+import type { Track as TrackType } from '../../types'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
-import { flattenTracks } from './trackTree'
+import { flattenVisualRows } from './trackTree'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+
+/** An object track's ability lanes (from its instrument def), for the row flattener. */
+const lanesOf = (t: TrackType) =>
+  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -51,9 +58,10 @@ export function TimelineArea() {
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
   // Tracks render as a flattened tree (DFS order, indented by depth); collapsed
-  // parents hide their descendant rows.
+  // parents hide their descendant rows. Each object track's ability lanes are
+  // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
-  const flatTracks = flattenTracks(tracks, rootTrackIds, collapsedTrackIds)
+  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds, lanesOf)
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
@@ -217,17 +225,32 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            {flatTracks.map((f, i) => {
-              const track = tracks[f.id]
+            {visualRows.map((row, i) => {
+              const isLast = i === visualRows.length - 1
+              if (row.kind === 'lane') {
+                return (
+                  <AbilityLaneRow
+                    key={`${row.trackId}:${row.laneKey}`}
+                    trackId={row.trackId}
+                    laneKey={row.laneKey}
+                    label={row.label}
+                    color={row.color}
+                    depth={row.depth}
+                    timelineWidthPx={timelineWidthPx}
+                    isLast={isLast}
+                  />
+                )
+              }
+              const track = tracks[row.id]
               return track ? (
                 <Track
-                  key={f.id}
+                  key={row.id}
                   track={track}
-                  depth={f.depth}
-                  isLast={i === flatTracks.length - 1}
+                  depth={row.depth}
+                  isLast={isLast}
                   liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
-                  dimmed={trackDrop?.activeId === f.id}
-                  dropInto={trackDrop?.intoId === f.id}
+                  dimmed={trackDrop?.activeId === row.id}
+                  dropInto={trackDrop?.intoId === row.id}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
                   barWidthPx={barWidthPx}
