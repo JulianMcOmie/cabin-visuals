@@ -203,7 +203,7 @@ export function TimelineArea() {
         {rootTrackIds.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <p className="text-xs text-zinc-600 text-center px-4">
-              No tracks yet — click <span className="text-zinc-400">+</span> to add a track, then right-click a lane to draw blocks.
+              No tracks yet. Click <span className="text-zinc-400 text-lg">+</span> to add a track, then right-click a lane to draw blocks.
             </p>
           </div>
         )}
