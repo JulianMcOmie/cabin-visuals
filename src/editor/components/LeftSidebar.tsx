@@ -41,6 +41,13 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="none" stroke="#4ecdc4" strokeWidth="1.1" />
     </svg>
   )},
+  { id: 'cylinderFlight', name: 'Cylinder Flight', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <ellipse cx="6" cy="3" rx="3.5" ry="1.3" fill="none" stroke="#ec4899" strokeWidth="1.1" />
+      <path d="M2.5 3 V9 M9.5 3 V9" stroke="#ec4899" strokeWidth="1.1" />
+      <path d="M2.5 9 A3.5 1.3 0 0 0 9.5 9" fill="none" stroke="#ec4899" strokeWidth="1.1" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
