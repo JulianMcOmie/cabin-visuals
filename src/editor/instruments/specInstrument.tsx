@@ -34,7 +34,7 @@ interface CompiledAppearance {
 /** The generic renderer for a RenderSpec object: the primitive's world transform comes
  *  from the engine (composed with ancestors); the appearance bindings are evaluated
  *  onto the material each frame. Mirrors the Cube's code path, but data-driven. */
-function SpecRenderer({ trackId, primitive, appearance }: { trackId: string; primitive: Primitive; appearance: CompiledAppearance }) {
+function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { trackId: string; primitive: Primitive; appearance: CompiledAppearance; paramDefaults: Record<string, number> }) {
   const meshRef = useRef<Mesh>(null)
   useFrame(() => {
     if (!meshRef.current) return
@@ -43,7 +43,9 @@ function SpecRenderer({ trackId, primitive, appearance }: { trackId: string; pri
     if (state) state.world.decompose(meshRef.current.position, meshRef.current.quaternion, meshRef.current.scale)
 
     const mat = meshRef.current.material as MeshStandardMaterial
-    const scope: Scope = { param: state?.params ?? {}, port: state?.portValues ?? {}, beat: useTimeStore.getState().currentBeat }
+    // Overlay the track's explicit params over the instrument's defaults, so an
+    // unset param reads its default (not 0) — a fresh track has no params yet.
+    const scope: Scope = { param: { ...paramDefaults, ...state?.params }, port: state?.portValues ?? {}, beat: useTimeStore.getState().currentBeat }
     if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
     if (appearance.opacity) { mat.transparent = true; mat.opacity = appearance.opacity(scope) }
@@ -72,6 +74,10 @@ export function specInstrument(opts: {
 }): ObjectInstrumentDef {
   const { spec } = opts
 
+  // Defaults for every param, so an unset param evaluates to its default (not 0).
+  const paramDefaults: Record<string, number> = {}
+  for (const p of opts.params) paramDefaults[p.key] = p.default
+
   const [px, py, pz] = compileVec(spec.transform?.position, ZERO)
   const [rx, ry, rz] = compileVec(spec.transform?.rotation, ZERO)
   let sx: Compiled, sy: Compiled, sz: Compiled
@@ -81,7 +87,7 @@ export function specInstrument(opts: {
   else { sx = sy = sz = ONE }
 
   const localTransform = (ctx: TransformCtx): LocalTransform => {
-    const s: Scope = { param: ctx.params, port: ctx.ports, beat: ctx.beat }
+    const s: Scope = { param: { ...paramDefaults, ...ctx.params }, port: ctx.ports, beat: ctx.beat }
     return {
       position: [px(s), py(s), pz(s)],
       rotation: [rx(s), ry(s), rz(s)],
@@ -96,7 +102,7 @@ export function specInstrument(opts: {
   }
 
   const Component = ({ trackId }: { trackId: string }) => (
-    <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} />
+    <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} paramDefaults={paramDefaults} />
   )
 
   return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, ports: opts.ports, localTransform, component: Component }
