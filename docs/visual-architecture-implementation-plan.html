@@ -311,7 +311,7 @@
   parentId?; childIds;            <span class="c">// nested hierarchy — becomes functional in phase 5</span>
   tags?: <span class="k">string</span>[];               <span class="c">// ✓ phase 4 — cross-cutting modulation targeting (shipped optional)</span>
   targets?: Routing[];            <span class="c">// ✓ modulator-only: a LIST of Routings → one modulator drives MANY ports/groups</span>
-  lanes?: Block[];                <span class="c">// abilities — a PARALLEL array on the track, NOT child tracks (phase 6)</span>
+  lanes?: Record&lt;string, Block[]&gt;;  <span class="c">// ✓ phase 6 — abilities, keyed by AbilityLaneDef.key; a PARALLEL structure, NOT child tracks (shipped as Record, not the flat Block[] drawn here)</span>
 }
 <span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// ✓ shipped (phase 4) exactly as below</span>
   port: <span class="k">string</span>;
@@ -494,9 +494,19 @@
 
 <h3>Phase 6 — Ability lanes &nbsp;·&nbsp; Phase 7 — Event modifiers <span class="badge b-new">trackTypes</span> <span class="badge b-edit">midi editors</span></h3>
 <ul class="small">
-  <li><strong>Abilities:</strong> each ability = an entry in the parent's <strong>parallel <code>lanes[]</code> array</strong> (decided — <em>not</em> a child track), rendered as an indented sub-row with its own editor. Because the data is a parallel structure rather than the child-track hierarchy, this is <strong>largely independent of phase 5</strong> (it borrows the indented-row look, not the hierarchy data model). <span class="badge b-edit">edit</span> <span class="file">PianoRollPanel.tsx</span> / the midi components to host per-lane editors.</li>
-  <li><strong>Event modifiers:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> (the <code>combine</code> family — suppress/mute/transpose/…) wired into <span class="file">resolve.ts</span>; <span class="badge b-new">new</span> small editors for mute/suppress regions. mute sets a <code>blackedOut</code> flag read in <span class="file">ObjectRenderer</span>.</li>
+  <li><strong>Abilities — shipped as 5 commits.</strong> Each ability = an entry in the parent's <strong>parallel <code>lanes</code> structure</strong> (decided — <em>not</em> a child track), rendered as an indented sub-row with its own MIDI editor. A parallel structure rather than the child-track hierarchy, so this was <strong>independent of phase 5</strong> (it borrows the indented-row look, not the hierarchy data model).</li>
+  <li><strong>Event modifiers:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> (the <code>combine</code> family — suppress/mute/transpose/…) wired into <span class="file">resolve.ts</span>; <span class="badge b-new">new</span> small editors for mute/suppress regions. mute sets a <code>blackedOut</code> flag read in <span class="file">ObjectRenderer</span>. <em>(Shipped in phase 7 already — modifier tracks fold into the parent's note stream.)</em></li>
 </ul>
+
+<div class="note"><strong>As-built (phase 6, 5 commits):</strong>
+<ol class="small">
+  <li><strong>Skeleton</strong> — <code>AbilityLaneDef { key; label; editor?: EditorKind; color? }</code> + <code>abilities?</code> on <code>ObjectInstrumentDef</code> (<span class="file">instruments/types.ts</span>); <code>Track.lanes?: Record&lt;string, Block[]&gt;</code> (<span class="file">types.ts</span>) — keyed per ability, each a full block+notes stream (not the plan's flat <code>Block[]</code>). <code>editor</code> declared; only <code>pitched</code> wired.</li>
+  <li><strong>Ability events</strong> — <span class="file">resolve.ts</span> folds each lane into <code>ResolvedObject.abilityEvents: Map&lt;key, ResolvedNote[]&gt;</code>, threaded to <code>ObjectState</code> so the instrument's own render pulls it per frame.</li>
+  <li><strong>Track-row UI</strong> — lanes render as uniform-height indented sub-rows via a new <code>flattenVisualRows</code> model (<code>VisualRow = track | lane</code>) in <span class="file">trackTree.ts</span>; the object track just gets taller. <code>computeDropTarget</code>, nest-drag, library-drag, block vertical-move, and Alt-copy-drag were all made visual-row-aware so a taller track can't desync the drag math. New <span class="file">AbilityLaneRow.tsx</span> + self-contained <span class="file">useLaneGestures.ts</span> (lane draw/move/resize).</li>
+  <li><strong>Editor lane-targeting</strong> — <code>editingBlock.laneKey?</code> (<span class="file">UIStore</span>); the store's block actions take an optional <code>laneKey</code> (writes route to <code>blocks</code> or <code>lanes[laneKey]</code>); the MIDI editor (<span class="file">PianoRollPanel</span> / <span class="file">useMidiEditorState</span> / <span class="file">useMidiBlockGestures</span> / <span class="file">MidiEditor</span>) threads it, so a lane block edits exactly like a track's.</li>
+  <li><strong>First real ability</strong> — the Cube's <strong>Shatter</strong> (<span class="file">Cube.tsx</span>): a note on its Shatter lane bursts the cube into eight fragments that fly out and reassemble over the note, velocity setting the blast radius.</li>
+</ol>
+<strong>The behavior is code, not a scalar namespace.</strong> Per §4.4/§4.5: the instrument's own render consumes <code>abilityEvents</code> (the <strong>code escape hatch</strong>) — abilities are bespoke and instrument-intrinsic, not generic or attachable. Circle/Triangle stay passive <code>RenderSpec</code> specs (no abilities). The declarative <code>onAbility</code> grammar remains the long-term north star, to be grown <em>from</em> real abilities like Shatter, not designed up front.</div>
 
 <h3>Phases 8–10 — Effects, RenderSpec, English <span class="badge b-new">later</span></h3>
 <ul class="small">
