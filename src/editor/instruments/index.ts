@@ -28,6 +28,7 @@ import { folderFlightInstrument } from './FolderFlight'
 import { emojiDisplayInstrument } from './EmojiDisplay'
 import { beatParticleKitInstrument } from './BeatParticleKit'
 import { cameraControlInstrument } from './CameraControl'
+import { windowsXpInstrument } from './WindowsXP'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -60,6 +61,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [emojiDisplayInstrument.id]: emojiDisplayInstrument,
   [beatParticleKitInstrument.id]: beatParticleKitInstrument,
   [cameraControlInstrument.id]: cameraControlInstrument,
+  [windowsXpInstrument.id]: windowsXpInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

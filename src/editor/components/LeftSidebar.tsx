@@ -185,6 +185,12 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
     </svg>
   )},
+  { id: 'windowsXp', name: 'Windows XP', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="1" width="10" height="10" rx="1.5" fill="#ECE9D8" stroke="#0054E3" />
+      <rect x="1" y="1" width="10" height="3.2" rx="1.5" fill="#0058ee" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
