@@ -178,9 +178,9 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'instruments' && (
           <>
-            <Section title="Object" description="A visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modulator" description="Drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modifier" description="A child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modulator" description="A Modulator instrument drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
         {tab === 'effects' && (
