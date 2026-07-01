@@ -58,6 +58,9 @@ interface ProjectState {
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into an event modifier of the given type (no instrument). */
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
+  /** Add an `automation` child track under `parentId`, driving the given param over
+   *  time. No-op if one already automates that param. */
+  addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   // Visual effects (plugins) on a track.
@@ -364,6 +367,40 @@ export const useProjectStore = create<ProjectState>((set) => ({
         tracks: {
           ...s.tracks,
           [trackId]: { ...track, type, instrumentId: '', params: {}, name },
+        },
+      }
+    }),
+
+  addAutomationTrack: (parentId, paramKey, paramLabel) =>
+    set((s) => {
+      const parent = s.tracks[parentId]
+      if (!parent) return s
+      // One automation lane per param — don't stack duplicates.
+      const exists = parent.childIds.some((cid) => {
+        const c = s.tracks[cid]
+        return c?.type === 'automation' && c.targetParam === paramKey
+      })
+      if (exists) return s
+      const id = crypto.randomUUID()
+      const track: Track = {
+        id,
+        name: paramLabel,
+        type: 'automation',
+        instrumentId: '',
+        targetParam: paramKey,
+        interpolation: 'linear',
+        color: parent.color,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        parentId,
+      }
+      return {
+        tracks: {
+          ...s.tracks,
+          [id]: track,
+          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
         },
       }
     }),
