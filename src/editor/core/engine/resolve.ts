@@ -74,9 +74,15 @@ function flattenNotes(track: Track, beatsPerBar: number): ResolvedNote[] {
 function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
   if (!def) return out
+  // Per-object solo among this track's automation children.
+  const anyAutoSolo = (track.childIds ?? []).some((cid) => {
+    const c = p.tracks[cid]
+    return !!c && !c.instrumentId && c.type === 'automation' && !!c.solo
+  })
   for (const childId of track.childIds ?? []) {
     const child = p.tracks[childId]
-    if (!child || child.instrumentId || child.type !== 'automation' || child.muted) continue
+    if (!child || child.instrumentId || child.type !== 'automation') continue
+    if (child.muted || (anyAutoSolo && !child.solo)) continue
     const param = child.targetParam
     if (!param) continue
     const pdef = def.params.find((pd) => pd.key === param)
@@ -90,13 +96,18 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
   return out
 }
 
-/** Resolve a track's ability lanes into per-key note streams (absolute beats). */
+/** Resolve a track's ability lanes into per-key note streams (absolute beats). Solo is
+ *  per-object: if any lane on this track is soloed, the non-soloed lanes go silent. */
 function resolveAbilityEvents(track: Track, beatsPerBar: number): Map<string, ResolvedNote[]> {
   const events = new Map<string, ResolvedNote[]>()
   if (!track.lanes) return events
+  const meta = track.laneMeta ?? {}
+  const anyLaneSolo = Object.values(meta).some((m) => m?.solo)
   for (const [key, blocks] of Object.entries(track.lanes)) {
-    // A muted ability lane resolves to no events, so its ability doesn't fire.
-    events.set(key, track.laneMeta?.[key]?.muted ? [] : flattenBlocks(blocks, beatsPerBar))
+    const m = meta[key]
+    // A muted lane — or, when any lane is soloed, a non-soloed lane — fires nothing.
+    const off = !!m?.muted || (anyLaneSolo && !m?.solo)
+    events.set(key, off ? [] : flattenBlocks(blocks, beatsPerBar))
   }
   return events
 }
@@ -111,9 +122,15 @@ function applyModifiers(
 ): { notes: ResolvedNote[]; blackouts: BlackoutRegion[] } {
   let notes = baseNotes
   const blackouts: BlackoutRegion[] = []
+  // Per-object solo among this track's modifier children.
+  const anyModSolo = (track.childIds ?? []).some((cid) => {
+    const c = p.tracks[cid]
+    return !!c && !c.instrumentId && isModifierType(c.type) && !!c.solo
+  })
   for (const childId of track.childIds ?? []) {
     const child = p.tracks[childId]
-    if (!child || child.instrumentId || !isModifierType(child.type) || child.muted) continue
+    if (!child || child.instrumentId || !isModifierType(child.type)) continue
+    if (child.muted || (anyModSolo && !child.solo)) continue
     const self = flattenNotes(child, p.beatsPerBar)
     if (child.type === 'mute') {
       for (const n of self) blackouts.push({ start: n.beat, end: n.beat + (n.durationBeats || 0.25) })
@@ -140,6 +157,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   // objects are known.
   const modTracks: { id: string; track: Track }[] = []
 
+  // Real solo, scoped to OBJECTS: if any object is soloed, non-soloed objects go off
+  // (muted). Modulators + children (modifiers/automation) keep their own mute, so
+  // soloing an object never disables its own automation, its modifiers, or a modulator
+  // that targets it. Ability-lane solo is separate (per object, in resolveAbilityEvents).
+  const isObjectTrack = (t: Track) => !!t.instrumentId && !getModulator(t.instrumentId)
+  const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && isObjectTrack(t))
+  const objectOff = (track: Track) => !!track.muted || (anyObjectSolo && !track.solo)
+
   for (const id of flattenTree(p)) {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
@@ -157,7 +182,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       trackId: id,
       instrumentId: track.instrumentId,
       parentId: track.parentId,
-      muted: track.muted,
+      muted: objectOff(track),
       params: track.params ?? {},
       ports: def?.ports ?? [],
       localTransform: def?.localTransform,
