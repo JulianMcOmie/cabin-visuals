@@ -54,6 +54,12 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M6 0.5V2 M6 10V11.5 M0.5 6H2 M10 6H11.5 M2.3 2.3L3.3 3.3 M8.7 8.7L9.7 9.7 M9.7 2.3L8.7 3.3 M3.3 8.7L2.3 9.7" stroke="#ff9d00" strokeWidth="1" strokeLinecap="round" />
     </svg>
   )},
+  { id: 'particleRiser', name: 'Particle Riser', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M4 11 Q4 6 6 1 Q8 6 8 11" fill="none" stroke="#a78bfa" strokeWidth="1.1" />
+      <circle cx="6" cy="2" r="0.7" fill="#a78bfa" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
