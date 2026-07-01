@@ -19,6 +19,8 @@ interface AbilityLaneRowProps {
   timelineWidthPx: number
   /** Last row overall — suppresses the label divider, like a track. */
   isLast?: boolean
+  /** During an Alt copy-drag: vertical shift (px) so the lane reflows with its track. */
+  liftOffset?: number
 }
 
 /**
@@ -27,7 +29,7 @@ interface AbilityLaneRowProps {
  * — NOT a child track. Right-click the lane to draw a block; double-click a block to
  * edit its notes in the MIDI editor (both scoped to this lane via `laneKey`).
  */
-export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidthPx, timelineWidthPx, isLast }: AbilityLaneRowProps) {
+export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidthPx, timelineWidthPx, isLast, liftOffset }: AbilityLaneRowProps) {
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const selectedBlockIds = useUIStore((s) => s.selectedBlockIds)
@@ -38,10 +40,18 @@ export function AbilityLaneRow({ trackId, laneKey, label, color, depth, barWidth
   const laneRef = useRef<HTMLDivElement>(null)
   const { onLanePointerDown, onBlockPointerDown } = useLaneGestures(trackId, laneKey, laneRef)
 
+  const inCopyDrag = liftOffset !== undefined
+
   return (
     <div
       className="flex items-stretch border-b border-zinc-800/60 last:border-b-0"
-      style={{ height: rowHeight, position: 'relative' }}
+      style={{
+        height: rowHeight,
+        position: 'relative',
+        transform: inCopyDrag ? `translateY(${liftOffset}px)` : undefined,
+        transition: inCopyDrag ? 'transform 0.15s ease' : undefined,
+        zIndex: inCopyDrag ? 15 : undefined,
+      }}
     >
       <div
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}

@@ -72,9 +72,12 @@ export function TimelineArea() {
   // dim (the dragged source), a row to highlight (nest-into), or an insertion line.
   const trackDrop = useUIStore((s) => s.trackDrop)
 
-  // Alt copy-drag still reflows rows to open a gap at its live insertion index.
+  // Alt copy-drag still reflows rows to open a gap at its live insertion point. The
+  // gap is a VISUAL row index (root tracks aren't at index*rowHeight once lanes exist);
+  // it only opens when there's a real target (insertIndex != null).
   const dragActive = !!copyDrag
-  const dragInsertIndex = copyDrag?.insertIndex ?? null
+  const dragHasTarget = copyDrag?.insertIndex != null
+  const dragGapRow = copyDrag?.gapRow ?? null
   const dragRowHeight = copyDrag?.rowHeight ?? 0
 
   const { startScrub } = useScrub({
@@ -239,6 +242,7 @@ export function TimelineArea() {
                     barWidthPx={barWidthPx}
                     timelineWidthPx={timelineWidthPx}
                     isLast={isLast}
+                    liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
                   />
                 )
               }
@@ -249,7 +253,7 @@ export function TimelineArea() {
                   track={track}
                   depth={row.depth}
                   isLast={isLast}
-                  liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
+                  liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
                   dimmed={trackDrop?.activeId === row.id}
                   dropInto={trackDrop?.intoId === row.id}
                   onCopyDragStart={startTrackCopyDrag}
