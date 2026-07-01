@@ -6,6 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
+import { getPlugin } from '../plugins'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { Routing } from '../types'
 
@@ -234,10 +235,18 @@ export function TrackEditor() {
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
+  const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
+  const removeEffect = useProjectStore((s) => s.removeEffect)
+  const toggleEffect = useProjectStore((s) => s.toggleEffect)
+  const effectDragging = useUIStore((s) => s.effectDragging)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
     null
+
+  // Dragging an effect from the library flips this panel to its Effects tab so the
+  // drop zone is visible.
+  useEffect(() => { if (effectDragging) setTab('effects') }, [effectDragging])
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-900">
@@ -370,7 +379,63 @@ export function TrackEditor() {
           </>
         )}
         {tab === 'effects' && (
-          <p className="text-xs text-zinc-600 text-center mt-8">No effects</p>
+          track ? (
+            <div
+              data-effects-drop
+              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-indigo-500/60 bg-indigo-500/5' : ''}`}
+            >
+              {(track.visualPlugins ?? []).length === 0 ? (
+                <p className="text-xs text-zinc-600 text-center mt-8">
+                  {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
+                </p>
+              ) : (
+                (track.visualPlugins ?? []).map((inst) => {
+                  const plugin = getPlugin(inst.pluginId)
+                  if (!plugin) return null
+                  return (
+                    <div key={inst.id} className="mb-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <button
+                            onClick={() => toggleEffect(track.id, inst.id)}
+                            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
+                              inst.enabled ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+                            }`}
+                            aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
+                          >
+                            {inst.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
+                          </button>
+                          <span className={`text-xs font-semibold truncate ${inst.enabled ? 'text-zinc-200' : 'text-zinc-500'}`}>
+                            {plugin.name}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => removeEffect(track.id, inst.id)}
+                          className="flex-shrink-0 text-zinc-500 hover:text-zinc-200"
+                          aria-label="Remove effect"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                      {plugin.params.map((p) => (
+                        <ParamSlider
+                          key={p.key}
+                          label={p.label}
+                          min={p.min}
+                          max={p.max}
+                          step={p.step}
+                          value={inst.settings[p.key] ?? p.default}
+                          onChange={(v) => setEffectSetting(track.id, inst.id, p.key, v)}
+                        />
+                      ))}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>
+          )
         )}
       </div>
     </div>

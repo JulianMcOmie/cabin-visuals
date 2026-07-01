@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
+import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
+import { PLUGIN_LIST } from '../plugins'
 import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
@@ -98,6 +100,7 @@ type LibraryTab = 'instruments' | 'effects'
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
+  const { startEffectDrag, ghostRef: effectGhostRef, ghostName: effectGhostName } = useEffectDrag()
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
@@ -149,7 +152,21 @@ export function LeftSidebar() {
           </>
         )}
         {tab === 'effects' && (
-          <p className="text-xs text-zinc-600 text-center mt-8 px-3">No effects available</p>
+          <div>
+            {PLUGIN_LIST.map((plugin) => (
+              <div
+                key={plugin.id}
+                onPointerDown={(e) => startEffectDrag(e, plugin)}
+                title={`Drag ${plugin.name} onto a track's Effects panel`}
+                className="flex items-center gap-2.5 px-4 py-1.5 cursor-default hover:bg-zinc-800/60 transition-colors select-none"
+              >
+                <span className="flex-shrink-0 flex items-center justify-center w-4">
+                  <Sparkles size={12} className="text-zinc-400" />
+                </span>
+                <span className="text-xs text-zinc-300">{plugin.name}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -164,6 +181,18 @@ export function LeftSidebar() {
         >
           {droppable && <Plus size={13} className="text-green-400" strokeWidth={2.5} />}
           {ghostName}
+        </div>
+      )}
+
+      {/* Ghost while dragging an effect onto the Track Editor's Effects panel. */}
+      {effectGhostName && (
+        <div
+          ref={effectGhostRef}
+          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-zinc-700 bg-[#202024] text-xs font-medium text-white shadow-lg shadow-black/40"
+          style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
+        >
+          <Sparkles size={12} className="text-zinc-400" />
+          {effectGhostName}
         </div>
       )}
     </div>
