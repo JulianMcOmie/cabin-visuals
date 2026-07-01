@@ -5,6 +5,7 @@
 import { cubeInstrument } from './Cube'
 import { circleInstrument, triangleInstrument } from './shapes'
 import { icosahedronBurstInstrument } from './IcosahedronBurst'
+import { hexagonDotsInstrument } from './HexagonDots'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -14,6 +15,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [circleInstrument.id]: circleInstrument,
   [triangleInstrument.id]: triangleInstrument,
   [icosahedronBurstInstrument.id]: icosahedronBurstInstrument,
+  [hexagonDotsInstrument.id]: hexagonDotsInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
