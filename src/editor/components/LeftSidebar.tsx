@@ -172,6 +172,19 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M3.5 7.5 Q6 10 8.5 7.5" fill="none" stroke="#000" strokeWidth="1" strokeLinecap="round" />
     </svg>
   )},
+  { id: 'beatParticleKit', name: 'Beat Particle Kit', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect width="12" height="12" rx="2" fill="#e2e8f0" />
+      <circle cx="4" cy="7" r="2.4" fill="#111827" /><circle cx="8.4" cy="4.6" r="1.5" fill="#111827" /><circle cx="9" cy="8.6" r="0.9" fill="#111827" />
+    </svg>
+  )},
+  { id: 'cameraControl', name: 'Camera', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="3.5" width="7.5" height="5.5" rx="1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <path d="M8.5 5.3 L11 4 V8.5 L8.5 7.2 Z" fill="none" stroke="#818cf8" strokeWidth="1" strokeLinejoin="round" />
+      <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve

@@ -26,6 +26,8 @@ import { dotFieldInstrument } from './DotField'
 import { metronomeBallsInstrument } from './MetronomeBalls'
 import { folderFlightInstrument } from './FolderFlight'
 import { emojiDisplayInstrument } from './EmojiDisplay'
+import { beatParticleKitInstrument } from './BeatParticleKit'
+import { cameraControlInstrument } from './CameraControl'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -56,6 +58,8 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [metronomeBallsInstrument.id]: metronomeBallsInstrument,
   [folderFlightInstrument.id]: folderFlightInstrument,
   [emojiDisplayInstrument.id]: emojiDisplayInstrument,
+  [beatParticleKitInstrument.id]: beatParticleKitInstrument,
+  [cameraControlInstrument.id]: cameraControlInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
