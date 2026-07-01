@@ -70,9 +70,11 @@ export function Cube({ trackId }: { trackId: string }) {
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
     mat.emissiveIntensity = 0.2 + energy * 1.2
 
-    // Shatter: sample this track's Shatter lane at the current beat. A note's window
-    // is [beat, beat+duration); the burst rises then falls (sin) over that window, so
-    // the cube flies apart and reassembles. Overlapping notes take the strongest.
+    // Shatter: sample this track's Shatter lane at the current beat — a pure function
+    // of the beat, so scrubbing mirrors playback exactly. The burst is MAX at the note
+    // onset and decays back over the note (the cube flies apart, then reassembles), so
+    // the on-grid beat you actually land on when scrubbing (the playhead snaps to 1/4
+    // beat) is the peak — not a zero-crossing. Overlapping notes take the strongest.
     const beat = useTimeStore.getState().currentBeat
     const events = state?.abilityEvents.get('shatter') ?? []
     let a = 0
@@ -80,7 +82,7 @@ export function Cube({ trackId }: { trackId: string }) {
     for (const n of events) {
       const dur = n.durationBeats || 0.5
       if (beat >= n.beat && beat < n.beat + dur) {
-        const env = Math.sin(Math.PI * ((beat - n.beat) / dur))
+        const env = Math.pow(1 - (beat - n.beat) / dur, 1.3)
         if (env > a) { a = env; vel = n.velocity }
       }
     }
