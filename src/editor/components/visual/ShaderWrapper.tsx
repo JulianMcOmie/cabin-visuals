@@ -14,6 +14,20 @@ import type { PluginInstance } from '../../types'
 // the target regardless of camera. Passthrough fragment blits the final texture.
 const QUAD_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }'
 const PASSTHROUGH_FRAG = 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }'
+// The FBO chain works in linear space; the main scene's render to the canvas applies
+// the sRGB output encoding, but this overlay (a raw ShaderMaterial) bypasses it — so it
+// must encode itself, or the object reads darker (looks like reduced opacity).
+const OUTPUT_FRAG = `
+  uniform sampler2D tDiffuse;
+  varying vec2 vUv;
+  vec3 lin2srgb(vec3 c){
+    return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
+  }
+  void main(){
+    vec4 t = texture2D(tDiffuse, vUv);
+    gl_FragColor = vec4(lin2srgb(t.rgb), t.a);
+  }
+`
 
 /**
  * Per-object screen-space shader chain (plan §4.6, Option A — ported from Excellent DAW).
@@ -127,7 +141,7 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
         <planeGeometry args={[2, 2]} />
         <shaderMaterial
           vertexShader={QUAD_VERT}
-          fragmentShader={PASSTHROUGH_FRAG}
+          fragmentShader={OUTPUT_FRAG}
           uniforms={rig.outUniforms}
           transparent
           depthTest={false}
