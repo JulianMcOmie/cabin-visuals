@@ -19,7 +19,7 @@ interface TrackContextMenuProps {
 export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuProps) {
   const track = useProjectStore((s) => s.tracks[trackId])
   const tracks = useProjectStore((s) => s.tracks)
-  const addAbilityLane = useProjectStore((s) => s.addAbilityLane)
+  const addAbilityTrack = useProjectStore((s) => s.addAbilityTrack)
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
 
   const [openSub, setOpenSub] = useState<'ability' | 'automation' | null>(null)
@@ -44,13 +44,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const def = getInstrument(track.instrumentId)
   const abilities = def?.abilities ?? []
   const params = def?.params ?? []
-  const activeLanes = track.lanes ?? {}
-  const automatedParams = new Set(
-    track.childIds
-      .map((cid) => tracks[cid])
-      .filter((c) => c?.type === 'automation')
-      .map((c) => c!.targetParam),
-  )
+  const childTracks = track.childIds.map((cid) => tracks[cid])
+  const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
+  const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
 
   const hasAny = abilities.length > 0 || params.length > 0
 
@@ -72,12 +68,12 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
           {openSub === 'ability' && (
             <div className="absolute left-full top-0 -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50">
               {abilities.map((a) => {
-                const added = a.key in activeLanes
+                const added = addedAbilities.has(a.key)
                 return (
                   <button
                     key={a.key}
                     disabled={added}
-                    onClick={() => { addAbilityLane(trackId, a.key); onClose() }}
+                    onClick={() => { addAbilityTrack(trackId, a.key, a.label); onClose() }}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
                       added ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
                     }`}

@@ -14,7 +14,7 @@ export interface Block {
   notes: Note[]
 }
 
-export type TrackType = 'base' | 'add' | 'mute' | 'suppress' | 'override' | 'automation'
+export type TrackType = 'base' | 'add' | 'mute' | 'suppress' | 'override' | 'automation' | 'ability'
 
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
@@ -60,6 +60,9 @@ export interface Track {
   targets?: Routing[]
   targetParam?: string
   interpolation?: InterpolationMode
+  /** For an `ability` child track: which of the parent instrument's abilities it drives
+   *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
+  abilityKey?: string
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   visualPlugins?: PluginInstance[]
   /**

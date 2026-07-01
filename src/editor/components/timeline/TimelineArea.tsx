@@ -5,7 +5,6 @@ import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
-import { AbilityLaneRow } from './AbilityLaneRow'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
@@ -229,22 +228,8 @@ export function TimelineArea() {
           >
             {visualRows.map((row, i) => {
               const isLast = i === visualRows.length - 1
-              if (row.kind === 'lane') {
-                return (
-                  <AbilityLaneRow
-                    key={`${row.trackId}:${row.laneKey}`}
-                    trackId={row.trackId}
-                    laneKey={row.laneKey}
-                    label={row.label}
-                    color={row.color}
-                    depth={row.depth}
-                    barWidthPx={barWidthPx}
-                    timelineWidthPx={timelineWidthPx}
-                    isLast={isLast}
-                    liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
-                  />
-                )
-              }
+              // Abilities are `ability` child tracks now — no separate lane rows.
+              if (row.kind === 'lane') return null
               const track = tracks[row.id]
               return track ? (
                 <Track

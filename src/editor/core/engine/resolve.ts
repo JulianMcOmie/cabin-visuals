@@ -96,18 +96,17 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
   return out
 }
 
-/** Resolve a track's ability lanes into per-key note streams (absolute beats). Solo is
- *  per-object: if any lane on this track is soloed, the non-soloed lanes go silent. */
-function resolveAbilityEvents(track: Track, beatsPerBar: number): Map<string, ResolvedNote[]> {
+/** Gather an object track's `ability` child tracks into per-key note streams. Solo is
+ *  per-object: if any ability child is soloed, the non-soloed ones go silent. */
+function resolveAbilityEvents(track: Track, p: ProjectSnapshot): Map<string, ResolvedNote[]> {
   const events = new Map<string, ResolvedNote[]>()
-  if (!track.lanes) return events
-  const meta = track.laneMeta ?? {}
-  const anyLaneSolo = Object.values(meta).some((m) => m?.solo)
-  for (const [key, blocks] of Object.entries(track.lanes)) {
-    const m = meta[key]
-    // A muted lane — or, when any lane is soloed, a non-soloed lane — fires nothing.
-    const off = !!m?.muted || (anyLaneSolo && !m?.solo)
-    events.set(key, off ? [] : flattenBlocks(blocks, beatsPerBar))
+  const children = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !c.instrumentId && c.type === 'ability' && !!c.abilityKey)
+  const anySolo = children.some((c) => c.solo)
+  for (const child of children) {
+    const off = !!child.muted || (anySolo && !child.solo)
+    events.set(child.abilityKey as string, off ? [] : flattenNotes(child, p.beatsPerBar))
   }
   return events
 }
@@ -188,7 +187,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       localTransform: def?.localTransform,
       notes,
       blackouts,
-      abilityEvents: resolveAbilityEvents(track, p.beatsPerBar),
+      abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
       tags,
     })

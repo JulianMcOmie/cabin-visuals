@@ -61,13 +61,11 @@ interface ProjectState {
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
-  /** Reveal an instrument ability's lane on a track (opt-in). No-op if already added. */
-  addAbilityLane: (trackId: string, laneKey: string) => void
+  /** Add an `ability` child track under `parentId` for one of the parent instrument's
+   *  abilities (opt-in). No-op if that ability already has a track. */
+  addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
-  /** Toggle mute/solo on one ability lane (keyed by ability key). */
-  toggleLaneMuted: (trackId: string, laneKey: string) => void
-  toggleLaneSolo: (trackId: string, laneKey: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   // Visual effects (plugins) on a track.
@@ -412,14 +410,35 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  addAbilityLane: (trackId, laneKey) =>
+  addAbilityTrack: (parentId, abilityKey, abilityLabel) =>
     set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || (track.lanes && laneKey in track.lanes)) return s
+      const parent = s.tracks[parentId]
+      if (!parent) return s
+      // One ability track per ability — don't stack duplicates.
+      const exists = parent.childIds.some((cid) => {
+        const c = s.tracks[cid]
+        return c?.type === 'ability' && c.abilityKey === abilityKey
+      })
+      if (exists) return s
+      const id = crypto.randomUUID()
+      const track: Track = {
+        id,
+        name: abilityLabel,
+        type: 'ability',
+        instrumentId: '',
+        abilityKey,
+        color: parent.color,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        parentId,
+      }
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, lanes: { ...track.lanes, [laneKey]: [] } },
+          [id]: track,
+          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
         },
       }
     }),
@@ -429,32 +448,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
-    }),
-
-  toggleLaneMuted: (trackId, laneKey) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      const cur = track.laneMeta?.[laneKey] ?? {}
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, laneMeta: { ...track.laneMeta, [laneKey]: { ...cur, muted: !cur.muted } } },
-        },
-      }
-    }),
-
-  toggleLaneSolo: (trackId, laneKey) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      const cur = track.laneMeta?.[laneKey] ?? {}
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: { ...track, laneMeta: { ...track.laneMeta, [laneKey]: { ...cur, solo: !cur.solo } } },
-        },
-      }
     }),
 
   setTrackTargets: (trackId, targets) =>
