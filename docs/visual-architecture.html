@@ -548,7 +548,7 @@
 <ul>
   <li>Each entry in the object def's <code>abilities[]</code> becomes <strong>an indented sub-row</strong> under the instrument track, with <strong>its own MIDI editor</strong> and its own block/stream — not a relabelled row in a shared grid.</li>
   <li>A modulator's <code>trigger</code> is the degenerate case — a single ability lane ("when do I fire"), i.e. one such editor.</li>
-  <li><strong>A parallel structure, not child tracks (decided).</strong> The lanes live as a <code>lanes[]</code> array <em>on</em> the instrument track — their own little structure — drawn by a dedicated indented-row widget. They are <em>not</em> modelled as entries in the general nested-track hierarchy, so they don't depend on that hierarchy's data model: they borrow the indented <em>look</em>, not the machinery.</li>
+  <li><strong>A parallel structure, not child tracks (decided) — ⚠ SUPERSEDED.</strong> This was the original call (lanes as a <code>lanes[]</code> array on the instrument track, drawn by a dedicated indented-row widget). <strong>As shipped, abilities are real <code>ability</code> child tracks instead</strong> — functionally identical to automation tracks. The win: every block (normal / automation / ability) is <code>track.blocks</code> handled by one gesture system, so block editing is completely unified (marquee / move / copy / paste across all track types). The indented-row widget (<code>AbilityLaneRow</code>) and its bespoke gestures were removed.</li>
 </ul>
 
 <h3 id="spec">4.5 — Declarative specs &amp; "design in English"</h3>
