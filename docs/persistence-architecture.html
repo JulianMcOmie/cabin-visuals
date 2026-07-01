@@ -6,58 +6,58 @@
 <title>Persistence Architecture — Cabin Visuals</title>
 <style>
   :root{
-    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
     --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
-    --code:#f2f2f2; --radius:8px;
+    --code:#ffffff; --radius:8px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   .wrap{max-width:940px;margin:0 auto;padding:48px 30px 120px}
   header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
-  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
-  .sub{color:var(--muted);font-size:16px;margin:0}
-  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
-  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
-  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
-  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  h1{font-size:34px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:18px;margin:0}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:24px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:19px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   p{margin:10px 0}
   a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
   strong{color:var(--ink)}
   code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
-  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:14.5px;line-height:1.6}
   pre code{background:none;border:none;padding:0;color:#1a1a1a}
   .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}.t{color:#000}
   ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15.5px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
   tr:last-child td{border-bottom:none}
   td:first-child{color:var(--ink)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
-  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
   .b-rec{background:var(--ink);color:#fff;border-color:var(--ink)}
   .b-borrow{background:#fff;color:#111;border-color:#111}
-  .b-build{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-build{background:#ffffff;color:#111;border-color:#9a9a9a}
   .b-risk{background:#fff;color:#111;border-style:dashed}
   .b-future{background:#fff;color:#555;border-style:dotted;border-color:#888}
-  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .toc{columns:2;gap:28px;margin:8px 0 0}
-  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:15.5px;text-decoration:none}
   .toc a:hover{color:var(--ink);text-decoration:underline}
-  .muted{color:var(--muted)}.small{font-size:13px}
+  .muted{color:var(--muted)}.small{font-size:14.5px}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
-  .lead{font-size:16px;color:#2a2a2a}
+  .lead{font-size:18px;color:#2a2a2a}
   figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
   figure.fig svg{display:block;width:100%;height:auto}
-  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
-  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
-  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .figtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#ffffff;padding:6px 24px 20px;margin:22px 0}
   .keystone h3{margin-top:18px}
   .keystone ol{padding-left:20px}.keystone li{margin:11px 0}
   @media print{
@@ -115,11 +115,11 @@
     <defs><marker id="ar1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="60" width="200" height="120" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="120" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">BROWSER</text>
-    <rect x="38" y="98" width="164" height="30" rx="5" fill="#e6e6e6" stroke="#9a9a9a"/>
+    <rect x="38" y="98" width="164" height="30" rx="5" fill="#ffffff" stroke="#9a9a9a"/>
     <text x="120" y="118" text-anchor="middle" font-size="11" fill="#141414">ProjectStore (Zustand)</text>
-    <rect x="38" y="134" width="164" height="30" rx="5" fill="#f6f6f6" stroke="#9a9a9a" stroke-dasharray="4 3"/>
+    <rect x="38" y="134" width="164" height="30" rx="5" fill="#ffffff" stroke="#9a9a9a" stroke-dasharray="4 3"/>
     <text x="120" y="154" text-anchor="middle" font-size="11" fill="#141414">source of truth</text>
-    <rect x="300" y="66" width="230" height="108" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="300" y="66" width="230" height="108" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="415" y="90" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">persistence/ module</text>
     <rect x="316" y="100" width="198" height="26" rx="4" fill="#fff" stroke="#9a9a9a"/>
     <text x="415" y="118" text-anchor="middle" font-size="10.5" fill="#141414">projectRepo · load / save / list</text>
@@ -131,16 +131,16 @@
     <text x="228" y="156" font-size="9.5" fill="#565656">load → hydrate</text>
     <rect x="610" y="40" width="250" height="180" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="735" y="64" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">SUPABASE (Postgres)</text>
-    <rect x="628" y="78" width="214" height="52" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/>
+    <rect x="628" y="78" width="214" height="52" rx="5" fill="#ffffff" stroke="#9a9a9a"/>
     <text x="735" y="98" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">projects</text>
     <text x="735" y="116" text-anchor="middle" font-size="9.5" fill="#565656">id · owner · name · updated_at · data JSONB</text>
     <rect x="628" y="138" width="214" height="30" rx="5" fill="#141414"/>
     <text x="735" y="158" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">RLS: owner = auth.uid()</text>
-    <rect x="628" y="176" width="214" height="30" rx="5" fill="#f6f6f6" stroke="#9a9a9a"/>
+    <rect x="628" y="176" width="214" height="30" rx="5" fill="#ffffff" stroke="#9a9a9a"/>
     <text x="735" y="196" text-anchor="middle" font-size="10.5" fill="#141414">Supabase Auth (users)</text>
     <path d="M530,120 L606,120" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar1)"/>
     <text x="536" y="112" font-size="9.5" fill="#565656">@supabase/supabase-js</text>
-    <rect x="20" y="270" width="840" height="60" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <rect x="20" y="270" width="840" height="60" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
     <text x="440" y="294" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">DOCUMENT BLOB (the project)  +  RELATIONAL SPINE (the few queryable columns)</text>
     <text x="440" y="314" text-anchor="middle" font-size="11" fill="#565656">everything the editor edits lives in the blob; only what a list/query needs is promoted to a column — id, owner, name, updated_at, schema_version</text>
   </svg>
@@ -221,16 +221,16 @@
     <rect x="30" y="36" width="330" height="80" rx="8" fill="#fff" stroke="#141414" stroke-width="1.6"/>
     <text x="46" y="58" font-size="11" font-weight="700" fill="#141414">projects (one row)</text>
     <text x="46" y="76" font-size="10" fill="#565656">id · owner · name · updated_at · schema_version</text>
-    <rect x="46" y="86" width="298" height="22" rx="4" fill="#e6e6e6" stroke="#9a9a9a"/>
+    <rect x="46" y="86" width="298" height="22" rx="4" fill="#ffffff" stroke="#9a9a9a"/>
     <text x="195" y="101" text-anchor="middle" font-size="10" fill="#141414">data JSONB = { tracks, blocks, notes, bpm, … }</text>
     <text x="30" y="150" font-size="10.5" fill="#565656">load = one SELECT · save = one UPSERT · model change = no migration</text>
     <text x="430" y="24" font-size="12" font-weight="700" fill="#141414">Normalized — many tables, joined</text>
-    <rect x="430" y="36" width="110" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="485" y="55" text-anchor="middle" font-size="10.5" fill="#141414">tracks</text>
-    <rect x="560" y="36" width="110" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="615" y="55" text-anchor="middle" font-size="10.5" fill="#141414">blocks</text>
-    <rect x="690" y="36" width="90" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="735" y="55" text-anchor="middle" font-size="10.5" fill="#141414">notes</text>
-    <rect x="430" y="80" width="110" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="485" y="99" text-anchor="middle" font-size="10.5" fill="#141414">automation</text>
-    <rect x="560" y="80" width="110" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="615" y="99" text-anchor="middle" font-size="10.5" fill="#141414">effects</text>
-    <rect x="690" y="80" width="90" height="28" rx="5" fill="#f0f0f0" stroke="#141414"/><text x="735" y="99" text-anchor="middle" font-size="10.5" fill="#141414">routings</text>
+    <rect x="430" y="36" width="110" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="485" y="55" text-anchor="middle" font-size="10.5" fill="#141414">tracks</text>
+    <rect x="560" y="36" width="110" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="615" y="55" text-anchor="middle" font-size="10.5" fill="#141414">blocks</text>
+    <rect x="690" y="36" width="90" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="735" y="55" text-anchor="middle" font-size="10.5" fill="#141414">notes</text>
+    <rect x="430" y="80" width="110" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="485" y="99" text-anchor="middle" font-size="10.5" fill="#141414">automation</text>
+    <rect x="560" y="80" width="110" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="615" y="99" text-anchor="middle" font-size="10.5" fill="#141414">effects</text>
+    <rect x="690" y="80" width="90" height="28" rx="5" fill="#ffffff" stroke="#141414"/><text x="735" y="99" text-anchor="middle" font-size="10.5" fill="#141414">routings</text>
     <path d="M485,64 V80" stroke="#9a9a9a" stroke-width="1" marker-end="url(#ar2)"/>
     <path d="M615,64 V80" stroke="#9a9a9a" stroke-width="1" marker-end="url(#ar2)"/>
     <text x="430" y="150" font-size="10.5" fill="#565656">load = N joins · save = a transaction of many writes · model change = a migration each time</text>
@@ -251,18 +251,18 @@
     <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="40" y="20" width="720" height="120" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="60" y="44" font-size="13" font-weight="700" fill="#141414">projects — one row per project</text>
-    <rect x="60" y="56" width="120" height="32" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/><text x="120" y="77" text-anchor="middle" font-size="10.5" fill="#141414">id (uuid, pk)</text>
-    <rect x="192" y="56" width="120" height="32" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/><text x="252" y="77" text-anchor="middle" font-size="10.5" fill="#141414">owner (uuid)</text>
-    <rect x="324" y="56" width="120" height="32" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/><text x="384" y="77" text-anchor="middle" font-size="10.5" fill="#141414">name (text)</text>
-    <rect x="456" y="56" width="140" height="32" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/><text x="526" y="77" text-anchor="middle" font-size="10.5" fill="#141414">updated_at (tstz)</text>
-    <rect x="608" y="56" width="132" height="32" rx="5" fill="#f0f0f0" stroke="#9a9a9a"/><text x="674" y="77" text-anchor="middle" font-size="10.5" fill="#141414">schema_version (int)</text>
-    <rect x="60" y="98" width="680" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/>
+    <rect x="60" y="56" width="120" height="32" rx="5" fill="#ffffff" stroke="#9a9a9a"/><text x="120" y="77" text-anchor="middle" font-size="10.5" fill="#141414">id (uuid, pk)</text>
+    <rect x="192" y="56" width="120" height="32" rx="5" fill="#ffffff" stroke="#9a9a9a"/><text x="252" y="77" text-anchor="middle" font-size="10.5" fill="#141414">owner (uuid)</text>
+    <rect x="324" y="56" width="120" height="32" rx="5" fill="#ffffff" stroke="#9a9a9a"/><text x="384" y="77" text-anchor="middle" font-size="10.5" fill="#141414">name (text)</text>
+    <rect x="456" y="56" width="140" height="32" rx="5" fill="#ffffff" stroke="#9a9a9a"/><text x="526" y="77" text-anchor="middle" font-size="10.5" fill="#141414">updated_at (tstz)</text>
+    <rect x="608" y="56" width="132" height="32" rx="5" fill="#ffffff" stroke="#9a9a9a"/><text x="674" y="77" text-anchor="middle" font-size="10.5" fill="#141414">schema_version (int)</text>
+    <rect x="60" y="98" width="680" height="30" rx="5" fill="#ffffff" stroke="#141414"/>
     <text x="400" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">data JSONB  ←  the whole document blob</text>
     <text x="60" y="162" font-size="11" font-weight="700" fill="#565656">the spine (queried by the browser + RLS)</text>
     <path d="M120,88 V150" stroke="#9a9a9a" stroke-width="1.1"/>
     <path d="M252,88 V150" stroke="#9a9a9a" stroke-width="1.1"/>
     <path d="M384,88 V150" stroke="#9a9a9a" stroke-width="1.1"/>
-    <rect x="120" y="178" width="620" height="126" rx="8" fill="#f6f6f6" stroke="#141414" stroke-width="1.4"/>
+    <rect x="120" y="178" width="620" height="126" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="140" y="200" font-size="12" font-weight="700" fill="#141414">data JSONB — the ProjectDocument</text>
     <text x="140" y="222" font-size="10.5" fill="#565656">schemaVersion · bpm · beatsPerBar · totalBars</text>
     <text x="140" y="242" font-size="10.5" fill="#565656">tracks {} · rootTrackIds []   (from ProjectStore)</text>
@@ -312,17 +312,17 @@
   <div class="figtitle">The persistence/ module — one door between store and Supabase</div>
   <svg viewBox="0 0 820 250" role="img" aria-label="Persistence module layout">
     <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="90" width="150" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="20" y="90" width="150" height="70" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="95" y="118" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
     <text x="95" y="136" text-anchor="middle" font-size="9.5" fill="#565656">the document</text>
     <rect x="250" y="30" width="320" height="190" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="410" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">persistence/  ★ new module</text>
-    <rect x="270" y="64" width="130" height="44" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="335" y="84" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">supabase.ts</text><text x="335" y="99" text-anchor="middle" font-size="8.5" fill="#565656">(re-export client)</text>
-    <rect x="420" y="64" width="130" height="44" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="485" y="84" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">projectRepo.ts</text><text x="485" y="99" text-anchor="middle" font-size="8.5" fill="#565656">load/save/list/create</text>
-    <rect x="270" y="120" width="130" height="44" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="335" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">serialize.ts</text><text x="335" y="155" text-anchor="middle" font-size="8.5" fill="#565656">store ⇄ doc + upgrade</text>
-    <rect x="420" y="120" width="130" height="44" rx="6" fill="#141414"/><text x="485" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">autosave.ts</text><text x="485" y="155" text-anchor="middle" font-size="8.5" fill="#dcdcdc">debounced subscribe</text>
-    <rect x="270" y="176" width="280" height="32" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="410" y="196" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">useAuth.ts · useProjectList.ts (hooks)</text>
-    <rect x="650" y="90" width="150" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="270" y="64" width="130" height="44" rx="6" fill="#ffffff" stroke="#141414"/><text x="335" y="84" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">supabase.ts</text><text x="335" y="99" text-anchor="middle" font-size="8.5" fill="#565656">(re-export client)</text>
+    <rect x="420" y="64" width="130" height="44" rx="6" fill="#ffffff" stroke="#141414"/><text x="485" y="84" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">projectRepo.ts</text><text x="485" y="99" text-anchor="middle" font-size="8.5" fill="#565656">load/save/list/create</text>
+    <rect x="270" y="120" width="130" height="44" rx="6" fill="#ffffff" stroke="#141414"/><text x="335" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">serialize.ts</text><text x="335" y="155" text-anchor="middle" font-size="8.5" fill="#565656">store ⇄ doc + upgrade</text>
+    <rect x="420" y="120" width="130" height="44" rx="6" fill="#141414"/><text x="485" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">autosave.ts</text><text x="485" y="155" text-anchor="middle" font-size="8.5" fill="#ffffff">debounced subscribe</text>
+    <rect x="270" y="176" width="280" height="32" rx="6" fill="#ffffff" stroke="#141414"/><text x="410" y="196" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">useAuth.ts · useProjectList.ts (hooks)</text>
+    <rect x="650" y="90" width="150" height="70" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="725" y="118" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Supabase</text>
     <text x="725" y="136" text-anchor="middle" font-size="9.5" fill="#565656">projects · auth</text>
     <path d="M170,110 C210,110 214,90 248,90" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar4)"/>
@@ -366,7 +366,7 @@
   <div class="figtitle">Save/load lifecycle — load once, autosave forever</div>
   <svg viewBox="0 0 820 400" role="img" aria-label="Save load lifecycle">
     <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="300" y="16" width="220" height="44" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
+    <rect x="300" y="16" width="220" height="44" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="410" y="38" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">open /editor?project=id</text>
     <text x="410" y="54" text-anchor="middle" font-size="10" fill="#565656">route carries the project id</text>
     <path d="M410,60 V86" stroke="#141414" stroke-width="1.5" marker-end="url(#ar5)"/>
@@ -376,17 +376,17 @@
     <text x="410" y="129" text-anchor="middle" font-size="10" fill="#565656">SELECT data → upgradeDocument() → doc</text>
     <path d="M410,142 V168" stroke="#141414" stroke-width="1.5" marker-end="url(#ar5)"/>
     <text x="422" y="160" font-size="9.5" fill="#565656">② hydrate</text>
-    <rect x="300" y="172" width="220" height="48" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.5"/>
+    <rect x="300" y="172" width="220" height="48" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="410" y="194" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore.setState(doc)</text>
     <text x="410" y="210" text-anchor="middle" font-size="10" fill="#565656">the editor now renders the project</text>
     <path d="M410,220 V246" stroke="#141414" stroke-width="1.5" marker-end="url(#ar5)"/>
-    <rect x="60" y="250" width="700" height="132" rx="8" fill="#f6f6f6" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <rect x="60" y="250" width="700" height="132" rx="8" fill="#ffffff" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
     <text x="76" y="272" font-size="11" font-weight="700" fill="#141414">AUTOSAVE LOOP — for the life of the session</text>
     <rect x="80" y="286" width="150" height="48" rx="6" fill="#fff" stroke="#141414"/><text x="155" y="306" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">user edits</text><text x="155" y="322" text-anchor="middle" font-size="9" fill="#565656">store mutates (instant)</text>
     <path d="M230,310 H266" stroke="#141414" stroke-width="1.4" marker-end="url(#ar5)"/>
     <rect x="268" y="286" width="160" height="48" rx="6" fill="#fff" stroke="#141414"/><text x="348" y="306" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">subscribe + debounce</text><text x="348" y="322" text-anchor="middle" font-size="9" fill="#565656">~1s idle · coalesce burst</text>
     <path d="M428,310 H464" stroke="#141414" stroke-width="1.4" marker-end="url(#ar5)"/>
-    <rect x="466" y="286" width="140" height="48" rx="6" fill="#141414"/><text x="536" y="306" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">projectRepo.save</text><text x="536" y="322" text-anchor="middle" font-size="9" fill="#dcdcdc">one UPSERT · off-thread</text>
+    <rect x="466" y="286" width="140" height="48" rx="6" fill="#141414"/><text x="536" y="306" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">projectRepo.save</text><text x="536" y="322" text-anchor="middle" font-size="9" fill="#ffffff">one UPSERT · off-thread</text>
     <path d="M606,310 H642" stroke="#141414" stroke-width="1.4" marker-end="url(#ar5)"/>
     <rect x="644" y="286" width="100" height="48" rx="6" fill="#fff" stroke="#141414"/><text x="694" y="306" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">Supabase</text><text x="694" y="322" text-anchor="middle" font-size="9" fill="#565656">status → UI</text>
     <text x="410" y="368" text-anchor="middle" font-size="9.5" fill="#565656">a burst of edits → one save; the editor never waits on the network; a failed save retries, doc stays intact</text>
@@ -437,14 +437,14 @@
   <div class="figtitle">Local-first — the edit is done before the network hears about it</div>
   <svg viewBox="0 0 800 200" role="img" aria-label="Local first flow">
     <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="70" width="150" height="56" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="95" y="94" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">edit</text><text x="95" y="112" text-anchor="middle" font-size="9.5" fill="#565656">a note, a slider</text>
-    <rect x="210" y="70" width="170" height="56" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.7"/><text x="295" y="90" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">ProjectStore</text><text x="295" y="107" text-anchor="middle" font-size="9.5" fill="#565656">applied instantly</text><text x="295" y="121" text-anchor="middle" font-size="9" fill="#565656">screen updates now</text>
+    <rect x="20" y="70" width="150" height="56" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="95" y="94" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">edit</text><text x="95" y="112" text-anchor="middle" font-size="9.5" fill="#565656">a note, a slider</text>
+    <rect x="210" y="70" width="170" height="56" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.7"/><text x="295" y="90" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">ProjectStore</text><text x="295" y="107" text-anchor="middle" font-size="9.5" fill="#565656">applied instantly</text><text x="295" y="121" text-anchor="middle" font-size="9" fill="#565656">screen updates now</text>
     <path d="M170,98 H206" stroke="#141414" stroke-width="1.6" marker-end="url(#ar6)"/>
     <rect x="430" y="34" width="160" height="42" rx="6" fill="#fff" stroke="#141414"/><text x="510" y="55" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">renderer / engine</text><text x="510" y="69" text-anchor="middle" font-size="9" fill="#565656">reads store — no wait</text>
-    <rect x="430" y="120" width="160" height="42" rx="6" fill="#141414"/><text x="510" y="141" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">autosave (async)</text><text x="510" y="155" text-anchor="middle" font-size="9" fill="#dcdcdc">debounced, background</text>
+    <rect x="430" y="120" width="160" height="42" rx="6" fill="#141414"/><text x="510" y="141" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">autosave (async)</text><text x="510" y="155" text-anchor="middle" font-size="9" fill="#ffffff">debounced, background</text>
     <path d="M380,90 C405,80 410,66 428,58" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar6)"/>
     <path d="M380,108 C405,120 410,132 428,138" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar6)"/>
-    <rect x="640" y="120" width="140" height="42" rx="6" fill="#f0f0f0" stroke="#141414"/><text x="710" y="141" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">Supabase</text><text x="710" y="155" text-anchor="middle" font-size="9" fill="#565656">eventually consistent</text>
+    <rect x="640" y="120" width="140" height="42" rx="6" fill="#ffffff" stroke="#141414"/><text x="710" y="141" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">Supabase</text><text x="710" y="155" text-anchor="middle" font-size="9" fill="#565656">eventually consistent</text>
     <path d="M590,141 H636" stroke="#141414" stroke-width="1.4" marker-end="url(#ar6)"/>
   </svg>
   <figcaption>The critical path is edit → store → screen, with zero network in it. Saving is a side-effect that trails behind. This is what makes a DAW feel native even though its truth lives in Postgres.</figcaption>
@@ -460,14 +460,14 @@
   <div class="figtitle">Auth flow — session in, owner out</div>
   <svg viewBox="0 0 820 250" role="img" aria-label="Auth flow">
     <defs><marker id="ar7" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="100" width="140" height="52" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="90" y="122" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">login / signup</text><text x="90" y="139" text-anchor="middle" font-size="9" fill="#565656">app/(auth)/*</text>
+    <rect x="20" y="100" width="140" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="90" y="122" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">login / signup</text><text x="90" y="139" text-anchor="middle" font-size="9" fill="#565656">app/(auth)/*</text>
     <path d="M160,126 H196" stroke="#141414" stroke-width="1.5" marker-end="url(#ar7)"/>
     <rect x="198" y="100" width="150" height="52" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/><text x="273" y="122" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">Supabase Auth</text><text x="273" y="139" text-anchor="middle" font-size="9" fill="#565656">issues session cookie</text>
     <path d="M348,126 H384" stroke="#141414" stroke-width="1.5" marker-end="url(#ar7)"/>
-    <rect x="386" y="100" width="160" height="52" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.5"/><text x="466" y="122" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">middleware</text><text x="466" y="139" text-anchor="middle" font-size="9" fill="#565656">refresh · gate routes</text>
+    <rect x="386" y="100" width="160" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="466" y="122" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">middleware</text><text x="466" y="139" text-anchor="middle" font-size="9" fill="#565656">refresh · gate routes</text>
     <path d="M546,126 H582" stroke="#141414" stroke-width="1.5" marker-end="url(#ar7)"/>
-    <rect x="584" y="70" width="216" height="42" rx="6" fill="#f6f6f6" stroke="#141414"/><text x="692" y="90" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">every supabase-js call</text><text x="692" y="105" text-anchor="middle" font-size="9" fill="#565656">carries the session → auth.uid()</text>
-    <rect x="584" y="130" width="216" height="42" rx="6" fill="#141414"/><text x="692" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">owner = user.id</text><text x="692" y="165" text-anchor="middle" font-size="9" fill="#dcdcdc">RLS anchor · list filter</text>
+    <rect x="584" y="70" width="216" height="42" rx="6" fill="#ffffff" stroke="#141414"/><text x="692" y="90" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">every supabase-js call</text><text x="692" y="105" text-anchor="middle" font-size="9" fill="#565656">carries the session → auth.uid()</text>
+    <rect x="584" y="130" width="216" height="42" rx="6" fill="#141414"/><text x="692" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">owner = user.id</text><text x="692" y="165" text-anchor="middle" font-size="9" fill="#ffffff">RLS anchor · list filter</text>
     <path d="M546,116 C560,100 568,94 582,92" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar7)"/>
     <path d="M546,136 C560,150 568,151 582,151" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar7)"/>
   </svg>
@@ -487,13 +487,13 @@
   <div class="figtitle">RLS — the database filters by owner, so the client can't overreach</div>
   <svg viewBox="0 0 820 260" role="img" aria-label="RLS enforcement">
     <defs><marker id="ar8" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="40" width="170" height="52" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="105" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">User A (session)</text><text x="105" y="79" text-anchor="middle" font-size="9" fill="#565656">SELECT * FROM projects</text>
-    <rect x="20" y="150" width="170" height="52" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="105" y="172" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">User A (malicious)</text><text x="105" y="189" text-anchor="middle" font-size="9" fill="#565656">…WHERE owner = B</text>
-    <rect x="300" y="90" width="200" height="64" rx="8" fill="#141414"/><text x="400" y="118" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">RLS policy</text><text x="400" y="137" text-anchor="middle" font-size="9.5" fill="#dcdcdc">USING (owner = auth.uid())</text>
+    <rect x="20" y="40" width="170" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="105" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">User A (session)</text><text x="105" y="79" text-anchor="middle" font-size="9" fill="#565656">SELECT * FROM projects</text>
+    <rect x="20" y="150" width="170" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="105" y="172" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">User A (malicious)</text><text x="105" y="189" text-anchor="middle" font-size="9" fill="#565656">…WHERE owner = B</text>
+    <rect x="300" y="90" width="200" height="64" rx="8" fill="#141414"/><text x="400" y="118" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">RLS policy</text><text x="400" y="137" text-anchor="middle" font-size="9.5" fill="#ffffff">USING (owner = auth.uid())</text>
     <path d="M190,66 C240,80 250,100 298,108" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar8)"/>
     <path d="M190,176 C240,160 250,140 298,132" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar8)"/>
     <rect x="610" y="40" width="190" height="52" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/><text x="705" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">✓ A's rows only</text><text x="705" y="79" text-anchor="middle" font-size="9" fill="#565656">B's projects invisible</text>
-    <rect x="610" y="150" width="190" height="52" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="4 3"/><text x="705" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">✗ zero rows</text><text x="705" y="189" text-anchor="middle" font-size="9" fill="#565656">policy filters it out</text>
+    <rect x="610" y="150" width="190" height="52" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="4 3"/><text x="705" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">✗ zero rows</text><text x="705" y="189" text-anchor="middle" font-size="9" fill="#565656">policy filters it out</text>
     <path d="M500,110 C550,90 560,72 608,66" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar8)"/>
     <path d="M500,138 C550,158 560,172 608,176" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar8)"/>
   </svg>
@@ -525,14 +525,14 @@
   <div class="figtitle">Migrations workflow — schema in git, applied everywhere the same</div>
   <svg viewBox="0 0 820 210" role="img" aria-label="Drizzle migrations workflow">
     <defs><marker id="ar9" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="80" width="150" height="52" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="95" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">schema.ts</text><text x="95" y="119" text-anchor="middle" font-size="9" fill="#565656">tables + policies (TS)</text>
+    <rect x="20" y="80" width="150" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="95" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">schema.ts</text><text x="95" y="119" text-anchor="middle" font-size="9" fill="#565656">tables + policies (TS)</text>
     <path d="M170,106 H206" stroke="#141414" stroke-width="1.5" marker-end="url(#ar9)"/>
     <rect x="208" y="80" width="160" height="52" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/><text x="288" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">drizzle-kit generate</text><text x="288" y="119" text-anchor="middle" font-size="9" fill="#565656">→ 0001_*.sql</text>
     <path d="M368,106 H404" stroke="#141414" stroke-width="1.5" marker-end="url(#ar9)"/>
-    <rect x="406" y="80" width="150" height="52" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.5"/><text x="481" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">commit to git</text><text x="481" y="119" text-anchor="middle" font-size="9" fill="#565656">reviewed in a PR</text>
+    <rect x="406" y="80" width="150" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="481" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">commit to git</text><text x="481" y="119" text-anchor="middle" font-size="9" fill="#565656">reviewed in a PR</text>
     <path d="M556,106 H592" stroke="#141414" stroke-width="1.5" marker-end="url(#ar9)"/>
     <rect x="594" y="52" width="200" height="42" rx="6" fill="#fff" stroke="#141414"/><text x="694" y="72" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">drizzle-kit migrate (dev)</text><text x="694" y="87" text-anchor="middle" font-size="9" fill="#565656">local Supabase</text>
-    <rect x="594" y="118" width="200" height="42" rx="6" fill="#141414"/><text x="694" y="138" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">migrate (CI → prod)</text><text x="694" y="153" text-anchor="middle" font-size="9" fill="#dcdcdc">same SQL, every env</text>
+    <rect x="594" y="118" width="200" height="42" rx="6" fill="#141414"/><text x="694" y="138" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">migrate (CI → prod)</text><text x="694" y="153" text-anchor="middle" font-size="9" fill="#ffffff">same SQL, every env</text>
     <path d="M556,100 C575,86 580,78 592,74" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar9)"/>
     <path d="M556,112 C575,126 580,134 592,138" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar9)"/>
   </svg>
@@ -559,7 +559,7 @@
   <div class="figtitle">Doc-version upgrade — old blob in, current shape out</div>
   <svg viewBox="0 0 820 240" role="img" aria-label="Document version upgrade chain">
     <defs><marker id="arA" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="94" width="130" height="52" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/><text x="85" y="116" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">loaded blob</text><text x="85" y="133" text-anchor="middle" font-size="9" fill="#565656">schemaVersion: 1</text>
+    <rect x="20" y="94" width="130" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="85" y="116" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">loaded blob</text><text x="85" y="133" text-anchor="middle" font-size="9" fill="#565656">schemaVersion: 1</text>
     <path d="M150,120 H184" stroke="#141414" stroke-width="1.5" marker-end="url(#arA)"/>
     <rect x="186" y="94" width="120" height="52" rx="6" fill="#fff" stroke="#141414"/><text x="246" y="116" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">upgrade 1→2</text><text x="246" y="133" text-anchor="middle" font-size="8.5" fill="#565656">add track.tags</text>
     <path d="M306,120 H340" stroke="#141414" stroke-width="1.5" marker-end="url(#arA)"/>
@@ -567,7 +567,7 @@
     <path d="M462,120 H496" stroke="#141414" stroke-width="1.5" marker-end="url(#arA)"/>
     <rect x="498" y="94" width="120" height="52" rx="6" fill="#fff" stroke="#141414"/><text x="558" y="116" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">upgrade 3→4</text><text x="558" y="133" text-anchor="middle" font-size="8.5" fill="#565656">lanes: Record</text>
     <path d="M618,120 H652" stroke="#141414" stroke-width="1.5" marker-end="url(#arA)"/>
-    <rect x="654" y="88" width="146" height="64" rx="8" fill="#141414"/><text x="727" y="114" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">current doc</text><text x="727" y="133" text-anchor="middle" font-size="9" fill="#dcdcdc">schemaVersion: 4</text>
+    <rect x="654" y="88" width="146" height="64" rx="8" fill="#141414"/><text x="727" y="114" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">current doc</text><text x="727" y="133" text-anchor="middle" font-size="9" fill="#ffffff">schemaVersion: 4</text>
     <text x="410" y="188" text-anchor="middle" font-size="10" fill="#565656">each step is a pure function vN → vN+1; the chain runs until the doc matches CURRENT_VERSION</text>
     <text x="410" y="208" text-anchor="middle" font-size="10" fill="#565656">the editor only ever sees the latest shape — old saves keep opening, forever</text>
   </svg>

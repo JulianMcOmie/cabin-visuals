@@ -6,58 +6,58 @@
 <title>Audio Track Architecture — Cabin Visuals</title>
 <style>
   :root{
-    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
     --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
-    --code:#f2f2f2; --radius:8px;
+    --code:#ffffff; --radius:8px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   .wrap{max-width:940px;margin:0 auto;padding:48px 30px 120px}
   header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
-  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
-  .sub{color:var(--muted);font-size:16px;margin:0}
-  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
-  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
-  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
-  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  h1{font-size:34px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:18px;margin:0}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:24px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:19px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   p{margin:10px 0}
   a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
   strong{color:var(--ink)}
   code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
-  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:14.5px;line-height:1.6}
   pre code{background:none;border:none;padding:0;color:#1a1a1a}
   .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}.t{color:#000}
   ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15.5px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
   tr:last-child td{border-bottom:none}
   td:first-child{color:var(--ink)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
-  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
   .b-rec{background:var(--ink);color:#fff;border-color:var(--ink)}
   .b-borrow{background:#fff;color:#111;border-color:#111}
-  .b-build{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-build{background:#ffffff;color:#111;border-color:#9a9a9a}
   .b-risk{background:#fff;color:#111;border-style:dashed}
   .b-future{background:#fff;color:#555;border-style:dotted;border-color:#888}
-  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .toc{columns:2;gap:28px;margin:8px 0 0}
-  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:15.5px;text-decoration:none}
   .toc a:hover{color:var(--ink);text-decoration:underline}
-  .muted{color:var(--muted)}.small{font-size:13px}
+  .muted{color:var(--muted)}.small{font-size:14.5px}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
-  .lead{font-size:16px;color:#2a2a2a}
+  .lead{font-size:18px;color:#2a2a2a}
   figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
   figure.fig svg{display:block;width:100%;height:auto}
-  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
-  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
-  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .figtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#ffffff;padding:6px 24px 20px;margin:22px 0}
   .keystone h3{margin-top:18px}
   .keystone ol{padding-left:20px}.keystone li{margin:11px 0}
   @media print{
@@ -109,16 +109,16 @@
   <svg viewBox="0 0 880 360" role="img" aria-label="Audio track overview">
     <defs><marker id="ar1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <text x="20" y="34" font-size="12" font-weight="700" fill="#141414">TODAY — one global clip, pinned to beat 0</text>
-    <rect x="20" y="46" width="400" height="40" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="20" y="46" width="400" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="220" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">AudioStore.clip · one Tone.Player</text>
     <text x="220" y="80" text-anchor="middle" font-size="10" fill="#565656">file 0:00 == timeline beat 0 (hard-wired)</text>
     <text x="460" y="34" font-size="12" font-weight="700" fill="#141414">TOMORROW — a track of positioned blocks</text>
-    <rect x="460" y="42" width="400" height="48" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.4"/>
+    <rect x="460" y="42" width="400" height="48" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="660" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Audio track</text>
     <rect x="520" y="70" width="90" height="14" rx="3" fill="#141414"/><text x="565" y="81" text-anchor="middle" font-size="9" fill="#fff">block @bar 4</text>
     <rect x="700" y="70" width="120" height="14" rx="3" fill="#141414"/><text x="760" y="81" text-anchor="middle" font-size="9" fill="#fff">block @bar 12</text>
 
-    <rect x="20" y="120" width="200" height="48" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="20" y="120" width="200" height="48" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="120" y="143" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">TimeStore.currentBeat</text>
     <text x="120" y="160" text-anchor="middle" font-size="11" fill="#565656">the ONE clock — unchanged</text>
     <rect x="330" y="102" width="250" height="86" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
@@ -128,17 +128,17 @@
     <text x="455" y="179" text-anchor="middle" font-size="10.5" fill="#565656">at start(when, inClipOffset)</text>
     <path d="M220,144 L326,144" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
     <text x="240" y="136" font-size="10" fill="#565656">drives</text>
-    <rect x="650" y="112" width="210" height="40" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="650" y="112" width="210" height="40" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="755" y="132" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">Tone.Player[] (per block)</text>
     <text x="755" y="146" text-anchor="middle" font-size="9.5" fill="#565656">started/stopped by beat window</text>
     <path d="M580,144 L646,138" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
 
-    <rect x="330" y="204" width="250" height="44" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="330" y="204" width="250" height="44" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="455" y="226" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Waveform in the block</text>
     <text x="455" y="242" text-anchor="middle" font-size="10" fill="#565656">peaks from the decoded buffer, on a canvas</text>
     <path d="M455,188 V202" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
 
-    <rect x="20" y="278" width="840" height="60" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <rect x="20" y="278" width="840" height="60" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
     <text x="440" y="302" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">THE INVARIANT: beat is time. Audio is scheduled RELATIVE to the beat clock, never the reverse.</text>
     <text x="440" y="322" text-anchor="middle" font-size="11" fill="#565656">block plays iff currentBeat ∈ [blockStartBeat, blockEndBeat) · in-clip offset = (beat − blockStartBeat) → seconds + trimStart</text>
   </svg>
@@ -174,10 +174,10 @@
   <div class="figtitle">Today's data-flow — one clip, one player, pinned to beat 0</div>
   <svg viewBox="0 0 820 210" role="img" aria-label="Current audio flow">
     <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="82" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="20" y="82" width="150" height="46" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="95" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioBar</text>
     <text x="95" y="118" text-anchor="middle" font-size="9" fill="#565656">load a file</text>
-    <rect x="210" y="82" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="210" y="82" width="150" height="46" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="285" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioStore.clip</text>
     <text x="285" y="118" text-anchor="middle" font-size="9" fill="#565656">one AudioClip</text>
     <rect x="400" y="60" width="180" height="90" rx="6" fill="#fff" stroke="#141414" stroke-width="1.6"/>
@@ -187,7 +187,7 @@
     <text x="490" y="132" text-anchor="middle" font-size="9" fill="#565656">start(when, startBeat*60/bpm)</text>
     <rect x="620" y="82" width="180" height="46" rx="6" fill="#141414"/>
     <text x="710" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Tone.Transport</text>
-    <text x="710" y="118" text-anchor="middle" font-size="9" fill="#dcdcdc">RAF → setCurrentBeat</text>
+    <text x="710" y="118" text-anchor="middle" font-size="9" fill="#ffffff">RAF → setCurrentBeat</text>
     <path d="M170,105 L206,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
     <path d="M360,105 L396,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
     <path d="M580,105 L616,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
@@ -249,17 +249,17 @@
   <svg viewBox="0 0 820 320" role="img" aria-label="Audio data model">
     <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <text x="30" y="26" font-size="12" font-weight="700" fill="#141414">THE MATERIAL — a clip library (AudioStore, grown from one slot to many)</text>
-    <rect x="30" y="36" width="220" height="70" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="30" y="36" width="220" height="70" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="44" y="56" font-size="11" font-weight="700" fill="#141414">AudioClip</text>
     <text x="44" y="74" font-size="9.5" fill="#565656">ref · fileName · duration</text>
     <text x="44" y="90" font-size="9.5" fill="#565656">(bytes behind audioSource.ts)</text>
-    <rect x="270" y="36" width="180" height="70" rx="6" fill="#f6f6f6" stroke="#141414" stroke-dasharray="3 2"/>
+    <rect x="270" y="36" width="180" height="70" rx="6" fill="#ffffff" stroke="#141414" stroke-dasharray="3 2"/>
     <text x="284" y="56" font-size="10.5" font-weight="700" fill="#141414">decoded AudioBuffer</text>
     <text x="284" y="74" font-size="9" fill="#565656">cached per ref (for peaks +</text>
     <text x="284" y="88" font-size="9" fill="#565656">Tone.Player), never persisted</text>
 
     <text x="30" y="150" font-size="12" font-weight="700" fill="#141414">THE PLACEMENT — an audio track of audio blocks (ProjectStore)</text>
-    <rect x="30" y="160" width="200" height="86" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.5"/>
+    <rect x="30" y="160" width="200" height="86" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="44" y="180" font-size="11" font-weight="700" fill="#141414">Track (type: 'audio')</text>
     <text x="44" y="198" font-size="9.5" fill="#565656">name · color · muted · solo</text>
     <text x="44" y="214" font-size="9.5" fill="#565656">parentId · childIds</text>
@@ -275,9 +275,9 @@
     <text x="250" y="128" font-size="9" fill="#565656">clipRef resolves to a library clip</text>
     <rect x="580" y="168" width="210" height="74" rx="6" fill="#141414"/>
     <text x="685" y="190" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">derived (not stored)</text>
-    <text x="596" y="208" font-size="9" fill="#dcdcdc">startBeat = startBar · beatsPerBar</text>
-    <text x="596" y="223" font-size="9" fill="#dcdcdc">durBeats  = (trimEnd−trimStart)·bpm/60</text>
-    <text x="596" y="238" font-size="9" fill="#dcdcdc">endBeat   = startBeat + durBeats</text>
+    <text x="596" y="208" font-size="9" fill="#ffffff">startBeat = startBar · beatsPerBar</text>
+    <text x="596" y="223" font-size="9" fill="#ffffff">durBeats  = (trimEnd−trimStart)·bpm/60</text>
+    <text x="596" y="238" font-size="9" fill="#ffffff">endBeat   = startBeat + durBeats</text>
     <path d="M540,205 L576,205" stroke="#141414" stroke-width="1.4" marker-end="url(#ar3)"/>
   </svg>
   <figcaption>The clip is reusable material; the block is a positioned, trimmed reference to it. The beat window (<code>startBeat</code>…<code>endBeat</code>) is derived from <code>startBar</code> + trim + tempo — never stored, always recomputable, exactly like the visual engine's resolved graph.</figcaption>
@@ -323,12 +323,12 @@
   <div class="figtitle">Dragging an audio block = changing startBar = rescheduling audio</div>
   <svg viewBox="0 0 820 220" role="img" aria-label="Dragging an audio block">
     <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="30" width="780" height="30" rx="4" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="20" y="30" width="780" height="30" rx="4" fill="#ffffff" stroke="#141414"/>
     <text x="30" y="49" font-size="10" font-weight="700" fill="#565656">RULER (bars)</text>
     <g stroke="#cfcfcf"><line x1="150" y1="30" x2="150" y2="60"/><line x1="280" y1="30" x2="280" y2="60"/><line x1="410" y1="30" x2="410" y2="60"/><line x1="540" y1="30" x2="540" y2="60"/><line x1="670" y1="30" x2="670" y2="60"/></g>
-    <rect x="20" y="72" width="780" height="44" rx="4" fill="#fafafa" stroke="#141414"/>
+    <rect x="20" y="72" width="780" height="44" rx="4" fill="#ffffff" stroke="#141414"/>
     <text x="30" y="98" font-size="10" font-weight="700" fill="#565656">AUDIO TRACK</text>
-    <rect x="150" y="80" width="150" height="28" rx="3" fill="#dcdcdc" stroke="#141414"/>
+    <rect x="150" y="80" width="150" height="28" rx="3" fill="#ffffff" stroke="#141414"/>
     <path d="M158,94 L172,88 L186,98 L200,86 L214,96 L228,90 L242,97 L256,88 L270,95 L284,90" fill="none" stroke="#141414" stroke-width="1"/>
     <text x="225" y="72" text-anchor="middle" font-size="9" fill="#565656">before: startBar 2</text>
     <rect x="410" y="80" width="150" height="28" rx="3" fill="#141414"/>
@@ -336,7 +336,7 @@
     <text x="485" y="72" text-anchor="middle" font-size="9" fill="#565656">after: startBar 8</text>
     <path d="M300,94 C350,94 360,94 406,94" fill="none" stroke="#6a6a6a" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ar4)"/>
     <text x="355" y="86" text-anchor="middle" font-size="9" fill="#565656">drag</text>
-    <rect x="20" y="140" width="780" height="56" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <rect x="20" y="140" width="780" height="56" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="5 4"/>
     <text x="410" y="162" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">On drop: updateAudioBlock(id, { startBar: 8 }) → store changes</text>
     <text x="410" y="182" text-anchor="middle" font-size="10.5" fill="#565656">if playing, the engine re-derives this block's beat window and re-arms its player (or stops it if it's now outside the current beat)</text>
   </svg>
@@ -357,7 +357,7 @@
   <div class="figtitle">Two engines, one clock — where audio scheduling belongs</div>
   <svg viewBox="0 0 820 300" role="img" aria-label="Where audio belongs">
     <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="120" width="170" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
+    <rect x="20" y="120" width="170" height="70" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="105" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
     <text x="105" y="164" text-anchor="middle" font-size="9.5" fill="#565656">tracks (incl. audio track</text>
     <text x="105" y="178" text-anchor="middle" font-size="9.5" fill="#565656">+ AudioBlock[])</text>
@@ -368,7 +368,7 @@
     <text x="410" y="90" text-anchor="middle" font-size="10" fill="#565656">observes the project · reads currentBeat</text>
     <text x="410" y="107" text-anchor="middle" font-size="10" fill="#565656">★ does NOT touch audio</text>
 
-    <rect x="250" y="190" width="320" height="90" rx="10" fill="#f6f6f6" stroke="#141414" stroke-width="2"/>
+    <rect x="250" y="190" width="320" height="90" rx="10" fill="#ffffff" stroke="#141414" stroke-width="2"/>
     <text x="410" y="212" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">PLAYBACK ENGINE (core/playback.ts)</text>
     <text x="410" y="232" text-anchor="middle" font-size="10" fill="#565656">Tone.Transport · RAF beat clock</text>
     <text x="410" y="250" text-anchor="middle" font-size="10" fill="#565656">★ schedules audio players per block</text>
@@ -376,7 +376,7 @@
 
     <rect x="630" y="120" width="170" height="70" rx="8" fill="#141414"/>
     <text x="715" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">TimeStore.currentBeat</text>
-    <text x="715" y="170" text-anchor="middle" font-size="9.5" fill="#dcdcdc">the ONE clock</text>
+    <text x="715" y="170" text-anchor="middle" font-size="9.5" fill="#ffffff">the ONE clock</text>
 
     <path d="M190,150 C215,120 220,90 246,80" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar5)"/>
     <text x="196" y="104" font-size="9" fill="#565656">observe</text>
@@ -402,7 +402,7 @@
     <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="300" y="20" width="220" height="40" rx="6" fill="#141414"/>
     <text x="410" y="38" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">play(startBeat)</text>
-    <text x="410" y="53" text-anchor="middle" font-size="9.5" fill="#dcdcdc">arm transport at `when`</text>
+    <text x="410" y="53" text-anchor="middle" font-size="9.5" fill="#ffffff">arm transport at `when`</text>
     <path d="M410,60 V84" stroke="#141414" stroke-width="1.4" marker-end="url(#ar6)"/>
     <text x="425" y="78" font-size="9" fill="#565656">for each audio block:</text>
 
@@ -415,7 +415,7 @@
     <text x="76" y="204" font-size="9" fill="#565656">player.start(when, offset)</text>
     <text x="76" y="220" font-size="9" fill="#565656">(dur clamped to trimEnd)</text>
 
-    <rect x="300" y="90" width="220" height="140" rx="8" fill="#f6f6f6" stroke="#141414" stroke-width="1.5"/>
+    <rect x="300" y="90" width="220" height="140" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="410" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">block starts AFTER now</text>
     <text x="316" y="132" font-size="9" fill="#565656">playBeat ≤ startBeat</text>
     <text x="316" y="150" font-size="9" fill="#565656">→ schedule ahead:</text>
@@ -424,14 +424,14 @@
     <text x="316" y="204" font-size="9" fill="#565656">player.start(when + delaySec,</text>
     <text x="316" y="220" font-size="9" fill="#565656">  trimStart)</text>
 
-    <rect x="540" y="90" width="220" height="140" rx="8" fill="#fafafa" stroke="#141414" stroke-width="1.5"/>
+    <rect x="540" y="90" width="220" height="140" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="650" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">block already ENDED</text>
     <text x="556" y="132" font-size="9" fill="#565656">playBeat ≥ endBeat</text>
     <text x="556" y="150" font-size="9" fill="#565656">→ don't arm it</text>
     <text x="556" y="170" font-size="9" fill="#565656">(player idle; will arm when</text>
     <text x="556" y="184" font-size="9" fill="#565656">the user seeks back into it)</text>
 
-    <rect x="200" y="250" width="420" height="40" rx="6" fill="#f0f0f0" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <rect x="200" y="250" width="420" height="40" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="5 4"/>
     <text x="410" y="268" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">all players share the same `when` (+ per-block delay)</text>
     <text x="410" y="283" text-anchor="middle" font-size="9.5" fill="#565656">→ every block stays sample-aligned to the transport, exactly like today's single player</text>
   </svg>
@@ -480,19 +480,19 @@
     <defs><marker id="ar7" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <line x1="40" y1="60" x2="780" y2="60" stroke="#141414" stroke-width="1.2"/>
     <text x="40" y="46" font-size="10" font-weight="700" fill="#565656">timeline (beats)</text>
-    <rect x="120" y="46" width="140" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="190" y="63" text-anchor="middle" font-size="9" fill="#141414">block A</text>
-    <rect x="360" y="46" width="180" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="450" y="63" text-anchor="middle" font-size="9" fill="#141414">block B</text>
-    <rect x="600" y="46" width="120" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="660" y="63" text-anchor="middle" font-size="9" fill="#141414">block C</text>
+    <rect x="120" y="46" width="140" height="26" rx="3" fill="#ffffff" stroke="#141414"/><text x="190" y="63" text-anchor="middle" font-size="9" fill="#141414">block A</text>
+    <rect x="360" y="46" width="180" height="26" rx="3" fill="#ffffff" stroke="#141414"/><text x="450" y="63" text-anchor="middle" font-size="9" fill="#141414">block B</text>
+    <rect x="600" y="46" width="120" height="26" rx="3" fill="#ffffff" stroke="#141414"/><text x="660" y="63" text-anchor="middle" font-size="9" fill="#141414">block C</text>
     <line x1="430" y1="30" x2="430" y2="120" stroke="#141414" stroke-width="1.6"/>
     <path d="M430,26 l-6,-8 l12,0 z" fill="#141414"/>
     <text x="430" y="18" text-anchor="middle" font-size="9" font-weight="700" fill="#141414">seek here</text>
-    <rect x="120" y="140" width="220" height="60" rx="6" fill="#fafafa" stroke="#141414"/>
+    <rect x="120" y="140" width="220" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="230" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">A · outside → stop</text>
     <text x="230" y="178" text-anchor="middle" font-size="9" fill="#565656">endBeat &lt; seekBeat</text>
     <rect x="360" y="140" width="180" height="60" rx="6" fill="#141414"/>
     <text x="450" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">B · inside → restart</text>
-    <text x="450" y="178" text-anchor="middle" font-size="9" fill="#dcdcdc">start(when, offset@seek)</text>
-    <rect x="560" y="140" width="200" height="60" rx="6" fill="#fafafa" stroke="#141414"/>
+    <text x="450" y="178" text-anchor="middle" font-size="9" fill="#ffffff">start(when, offset@seek)</text>
+    <rect x="560" y="140" width="200" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="660" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">C · future → schedule</text>
     <text x="660" y="178" text-anchor="middle" font-size="9" fill="#565656">start(when + delay, trimStart)</text>
   </svg>
@@ -514,27 +514,27 @@
   <div class="figtitle">Waveform pipeline — decode once, peak, draw, trim-clip</div>
   <svg viewBox="0 0 820 260" role="img" aria-label="Waveform pipeline">
     <defs><marker id="ar8" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="20" y="40" width="150" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="95" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">decode</text>
     <text x="95" y="80" text-anchor="middle" font-size="9" fill="#565656">ref → AudioBuffer</text>
     <text x="95" y="93" text-anchor="middle" font-size="9" fill="#565656">(cached per ref)</text>
-    <rect x="200" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="200" y="40" width="150" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="275" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">peaks</text>
     <text x="275" y="80" text-anchor="middle" font-size="9" fill="#565656">min/max per column</text>
     <text x="275" y="93" text-anchor="middle" font-size="9" fill="#565656">(downsample, cached)</text>
-    <rect x="380" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="380" y="40" width="150" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="455" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">draw</text>
     <text x="455" y="80" text-anchor="middle" font-size="9" fill="#565656">canvas in the block</text>
     <text x="455" y="93" text-anchor="middle" font-size="9" fill="#565656">width = block px</text>
     <rect x="560" y="40" width="150" height="60" rx="6" fill="#141414"/>
     <text x="635" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">clip to trim</text>
-    <text x="635" y="80" text-anchor="middle" font-size="9" fill="#dcdcdc">show trimStart..trimEnd</text>
-    <text x="635" y="93" text-anchor="middle" font-size="9" fill="#dcdcdc">slice of the peaks</text>
+    <text x="635" y="80" text-anchor="middle" font-size="9" fill="#ffffff">show trimStart..trimEnd</text>
+    <text x="635" y="93" text-anchor="middle" font-size="9" fill="#ffffff">slice of the peaks</text>
     <path d="M170,70 L196,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
     <path d="M350,70 L376,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
     <path d="M530,70 L556,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
 
-    <rect x="120" y="150" width="580" height="70" rx="4" fill="#fafafa" stroke="#141414"/>
+    <rect x="120" y="150" width="580" height="70" rx="4" fill="#ffffff" stroke="#141414"/>
     <text x="130" y="168" font-size="9" font-weight="700" fill="#565656">the block, waveform drawn to fit</text>
     <g stroke="#141414" stroke-width="1">
       <path d="M140,185 L152,175 L164,195 L176,168 L188,200 L200,172 L212,192 L224,178 L236,198 L248,170 L260,190 L272,182 L284,196 L296,174 L308,193 L320,180 L332,197 L344,176 L356,191 L368,184 L380,195 L392,178 L404,192 L416,181 L428,196 L440,175 L452,190 L464,183 L476,197 L488,177 L500,192 L512,180 L524,195 L536,179 L548,193 L560,182 L572,196 L584,176 L596,190 L608,184 L620,195 L632,180 L644,192 L656,182 L668,196" fill="none"/>
@@ -572,7 +572,7 @@
   <svg viewBox="0 0 820 210" role="img" aria-label="Trimming a block">
     <defs><marker id="ar9" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <text x="30" y="34" font-size="10" font-weight="700" fill="#565656">full clip, untrimmed</text>
-    <rect x="120" y="44" width="360" height="40" rx="4" fill="#dcdcdc" stroke="#141414"/>
+    <rect x="120" y="44" width="360" height="40" rx="4" fill="#ffffff" stroke="#141414"/>
     <path d="M128,64 L146,52 L164,74 L182,50 L200,72 L218,56 L236,76 L254,54 L272,70 L290,58 L308,74 L326,52 L344,72 L362,56 L380,76 L398,54 L416,70 L434,60 L452,74 L470,58" fill="none" stroke="#141414" stroke-width="1"/>
     <text x="122" y="98" font-size="8.5" fill="#565656">trimStart 0</text>
     <text x="478" y="98" text-anchor="end" font-size="8.5" fill="#565656">trimEnd = duration</text>

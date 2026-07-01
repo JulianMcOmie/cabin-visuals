@@ -6,64 +6,64 @@
 <title>Audio Track — Implementation Plan</title>
 <style>
   :root{
-    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
     --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
-    --code:#f2f2f2; --radius:8px;
+    --code:#ffffff; --radius:8px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
   header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
-  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
-  .sub{color:var(--muted);font-size:16px;margin:0}
-  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
-  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
-  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
-  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  h1{font-size:34px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:18px;margin:0}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:24px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:19px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   p{margin:10px 0}
   a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
   strong{color:var(--ink)}
   code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
-  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:14.5px;line-height:1.6}
   pre code{background:none;border:none;padding:0;color:#1a1a1a}
   .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}
   ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15.5px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
   tr:last-child td{border-bottom:none}
   td:first-child{color:var(--ink)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
-  .badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
   .b-new{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .b-edit{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-edit{background:#ffffff;color:#111;border-color:#9a9a9a}
   .b-del{background:#fff;color:#111;border-style:dashed}
   .b-store{background:#fff;color:#111;border-color:#111}
   .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
   .pill-row{margin:10px 0 4px}
-  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .toc{columns:2;gap:28px;margin:8px 0 0}
-  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:15.5px;text-decoration:none}
   .toc a:hover{color:var(--ink);text-decoration:underline}
-  .muted{color:var(--muted)}.small{font-size:13px}
+  .muted{color:var(--muted)}.small{font-size:14.5px}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:760px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
   figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
   figure.fig svg{display:block;width:100%;height:auto}
-  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
-  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
-  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
-  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
-  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:10px}
-  .tg-edit{color:#111;background:#dcdcdc;border-radius:4px;padding:0 4px;font-size:10px}
-  .tg-del{color:#111;border:1px dashed #777;border-radius:4px;padding:0 4px;font-size:10px}
-  .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#fbfbfb}
-  .comp h4{color:var(--ink);font-size:14px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
+  .figtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#ffffff;padding:6px 24px 20px;margin:22px 0}
+  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:14px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
+  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:11.5px}
+  .tg-edit{color:#111;background:#ffffff;border-radius:4px;padding:0 4px;font-size:11.5px}
+  .tg-del{color:#111;border:1px dashed #777;border-radius:4px;padding:0 4px;font-size:11.5px}
+  .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#ffffff}
+  .comp h4{color:var(--ink);font-size:15.5px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
   @media print{
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
@@ -105,38 +105,38 @@
   <div class="figtitle">Where the new pieces live and how they connect</div>
   <svg viewBox="0 0 900 350" role="img" aria-label="Module layout">
     <defs><marker id="aL" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="40" width="170" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="20" y="40" width="170" height="70" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="105" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">AudioStore</text>
     <text x="105" y="82" text-anchor="middle" font-size="10" fill="#565656">clip → clips library</text>
     <text x="105" y="99" text-anchor="middle" font-size="10" fill="#565656">(Record&lt;ref, AudioClip&gt;)</text>
-    <rect x="20" y="150" width="170" height="76" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="20" y="150" width="170" height="76" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="105" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
     <text x="105" y="192" text-anchor="middle" font-size="10" fill="#565656">audio track + AudioBlock[]</text>
     <text x="105" y="209" text-anchor="middle" font-size="10" fill="#565656">(startBar · trim · gestures)</text>
 
     <rect x="250" y="60" width="360" height="230" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="430" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">core/  (transport + audio bytes)</text>
-    <rect x="270" y="96" width="160" height="60" rx="6" fill="#f6f6f6" stroke="#141414" stroke-width="1.5"/>
+    <rect x="270" y="96" width="160" height="60" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="350" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">playback.ts</text>
     <text x="350" y="137" text-anchor="middle" font-size="9" fill="#565656">1 player → per-block pool</text>
     <text x="350" y="150" text-anchor="middle" font-size="9" fill="#565656">armBlock() · loadClips()</text>
-    <rect x="450" y="96" width="140" height="60" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <rect x="450" y="96" width="140" height="60" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="520" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">audioSource.ts</text>
     <text x="520" y="137" text-anchor="middle" font-size="9" fill="#565656">ref → bytes (as-is)</text>
     <text x="520" y="150" text-anchor="middle" font-size="9" fill="#565656">getPlayableUrl()</text>
     <rect x="270" y="172" width="160" height="56" rx="6" fill="#141414"/>
     <text x="350" y="194" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">waveform.ts</text>
-    <text x="350" y="211" text-anchor="middle" font-size="9" fill="#dcdcdc">decode-cache + peaks</text>
-    <rect x="450" y="172" width="140" height="56" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="350" y="211" text-anchor="middle" font-size="9" fill="#ffffff">decode-cache + peaks</text>
+    <rect x="450" y="172" width="140" height="56" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="520" y="194" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">usePlayback.ts</text>
     <text x="520" y="211" text-anchor="middle" font-size="9" fill="#565656">loadClips before play</text>
 
-    <rect x="670" y="70" width="200" height="90" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="670" y="70" width="200" height="90" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="770" y="94" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">components/timeline/</text>
     <text x="770" y="112" text-anchor="middle" font-size="10" fill="#565656">AudioTrack row</text>
     <text x="770" y="129" text-anchor="middle" font-size="10" fill="#565656">AudioBlockView + waveform</text>
     <text x="770" y="146" text-anchor="middle" font-size="10" fill="#565656">move / trim gestures</text>
-    <rect x="670" y="188" width="200" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
+    <rect x="670" y="188" width="200" height="70" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="770" y="212" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">TimeStore</text>
     <text x="770" y="230" text-anchor="middle" font-size="10" fill="#565656">currentBeat — the clock</text>
     <text x="770" y="247" text-anchor="middle" font-size="10" fill="#565656">★ UNCHANGED</text>
@@ -214,7 +214,7 @@
   <svg viewBox="0 0 900 250" role="img" aria-label="Phase ladder">
     <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <g font-size="11" fill="#141414">
-      <rect x="20" y="24" width="270" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="32" y="44" font-weight="700">1 · Audio-block data model + type</text>
+      <rect x="20" y="24" width="270" height="30" rx="5" fill="#ffffff" stroke="#141414"/><text x="32" y="44" font-weight="700">1 · Audio-block data model + type</text>
       <rect x="20" y="62" width="270" height="30" rx="5" fill="#141414"/><text x="32" y="82" fill="#fff" font-weight="700">2 · Transport scheduling ★ keystone</text>
       <rect x="20" y="100" width="270" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="120" font-weight="700">3 · Waveform block + drag</text>
       <rect x="20" y="138" width="270" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Multiple clips + trim</text>
@@ -247,22 +247,22 @@
   <svg viewBox="0 0 900 300" role="img" aria-label="Data model layers">
     <defs><marker id="aM" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <text x="30" y="22" font-size="12" font-weight="700" fill="#141414">MATERIAL — the clip library  (AudioStore.ts + audioSource.ts)</text>
-    <rect x="30" y="34" width="200" height="70" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="30" y="34" width="200" height="70" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="44" y="54" font-size="11" font-weight="700" fill="#141414">AudioClip</text>
     <text x="44" y="72" font-size="9.5" fill="#565656">ref · fileName · duration</text>
     <text x="44" y="88" font-size="9.5" fill="#565656">(unchanged shape)</text>
-    <rect x="250" y="34" width="200" height="70" rx="6" fill="#f6f6f6" stroke="#141414" stroke-dasharray="3 2"/>
+    <rect x="250" y="34" width="200" height="70" rx="6" fill="#ffffff" stroke="#141414" stroke-dasharray="3 2"/>
     <text x="264" y="54" font-size="10.5" font-weight="700" fill="#141414">decoded AudioBuffer</text>
     <text x="264" y="72" font-size="9" fill="#565656">cached per ref (waveform.ts)</text>
     <text x="264" y="88" font-size="9" fill="#565656">feeds peaks + Tone.Player</text>
 
     <text x="30" y="146" font-size="12" font-weight="700" fill="#141414">PLACEMENT — edited, persisted, undoable  (types.ts + ProjectStore)</text>
-    <rect x="30" y="158" width="200" height="86" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="30" y="158" width="200" height="86" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="44" y="178" font-size="11" font-weight="700" fill="#141414">Track (type: 'audio')</text>
     <text x="44" y="196" font-size="9.5" fill="#565656">name · color · muted · solo</text>
     <text x="44" y="212" font-size="9.5" fill="#565656">parentId · childIds</text>
     <text x="44" y="228" font-size="9.5" fill="#565656">audioBlocks: AudioBlock[]</text>
-    <rect x="250" y="158" width="230" height="86" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="250" y="158" width="230" height="86" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="264" y="178" font-size="11" font-weight="700" fill="#141414">AudioBlock</text>
     <text x="264" y="196" font-size="9.5" fill="#565656">clipRef → AudioClip.ref</text>
     <text x="264" y="212" font-size="9.5" fill="#565656">startBar</text>
@@ -320,7 +320,7 @@
   <div class="figtitle">Runtime data-flow — which function owns each step</div>
   <svg viewBox="0 0 900 320" role="img" aria-label="Audio runtime flow">
     <defs><marker id="aD" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="30" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="20" y="30" width="150" height="46" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="95" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">user hits play / seeks</text>
     <text x="95" y="66" text-anchor="middle" font-size="9" fill="#565656">or drags a block</text>
     <path d="M170,53 H214" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
@@ -329,7 +329,7 @@
     <text x="301" y="65" text-anchor="middle" font-size="9" fill="#565656">gather audioBlocks + refs</text>
     <path d="M301,80 V104" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
     <text x="312" y="97" font-size="9" fill="#565656">await loadClips(refs)</text>
-    <rect x="216" y="108" width="170" height="50" rx="6" fill="#f6f6f6" stroke="#141414" stroke-width="1.4"/>
+    <rect x="216" y="108" width="170" height="50" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="301" y="130" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">loadClips()</text>
     <text x="301" y="146" text-anchor="middle" font-size="9" fill="#565656">pool: create/dispose players</text>
     <path d="M386,133 H440" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
@@ -343,11 +343,11 @@
 
     <rect x="680" y="60" width="200" height="64" rx="8" fill="#141414"/>
     <text x="780" y="84" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">armBlock(block, atBeat, when)</text>
-    <text x="780" y="102" text-anchor="middle" font-size="9" fill="#dcdcdc">3 cases: mid / future / past</text>
-    <text x="780" y="116" text-anchor="middle" font-size="9" fill="#dcdcdc">player.start(when[+delay], offset)</text>
+    <text x="780" y="102" text-anchor="middle" font-size="9" fill="#ffffff">3 cases: mid / future / past</text>
+    <text x="780" y="116" text-anchor="middle" font-size="9" fill="#ffffff">player.start(when[+delay], offset)</text>
     <path d="M622,110 C645,110 655,100 676,96" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
 
-    <rect x="216" y="200" width="664" height="90" rx="8" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <rect x="216" y="200" width="664" height="90" rx="8" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="5 4"/>
     <text x="232" y="220" font-size="11" font-weight="700" fill="#141414">STEADY STATE — no per-frame audio work</text>
     <rect x="232" y="232" width="200" height="48" rx="6" fill="#fff" stroke="#141414"/>
     <text x="332" y="254" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">RAF tracker (existing)</text>
@@ -390,7 +390,7 @@
   <div class="figtitle">Render + gesture path for an audio block</div>
   <svg viewBox="0 0 900 220" role="img" aria-label="Audio block render">
     <defs><marker id="aR" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="86" width="160" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <rect x="20" y="86" width="160" height="46" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
     <text x="100" y="106" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">Track.tsx</text>
     <text x="100" y="122" text-anchor="middle" font-size="9" fill="#565656">type==='audio' branch</text>
     <path d="M180,109 H224" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
@@ -402,15 +402,15 @@
     <path d="M406,120 C440,126 440,162 472,162" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
     <rect x="474" y="34" width="200" height="46" rx="6" fill="#141414"/>
     <text x="574" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">&lt;canvas&gt; waveform</text>
-    <text x="574" y="71" text-anchor="middle" font-size="9" fill="#dcdcdc">getPeaks(ref) → draw</text>
-    <rect x="474" y="140" width="200" height="46" rx="6" fill="#f6f6f6" stroke="#141414"/>
+    <text x="574" y="71" text-anchor="middle" font-size="9" fill="#ffffff">getPeaks(ref) → draw</text>
+    <rect x="474" y="140" width="200" height="46" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="574" y="162" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">move / trim gestures</text>
     <text x="574" y="177" text-anchor="middle" font-size="9" fill="#565656">→ updateAudioBlock()</text>
-    <rect x="710" y="140" width="170" height="46" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="710" y="140" width="170" height="46" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="795" y="162" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">ProjectStore</text>
     <text x="795" y="177" text-anchor="middle" font-size="9" fill="#565656">startBar / trim change</text>
     <path d="M674,163 H706" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>
-    <rect x="710" y="34" width="170" height="46" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="710" y="34" width="170" height="46" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="795" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">waveform.ts</text>
     <text x="795" y="71" text-anchor="middle" font-size="9" fill="#565656">decode-cache + peaks</text>
     <path d="M674,57 H706" stroke="#141414" stroke-width="1.4" marker-end="url(#aR)"/>

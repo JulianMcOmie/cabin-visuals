@@ -6,58 +6,58 @@
 <title>Mute / Solo in a Nested Hierarchy — Cabin Visuals</title>
 <style>
   :root{
-    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
     --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
-    --code:#f2f2f2; --radius:8px;
+    --code:#ffffff; --radius:8px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   .wrap{max-width:940px;margin:0 auto;padding:48px 30px 120px}
   header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
-  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
-  .sub{color:var(--muted);font-size:16px;margin:0}
-  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
-  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
-  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
-  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  h1{font-size:34px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:18px;margin:0}
+  .kicker{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:24px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:19px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   p{margin:10px 0}
   a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
   strong{color:var(--ink)}
   code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
-  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:14.5px;line-height:1.6}
   pre code{background:none;border:none;padding:0;color:#1a1a1a}
   .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}.t{color:#000}
   ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15.5px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
   tr:last-child td{border-bottom:none}
   td:first-child{color:var(--ink)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
-  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
+  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
   .b-rec{background:var(--ink);color:#fff;border-color:var(--ink)}
   .b-borrow{background:#fff;color:#111;border-color:#111}
-  .b-build{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-build{background:#ffffff;color:#111;border-color:#9a9a9a}
   .b-risk{background:#fff;color:#111;border-style:dashed}
   .b-future{background:#fff;color:#555;border-style:dotted;border-color:#888}
-  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
-  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .toc{columns:2;gap:28px;margin:8px 0 0}
-  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:15.5px;text-decoration:none}
   .toc a:hover{color:var(--ink);text-decoration:underline}
-  .muted{color:var(--muted)}.small{font-size:13px}
+  .muted{color:var(--muted)}.small{font-size:14.5px}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
-  .lead{font-size:16px;color:#2a2a2a}
+  .lead{font-size:18px;color:#2a2a2a}
   figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
   figure.fig svg{display:block;width:100%;height:auto}
-  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
-  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
-  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .figtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#ffffff;padding:6px 24px 20px;margin:22px 0}
   .keystone h3{margin-top:18px}
   .keystone ol{padding-left:20px}.keystone li{margin:11px 0}
   @media print{
@@ -217,7 +217,7 @@ These are the two cases the recommendation fixes with an <em>ancestor + descenda
     <path d="M180,102 H208" stroke="#141414" stroke-width="1.2"/>
     <path d="M180,125 H208" stroke="#141414" stroke-width="1.2"/>
     <!-- modulator routing -->
-    <rect x="470" y="94" width="180" height="30" rx="5" fill="#f0f0f0" stroke="#141414"/>
+    <rect x="470" y="94" width="180" height="30" rx="5" fill="#ffffff" stroke="#141414"/>
     <text x="560" y="114" text-anchor="middle" font-size="11" fill="#141414">Modulator → Cube.scale</text>
     <defs><marker id="ms1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <path d="M468,109 H184" stroke="#141414" stroke-width="1.3" marker-end="url(#ms1)"/>
@@ -239,7 +239,7 @@ These are the two cases the recommendation fixes with an <em>ancestor + descenda
     <defs><marker id="ms2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <text x="20" y="24" font-size="12" font-weight="700" fill="#141414">Solo ▶ Star (nested)</text>
     <!-- Scene group (ancestor, kept) -->
-    <rect x="40" y="42" width="180" height="30" rx="5" fill="#d7d7d7" stroke="#141414" stroke-width="1.6"/>
+    <rect x="40" y="42" width="180" height="30" rx="5" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
     <text x="130" y="62" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">Scene group · kept</text>
     <text x="228" y="61" font-size="10" fill="#565656">ancestor → audible for context</text>
     <!-- Star (soloed) -->
@@ -283,7 +283,7 @@ These are the two cases the recommendation fixes with an <em>ancestor + descenda
     <text x="180" y="111" text-anchor="middle" font-size="11" fill="#999">↳ Star · hidden (inherited)</text>
     <rect x="90" y="128" width="180" height="28" rx="5" fill="#eee" stroke="#bbb" stroke-dasharray="4 3"/>
     <text x="180" y="147" text-anchor="middle" font-size="11" fill="#999">↳ Cube · hidden (inherited)</text>
-    <rect x="300" y="110" width="180" height="28" rx="5" fill="#f2f2f2" stroke="#ccc" stroke-dasharray="4 3"/>
+    <rect x="300" y="110" width="180" height="28" rx="5" fill="#ffffff" stroke="#ccc" stroke-dasharray="4 3"/>
     <text x="390" y="129" text-anchor="middle" font-size="10.5" fill="#999">↳↳ Cube's automation — moot</text>
     <path d="M70,72 V106 H88" fill="none" stroke="#bbb" stroke-width="1.2"/>
     <path d="M70,106 V142 H88" fill="none" stroke="#bbb" stroke-width="1.2"/>
