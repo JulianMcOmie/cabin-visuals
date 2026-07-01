@@ -62,4 +62,10 @@ export interface Track {
   interpolation?: InterpolationMode
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   visualPlugins?: PluginInstance[]
+  /**
+   * Per-ability note streams, keyed by the instrument's `AbilityLaneDef.key`. Each
+   * lane holds full blocks + notes and is edited like a track. A PARALLEL structure
+   * on the object track — deliberately NOT child tracks in the hierarchy.
+   */
+  lanes?: Record<string, Block[]>
 }
