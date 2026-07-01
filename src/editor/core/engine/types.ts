@@ -98,4 +98,10 @@ export interface ObjectState {
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The
    *  instrument samples these against the current beat to drive its signature move. */
   abilityEvents: Map<string, ResolvedNote[]>
+  /** The object's full resolved note stream (absolute beats, pitch/velocity/duration),
+   *  so a pitch-reactive instrument can read it. Static per resolve. */
+  notes: ResolvedNote[]
+  /** The notes live at the current beat (`beat ∈ [note.beat, note.beat+duration)`),
+   *  recomputed each frame — the analogue of Tyler's `activeNotes`. */
+  activeNotes: ResolvedNote[]
 }
