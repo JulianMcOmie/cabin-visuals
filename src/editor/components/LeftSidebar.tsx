@@ -60,6 +60,33 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="2" r="0.7" fill="#a78bfa" />
     </svg>
   )},
+  { id: 'textDisplay', name: 'Text Display', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
+    </svg>
+  )},
+  { id: 'square', name: 'Square', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="#8B00FF" strokeWidth="1.2" />
+      <path d="M2.5 6 H9.5" stroke="#8B00FF" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'stars', name: 'Stars', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#fbbf24">
+        <circle cx="6" cy="6" r="1.4" /><circle cx="2" cy="2.5" r="0.8" /><circle cx="10" cy="3" r="0.7" />
+        <circle cx="3" cy="9.5" r="0.7" /><circle cx="9.5" cy="9" r="0.9" /><circle cx="1.5" cy="6" r="0.5" /><circle cx="11" cy="6.5" r="0.5" />
+      </g>
+    </svg>
+  )},
+  { id: 'particleBurst', name: 'Particle Burst', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#f59e0b">
+        <circle cx="6" cy="6" r="1.4" /><circle cx="6" cy="1.5" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
+        <circle cx="2.8" cy="2.8" r="0.7" /><circle cx="9.2" cy="2.8" r="0.7" /><circle cx="2.8" cy="9.2" r="0.7" /><circle cx="9.2" cy="9.2" r="0.7" />
+      </g>
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
