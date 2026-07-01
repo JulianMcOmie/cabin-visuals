@@ -17,6 +17,10 @@ import { circleGridInstrument } from './CircleGrid'
 import { silkSymmetryInstrument } from './SilkSymmetry'
 import { fractalTunnelInstrument } from './FractalTunnel'
 import { diamondLatticeInstrument } from './DiamondLattice'
+import { neonPolarInstrument } from './NeonPolar'
+import { hopfFibrationInstrument } from './HopfFibration'
+import { particleStreamsInstrument } from './ParticleStreams'
+import { particleBassRingInstrument } from './ParticleBassRing'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -38,6 +42,10 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [silkSymmetryInstrument.id]: silkSymmetryInstrument,
   [fractalTunnelInstrument.id]: fractalTunnelInstrument,
   [diamondLatticeInstrument.id]: diamondLatticeInstrument,
+  [neonPolarInstrument.id]: neonPolarInstrument,
+  [hopfFibrationInstrument.id]: hopfFibrationInstrument,
+  [particleStreamsInstrument.id]: particleStreamsInstrument,
+  [particleBassRingInstrument.id]: particleBassRingInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

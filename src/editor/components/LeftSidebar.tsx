@@ -116,6 +116,31 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <polygon points="6,3.5 7.5,6 6,8.5 4.5,6" fill="none" stroke="#ec4899" strokeWidth="1" />
     </svg>
   )},
+  { id: 'neonPolar', name: 'Neon Polar', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M6 1 Q10 3 9 6 Q11 9 6 11 Q1 9 3 6 Q2 3 6 1 Z" fill="none" stroke="#22d3ee" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'hopfFibration', name: 'Hopf Fibration', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#818cf8" strokeWidth="0.9">
+      <ellipse cx="6" cy="6" rx="5" ry="2.2" /><ellipse cx="6" cy="6" rx="2.2" ry="5" /><circle cx="6" cy="6" r="4" />
+    </svg>
+  )},
+  { id: 'particleStreams', name: 'Particle Streams', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#60a5fa">
+        <circle cx="6" cy="6" r="1.3" /><circle cx="9" cy="4" r="0.8" /><circle cx="10.5" cy="3" r="0.5" /><circle cx="8.5" cy="8.5" r="0.8" /><circle cx="10" cy="10" r="0.5" />
+        <circle cx="3" cy="4" r="0.8" /><circle cx="1.5" cy="3" r="0.5" /><circle cx="3.5" cy="8.5" r="0.8" /><circle cx="2" cy="10" r="0.5" />
+      </g>
+    </svg>
+  )},
+  { id: 'particleBassRing', name: 'Particle Bass Ring', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#f472b6">
+        <circle cx="6" cy="1.5" r="0.8" /><circle cx="9.2" cy="2.8" r="0.8" /><circle cx="10.5" cy="6" r="0.8" /><circle cx="9.2" cy="9.2" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="2.8" cy="9.2" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="2.8" cy="2.8" r="0.8" />
+      </g>
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
