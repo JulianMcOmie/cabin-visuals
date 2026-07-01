@@ -2,12 +2,17 @@ import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type RefOb
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
-import { flattenTracks, subtreeIds, type FlatTrack } from './trackTree'
+import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { computeDropTarget } from './trackDrop'
+import { getInstrument } from '../../instruments'
+import type { Track } from '../../types'
+
+const lanesOf = (t: Track) =>
+  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 interface Session {
   activeId: string
-  flat: FlatTrack[]
+  rows: VisualRow[]
   subtree: Set<string>
   listTop: number
   rowHeight: number
@@ -31,13 +36,13 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
     const rowHeight = useUIStore.getState().tracksRowHeight
-    const flat = flattenTracks(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
-    if (flat.findIndex((f) => f.id === trackId) < 0) return
+    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, lanesOf)
+    if (rows.findIndex((r) => r.kind === 'track' && r.id === trackId) < 0) return
 
     const scRect = sc.getBoundingClientRect()
     const session: Session = {
       activeId: trackId,
-      flat,
+      rows,
       subtree: subtreeIds(tracks, trackId),
       listTop: scRect.top - sc.scrollTop, // screen-y of content row 0's top
       rowHeight,
@@ -54,7 +59,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       if (!s) return
       const { tracks, rootTrackIds } = useProjectStore.getState()
       const drop = computeDropTarget({
-        tracks, rootTrackIds, flat: s.flat, listTop: s.listTop, rowHeight: s.rowHeight,
+        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, rowHeight: s.rowHeight,
         clientY: ev.clientY, excludeSubtree: s.subtree,
       })
       s.target = drop ? { parentId: drop.parentId, index: drop.index } : null

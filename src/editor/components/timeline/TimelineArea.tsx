@@ -5,15 +5,22 @@ import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
+import { AbilityLaneRow } from './AbilityLaneRow'
 import { TimelineRuler } from './TimelineRuler'
+import { getInstrument } from '../../instruments'
+import type { Track as TrackType } from '../../types'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
-import { flattenTracks } from './trackTree'
+import { flattenVisualRows } from './trackTree'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+
+/** An object track's ability lanes (from its instrument def), for the row flattener. */
+const lanesOf = (t: TrackType) =>
+  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -51,9 +58,10 @@ export function TimelineArea() {
   const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
 
   // Tracks render as a flattened tree (DFS order, indented by depth); collapsed
-  // parents hide their descendant rows.
+  // parents hide their descendant rows. Each object track's ability lanes are
+  // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
-  const flatTracks = flattenTracks(tracks, rootTrackIds, collapsedTrackIds)
+  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds, lanesOf)
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
@@ -64,9 +72,12 @@ export function TimelineArea() {
   // dim (the dragged source), a row to highlight (nest-into), or an insertion line.
   const trackDrop = useUIStore((s) => s.trackDrop)
 
-  // Alt copy-drag still reflows rows to open a gap at its live insertion index.
+  // Alt copy-drag still reflows rows to open a gap at its live insertion point. The
+  // gap is a VISUAL row index (root tracks aren't at index*rowHeight once lanes exist);
+  // it only opens when there's a real target (insertIndex != null).
   const dragActive = !!copyDrag
-  const dragInsertIndex = copyDrag?.insertIndex ?? null
+  const dragHasTarget = copyDrag?.insertIndex != null
+  const dragGapRow = copyDrag?.gapRow ?? null
   const dragRowHeight = copyDrag?.rowHeight ?? 0
 
   const { startScrub } = useScrub({
@@ -203,7 +214,7 @@ export function TimelineArea() {
         {rootTrackIds.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <p className="text-xs text-zinc-600 text-center px-4">
-              No tracks yet — click <span className="text-zinc-400">+</span> to add a track, then right-click a lane to draw blocks.
+              No tracks yet. Click <span className="text-zinc-400 text-lg">+</span> to add a track, then right-click a lane to draw blocks.
             </p>
           </div>
         )}
@@ -217,17 +228,34 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
-            {flatTracks.map((f, i) => {
-              const track = tracks[f.id]
+            {visualRows.map((row, i) => {
+              const isLast = i === visualRows.length - 1
+              if (row.kind === 'lane') {
+                return (
+                  <AbilityLaneRow
+                    key={`${row.trackId}:${row.laneKey}`}
+                    trackId={row.trackId}
+                    laneKey={row.laneKey}
+                    label={row.label}
+                    color={row.color}
+                    depth={row.depth}
+                    barWidthPx={barWidthPx}
+                    timelineWidthPx={timelineWidthPx}
+                    isLast={isLast}
+                    liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
+                  />
+                )
+              }
+              const track = tracks[row.id]
               return track ? (
                 <Track
-                  key={f.id}
+                  key={row.id}
                   track={track}
-                  depth={f.depth}
-                  isLast={i === flatTracks.length - 1}
-                  liftOffset={dragActive ? (dragInsertIndex != null && i >= dragInsertIndex ? dragRowHeight : 0) : undefined}
-                  dimmed={trackDrop?.activeId === f.id}
-                  dropInto={trackDrop?.intoId === f.id}
+                  depth={row.depth}
+                  isLast={isLast}
+                  liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
+                  dimmed={trackDrop?.activeId === row.id}
+                  dropInto={trackDrop?.intoId === row.id}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
                   barWidthPx={barWidthPx}

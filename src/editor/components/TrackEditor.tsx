@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles, ChevronDown, Check, X } from 'lucide-react'
+import { Music2, Sparkles, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
+import { getPlugin, type VisualPlugin } from '../plugins'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Routing } from '../types'
+import type { Routing, PluginInstance } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -221,6 +222,61 @@ function TagEditor({
   )
 }
 
+/** One effect in the Effects tab: header (enable / name / remove) with collapsible
+ *  param sliders. Collapse is local per instance, so it persists across re-renders. */
+function EffectItem({
+  plugin, inst, onToggle, onRemove, onSetSetting,
+}: {
+  plugin: VisualPlugin
+  inst: PluginInstance
+  onToggle: () => void
+  onRemove: () => void
+  onSetSetting: (key: string, value: number) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button
+            onClick={onToggle}
+            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
+              inst.enabled ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+            }`}
+            aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
+          >
+            {inst.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
+          </button>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex items-center gap-1 min-w-0"
+            aria-label={collapsed ? 'Expand settings' : 'Collapse settings'}
+          >
+            <span className={`text-xs font-semibold truncate ${inst.enabled ? 'text-zinc-200' : 'text-zinc-500'}`}>
+              {plugin.name}
+            </span>
+            {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-zinc-500" /> : <ChevronDown size={12} className="flex-shrink-0 text-zinc-500" />}
+          </button>
+        </div>
+        <button onClick={onRemove} className="flex-shrink-0 text-zinc-500 hover:text-zinc-200" aria-label="Remove effect">
+          <X size={12} />
+        </button>
+      </div>
+      {!collapsed && plugin.params.map((p) => (
+        <ParamSlider
+          key={p.key}
+          label={p.label}
+          min={p.min}
+          max={p.max}
+          step={p.step}
+          value={inst.settings[p.key] ?? p.default}
+          onChange={(v) => onSetSetting(p.key, v)}
+        />
+      ))}
+    </div>
+  )
+}
+
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'instrument', label: 'Instrument', icon: <Music2 size={11} /> },
   { id: 'effects', label: 'Effects', icon: <Sparkles size={11} /> },
@@ -234,10 +290,18 @@ export function TrackEditor() {
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
+  const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
+  const removeEffect = useProjectStore((s) => s.removeEffect)
+  const toggleEffect = useProjectStore((s) => s.toggleEffect)
+  const effectDragging = useUIStore((s) => s.effectDragging)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
     null
+
+  // Dragging an effect from the library flips this panel to its Effects tab so the
+  // drop zone is visible.
+  useEffect(() => { if (effectDragging) setTab('effects') }, [effectDragging])
 
   return (
     <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-900">
@@ -370,7 +434,35 @@ export function TrackEditor() {
           </>
         )}
         {tab === 'effects' && (
-          <p className="text-xs text-zinc-600 text-center mt-8">No effects</p>
+          track ? (
+            <div
+              data-effects-drop
+              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-indigo-500/60 bg-indigo-500/5' : ''}`}
+            >
+              {(track.visualPlugins ?? []).length === 0 ? (
+                <p className="text-xs text-zinc-600 text-center mt-8">
+                  {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
+                </p>
+              ) : (
+                (track.visualPlugins ?? []).map((inst) => {
+                  const plugin = getPlugin(inst.pluginId)
+                  if (!plugin) return null
+                  return (
+                    <EffectItem
+                      key={inst.id}
+                      plugin={plugin}
+                      inst={inst}
+                      onToggle={() => toggleEffect(track.id, inst.id)}
+                      onRemove={() => removeEffect(track.id, inst.id)}
+                      onSetSetting={(key, value) => setEffectSetting(track.id, inst.id, key, value)}
+                    />
+                  )
+                })
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>
+          )
         )}
       </div>
     </div>

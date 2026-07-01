@@ -4,8 +4,18 @@ import { useProjectStore, cloneBlock, cloneTrack } from '../../store/ProjectStor
 import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
-import { flattenTracks } from './trackTree'
-import type { Note, Block } from '../../types'
+import { flattenVisualRows } from './trackTree'
+import { getInstrument } from '../../instruments'
+import type { Note, Block, Track } from '../../types'
+
+const lanesOf = (t: Track) =>
+  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
+
+/** Owning track id for each visual row (a track row → itself; a lane sub-row → its
+ *  parent track), so a vertical block drag maps every row it crosses to a real track. */
+function rowTrackIdsOf(rows: ReturnType<typeof flattenVisualRows>): string[] {
+  return rows.map((r) => (r.kind === 'track' ? r.id : r.trackId))
+}
 
 interface BlockOrigin {
   trackId: string
@@ -27,9 +37,10 @@ type DragState =
       barWidthPx: number
       totalBars: number
       origins: Map<string, BlockOrigin>
-      /** Track ids in visible (flattened tree) order — vertical block moves index into
-       *  this, so blocks on nested/child tracks move like top-level ones. */
-      flatOrder: string[]
+      /** Owning track id per VISUAL row (track rows + ability-lane sub-rows), so a
+       *  vertical block move indexes by the rows the user actually sees. Lane rows map
+       *  to their parent track (dragging "through" a lane lands on the next track). */
+      rowTrackIds: string[]
     }
   | {
       type: 'marquee'
@@ -130,14 +141,15 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           const maxStart = Math.max(0, d.totalBars - o.durationBars)
           const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
 
-          // Vertical: move to the track at origin index + rowDelta (clamped), in the
-          // visible tree order — so nested/child rows are valid targets too.
-          const targetIndex = Math.max(0, Math.min(d.flatOrder.length - 1, o.trackIndex + rowDelta))
-          const targetTrackId = d.flatOrder[targetIndex]
+          // Vertical: move to the row at origin index + rowDelta (clamped), mapped to
+          // its owning track — so nested/child rows and ability-lane rows are crossed
+          // correctly (a lane row resolves to its parent track, never a drop target).
+          const targetIndex = Math.max(0, Math.min(d.rowTrackIds.length - 1, o.trackIndex + rowDelta))
+          const targetTrackId = d.rowTrackIds[targetIndex]
 
           // The block may have already moved tracks on a previous frame; find it.
           let currentTrackId = o.trackId
-          for (const tId of d.flatOrder) {
+          for (const tId of d.rowTrackIds) {
             if (store.tracks[tId]?.blocks.some((b) => b.id === blockId)) {
               currentTrackId = tId
               break
@@ -191,18 +203,19 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
   }, [])
 
-  // Capture the drag-start positions of every block in `dragSet`. `order` is the
-  // visible (flattened tree) track-id order, so blocks on nested tracks are captured
-  // and their trackIndex matches the vertical row the user sees.
-  const captureOrigins = (dragSet: Set<string>, order: string[]) => {
+  // Capture the drag-start positions of every block in `dragSet`. `rows` is the visible
+  // visual-row list; a block's `trackIndex` is the visual index of ITS track row, so
+  // `trackIndex + rowDelta` lands on the row the user drags to (lane rows included).
+  const captureOrigins = (dragSet: Set<string>, rows: ReturnType<typeof flattenVisualRows>) => {
     const { tracks } = useProjectStore.getState()
     const origins = new Map<string, BlockOrigin>()
-    order.forEach((tId, idx) => {
-      const t = tracks[tId]
+    rows.forEach((row, idx) => {
+      if (row.kind !== 'track') return
+      const t = tracks[row.id]
       if (!t) return
       for (const b of t.blocks) {
         if (dragSet.has(b.id)) {
-          origins.set(b.id, { trackId: tId, trackIndex: idx, startBar: b.startBar, durationBars: b.durationBars, notes: b.notes })
+          origins.set(b.id, { trackId: row.id, trackIndex: idx, startBar: b.startBar, durationBars: b.durationBars, notes: b.notes })
         }
       }
     })
@@ -261,15 +274,15 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     const { tracks: allTracks, rootTrackIds } = useProjectStore.getState()
-    const flatOrder = flattenTracks(allTracks, rootTrackIds, useUIStore.getState().collapsedTrackIds).map((f) => f.id)
+    const rows = flattenVisualRows(allTracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, lanesOf)
     dragRef.current = {
       type,
       startX: e.clientX,
       startY: e.clientY,
       barWidthPx: useProjectStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
       totalBars: useProjectStore.getState().totalBars,
-      origins: captureOrigins(dragSet, flatOrder),
-      flatOrder,
+      origins: captureOrigins(dragSet, rows),
+      rowTrackIds: rowTrackIdsOf(rows),
     }
     beginGestureTracking()
   }, [selectedBlockIds, setSelectedBlockIds, laneRef, beginGestureTracking])

@@ -33,6 +33,14 @@ export interface Routing {
   amount: number
 }
 
+/** A visual effect plugin attached to a track: which plugin, on/off, param values. */
+export interface PluginInstance {
+  id: string
+  pluginId: string
+  enabled: boolean
+  settings: Record<string, number>
+}
+
 export interface Track {
   id: string
   name: string
@@ -52,4 +60,12 @@ export interface Track {
   targets?: Routing[]
   targetParam?: string
   interpolation?: InterpolationMode
+  /** Visual effects applied to this object's rendered output (transform/clone/shader). */
+  visualPlugins?: PluginInstance[]
+  /**
+   * Per-ability note streams, keyed by the instrument's `AbilityLaneDef.key`. Each
+   * lane holds full blocks + notes and is edited like a track. A PARALLEL structure
+   * on the object track — deliberately NOT child tracks in the hierarchy.
+   */
+  lanes?: Record<string, Block[]>
 }

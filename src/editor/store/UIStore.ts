@@ -4,6 +4,9 @@ import { TRACK_LABEL_WIDTH } from '../constants'
 interface EditingBlockRef {
   trackId: string
   blockId: string
+  /** Set when the block lives in an ability lane (`track.lanes[laneKey]`) rather than
+   *  the track's own blocks. Undefined = main track lane. */
+  laneKey?: string
 }
 
 interface UIState {
@@ -55,6 +58,11 @@ interface UIState {
   // `activeId` is the row being moved (dimmed); only set for an existing-track drag.
   trackDrop: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null
   setTrackDrop: (v: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null) => void
+
+  // True while an effect is being dragged from the library — the Track Editor uses it
+  // to switch to its Effects tab and highlight the drop zone.
+  effectDragging: boolean
+  setEffectDragging: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -108,4 +116,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   trackDrop: null,
   setTrackDrop: (v) => set({ trackDrop: v }),
+
+  effectDragging: false,
+  setEffectDragging: (v) => set({ effectDragging: v }),
 }));

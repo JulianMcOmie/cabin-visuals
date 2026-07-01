@@ -31,16 +31,14 @@ interface CompiledAppearance {
   opacity: Compiled | null
 }
 
-/** The generic renderer for a RenderSpec object: the primitive's world transform comes
- *  from the engine (composed with ancestors); the appearance bindings are evaluated
- *  onto the material each frame. Mirrors the Cube's code path, but data-driven. */
+/** The generic renderer for a RenderSpec object: the world transform + blackout are
+ *  applied by ObjectRenderer's placement group (this mesh sits at local origin); the
+ *  appearance bindings are evaluated onto the material each frame. */
 function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { trackId: string; primitive: Primitive; appearance: CompiledAppearance; paramDefaults: Record<string, number> }) {
   const meshRef = useRef<Mesh>(null)
   useFrame(() => {
     if (!meshRef.current) return
     const state = getObjectState(trackId)
-    meshRef.current.visible = !state?.blackedOut
-    if (state) state.world.decompose(meshRef.current.position, meshRef.current.quaternion, meshRef.current.scale)
 
     const mat = meshRef.current.material as MeshStandardMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an

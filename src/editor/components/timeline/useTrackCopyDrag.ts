@@ -2,11 +2,20 @@ import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, 
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { flattenVisualRows } from './trackTree'
+import { getInstrument } from '../../instruments'
+import type { Track } from '../../types'
+
+const lanesOf = (t: Track) =>
+  getInstrument(t.instrumentId)?.abilities?.map((a) => ({ key: a.key, label: a.label, color: a.color })) ?? []
 
 interface CopyDragState {
   srcIndex: number
   /** Where the copy would land (root index), or null while over the original (no-op). */
   insertIndex: number | null
+  /** The VISUAL row index the reflow gap opens at (root tracks aren't at
+   *  `index * rowHeight` once lanes/nested rows exist). null = no gap. */
+  gapRow: number | null
   name: string
   color: string
   muted: boolean
@@ -26,7 +35,7 @@ interface CopyDragState {
 export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
   const [copyDrag, setCopyDrag] = useState<CopyDragState | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
-  const sessionRef = useRef<{ srcId: string; srcIndex: number; grabOffsetY: number; listTop: number; insertIndex: number | null; rowHeight: number } | null>(null)
+  const sessionRef = useRef<{ srcId: string; srcIndex: number; grabOffsetY: number; listTop: number; insertIndex: number | null; gapRow: number | null; rowHeight: number; rootTops: number[]; n: number } | null>(null)
 
   const startTrackCopyDrag = useCallback((e: ReactPointerEvent, trackId: string) => {
     const sc = scrollRef.current
@@ -37,12 +46,20 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (srcIndex < 0 || !track) return
     const rowHeight = useUIStore.getState().tracksRowHeight
 
+    // Visual row of each root track (they're spread apart by their lanes + nested
+    // descendants), so the ghost maps to the real layout, not `index * rowHeight`.
+    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, lanesOf)
+    const rootTops: number[] = []
+    rows.forEach((r, i) => { if (r.kind === 'track' && r.depth === 0) rootTops.push(i) })
+    const n = rows.length
+    const srcVisualIndex = rootTops[srcIndex] ?? srcIndex
+
     const scRect = sc.getBoundingClientRect()
     const listTop = scRect.top - sc.scrollTop // screen-y of row 0's top
-    const grabOffsetY = e.clientY - (listTop + srcIndex * rowHeight)
+    const grabOffsetY = e.clientY - (listTop + srcVisualIndex * rowHeight)
 
-    sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null, rowHeight }
-    setCopyDrag({ srcIndex, insertIndex: null, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null, gapRow: null, rowHeight, rootTops, n }
+    setCopyDrag({ srcIndex, insertIndex: null, gapRow: null, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
     lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {
@@ -58,16 +75,30 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       const s = sessionRef.current
       if (!s) return
       moveGhost(ev.clientY)
-      const n = useProjectStore.getState().rootTrackIds.length
-      // The row the dragged ghost sits majority-over (by its center) gets displaced
-      // down, along with everything below it; hovering the original's row is the
-      // no-op zone. Measured against the static (un-shifted) row positions.
-      const ghostCenter = ev.clientY - s.listTop - s.grabOffsetY + s.rowHeight / 2
-      const row = Math.max(0, Math.min(n, Math.floor(ghostCenter / s.rowHeight)))
-      const insertIndex = row === s.srcIndex ? null : row
-      if (s.insertIndex !== insertIndex) {
+      const k = s.rootTops.length
+      const bottomOf = (j: number) => (j + 1 < k ? s.rootTops[j + 1] : s.n)
+      // Ghost center in visual-row units, against the static (un-shifted) layout.
+      const gcRow = (ev.clientY - s.listTop - s.grabOffsetY + s.rowHeight / 2) / s.rowHeight
+
+      let insertIndex: number | null
+      let gapRow: number | null
+      // Hovering anywhere over the original's block (its row + its lanes) is the no-op.
+      if (gcRow >= s.rootTops[s.srcIndex] && gcRow < bottomOf(s.srcIndex)) {
+        insertIndex = null
+        gapRow = null
+      } else {
+        // Insert after every root block whose midpoint is above the cursor.
+        let idx = 0
+        for (let j = 0; j < k; j++) {
+          if ((s.rootTops[j] + bottomOf(j)) / 2 < gcRow) idx = j + 1
+        }
+        insertIndex = idx
+        gapRow = idx < k ? s.rootTops[idx] : s.n
+      }
+      if (s.insertIndex !== insertIndex || s.gapRow !== gapRow) {
         s.insertIndex = insertIndex
-        setCopyDrag((prev) => (prev ? { ...prev, insertIndex } : prev))
+        s.gapRow = gapRow
+        setCopyDrag((prev) => (prev ? { ...prev, insertIndex, gapRow } : prev))
       }
     }
     const onUp = () => {

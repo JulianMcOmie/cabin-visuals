@@ -11,6 +11,8 @@ interface UseMidiBlockGesturesOptions {
   beatsPerBar: number
   /** Total beats the editor timeline spans (for clamping the block to the canvas). */
   maxBeats: number
+  /** Set when the edited block lives in an ability lane, so moves/resizes write there. */
+  laneKey?: string
 }
 
 const EDGE_PX = 8
@@ -34,12 +36,12 @@ interface DragState {
  * a left-resize offsets every note's startBeat by the opposite of the start shift.
  * Moving the block intentionally carries its notes; right-resize leaves them be.
  */
-export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, beatsPerBar, maxBeats }: UseMidiBlockGesturesOptions) {
+export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, beatsPerBar, maxBeats, laneKey }: UseMidiBlockGesturesOptions) {
   const dragRef = useRef<DragState | null>(null)
 
   // Mirrored for the window listener so it never reads a stale closure.
-  const latest = useRef({ trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats })
-  latest.current = { trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats }
+  const latest = useRef({ trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats, laneKey })
+  latest.current = { trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats, laneKey }
 
   // Hover cursor: resize near the edges, grab in the middle (skipped mid-drag so
   // the locked cursor wins).
@@ -77,10 +79,10 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
 
       if (d.mode === 'moving') {
         const startBar = Math.max(0, Math.min(maxBar - d.originDurationBars, d.originStartBar + deltaBars))
-        update(l.trackId, l.blockId, { startBar })
+        update(l.trackId, l.blockId, { startBar }, l.laneKey)
       } else if (d.mode === 'resizing-right') {
         const durationBars = Math.max(oneBeat, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
-        update(l.trackId, l.blockId, { durationBars })
+        update(l.trackId, l.blockId, { durationBars }, l.laneKey)
       } else {
         const end = d.originStartBar + d.originDurationBars
         const startBar = Math.max(0, Math.min(end - oneBeat, d.originStartBar + deltaBars))
@@ -89,7 +91,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
         // (one store write → one render; no flicker, no re-sync clobber).
         const offsetBeats = (d.originStartBar - startBar) * l.beatsPerBar
         const notes = d.originNotes.map((n) => ({ ...n, startBeat: n.startBeat + offsetBeats }))
-        update(l.trackId, l.blockId, { startBar, durationBars: end - startBar, notes })
+        update(l.trackId, l.blockId, { startBar, durationBars: end - startBar, notes }, l.laneKey)
       }
     }
     const onUp = () => {

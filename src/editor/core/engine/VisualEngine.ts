@@ -69,7 +69,7 @@ export function computeAtBeat(beat: number) {
     else world.copy(_local)
 
     const blackedOut = obj.blackouts.some((r) => beat >= r.start && beat < r.end)
-    states.set(obj.trackId, { params: obj.params, portValues, world, blackedOut })
+    states.set(obj.trackId, { params: obj.params, portValues, world, blackedOut, abilityEvents: obj.abilityEvents })
   }
 }
 

@@ -1,5 +1,5 @@
 import type { Track } from '../../types'
-import type { FlatTrack } from './trackTree'
+import type { VisualRow } from './trackTree'
 
 /** One indent level (px) — also the label's left-padding step (see Track). */
 export const INDENT_PX = 16
@@ -28,14 +28,14 @@ export interface DropTarget {
 export function computeDropTarget(args: {
   tracks: Record<string, Track>
   rootTrackIds: string[]
-  flat: FlatTrack[]
+  rows: VisualRow[]
   listTop: number
   rowHeight: number
   clientY: number
   excludeSubtree?: Set<string>
 }): DropTarget | null {
-  const { tracks, rootTrackIds, flat, listTop, rowHeight, clientY, excludeSubtree } = args
-  const n = flat.length
+  const { tracks, rootTrackIds, rows, listTop, rowHeight, clientY, excludeSubtree } = args
+  const n = rows.length
   const contentY = clientY - listTop
   const rawIndex = Math.floor(contentY / rowHeight)
 
@@ -46,35 +46,48 @@ export function computeDropTarget(args: {
   }
 
   const overIndex = Math.max(0, Math.min(n - 1, rawIndex))
-  const over = flat[overIndex]
-  const overTrack = tracks[over.id]
-  if (!overTrack || excludeSubtree?.has(over.id)) return null
+  const over = rows[overIndex]
+  const overTrackId = over.kind === 'track' ? over.id : over.trackId
+  const overTrack = tracks[overTrackId]
+  if (!overTrack || excludeSubtree?.has(overTrackId)) return null
 
+  // The flat index + depth of the *track* row that owns this row (itself, or — for a
+  // lane sub-row — the nearest track row above it). All sibling/subtree math is in
+  // terms of the track, never the lane.
+  let trackRowIndex = overIndex
+  if (over.kind === 'lane') {
+    while (trackRowIndex > 0 && !(rows[trackRowIndex].kind === 'track' && (rows[trackRowIndex] as { id: string }).id === overTrackId)) {
+      trackRowIndex--
+    }
+  }
+  const trackDepth = rows[trackRowIndex].depth
   const frac = (contentY - overIndex * rowHeight) / rowHeight
 
-  // Middle band → nest into `over` (append as its last child).
-  if (frac >= 0.25 && frac <= 0.75) {
+  // Middle band of a *track* row → nest into it (append as its last child). A lane
+  // sub-row is never a nest target.
+  if (over.kind === 'track' && frac >= 0.25 && frac <= 0.75) {
     return { parentId: over.id, index: undefined, line: null, intoId: over.id }
   }
 
-  // Top/bottom edge → sibling drop in `over`'s parent.
+  // Edge (or anywhere over a lane row) → sibling drop in the track's parent.
   const parentId = overTrack.parentId ?? null
   const siblings = (parentId == null ? rootTrackIds : tracks[parentId]?.childIds ?? []).filter(
     (id) => !excludeSubtree?.has(id),
   )
-  const pos = siblings.indexOf(over.id)
+  const pos = siblings.indexOf(overTrackId)
   let index: number
   let top: number
-  if (frac < 0.25) {
+  if (over.kind === 'track' && frac < 0.25) {
     // Before `over`.
     index = pos < 0 ? 0 : pos
-    top = overIndex * rowHeight
+    top = trackRowIndex * rowHeight
   } else {
-    // After `over` and its whole subtree (DFS-contiguous, depth > over.depth).
+    // After the track and its whole subtree (DFS-contiguous: lanes + descendants all
+    // have depth > the track's).
     index = pos < 0 ? siblings.length : pos + 1
-    let j = overIndex + 1
-    while (j < n && flat[j].depth > over.depth) j++
+    let j = trackRowIndex + 1
+    while (j < n && rows[j].depth > trackDepth) j++
     top = j * rowHeight
   }
-  return { parentId, index, line: { top, left: over.depth * INDENT_PX }, intoId: null }
+  return { parentId, index, line: { top, left: trackDepth * INDENT_PX }, intoId: null }
 }
