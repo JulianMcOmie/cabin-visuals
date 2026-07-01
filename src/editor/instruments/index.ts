@@ -3,12 +3,15 @@
 // list, and renderers resolve the visual component via the def (def.component).
 
 import { cubeInstrument } from './Cube'
+import { circleInstrument, triangleInstrument } from './shapes'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cubeInstrument.id]: cubeInstrument,
+  [circleInstrument.id]: circleInstrument,
+  [triangleInstrument.id]: triangleInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
