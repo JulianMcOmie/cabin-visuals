@@ -74,7 +74,7 @@ export function specInstrument(opts: {
 
   // Defaults for every param, so an unset param evaluates to its default (not 0).
   const paramDefaults: Record<string, number> = {}
-  for (const p of opts.params) paramDefaults[p.key] = p.default
+  for (const p of opts.params) if (typeof p.default === 'number') paramDefaults[p.key] = p.default
 
   const [px, py, pz] = compileVec(spec.transform?.position, ZERO)
   const [rx, ry, rz] = compileVec(spec.transform?.rotation, ZERO)

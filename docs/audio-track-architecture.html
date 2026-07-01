@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Audio Track Architecture — Cabin Visuals</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#f2f2f2; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:30px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:16px;margin:0}
+  .kicker{display:inline-block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:21px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:17px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:12.5px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}.t{color:#000}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff}
+  .b-rec{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-borrow{background:#fff;color:#111;border-color:#111}
+  .b-build{background:#dcdcdc;color:#111;border-color:#9a9a9a}
+  .b-risk{background:#fff;color:#111;border-style:dashed}
+  .b-future{background:#fff;color:#555;border-style:dotted;border-color:#888}
+  .note{border-left:4px solid #c2c2c2;background:#f4f4f4;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#f1f1f1;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ededed;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .toc{columns:2;gap:28px;margin:8px 0 0}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:14px;text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .muted{color:var(--muted)}.small{font-size:13px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}.toc{columns:1}}
+  .lead{font-size:16px;color:#2a2a2a}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .keystone{border:2px solid var(--ink);border-radius:var(--radius);background:#f6f6f6;padding:6px 24px 20px;margin:22px 0}
+  .keystone h3{margin-top:18px}
+  .keystone ol{padding-left:20px}.keystone li{margin:11px 0}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}
+    .wrap{max-width:none;padding:0 6px}
+    a{color:#000}
+    figure.fig,pre,table,.card,.keystone,.note,.warn,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Transport Design</span>
+  <h1>Audio Track Architecture</h1>
+  <p class="sub">Turning the single global backing clip into a first-class <strong>audio track</strong> — a block you can drag around the timeline, offset, trim, and stack — while keeping the beat clock the sole source of truth.</p>
+</header>
+
+<div class="card">
+  <h3 style="margin-top:18px">Contents</h3>
+  <nav class="toc">
+    <a href="#internalize">★ The big picture (start here)</a>
+    <a href="#today">1 · How audio works today</a>
+    <a href="#goal">2 · The goal &amp; the one hard problem</a>
+    <a href="#model">3 · Data model — audio track &amp; audio block</a>
+    <a href="#placement">4 · Placement on the timeline</a>
+    <a href="#resolve">5 · How it plugs into resolve + the clock</a>
+    <a href="#schedule">6 · Scheduling audio at a timeline offset</a>
+    <a href="#seek">7 · Seeking &amp; scrubbing with audio</a>
+    <a href="#waveform">8 · Waveform rendering pipeline</a>
+    <a href="#multi">9 · Multiple clips &amp; trimming</a>
+    <a href="#tradeoffs">10 · Tradeoffs &amp; open questions</a>
+  </nav>
+</div>
+
+<p class="lead">Right now audio is a <strong>single global clip pinned to the transport</strong>: one <code>AudioClip</code> in <span class="file">AudioStore</span>, one <code>Tone.Player</code> inside the playback engine, hard-wired so <em>file 0:00 == timeline beat 0</em>. It is not a track, it has no position, and it can't be moved. This doc reshapes it into an <strong>audio block on an audio track</strong> — a clip reference plus a <code>startBar</code>/offset — so the player is scheduled at the block's timeline position, and moving the block reschedules the audio. The clock stays exactly where it is.</p>
+
+<div class="rec"><strong>The one-line answer:</strong> add an <code>'audio'</code> track type carrying <strong>audio blocks</strong> (each = a <code>clipRef</code> + <code>startBar</code> + in-clip <code>trimStart</code>/<code>trimEnd</code>), teach the existing <span class="file">core/playback.ts</span> engine to schedule one <code>Tone.Player</code> per block at <em>its</em> beat offset instead of one global player at beat 0, and render a waveform inside the block from the decoded buffer. The beat clock (<code>currentBeat</code> in <span class="file">TimeStore</span>) never changes — audio is scheduled <em>relative to it</em>.</p></div>
+
+<!-- 0 -->
+<h2 id="internalize">★ The big picture — internalize this first</h2>
+<p>Before the section detail, here is the whole change in one view, and the four mental models everything hangs off. Hold these and the rest is elaboration.</p>
+
+<figure class="fig">
+  <div class="figtitle">From global clip to positioned block — the whole change at a glance</div>
+  <svg viewBox="0 0 880 360" role="img" aria-label="Audio track overview">
+    <defs><marker id="ar1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="20" y="34" font-size="12" font-weight="700" fill="#141414">TODAY — one global clip, pinned to beat 0</text>
+    <rect x="20" y="46" width="400" height="40" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="220" y="66" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">AudioStore.clip · one Tone.Player</text>
+    <text x="220" y="80" text-anchor="middle" font-size="10" fill="#565656">file 0:00 == timeline beat 0 (hard-wired)</text>
+    <text x="460" y="34" font-size="12" font-weight="700" fill="#141414">TOMORROW — a track of positioned blocks</text>
+    <rect x="460" y="42" width="400" height="48" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.4"/>
+    <text x="660" y="62" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Audio track</text>
+    <rect x="520" y="70" width="90" height="14" rx="3" fill="#141414"/><text x="565" y="81" text-anchor="middle" font-size="9" fill="#fff">block @bar 4</text>
+    <rect x="700" y="70" width="120" height="14" rx="3" fill="#141414"/><text x="760" y="81" text-anchor="middle" font-size="9" fill="#fff">block @bar 12</text>
+
+    <rect x="20" y="120" width="200" height="48" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="120" y="143" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">TimeStore.currentBeat</text>
+    <text x="120" y="160" text-anchor="middle" font-size="11" fill="#565656">the ONE clock — unchanged</text>
+    <rect x="330" y="102" width="250" height="86" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="455" y="126" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">PLAYBACK ENGINE</text>
+    <text x="455" y="145" text-anchor="middle" font-size="10.5" fill="#565656">core/playback.ts · Tone.Transport</text>
+    <text x="455" y="163" text-anchor="middle" font-size="10.5" fill="#565656">schedules a player PER BLOCK</text>
+    <text x="455" y="179" text-anchor="middle" font-size="10.5" fill="#565656">at start(when, inClipOffset)</text>
+    <path d="M220,144 L326,144" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
+    <text x="240" y="136" font-size="10" fill="#565656">drives</text>
+    <rect x="650" y="112" width="210" height="40" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="755" y="132" text-anchor="middle" font-size="11.5" font-weight="700" fill="#141414">Tone.Player[] (per block)</text>
+    <text x="755" y="146" text-anchor="middle" font-size="9.5" fill="#565656">started/stopped by beat window</text>
+    <path d="M580,144 L646,138" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
+
+    <rect x="330" y="204" width="250" height="44" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="455" y="226" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Waveform in the block</text>
+    <text x="455" y="242" text-anchor="middle" font-size="10" fill="#565656">peaks from the decoded buffer, on a canvas</text>
+    <path d="M455,188 V202" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
+
+    <rect x="20" y="278" width="840" height="60" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
+    <text x="440" y="302" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">THE INVARIANT: beat is time. Audio is scheduled RELATIVE to the beat clock, never the reverse.</text>
+    <text x="440" y="322" text-anchor="middle" font-size="11" fill="#565656">block plays iff currentBeat ∈ [blockStartBeat, blockEndBeat) · in-clip offset = (beat − blockStartBeat) → seconds + trimStart</text>
+  </svg>
+  <figcaption>The transport and clock are untouched. Audio moves from "one player at beat 0" to "one player per block, each armed at its block's beat window and started at its own in-clip offset." A waveform is drawn inside each block.</figcaption>
+</figure>
+
+<div class="keystone">
+  <h3>Four things to hold in your head</h3>
+  <ol>
+    <li><strong>The clip is the bytes; the block is the placement.</strong> An <em>AudioClip</em> (already exists — <code>ref</code> · <code>fileName</code> · <code>duration</code>) is the decoded material. An <em>audio block</em> is a reference to a clip <em>plus</em> where it sits (<code>startBar</code>) and how much of it plays (<code>trimStart</code>/<code>trimEnd</code>). Many blocks can point at one clip.</li>
+    <li><strong>The beat clock is the sole timebase — audio is scheduled relative to it.</strong> Today's hard-wired "file 0:00 == beat 0" becomes "block plays when <code>currentBeat</code> enters its window, at an in-clip offset computed from <code>beat − blockStartBeat</code>." Moving the block just changes that window → reschedules the audio. The clock code doesn't move.</li>
+    <li><strong>One <code>Tone.Player</code> per audio block, armed on a beat window.</strong> The engine keeps a small pool of players keyed by block. On <code>play()</code>/<code>seek()</code> it (re)computes, for each block, whether it's live at the current beat and where inside the clip to start — the same <code>start(when, offset)</code> the code already uses, generalized from one player to N.</li>
+    <li><strong>Seeking is already sample-accurate — extend it per-block.</strong> The <code>seek()</code> path already re-arms the audio at <code>beat * 60 / bpm</code>. Generalize it: for each block, restart it at its own offset if the new beat lands inside its window, stop it if it doesn't. Scrub-while-paused is a design choice (§7).</li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<h2 id="today">1 · How audio works today</h2>
+<p>Audio is deliberately minimal and global. Three files own it, and there is no notion of a track, a position, or an offset.</p>
+<table>
+  <thead><tr><th>File</th><th>What it holds today</th><th>Consequence</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">store/AudioStore.ts</span></td><td>A single <code>clip: AudioClip | null</code> (<code>ref</code> · <code>fileName</code> · <code>duration</code>) + <code>setClip</code>. JSON-friendly; the bytes live behind <span class="file">audioSource.ts</span> by <code>ref</code>.</td><td>One clip for the whole project. No array, no position field. This is the natural seed for the clip <em>library</em>.</td></tr>
+    <tr><td><span class="file">core/playback.ts</span></td><td>A <code>PlaybackEngine</code> singleton (<code>getPlaybackEngine()</code>) owning <em>one</em> <code>Tone.Player</code>. <code>play(startBeat)</code> arms transport + player at a shared audio-clock time; the player starts at <code>startBeat * 60 / bpm</code> seconds into the file — i.e. <strong>file 0:00 pinned to beat 0</strong>.</td><td>The player has no timeline offset. Beat 0 always maps to the clip's first sample. Moving audio is impossible by construction.</td></tr>
+    <tr><td><span class="file">hooks/usePlayback.ts</span></td><td>Wires the engine's callbacks (bpm, beatsPerBar, maxBeat, onBeatChange→<code>setCurrentBeat</code>). On <code>play()</code> it awaits <code>engine.loadAudio(clip.ref)</code> then <code>engine.play(start)</code>.</td><td>Loads exactly one clip by ref before playing. Generalizes to "load every block's clip."</td></tr>
+    <tr><td><span class="file">store/TimeStore.ts</span></td><td><code>currentBeat</code> + <code>isPlaying</code>, clamped to project length. The clock.</td><td>Untouched by this work — it is the invariant.</td></tr>
+    <tr><td><span class="file">components/AudioBar.tsx</span></td><td>A one-line bar: load a file (→ <code>saveAudio</code> → <code>ref</code>, decode for duration), show its name, clear it.</td><td>The load path stays; it feeds the clip library instead of the single global slot.</td></tr>
+    <tr><td><span class="file">core/audioSource.ts</span></td><td>The one module that knows where bytes live: <code>saveAudio(file)→ref</code>, <code>getPlayableUrl(ref)</code>, <code>removeAudio(ref)</code>. In-memory object URLs today; IndexedDB/Supabase later.</td><td>Already the right seam. A block's <code>clipRef</code> resolves through the same <code>getPlayableUrl</code>.</td></tr>
+  </tbody>
+</table>
+
+<figure class="fig">
+  <div class="figtitle">Today's data-flow — one clip, one player, pinned to beat 0</div>
+  <svg viewBox="0 0 820 210" role="img" aria-label="Current audio flow">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="82" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="95" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioBar</text>
+    <text x="95" y="118" text-anchor="middle" font-size="9" fill="#565656">load a file</text>
+    <rect x="210" y="82" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
+    <text x="285" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioStore.clip</text>
+    <text x="285" y="118" text-anchor="middle" font-size="9" fill="#565656">one AudioClip</text>
+    <rect x="400" y="60" width="180" height="90" rx="6" fill="#fff" stroke="#141414" stroke-width="1.6"/>
+    <text x="490" y="84" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">PlaybackEngine</text>
+    <text x="490" y="102" text-anchor="middle" font-size="9" fill="#565656">one Tone.Player</text>
+    <text x="490" y="118" text-anchor="middle" font-size="9" fill="#565656">play(startBeat):</text>
+    <text x="490" y="132" text-anchor="middle" font-size="9" fill="#565656">start(when, startBeat*60/bpm)</text>
+    <rect x="620" y="82" width="180" height="46" rx="6" fill="#141414"/>
+    <text x="710" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Tone.Transport</text>
+    <text x="710" y="118" text-anchor="middle" font-size="9" fill="#dcdcdc">RAF → setCurrentBeat</text>
+    <path d="M170,105 L206,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <path d="M360,105 L396,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <path d="M580,105 L616,105" stroke="#141414" stroke-width="1.4" marker-end="url(#ar2)"/>
+    <text x="120" y="170" text-anchor="middle" font-size="10" fill="#565656">There is no track, no startBar, no offset anywhere in this chain.</text>
+  </svg>
+  <figcaption>The whole audio story fits in one line: a clip, a player, and a hard mapping of file 0:00 to beat 0. Everything below is about inserting a <em>position</em> into that mapping.</figcaption>
+</figure>
+
+<!-- 2 -->
+<h2 id="goal">2 · The goal &amp; the one hard problem</h2>
+<p>The user wants audio to behave like a block: <strong>drag it along the timeline, offset its start, trim its ends, and drop more than one</strong> — exactly like the MIDI blocks that already exist (<code>Block</code> with <code>startBar</code>/<code>durationBars</code>, positioned at <code>startBar * barWidthPx</code>). Everything in this doc reduces to one hard problem:</p>
+<div class="rec"><strong>The hard problem in one sentence:</strong> audio is scheduled in <em>seconds on an audio clock</em>, but the timeline is measured in <em>beats</em> — so placing a clip at bar&nbsp;12 means "when <code>currentBeat</code> reaches bar&nbsp;12's beat, start this player at second 0 of the clip; while the clip plays, its in-clip second = (beat − blockStartBeat) × 60/bpm." Get that beat⟷second conversion right, per block, at play/seek/tempo-change, and the feature is done. Everything else — the data model, the waveform, the UI — is scaffolding around that conversion.</div>
+
+<figure class="fig">
+  <div class="figtitle">The beat ⟷ second bridge, per block</div>
+  <svg viewBox="0 0 820 200" role="img" aria-label="Beat to second conversion">
+    <line x1="40" y1="60" x2="780" y2="60" stroke="#141414" stroke-width="1.2"/>
+    <text x="40" y="46" font-size="11" font-weight="700" fill="#141414">TIMELINE (beats)</text>
+    <g fill="#565656" font-size="9">
+      <text x="120" y="52">bar 0</text><text x="330" y="52">bar 8</text><text x="530" y="52">bar 12</text><text x="720" y="52">bar 20</text>
+    </g>
+    <line x1="120" y1="55" x2="120" y2="65" stroke="#141414"/><line x1="330" y1="55" x2="330" y2="65" stroke="#141414"/>
+    <line x1="530" y1="55" x2="530" y2="65" stroke="#141414"/><line x1="720" y1="55" x2="720" y2="65" stroke="#141414"/>
+    <rect x="530" y="72" width="190" height="26" rx="4" fill="#141414"/>
+    <text x="625" y="89" text-anchor="middle" font-size="10" fill="#fff">audio block · startBar = 12</text>
+    <line x1="530" y1="98" x2="530" y2="150" stroke="#6a6a6a" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <line x1="720" y1="98" x2="720" y2="150" stroke="#6a6a6a" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <line x1="330" y1="150" x2="780" y2="150" stroke="#141414" stroke-width="1.2"/>
+    <text x="330" y="176" font-size="11" font-weight="700" fill="#141414">CLIP (seconds)</text>
+    <text x="540" y="168" font-size="9" fill="#565656">clip 0:00 aligns here (+ trimStart)</text>
+    <text x="625" y="130" text-anchor="middle" font-size="10" fill="#141414">inClipSec = (currentBeat − startBeat)·60/bpm + trimStart</text>
+  </svg>
+  <figcaption>A block at bar&nbsp;12 anchors the clip's 0:00 (plus any <code>trimStart</code>) to bar&nbsp;12's beat. The engine converts the live beat into an in-clip second for exactly the players whose window contains it.</figcaption>
+</figure>
+
+<!-- 3 -->
+<h2 id="model">3 · Data model — audio track &amp; audio block</h2>
+<p>Two design choices, and a recommendation. The audio material (the <code>AudioClip</code>) already exists and is the right shape — it just needs to become a <em>library</em> (many clips) instead of a single slot. The new thing is a <strong>placement</strong>: a block that references a clip and knows where it sits.</p>
+
+<h3>3.1 — Which container: a new track type vs. an audio-typed block</h3>
+<table>
+  <thead><tr><th>Option</th><th>Shape</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>A · Audio track type</strong></td>
+      <td>Add <code>'audio'</code> to <code>TrackType</code>; the track carries <code>audioBlocks: AudioBlock[]</code> (or reuses <code>blocks</code> with an audio payload). Mirrors the MIDI-track model exactly.</td>
+      <td><span class="badge b-rec">Recommended.</span> A track already owns a lane, a color, a name, mute/solo, and a row in the timeline — everything an audio lane needs. It slots into the existing track tree, gesture system, and renderer with the least new surface.</td>
+    </tr>
+    <tr>
+      <td><strong>B · Audio block on any track</strong></td>
+      <td>A <code>Block</code> variant (<code>kind: 'audio'</code>) that can live on an existing track alongside MIDI blocks.</td>
+      <td><span class="badge b-risk">Rejected as primary.</span> Mixing audio + MIDI in one lane muddies resolve (audio isn't a note stream) and the piano-roll gesture math. Keep audio in its own track kind; the block itself is where the audio payload lives.</td>
+    </tr>
+  </tbody>
+</table>
+
+<figure class="fig">
+  <div class="figtitle">The data model — clip library, audio track, audio block</div>
+  <svg viewBox="0 0 820 320" role="img" aria-label="Audio data model">
+    <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="30" y="26" font-size="12" font-weight="700" fill="#141414">THE MATERIAL — a clip library (AudioStore, grown from one slot to many)</text>
+    <rect x="30" y="36" width="220" height="70" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="44" y="56" font-size="11" font-weight="700" fill="#141414">AudioClip</text>
+    <text x="44" y="74" font-size="9.5" fill="#565656">ref · fileName · duration</text>
+    <text x="44" y="90" font-size="9.5" fill="#565656">(bytes behind audioSource.ts)</text>
+    <rect x="270" y="36" width="180" height="70" rx="6" fill="#f6f6f6" stroke="#141414" stroke-dasharray="3 2"/>
+    <text x="284" y="56" font-size="10.5" font-weight="700" fill="#141414">decoded AudioBuffer</text>
+    <text x="284" y="74" font-size="9" fill="#565656">cached per ref (for peaks +</text>
+    <text x="284" y="88" font-size="9" fill="#565656">Tone.Player), never persisted</text>
+
+    <text x="30" y="150" font-size="12" font-weight="700" fill="#141414">THE PLACEMENT — an audio track of audio blocks (ProjectStore)</text>
+    <rect x="30" y="160" width="200" height="86" rx="6" fill="#e6e6e6" stroke="#141414" stroke-width="1.5"/>
+    <text x="44" y="180" font-size="11" font-weight="700" fill="#141414">Track (type: 'audio')</text>
+    <text x="44" y="198" font-size="9.5" fill="#565656">name · color · muted · solo</text>
+    <text x="44" y="214" font-size="9.5" fill="#565656">parentId · childIds</text>
+    <text x="44" y="230" font-size="9.5" fill="#565656">audioBlocks: AudioBlock[]</text>
+    <rect x="300" y="150" width="240" height="110" rx="6" fill="#fff" stroke="#141414" stroke-width="1.6"/>
+    <text x="420" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">AudioBlock</text>
+    <text x="316" y="192" font-size="9.5" fill="#565656">id · clipRef  →  AudioClip.ref</text>
+    <text x="316" y="208" font-size="9.5" fill="#565656">startBar        (timeline position)</text>
+    <text x="316" y="224" font-size="9.5" fill="#565656">trimStart · trimEnd  (in-clip secs)</text>
+    <text x="316" y="240" font-size="9.5" fill="#565656">gain? · fadeIn? · fadeOut?</text>
+    <path d="M230,203 L296,203" stroke="#141414" stroke-width="1.4" marker-end="url(#ar3)"/>
+    <path d="M420,150 C420,128 250,120 140,106" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <text x="250" y="128" font-size="9" fill="#565656">clipRef resolves to a library clip</text>
+    <rect x="580" y="168" width="210" height="74" rx="6" fill="#141414"/>
+    <text x="685" y="190" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">derived (not stored)</text>
+    <text x="596" y="208" font-size="9" fill="#dcdcdc">startBeat = startBar · beatsPerBar</text>
+    <text x="596" y="223" font-size="9" fill="#dcdcdc">durBeats  = (trimEnd−trimStart)·bpm/60</text>
+    <text x="596" y="238" font-size="9" fill="#dcdcdc">endBeat   = startBeat + durBeats</text>
+    <path d="M540,205 L576,205" stroke="#141414" stroke-width="1.4" marker-end="url(#ar3)"/>
+  </svg>
+  <figcaption>The clip is reusable material; the block is a positioned, trimmed reference to it. The beat window (<code>startBeat</code>…<code>endBeat</code>) is derived from <code>startBar</code> + trim + tempo — never stored, always recomputable, exactly like the visual engine's resolved graph.</figcaption>
+</figure>
+
+<h3>3.2 — The types</h3>
+<pre><code><span class="c">// store/AudioStore.ts — the clip stays as-is, but the store holds a LIBRARY</span>
+<span class="k">interface</span> <span class="f">AudioClip</span> {          <span class="c">// unchanged — already serializable</span>
+  ref: <span class="k">string</span>;                  <span class="c">// opaque handle → audioSource.ts bytes</span>
+  fileName: <span class="k">string</span>;
+  duration: <span class="k">number</span>;             <span class="c">// seconds (full file)</span>
+}
+<span class="k">interface</span> <span class="f">AudioState</span> {
+  clips: <span class="f">Record</span>&lt;<span class="k">string</span>, AudioClip&gt;;   <span class="c">// was: clip | null — now a library keyed by ref</span>
+  addClip; removeClip;
+}
+
+<span class="c">// types.ts — the placement lives in the project document (undoable)</span>
+<span class="k">interface</span> <span class="f">AudioBlock</span> {
+  id: <span class="k">string</span>;
+  clipRef: <span class="k">string</span>;              <span class="c">// → AudioClip.ref (the material)</span>
+  startBar: <span class="k">number</span>;             <span class="c">// timeline position — the whole point (like Block.startBar)</span>
+  trimStart: <span class="k">number</span>;            <span class="c">// seconds into the clip where playback begins (default 0)</span>
+  trimEnd: <span class="k">number</span>;              <span class="c">// seconds into the clip where it ends (default = clip.duration)</span>
+  gain?: <span class="k">number</span>;                <span class="c">// per-block volume (dB or linear)</span>
+  fadeIn?: <span class="k">number</span>; fadeOut?: <span class="k">number</span>; <span class="c">// seconds — optional edge fades</span>
+}
+
+<span class="k">type</span> <span class="f">TrackType</span> = <span class="s">'base'</span> | <span class="s">'add'</span> | … | <span class="s">'audio'</span>;   <span class="c">// + one member</span>
+
+<span class="k">interface</span> <span class="f">Track</span> {                <span class="c">// an audio track reuses the existing Track shell</span>
+  … name; color; muted; solo; parentId; childIds;
+  audioBlocks?: AudioBlock[];   <span class="c">// present only when type === 'audio'</span>
+}</code></pre>
+<div class="note"><strong>Why <code>startBar</code> not <code>startBeat</code>?</strong> To match the MIDI <code>Block</code> exactly (<code>startBar</code>/<code>durationBars</code>, drawn at <code>startBar * barWidthPx</code>). The <em>beat</em> position and the <em>duration in beats</em> are derived at schedule time (<code>startBar × beatsPerBar</code>, and the trimmed clip length converted through the current bpm). Storing beats would duplicate what bpm already implies; storing bars keeps the block's on-screen width honest as the ruler zooms.</div>
+<div class="warn"><strong>Audio duration is fixed seconds; the timeline is beats — they drift with tempo.</strong> A 4-second clip is 4 seconds no matter the bpm, but its <em>width in bars</em> changes when you change tempo (8 beats at 120bpm, 4 beats at 60bpm). Decide the contract early: <strong>(a)</strong> the block anchors at <code>startBar</code> and its visible width is recomputed from <code>(trimEnd−trimStart)</code> seconds ÷ current beat-length (audio never time-stretches; the block just gets wider/narrower on the ruler), or <strong>(b)</strong> time-stretch the audio to fit a bar count (out of scope — needs a rubberband-style DSP). Recommendation: <strong>(a)</strong> — no stretching, width follows tempo. This is the audio analogue of §5's beat⟷second bridge and the single most important semantic call in the doc.</div>
+
+<!-- 4 -->
+<h2 id="placement">4 · Placement on the timeline</h2>
+<p>An audio block is drawn and dragged exactly like a MIDI block, because the timeline already speaks bars. The MIDI <code>Block</code> component positions itself at <code>left = startBar * barWidthPx</code>, <code>width = durationBars * barWidthPx</code> (<span class="file">timeline/Block.tsx</span>); an <code>AudioBlock</code> does the same, but its width comes from the trimmed clip length rather than a stored <code>durationBars</code>.</p>
+
+<figure class="fig">
+  <div class="figtitle">Dragging an audio block = changing startBar = rescheduling audio</div>
+  <svg viewBox="0 0 820 220" role="img" aria-label="Dragging an audio block">
+    <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="30" width="780" height="30" rx="4" fill="#f0f0f0" stroke="#141414"/>
+    <text x="30" y="49" font-size="10" font-weight="700" fill="#565656">RULER (bars)</text>
+    <g stroke="#cfcfcf"><line x1="150" y1="30" x2="150" y2="60"/><line x1="280" y1="30" x2="280" y2="60"/><line x1="410" y1="30" x2="410" y2="60"/><line x1="540" y1="30" x2="540" y2="60"/><line x1="670" y1="30" x2="670" y2="60"/></g>
+    <rect x="20" y="72" width="780" height="44" rx="4" fill="#fafafa" stroke="#141414"/>
+    <text x="30" y="98" font-size="10" font-weight="700" fill="#565656">AUDIO TRACK</text>
+    <rect x="150" y="80" width="150" height="28" rx="3" fill="#dcdcdc" stroke="#141414"/>
+    <path d="M158,94 L172,88 L186,98 L200,86 L214,96 L228,90 L242,97 L256,88 L270,95 L284,90" fill="none" stroke="#141414" stroke-width="1"/>
+    <text x="225" y="72" text-anchor="middle" font-size="9" fill="#565656">before: startBar 2</text>
+    <rect x="410" y="80" width="150" height="28" rx="3" fill="#141414"/>
+    <path d="M418,94 L432,88 L446,98 L460,86 L474,96 L488,90 L502,97 L516,88 L530,95 L544,90" fill="none" stroke="#fff" stroke-width="1"/>
+    <text x="485" y="72" text-anchor="middle" font-size="9" fill="#565656">after: startBar 8</text>
+    <path d="M300,94 C350,94 360,94 406,94" fill="none" stroke="#6a6a6a" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ar4)"/>
+    <text x="355" y="86" text-anchor="middle" font-size="9" fill="#565656">drag</text>
+    <rect x="20" y="140" width="780" height="56" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <text x="410" y="162" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">On drop: updateAudioBlock(id, { startBar: 8 }) → store changes</text>
+    <text x="410" y="182" text-anchor="middle" font-size="10.5" fill="#565656">if playing, the engine re-derives this block's beat window and re-arms its player (or stops it if it's now outside the current beat)</text>
+  </svg>
+  <figcaption>Dragging changes one number — <code>startBar</code>. The store update is the trigger; the engine reacts by rescheduling only that block's player. Same gesture as MIDI blocks; snapping to the bar grid comes free.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Reuse the block gesture system.</strong> Move/drag, marquee-select, copy/paste, alt-duplicate already operate on <code>Block</code>s. An <code>AudioBlock</code> needs the same move gesture (writing <code>startBar</code>) and edge-drag handles for trim (§9). Because it lives on its own track type, its gestures can branch cleanly without touching MIDI-block math.</li>
+  <li><strong>Width follows content.</strong> Unlike a MIDI block (author-set <code>durationBars</code>), an audio block's width is <em>derived</em> from <code>(trimEnd − trimStart)</code> seconds at the current tempo — you don't type a bar count, you drag the trim edges (§9).</li>
+  <li><strong>Snapping.</strong> Same bar/beat snap the ruler already enforces. Free-positioning (no snap, with a modifier) is a natural later add since audio start rarely lands on an exact beat.</li>
+</ul>
+
+<!-- 5 -->
+<h2 id="resolve">5 · How it plugs into resolve + the clock</h2>
+<p>There are two engines in this codebase and the audio work touches only one of them. The <strong>visual engine</strong> (<span class="file">core/engine/</span>, resolve → compute → render) is a read-only observer of the project and cares nothing about audio. The <strong>playback/transport engine</strong> (<span class="file">core/playback.ts</span>) owns the Tone transport, the RAF beat clock, and — today — the single audio player. Audio-as-a-track lives entirely in the second engine.</p>
+
+<figure class="fig">
+  <div class="figtitle">Two engines, one clock — where audio scheduling belongs</div>
+  <svg viewBox="0 0 820 300" role="img" aria-label="Where audio belongs">
+    <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="120" width="170" height="70" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
+    <text x="105" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">ProjectStore</text>
+    <text x="105" y="164" text-anchor="middle" font-size="9.5" fill="#565656">tracks (incl. audio track</text>
+    <text x="105" y="178" text-anchor="middle" font-size="9.5" fill="#565656">+ AudioBlock[])</text>
+
+    <rect x="250" y="30" width="320" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="1.6"/>
+    <text x="410" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">VISUAL ENGINE (core/engine/)</text>
+    <text x="410" y="72" text-anchor="middle" font-size="10" fill="#565656">resolve → compute@beat → render</text>
+    <text x="410" y="90" text-anchor="middle" font-size="10" fill="#565656">observes the project · reads currentBeat</text>
+    <text x="410" y="107" text-anchor="middle" font-size="10" fill="#565656">★ does NOT touch audio</text>
+
+    <rect x="250" y="190" width="320" height="90" rx="10" fill="#f6f6f6" stroke="#141414" stroke-width="2"/>
+    <text x="410" y="212" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">PLAYBACK ENGINE (core/playback.ts)</text>
+    <text x="410" y="232" text-anchor="middle" font-size="10" fill="#565656">Tone.Transport · RAF beat clock</text>
+    <text x="410" y="250" text-anchor="middle" font-size="10" fill="#565656">★ schedules audio players per block</text>
+    <text x="410" y="268" text-anchor="middle" font-size="10" fill="#565656">reads audio blocks on play/seek</text>
+
+    <rect x="630" y="120" width="170" height="70" rx="8" fill="#141414"/>
+    <text x="715" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">TimeStore.currentBeat</text>
+    <text x="715" y="170" text-anchor="middle" font-size="9.5" fill="#dcdcdc">the ONE clock</text>
+
+    <path d="M190,150 C215,120 220,90 246,80" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar5)"/>
+    <text x="196" y="104" font-size="9" fill="#565656">observe</text>
+    <path d="M190,168 C215,200 220,225 246,232" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar5)"/>
+    <text x="196" y="212" font-size="9" fill="#565656">read blocks</text>
+    <path d="M570,235 C600,220 610,200 628,180" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar5)"/>
+    <text x="580" y="214" font-size="9" fill="#565656">writes beat</text>
+    <path d="M628,150 C600,110 590,90 572,80" fill="none" stroke="#141414" stroke-width="1.3" marker-end="url(#ar5)"/>
+    <text x="596" y="104" font-size="9" fill="#565656">reads beat</text>
+  </svg>
+  <figcaption>The playback engine already produces the beat (RAF → <code>setCurrentBeat</code>) and the visual engine already consumes it. Audio scheduling is a new responsibility of the playback engine only — it now reads audio blocks from the project on play/seek. The visual engine is untouched.</figcaption>
+</figure>
+
+<div class="note"><strong>Does audio need to "resolve"?</strong> No heavy resolve like the visual graph. On <code>play()</code>/<code>seek()</code> the playback engine gathers the audio blocks from the project store and computes, for each, its beat window (<code>startBeat</code>…<code>endBeat</code>). That's a cheap O(blocks) pass done at transport events, not per frame. There's no per-frame audio work at all in the steady state — once players are armed with <code>start(when, offset)</code>, Tone's clock carries them; the RAF only reads the transport position to advance <code>currentBeat</code> and to detect when a block window closes.</div>
+
+<!-- 6 -->
+<h2 id="schedule">6 · Scheduling audio at a timeline offset</h2>
+<p>This is the mechanical core: generalize today's single-player <code>start(when, startBeat*60/bpm)</code> into one player per block, each started at <em>its</em> in-clip offset. The existing engine already does the hard audio-clock alignment (a shared <code>when = Tone.now() + AUDIO_LOOKAHEAD</code> so transport and audio are sample-aligned). We keep that and loop it over blocks.</p>
+
+<figure class="fig">
+  <div class="figtitle">play(startBeat): arm each block relative to the beat clock</div>
+  <svg viewBox="0 0 820 300" role="img" aria-label="Scheduling per block">
+    <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="300" y="20" width="220" height="40" rx="6" fill="#141414"/>
+    <text x="410" y="38" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">play(startBeat)</text>
+    <text x="410" y="53" text-anchor="middle" font-size="9.5" fill="#dcdcdc">arm transport at `when`</text>
+    <path d="M410,60 V84" stroke="#141414" stroke-width="1.4" marker-end="url(#ar6)"/>
+    <text x="425" y="78" font-size="9" fill="#565656">for each audio block:</text>
+
+    <rect x="60" y="90" width="220" height="140" rx="8" fill="#fff" stroke="#141414" stroke-width="1.5"/>
+    <text x="170" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">block starts BEFORE now</text>
+    <text x="76" y="132" font-size="9" fill="#565656">startBeat &lt; playBeat &lt; endBeat</text>
+    <text x="76" y="150" font-size="9" fill="#565656">→ we join mid-clip:</text>
+    <text x="76" y="170" font-size="9" fill="#141414">offset = trimStart +</text>
+    <text x="76" y="184" font-size="9" fill="#141414">  (playBeat − startBeat)·60/bpm</text>
+    <text x="76" y="204" font-size="9" fill="#565656">player.start(when, offset)</text>
+    <text x="76" y="220" font-size="9" fill="#565656">(dur clamped to trimEnd)</text>
+
+    <rect x="300" y="90" width="220" height="140" rx="8" fill="#f6f6f6" stroke="#141414" stroke-width="1.5"/>
+    <text x="410" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">block starts AFTER now</text>
+    <text x="316" y="132" font-size="9" fill="#565656">playBeat ≤ startBeat</text>
+    <text x="316" y="150" font-size="9" fill="#565656">→ schedule ahead:</text>
+    <text x="316" y="170" font-size="9" fill="#141414">delaySec =</text>
+    <text x="316" y="184" font-size="9" fill="#141414">  (startBeat − playBeat)·60/bpm</text>
+    <text x="316" y="204" font-size="9" fill="#565656">player.start(when + delaySec,</text>
+    <text x="316" y="220" font-size="9" fill="#565656">  trimStart)</text>
+
+    <rect x="540" y="90" width="220" height="140" rx="8" fill="#fafafa" stroke="#141414" stroke-width="1.5"/>
+    <text x="650" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">block already ENDED</text>
+    <text x="556" y="132" font-size="9" fill="#565656">playBeat ≥ endBeat</text>
+    <text x="556" y="150" font-size="9" fill="#565656">→ don't arm it</text>
+    <text x="556" y="170" font-size="9" fill="#565656">(player idle; will arm when</text>
+    <text x="556" y="184" font-size="9" fill="#565656">the user seeks back into it)</text>
+
+    <rect x="200" y="250" width="420" height="40" rx="6" fill="#f0f0f0" stroke="#6a6a6a" stroke-dasharray="5 4"/>
+    <text x="410" y="268" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">all players share the same `when` (+ per-block delay)</text>
+    <text x="410" y="283" text-anchor="middle" font-size="9.5" fill="#565656">→ every block stays sample-aligned to the transport, exactly like today's single player</text>
+  </svg>
+  <figcaption>Three cases per block at <code>play()</code>: mid-clip (start with an in-clip offset), future (start delayed at <code>trimStart</code>), or past (leave idle). Tone's own scheduler handles the "future" case — no per-frame polling needed to start a block.</figcaption>
+</figure>
+
+<pre><code><span class="c">// core/playback.ts — generalized play(), sketched</span>
+<span class="k">async</span> <span class="f">play</span>(startBeat: <span class="k">number</span>) {
+  <span class="k">const</span> bpm = <span class="k">this</span>.callbacks.getBpm();
+  <span class="k">const</span> beatsPerBar = <span class="k">this</span>.callbacks.getBeatsPerBar();
+  <span class="k">const</span> transport = Tone.getTransport();
+  transport.stop();
+  transport.bpm.value = bpm;
+  transport.position = beatToPosition(startBeat, beatsPerBar);
+
+  <span class="k">const</span> when = Tone.now() + AUDIO_LOOKAHEAD;   <span class="c">// shared audio-clock anchor (unchanged)</span>
+  transport.start(when);
+
+  <span class="k">for</span> (<span class="k">const</span> b <span class="k">of</span> <span class="k">this</span>.audioBlocks) {              <span class="c">// was: one global player</span>
+    <span class="k">const</span> startBeat_b = b.startBar * beatsPerBar;
+    <span class="k">const</span> clipLenBeats = (b.trimEnd - b.trimStart) * bpm / 60;
+    <span class="k">const</span> endBeat_b = startBeat_b + clipLenBeats;
+    <span class="k">const</span> player = <span class="k">this</span>.playerFor(b);           <span class="c">// pooled Tone.Player, buffer already loaded</span>
+    player.stop(when);
+    <span class="k">if</span> (startBeat &gt;= endBeat_b) <span class="k">continue</span>;         <span class="c">// past — leave idle</span>
+    <span class="k">if</span> (startBeat &lt;= startBeat_b) {                <span class="c">// future — schedule ahead</span>
+      <span class="k">const</span> delaySec = (startBeat_b - startBeat) * 60 / bpm;
+      player.start(when + delaySec, b.trimStart);
+    } <span class="k">else</span> {                                    <span class="c">// mid-clip — join with an offset</span>
+      <span class="k">const</span> offset = b.trimStart + (startBeat - startBeat_b) * 60 / bpm;
+      player.start(when, offset);
+    }
+  }
+  <span class="k">this</span>.startBeatTracking();
+}</code></pre>
+<div class="rec"><strong>The whole feature is this loop.</strong> Today's engine schedules <em>one</em> player with <code>start(when, startBeat*60/bpm)</code> — which is exactly the mid-clip branch for a block anchored at beat 0. Adding <code>startBar</code> just shifts the anchor and splits into three cases. The <code>AUDIO_LOOKAHEAD</code> alignment, the <code>beatToPosition</code> conversion, and the RAF tracker all carry over unchanged.</div>
+<div class="note"><strong>Player pooling &amp; buffer loading.</strong> <code>loadAudio(ref)</code> today loads one buffer and no-ops if the ref is unchanged. Generalize to <code>loadClips(refs)</code>: dispose players for refs no longer referenced, create/keep a <code>Tone.Player</code> per <em>block</em> (two blocks of the same clip can overlap, so key players by block id, sharing a decoded <code>ToneAudioBuffer</code> per ref). <code>usePlayback.play()</code> awaits this before starting, exactly as it awaits <code>loadAudio</code> now.</div>
+
+<!-- 7 -->
+<h2 id="seek">7 · Seeking &amp; scrubbing with audio</h2>
+<p>The engine already has a correct <code>seek(beat)</code>: it sets <code>transport.position</code> and, if playing, re-arms the single player at <code>beat*60/bpm</code>. Generalize it to the three-case loop from §6 — for each block, restart it at its own offset if the new beat lands in its window, stop it if it doesn't.</p>
+
+<figure class="fig">
+  <div class="figtitle">seek(beat): re-window every block</div>
+  <svg viewBox="0 0 820 220" role="img" aria-label="Seek re-windowing">
+    <defs><marker id="ar7" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <line x1="40" y1="60" x2="780" y2="60" stroke="#141414" stroke-width="1.2"/>
+    <text x="40" y="46" font-size="10" font-weight="700" fill="#565656">timeline (beats)</text>
+    <rect x="120" y="46" width="140" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="190" y="63" text-anchor="middle" font-size="9" fill="#141414">block A</text>
+    <rect x="360" y="46" width="180" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="450" y="63" text-anchor="middle" font-size="9" fill="#141414">block B</text>
+    <rect x="600" y="46" width="120" height="26" rx="3" fill="#dcdcdc" stroke="#141414"/><text x="660" y="63" text-anchor="middle" font-size="9" fill="#141414">block C</text>
+    <line x1="430" y1="30" x2="430" y2="120" stroke="#141414" stroke-width="1.6"/>
+    <path d="M430,26 l-6,-8 l12,0 z" fill="#141414"/>
+    <text x="430" y="18" text-anchor="middle" font-size="9" font-weight="700" fill="#141414">seek here</text>
+    <rect x="120" y="140" width="220" height="60" rx="6" fill="#fafafa" stroke="#141414"/>
+    <text x="230" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">A · outside → stop</text>
+    <text x="230" y="178" text-anchor="middle" font-size="9" fill="#565656">endBeat &lt; seekBeat</text>
+    <rect x="360" y="140" width="180" height="60" rx="6" fill="#141414"/>
+    <text x="450" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">B · inside → restart</text>
+    <text x="450" y="178" text-anchor="middle" font-size="9" fill="#dcdcdc">start(when, offset@seek)</text>
+    <rect x="560" y="140" width="200" height="60" rx="6" fill="#fafafa" stroke="#141414"/>
+    <text x="660" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#141414">C · future → schedule</text>
+    <text x="660" y="178" text-anchor="middle" font-size="9" fill="#565656">start(when + delay, trimStart)</text>
+  </svg>
+  <figcaption>A seek is just "re-run the §6 windowing at the new beat." Each block independently stops, restarts mid-clip, or is scheduled ahead. This is why the per-block offset math must be the single shared helper both <code>play</code> and <code>seek</code> call.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Seek while playing</strong> — re-window every block (the figure). Reuse a shared <code>armBlock(block, atBeat, when)</code> helper so <code>play</code> and <code>seek</code> can't diverge.</li>
+  <li><strong>Scrub while paused</strong> — a design choice. Today, dragging the playhead while paused updates <code>currentBeat</code> (visuals follow) but plays no audio. Two options: <strong>(a)</strong> keep it silent (simplest, matches today), or <strong>(b)</strong> "audio scrubbing" — play a short grain of the clip at the scrub position (a DAW nicety; more work, needs a throttled short-lived player). Recommendation: ship <strong>(a)</strong>; treat <strong>(b)</strong> as a later polish.</li>
+  <li><strong>Tempo change while playing</strong> — <code>setBpm</code> currently just sets <code>transport.bpm</code>. With positioned audio, a live bpm change moves every block's beat window (seconds are fixed, beats aren't — §3.2's warning). Simplest correct behavior: on a live bpm change, re-window all blocks (a <code>seek(currentBeat)</code>-style re-arm) so they realign. Audio doesn't stretch; it just re-anchors.</li>
+  <li><strong>End-of-project</strong> — the RAF tracker already stops the transport + player at <code>maxBeat</code>. Generalize "stop the player" to "stop all block players."</li>
+</ul>
+
+<!-- 8 -->
+<h2 id="waveform">8 · Waveform rendering pipeline</h2>
+<p>A waveform inside the block turns the abstract clip into something you can align by eye. The pipeline is: decode the clip once → compute min/max peaks per pixel column → draw to a canvas sized to the block → redraw on resize/zoom/trim.</p>
+
+<figure class="fig">
+  <div class="figtitle">Waveform pipeline — decode once, peak, draw, trim-clip</div>
+  <svg viewBox="0 0 820 260" role="img" aria-label="Waveform pipeline">
+    <defs><marker id="ar8" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="95" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">decode</text>
+    <text x="95" y="80" text-anchor="middle" font-size="9" fill="#565656">ref → AudioBuffer</text>
+    <text x="95" y="93" text-anchor="middle" font-size="9" fill="#565656">(cached per ref)</text>
+    <rect x="200" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="275" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">peaks</text>
+    <text x="275" y="80" text-anchor="middle" font-size="9" fill="#565656">min/max per column</text>
+    <text x="275" y="93" text-anchor="middle" font-size="9" fill="#565656">(downsample, cached)</text>
+    <rect x="380" y="40" width="150" height="60" rx="6" fill="#f0f0f0" stroke="#141414"/>
+    <text x="455" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">draw</text>
+    <text x="455" y="80" text-anchor="middle" font-size="9" fill="#565656">canvas in the block</text>
+    <text x="455" y="93" text-anchor="middle" font-size="9" fill="#565656">width = block px</text>
+    <rect x="560" y="40" width="150" height="60" rx="6" fill="#141414"/>
+    <text x="635" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">clip to trim</text>
+    <text x="635" y="80" text-anchor="middle" font-size="9" fill="#dcdcdc">show trimStart..trimEnd</text>
+    <text x="635" y="93" text-anchor="middle" font-size="9" fill="#dcdcdc">slice of the peaks</text>
+    <path d="M170,70 L196,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
+    <path d="M350,70 L376,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
+    <path d="M530,70 L556,70" stroke="#141414" stroke-width="1.4" marker-end="url(#ar8)"/>
+
+    <rect x="120" y="150" width="580" height="70" rx="4" fill="#fafafa" stroke="#141414"/>
+    <text x="130" y="168" font-size="9" font-weight="700" fill="#565656">the block, waveform drawn to fit</text>
+    <g stroke="#141414" stroke-width="1">
+      <path d="M140,185 L152,175 L164,195 L176,168 L188,200 L200,172 L212,192 L224,178 L236,198 L248,170 L260,190 L272,182 L284,196 L296,174 L308,193 L320,180 L332,197 L344,176 L356,191 L368,184 L380,195 L392,178 L404,192 L416,181 L428,196 L440,175 L452,190 L464,183 L476,197 L488,177 L500,192 L512,180 L524,195 L536,179 L548,193 L560,182 L572,196 L584,176 L596,190 L608,184 L620,195 L632,180 L644,192 L656,182 L668,196" fill="none"/>
+    </g>
+    <line x1="140" y1="185" x2="668" y2="185" stroke="#cfcfcf" stroke-width="0.5"/>
+    <rect x="120" y="150" width="40" height="70" fill="#000" opacity="0.08"/>
+    <rect x="628" y="150" width="72" height="70" fill="#000" opacity="0.08"/>
+    <text x="140" y="238" font-size="8.5" fill="#565656">trimmed-off head (dimmed)</text>
+    <text x="664" y="238" text-anchor="end" font-size="8.5" fill="#565656">trimmed-off tail (dimmed)</text>
+  </svg>
+  <figcaption>Decode and peak-compute are done once per clip and cached (independent of the block's on-screen size). Only the cheap draw step re-runs on resize/zoom/trim. Trimming shows or dims a slice of the same peak array — no re-decode.</figcaption>
+</figure>
+
+<ul>
+  <li><strong>Decode once, off the buffer you already have.</strong> <span class="file">AudioBar</span> already decodes the file to read <code>duration</code> (<code>ctx.decodeAudioData</code>). Keep that buffer (cache it per <code>ref</code>) so both the waveform and the <code>Tone.Player</code> reuse it — no second decode.</li>
+  <li><strong>Peaks are size-independent.</strong> Compute a fixed-resolution min/max peak array per clip (e.g. a few thousand buckets) once; the canvas draw samples <em>from</em> that array to the current pixel width. Zoom/resize is a redraw, not a re-analysis.</li>
+  <li><strong>Draw on a <code>&lt;canvas&gt;</code> inside the block.</strong> Cheap, and it composites under the block's chrome. Trimming renders only the <code>[trimStart, trimEnd]</code> slice (or dims the rest, as drawn).</li>
+  <li><strong>Where the code goes.</strong> A small <code>core/waveform.ts</code> (decode-cache + peaks) feeding a <code>&lt;AudioBlockView&gt;</code> component — the audio analogue of the MIDI <span class="file">Block.tsx</span>.</li>
+</ul>
+
+<!-- 9 -->
+<h2 id="multi">9 · Multiple clips &amp; trimming</h2>
+<p>Once a block is a positioned reference, "multiple clips" and "trim" fall out almost for free — they're just more blocks and two more numbers.</p>
+
+<h3>9.1 — Multiple clips / blocks</h3>
+<ul>
+  <li><strong>Many blocks per track, many tracks.</strong> An audio track holds an <code>AudioBlock[]</code>; you can have several audio tracks. The §6 scheduling loop already iterates all blocks, so N clips is the same code path as one.</li>
+  <li><strong>Overlap is fine.</strong> Two blocks whose windows overlap = two players sounding at once (Tone mixes them at the destination). This is why players are keyed by <em>block</em>, not by <em>ref</em>.</li>
+  <li><strong>The clip library.</strong> <code>AudioStore.clip</code> becomes <code>clips: Record&lt;ref, AudioClip&gt;</code> — a small library the block picker draws from. <span class="file">AudioBar</span>'s load path adds to the library instead of replacing the single slot; the existing library-drag-to-add-track gesture (recent commit) is the natural way to drop a clip onto the timeline.</li>
+</ul>
+
+<h3>9.2 — Trimming</h3>
+<figure class="fig">
+  <div class="figtitle">Trim = drag an edge = change trimStart / trimEnd (and maybe startBar)</div>
+  <svg viewBox="0 0 820 210" role="img" aria-label="Trimming a block">
+    <defs><marker id="ar9" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="30" y="34" font-size="10" font-weight="700" fill="#565656">full clip, untrimmed</text>
+    <rect x="120" y="44" width="360" height="40" rx="4" fill="#dcdcdc" stroke="#141414"/>
+    <path d="M128,64 L146,52 L164,74 L182,50 L200,72 L218,56 L236,76 L254,54 L272,70 L290,58 L308,74 L326,52 L344,72 L362,56 L380,76 L398,54 L416,70 L434,60 L452,74 L470,58" fill="none" stroke="#141414" stroke-width="1"/>
+    <text x="122" y="98" font-size="8.5" fill="#565656">trimStart 0</text>
+    <text x="478" y="98" text-anchor="end" font-size="8.5" fill="#565656">trimEnd = duration</text>
+
+    <text x="30" y="134" font-size="10" font-weight="700" fill="#565656">trimmed: left edge dragged in</text>
+    <rect x="240" y="144" width="240" height="40" rx="4" fill="#141414"/>
+    <path d="M248,164 L266,158 L284,176 L302,154 L320,170 L338,158 L356,174 L374,154 L392,170 L410,160 L428,174 L446,156 L464,172" fill="none" stroke="#fff" stroke-width="1"/>
+    <rect x="120" y="144" width="120" height="40" rx="4" fill="none" stroke="#9a9a9a" stroke-dasharray="4 3"/>
+    <path d="M180,124 L180,142" stroke="#6a6a6a" stroke-width="1.2" marker-end="url(#ar9)"/>
+    <text x="180" y="118" text-anchor="middle" font-size="8.5" fill="#565656">drag right edge of head</text>
+    <text x="245" y="198" font-size="8.5" fill="#141414">trimStart ↑ AND startBar ↑ (block shrinks from the left, stays anchored to content)</text>
+  </svg>
+  <figcaption>Dragging the right edge changes <code>trimEnd</code> only. Dragging the left edge changes <code>trimStart</code> <em>and</em> <code>startBar</code> together (the audio you keep still lines up with the same beats). Same edge-drag gesture MIDI blocks use for resize, branched for audio semantics.</figcaption>
+</figure>
+<ul>
+  <li><strong>Trim end</strong> — drag the right edge → decrease <code>trimEnd</code>. Block gets shorter; start unchanged.</li>
+  <li><strong>Trim start</strong> — drag the left edge → increase <code>trimStart</code> <em>and</em> increase <code>startBar</code> by the same beat amount, so the surviving audio stays aligned to its original beats (the classic DAW "trim from the left" behavior).</li>
+  <li><strong>Scheduling honors trim automatically</strong> — the §6 math already uses <code>trimStart</code> as the base offset and <code>trimEnd</code> to clamp duration. No new scheduling code; trim just feeds numbers into the existing loop.</li>
+  <li><strong>Split</strong> (later) — cutting a block at the playhead = two blocks sharing the ref, with complementary <code>trimStart</code>/<code>trimEnd</code>/<code>startBar</code>. Free once trim exists.</li>
+</ul>
+
+<!-- 10 -->
+<h2 id="tradeoffs">10 · Tradeoffs &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">semantics</span> <strong>Seconds vs. beats under tempo change.</strong> The single most important call (§3.2). Audio is fixed seconds; blocks are placed in bars. Decide "no time-stretch, width follows tempo, re-window on bpm change" up front — it's cheap and correct, and it keeps the beat clock the sole timebase.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Player pool lifecycle.</strong> One <code>Tone.Player</code> per block (sharing decoded buffers per ref). Create/dispose as blocks are added/removed; don't leak players on delete. The current single-player <code>dispose()</code> generalizes to a keyed map.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Scheduling drift on many blocks.</strong> All players share one <code>when</code> anchor, so they stay aligned; but scheduling far-future blocks with Tone's own timeline (vs. re-arming on each seek) is cleaner than polling. Prefer <code>start(when + delay, offset)</code> and let Tone hold them.</li>
+  <li><span class="badge b-risk">open</span> <strong>Audio scrubbing while paused.</strong> Ship silent-scrub first (matches today). Grain-scrub is a real feature with real cost — defer.</li>
+  <li><span class="badge b-risk">open</span> <strong>Does audio belong in the undoable document?</strong> The <em>placement</em> (audio blocks, startBar, trim) clearly should — it's an edit, like moving a MIDI block, so it lives in <span class="file">ProjectStore</span>. The <em>clip library</em> (bytes/refs) is more like <span class="file">AudioStore</span>'s current ephemeral role; decide whether adding a clip is undoable.</li>
+  <li><span class="badge b-risk">open</span> <strong>Loading latency at <code>play()</code>.</strong> <code>usePlayback.play()</code> awaits buffer load before starting. With many clips, pre-decode on insert (when the block is dropped) rather than at play, so the downbeat isn't gated on decoding.</li>
+  <li><span class="badge b-future">later</span> <strong>Audio-reactive visuals.</strong> Out of scope here, but positioned audio is the substrate for it: once a clip sits at a known beat window, its analyzed amplitude/FFT could feed a modulator port in the visual engine. Named, not designed — keep the audio track independent of the visual engine for now.</li>
+</ul>
+
+<div class="rec">
+  <p style="margin-top:6px"><strong>Recommendation in one breath:</strong></p>
+  <ul>
+    <li>Add an <code>'audio'</code> track type carrying <strong>audio blocks</strong> — each a <code>clipRef</code> + <code>startBar</code> + <code>trimStart</code>/<code>trimEnd</code>. The clip (already the right shape) becomes a small <em>library</em>.</li>
+    <li>Generalize <span class="file">core/playback.ts</span> from one global player to <strong>one player per block</strong>, armed on its beat window via the same <code>start(when, offset)</code> alignment the code already uses — three cases: mid-clip, future, past.</li>
+    <li>Keep the <strong>beat clock the sole timebase</strong>; audio is scheduled relative to <code>currentBeat</code>, never the reverse. Moving a block = changing <code>startBar</code> = rescheduling that player.</li>
+    <li>Draw a <strong>waveform</strong> in the block from a decode-once, size-independent peak cache; trim shows a slice of it.</li>
+    <li>Prove it on the smallest loop first: <strong>one audio block you can drag → it plays at its position</strong>. Multiple clips and trimming are additive once that lands.</li>
+  </ul>
+</div>
+
+<hr/>
+<p class="small muted">Design artifact for decision-making. References: <span class="file">src/editor/store/AudioStore.ts</span>, <span class="file">src/editor/core/playback.ts</span> (the transport engine, <code>getPlaybackEngine</code>), <span class="file">src/editor/hooks/usePlayback.ts</span>, <span class="file">src/editor/store/TimeStore.ts</span>, <span class="file">src/editor/components/AudioBar.tsx</span>, <span class="file">src/editor/core/audioSource.ts</span>, <span class="file">src/editor/types.ts</span>, <span class="file">src/editor/store/ProjectStore.ts</span>. No code changed. Companion: <span class="file">audio-track-architecture-implementation-plan.html</span>.</p>
+
+</div>
+</body>
+</html>

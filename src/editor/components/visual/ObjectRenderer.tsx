@@ -21,16 +21,29 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   const plugins = useProjectStore((s) => s.tracks[trackId]?.visualPlugins) ?? []
   const shaderInstances = plugins.filter((p) => p.enabled && getPlugin(p.pluginId)?.category === 'shader')
 
+  const isFullFrame = !!def?.fullFrame
+
   useFrame(() => {
     const g = groupRef.current
     if (!g) return
     const state = getObjectState(trackId)
     g.visible = !state?.blackedOut
-    if (state) state.world.decompose(g.position, g.quaternion, g.scale)
+    // Full-frame instruments size themselves to the viewport — no placement transform.
+    if (!isFullFrame && state) state.world.decompose(g.position, g.quaternion, g.scale)
   })
 
   if (!def) return null
   const Component = def.component
+
+  // Full-frame instruments (viewport-filling planes) skip the placement transform and the
+  // transform/clone effect chain; shaders may still post-process them.
+  if (isFullFrame) {
+    const frame = <group ref={groupRef}><Component trackId={trackId} /></group>
+    return shaderInstances.length > 0
+      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{frame}</ShaderWrapper>
+      : frame
+  }
+
   const content = (
     <CloneWrapper plugins={plugins}>
       <TransformWrapper plugins={plugins}>

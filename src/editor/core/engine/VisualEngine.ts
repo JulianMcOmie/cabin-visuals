@@ -83,7 +83,7 @@ export function computeAtBeat(beat: number) {
     // Notes live at this beat — pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
-    states.set(obj.trackId, { params, portValues, world, blackedOut, abilityEvents: obj.abilityEvents, notes: obj.notes, activeNotes })
+    states.set(obj.trackId, { params, portValues, world, blackedOut, stringParams: obj.stringParams, abilityEvents: obj.abilityEvents, notes: obj.notes, activeNotes })
   }
 }
 

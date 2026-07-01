@@ -10,6 +10,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { generateRows, generateAutomationRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { getInstrument } from '../../instruments'
+import { isNumberParam } from '../../instruments/types'
 import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX } from '../../core/engine/automation'
 import type { Block, InterpolationMode } from '../../types'
 
@@ -78,7 +79,7 @@ export function PianoRollPanel() {
   if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
     const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
-    if (pdef) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
+    if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
   }
 
   return (

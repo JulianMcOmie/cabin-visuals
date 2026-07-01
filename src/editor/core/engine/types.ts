@@ -43,6 +43,8 @@ export interface ResolvedObject {
   params: Record<string, number>
   /** The instrument's ports (from its def), so the matrix knows what to fill. */
   ports: PortDef[]
+  /** String-valued params (color / string), passed straight to the instrument. */
+  stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
   /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
@@ -95,6 +97,8 @@ export interface ObjectState {
   /** World transform (local composed with all ancestors). Reused across frames —
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
+  /** String-valued params (color / string) for the instrument component. */
+  stringParams: Record<string, string>
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The
    *  instrument samples these against the current beat to drive its signature move. */
   abilityEvents: Map<string, ResolvedNote[]>

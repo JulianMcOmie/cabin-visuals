@@ -12,7 +12,7 @@ import type {
 } from './types'
 import { isModifierType, combineModifier } from './trackTypes'
 import { extractKeyframes } from './automation'
-import type { ObjectInstrumentDef } from '../../instruments/types'
+import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -86,7 +86,7 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
     const param = child.targetParam
     if (!param) continue
     const pdef = def.params.find((pd) => pd.key === param)
-    if (!pdef) continue
+    if (!pdef || !isNumberParam(pdef)) continue
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
@@ -184,6 +184,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       muted: objectOff(track),
       params: track.params ?? {},
       ports: def?.ports ?? [],
+      stringParams: track.stringParams ?? {},
       localTransform: def?.localTransform,
       notes,
       blackouts,

@@ -7,6 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
 import { getPlugin, type VisualPlugin } from '../plugins'
+import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { Routing, PluginInstance } from '../types'
 
@@ -65,6 +66,81 @@ function ParamSlider({
         />
       </div>
     </div>
+  )
+}
+
+/** Renders the right control for any param type: slider (number), dropdown (select),
+ *  toggle (boolean), colour picker (color), or text/textarea (string). Numeric values
+ *  go through `onNum`; string values (color/string) through `onStr`. */
+function ParamControl({ param, numValue, strValue, onNum, onStr }: {
+  param: ParamDef
+  numValue: number | undefined
+  strValue: string | undefined
+  onNum: (v: number) => void
+  onStr?: (v: string) => void
+}) {
+  if (param.type === 'select') {
+    return (
+      <div className="mb-4">
+        <div className="text-xs text-zinc-300 mb-1.5">{param.label}</div>
+        <select
+          value={numValue ?? param.default}
+          onChange={(e) => onNum(Number(e.target.value))}
+          className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+        >
+          {param.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    )
+  }
+  if (param.type === 'boolean') {
+    const on = (numValue ?? param.default) >= 0.5
+    return (
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-xs text-zinc-300">{param.label}</span>
+        <button
+          onClick={() => onNum(on ? 0 : 1)}
+          className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${on ? 'bg-cyan-600' : 'bg-zinc-700'}`}
+          aria-label={param.label}
+        >
+          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+        </button>
+      </div>
+    )
+  }
+  if (param.type === 'color') {
+    return (
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-xs text-zinc-300">{param.label}</span>
+        <input
+          type="color"
+          value={strValue ?? param.default}
+          onChange={(e) => onStr?.(e.target.value)}
+          className="w-8 h-6 rounded bg-transparent border border-zinc-700 cursor-pointer flex-shrink-0"
+        />
+      </div>
+    )
+  }
+  if (param.type === 'string') {
+    const value = strValue ?? param.default
+    return (
+      <div className="mb-4">
+        <div className="text-xs text-zinc-300 mb-1.5">{param.label}</div>
+        {param.multiline
+          ? <textarea value={value} onChange={(e) => onStr?.(e.target.value)} rows={3} className="w-full px-2 py-1 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none resize-y" />
+          : <input type="text" value={value} onChange={(e) => onStr?.(e.target.value)} className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none" />}
+      </div>
+    )
+  }
+  return (
+    <ParamSlider
+      label={param.label}
+      value={numValue ?? param.default}
+      min={param.min}
+      max={param.max}
+      step={param.step}
+      onChange={onNum}
+    />
   )
 }
 
@@ -263,14 +339,12 @@ function EffectItem({
         </button>
       </div>
       {!collapsed && plugin.params.map((p) => (
-        <ParamSlider
+        <ParamControl
           key={p.key}
-          label={p.label}
-          min={p.min}
-          max={p.max}
-          step={p.step}
-          value={inst.settings[p.key] ?? p.default}
-          onChange={(v) => onSetSetting(p.key, v)}
+          param={p}
+          numValue={inst.settings[p.key]}
+          strValue={undefined}
+          onNum={(v) => onSetSetting(p.key, v)}
         />
       ))}
     </div>
@@ -288,6 +362,7 @@ export function TrackEditor() {
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
+  const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
@@ -407,14 +482,13 @@ export function TrackEditor() {
                         <>
                           <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
                           {def.params.map((p) => (
-                            <ParamSlider
+                            <ParamControl
                               key={p.key}
-                              label={p.label}
-                              min={p.min}
-                              max={p.max}
-                              step={p.step}
-                              value={track.params?.[p.key] ?? p.default}
-                              onChange={(v) => setTrackParam(track.id, p.key, v)}
+                              param={p}
+                              numValue={track.params?.[p.key]}
+                              strValue={track.stringParams?.[p.key]}
+                              onNum={(v) => setTrackParam(track.id, p.key, v)}
+                              onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                             />
                           ))}
                         </>

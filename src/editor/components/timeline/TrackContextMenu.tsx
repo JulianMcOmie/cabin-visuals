@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Check } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
+import { isNumberParam } from '../../instruments/types'
 
 interface TrackContextMenuProps {
   x: number
@@ -43,7 +44,8 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   if (!track) return null
   const def = getInstrument(track.instrumentId)
   const abilities = def?.abilities ?? []
-  const params = def?.params ?? []
+  // Only numeric params can be automated (keyframes interpolate a number).
+  const params = (def?.params ?? []).filter(isNumberParam)
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))

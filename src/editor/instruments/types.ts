@@ -5,13 +5,47 @@
 
 import type { FC } from 'react'
 
-export interface ParamDef {
+// A param is either numeric-valued (number / select / boolean — stored in track.params)
+// or string-valued (color / string — stored in track.stringParams). The union keeps the
+// numeric engine paths (localTransform / spec / automation) untouched.
+interface ParamBase {
   key: string
   label: string
+}
+export interface NumberParamDef extends ParamBase {
+  type?: 'number'
   min: number
   max: number
   step: number
   default: number
+}
+export interface SelectParamDef extends ParamBase {
+  type: 'select'
+  options: { value: number; label: string }[]
+  default: number
+}
+export interface BooleanParamDef extends ParamBase {
+  type: 'boolean'
+  default: number // 0 or 1
+}
+export interface ColorParamDef extends ParamBase {
+  type: 'color'
+  default: string // '#rrggbb'
+}
+export interface StringParamDef extends ParamBase {
+  type: 'string'
+  default: string
+  multiline?: boolean
+}
+export type ParamDef = NumberParamDef | SelectParamDef | BooleanParamDef | ColorParamDef | StringParamDef
+
+/** A param whose value is a string (stored in track.stringParams), not a number. */
+export function isStringParam(p: ParamDef): p is ColorParamDef | StringParamDef {
+  return p.type === 'color' || p.type === 'string'
+}
+/** A plain numeric slider param (the only kind automation can target). */
+export function isNumberParam(p: ParamDef): p is NumberParamDef {
+  return p.type === undefined || p.type === 'number'
 }
 
 /**
@@ -82,6 +116,10 @@ export interface ObjectInstrumentDef {
   localTransform?: (ctx: TransformCtx) => LocalTransform
   /** The R3F visual; pulls its per-frame state by trackId from the engine. */
   component: FC<{ trackId: string }>
+  /** A full-frame instrument sizes itself to the viewport (a screen-filling plane) rather
+   *  than sitting at a 3D position. The renderer skips the placement transform + the
+   *  transform/clone effect chain for these. */
+  fullFrame?: boolean
 }
 
 /** A modulator / shaper instrument — renders nothing; its trigger notes drive a
@@ -95,7 +133,8 @@ export interface ModulatorInstrumentDef {
   port: string
 }
 
-/** A param's schema default (no track/registry lookup). */
+/** A numeric param's schema default (no track/registry lookup). Non-numeric params → 0. */
 export function paramDefault(def: ObjectInstrumentDef, key: string): number {
-  return def.params.find((p) => p.key === key)?.default ?? 0
+  const p = def.params.find((p) => p.key === key)
+  return p && typeof p.default === 'number' ? p.default : 0
 }

@@ -55,6 +55,7 @@ interface ProjectState {
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
+  setTrackStringParam: (trackId: string, key: string, value: string) => void
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into an event modifier of the given type (no instrument). */
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
@@ -347,6 +348,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
+  setTrackStringParam: (trackId, key, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, stringParams: { ...track.stringParams, [key]: value } },
+        },
+      }
+    }),
+
   // Swap a track's instrument (double-click in the library). Params are instrument-
   // specific, so they reset to the new instrument's defaults rather than carrying
   // stale keys across; the track is renamed to match (tracks are named after their
@@ -470,7 +483,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const plugin = getPlugin(pluginId)
       if (!track || !plugin) return s
       const settings: Record<string, number> = {}
-      for (const p of plugin.params) settings[p.key] = p.default
+      for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
       const instance: PluginInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
       return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: [...(track.visualPlugins ?? []), instance] } } }
     }),

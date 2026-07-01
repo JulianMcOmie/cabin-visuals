@@ -48,6 +48,9 @@ export interface Track {
   instrumentId: string
   /** User-set instrument parameter values (keys defined by the instrument schema). */
   params?: Record<string, number>
+  /** String-valued instrument params (color / string types), kept apart from the numeric
+   *  `params` so the engine's numeric paths stay untouched. */
+  stringParams?: Record<string, string>
   color: string
   muted: boolean
   solo: boolean
