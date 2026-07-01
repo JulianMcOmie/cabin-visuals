@@ -523,10 +523,17 @@ This revives the old dead stub (<code>TrackType 'automation'</code>, <code>targe
 
 <h3>Phases 8–10 — Effects, RenderSpec, English <span class="badge b-new">later</span></h3>
 <ul class="small">
-  <li><strong>Effects (plugins):</strong> <span class="badge b-new">new</span> <span class="file">components/visual/effects/*</span> (Transform/Clone/Shader wrappers) + <span class="file">lib/three/*</span> pools, ported from Tyler.</li>
-  <li><strong>RenderSpec:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/renderSpec.ts</span> (interpreter + expression vocabulary); <span class="file">ObjectRenderer</span> dispatches code-vs-spec.</li>
-  <li><strong>English → spec:</strong> an LLM endpoint that emits + validates a <code>RenderSpec</code>. Only after the spec is stable.</li>
+  <li><strong>Effects (plugins) — ✓ shipped.</strong> Transform (offset/rotate/scale), Clone (echo/tile/radialSymmetry/rotationalSymmetry/linearDuplicate), and Shader (kaleidoscope/pixelate/chromaticAberration/opacity), ported from Tyler. See the as-built note below.</li>
+  <li><strong>RenderSpec — ✓ shipped:</strong> <span class="file">core/engine/renderSpec.ts</span> (interpreter + expression vocabulary); <span class="file">ObjectRenderer</span> dispatches code-vs-spec (Circle/Triangle are specs).</li>
+  <li><strong>English → spec:</strong> an LLM endpoint that emits + validates a <code>RenderSpec</code>. Only after the spec is stable. <span class="badge b-new">not started</span></li>
 </ul>
+
+<div class="note"><strong>As-built (effects).</strong> Contract widened to Tyler's <code>VisualPlugin { category: 'transform'|'clone'|'shader', params, applyTransform?, getClones?, fragmentShader? }</code> (<span class="file">plugins/types.ts</span>); chain per object in <span class="file">ObjectRenderer</span> is <strong>transform ▸ clone ▸ shader</strong>. <code>time</code> = the beat (music-synced), not wall-clock.
+<ul class="small">
+  <li><strong>Clones</strong> — <span class="file">CloneWrapper</span> React-<em>duplicates</em> the object into N groups (not InstancedMesh — matches Tyler; fine for modest N), applying <code>getClones().getTransform(i)</code> + <code>getOpacity(i)</code> per frame. 5 plugins.</li>
+  <li><strong>Shaders</strong> — <strong>Option A, per-object FBO</strong> (the plan's per-object model): <span class="file">ShaderWrapper</span> renders the object (with its world transform) into an offscreen scene + FBO via <code>createPortal</code>, runs each shader as a ping-pong fullscreen pass, and draws the result as a clip-space fullscreen overlay (depth-test off) over the 3D scene. A shaded object becomes a full-frame post-processed layer; un-shaded objects are untouched. 4 plugins.</li>
+  <li><strong>Deferred</strong> (Tyler has, we skipped): the multi-scene <code>SceneCompositor</code> + <strong>masks</strong> (not needed for per-object post-fx), instancing <strong>pools</strong> (<code>lib/three/*</code> — an instrument concern), and automating <em>effect</em> params (automation targets instrument params only so far). Enum/boolean plugin params render as numeric sliders for now.</li>
+</ul></div>
 
 <!-- G -->
 <h2 id="inventory">G · Master file inventory</h2>
