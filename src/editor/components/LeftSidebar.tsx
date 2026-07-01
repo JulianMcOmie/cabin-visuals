@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace } from 'lucide-re
 import { useLibraryDrag } from './useLibraryDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
+import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
  *  event-modifier child track (whose `id` is the modifier's track type). */
@@ -99,13 +100,14 @@ export function LeftSidebar() {
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
-  // Double-click swaps the selected track's instrument (no-op if nothing selected).
+  // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
+  const setTrackModifier = useProjectStore((s) => s.setTrackModifier)
   const onItemDoubleClick = (item: InstrumentItem) => {
-    // Double-click swaps an object/modulator instrument; modifiers are added by drag only.
-    if (item.kind === 'modifier') return
     const selectedTrackId = useUIStore.getState().selectedTrackId
-    if (selectedTrackId) setTrackInstrument(selectedTrackId, item.id, item.name)
+    if (!selectedTrackId) return
+    if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
+    else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
   return (

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Track, Block, Note } from '../types'
+import type { Track, TrackType, Block, Note } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -45,6 +45,8 @@ interface ProjectState {
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
+  /** Convert a track into an event modifier of the given type (no instrument). */
+  setTrackModifier: (trackId: string, type: TrackType, name: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   setBpm: (bpm: number) => void
@@ -332,6 +334,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
         tracks: {
           ...s.tracks,
           [trackId]: { ...track, instrumentId, params: {}, name: name ?? track.name },
+        },
+      }
+    }),
+
+  // Convert to an event modifier: set the type, drop the instrument + params.
+  setTrackModifier: (trackId, type, name) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, type, instrumentId: '', params: {}, name },
         },
       }
     }),
