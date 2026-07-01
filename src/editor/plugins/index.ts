@@ -9,6 +9,10 @@ import { tilePlugin } from './clones/tile'
 import { radialSymmetryPlugin } from './clones/radialSymmetry'
 import { linearDuplicatePlugin } from './clones/linearDuplicate'
 import { rotationalSymmetryPlugin } from './clones/rotationalSymmetry'
+import { kaleidoscopePlugin } from './shaders/kaleidoscope'
+import { pixelatePlugin } from './shaders/pixelate'
+import { chromaticAberrationPlugin } from './shaders/chromaticAberration'
+import { opacityPlugin } from './shaders/opacity'
 import type { VisualPlugin } from './types'
 
 export type { VisualPlugin, EffectCategory, CloneSpec } from './types'
@@ -22,6 +26,10 @@ export const PLUGINS: Record<string, VisualPlugin> = {
   [radialSymmetryPlugin.id]: radialSymmetryPlugin,
   [linearDuplicatePlugin.id]: linearDuplicatePlugin,
   [rotationalSymmetryPlugin.id]: rotationalSymmetryPlugin,
+  [kaleidoscopePlugin.id]: kaleidoscopePlugin,
+  [pixelatePlugin.id]: pixelatePlugin,
+  [chromaticAberrationPlugin.id]: chromaticAberrationPlugin,
+  [opacityPlugin.id]: opacityPlugin,
 }
 
 export function getPlugin(id: string): VisualPlugin | undefined {
