@@ -31,6 +31,11 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <polygon points="6,1 11,11 1,11" fill="none" stroke="#818cf8" strokeWidth="1.2" />
     </svg>
   )},
+  { id: 'icosahedronBurst', name: 'Icosahedron Burst', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M6 1 L11 6 L6 11 L1 6 Z" fill="none" stroke="#22d3ee" strokeWidth="1.2" />
+    </svg>
+  )},
 ])
 
 // Event modifiers — dropped into an object, they transform its note stream at resolve
