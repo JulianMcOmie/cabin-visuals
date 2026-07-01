@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Track, TrackType, Block, Note } from '../types'
+import { getPlugin } from '../plugins'
+import type { Track, TrackType, Block, Note, PluginInstance } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -49,6 +50,11 @@ interface ProjectState {
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
+  // Visual effects (plugins) on a track.
+  addEffect: (trackId: string, pluginId: string) => void
+  removeEffect: (trackId: string, instanceId: string) => void
+  setEffectSetting: (trackId: string, instanceId: string, key: string, value: number) => void
+  toggleEffect: (trackId: string, instanceId: string) => void
   setBpm: (bpm: number) => void
 }
 
@@ -363,6 +369,48 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
+    }),
+
+  addEffect: (trackId, pluginId) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      const plugin = getPlugin(pluginId)
+      if (!track || !plugin) return s
+      const settings: Record<string, number> = {}
+      for (const p of plugin.params) settings[p.key] = p.default
+      const instance: PluginInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: [...(track.visualPlugins ?? []), instance] } } }
+    }),
+
+  removeEffect: (trackId, instanceId) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.visualPlugins) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: track.visualPlugins.filter((e) => e.id !== instanceId) } } }
+    }),
+
+  setEffectSetting: (trackId, instanceId, key, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.visualPlugins) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, visualPlugins: track.visualPlugins.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
+        },
+      }
+    }),
+
+  toggleEffect: (trackId, instanceId) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.visualPlugins) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, visualPlugins: track.visualPlugins.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
+        },
+      }
     }),
 
   setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),

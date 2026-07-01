@@ -33,6 +33,14 @@ export interface Routing {
   amount: number
 }
 
+/** A visual effect plugin attached to a track: which plugin, on/off, param values. */
+export interface PluginInstance {
+  id: string
+  pluginId: string
+  enabled: boolean
+  settings: Record<string, number>
+}
+
 export interface Track {
   id: string
   name: string
@@ -52,4 +60,6 @@ export interface Track {
   targets?: Routing[]
   targetParam?: string
   interpolation?: InterpolationMode
+  /** Visual effects applied to this object's rendered output (transform/clone/shader). */
+  visualPlugins?: PluginInstance[]
 }

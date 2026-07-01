@@ -39,24 +39,18 @@ export const cubeInstrument: ObjectInstrumentDef = {
   component: Cube,
 }
 
-// One cube per cube track. The transform (position/spin/scale) is computed by the
-// engine — composed with any parent's transform — and arrives as a world matrix in
-// state; the component just decomposes it onto the mesh. Appearance (color/emissive)
-// stays here as the object's intrinsic render math.
+// One cube per cube track. The transform (world matrix) and mute blackout are applied
+// by ObjectRenderer's placement group; this draws the mesh at local origin and only
+// owns appearance (color/emissive) as the object's intrinsic render math.
 export function Cube({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
 
   useFrame(() => {
     if (!meshRef.current) return
     const state = getObjectState(trackId)
-    // A mute modifier blacks the object out during its regions.
-    meshRef.current.visible = !state?.blackedOut
     // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
     const energy = state?.portValues.energy ?? 0
     const baseHue = state?.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
-
-    // World transform from the engine (already includes parent inheritance).
-    if (state) state.world.decompose(meshRef.current.position, meshRef.current.quaternion, meshRef.current.scale)
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
