@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Mesh } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. An 808-style bass ring made of particles that shakes in
 // pitch-shaped waves as each note decays. Bass note-ons pulse the ring; the wave
 // simulation, envelope, and Points shader are Tyler's verbatim. Tyler's seek/palette
-// handling is dropped; note-ons are detected from the object's activeNotes.
+// handling is dropped; all motion derives from `state.beat`, and hit envelopes are
+// computed from `state.notes` each frame (note-onset ages, not a spawned list), so
+// scrub == playback.
 
 const PITCH_MIN = 24
 const PITCH_MAX = 60
@@ -25,7 +26,8 @@ interface RingParticle {
   dotScale: number
 }
 interface BassHit {
-  time: number
+  ageSec: number
+  amp: number
   pitch: number
   velocity: number
   length: number
@@ -82,8 +84,7 @@ function makeParticles(count: number): RingParticle[] {
   return particles
 }
 
-function bassEnvelope(now: number, hit: BassHit, attack: number, decay: number, sustain: number, release: number): number {
-  const age = now - hit.time
+function bassEnvelope(age: number, velocity: number, length: number, attack: number, decay: number, sustain: number, release: number): number {
   if (age < 0) return 0
 
   const safeAttack = Math.max(0.001, attack)
@@ -91,18 +92,18 @@ function bassEnvelope(now: number, hit: BassHit, attack: number, decay: number, 
   const safeRelease = Math.max(0.001, release)
 
   if (age < safeAttack) {
-    return smooth01(age / safeAttack) * hit.velocity
+    return smooth01(age / safeAttack) * velocity
   }
 
   const bodyAge = age - safeAttack
   const bodyLevel = sustain + (1 - sustain) * Math.exp(-bodyAge / safeDecay)
-  if (bodyAge <= hit.length) {
-    return clamp(bodyLevel * hit.velocity, 0, 1)
+  if (bodyAge <= length) {
+    return clamp(bodyLevel * velocity, 0, 1)
   }
 
-  const releaseAge = bodyAge - hit.length
-  const releaseStart = sustain + (1 - sustain) * Math.exp(-hit.length / safeDecay)
-  return clamp(releaseStart * Math.exp(-releaseAge / safeRelease) * hit.velocity, 0, 1)
+  const releaseAge = bodyAge - length
+  const releaseStart = sustain + (1 - sustain) * Math.exp(-length / safeDecay)
+  return clamp(releaseStart * Math.exp(-releaseAge / safeRelease) * velocity, 0, 1)
 }
 
 // colorMode: 0 mono (black), 1 pitch color, 2 bass teal.
@@ -152,8 +153,6 @@ const PORTS: PortDef[] = [
 
 function ParticleBassRingVisual({ trackId }: { trackId: string }) {
   const backgroundRef = useRef<Mesh>(null)
-  const prevKeys = useRef<Set<string>>(new Set())
-  const hitsRef = useRef<BassHit[]>([])
   const colorRef = useRef(new Color())
 
   const particles = useMemo(() => makeParticles(MAX_PARTICLES), [])
@@ -176,16 +175,13 @@ function ParticleBassRingVisual({ trackId }: { trackId: string }) {
   }), [])
 
   useEffect(() => () => {
-    hitsRef.current = []
     geometry.dispose()
     material.dispose()
   }, [geometry, material])
 
-  useFrame(({ clock }) => {
-    const state = getObjectState(trackId)
-    if (!state) return
-
-    const now = clock.elapsedTime
+  useInstrumentFrame(trackId, (state) => {
+    // Beat-time in seconds — the wave/envelope constants were tuned in seconds.
+    const t = state.beat * state.secPerBeat
     const params = state.params
     const particleCount = Math.floor(clamp(params.particleCount ?? 2200, 300, MAX_PARTICLES))
     const dotSize = params.dotSize ?? 6.5
@@ -214,29 +210,31 @@ function ParticleBassRingVisual({ trackId }: { trackId: string }) {
       backgroundRef.current.visible = (params.whiteBackground ?? 1) >= 0.5
     }
 
-    // A note-on = a bass note newly present in activeNotes this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
+    // A hit = a bass note whose onset the playhead has passed and whose envelope is
+    // still audible — derived purely from state.notes each frame, so scrubbing to any
+    // beat reconstructs exactly the hits playback would have live there.
+    const minimumHitLife = Math.max(0.03, attack + 0.01)
+    const hits: BassHit[] = []
+    for (const n of state.notes) {
       if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
-      if (prevKeys.current.has(`${n.pitch}:${n.beat}`)) continue
+      const ageSec = (state.beat - n.beat) * state.secPerBeat
+      if (ageSec < 0) continue
       const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
       const duration = Math.max(0.05, n.durationBeats || 1)
-      hitsRef.current.push({
-        time: now,
+      const length = Math.max(0.04, baseLength + duration * noteLengthScale)
+      const amp = bassEnvelope(ageSec, velocity, length, attack, decay, sustain, release)
+      if (ageSec >= minimumHitLife && amp <= 0.003) continue
+      hits.push({
+        ageSec,
+        amp,
         pitch: n.pitch,
         velocity,
-        length: Math.max(0.04, baseLength + duration * noteLengthScale),
+        length,
         phase: ((n.pitch % 12) / 12) * TWO_PI,
       })
     }
-    prevKeys.current = keys
 
-    const minimumHitLife = Math.max(0.03, attack + 0.01)
-    hitsRef.current = hitsRef.current
-      .filter((hit) => (now - hit.time) < minimumHitLife || bassEnvelope(now, hit, attack, decay, sustain, release) > 0.003)
-      .slice(-MAX_ACTIVE_HITS)
-
-    const activeHits = hitsRef.current
+    const activeHits = hits.slice(-MAX_ACTIVE_HITS)
     const positions = geometry.getAttribute('position') as BufferAttribute
     const sizes = geometry.getAttribute('aSize') as BufferAttribute
     const alphas = geometry.getAttribute('aAlpha') as BufferAttribute
@@ -251,7 +249,7 @@ function ParticleBassRingVisual({ trackId }: { trackId: string }) {
       return
     }
 
-    const rotation = now * rotationSpeed * rotationAmount
+    const rotation = t * rotationSpeed * rotationAmount
     const radiusSpan = outerRadius - innerRadius
     let cursor = 0
 
@@ -266,10 +264,10 @@ function ParticleBassRingVisual({ trackId }: { trackId: string }) {
       let colorPitch = PITCH_MIN
 
       for (const hit of activeHits) {
-        const amp = bassEnvelope(now, hit, attack, decay, sustain, release)
+        const amp = hit.amp
         if (amp <= 0.003) continue
 
-        const age = now - hit.time
+        const age = hit.ageSec
         const pitchNorm = clamp((hit.pitch - PITCH_MIN) / (PITCH_MAX - PITCH_MIN), 0, 1)
         const arms = 1 + (hit.pitch % 5)
         const direction = hit.pitch % 2 === 0 ? 1 : -1
@@ -292,7 +290,7 @@ function ParticleBassRingVisual({ trackId }: { trackId: string }) {
 
       const combinedAmp = clamp(ampSum, 0, 1.6)
       const radiusPushV = radialWave * radialPush
-      const noise = Math.sin(now * 18 + p.phase * 1.7) * turbulence * combinedAmp
+      const noise = Math.sin(t * 18 + p.phase * 1.7) * turbulence * combinedAmp
       const finalRadius = radius + radiusPushV + noise
       const x = centerX + Math.cos(angle) * finalRadius
       const y = centerY + Math.sin(angle) * finalRadius

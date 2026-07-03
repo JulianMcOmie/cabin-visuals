@@ -1,20 +1,20 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Group, Mesh, SphereGeometry, MeshBasicMaterial, Color, Vector3 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Each note spawns a ring of six glowing dots out at a distant
 // hexagon; they rotate around their orbit and drift toward the camera, fading in and out.
-// Rendered imperatively (Tyler's version re-rendered React every frame).
+// Fully derived from beat-age each frame (no integration), so it's scrub-accurate.
 
-interface Dot { mesh: Mesh; mat: MeshBasicMaterial; radius: number; angle: number }
+interface Pooled { mesh: Mesh; mat: MeshBasicMaterial; active: boolean }
 
 const HEX_RADIUS = 4
 const HEX_DISTANCE = 25
-let colorHue = 0
 let sharedSphere: SphereGeometry | null = null
 function sphereGeo() { if (!sharedSphere) sharedSphere = new SphereGeometry(1, 16, 16); return sharedSphere }
+const _c = new Color()
 
 function hexagonPoint(angle: number, radius: number, distance: number): Vector3 {
   const hexAngle = Math.PI / 3
@@ -24,11 +24,6 @@ function hexagonPoint(angle: number, radius: number, distance: number): Vector3 
   const x = Math.cos(a1) * radius + (Math.cos(a2) * radius - Math.cos(a1) * radius) * local
   const y = Math.sin(a1) * radius + (Math.sin(a2) * radius - Math.sin(a1) * radius) * local
   return new Vector3(x, y, -distance)
-}
-function nextRainbow(): Color {
-  const hue = (colorHue % 360) / 360
-  colorHue += 15 + Math.random() * 10
-  return new Color().setHSL(hue, 0.9, 0.6)
 }
 
 const PARAMS: ParamDef[] = [
@@ -43,60 +38,68 @@ const PORTS: PortDef[] = [
 
 function HexagonDotsVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
-  const dotsRef = useRef<Dot[]>([])
-  const prevKeys = useRef<Set<string>>(new Set())
+  const poolRef = useRef<Pooled[]>([])
   const { camera } = useThree()
 
   useEffect(() => () => {
     const g = groupRef.current
-    if (g) for (const d of dotsRef.current) { g.remove(d.mesh); d.mat.dispose() }
-    dotsRef.current = []
+    if (g) for (const p of poolRef.current) { g.remove(p.mesh); p.mat.dispose() }
+    poolRef.current = []
   }, [])
 
-  useFrame((_, delta) => {
+  function acquire(group: Group): Pooled {
+    for (const p of poolRef.current) if (!p.active) { p.active = true; p.mesh.visible = true; return p }
+    const mat = new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })
+    const mesh = new Mesh(sphereGeo(), mat)
+    group.add(mesh)
+    const entry: Pooled = { mesh, mat, active: true }
+    poolRef.current.push(entry)
+    return entry
+  }
+
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
     const dotSpeed = state.params.dotSpeed ?? 4
     const dotSize = state.params.dotSize ?? 0.15
-
-    // Spawn a hexagon ring on each new note.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
-      if (prevKeys.current.has(`${n.pitch}:${n.beat}`)) continue
-      const base = nextRainbow()
-      const vel = n.velocity <= 1 ? n.velocity : n.velocity / 127
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2 + (Math.random() - 0.5) * 0.3
-        const pos = hexagonPoint(angle, HEX_RADIUS, HEX_DISTANCE)
-        const radius = Math.hypot(pos.x, pos.y)
-        const color = base.clone().offsetHSL(Math.random() * 0.05 - 0.025, 0, Math.random() * 0.1 - 0.05)
-        const mat = new MeshBasicMaterial({ color, transparent: true, opacity: 0.8 + vel * 0.2, depthWrite: false })
-        const mesh = new Mesh(sphereGeo(), mat)
-        mesh.position.copy(pos)
-        mesh.scale.setScalar(dotSize * (0.7 + vel * 0.6))
-        group.add(mesh)
-        dotsRef.current.push({ mesh, mat, radius, angle })
-      }
-    }
-    prevKeys.current = keys
-
     const camZ = camera.position.z
     const threshold = camZ + 2
-    const dead: Dot[] = []
-    for (const d of dotsRef.current) {
-      d.mesh.position.z += dotSpeed * delta
-      d.angle += 0.5 * delta
-      d.mesh.position.x = Math.cos(d.angle) * d.radius
-      d.mesh.position.y = Math.sin(d.angle) * d.radius
-      const distFromCam = camZ - d.mesh.position.z
-      if (distFromCam < 2) d.mat.opacity = Math.max(0, distFromCam / 2)
-      else if (d.mesh.position.z > -HEX_DISTANCE + 5) d.mat.opacity = Math.min(1, (HEX_DISTANCE + d.mesh.position.z) / 5)
-      if (d.mesh.position.z >= threshold) dead.push(d)
+
+    for (const p of poolRef.current) { p.active = false; p.mesh.visible = false }
+
+    // Each note owns a hexagon ring; every dot's position is closed-form in the
+    // note's beat-age, so pause freezes it and scrubbing (either way) reproduces it.
+    for (let ei = 0; ei < state.notes.length; ei++) {
+      const n = state.notes[ei]
+      const ageSec = (state.beat - n.beat) * state.secPerBeat
+      if (ageSec < 0) continue
+      const z = -HEX_DISTANCE + dotSpeed * ageSec
+      if (z >= threshold) continue
+
+      // Rainbow: the old version random-walked a module-level hue by 15–25° per
+      // spawn; keep the same average stride (20°/note) but seed the wobble from
+      // the note so a scrub regenerates the identical color.
+      const noteSeed = n.beat * 13 + n.pitch * 7
+      const hue = ((ei * 20 + (seededRand(noteSeed) - 0.5) * 10) / 360 + 1) % 1
+      const vel = n.velocity <= 1 ? n.velocity : n.velocity / 127
+      // Fade in over the first 5 units, fade out inside 2 units of the camera.
+      const opacity = Math.max(0, Math.min(1, (HEX_DISTANCE + z) / 5, (camZ - z) / 2))
+
+      const spin = 0.5 * ageSec
+      for (let i = 0; i < 6; i++) {
+        const baseAngle = (i / 6) * Math.PI * 2 + (seededRand(noteSeed + i) - 0.5) * 0.3
+        const pos = hexagonPoint(baseAngle, HEX_RADIUS, HEX_DISTANCE)
+        const radius = Math.hypot(pos.x, pos.y)
+        const angle = baseAngle + spin
+        const d = acquire(group)
+        d.mesh.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, z)
+        d.mesh.scale.setScalar(dotSize * (0.7 + vel * 0.6))
+        d.mat.color.copy(_c.setHSL(hue, 0.9, 0.6).offsetHSL(
+          seededRand(noteSeed + i * 3 + 100) * 0.05 - 0.025, 0, seededRand(noteSeed + i * 3 + 200) * 0.1 - 0.05,
+        ))
+        d.mat.opacity = opacity
+      }
     }
-    for (const d of dead) { group.remove(d.mesh); d.mat.dispose() }
-    if (dead.length) dotsRef.current = dotsRef.current.filter((d) => !dead.includes(d))
   })
 
   return <group ref={groupRef} />

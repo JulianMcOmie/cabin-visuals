@@ -1,14 +1,16 @@
 import { useMemo, useRef, useEffect } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import {
   InstancedMesh, InstancedBufferAttribute, SphereGeometry, MeshBasicMaterial,
   Object3D, Color, Vector3, AdditiveBlending,
 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
-// Ported from Excellent DAW's ParticleBurst. Each note spawns an InstancedMesh burst of
+// Ported from Excellent DAW's ParticleBurst. Each note is an InstancedMesh burst of
 // particles that expands outward (7 selectable burst geometries + 5 ease curves) and fades.
+// Bursts are derived fresh each frame from the note stream (age = beats since onset, in
+// seconds at the current tempo), so they're fully scrub-accurate — no spawn-time state.
 // Pitch (36–71) picks one of Tyler's hardcoded colour presets; velocity scales brightness.
 // Tyler's palette colour-mode is dropped (no palettes here). Burst math + golden-ratio
 // sphere distribution + easing are Tyler's verbatim; only state reads + params are rewired.
@@ -182,7 +184,8 @@ function samplePreset(preset: ColorPreset, t: number): { h: number; s: number; l
   return stops[0]
 }
 
-// ── Particle distribution (golden ratio sphere, Tyler verbatim) ──────────────
+// ── Particle distribution (golden ratio sphere, Tyler's layout with the random
+// jitter swapped for seededRand so the table is identical across mounts) ──────
 interface Particle {
   nx: number; ny: number; nz: number
   r: number
@@ -203,16 +206,16 @@ function buildParticles(count: number): Particle[] {
     const nx = Math.cos(theta) * r
     const ny = y
     const nz = Math.sin(theta) * r
-    const jTheta = Math.random() * Math.PI * 2
-    const jPhi = Math.acos(2 * Math.random() - 1)
+    const jTheta = seededRand(i * 4 + 1) * Math.PI * 2
+    const jPhi = Math.acos(2 * seededRand(i * 4 + 2) - 1)
     const jStr = 0.3
     out.push({
       nx, ny, nz,
-      r: Math.pow(Math.random(), 0.5),
+      r: Math.pow(seededRand(i * 4 + 3), 0.5),
       jx: Math.sin(jPhi) * Math.cos(jTheta) * jStr,
       jy: Math.sin(jPhi) * Math.sin(jTheta) * jStr,
       jz: Math.cos(jPhi) * jStr,
-      dissolveMul: 0.6 + Math.random() * 0.8,
+      dissolveMul: 0.6 + seededRand(i * 4 + 4) * 0.8,
       theta: theta % (Math.PI * 2),
       phi: Math.acos(y),
       iNorm: i / (count - 1),
@@ -225,7 +228,8 @@ function buildParticles(count: number): Particle[] {
 const MAX_PARTICLES = 8000
 const MAX_ACTIVE_BURSTS = 6
 
-interface BurstEntry { birthTime: number; preset: ColorPreset }
+// A live burst this frame: t ∈ [0,1) is its normalized age, derived from the beat.
+interface BurstEntry { t: number; preset: ColorPreset }
 
 // Reusable temp vectors to avoid per-frame allocation (Tyler's names)
 const _tmpVec3A = new Vector3()
@@ -273,8 +277,7 @@ const PORTS: PortDef[] = [
 
 function ParticleBurstVisual({ trackId }: { trackId: string }) {
   const meshRef = useRef<InstancedMesh>(null)
-  const prevKeys = useRef<Set<string>>(new Set())
-  const burstsRef = useRef<BurstEntry[]>([])
+  const { camera } = useThree()
 
   // Build a single InstancedMesh sized for MAX_PARTICLES * MAX_ACTIVE_BURSTS instances.
   const particles = useMemo(() => buildParticles(MAX_PARTICLES), [])
@@ -293,16 +296,13 @@ function ParticleBurstVisual({ trackId }: { trackId: string }) {
   }), [])
 
   useEffect(() => () => {
-    burstsRef.current = []
     geometry.dispose()
     material.dispose()
   }, [geometry, material])
 
-  useFrame(({ camera }, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     if (!mesh) return
-    const state = getObjectState(trackId)
-    if (!state) { mesh.count = 0; return }
 
     const par = state.params
     const burstType = BURST_TYPES[Math.round(par.burstType ?? 0)] ?? 'sphere'
@@ -319,24 +319,21 @@ function ParticleBurstVisual({ trackId }: { trackId: string }) {
     const spiralTwists = par.spiralTwists ?? 3
     const polarPetals = par.polarPetals ?? 5
 
-    // Advance the local clock and spawn a burst on each new note-on.
-    const now = performance.now() / 1000
-
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
+    // Derive the live bursts from the note stream: a note is a burst while its age
+    // (seconds since onset at the current tempo) is inside burstLifetime. Pure
+    // function of state.beat, so a paused playhead holds still and scrub == playback.
+    const alive: BurstEntry[] = []
+    for (const n of state.notes) {
+      if (n.beat > state.beat) break  // notes are sorted; the rest are in the future
       if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
-      const key = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(key)) continue
+      const ageSec = (state.beat - n.beat) * state.secPerBeat
+      if (ageSec >= burstLifetime) continue
       const presetIndex = Math.max(0, Math.min(n.pitch - PITCH_MIN, COLOR_PRESETS.length - 1))
-      burstsRef.current.push({ birthTime: now, preset: COLOR_PRESETS[presetIndex] })
+      alive.push({ t: ageSec / burstLifetime, preset: COLOR_PRESETS[presetIndex] })
     }
-    prevKeys.current = keys
+    const bursts = alive.slice(-MAX_ACTIVE_BURSTS)  // keep the newest, like Tyler's cap
 
-    burstsRef.current = burstsRef.current
-      .filter((b) => (now - b.birthTime) < burstLifetime)
-      .slice(-MAX_ACTIVE_BURSTS)
-
-    if (burstsRef.current.length === 0) { mesh.count = 0; return }
+    if (bursts.length === 0) { mesh.count = 0; return }
 
     // Camera basis for cone/jet/etc. modes and cylinder clipping (Tyler verbatim).
     const camDir = _tmpVec3A
@@ -348,9 +345,8 @@ function ParticleBurstVisual({ trackId }: { trackId: string }) {
     const up = _tmpVec3F.crossVectors(right, toCamera).normalize()
 
     let cursor = 0
-    for (const burst of burstsRef.current) {
-      const age = now - burst.birthTime
-      const t = Math.min(age / burstLifetime, 1)
+    for (const burst of bursts) {
+      const t = burst.t
       const expand = applyEase(burstCurve, t, burstPower)
       const alpha = Math.max(0, Math.pow(1 - t, fadePower))
       if (alpha < 0.005) continue

@@ -1,8 +1,7 @@
 import { useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's `cameraControl`. This instrument renders NO mesh — it
@@ -52,17 +51,14 @@ const PORTS: PortDef[] = [
   { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
 ]
 
-interface CamHit { time: number; velocity: number; pitch: number }
+// The old cap on concurrent hits (kept so dense passages don't stack unbounded punch).
+const MAX_HITS = 8
 
 function CameraControlVisual({ trackId }: { trackId: string }) {
   const { camera } = useThree()
-  const prevKeys = useRef<Set<string>>(new Set())
-  const hitsRef = useRef<CamHit[]>([])
   const lookTarget = useRef(new Vector3(0, 0, 0))
 
-  useFrame(() => {
-    const state = getObjectState(trackId)
-    if (!state) return
+  useInstrumentFrame(trackId, (state) => {
     const p = state.params
     const ports = state.portValues
 
@@ -83,31 +79,31 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
     const scalePort = ports.scale ?? 0
     const huePort = ports.hue ?? 0
 
-    const now = performance.now() / 1000
-
-    // Register a punch on each new note onset (`${pitch}:${beat}` over activeNotes).
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    if (punchAmount > 0 || shakeAmount > 0) {
-      for (const n of state.activeNotes) {
-        const key = `${n.pitch}:${n.beat}`
-        if (prevKeys.current.has(key)) continue
-        const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
-        hitsRef.current.push({ time: now, velocity, pitch: n.pitch })
-      }
-    }
-    prevKeys.current = keys
-    hitsRef.current = hitsRef.current.filter((h) => now - h.time <= punchDecay).slice(-8)
-
-    // Accumulate the decaying impulse across live hits.
+    // Accumulate the decaying impulse purely from the playhead: a note "hits" while
+    // its beat-age (in seconds) is inside the punch window, so paused = static frame
+    // and scrub == playback. Notes are sorted by beat — walk backwards from the
+    // playhead and stop past the window (or after the most recent MAX_HITS, matching
+    // the old cap).
     let punch = 0
     let shakeX = 0
     let shakeY = 0
-    for (const h of hitsRef.current) {
-      const env = easeOutDecay((now - h.time) / punchDecay) * h.velocity
-      punch += env
-      // Deterministic per-hit shake direction from pitch, decaying with the envelope.
-      shakeX += Math.sin(h.pitch * 1.7 + now * 12) * env
-      shakeY += Math.cos(h.pitch * 2.3 + now * 9) * env
+    if (punchAmount > 0 || shakeAmount > 0) {
+      const notes = state.notes
+      let hits = 0
+      for (let i = notes.length - 1; i >= 0; i--) {
+        const n = notes[i]
+        const ageSec = (state.beat - n.beat) * state.secPerBeat
+        if (ageSec < 0) continue // not struck yet
+        if (ageSec > punchDecay) break // sorted: everything earlier is older still
+        const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
+        const env = easeOutDecay(ageSec / punchDecay) * velocity
+        punch += env
+        // Deterministic per-hit shake direction from pitch, oscillating on the hit's
+        // beat-age (anchored at onset), decaying with the envelope.
+        shakeX += Math.sin(n.pitch * 1.7 + ageSec * 12) * env
+        shakeY += Math.cos(n.pitch * 2.3 + ageSec * 9) * env
+        if (++hits >= MAX_HITS) break
+      }
     }
 
     // Slow hue-driven orbital drift + energy dolly.

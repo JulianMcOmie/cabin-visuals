@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Mesh } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A long-building upward particle riser with an accelerating
 // pressure-wave front — each note triggers a riser (velocity + note length shape it).
 // Tyler's palette color-mode is dropped (no palettes here); colorMode 0 = pitch colours,
-// 1 = mono black. Particle simulation math is Tyler's verbatim.
+// 1 = mono black. Particle simulation math is Tyler's verbatim; only the time source is
+// rewired: risers derive purely from `state.notes` + the playhead each frame (onset ages,
+// not a spawned list), so a paused playhead is a frozen frame and scrub == playback.
 
 const PITCH_MIN = 24
 const PITCH_MAX = 96
@@ -22,7 +22,7 @@ interface RiserParticle {
   angle: number; radiusNorm: number; heightOffset: number; birthOffset: number
   phase: number; speedMul: number; sizeMul: number; weight: number; drift: number; seed: number
 }
-interface RiserHit { id: number; time: number; pitch: number; velocity: number; duration: number }
+interface RiserHit { id: number; age: number; pitch: number; velocity: number; duration: number }
 
 const vertexShader = `
   attribute float aSize; attribute float aAlpha; attribute vec3 aColor;
@@ -112,21 +112,15 @@ const PORTS: PortDef[] = [
 ]
 
 function ParticleRiserVisual({ trackId }: { trackId: string }) {
-  const prevKeys = useRef<Set<string>>(new Set())
-  const hitsRef = useRef<RiserHit[]>([])
-  const idRef = useRef(0)
   const colorRef = useRef(new Color())
 
   const particles = useMemo(() => makeParticles(MAX_PARTICLES), [])
   const geometry = useMemo(buildGeometry, [])
   const material = useMemo(() => new ShaderMaterial({ vertexShader, fragmentShader, transparent: true, depthTest: false, depthWrite: false }), [])
 
-  useEffect(() => () => { hitsRef.current = []; geometry.dispose(); material.dispose() }, [geometry, material])
+  useEffect(() => () => { geometry.dispose(); material.dispose() }, [geometry, material])
 
-  useFrame(({ clock }) => {
-    const state = getObjectState(trackId)
-    if (!state) return
-    const now = clock.elapsedTime
+  useInstrumentFrame(trackId, (state) => {
     const p = state.params
     const particleCount = Math.floor(clamp(p.particleCount ?? 5200, 400, MAX_PARTICLES))
     const dotSize = p.dotSize ?? 5.8
@@ -151,27 +145,34 @@ function ParticleRiserVisual({ trackId }: { trackId: string }) {
     const peakFlash = p.peakFlash ?? 0.55
     const mono = (p.colorMode ?? 0) >= 0.5
 
-    const secPerBeat = 60 / useProjectStore.getState().bpm
+    // Beat-time in seconds — the noise/shimmer oscillation frequencies were tuned in seconds.
+    const t = state.beat * state.secPerBeat
     const makeDuration = (durSec: number) => Math.max(0.25, duration + Math.max(0, durSec) * noteDurationScale)
 
-    // Spawn a riser on each new note.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
+    // Derive the alive risers purely from the note list: a riser exists while its onset
+    // age is within [0, duration + release]. `id` is the note's onset index among
+    // eligible notes (the pure replacement for the old spawn counter — it only offsets
+    // each riser's hue and spiral). Newest MAX_ACTIVE_RISERS win, as before.
+    const alive: RiserHit[] = []
+    let nextId = 0
+    for (const n of state.notes) {
       if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
-      if (prevKeys.current.has(`${n.pitch}:${n.beat}`)) continue
+      const id = nextId++
+      const age = (state.beat - n.beat) * state.secPerBeat
+      if (age < 0) continue
+      const hitDuration = makeDuration((n.durationBeats || 0) * state.secPerBeat)
+      if (age > hitDuration + release) continue
       const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
-      hitsRef.current.push({ id: idRef.current++, time: now, pitch: n.pitch, velocity, duration: makeDuration((n.durationBeats || 0) * secPerBeat) })
+      alive.push({ id, age, pitch: n.pitch, velocity, duration: hitDuration })
     }
-    prevKeys.current = keys
-
-    hitsRef.current = hitsRef.current.filter((hit) => now - hit.time <= hit.duration + release).slice(-MAX_ACTIVE_RISERS)
+    const hits = alive.slice(-MAX_ACTIVE_RISERS)
 
     const pos = (geometry.getAttribute('position') as BufferAttribute).array as Float32Array
     const size = (geometry.getAttribute('aSize') as BufferAttribute).array as Float32Array
     const alpha = (geometry.getAttribute('aAlpha') as BufferAttribute).array as Float32Array
     const col = (geometry.getAttribute('aColor') as BufferAttribute).array as Float32Array
 
-    if (hitsRef.current.length === 0) { geometry.setDrawRange(0, 0); return }
+    if (hits.length === 0) { geometry.setDrawRange(0, 0); return }
 
     let cursor = 0
     const writePoint = (x: number, y: number, z: number, ps: number, opacity: number, color: Color) => {
@@ -183,8 +184,8 @@ function ParticleRiserVisual({ trackId }: { trackId: string }) {
       cursor++
     }
 
-    for (const hit of hitsRef.current) {
-      const age = now - hit.time
+    for (const hit of hits) {
+      const age = hit.age
       const progress = clamp(age / hit.duration, 0, 1)
       const energy = smooth01(progress)
       const env = riserEnvelope(age, hit.duration, attack, release) * hit.velocity
@@ -209,8 +210,8 @@ function ParticleRiserVisual({ trackId }: { trackId: string }) {
         const pull = 1 - centerPull * energy * smooth01(heightNorm)
         const laneWidth = width * (0.34 + pt.radiusNorm * 0.72) * pull
         const spiral = pt.angle + spiralAmount * (age * spiralSpeed * (0.4 + energy) + heightNorm * 4.8 + pt.phase) + hit.id * 0.19
-        const noise = Math.sin(now * 7.5 + pt.phase + heightNorm * 8.0) * turbulence * (0.25 + energy)
-        const breath = Math.sin(now * (4.0 + shimmer * 8.0) + pt.phase * 1.7) * shimmer * 0.06 * energy
+        const noise = Math.sin(t * 7.5 + pt.phase + heightNorm * 8.0) * turbulence * (0.25 + energy)
+        const breath = Math.sin(t * (4.0 + shimmer * 8.0) + pt.phase * 1.7) * shimmer * 0.06 * energy
         const radial = laneWidth * (1 + noise + breath)
         const x = Math.cos(spiral) * radial + pt.drift * turbulence * (0.45 + energy)
         const y = startY + heightNorm * (endY - startY)

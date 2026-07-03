@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Vector3, Mesh } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Note-triggered particle strings that rush outward and toward the
-// camera in fast fading streams. Each note-on spawns a burst of streams. Tyler's palette
-// color-mode is dropped (no palettes here); colorMode 0 = mono black, 1 = pitch colours.
+// camera in fast fading streams. Each note drives a burst of streams, derived per frame from
+// the note list (pure function of the beat — scrub == playback). Tyler's palette color-mode
+// is dropped (no palettes here); colorMode 0 = mono black, 1 = pitch colours.
 // Particle simulation math + GLSL Points shader are Tyler's verbatim.
 
 const TWO_PI = Math.PI * 2
@@ -22,7 +23,7 @@ interface StreamSpec {
   laneX: number; laneY: number; laneRadius: number; speedMul: number; sizeMul: number
   curve: number; phase: number; hue: number; seed: number
 }
-interface BurstEntry { id: number; birthTime: number; pitch: number; velocity: number; streams: StreamSpec[] }
+interface AliveBurst { id: number; ageSec: number; pitch: number; velocity: number; streams: StreamSpec[] }
 
 const vertexShader = `
   attribute float aSize;
@@ -155,9 +156,10 @@ const _tmpVec3G = new Vector3()
 
 function ParticleStreamsVisual({ trackId }: { trackId: string }) {
   const backgroundRef = useRef<Mesh>(null)
-  const prevKeys = useRef<Set<string>>(new Set())
-  const burstsRef = useRef<BurstEntry[]>([])
-  const idRef = useRef(0)
+  const { camera } = useThree()
+  // Stream specs are deterministic per (note index, pitch, stream count); the cache
+  // only avoids reallocating them every frame, it never holds mutable state.
+  const streamCache = useRef<Map<string, StreamSpec[]>>(new Map())
   const colorRef = useRef(new Color())
 
   const geometry = useMemo(buildGeometry, [])
@@ -170,16 +172,12 @@ function ParticleStreamsVisual({ trackId }: { trackId: string }) {
   }), [])
 
   useEffect(() => () => {
-    burstsRef.current = []
+    streamCache.current.clear()
     geometry.dispose()
     material.dispose()
   }, [geometry, material])
 
-  useFrame(({ camera, clock }) => {
-    const state = getObjectState(trackId)
-    if (!state) return
-
-    const now = clock.elapsedTime
+  useInstrumentFrame(trackId, (state) => {
     const p = state.params
     const streamCount = clamp(p.streams ?? 28, 1, MAX_STREAMS)
     const particlesPerStream = Math.floor(clamp(p.particlesPerStream ?? 42, 4, MAX_PARTICLES_PER_STREAM))
@@ -204,28 +202,35 @@ function ParticleStreamsVisual({ trackId }: { trackId: string }) {
       backgroundRef.current.visible = (p.whiteBackground ?? 1) >= 0.5
     }
 
-    // Spawn a burst on each new note-on (a note key newly present in activeNotes this frame).
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
-      if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
-      const key = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(key)) continue
-      const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
-      const id = idRef.current++
-      burstsRef.current.push({
-        id,
-        birthTime: now,
-        pitch: n.pitch,
-        velocity,
-        streams: makeStreams(streamCount, id, n.pitch),
-      })
-    }
-    prevKeys.current = keys
+    // Beat-time seconds — the flicker/spiral/breath clock. Matches wall time during
+    // playback at default bpm, and freezes with the playhead when paused.
+    const tSec = state.beat * state.secPerBeat
 
+    // Alive bursts are derived from the note list every frame (never spawned into a
+    // ref), so any scrub — forward or backward — reconstructs exactly the bursts
+    // playback shows at that beat. A burst is alive while its note-on age (in
+    // seconds, via secPerBeat) is inside the envelope's total lifetime.
     const totalLifetime = attackDuration + travelDuration + fadeDuration + trailDuration
-    burstsRef.current = burstsRef.current
-      .filter((burst) => now - burst.birthTime <= totalLifetime)
-      .slice(-MAX_ACTIVE_BURSTS)
+    const cache = streamCache.current
+    const notes = state.notes
+    const alive: AliveBurst[] = []
+    for (let ni = 0; ni < notes.length; ni++) {
+      const n = notes[ni]
+      if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
+      const ageSec = (state.beat - n.beat) * state.secPerBeat
+      if (ageSec < 0 || ageSec > totalLifetime) continue
+      const velocity = clamp(n.velocity <= 1 ? n.velocity : n.velocity / 127, 0.05, 1)
+      const cacheKey = `${ni}:${n.pitch}:${streamCount}`
+      let streams = cache.get(cacheKey)
+      if (!streams) {
+        if (cache.size > 512) cache.clear()
+        streams = makeStreams(streamCount, ni, n.pitch)
+        cache.set(cacheKey, streams)
+      }
+      alive.push({ id: ni, ageSec, pitch: n.pitch, velocity, streams })
+    }
+    // Notes are sorted by beat, so the tail holds the most recently started bursts.
+    const bursts = alive.length > MAX_ACTIVE_BURSTS ? alive.slice(-MAX_ACTIVE_BURSTS) : alive
 
     const positions = geometry.getAttribute('position') as BufferAttribute
     const sizes = geometry.getAttribute('aSize') as BufferAttribute
@@ -277,8 +282,8 @@ function ParticleStreamsVisual({ trackId }: { trackId: string }) {
       cursor++
     }
 
-    for (const burst of burstsRef.current) {
-      const age = now - burst.birthTime
+    for (const burst of bursts) {
+      const age = burst.ageSec
       const env = envelope(age, attackDuration, travelDuration, fadeDuration) * burst.velocity
       if (env <= 0.002) continue
 
@@ -300,16 +305,16 @@ function ParticleStreamsVisual({ trackId }: { trackId: string }) {
           const progress = clamp(progressRaw, 0, 1)
           const distance = progress * travelDistance * stream.speedMul
           const stringAlpha = Math.pow(1 - tailT * 0.76, 1.6)
-          const flicker = 0.92 + Math.sin(now * 24 + stream.phase + j * 0.47) * 0.08
+          const flicker = 0.92 + Math.sin(tSec * 24 + stream.phase + j * 0.47) * 0.08
           const waveBoost = Math.exp(-Math.pow(j / waveWidth, 2.35))
           const waveScale = 0.36 + waveBoost * waveSizeBoost
           const spawnFade = smooth01(progressRaw / Math.max(0.001, trailProgress / particlesPerStream))
-          const spiral = spiralAmount * (now * spiralSpeed + progress * 3.2 + stream.phase)
+          const spiral = spiralAmount * (tSec * spiralSpeed + progress * 3.2 + stream.phase)
           const spiralCos = Math.cos(spiral)
           const spiralSin = Math.sin(spiral)
           const laneX = stream.laneX * spiralCos - stream.laneY * spiralSin
           const laneY = stream.laneX * spiralSin + stream.laneY * spiralCos
-          const streamBreath = Math.sin(now * 5.2 + stream.phase + progress * 4.0) * turbulence * (0.2 + progress)
+          const streamBreath = Math.sin(tSec * 5.2 + stream.phase + progress * 4.0) * turbulence * (0.2 + progress)
           const runScale = baseLaneScale + runSpread * progress
           const jitterA = stream.seed + j * 19.19
           const jitterScale = streamTightness * (0.15 + progress) * (0.35 + stream.laneRadius)

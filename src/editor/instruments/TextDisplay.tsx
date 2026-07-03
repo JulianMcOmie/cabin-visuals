@@ -1,15 +1,16 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import type { ResolvedNote } from '../core/engine/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Displays text a word at a time, advancing on each MIDI note
 // and filling the frame. Words are rendered to a canvas + CanvasTexture on screen-filling
 // planes. Supports delay echoes, per-note height offset (pitch 60-72), flight mode (words
-// zoom toward the camera), and rainbow hue cycling. Tyler's Google-font loader, palette,
-// and seek handling are dropped; note-onsets are detected from the object's activeNotes.
+// zoom toward the camera), and rainbow hue cycling. Tyler's Google-font loader and palette
+// are dropped; everything (word index, bounce/release/pop ages, echoes, flight sprites)
+// is derived per frame from the resolved note list, so scrub == playback.
 
 // Pitch roles (kept from Tyler): a dedicated "next word" pitch advances the word, a bass
 // "pop" pitch punches the current word, and a 60-72 band sets a vertical height offset.
@@ -122,22 +123,14 @@ function parseWords(text: string): string[] {
   return result
 }
 
-interface WordHistoryEntry {
-  word: string
-  triggerTime: number
-  duration: number
-  yOffset: number
-}
-
-interface FlightSprite {
+// Flight sprites are pooled: one mesh+texture reused across subdiv indices, retextured
+// only when the (word, styling) key changes.
+interface FlightPooled {
   mesh: Mesh
   texture: CanvasTexture
-  birthTime: number
-  vx: number
-  vy: number
-  tumbleX: number
-  tumbleY: number
-  word: string
+  mat: MeshBasicMaterial
+  key: string
+  active: boolean
 }
 
 const MAX_FLIGHT_SPRITES = 128
@@ -186,30 +179,16 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
 
-  // Note-onset detection: keys present in activeNotes that are new this frame.
-  const prevKeys = useRef<Set<string>>(new Set())
-  const wordIndexRef = useRef(0) // advances once per PITCH_NEXT_WORD onset
-
-  // Timing (seconds, from performance.now()).
-  const noteOnTimeRef = useRef(-1)
-  const onsetTimeRef = useRef(-1)
-  const bassPopTimeRef = useRef(-1)
-  const releaseTimeRef = useRef(-1)
-  const lastFrameTimeRef = useRef(0)
-  const currentYOffsetRef = useRef(0)
-
   // Cache keys for the main texture so we only re-render the canvas when needed.
   const lastRenderKeyRef = useRef('')
 
   // Delay echoes — one pre-created mesh per tap slot.
-  const wordHistoryRef = useRef<WordHistoryEntry[]>([])
   const echoMeshesRef = useRef<Mesh[]>([])
   const echoTexturesRef = useRef<CanvasTexture[]>([])
   const echoLastWordsRef = useRef<string[]>([])
 
-  // Flight mode.
-  const flightSpritesRef = useRef<FlightSprite[]>([])
-  const flightLastSubdivRef = useRef(-1)
+  // Flight mode mesh pool.
+  const flightPoolRef = useRef<FlightPooled[]>([])
 
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
@@ -243,12 +222,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       tex.dispose()
       for (const t of textures) t.dispose()
       for (const m of meshes) { (m.material as Material).dispose(); m.geometry.dispose() }
-      for (const spr of flightSpritesRef.current) {
+      for (const spr of flightPoolRef.current) {
         spr.texture.dispose()
-        ;(spr.mesh.material as Material).dispose()
+        spr.mat.dispose()
         spr.mesh.geometry.dispose()
       }
-      flightSpritesRef.current = []
+      flightPoolRef.current = []
     }
   }, [])
 
@@ -260,9 +239,23 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     return () => { for (const mesh of echoMeshesRef.current) g.remove(mesh) }
   }, [ready])
 
-  useFrame((_, delta) => {
-    const state = getObjectState(trackId)
-    if (!state || !textureRef.current || !meshRef.current || !groupRef.current) return
+  function acquireFlightSprite(group: Group): FlightPooled {
+    for (const spr of flightPoolRef.current) {
+      if (!spr.active) { spr.active = true; spr.mesh.visible = true; return spr }
+    }
+    const texture = new CanvasTexture(createTextCanvas('', 0.05, fontStack(0), '#ffffff', '#000000'))
+    texture.minFilter = LinearFilter
+    texture.magFilter = LinearFilter
+    const mat = new MeshBasicMaterial({ map: texture, transparent: true, opacity: 1, side: DoubleSide, depthWrite: false, toneMapped: false })
+    const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
+    group.add(mesh)
+    const entry: FlightPooled = { mesh, texture, mat, key: '', active: true }
+    flightPoolRef.current.push(entry)
+    return entry
+  }
+
+  useInstrumentFrame(trackId, (state) => {
+    if (!textureRef.current || !meshRef.current || !groupRef.current) return
 
     const p = state.params
     const text = state.stringParams.text ?? 'HELLO'
@@ -293,74 +286,71 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const words = parseWords(text)
     if (words.length === 0) { meshRef.current.visible = false; return }
 
-    const currentBeat = useTimeStore.getState().currentBeat
-    const now = performance.now() / 1000
-    const dt = now - lastFrameTimeRef.current
-    lastFrameTimeRef.current = now
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
 
-    // --- Note-onset detection ---
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    let nextWordOnset = false
-    let bassPopOnset = false
-    for (const n of state.activeNotes) {
-      const k = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(k)) continue
-      if (n.pitch === PITCH_NEXT_WORD) nextWordOnset = true
-      else if (n.pitch === PITCH_BASS_POP) bassPopOnset = true
-    }
-    prevKeys.current = keys
-
-    // Height offset from the latest held 60-72 note.
-    let latestHeightPitch = -1
-    for (const n of state.activeNotes) {
-      if (n.pitch >= PITCH_HEIGHT_MIN && n.pitch <= PITCH_HEIGHT_MAX) {
-        latestHeightPitch = Math.max(latestHeightPitch, n.pitch)
+    // --- Note derivation (pure) ---
+    // Every visual below is a function of the beat and the resolved note list: the
+    // word index is the count of past "next word" onsets, and every age (bounce,
+    // release fade, bass pop, sprite flight) is measured from a note's beat.
+    const nextWordNotes: ResolvedNote[] = []
+    const heightNotes: ResolvedNote[] = []
+    let lastBassNote: ResolvedNote | null = null
+    let lastWordEndBeat = -1
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break // notes are sorted by beat
+      if (n.pitch === PITCH_NEXT_WORD) {
+        nextWordNotes.push(n)
+        lastWordEndBeat = Math.max(lastWordEndBeat, n.beat + n.durationBeats)
+      } else if (n.pitch === PITCH_BASS_POP) {
+        lastBassNote = n
+      } else if (n.pitch >= PITCH_HEIGHT_MIN && n.pitch <= PITCH_HEIGHT_MAX) {
+        heightNotes.push(n)
       }
     }
-    if (latestHeightPitch >= 0) {
-      currentYOffsetRef.current = (latestHeightPitch - PITCH_HEIGHT_CENTER) / (PITCH_HEIGHT_MAX - PITCH_HEIGHT_CENTER)
+
+    // Is some word note sounding at beat b? (gates flight spawns / release fade)
+    const nextWordHeldAt = (b: number) => {
+      for (const n of nextWordNotes) {
+        if (n.beat > b) break
+        if (b < n.beat + n.durationBeats) return true
+      }
+      return false
     }
 
-    // Is the word note currently held?
-    const isNoteHeld = state.activeNotes.some((n) => n.pitch === PITCH_NEXT_WORD)
+    // Count of word onsets at or before beat b — the word index at that beat.
+    const wordCountAt = (b: number) => {
+      let c = 0
+      for (const n of nextWordNotes) { if (n.beat <= b) c++; else break }
+      return c
+    }
+
+    // Height offset at beat b: the highest held 60-72 pitch, else the last one to
+    // release stays in effect (sticky, like Tyler's ref did).
+    const yOffsetAt = (b: number) => {
+      let heldPitch = -1
+      let sticky: ResolvedNote | null = null
+      for (const n of heightNotes) {
+        if (n.beat > b) break
+        if (b < n.beat + n.durationBeats && n.pitch > heldPitch) heldPitch = n.pitch
+        const end = n.beat + n.durationBeats
+        const stickyEnd = sticky ? sticky.beat + sticky.durationBeats : -Infinity
+        if (end > stickyEnd || (end === stickyEnd && sticky && n.pitch > sticky.pitch)) sticky = n
+      }
+      const pitch = heldPitch >= 0 ? heldPitch : sticky ? sticky.pitch : -1
+      return pitch < 0 ? 0 : (pitch - PITCH_HEIGHT_CENTER) / (PITCH_HEIGHT_MAX - PITCH_HEIGHT_CENTER)
+    }
+
+    const wordCount = nextWordNotes.length
+    const lastWordNote = wordCount > 0 ? nextWordNotes[wordCount - 1] : null
+    const currentWord = words[(Math.max(1, wordCount) - 1) % words.length] ?? words[0]
+    const isNoteHeld = currentBeat < lastWordEndBeat
+    const currentYOffset = yOffsetAt(currentBeat)
 
     // Rainbow hue cycles on beat subdivisions.
     const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
     const rainbowHue = rainbowEnabled ? ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
     const effectiveColor = rainbowEnabled ? hslToHex(rainbowHue, 1, 0.55) : color
-
-    // Advance the word on a new "next word" onset.
-    if (nextWordOnset) {
-      wordIndexRef.current++
-      noteOnTimeRef.current = now
-      onsetTimeRef.current = now
-      releaseTimeRef.current = -1
-    }
-    const currentWord = words[(Math.max(1, wordIndexRef.current) - 1) % words.length] ?? words[0]
-
-    if (nextWordOnset) {
-      wordHistoryRef.current.push({ word: currentWord, triggerTime: now, duration: 0, yOffset: currentYOffsetRef.current })
-    }
-
-    if (bassPopOnset) bassPopTimeRef.current = now
-
-    // Release tracking for fade-out.
-    if (!isNoteHeld && releaseTimeRef.current < 0 && noteOnTimeRef.current >= 0) {
-      releaseTimeRef.current = now
-    }
-
-    // Update duration of the latest history entry while held.
-    const history = wordHistoryRef.current
-    if (isNoteHeld && history.length > 0 && noteOnTimeRef.current >= 0) {
-      history[history.length - 1].duration = now - noteOnTimeRef.current
-    } else if (!isNoteHeld && noteOnTimeRef.current >= 0) {
-      if (history.length > 0) history[history.length - 1].duration = now - noteOnTimeRef.current
-      noteOnTimeRef.current = -1
-    }
-
-    // Prune expired history.
-    const maxEchoLifetime = delayTaps * delayTime + 10
-    wordHistoryRef.current = history.filter((e) => now - e.triggerTime < maxEchoLifetime)
 
     const baseScale = Math.min(viewport.width, viewport.height) * 0.6 * fontSize
 
@@ -375,89 +365,68 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     }
 
     // --- Flight mode ---
+    // One sprite per past flight subdiv where a word note was held. Each sprite's
+    // pose is closed-form from its age (no per-frame integration), with drift and
+    // tumble seeded from the subdiv index, so scrubbing reproduces it exactly.
+    for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
     if (flightEnabled) {
-      const flightSubdiv = Math.floor(currentBeat * flightSubdivRate)
-      if (flightSubdiv !== flightLastSubdivRef.current) {
-        flightLastSubdivRef.current = flightSubdiv
-        if (isNoteHeld && flightSpritesRef.current.length < MAX_FLIGHT_SPRITES) {
-          const tex = new CanvasTexture(createTextCanvas(currentWord, strokeWidth, family, effectiveColor, strokeColor))
-          tex.minFilter = LinearFilter
-          tex.magFilter = LinearFilter
-          const mat = new MeshBasicMaterial({ map: tex, transparent: true, opacity: textOpacity, side: DoubleSide, depthWrite: false, toneMapped: false })
-          const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
-          mesh.position.set(0, currentYOffsetRef.current * viewport.height * heightAmount, 0)
-          mesh.scale.setScalar(baseScale)
-          groupRef.current.add(mesh)
+      const lifeBeats = flightMaxDepth / flightSpeed / secPerBeat
+      const kMax = Math.floor(currentBeat * flightSubdivRate)
+      const kMin = Math.max(0, Math.ceil((currentBeat - lifeBeats) * flightSubdivRate), kMax - MAX_FLIGHT_SPRITES + 1)
+      for (let k = kMin; k <= kMax; k++) {
+        const spawnBeat = k / flightSubdivRate
+        if (spawnBeat > currentBeat || !nextWordHeldAt(spawnBeat)) continue
+        const ageSec = (currentBeat - spawnBeat) * secPerBeat
+        const depth = flightSpeed * ageSec
+        if (depth > flightMaxDepth) continue
 
-          const seed = flightSubdiv * 13 + 7
-          const pseudoRand = (n: number) => { const x = Math.sin(n * 9301 + 49297) * 233280; return x - Math.floor(x) }
-          flightSpritesRef.current.push({
-            mesh, texture: tex, birthTime: now,
-            vx: (pseudoRand(seed) - 0.5) * flightDrift,
-            vy: (pseudoRand(seed + 1) - 0.5) * flightDrift * 0.6,
-            tumbleX: (pseudoRand(seed + 2) - 0.5) * flightTumble,
-            tumbleY: (pseudoRand(seed + 3) - 0.5) * flightTumble,
-            word: currentWord,
-          })
+        const sprWord = words[(Math.max(1, wordCountAt(spawnBeat)) - 1) % words.length] ?? words[0]
+        const sprColor = rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color
+        const seed = k * 13 + 7
+        const vx = (seededRand(seed) - 0.5) * flightDrift
+        const vy = (seededRand(seed + 1) - 0.5) * flightDrift * 0.6
+        const tumbleX = (seededRand(seed + 2) - 0.5) * flightTumble
+        const tumbleY = (seededRand(seed + 3) - 0.5) * flightTumble
+
+        const spr = acquireFlightSprite(groupRef.current)
+        const sprKey = `${sprWord}|${strokeWidth}|${family}|${sprColor}|${strokeColor}`
+        if (sprKey !== spr.key) {
+          spr.key = sprKey
+          spr.texture.image = createTextCanvas(sprWord, strokeWidth, family, sprColor, strokeColor)
+          spr.texture.needsUpdate = true
         }
-      }
-
-      const flightDt = Math.min(dt, 0.05)
-      const toRemove: number[] = []
-      for (let i = 0; i < flightSpritesRef.current.length; i++) {
-        const spr = flightSpritesRef.current[i]
-        const m = spr.mesh
-        m.position.z -= flightSpeed * flightDt
-        m.position.x += spr.vx * flightDt
-        m.position.y += spr.vy * flightDt
-        m.rotation.x += spr.tumbleX * flightDt
-        m.rotation.y += spr.tumbleY * flightDt
-        const depth = -m.position.z
+        spr.mesh.position.set(
+          vx * ageSec,
+          yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec,
+          -depth,
+        )
+        spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
+        spr.mesh.scale.setScalar(baseScale)
         const fadeStart = flightMaxDepth * 0.7
-        const mat = m.material as MeshBasicMaterial
-        mat.opacity = depth > fadeStart
+        spr.mat.opacity = depth > fadeStart
           ? textOpacity * Math.max(0, 1 - (depth - fadeStart) / (flightMaxDepth - fadeStart))
           : textOpacity
-        if (depth > flightMaxDepth) toRemove.push(i)
       }
-      for (let i = toRemove.length - 1; i >= 0; i--) {
-        const idx = toRemove[i]
-        const spr = flightSpritesRef.current[idx]
-        groupRef.current.remove(spr.mesh)
-        spr.texture.dispose()
-        ;(spr.mesh.material as Material).dispose()
-        spr.mesh.geometry.dispose()
-        flightSpritesRef.current.splice(idx, 1)
-      }
-    } else if (flightSpritesRef.current.length > 0) {
-      for (const spr of flightSpritesRef.current) {
-        groupRef.current.remove(spr.mesh)
-        spr.texture.dispose()
-        ;(spr.mesh.material as Material).dispose()
-        spr.mesh.geometry.dispose()
-      }
-      flightSpritesRef.current = []
     }
 
     // --- Main mesh ---
     let releaseOpacity = 1
     if (isNoteHeld) {
       releaseOpacity = 1
-    } else if (releaseTimeRef.current >= 0) {
-      const releaseAge = now - releaseTimeRef.current
+    } else if (lastWordNote) {
+      const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
       releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
-    } else if (wordIndexRef.current === 0) {
-      releaseOpacity = 1 // show the first word before any note plays
     }
+    // (before any word note has played, the first word shows at full opacity)
     meshRef.current.visible = releaseOpacity > 0
 
     const onsetDuration = 0.12
-    const onsetAge = onsetTimeRef.current >= 0 ? now - onsetTimeRef.current : onsetDuration
+    const onsetAge = lastWordNote ? (currentBeat - lastWordNote.beat) * secPerBeat : onsetDuration
     const onsetT = Math.min(onsetAge / onsetDuration, 1)
     const onsetScale = 1 + onsetBounce * (1 - onsetT)
 
     const bassPopDuration = 0.25
-    const bassPopAge = bassPopTimeRef.current >= 0 ? now - bassPopTimeRef.current : bassPopDuration
+    const bassPopAge = lastBassNote ? (currentBeat - lastBassNote.beat) * secPerBeat : bassPopDuration
     const bassPopT = Math.min(bassPopAge / bassPopDuration, 1)
     const bassPopDecay = 1 - bassPopT
     const bassPopScale = 1 + 0.25 * bassPopDecay * bassPopDecay
@@ -470,7 +439,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const scale = baseScale * onsetScale * bassPopScale
     meshRef.current.scale.set(scale, scale, 1)
     meshRef.current.position.x = shakeX
-    meshRef.current.position.y = currentYOffsetRef.current * viewport.height * heightAmount + shakeY
+    meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
 
     // --- Delay taps ---
     for (let tap = 0; tap < MAX_DELAY_TAPS; tap++) {
@@ -481,21 +450,25 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tapNum = tap + 1
       const tapOffset = tapNum * delayTime
 
-      let bestEntry: WordHistoryEntry | null = null
-      let bestEchoAge = Infinity
-      for (let h = history.length - 1; h >= 0; h--) {
-        const echoAge = now - (history[h].triggerTime + tapOffset)
-        if (echoAge >= 0 && echoAge < bestEchoAge) { bestEntry = history[h]; bestEchoAge = echoAge; break }
+      // Most recent word onset whose echo for this tap has already started.
+      let echoIdx = -1
+      let echoAge = 0
+      for (let h = wordCount - 1; h >= 0; h--) {
+        const age = (currentBeat - nextWordNotes[h].beat) * secPerBeat - tapOffset
+        if (age >= 0) { echoIdx = h; echoAge = age; break }
       }
-      if (!bestEntry) { mesh.visible = false; continue }
+      if (echoIdx < 0) { mesh.visible = false; continue }
 
-      const echoDuration = bestEntry.duration > 0 ? bestEntry.duration : delayTime
-      if (bestEchoAge > echoDuration) { mesh.visible = false; continue }
+      const echoNote = nextWordNotes[echoIdx]
+      const heldSec = echoNote.durationBeats * secPerBeat
+      const echoDuration = heldSec > 0 ? heldSec : delayTime
+      if (echoAge > echoDuration) { mesh.visible = false; continue }
 
+      const echoWord = words[echoIdx % words.length]
       const tex = echoTexturesRef.current[tap]
-      const echoKey = `${bestEntry.word}|${effectiveColor}|${strokeColor}`
+      const echoKey = `${echoWord}|${effectiveColor}|${strokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        tex.image = createTextCanvas(bestEntry.word, strokeWidth, family, effectiveColor, strokeColor)
+        tex.image = createTextCanvas(echoWord, strokeWidth, family, effectiveColor, strokeColor)
         tex.needsUpdate = true
         echoLastWordsRef.current[tap] = echoKey
       }
@@ -503,7 +476,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tapScale = baseScale * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
       mesh.scale.set(tapScale, tapScale, 1)
       mesh.position.x = pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0
-      mesh.position.y = bestEntry.yOffset * viewport.height * heightAmount
+      mesh.position.y = yOffsetAt(echoNote.beat) * viewport.height * heightAmount
       mesh.position.z = -0.01 * tapNum
       ;(mesh.material as MeshBasicMaterial).opacity = Math.max(0.01, 1 - delayOpacityFalloff * tapNum) * textOpacity
       mesh.visible = true

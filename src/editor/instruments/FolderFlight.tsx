@@ -1,14 +1,13 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, DoubleSide } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
-// Ported from Excellent DAW. 3D folder icons fly backward into z-depth — each note onset
-// spawns a folder that pops in, drifts, tumbles, and fades out at max depth. Meshes are
+// Ported from Excellent DAW. 3D folder icons fly backward into z-depth — each note in the
+// C4 octave is a folder that pops in, drifts, tumbles, and fades out at max depth. Every
+// folder's pose is closed-form from its age (beats since onset → seconds), so a static
+// playhead is a static frame and scrubbing in either direction is exact. Meshes are
 // pooled. The folder icon is drawn procedurally to a canvas texture (no asset needed).
-// Tyler's currentBeat/subdivRate spawn gating + legato glide are replaced with the cabin
-// note-onset model (spawn per new note); spawn/flight/recycle math is otherwise preserved.
 
 const PITCH_MIN = 60 // C4
 const PITCH_MAX = 71 // B4
@@ -81,16 +80,7 @@ function getFolderTexture(): CanvasTexture {
   return _folderTexture
 }
 
-interface FolderSprite {
-  mesh: Mesh
-  mat: MeshBasicMaterial
-  birthTime: number // performance.now() ms
-  vx: number
-  vy: number
-  tumbleX: number
-  tumbleY: number
-  targetScale: number
-}
+interface Pooled { mesh: Mesh; mat: MeshBasicMaterial; active: boolean }
 
 const PARAMS: ParamDef[] = [
   { key: 'speed', label: 'Flight Speed', min: 2, max: 60, step: 1, default: 15 },
@@ -109,25 +99,40 @@ const PORTS: PortDef[] = [
 
 function FolderFlightVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
-  const spritesRef = useRef<FolderSprite[]>([])
-  const prevKeys = useRef<Set<string>>(new Set())
+  const poolRef = useRef<Pooled[]>([])
   const geo = useMemo(() => new PlaneGeometry(1, 1), [])
 
   useEffect(() => () => {
     const g = groupRef.current
-    for (const spr of spritesRef.current) {
-      if (g) g.remove(spr.mesh)
-      spr.mat.dispose()
+    for (const p of poolRef.current) {
+      if (g) g.remove(p.mesh)
+      p.mat.dispose()
     }
-    spritesRef.current = []
+    poolRef.current = []
     geo.dispose()
   }, [geo])
 
-  useFrame((_, delta) => {
+  // Per-sprite material because each folder fades independently near max depth
+  function acquire(group: Group): Pooled {
+    for (const p of poolRef.current) if (!p.active) { p.active = true; p.mesh.visible = true; return p }
+    const mat = new MeshBasicMaterial({
+      map: getFolderTexture(),
+      transparent: true,
+      opacity: 1,
+      side: DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    })
+    const mesh = new Mesh(geo, mat)
+    group.add(mesh)
+    const entry: Pooled = { mesh, mat, active: true }
+    poolRef.current.push(entry)
+    return entry
+  }
+
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
 
     const p = state.params
     const speed = p.speed ?? 15
@@ -138,15 +143,25 @@ function FolderFlightVisual({ trackId }: { trackId: string }) {
     const drift = p.drift ?? 0.5
     const tumble = p.tumble ?? 1
 
-    const now = performance.now()
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
+    const fadeStart = maxDepth * 0.7
 
-    // ── Spawn a folder on each new note onset ──
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
+    for (const pm of poolRef.current) { pm.active = false; pm.mesh.visible = false }
+
+    let rendered = 0
+    for (const n of state.notes) {
       if (n.pitch < PITCH_MIN || n.pitch > PITCH_MAX) continue
-      const key = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(key)) continue
-      if (spritesRef.current.length >= MAX_SPRITES) break
+
+      // Age in seconds since onset; folders don't exist before their note plays
+      const ageSec = (currentBeat - n.beat) * secPerBeat
+      if (ageSec < 0) continue
+
+      // Fly backward into z-depth from the spawn plane; cull past max depth
+      const z = -5 - speed * ageSec
+      const depth = -z
+      if (depth > maxDepth) continue
+      if (rendered >= MAX_SPRITES) break
 
       // Velocity 0..1 (accept normalized or 0..127)
       const velocity = n.velocity <= 1 ? n.velocity : n.velocity / 127
@@ -155,82 +170,35 @@ function FolderFlightVisual({ trackId }: { trackId: string }) {
       const pitchNorm = (n.pitch - PITCH_MIN) / Math.max(1, PITCH_MAX - PITCH_MIN)
       const spawnY = (pitchNorm - 0.5) * ySpread
 
-      const mat = new MeshBasicMaterial({
-        map: getFolderTexture(),
-        transparent: true,
-        opacity,
-        side: DoubleSide,
-        depthWrite: false,
-        toneMapped: false,
-      })
-      const mesh = new Mesh(geo, mat)
-      mesh.position.set(0, spawnY, -5)
-      mesh.scale.setScalar(0.01) // springs up
-      group.add(mesh)
-
       // Deterministic pseudo-random per onset (mirrors Tyler's seed math)
       const seed = Math.floor(n.beat * 13) + n.pitch * 7
-      const pseudoRand = (m: number) => {
-        const x = Math.sin(m * 9301 + 49297) * 233280
-        return x - Math.floor(x)
-      }
+      const vx = (seededRand(seed) - 0.5) * drift
+      const vy = (seededRand(seed + 1) - 0.5) * drift * 0.6
+      const tumbleX = (seededRand(seed + 2) - 0.5) * tumble
+      const tumbleY = (seededRand(seed + 3) - 0.5) * tumble
 
-      spritesRef.current.push({
-        mesh,
-        mat,
-        birthTime: now,
-        vx: (pseudoRand(seed) - 0.5) * drift,
-        vy: (pseudoRand(seed + 1) - 0.5) * drift * 0.6,
-        tumbleX: (pseudoRand(seed + 2) - 0.5) * tumble,
-        tumbleY: (pseudoRand(seed + 3) - 0.5) * tumble,
-        targetScale: iconScale * (0.6 + velocity * 0.6),
-      })
-    }
-    prevKeys.current = keys
+      const pooled = acquire(group)
+      const mesh = pooled.mesh
 
-    // ── Update existing sprites ──
-    const dt = Math.min(delta, 0.05) // cap to avoid jumps
-    const toRemove: number[] = []
-
-    for (let i = 0; i < spritesRef.current.length; i++) {
-      const spr = spritesRef.current[i]
-      const mesh = spr.mesh
-
-      // Fly backward into z-depth
-      mesh.position.z -= speed * dt
       // Drift in x/y as they fly away
-      mesh.position.x += spr.vx * dt
-      mesh.position.y += spr.vy * dt
+      mesh.position.set(vx * ageSec, spawnY + vy * ageSec, z)
       // Tumble rotation
-      mesh.rotation.x += spr.tumbleX * dt
-      mesh.rotation.y += spr.tumbleY * dt
+      mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
 
-      // Spring scale animation (quick pop-in), age in seconds
-      const age = (now - spr.birthTime) / 1000
-      const springProgress = Math.min(age * 8, 1)
+      // Spring scale animation (quick pop-in)
+      const targetScale = iconScale * (0.6 + velocity * 0.6)
+      const springProgress = Math.min(ageSec * 8, 1)
       const spring = 1 - Math.pow(1 - springProgress, 3) // ease out cubic
-      mesh.scale.setScalar(spr.targetScale * spring)
+      mesh.scale.setScalar(targetScale * spring)
 
       // Fade out near max depth
-      const depth = -mesh.position.z
-      const fadeStart = maxDepth * 0.7
       if (depth > fadeStart) {
-        spr.mat.opacity = opacity * Math.max(0, 1 - (depth - fadeStart) / (maxDepth - fadeStart))
+        pooled.mat.opacity = opacity * Math.max(0, 1 - (depth - fadeStart) / (maxDepth - fadeStart))
       } else {
-        spr.mat.opacity = opacity
+        pooled.mat.opacity = opacity
       }
 
-      // Cull past max depth
-      if (depth > maxDepth) toRemove.push(i)
-    }
-
-    // Remove culled sprites (reverse order to keep indices stable)
-    for (let i = toRemove.length - 1; i >= 0; i--) {
-      const idx = toRemove[i]
-      const spr = spritesRef.current[idx]
-      group.remove(spr.mesh)
-      spr.mat.dispose()
-      spritesRef.current.splice(idx, 1)
+      rendered++
     }
   })
 

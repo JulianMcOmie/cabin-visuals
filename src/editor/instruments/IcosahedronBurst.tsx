@@ -1,14 +1,14 @@
 import { useRef, useEffect } from 'react'
-import { useFrame } from '@react-three/fiber'
 import {
   Group, LineSegments, LineBasicMaterial, EdgesGeometry, IcosahedronGeometry, Color, AdditiveBlending,
   type BufferGeometry,
 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Nested icosahedron wireframes spawn on each note and expand
-// outward, fading as they grow. Note-ons are detected from the object's activeNotes.
+// outward, fading as they grow. Each shell's size/opacity is closed-form in how long ago
+// (in beats → seconds) its note played, so it's fully scrub-accurate. Lines are pooled.
 
 let sharedEdges: BufferGeometry | null = null
 function edgeGeometry(): BufferGeometry {
@@ -16,9 +16,8 @@ function edgeGeometry(): BufferGeometry {
   return sharedEdges
 }
 
-interface Shell { line: LineSegments; material: LineBasicMaterial; age: number }
+interface Pooled { line: LineSegments; material: LineBasicMaterial; active: boolean }
 const _c = new Color()
-let hueCounter = 0
 
 const PARAMS: ParamDef[] = [
   { key: 'startSize', label: 'Start Size', min: 0.05, max: 1, step: 0.05, default: 0.15 },
@@ -38,20 +37,29 @@ const PORTS: PortDef[] = [
 
 function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
-  const shellsRef = useRef<Shell[]>([])
-  const prevKeys = useRef<Set<string>>(new Set())
+  const poolRef = useRef<Pooled[]>([])
 
   useEffect(() => () => {
     const g = groupRef.current
-    if (g) for (const s of shellsRef.current) { g.remove(s.line); s.material.dispose() }
-    shellsRef.current = []
+    if (g) for (const p of poolRef.current) { g.remove(p.line); p.material.dispose() }
+    poolRef.current = []
   }, [])
 
-  useFrame((_, delta) => {
+  function acquire(group: Group): Pooled {
+    for (const p of poolRef.current) if (!p.active) { p.active = true; p.line.visible = true; return p }
+    const material = new LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false })
+    material.blending = AdditiveBlending
+    const line = new LineSegments(edgeGeometry(), material)
+    group.add(line)
+    const entry: Pooled = { line, material, active: true }
+    poolRef.current.push(entry)
+    return entry
+  }
+
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
+    const notes = state.notes
     const p = state.params
     const startSize = p.startSize ?? 0.15
     const expansionSpeed = p.expansionSpeed ?? 4
@@ -62,37 +70,29 @@ function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
     const saturation = p.saturation ?? 0.9
     const lightness = p.lightness ?? 0.6
 
-    // A note-on = a note key that's newly present in activeNotes this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.beat}:${n.pitch}`))
-    let onsets = 0
-    for (const k of keys) if (!prevKeys.current.has(k)) onsets++
-    prevKeys.current = keys
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
+    // Seconds a shell takes to expand from startSize to maxSize — its lifetime.
+    const lifetime = (maxSize - startSize) / expansionSpeed
+    const fadeThreshold = maxSize * fadeStart
 
-    for (let i = 0; i < Math.min(onsets, 3); i++) {
-      const hue = (baseHue + hueCounter * hueStep) % 1
-      hueCounter++
-      const material = new LineBasicMaterial({
-        color: _c.setHSL(hue, saturation, lightness).getHex(),
-        transparent: true, opacity: 1, depthWrite: false,
-      })
-      material.blending = AdditiveBlending
-      const line = new LineSegments(edgeGeometry(), material)
-      line.scale.setScalar(startSize)
-      group.add(line)
-      shellsRef.current.push({ line, material, age: 0 })
-    }
+    for (const pm of poolRef.current) { pm.active = false; pm.line.visible = false }
 
-    const dead: Shell[] = []
-    for (const shell of shellsRef.current) {
-      shell.age += delta
-      const size = startSize + shell.age * expansionSpeed
-      if (size >= maxSize) { dead.push(shell); continue }
-      shell.line.scale.setScalar(size)
-      const fadeThreshold = maxSize * fadeStart
-      shell.material.opacity = size > fadeThreshold ? 1 - (size - fadeThreshold) / (maxSize - fadeThreshold) : 1
+    // A shell = a note whose age (in seconds) is within [0, lifetime). Size and
+    // opacity are closed-form in that age, so pause freezes and scrub matches playback.
+    for (let ni = 0; ni < notes.length; ni++) {
+      const note = notes[ni]
+      const ageSec = (currentBeat - note.beat) * secPerBeat
+      if (ageSec < 0 || ageSec >= lifetime) continue
+      const size = startSize + ageSec * expansionSpeed
+
+      const pooled = acquire(group)
+      pooled.line.scale.setScalar(size)
+      // Hue steps per note in play order (index in the sorted note list stands in
+      // for the old spawn counter, so it's stable under scrubbing).
+      pooled.material.color.copy(_c.setHSL((baseHue + ni * hueStep) % 1, saturation, lightness))
+      pooled.material.opacity = size > fadeThreshold ? 1 - (size - fadeThreshold) / (maxSize - fadeThreshold) : 1
     }
-    for (const shell of dead) { group.remove(shell.line); shell.material.dispose() }
-    if (dead.length) shellsRef.current = shellsRef.current.filter((s) => !dead.includes(s))
   })
 
   return <group ref={groupRef} />
