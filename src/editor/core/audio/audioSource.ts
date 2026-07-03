@@ -7,7 +7,7 @@
 // upstream (the store descriptor, the playback engine, the UI) changes — they
 // only ever deal in refs resolved through getPlayableUrl().
 
-import { uploadAudio, getAudioUrl, deleteAudio } from '../../persistence/audioStorage'
+import { uploadAudio, getAudioUrl, deleteAudio } from '../../../persistence/audioStorage'
 
 const mem = new Map<string, string>() // ref -> object URL (this session's cache)
 

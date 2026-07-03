@@ -5,7 +5,7 @@ import { FileAudio, Volume2 } from 'lucide-react'
 import * as Tone from 'tone'
 import { useAudioStore } from '../store/AudioStore'
 import { useProjectStore } from '../store/ProjectStore'
-import { saveAudio } from '../core/audioSource'
+import { saveAudio } from '../core/audio/audioSource'
 
 /**
  * The one entry point for project audio: loading a file registers the clip in

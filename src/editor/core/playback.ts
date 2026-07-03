@@ -1,5 +1,5 @@
 import * as Tone from 'tone'
-import { getPlayableUrl } from './audioSource'
+import { getAudioEngine } from './audio/AudioEngine'
 
 type BeatChangeCallback = (beat: number) => void
 
@@ -11,36 +11,25 @@ interface EngineCallbacks {
   onEnd: () => void
 }
 
-// Shared schedule lookahead (seconds) so the transport and the audio player are
-// armed at the same audio-clock time and stay sample-aligned.
-const AUDIO_LOOKAHEAD = 0.02
+// Shared schedule lookahead (seconds): the transport and every audio player are
+// armed at the same audio-clock `when`, so they stay sample-aligned. 50ms (up
+// from 20ms) gives the N-player arming loop comfortable margin against downbeat
+// jitter.
+const AUDIO_LOOKAHEAD = 0.05
 
+/**
+ * The TRANSPORT engine: the Tone transport and the RAF beat clock — the sole
+ * producer of the beat and of the shared `when` anchor. Audio playback lives in
+ * the audio engine (core/audio/), which this hands (beat, when) at every
+ * transport event; visuals live in core/visual/, reading the beat per frame.
+ */
 class PlaybackEngine {
   private rafId: number | null = null
   private callbacks: EngineCallbacks | null = null
-  private player: Tone.Player | null = null
   private playing = false
-  /** The audio ref currently loaded into `player` (null = none). */
-  clipRef: string | null = null
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
-  }
-
-  /**
-   * Load (or swap, or clear) the audio clip. No-op if `ref` is already loaded.
-   * Resolves once the buffer is decoded, so callers can await before play().
-   */
-  async loadAudio(ref: string | null) {
-    if (ref === this.clipRef) return
-    this.player?.dispose()
-    this.player = null
-    this.clipRef = ref
-    if (!ref) return
-    await Tone.start()
-    const url = await getPlayableUrl(ref)
-    this.player = new Tone.Player(url).toDestination()
-    await Tone.loaded()
   }
 
   async play(startBeat: number) {
@@ -56,14 +45,10 @@ class PlaybackEngine {
     // Position is the single source of truth — set it, don't add it back later.
     transport.position = beatToPosition(startBeat, beatsPerBar)
 
-    // Arm transport + audio at the same audio-clock time. The audio's in-buffer
-    // offset is computed explicitly (file 0:00 == timeline beat 0).
+    // Arm transport + every audio block at the same audio-clock time.
     const when = Tone.now() + AUDIO_LOOKAHEAD
     transport.start(when)
-    if (this.player) {
-      this.player.stop(when)
-      this.player.start(when, startBeat * 60 / bpm)
-    }
+    getAudioEngine().armAll(startBeat, when, bpm, beatsPerBar)
 
     this.playing = true
     this.cancelBeatTracking()
@@ -72,14 +57,22 @@ class PlaybackEngine {
 
   pause() {
     Tone.getTransport().pause()
-    this.player?.stop()
+    getAudioEngine().stopAll()
     this.playing = false
     this.cancelBeatTracking()
   }
 
-  /** Live tempo change — affects future advancement, keeps the current position. */
+  /** Live tempo change: future advancement changes, the position doesn't. Every
+   *  audio block's beat window just moved (fixed seconds, new beat mapping), so
+   *  re-arm while playing. Audio never time-stretches — it re-anchors. */
   setBpm(bpm: number) {
     Tone.getTransport().bpm.value = bpm
+    if (this.playing && this.callbacks) {
+      const beatsPerBar = this.callbacks.getBeatsPerBar()
+      const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
+      const when = Tone.now() + AUDIO_LOOKAHEAD
+      getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+    }
   }
 
   /** Jump the (possibly playing) transport to a new beat, re-arming audio if live. */
@@ -88,11 +81,20 @@ class PlaybackEngine {
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     Tone.getTransport().position = beatToPosition(beat, beatsPerBar)
-    if (this.playing && this.player) {
+    if (this.playing) {
       const when = Tone.now() + AUDIO_LOOKAHEAD
-      this.player.stop(when)
-      this.player.start(when, beat * 60 / bpm)
+      getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
     }
+  }
+
+  /** Re-arm audio at the current position (block edits / mute toggles while playing). */
+  rearmAudio() {
+    if (!this.playing || !this.callbacks) return
+    const bpm = this.callbacks.getBpm()
+    const beatsPerBar = this.callbacks.getBeatsPerBar()
+    const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
+    const when = Tone.now() + AUDIO_LOOKAHEAD
+    getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
   }
 
   private startBeatTracking() {
@@ -104,7 +106,7 @@ class PlaybackEngine {
 
       if (beat >= maxBeat) {
         Tone.getTransport().stop()
-        this.player?.stop()
+        getAudioEngine().stopAll()
         this.playing = false
         onBeatChange(maxBeat)
         onEnd()
