@@ -20,6 +20,17 @@ import SignUpButton from "./AuthButtons/SignUpButton"
 export interface ProjectMetadata {
   id: string
   name: string
+  updatedAt: string
+}
+
+const formatLastEdited = (iso: string): string => {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000)
+  if (days <= 0) return 'Edited today'
+  if (days === 1) return 'Edited yesterday'
+  if (days < 30) return `Edited ${days} days ago`
+  return `Edited ${date.toLocaleDateString()}`
 }
 
 interface ProfileData {
@@ -167,6 +178,7 @@ export default function ProjectsDisplay({
                 </div>
                 <div className={styles.cardContent}>
                   <h3 className={styles.cardTitle}>{project.name}</h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">{formatLastEdited(project.updatedAt)}</p>
                 </div>
               </div>
             ))
