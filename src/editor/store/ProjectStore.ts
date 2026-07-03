@@ -227,35 +227,34 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => {
       const target = s.tracks[trackId]
       if (!target) return s
-      // The deleted node's children take its place — promoted to its parent (or root).
-      const promoted = target.childIds ?? []
-      const parentId = target.parentId
+      // Deleting a track takes its whole subtree with it — automation and ability
+      // lanes are meaningless without their parent, and nested children go too.
+      const doomed = new Set<string>()
+      const queue = [trackId]
+      while (queue.length) {
+        const id = queue.pop()!
+        if (doomed.has(id)) continue
+        doomed.add(id)
+        for (const c of s.tracks[id]?.childIds ?? []) queue.push(c)
+      }
 
       const tracks: Record<string, Track> = {}
       for (const [id, t] of Object.entries(s.tracks)) {
-        if (id === trackId) continue
+        if (doomed.has(id)) continue
         let nt = t
-        if (promoted.includes(id)) nt = { ...nt, parentId }
-        if (id === parentId) {
-          const idx = nt.childIds.indexOf(trackId)
-          const childIds = nt.childIds.filter((c) => c !== trackId)
-          childIds.splice(idx < 0 ? childIds.length : idx, 0, ...promoted)
-          nt = { ...nt, childIds }
+        if (id === target.parentId) {
+          nt = { ...nt, childIds: nt.childIds.filter((c) => c !== trackId) }
         }
-        // Drop any track-scoped routings that pointed at the deleted track.
-        if (nt.targets?.some((r) => r.scope.kind === 'track' && r.scope.id === trackId)) {
-          nt = { ...nt, targets: nt.targets.filter((r) => !(r.scope.kind === 'track' && r.scope.id === trackId)) }
+        // Drop any track-scoped routings that pointed into the deleted subtree.
+        if (nt.targets?.some((r) => r.scope.kind === 'track' && doomed.has(r.scope.id))) {
+          nt = { ...nt, targets: nt.targets.filter((r) => !(r.scope.kind === 'track' && doomed.has(r.scope.id))) }
         }
         tracks[id] = nt
       }
 
-      // If the deleted track was a root, its promoted children take its slot.
-      let rootTrackIds = s.rootTrackIds
-      if (parentId == null) {
-        const idx = rootTrackIds.indexOf(trackId)
-        rootTrackIds = rootTrackIds.filter((id) => id !== trackId)
-        if (promoted.length) rootTrackIds.splice(idx < 0 ? rootTrackIds.length : idx, 0, ...promoted)
-      }
+      const rootTrackIds = target.parentId == null
+        ? s.rootTrackIds.filter((id) => id !== trackId)
+        : s.rootTrackIds
       return { tracks, rootTrackIds }
     }),
 

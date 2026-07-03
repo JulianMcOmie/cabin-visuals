@@ -42,6 +42,21 @@ export function deselectTrack() {
   if (kept.size !== ui.selectedBlockIds.size) ui.setSelectedBlockIds(kept)
 }
 
+/** After a track (and its subtree) is deleted: clear the track selection and
+ *  drop selected block ids that no longer resolve to a live block. */
+export function pruneSelectionAfterTrackDelete() {
+  const ui = useUIStore.getState()
+  const { tracks } = useProjectStore.getState()
+  const live = new Set<string>()
+  for (const t of Object.values(tracks)) {
+    for (const b of t.blocks) live.add(b.id)
+    for (const b of t.audioBlocks ?? []) live.add(b.id)
+  }
+  const kept = new Set([...ui.selectedBlockIds].filter((id) => live.has(id)))
+  ui.setSelectedTrackId(null)
+  if (kept.size !== ui.selectedBlockIds.size) ui.setSelectedBlockIds(kept)
+}
+
 /** A newly added track/instrument becomes THE selection; all blocks deselect. */
 export function selectNewTrack(trackId: string) {
   const ui = useUIStore.getState()

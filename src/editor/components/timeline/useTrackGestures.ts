@@ -5,7 +5,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
-import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
+import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import type { Note, Block } from '../../types'
 
 /** Owning track id for each visual row, so a vertical block drag maps every row it
@@ -396,7 +396,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (trackId) {
             e.preventDefault()
             useProjectStore.getState().deleteTrack(trackId)
-            useUIStore.getState().setSelectedTrackId(null)
+            // The whole subtree is gone — drop selected blocks that died with it.
+            pruneSelectionAfterTrackDelete()
           }
         }
       } else if (e.key === 'Escape') {
