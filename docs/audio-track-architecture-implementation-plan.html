@@ -12,58 +12,62 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--text);font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
   header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
-  h1{font-size:34px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
-  .sub{color:var(--muted);font-size:18px;margin:0}
-  .kicker{display:inline-block;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
-  h2{font-size:24px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
-  h3{font-size:19px;margin:28px 0 8px;color:var(--ink)}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
   h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   p{margin:10px 0}
   a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
   strong{color:var(--ink)}
   code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
-  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:14.5px;line-height:1.6}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
   pre code{background:none;border:none;padding:0;color:#1a1a1a}
   .k{color:#000;font-weight:700}.f{color:#222}.s{color:#3a3a3a;font-style:italic}.c{color:#8a8a8a;font-style:italic}.n{color:#333}
   ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
-  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15.5px}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
   th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:700;font-size:13.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
   tr:last-child td{border-bottom:none}
   td:first-child{color:var(--ink)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
-  .badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
   .b-new{background:var(--ink);color:#fff;border-color:var(--ink)}
   .b-edit{background:#ffffff;color:#111;border-color:#9a9a9a}
+  .b-move{background:#fff;color:#111;border-color:#111}
   .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
   .pill-row{margin:10px 0 4px}
   .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
   .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
   .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .toc{columns:2;gap:28px;margin:8px 0 0}
-  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:15.5px;text-decoration:none}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:17px;text-decoration:none}
   .toc a:hover{color:var(--ink);text-decoration:underline}
-  .muted{color:var(--muted)}.small{font-size:14.5px}
+  .muted{color:var(--muted)}.small{font-size:16px}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
   figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
   figure.fig svg{display:block;width:100%;height:auto}
-  .figtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
-  figcaption{font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5}
-  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:14px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
-  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:11.5px}
-  .tg-edit{color:#111;background:#ffffff;border-radius:4px;padding:0 4px;font-size:11.5px}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .tree{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:15.5px;line-height:1.7;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;white-space:pre;color:#222}
+  .tg-new{font-weight:700;color:#000;border:1px solid #000;border-radius:4px;padding:0 4px;font-size:12.5px}
+  .tg-edit{color:#111;background:#ffffff;border-radius:4px;padding:0 4px;font-size:12.5px}
   .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#ffffff}
-  .comp h4{color:var(--ink);font-size:15.5px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
+  .comp h4{color:var(--ink);font-size:17px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
   @media(max-width:760px){.toc{columns:1}}
   @media print{
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
-    figure.fig,pre,table,.card,.note,.warn,.rec,.tree,.comp{break-inside:avoid;page-break-inside:avoid}
+    figure.fig,pre,table,.card,.note,.warn,.rec,.comp{break-inside:avoid;page-break-inside:avoid}
     h1,h2,h3,.figtitle{break-after:avoid;page-break-after:avoid}
+    /* Never clip horizontally on paper: wrap instead of scroll. */
+    pre,.tree{white-space:pre-wrap;overflow-x:visible;word-break:break-word}
+    .tree{break-inside:auto;page-break-inside:auto}
   }
 </style>
 </head>
@@ -83,58 +87,66 @@
     <a href="#scope">B · Scope &amp; the phase ladder</a>
     <a href="#model">C · Data model &amp; the document v2 upgrade</a>
     <a href="#engine">D · The audio engine (core/audio/)</a>
-    <a href="#renderer">E · The renderer — block + waveform</a>
+    <a href="#renderer">E · The renderer — block + waveform + AudioBar</a>
     <a href="#phases">F · Phase-by-phase build (with files)</a>
     <a href="#inventory">G · Master file inventory</a>
     <a href="#risks">H · Risks &amp; open questions</a>
   </nav>
 </div>
 
-<p class="muted small">This plan introduces <strong>one new directory</strong> — <span class="file">src/editor/core/audio/</span> (the audio engine: player pool, decode/peak cache, beat⟷second math) — plus edits to the transport engine (which <em>sheds</em> its player), the stores, the timeline, and the persistence layer (the document's first real version bump, v1 → v2). The visual engine (<span class="file">core/engine/</span>) and the clock (<span class="file">TimeStore</span>) are untouched. Decisions baked in from the architecture doc: separate audio engine · no time-stretch (width follows tempo) · silent scrub while paused · mute/solo at arm time · 50ms lookahead · adaptive waveform peaks.</p>
+<p class="muted small">This plan introduces <strong>one new directory</strong> — <span class="file">src/editor/core/audio/</span> (the audio engine: player pool, byte seam, decode/peak cache, beat⟷second math) — plus edits to the transport engine (which <em>sheds</em> its player), the stores, the timeline, and the persistence layer (the document's first real version bump, v1 → v2). Two codebase renames land alongside: <span class="file">core/engine/</span> → <span class="file">core/visual/</span> and <span class="file">plugins/</span> → <span class="file">effects/</span>. Decisions baked in: separate audio engine · no time-stretch (width follows tempo) · silent scrub while paused · mute/solo at arm time · 50ms lookahead · adaptive waveform peaks · one auto-created audio track for now · keep <code>when</code> (Web Audio spec name) · live-edit subscription in <span class="file">usePlayback</span>.</p>
 
 <!-- A -->
 <h2 id="components">A · Components that change — and one layer down</h2>
-<p>The highest level first, then a peek at the key function inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span>.</p>
+<p>The highest level first, then a peek at the key function inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span> <span class="badge b-move">rename/move</span>.</p>
 
 <figure class="fig">
   <div class="figtitle">Where the new pieces live and how they connect</div>
-  <svg viewBox="0 0 900 340" role="img" aria-label="Module layout">
+  <svg viewBox="0 0 900 480" role="img" aria-label="Module layout">
     <defs><marker id="aL" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <rect x="20" y="30" width="200" height="90" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
-    <text x="120" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">STORES</text>
-    <text x="120" y="72" text-anchor="middle" font-size="10" fill="#565656">ProjectStore: audioBlocks (placement)</text>
-    <text x="120" y="88" text-anchor="middle" font-size="10" fill="#565656">AudioStore: clips library (material)</text>
-    <text x="120" y="104" text-anchor="middle" font-size="10" fill="#565656">TimeStore: THE CLOCK (untouched)</text>
-    <rect x="20" y="200" width="200" height="90" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
-    <text x="120" y="224" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">TIMELINE UI</text>
-    <text x="120" y="242" text-anchor="middle" font-size="10" fill="#565656">AudioBlockView (waveform + trim)</text>
-    <text x="120" y="258" text-anchor="middle" font-size="10" fill="#565656">Track.tsx / TimelineArea.tsx</text>
-    <text x="120" y="274" text-anchor="middle" font-size="10" fill="#565656">gestures write startBar / trim</text>
-    <rect x="330" y="110" width="230" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="445" y="136" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">core/audio/  ★ new</text>
-    <rect x="346" y="148" width="198" height="26" rx="4" fill="#141414"/>
-    <text x="445" y="166" text-anchor="middle" font-size="10.5" fill="#fff">AudioEngine — pool · armBlock · gain</text>
-    <rect x="346" y="180" width="198" height="26" rx="4" fill="#ffffff" stroke="#9a9a9a"/>
-    <text x="445" y="198" text-anchor="middle" font-size="10.5" fill="#141414">waveform — decode cache · peaks</text>
-    <rect x="650" y="30" width="230" height="90" rx="8" fill="#141414"/>
-    <text x="765" y="56" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">TRANSPORT (playback.ts)</text>
-    <text x="765" y="74" text-anchor="middle" font-size="10" fill="#fff">sheds its Tone.Player</text>
-    <text x="765" y="90" text-anchor="middle" font-size="10" fill="#fff">play/seek/bpm → audioEngine.armAll</text>
-    <text x="765" y="106" text-anchor="middle" font-size="10" fill="#fff">sole producer of (beat, when)</text>
-    <rect x="650" y="200" width="230" height="90" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
-    <text x="765" y="224" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">PERSISTENCE</text>
-    <text x="765" y="242" text-anchor="middle" font-size="10" fill="#565656">serialize: clips library into the doc</text>
-    <text x="765" y="258" text-anchor="middle" font-size="10" fill="#565656">upgrade: v1 → v2 (bar-0 block synth)</text>
-    <text x="765" y="274" text-anchor="middle" font-size="10" fill="#565656">bytes: project-audio bucket (shipped)</text>
-    <path d="M220,75 C280,80 300,120 326,140" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aL)"/>
-    <text x="240" y="105" font-size="9.5" fill="#565656">blocks + clips (read)</text>
-    <path d="M646,75 C600,80 580,120 564,140" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aL)"/>
-    <text x="565" y="105" font-size="9.5" fill="#565656">(beat, when)</text>
-    <path d="M220,245 C270,240 300,215 326,200" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aL)"/>
-    <text x="245" y="222" font-size="9.5" fill="#565656">peaks (read)</text>
+    <rect x="10" y="30" width="300" height="134" rx="10" fill="#ffffff" stroke="#141414" stroke-width="2"/>
+    <text x="160" y="66" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">STORES</text>
+    <text x="160" y="94" text-anchor="middle" font-size="15.5" fill="#565656">ProjectStore — audioBlocks</text>
+    <text x="160" y="118" text-anchor="middle" font-size="15.5" fill="#565656">AudioStore — audioClips catalog</text>
+    <text x="160" y="142" text-anchor="middle" font-size="15.5" fill="#565656">TimeStore — THE CLOCK</text>
+    <rect x="10" y="316" width="300" height="134" rx="10" fill="#ffffff" stroke="#141414" stroke-width="2"/>
+    <text x="160" y="352" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">TIMELINE UI</text>
+    <text x="160" y="380" text-anchor="middle" font-size="15.5" fill="#565656">AudioBlock.tsx — waveform·trim</text>
+    <text x="160" y="404" text-anchor="middle" font-size="15.5" fill="#565656">Track.tsx / TimelineArea.tsx</text>
+    <text x="160" y="428" text-anchor="middle" font-size="15.5" fill="#565656">AudioBar — auto-create track</text>
+    <rect x="290" y="150" width="320" height="166" rx="12" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="450" y="186" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">core/audio/  ★ new</text>
+    <rect x="308" y="202" width="284" height="42" rx="5" fill="#141414"/>
+    <text x="450" y="229" text-anchor="middle" font-size="15.5" fill="#fff">AudioEngine — pool · armBlock</text>
+    <rect x="308" y="254" width="284" height="42" rx="5" fill="#ffffff" stroke="#9a9a9a"/>
+    <text x="450" y="281" text-anchor="middle" font-size="15.5" fill="#141414">waveform · audioSource (moved)</text>
+    <rect x="590" y="30" width="300" height="134" rx="10" fill="#141414"/>
+    <text x="740" y="66" text-anchor="middle" font-size="19" font-weight="700" fill="#fff">TRANSPORT (playback.ts)</text>
+    <text x="740" y="94" text-anchor="middle" font-size="15.5" fill="#fff">sheds its Tone.Player</text>
+    <text x="740" y="118" text-anchor="middle" font-size="15.5" fill="#fff">play/seek/bpm → armAll</text>
+    <text x="740" y="142" text-anchor="middle" font-size="15.5" fill="#fff">sole producer of (beat, when)</text>
+    <rect x="590" y="316" width="300" height="134" rx="10" fill="#ffffff" stroke="#141414" stroke-width="2"/>
+    <text x="740" y="352" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">PERSISTENCE</text>
+    <text x="740" y="380" text-anchor="middle" font-size="15.5" fill="#565656">serialize: audioClips → doc</text>
+    <text x="740" y="404" text-anchor="middle" font-size="15.5" fill="#565656">upgrade v1→v2: audio + effects</text>
+    <text x="740" y="428" text-anchor="middle" font-size="15.5" fill="#565656">bytes: bucket (shipped)</text>
+    <path d="M215,164 C250,190 265,205 288,222" fill="none" stroke="#141414" stroke-width="2" marker-end="url(#aL)"/>
+    <text x="118" y="200" font-size="15.5" fill="#565656">blocks + clips (read)</text>
+    <path d="M685,164 C650,190 635,205 612,222" fill="none" stroke="#141414" stroke-width="2" marker-end="url(#aL)"/>
+    <text x="648" y="200" font-size="15.5" fill="#565656">(beat, when)</text>
+    <path d="M215,316 C245,300 260,290 288,276" fill="none" stroke="#141414" stroke-width="2" marker-end="url(#aL)"/>
+    <text x="150" y="288" font-size="15.5" fill="#565656">peaks (read)</text>
   </svg>
-  <figcaption>The stores hold material + placement; the audio engine schedules it against the clock the transport produces; the timeline draws + edits it; persistence carries it in the document. The visual engine never appears in this diagram — that's the point.</figcaption>
+  <figcaption>The stores hold material + placement; the audio engine schedules it against the clock the transport produces; the timeline draws + edits it; persistence carries it in the document. The visual engine (<span class="file">core/visual/</span>, renamed) never appears in this diagram — that's the point.</figcaption>
 </figure>
+
+<div class="comp">
+  <h4>0 · The renames <span class="badge b-move">rename</span> <span class="file">core/engine/ → core/visual/</span> · <span class="file">plugins/ → effects/</span> · <span class="badge b-new">new</span> <span class="file">core/trackTypes.ts</span></h4>
+  <ul class="small">
+    <li><span class="file">core/engine/</span> → <span class="file">core/visual/</span> — symmetric with <span class="file">core/audio/</span>; contents untouched. Two promotions out of it: <code>isModifierType</code>/modifier semantics and the <code>AUTOMATION_PITCH_MIN/MAX</code> encoding constants (used by non-visual UI) move to <span class="file">core/trackTypes.ts</span>; <code>sampleLane</code> stays visual. Update the ESLint ban messages that reference <span class="file">core/engine/instrumentFrame</span>. <span class="file">playback.ts</span> keeps its name.</li>
+    <li><span class="file">plugins/</span> → <span class="file">effects/</span> at full depth: folder, <code>PluginInstance</code> → <code>EffectInstance</code>, <code>getPlugin</code> → <code>getEffect</code>. The persisted field <code>track.visualPlugins</code> → <code>track.effects</code> ships inside the v1→v2 document step (§C.2), not as a bare rename.</li>
+  </ul>
+</div>
 
 <div class="comp">
   <h4>1 · The audio engine <span class="badge b-new">new</span> <span class="file">core/audio/AudioEngine.ts</span></h4>
@@ -144,15 +156,15 @@
     <li><code>loadClips()</code> — awaits decoded buffers via the waveform cache (one <code>ToneAudioBuffer</code> per ref, shared by players and peaks); pre-decode fires on block <em>insert</em>, so <code>play()</code> rarely waits;</li>
     <li><code>armAll(atBeat, when, bpm, beatsPerBar)</code> — loops the shared <code>armBlock</code> three-case helper (mid-clip / future / past) over every block, skipping muted/soloed-out tracks;</li>
     <li><code>stopAll(when?)</code> — pause / end-of-project;</li>
-    <li>It has <strong>no clock</strong>: <code>when</code> is always passed in from the transport. It never calls <code>Tone.now()</code> for scheduling.</li>
+    <li>It has <strong>no clock</strong>: <code>when</code> (the Web Audio spec's name for an absolute audio-clock timestamp — kept, decided) is always passed in from the transport. It never calls <code>Tone.now()</code> for scheduling.</li>
   </ul>
 </div>
 
 <div class="comp">
-  <h4>2 · The waveform module <span class="badge b-new">new</span> <span class="file">core/audio/waveform.ts</span></h4>
+  <h4>2 · Bytes + waveforms <span class="badge b-new">new</span> <span class="file">core/audio/waveform.ts</span> · <span class="badge b-move">move</span> <span class="file">core/audio/audioSource.ts</span></h4>
   <ul class="small">
-    <li><code>getBuffer(ref)</code> — decode once per ref (bytes via <code>getPlayableUrl</code>), cache the <code>AudioBuffer</code>; shared by the player pool and the peaks;</li>
-    <li><code>getPeaks(ref, buckets)</code> — min/max peak array; base ~1000 buckets, re-extracted at <code>max(1000, widthPx/2)</code> when a block is drawn wider (adaptive resolution, from E-DAW). Zoom = redraw; deep zoom = one cheap re-extraction; never a re-decode.</li>
+    <li><span class="file">audioSource.ts</span> moves from <span class="file">core/</span> into <span class="file">core/audio/</span> unchanged — the ref → playable-bytes seam + session cache. Rule of thumb: everything audio-<em>runtime</em> in <span class="file">core/audio/</span>; everything audio-<em>cloud</em> in <span class="file">persistence/audioStorage.ts</span>;</li>
+    <li><span class="file">waveform.ts</span> — <code>getBuffer(ref)</code> (decode once per ref via <code>getPlayableUrl</code>; cache shared by the player pool and the peaks) + <code>getPeaks(ref, buckets)</code> (base ~1000 buckets; adaptive re-extraction at <code>max(1000, widthPx/2)</code> on deep zoom — redraw, never re-decode).</li>
   </ul>
 </div>
 
@@ -162,32 +174,32 @@
     <li>Deletes its <code>Tone.Player</code>, <code>loadAudio</code>, and <code>clipRef</code> — the transport is now <em>only</em> the Tone transport + the RAF beat clock;</li>
     <li><code>play(beat)</code> / <code>seek(beat)</code> compute the shared <code>when = Tone.now() + AUDIO_LOOKAHEAD</code> (bumped 0.02 → <strong>0.05</strong>) and call <code>audioEngine.armAll(beat, when, …)</code>;</li>
     <li><code>pause()</code> / end-of-project call <code>audioEngine.stopAll()</code>;</li>
-    <li><code>setBpm(bpm)</code> — besides setting <code>transport.bpm</code>, re-arms all blocks when playing (every beat window just moved). Audio never time-stretches; it re-anchors.</li>
+    <li><code>setBpm(bpm)</code> — besides setting <code>transport.bpm</code>, re-arms all blocks when playing (every beat window just moved). Audio never time-stretches — it re-anchors.</li>
   </ul>
 </div>
 
 <div class="comp">
   <h4>4 · The placement model <span class="badge b-edit">edit</span> <span class="file">editor/types.ts</span> · <span class="file">store/ProjectStore.ts</span> · <span class="file">store/AudioStore.ts</span></h4>
   <ul class="small">
-    <li><span class="file">types.ts</span> — <code>AudioBlock { id; clipRef; startBar; trimStart; trimEnd; gain?; fadeIn?; fadeOut? }</code>, <code>'audio'</code> added to <code>TrackType</code>, <code>Track.audioBlocks?</code>;</li>
-    <li><span class="file">ProjectStore.ts</span> — <code>addAudioTrack</code>, <code>addAudioBlock</code>, <code>updateAudioBlock</code> (drag → <code>startBar</code>; trim → <code>trimStart</code>/<code>trimEnd</code>), <code>deleteAudioBlock</code>. Document-only — no scheduling logic; edits are undoable automatically (generic snapshot boundary);</li>
-    <li><span class="file">AudioStore.ts</span> — <code>clip: AudioClip | null</code> → <code>clips: Record&lt;ref, AudioClip&gt;</code> + <code>addClip</code>/<code>removeClip</code>. Not undoable (loading a file isn't an edit), but persisted.</li>
+    <li><span class="file">types.ts</span> — <code>AudioBlock { id; clipRef; startBar; trimStart; trimEnd; gain?; fadeIn?; fadeOut? }</code>, <code>'audio'</code> added to <code>TrackType</code>, <code>Track.audioBlocks?</code> (and <code>Track.visualPlugins</code> → <code>Track.effects</code> from the rename);</li>
+    <li><span class="file">ProjectStore.ts</span> — <code>addAudioTrack</code> (inserts at index 0 — top of the root tracks), <code>addAudioBlock</code>, <code>updateAudioBlock</code> (drag → <code>startBar</code>; trim → <code>trimStart</code>/<code>trimEnd</code>), <code>deleteAudioBlock</code>. Document-only — no scheduling logic; edits are undoable automatically (generic snapshot boundary);</li>
+    <li><span class="file">AudioStore.ts</span> — <code>clip: AudioClip | null</code> → <code>audioClips: Record&lt;ref, AudioClip&gt;</code> + <code>addClip</code>/<code>removeClip</code>. An internal catalog, not a user-facing library. Not undoable (loading a file isn't an edit), but persisted.</li>
   </ul>
 </div>
 
 <div class="comp">
   <h4>5 · Persistence goes to v2 <span class="badge b-edit">edit</span> <span class="file">persistence/serialize.ts</span> · <span class="file">persistence/upgrade.ts</span> · <span class="file">persistence/types.ts</span></h4>
   <ul class="small">
-    <li><span class="file">serialize.ts</span> — picks <code>clips</code> (the library) instead of <code>audioClip</code>; <code>audioBlocks</code> ride free inside <code>tracks</code> via the generic field pick;</li>
-    <li><span class="file">upgrade.ts</span> — <code>CURRENT_VERSION = 2</code> and the chain's first real step: v1's <code>audioClip</code> → a <code>clips</code> library entry <em>plus a synthesized audio track holding one block at bar 0</em> (trim = full clip) — old saves keep sounding identical;</li>
-    <li><span class="file">persistence/types.ts</span> — <code>ProjectDocument</code> gains <code>clips</code>, drops <code>audioClip</code> (v2 shape). Bytes need nothing: refs are already <code>project-audio</code> bucket paths.</li>
+    <li><span class="file">serialize.ts</span> — picks <code>audioClips</code> (the catalog) instead of <code>audioClip</code>; <code>audioBlocks</code> and the renamed <code>effects</code> field ride free inside <code>tracks</code> via the generic field pick;</li>
+    <li><span class="file">upgrade.ts</span> — <code>CURRENT_VERSION = 2</code> and the chain's first real step, carrying all three shape changes that ship together (§C.2);</li>
+    <li><span class="file">persistence/types.ts</span> — <code>ProjectDocument</code> v2: <code>audioClips</code> replaces <code>audioClip</code>. Bytes need nothing: refs are already <code>project-audio</code> bucket paths.</li>
   </ul>
 </div>
 
 <div class="comp">
-  <h4>6 · The audio track row <span class="badge b-new">new</span> <span class="file">components/timeline/AudioBlockView.tsx</span> · <span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> · <span class="file">TimelineArea.tsx</span></h4>
+  <h4>6 · The audio track row <span class="badge b-new">new</span> <span class="file">components/timeline/AudioBlock.tsx</span> · <span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> · <span class="file">TimelineArea.tsx</span></h4>
   <ul class="small">
-    <li><span class="file">AudioBlockView.tsx</span> — the audio analogue of <span class="file">Block.tsx</span>: positioned at <code>startBar * barWidthPx</code>, width <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> bars <em>read reactively from bpm</em>, a <code>&lt;canvas&gt;</code> waveform from the peak cache, left/right trim handles;</li>
+    <li><span class="file">AudioBlock.tsx</span> — the audio analogue of <span class="file">Block.tsx</span> (same naming convention; it aliases the <code>AudioBlock</code> type import exactly as <span class="file">Block.tsx</span> aliases <code>Block</code>): positioned at <code>startBar * barWidthPx</code>, width <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> bars <em>read reactively from bpm</em>, a <code>&lt;canvas&gt;</code> waveform from the peak cache, left/right trim handles;</li>
     <li><span class="file">Track.tsx</span> — render <code>audioBlocks</code> when <code>type === 'audio'</code>; <span class="file">TimelineArea.tsx</span> — wire audio move/trim gestures (branch on track type; left-trim moves <code>trimStart</code> + <code>startBar</code> together).</li>
   </ul>
 </div>
@@ -195,53 +207,59 @@
 <div class="comp">
   <h4>7 · Load + play wiring <span class="badge b-edit">edit</span> <span class="file">hooks/usePlayback.ts</span> · <span class="file">components/AudioBar.tsx</span></h4>
   <ul class="small">
-    <li><span class="file">usePlayback.ts</span> — <code>play()</code> gathers audio blocks + tracks, awaits <code>audioEngine.loadClips()</code>, then <code>engine.play(start)</code>; a store subscription pushes block/mute edits to the audio engine while playing (dragging a block reschedules it live);</li>
-    <li><span class="file">AudioBar.tsx</span> — load path calls <code>addClip</code> (library) instead of <code>setClip</code>; becomes the entry point for dropping a clip onto an audio track.</li>
+    <li><span class="file">usePlayback.ts</span> — <code>play()</code> gathers audio blocks + tracks, awaits <code>audioEngine.loadClips()</code>, then <code>engine.play(start)</code>; a store subscription (decided: it lives here, keeping the engine store-free) pushes block/mute edits to the audio engine while playing — dragging a block reschedules it live;</li>
+    <li><span class="file">AudioBar.tsx</span> — loading a file registers the clip (<code>addClip</code>) and <strong>auto-creates one audio track at the top of the track rows</strong> with a block at bar 0. While an audio track exists, the AudioBar is hidden/greyed out (one audio track for now — decided); deleting the track re-enables it. No clip library UI, no drag-from-library gesture.</li>
   </ul>
 </div>
 
 <!-- B -->
 <h2 id="scope">B · Scope &amp; the phase ladder</h2>
-<p>Incremental and always-shippable: each phase leaves a working app. Phase 1 is the data model + the document upgrade, phase 2 the audio engine (the keystone: a placed block plays at its position), 3–4 are additive UI.</p>
+<p>Incremental and always-shippable: each phase leaves a working app. Phase 0 is the renames (pure code motion), phase 1 the data model + the document upgrade, phase 2 the audio engine (the keystone: a placed block plays at its position), 3–4 are additive UI.</p>
 
 <figure class="fig">
   <div class="figtitle">The phase ladder — and roughly where each lands</div>
-  <svg viewBox="0 0 900 240" role="img" aria-label="Phase ladder">
+  <svg viewBox="0 0 900 570" role="img" aria-label="Phase ladder">
     <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
-    <g font-size="11" fill="#141414">
-      <rect x="20" y="24" width="280" height="30" rx="5" fill="#ffffff" stroke="#141414"/><text x="32" y="44" font-weight="700">1 · Data model + document v2</text>
-      <rect x="20" y="62" width="280" height="30" rx="5" fill="#141414"/><text x="32" y="82" fill="#fff" font-weight="700">2 · Audio engine + transport wiring ★ keystone</text>
-      <rect x="20" y="100" width="280" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="120" font-weight="700">3 · Waveform + block view + drag</text>
-      <rect x="20" y="138" width="280" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="32" y="158" font-weight="700">4 · Trim + multi-clip + library UI</text>
-      <rect x="20" y="176" width="280" height="30" rx="5" fill="#fff" stroke="#141414" stroke-dasharray="5 4"/><text x="32" y="196" font-weight="700">5 · Later: split · fades · grain scrub</text>
+    <g>
+      <rect x="14" y="14" width="872" height="72" rx="7" fill="#ffffff" stroke="#141414" stroke-width="2"/>
+      <text x="32" y="44" font-size="19" font-weight="700" fill="#141414">0 · Renames: core/visual · effects · trackTypes promotion</text>
+      <text x="32" y="72" font-size="16" fill="#565656">core/engine→core/visual · plugins→effects · core/trackTypes.ts · eslint msgs</text>
+      <rect x="14" y="106" width="872" height="72" rx="7" fill="#ffffff" stroke="#141414" stroke-width="2"/>
+      <text x="32" y="136" font-size="19" font-weight="700" fill="#141414">1 · Data model + document v2</text>
+      <text x="32" y="164" font-size="16" fill="#565656">types · stores · persistence/{serialize, upgrade, types} (audioClips · effects field)</text>
+      <rect x="14" y="198" width="872" height="72" rx="7" fill="#141414"/>
+      <text x="32" y="228" font-size="19" font-weight="700" fill="#fff">2 · Audio engine + transport wiring ★ keystone</text>
+      <text x="32" y="256" font-size="16" fill="#dddddd">core/audio/{AudioEngine, audioSource} · core/playback.ts · hooks/usePlayback.ts</text>
+      <rect x="14" y="290" width="872" height="72" rx="7" fill="#fff" stroke="#141414" stroke-width="2"/>
+      <text x="32" y="320" font-size="19" font-weight="700" fill="#141414">3 · Waveform + block view + drag + AudioBar auto-create</text>
+      <text x="32" y="348" font-size="16" fill="#565656">core/audio/waveform.ts · timeline/AudioBlock.tsx · Track.tsx · AudioBar.tsx</text>
+      <rect x="14" y="382" width="872" height="72" rx="7" fill="#fff" stroke="#141414" stroke-width="2"/>
+      <text x="32" y="412" font-size="19" font-weight="700" fill="#141414">4 · Trim</text>
+      <text x="32" y="440" font-size="16" fill="#565656">AudioBlock.tsx (edge handles) · TimelineArea (gestures)</text>
+      <rect x="14" y="474" width="872" height="72" rx="7" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="6 5"/>
+      <text x="32" y="504" font-size="19" font-weight="700" fill="#141414">5 · Later: multi-track UI · split · fades · grain scrub</text>
+      <text x="32" y="532" font-size="16" fill="#565656">deferred — named, not designed</text>
     </g>
-    <text x="340" y="20" font-size="11" font-weight="700" fill="#141414">touches mostly…</text>
-    <g font-size="10.5" fill="#565656">
-      <text x="340" y="44">types.ts · ProjectStore · AudioStore · persistence/{serialize,upgrade,types}</text>
-      <text x="340" y="82">core/audio/AudioEngine.ts · core/playback.ts · hooks/usePlayback.ts</text>
-      <text x="340" y="120">core/audio/waveform.ts · timeline/AudioBlockView.tsx · Track.tsx · AudioBar.tsx</text>
-      <text x="340" y="158">AudioBlockView (handles) · TimelineArea (gestures) · library panel</text>
-      <text x="340" y="196">deferred — named, not designed</text>
-    </g>
-    <path d="M160,54 V62" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
-    <path d="M160,92 V100" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
-    <path d="M160,130 V138" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
-    <path d="M160,168 V176" stroke="#141414" stroke-width="1.2" marker-end="url(#aP)"/>
+    <path d="M450,86 V106" stroke="#141414" stroke-width="1.6" marker-end="url(#aP)"/>
+    <path d="M450,178 V198" stroke="#141414" stroke-width="1.6" marker-end="url(#aP)"/>
+    <path d="M450,270 V290" stroke="#141414" stroke-width="1.6" marker-end="url(#aP)"/>
+    <path d="M450,362 V382" stroke="#141414" stroke-width="1.6" marker-end="url(#aP)"/>
+    <path d="M450,454 V474" stroke="#141414" stroke-width="1.6" marker-end="url(#aP)"/>
   </svg>
-  <figcaption>Black = the keystone. Phases 1–2 prove the thesis (a block that plays at its position, old projects still sounding identical); 3–4 are additive. Each phase is one commit-sized unit.</figcaption>
+  <figcaption>Black = the keystone. Phases 0–2 prove the thesis (renamed engines side by side, then a block that plays at its position with old projects still sounding identical); 3–4 are additive. Each phase is one commit-sized unit.</figcaption>
 </figure>
 
-<div class="rec"><strong>In scope:</strong> the audio-block data model + document v2 upgrade, the audio engine (pool, armBlock, mute/solo, master gain, 50ms lookahead), transport wiring incl. bpm re-arm, waveform module + block view, drag + trim + multi-clip. <strong>Deferred (named, not detailed):</strong> grain-scrub while paused (silent-scrub is the decided behavior), block split, edge fades, loop-boundary retrigger (no loop regions yet), free-positioning off the snap grid, and audio-reactive visuals (a future bridge into the visual engine's ports — must respect the pause invariant; out of scope entirely).</div>
+<div class="rec"><strong>In scope:</strong> the renames, the audio-block data model + document v2 upgrade (audioClips + effects field + bar-0 block synth), the audio engine (pool, armBlock, mute/solo, master gain, 50ms lookahead), transport wiring incl. bpm re-arm, waveform module + block view, drag + trim, AudioBar auto-create with single-track gating. <strong>Deferred (named, not detailed):</strong> multi-audio-track / clip-library UI (engine supports N from day one — lifting the constraint is UI-only), grain-scrub while paused (silent-scrub is the decided behavior), block split, edge fades, loop-boundary retrigger (no loop regions yet), free-positioning off the snap grid, and audio-reactive visuals (a future bridge into the visual engine's ports — must respect the pause invariant; out of scope entirely).</div>
 
 <!-- C -->
 <h2 id="model">C · Data model &amp; the document v2 upgrade</h2>
-<p>Material (clips) vs placement (blocks) vs derived (beat windows). The window is never stored — recomputed from <code>startBar</code> + trim + tempo at schedule time, exactly like the visual engine's resolved graph.</p>
+<p>Material (clips) vs placement (blocks) vs derived (beat windows). The window is never stored — recomputed from <code>startBar</code> + trim + tempo at schedule time, exactly like the visual engine's resolved graph. (The full four-layer storage mental model — cloud bytes / editor bytes / metadata catalog / placement — is §3.3 of the architecture doc.)</p>
 
 <h3>C.1 — Types</h3>
-<pre><code><span class="c">// store/AudioStore.ts — material</span>
+<pre><code><span class="c">// store/AudioStore.ts — material (an internal catalog, not a user-facing library)</span>
 <span class="k">interface</span> <span class="f">AudioClip</span> { ref: <span class="k">string</span>; fileName: <span class="k">string</span>; duration: <span class="k">number</span>; }  <span class="c">// unchanged</span>
 <span class="k">interface</span> <span class="f">AudioState</span> {
-  clips: <span class="f">Record</span>&lt;<span class="k">string</span>, AudioClip&gt;;      <span class="c">// was: clip | null</span>
+  audioClips: <span class="f">Record</span>&lt;<span class="k">string</span>, AudioClip&gt;;   <span class="c">// was: clip | null</span>
   addClip: (c: AudioClip) => <span class="k">void</span>;
   removeClip: (ref: <span class="k">string</span>) => <span class="k">void</span>;
 }
@@ -258,36 +276,44 @@
   gain?: <span class="k">number</span>;
   fadeIn?: <span class="k">number</span>; fadeOut?: <span class="k">number</span>;   <span class="c">// phase 5</span>
 }
-<span class="k">interface</span> <span class="f">Track</span> {        <span class="c">// existing shell, one optional field</span>
+<span class="k">interface</span> <span class="f">Track</span> {        <span class="c">// existing shell; audioBlocks added, visualPlugins renamed</span>
   … type; name; color; muted; solo; parentId; childIds; blocks;
+  effects?: EffectInstance[];          <span class="c">// was: visualPlugins (rename, v2)</span>
   audioBlocks?: AudioBlock[];          <span class="c">// present only when type === 'audio'</span>
 }</code></pre>
 
-<h3>C.2 — The v1 → v2 upgrade step</h3>
-<pre><code><span class="c">// persistence/upgrade.ts — the chain's first real entry. Pure, append-only, fixture-tested.</span>
+<h3>C.2 — The v1 → v2 upgrade step (one step, three changes)</h3>
+<pre><code><span class="c">// persistence/upgrade.ts — the chain's first real entry. Pure, fixture-tested,</span>
+<span class="c">// frozen once shipped. One step carries everything that ships together in v2.</span>
 <span class="k">export const</span> CURRENT_VERSION = <span class="n">2</span>;
 UPGRADES[<span class="n">1</span>] = (doc) => {
   <span class="k">const</span> { audioClip, ...rest } = doc;
-  <span class="k">const</span> clips = audioClip ? { [audioClip.ref]: audioClip } : {};
+  <span class="c">// 1 · audioClip → audioClips (the catalog)</span>
+  <span class="k">const</span> audioClips = audioClip ? { [audioClip.ref]: audioClip } : {};
+  <span class="c">// 2 · the old global clip was pinned to beat 0 — reproduce it exactly:</span>
+  <span class="c">//     one audio track at the top, one block at bar 0, trim = full clip</span>
   <span class="k">let</span> tracks = rest.tracks, rootTrackIds = rest.rootTrackIds;
   <span class="k">if</span> (audioClip) {
-    <span class="c">// The old global clip was pinned to beat 0 — reproduce it exactly:</span>
-    <span class="c">// one audio track, one block at bar 0, trimmed to the full clip.</span>
     <span class="k">const</span> id = newId();
     tracks = { ...tracks, [id]: audioTrack(id, [blockAtBarZero(audioClip)]) };
-    rootTrackIds = [...rootTrackIds, id];
+    rootTrackIds = [id, ...rootTrackIds];
   }
-  <span class="k">return</span> { ...rest, tracks, rootTrackIds, clips };
+  <span class="c">// 3 · visualPlugins → effects on every track (the effects rename)</span>
+  tracks = mapValues(tracks, ({ visualPlugins, ...t }) =>
+    visualPlugins ? { ...t, effects: visualPlugins } : t);
+  <span class="k">return</span> { ...rest, tracks, rootTrackIds, audioClips };
 };</code></pre>
-<div class="note"><strong>Why the synthesized block matters:</strong> it's the compatibility proof. A v1 project opens as a v2 project with the same audio at the same place — the keystone canary (§F phase 2) checks exactly this: <em>a block at bar 0 must sound identical to yesterday's global clip.</em></div>
+<div class="note"><strong>Why the synthesized block matters:</strong> it's the compatibility proof. A v1 project opens as a v2 project with the same audio at the same place — the keystone canary (§F phase 2) checks exactly this: <em>a block at bar 0 must sound identical to yesterday's global clip.</em> And on append-only: the rule is "never edit a <em>shipped</em> step" — this step is new (nothing has shipped; the chain is empty), and it's frozen forever only once it lands.</div>
 <div class="note"><strong>Parallel <code>audioBlocks</code> vs the shared <code>blocks</code> array (open, revisit after trim):</strong> start with the parallel array — audio never enters MIDI-block code paths (piano roll, note gestures stay unaware). If trim/move gestures end up wanting the full block gesture system (marquee, copy/paste, alt-drag), migrate then. The abilities story suggests unified plumbing may win long-term; don't pre-pay for it.</div>
 
 <!-- D -->
 <h2 id="engine">D · The audio engine — core/audio/</h2>
-<p class="pill-row"><span class="badge b-new">core/audio/AudioEngine.ts</span><span class="badge b-new">core/audio/waveform.ts</span><span class="badge b-edit">core/playback.ts</span><span class="badge b-edit">hooks/usePlayback.ts</span></p>
+<p class="pill-row"><span class="badge b-new">core/audio/AudioEngine.ts</span><span class="badge b-new">core/audio/waveform.ts</span><span class="badge b-move">core/audio/audioSource.ts</span><span class="badge b-edit">core/playback.ts</span><span class="badge b-edit">hooks/usePlayback.ts</span></p>
 
 <h3>D.1 — the shared armBlock helper (the one place beat⟷second math lives)</h3>
-<pre><code><span class="c">// core/audio/AudioEngine.ts</span>
+<pre><code><span class="c">// core/audio/AudioEngine.ts — `when` is the Web Audio spec's own parameter name:</span>
+<span class="c">// the absolute audio-clock time (seconds since the AudioContext started) at which</span>
+<span class="c">// a scheduled action fires. Always computed by the transport, passed in.</span>
 <span class="f">armBlock</span>(b: AudioBlock, atBeat: <span class="k">number</span>, when: <span class="k">number</span>, bpm: <span class="k">number</span>, bpb: <span class="k">number</span>) {
   <span class="k">const</span> startBeat = b.startBar * bpb;
   <span class="k">const</span> endBeat   = startBeat + (b.trimEnd - b.trimStart) * bpm / 60;
@@ -304,61 +330,68 @@ UPGRADES[<span class="n">1</span>] = (doc) => {
 <ul>
   <li><strong>Mute/solo:</strong> <code>armAll</code> skips blocks whose track is muted or soloed-out (same semantics the visual engine uses to hide objects); a mute/solo toggle while playing triggers a re-arm pass via the store subscription in <span class="file">usePlayback</span>.</li>
   <li><strong>Pool lifecycle:</strong> <code>setBlocks</code> reconciles <code>Map&lt;blockId, Tone.Player&gt;</code> — dispose orphans on block delete, create newcomers routed through the master gain. Buffers cached per <em>ref</em> (blocks sharing a clip share one decode), players keyed per <em>block</em> (overlaps need distinct players).</li>
-    <li><strong>Master gain:</strong> one <code>Tone.Gain</code> → destination; players connect to it. Headroom against overlapping clips summing past 0dBFS; also the future seam for per-block <code>gain</code>/fades.</li>
+  <li><strong>Master gain:</strong> one <code>Tone.Gain</code> → destination; players connect to it. Headroom against overlapping clips summing past 0dBFS; also the future seam for per-block <code>gain</code>/fades.</li>
   <li><strong>Lookahead:</strong> <code>AUDIO_LOOKAHEAD = 0.05</code> (was 0.02) — arming N players wants the wider margin; E-DAW runs 50ms happily.</li>
   <li><strong>No clock of its own:</strong> the engine never calls <code>Tone.now()</code> for scheduling; <code>when</code> always arrives from the transport. One anchor = sample alignment.</li>
 </ul>
 
-<h3>D.2 — transport edits (<span class="file">playback.ts</span>)</h3>
+<h3>D.2 — transport edits (<span class="file">playback.ts</span> — name kept)</h3>
 <ul>
   <li>Remove <code>player</code>/<code>loadAudio</code>/<code>clipRef</code>; <code>play</code>/<code>seek</code>/<code>pause</code>/end-of-project delegate to the audio engine with <code>(beat, when)</code>;</li>
   <li><code>setBpm(bpm)</code>: set <code>transport.bpm</code>, and if playing, compute a fresh <code>when</code> and <code>armAll(currentBeat, when, …)</code> — every window moved. (Accepted consequence: a live bpm change mid-block audibly jumps the audio position; the beat clock wins. Paused bpm changes are artifact-free.)</li>
 </ul>
 
 <!-- E -->
-<h2 id="renderer">E · The renderer — audio block + waveform</h2>
-<p class="pill-row"><span class="badge b-new">core/audio/waveform.ts</span><span class="badge b-new">components/timeline/AudioBlockView.tsx</span><span class="badge b-edit">timeline/Track.tsx</span><span class="badge b-edit">timeline/TimelineArea.tsx</span><span class="badge b-edit">components/AudioBar.tsx</span></p>
+<h2 id="renderer">E · The renderer — audio block, waveform, AudioBar</h2>
+<p class="pill-row"><span class="badge b-new">core/audio/waveform.ts</span><span class="badge b-new">components/timeline/AudioBlock.tsx</span><span class="badge b-edit">timeline/Track.tsx</span><span class="badge b-edit">timeline/TimelineArea.tsx</span><span class="badge b-edit">components/AudioBar.tsx</span></p>
 <ul>
   <li><span class="badge b-new">new</span> <span class="file">core/audio/waveform.ts</span> — <code>getBuffer(ref)</code> (decode-cache shared with the player pool; pre-decode on block insert) + <code>getPeaks(ref, buckets)</code> (base ~1000 buckets; adaptive re-extraction at <code>max(1000, widthPx/2)</code> on deep zoom).</li>
-  <li><span class="badge b-new">new</span> <span class="file">AudioBlockView.tsx</span> — positioned at <code>startBar * barWidthPx</code>; width derived <em>reactively</em> from <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> — a bpm change resizes every audio block on the spot; canvas waveform drawing the <code>[trimStart, trimEnd]</code> slice; left/right trim handles.</li>
+  <li><span class="badge b-new">new</span> <span class="file">AudioBlock.tsx</span> — the audio analogue of <span class="file">Block.tsx</span> (aliases the <code>AudioBlock</code> type import, matching <span class="file">Block.tsx</span>'s convention): positioned at <code>startBar * barWidthPx</code>; width derived <em>reactively</em> from <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> — a bpm change resizes the block on the spot; canvas waveform drawing the <code>[trimStart, trimEnd]</code> slice; left/right trim handles.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">Track.tsx</span> — render <code>audioBlocks</code> when <code>type === 'audio'</code>; <span class="file">TimelineArea.tsx</span> — move gesture writes <code>startBar</code>; right-edge trim writes <code>trimEnd</code>; left-edge trim writes <code>trimStart</code> + <code>startBar</code> together (kept audio stays on its beats).</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">AudioBar.tsx</span> — load path → <code>addClip</code>; the library-drag-to-add-track gesture drops a clip onto the timeline as a new audio track + block.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">AudioBar.tsx</span> — loading a file → <code>addClip</code> + auto-create <strong>one</strong> audio track at the top of the track rows (root index 0) with a block at bar 0; while an audio track exists the AudioBar is hidden/greyed out; deleting the track re-enables it. No clip library UI or library-drag gesture (multi-track UI is phase 5+).</li>
 </ul>
 <div class="note"><strong>Pause-invariant note:</strong> the waveform is static per block state — nothing animates. These are timeline components (not instruments), so the instrument lint bans don't apply; there's simply nothing time-driven to ban.</div>
 
 <!-- F -->
 <h2 id="phases">F · Phase-by-phase build (with files)</h2>
 
+<h3>Phase 0 — Renames <span class="badge b-move">code motion only</span></h3>
+<ul class="small">
+  <li><span class="badge b-move">rename</span> <span class="file">core/engine/</span> → <span class="file">core/visual/</span>; <span class="badge b-new">new</span> <span class="file">core/trackTypes.ts</span> (promote <code>isModifierType</code> + modifier combining + <code>AUTOMATION_PITCH_MIN/MAX</code>); update all import paths and the ESLint ban messages referencing <span class="file">core/engine/instrumentFrame</span>.</li>
+  <li><span class="badge b-move">rename</span> <span class="file">plugins/</span> → <span class="file">effects/</span>; <code>PluginInstance</code> → <code>EffectInstance</code>, <code>getPlugin</code> → <code>getEffect</code>. The persisted <code>track.visualPlugins</code> field keeps working untouched until phase 1 renames it in the same breath as the document bump.</li>
+  <li>No behavior change anywhere — tsc + lint + a visual smoke test are the whole verification.</li>
+</ul>
+
 <h3>Phase 1 — Data model + document v2 <span class="badge b-edit">stores · persistence</span></h3>
 <ul class="small">
-  <li><span class="badge b-edit">edit</span> <span class="file">editor/types.ts</span> (<code>AudioBlock</code>, <code>'audio'</code>, <code>Track.audioBlocks?</code>), <span class="file">store/AudioStore.ts</span> (clips library), <span class="file">store/ProjectStore.ts</span> (<code>addAudioTrack</code>/<code>addAudioBlock</code>/<code>updateAudioBlock</code>/<code>deleteAudioBlock</code>).</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">persistence/types.ts</span> + <span class="file">serialize.ts</span> (doc carries <code>clips</code>) + <span class="file">upgrade.ts</span> (<code>CURRENT_VERSION = 2</code>, the v1→v2 step with the synthesized bar-0 block; fixture-test it against a captured v1 doc).</li>
-  <li>No playback change yet: you can create an audio track and place a block; it doesn't sound. Old projects open converted and still sound right via the (old) global-clip path — actually removed in phase 2, so phases 1+2 land together or back-to-back.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">editor/types.ts</span> (<code>AudioBlock</code>, <code>'audio'</code>, <code>Track.audioBlocks?</code>, <code>Track.effects</code>), <span class="file">store/AudioStore.ts</span> (<code>audioClips</code> catalog), <span class="file">store/ProjectStore.ts</span> (<code>addAudioTrack</code> at index 0, <code>addAudioBlock</code>/<code>updateAudioBlock</code>/<code>deleteAudioBlock</code>, <code>visualPlugins</code> → <code>effects</code> in actions).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">persistence/types.ts</span> + <span class="file">serialize.ts</span> (doc carries <code>audioClips</code>) + <span class="file">upgrade.ts</span> (<code>CURRENT_VERSION = 2</code>, the three-change v1→v2 step; fixture-test against captured v1 docs — with a clip, without a clip, with visualPlugins).</li>
+  <li>Phases 1+2 land back-to-back: phase 1 removes the old single-clip path's data, phase 2 replaces its playback.</li>
 </ul>
 
 <h3>Phase 2 — Audio engine + transport wiring ★ keystone <span class="badge b-new">core/audio</span> <span class="badge b-edit">playback.ts</span></h3>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">core/audio/AudioEngine.ts</span> (pool, <code>armBlock</code>, <code>armAll</code> with mute/solo, master gain, <code>stopAll</code>), minimal <span class="file">core/audio/waveform.ts</span> (just <code>getBuffer</code> for now).</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/audio/AudioEngine.ts</span> (pool, <code>armBlock</code>, <code>armAll</code> with mute/solo, master gain, <code>stopAll</code>); <span class="badge b-move">move</span> <span class="file">audioSource.ts</span> into <span class="file">core/audio/</span>; minimal <span class="file">core/audio/waveform.ts</span> (just <code>getBuffer</code> for now).</li>
   <li><span class="badge b-edit">edit</span> <span class="file">core/playback.ts</span> (sheds player; delegates; 50ms lookahead; <code>setBpm</code> re-arm), <span class="file">hooks/usePlayback.ts</span> (gather blocks, <code>loadClips</code>, live-edit subscription).</li>
 </ul>
-<div class="note"><strong>The keystone canary:</strong> open a v1 project (or drop a clip) — the upgraded bar-0 block must sound <em>identical</em> to yesterday's global clip: same start, same seek behavior, same end-of-project stop. Then drag the block to bar 8 and hit play before/inside/after its window — all three arm cases audible in the right places. If bar-0 differs, the beat⟷second math is wrong; fix it before any UI work.</div>
+<div class="note"><strong>The keystone canary:</strong> open a v1 project — the upgraded bar-0 block must sound <em>identical</em> to yesterday's global clip: same start, same seek behavior, same end-of-project stop. Then move the block to bar 8 (via the store, before the UI exists) and hit play before/inside/after its window — all three arm cases audible in the right places. If bar-0 differs, the beat⟷second math is wrong; fix it before any UI work.</div>
 
-<h3>Phase 3 — Waveform + block view + drag <span class="badge b-new">renderer</span></h3>
+<h3>Phase 3 — Waveform + block view + drag + AudioBar <span class="badge b-new">renderer</span></h3>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">timeline/AudioBlockView.tsx</span>; finish <span class="file">core/audio/waveform.ts</span> (<code>getPeaks</code> + adaptive resolution).</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> (render audio rows), <span class="file">TimelineArea.tsx</span> (move gesture → <code>updateAudioBlock(startBar)</code>), <span class="file">AudioBar.tsx</span> (→ <code>addClip</code> + drop-to-timeline).</li>
-  <li>Verify: bpm slider drag visibly resizes audio blocks while MIDI blocks hold width.</li>
+  <li><span class="badge b-new">new</span> <span class="file">timeline/AudioBlock.tsx</span>; finish <span class="file">core/audio/waveform.ts</span> (<code>getPeaks</code> + adaptive resolution).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">timeline/Track.tsx</span> (render audio rows), <span class="file">TimelineArea.tsx</span> (move gesture → <code>updateAudioBlock(startBar)</code>), <span class="file">AudioBar.tsx</span> (auto-create track at top + single-track gating).</li>
+  <li>Verify: bpm slider drag visibly resizes the audio block while MIDI blocks hold width; AudioBar greys out once the track exists and returns on delete.</li>
 </ul>
 
-<h3>Phase 4 — Trim + multi-clip + library UI <span class="badge b-edit">additive</span></h3>
+<h3>Phase 4 — Trim <span class="badge b-edit">additive</span></h3>
 <ul class="small">
-  <li><span class="badge b-edit">edit</span> <span class="file">AudioBlockView.tsx</span> (edge handles), <span class="file">TimelineArea.tsx</span> (right edge → <code>trimEnd</code>; left edge → <code>trimStart</code> + <code>startBar</code> together). Scheduling honors trim automatically.</li>
-  <li>Clip picker / library panel over <code>AudioStore.clips</code>; multiple blocks + overlapping blocks (already free in the engine — verify the master-gain headroom holds).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">AudioBlock.tsx</span> (edge handles), <span class="file">TimelineArea.tsx</span> (right edge → <code>trimEnd</code>; left edge → <code>trimStart</code> + <code>startBar</code> together). Scheduling honors trim automatically.</li>
+  <li>Multiple blocks on the one track (e.g. after a future split) already schedule correctly — the engine loop is N-block by construction; verify overlap + the master-gain headroom.</li>
 </ul>
 
 <h3>Phase 5 — Later <span class="badge b-risk">deferred</span></h3>
 <ul class="small">
-  <li>Split at playhead (two blocks, complementary trim) · edge fades (per-player gain ramps) · grain-scrub while paused · free-positioning off the snap grid · loop-boundary retrigger when loop regions exist.</li>
+  <li>Multi-audio-track / clip-catalog UI (engine-ready; UI-only lift) · split at playhead (two blocks, complementary trim) · edge fades (per-player gain ramps) · grain-scrub while paused · free-positioning off the snap grid · loop-boundary retrigger when loop regions exist.</li>
 </ul>
 
 <!-- G -->
@@ -366,43 +399,76 @@ UPGRADES[<span class="n">1</span>] = (doc) => {
 <div class="tree">src/
 ├─ editor/
 │  ├─ core/
-│  │  ├─ <span class="tg-new">NEW</span> audio/                    ★ the audio engine (new island)
-│  │  │  ├─ AudioEngine.ts         player pool · armBlock/armAll · mute/solo · master gain · stopAll
-│  │  │  └─ waveform.ts            decode cache (getBuffer, shared w/ players) · adaptive peaks
-│  │  ├─ <span class="tg-edit">EDIT</span> playback.ts             sheds its Tone.Player → pure transport; delegates (beat, when);
-│  │  │                            lookahead 0.02 → 0.05; setBpm re-arms while playing
-│  │  ├─ <span class="tg-edit">KEEP</span> audioSource.ts          ref → bytes seam (Supabase bucket) — unchanged
-│  │  └─ <span class="tg-edit">KEEP</span> engine/                 the VISUAL engine — entirely untouched
+│  │  ├─ <span class="tg-new">NEW</span> audio/          ★ the audio engine (new island)
+│  │  │  ├─ AudioEngine.ts
+│  │  │  │      player pool · armBlock/armAll · mute/solo
+│  │  │  │      master gain · stopAll
+│  │  │  ├─ waveform.ts
+│  │  │  │      decode cache (shared w/ players) · adaptive peaks
+│  │  │  └─ audioSource.ts   <span class="tg-edit">MOVED</span> from core/
+│  │  │         ref → playable bytes + session cache — unchanged
+│  │  ├─ <span class="tg-edit">RENAME</span> visual/       was engine/ — contents untouched
+│  │  │         (VisualEngine · resolve · matrix · instrumentFrame …)
+│  │  ├─ <span class="tg-new">NEW</span> trackTypes.ts
+│  │  │         promoted: modifier semantics (isModifierType)
+│  │  │         + AUTOMATION_PITCH_MIN/MAX encoding constants
+│  │  └─ <span class="tg-edit">EDIT</span> playback.ts     (name kept)
+│  │            sheds its Tone.Player → pure transport;
+│  │            delegates (beat, when); lookahead 0.02 → 0.05;
+│  │            setBpm re-arms while playing
+│  ├─ <span class="tg-edit">RENAME</span> effects/         was plugins/
+│  │         PluginInstance → EffectInstance · getPlugin → getEffect
 │  ├─ store/
-│  │  ├─ <span class="tg-edit">EDIT</span> AudioStore.ts           clip | null → clips: Record&lt;ref, AudioClip&gt; (+ add/removeClip)
-│  │  ├─ <span class="tg-edit">EDIT</span> ProjectStore.ts         + addAudioTrack, addAudioBlock, updateAudioBlock, deleteAudioBlock
-│  │  └─ <span class="tg-edit">KEEP</span> TimeStore.ts            currentBeat / isPlaying — THE CLOCK, untouched
+│  │  ├─ <span class="tg-edit">EDIT</span> AudioStore.ts
+│  │  │         clip | null → audioClips: Record&lt;ref, AudioClip&gt;
+│  │  ├─ <span class="tg-edit">EDIT</span> ProjectStore.ts
+│  │  │         + addAudioTrack (index 0), addAudioBlock,
+│  │  │           updateAudioBlock, deleteAudioBlock
+│  │  └─ <span class="tg-edit">KEEP</span> TimeStore.ts
+│  │            currentBeat / isPlaying — THE CLOCK, untouched
 │  ├─ hooks/
-│  │  └─ <span class="tg-edit">EDIT</span> usePlayback.ts          gather blocks → loadClips → play; live-edit + mute/solo subscription
+│  │  └─ <span class="tg-edit">EDIT</span> usePlayback.ts
+│  │            gather blocks → loadClips → play;
+│  │            live-edit + mute/solo subscription (decided: lives here)
 │  ├─ components/
-│  │  ├─ <span class="tg-edit">EDIT</span> AudioBar.tsx            load → addClip (library); drop-to-timeline entry point
+│  │  ├─ <span class="tg-edit">EDIT</span> AudioBar.tsx
+│  │  │         load → addClip + auto-create ONE audio track (top);
+│  │  │         hidden/greyed while an audio track exists
 │  │  └─ timeline/
-│  │     ├─ <span class="tg-new">NEW</span> AudioBlockView.tsx     block @ startBar·barWidthPx · reactive tempo width · waveform · trim
-│  │     ├─ <span class="tg-edit">EDIT</span> Track.tsx              render audioBlocks when type === 'audio'
-│  │     ├─ <span class="tg-edit">EDIT</span> TimelineArea.tsx       audio move / trim gestures (branch on track type)
-│  │     └─ <span class="tg-edit">KEEP</span> Block.tsx              the MIDI block — the shape AudioBlockView mirrors
-│  └─ <span class="tg-edit">EDIT</span> types.ts                   + AudioBlock, TrackType 'audio', Track.audioBlocks?
+│  │     ├─ <span class="tg-new">NEW</span> AudioBlock.tsx
+│  │     │       block @ startBar·barWidthPx · waveform · trim
+│  │     │       width follows tempo reactively
+│  │     ├─ <span class="tg-edit">EDIT</span> Track.tsx
+│  │     │       render audioBlocks when type === 'audio'
+│  │     ├─ <span class="tg-edit">EDIT</span> TimelineArea.tsx
+│  │     │       audio move / trim gestures (branch on type)
+│  │     └─ <span class="tg-edit">KEEP</span> Block.tsx
+│  │              the MIDI block — AudioBlock.tsx mirrors it
+│  └─ <span class="tg-edit">EDIT</span> types.ts
+│            + AudioBlock, TrackType 'audio', audioBlocks?
+│            visualPlugins → effects (EffectInstance)
 └─ persistence/
-   ├─ <span class="tg-edit">EDIT</span> types.ts                   ProjectDocument v2: clips (library) replaces audioClip
-   ├─ <span class="tg-edit">EDIT</span> serialize.ts               pick clips from AudioStore (audioBlocks ride free in tracks)
-   ├─ <span class="tg-edit">EDIT</span> upgrade.ts                 CURRENT_VERSION = 2 · v1→v2: clip → library + bar-0 block synth
-   └─ <span class="tg-edit">KEEP</span> audioStorage.ts            bucket upload/signed URLs — already shipped</div>
+   ├─ <span class="tg-edit">EDIT</span> types.ts
+   │         ProjectDocument v2: audioClips replaces audioClip
+   ├─ <span class="tg-edit">EDIT</span> serialize.ts
+   │         pick audioClips from AudioStore
+   │         (audioBlocks + effects ride free inside tracks)
+   ├─ <span class="tg-edit">EDIT</span> upgrade.ts
+   │         CURRENT_VERSION = 2 · one step, three changes:
+   │         audioClips + bar-0 block synth + effects rename
+   └─ <span class="tg-edit">KEEP</span> audioStorage.ts
+             bucket upload / signed URLs — already shipped</div>
 
 <table>
   <thead><tr><th>Untouched (and why that's the point)</th><th>Reason</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">core/engine/*</span> (visual engine), <span class="file">instruments/*</span>, <span class="file">components/visual/*</span></td><td>Audio scheduling lives in the audio engine only. Visuals read <code>currentBeat</code>, which doesn't change; the pause invariant is unaffected. The future audio-reactive bridge goes through modulator ports, later, deliberately.</td></tr>
+    <tr><td><span class="file">core/visual/*</span> (the visual engine — renamed, contents untouched), <span class="file">instruments/*</span>, <span class="file">components/visual/*</span></td><td>Audio scheduling lives in the audio engine only. Visuals read <code>currentBeat</code>, which doesn't change; the pause invariant is unaffected. The future audio-reactive bridge goes through modulator ports, later, deliberately.</td></tr>
     <tr><td><span class="file">TimeStore</span>, the RAF beat tracker</td><td>The clock is the invariant. Audio is scheduled relative to <code>currentBeat</code>; the beat is never derived from audio.</td></tr>
     <tr><td><span class="file">midi/*</span>, note gestures, MIDI <span class="file">Block.tsx</span></td><td>Audio lives in its own track type with its own block view (parallel <code>audioBlocks</code>); the piano roll never learns about audio.</td></tr>
-    <tr><td><span class="file">core/audioSource.ts</span>, <span class="file">persistence/audioStorage.ts</span>, the <code>project-audio</code> bucket</td><td>The bytes seam already shipped with persistence. A block's <code>clipRef</code> resolves through the same <code>getPlayableUrl(ref)</code>.</td></tr>
+    <tr><td><span class="file">persistence/audioStorage.ts</span>, the <code>project-audio</code> bucket</td><td>The cloud-bytes seam already shipped with persistence. A block's <code>clipRef</code> resolves through the same <code>getPlayableUrl(ref)</code> — now from <span class="file">core/audio/audioSource.ts</span>.</td></tr>
   </tbody>
 </table>
-<div class="rec"><strong>The one-sentence mental model:</strong> you're adding a <span class="file">core/audio/</span> island that schedules N players at N beat offsets — fed <code>(beat, when)</code> by a transport that sheds its player and keeps the clock — backed by an audio-block placement in the (now v2) project document and a waveform-drawing block on a new audio track; the visual engine, the clock, and the bytes seam are untouched.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> you're adding a <span class="file">core/audio/</span> island that schedules N players at N beat offsets — fed <code>(beat, when)</code> by a transport that sheds its player and keeps the clock — backed by an audio-block placement in the (now v2) project document and a waveform-drawing block on one auto-created audio track; <span class="file">core/visual/</span> (né <span class="file">core/engine/</span>), the clock, and the cloud-bytes seam are untouched.</div>
 
 <!-- H -->
 <h2 id="risks">H · Risks &amp; open questions</h2>
@@ -410,14 +476,14 @@ UPGRADES[<span class="n">1</span>] = (doc) => {
   <li><span class="badge b-risk">risk</span> <strong>The beat⟷second math diverging between call sites.</strong> Mitigation: exactly one <code>armBlock</code>, called by play, seek, and the bpm re-arm — plus the phase-2 canary (bar-0 block ≡ yesterday's global clip).</li>
   <li><span class="badge b-risk">risk</span> <strong>Player pool leaks.</strong> Reconcile <code>Map&lt;blockId, Player&gt;</code> against the block set on every <code>setBlocks</code>; dispose orphans on delete; never key players by ref (overlaps).</li>
   <li><span class="badge b-risk">risk</span> <strong>Downbeat decode latency.</strong> Pre-decode on block insert via the shared cache; <code>play()</code> should almost never actually wait.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Upgrade-step correctness.</strong> The v1→v2 step is the first shipped upgrade — fixture-test it against a real captured v1 document (with and without a clip), and never edit it once shipped.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Upgrade-step correctness.</strong> The v1→v2 step is the first shipped upgrade and carries three changes — fixture-test it against real captured v1 documents (with a clip, without, with visualPlugins), and never edit it once shipped.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Rename churn.</strong> Phase 0 touches many import paths (engine → visual, plugins → effects) plus the ESLint messages; it must be a pure-motion commit with zero behavior change, verified by tsc + lint + smoke test before anything audio lands on top.</li>
   <li><span class="badge b-risk">open</span> <strong>Parallel <code>audioBlocks</code> vs shared block plumbing.</strong> Start parallel; revisit after trim if the gesture system wants unifying.</li>
-  <li><span class="badge b-risk">open</span> <strong>Where the live-edit subscription lives.</strong> <span class="file">usePlayback</span> subscribing to the store and nudging the audio engine (recommended, mirrors existing wiring) vs the engine subscribing itself (couples it to the store). Keep the engine store-free.</li>
-  <li><span class="badge b-risk">later</span> <strong>Grain-scrub, split, fades, loop retrigger, audio-reactive ports</strong> — all named in the architecture doc §12; none designed here.</li>
+  <li><span class="badge b-risk">later</span> <strong>Multi-track UI, grain-scrub, split, fades, loop retrigger, audio-reactive ports</strong> — all named in the architecture doc §12; none designed here.</li>
 </ul>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Mirrors <span class="file">persistence-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">audio-track-architecture.html</span> (which records the decisions: separate engine, no time-stretch, silent scrub, mute/solo at arm, 50ms lookahead, adaptive peaks, document v2). Comparative source for taken mechanisms: <span class="file">Excellent-Daw/src/core/{playback,audio}.ts</span>. Greyscale, print-ready.</p>
+<p class="small muted">Plan only — no code changed. Mirrors <span class="file">persistence-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">audio-track-architecture.html</span> (which records the decisions: separate engine, the core/visual + effects renames, no time-stretch, silent scrub, mute/solo at arm, 50ms lookahead, adaptive peaks, one auto-created audio track, keep <code>when</code>, document v2). Comparative source for taken mechanisms: <span class="file">Excellent-Daw/src/core/{playback,audio}.ts</span>. Greyscale, print-ready.</p>
 
 </div>
 </body>
