@@ -17,8 +17,8 @@ interface AudioBlockProps {
  * The audio analogue of the MIDI Block: positioned at startBar · barWidthPx,
  * but its WIDTH is derived — (trimEnd − trimStart) seconds at the current
  * tempo — so a bpm change resizes it on the spot (audio is never resampled;
- * it just takes more or fewer beats). Dragging writes startBar (snapped to
- * the beat grid); the audio engine reschedules via the store subscription.
+ * it just takes more or fewer beats). Dragging writes startBar freely (no
+ * grid snap); the audio engine reschedules via the store subscription.
  */
 export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: AudioBlockProps) {
   // Width follows tempo reactively — this subscription is the feature.
@@ -66,7 +66,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
     return () => { cancelled = true }
   }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color])
 
-  // ── Drag gestures: move (body), trim (edges) — all snapped to the beat grid ──
+  // ── Drag gestures: move (body), trim (edges) — free positioning, no snap ──
   // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
   // the audio you keep stays aligned to its original beats (classic DAW left-trim).
   type DragMode = 'move' | 'trim-l' | 'trim-r'
@@ -78,7 +78,6 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
 
   const MIN_CLIP_SEC = 0.05
   const secPerBar = (60 / bpm) * beatsPerBar
-  const snapBars = (bars: number) => Math.round(bars * beatsPerBar) / beatsPerBar
 
   const edgeZone = (e: ReactPointerEvent<HTMLDivElement>): DragMode => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -110,11 +109,13 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       e.currentTarget.style.cursor = mode === 'move' ? 'default' : 'ew-resize'
       return
     }
+    // Audio deliberately moves/trims FREELY (no grid snap) — real audio rarely
+    // lands on a beat. MIDI blocks keep their snapping (useTrackGestures).
     const { mode, startX, orig } = drag
-    const deltaBars = snapBars((e.clientX - startX) / barWidthPx)
+    const deltaBars = (e.clientX - startX) / barWidthPx
 
     if (mode === 'move') {
-      const startBar = Math.max(0, snapBars(orig.startBar + deltaBars))
+      const startBar = Math.max(0, orig.startBar + deltaBars)
       if (startBar !== block.startBar) {
         useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar })
       }
