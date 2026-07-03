@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { setProject, syncParams, computeAtBeat } from './VisualEngine'
+import { PauseCanary } from './pauseCanary'
 
 /**
  * Mounted once inside <Canvas>. Two jobs:
@@ -14,7 +15,18 @@ import { setProject, syncParams, computeAtBeat } from './VisualEngine'
  *    keeps rendering the previous resolved graph until the new one lands.
  */
 export function VisualBeatSync() {
-  useFrame(() => computeAtBeat(useTimeStore.getState().currentBeat))
+  const canary = useRef<PauseCanary | null>(null)
+  useFrame((rootState) => {
+    const { currentBeat, isPlaying } = useTimeStore.getState()
+    computeAtBeat(currentBeat)
+    // Dev-only pause-invariant tripwire (see pauseCanary.ts). The project state
+    // ref is the edit stamp: edits while paused legitimately change the scene.
+    if (process.env.NODE_ENV !== 'production') {
+      ;(canary.current ??= new PauseCanary()).check(
+        rootState.scene, currentBeat, isPlaying, useProjectStore.getState(),
+      )
+    }
+  })
 
   useEffect(() => {
     setProject(useProjectStore.getState())

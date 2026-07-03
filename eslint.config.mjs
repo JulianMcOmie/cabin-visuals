@@ -36,7 +36,64 @@ const dawOverrides = {
   },
 };
 
+// The pause invariant, enforced: instrument visuals must be pure functions of
+// state.beat (+ params/notes) — see src/editor/core/engine/instrumentFrame.ts.
+// Banning every other time/randomness source makes the invariant unwritable
+// rather than merely discouraged. Frame access goes through useInstrumentFrame
+// (which deliberately exposes no clock/delta); randomness through seededRand.
+const instrumentInvariant = {
+  files: ["src/editor/instruments/**/*.{ts,tsx}"],
+  rules: {
+    "no-restricted-imports": [
+      "error",
+      {
+        paths: [
+          {
+            name: "@react-three/fiber",
+            importNames: ["useFrame"],
+            message:
+              "Instruments use useInstrumentFrame(trackId, cb) from core/engine/instrumentFrame — it exposes state.beat/state.secPerBeat and nothing wall-clock.",
+          },
+        ],
+      },
+    ],
+    "no-restricted-properties": [
+      "error",
+      {
+        object: "performance",
+        property: "now",
+        message: "Wall-clock time breaks the pause invariant. Derive time from state.beat (* state.secPerBeat for seconds).",
+      },
+      {
+        object: "Date",
+        property: "now",
+        message: "Wall-clock time breaks the pause invariant. Derive time from state.beat (* state.secPerBeat for seconds).",
+      },
+      {
+        object: "Math",
+        property: "random",
+        message: "Non-deterministic randomness breaks scrub reproducibility. Use seededRand(seed) from core/engine/instrumentFrame.",
+      },
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        selector: "Identifier[name='elapsedTime']",
+        message: "The r3f clock is wall-time and breaks the pause invariant. Derive time from state.beat.",
+      },
+      {
+        selector: "Identifier[name='getElapsedTime']",
+        message: "The r3f clock is wall-time and breaks the pause invariant. Derive time from state.beat.",
+      },
+      {
+        selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+        message: "Wall-clock time breaks the pause invariant. Derive time from state.beat.",
+      },
+    ],
+  },
+};
+
 // Combine base configs and custom rules
-const eslintConfig = [...baseConfigs, customRules, dawOverrides];
+const eslintConfig = [...baseConfigs, customRules, dawOverrides, instrumentInvariant];
 
 export default eslintConfig;
