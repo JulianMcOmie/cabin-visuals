@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
@@ -45,6 +46,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const isCollapsed = useUIStore((s) => s.collapsedTrackIds.has(track.id))
   const toggleMute = useProjectStore((s) => s.toggleMute)
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
+  const renameTrack = useProjectStore((s) => s.renameTrack)
+
+  // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
+  const [renaming, setRenaming] = useState(false)
+  const renameRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (renaming) renameRef.current?.select()
+  }, [renaming])
 
   const isSelected = selectedTrackId === track.id
   const hasChildren = track.childIds.length > 0
@@ -87,8 +96,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         }}
         onPointerDownCapture={(e) => {
           if (e.button !== 0) return
-          // The M/S buttons are not drag handles.
-          if ((e.target as HTMLElement).closest('button')) return
+          // The M/S buttons are not drag handles; neither is the rename input.
+          if ((e.target as HTMLElement).closest('button, input')) return
           // The audio track is pinned at the top — not draggable, not duplicable.
           if (track.type === 'audio') return
           // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the
@@ -115,7 +124,26 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           {isModifier && (
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: blockColor }} />
           )}
-          <span className={`text-xs font-medium truncate ${isModifier ? 'text-zinc-300' : 'text-white'}`}>{track.name}</span>
+          {renaming ? (
+            <input
+              ref={renameRef}
+              defaultValue={track.name}
+              onBlur={(e) => { renameTrack(track.id, e.currentTarget.value); setRenaming(false) }}
+              onKeyDown={(e) => {
+                e.stopPropagation() // keep Delete/Esc/space from the timeline + transport keys
+                if (e.key === 'Enter') e.currentTarget.blur()
+                else if (e.key === 'Escape') { e.currentTarget.value = track.name; e.currentTarget.blur() }
+              }}
+              className="w-full min-w-0 text-xs font-medium text-white bg-zinc-900 border border-zinc-600 rounded px-1 py-0 outline-none"
+            />
+          ) : (
+            <span
+              onDoubleClick={() => setRenaming(true)}
+              className={`text-xs font-medium truncate ${isModifier ? 'text-zinc-300' : 'text-white'}`}
+            >
+              {track.name}
+            </span>
+          )}
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); setTrackCollapsed(track.id, !isCollapsed) }}

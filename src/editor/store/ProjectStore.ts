@@ -45,6 +45,7 @@ interface ProjectState {
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
   setTrackParent: (trackId: string, parentId: string | null, index?: number) => void
+  renameTrack: (trackId: string, name: string) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
@@ -320,6 +321,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
         rootTrackIds.splice(i, 0, trackId)
       }
       return { tracks, rootTrackIds }
+    }),
+
+  renameTrack: (trackId, name) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      const trimmed = name.trim()
+      // An empty rename is a cancel, not a nameless track.
+      if (!track || !trimmed || trimmed === track.name) return s
+      return {
+        tracks: { ...s.tracks, [trackId]: { ...track, name: trimmed } },
+      }
     }),
 
   toggleMute: (trackId) =>
