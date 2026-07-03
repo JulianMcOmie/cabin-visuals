@@ -91,6 +91,9 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         for (let j = 0; j < k; j++) {
           if ((s.rootTops[j] + bottomOf(j)) / 2 < gcRow) idx = j + 1
         }
+        // The audio track is pinned at root index 0 — nothing lands above it.
+        const { tracks, rootTrackIds } = useProjectStore.getState()
+        if (idx === 0 && tracks[rootTrackIds[0]]?.type === 'audio') idx = 1
         insertIndex = idx
         gapRow = idx < k ? s.rootTops[idx] : s.n
       }

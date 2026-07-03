@@ -97,8 +97,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
         return { tracks }
       }
       const rootTrackIds = [...s.rootTrackIds]
+      // Never above the pinned audio track at root index 0.
+      const min = track.type !== 'audio' && s.tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
       if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(track.id)
-      else rootTrackIds.splice(atIndex, 0, track.id)
+      else rootTrackIds.splice(Math.max(min, atIndex), 0, track.id)
       return { tracks, rootTrackIds }
     }),
 
@@ -280,6 +282,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
       if (!child) return s
       if (parentId === trackId) return s
       if (parentId != null && !s.tracks[parentId]) return s
+      // The audio track is pinned at the top: it never moves, and nothing nests
+      // under it (the UI blocks both; this is the backstop).
+      if (child.type === 'audio') return s
+      if (parentId != null && s.tracks[parentId].type === 'audio') return s
       // Cycle guard: the new parent must not sit inside trackId's own subtree.
       for (let cur: string | undefined = parentId ?? undefined; cur != null; cur = s.tracks[cur]?.parentId) {
         if (cur === trackId) return s
@@ -306,7 +312,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
         childIds.splice(i, 0, trackId)
         tracks[parentId] = { ...np, childIds }
       } else {
-        const i = index == null ? rootTrackIds.length : Math.max(0, Math.min(rootTrackIds.length, index))
+        // Never above the pinned audio track at root index 0.
+        const min = tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
+        const i = index == null ? rootTrackIds.length : Math.max(min, Math.min(rootTrackIds.length, index))
         rootTrackIds.splice(i, 0, trackId)
       }
       return { tracks, rootTrackIds }

@@ -89,6 +89,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           if (e.button !== 0) return
           // The M/S buttons are not drag handles.
           if ((e.target as HTMLElement).closest('button')) return
+          // The audio track is pinned at the top — not draggable, not duplicable.
+          if (track.type === 'audio') return
           // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the
           // plain path, so a click without movement still selects the row.
           if (e.altKey) {

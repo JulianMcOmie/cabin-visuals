@@ -56,8 +56,9 @@ export function computeDropTarget(args: {
   const frac = (contentY - overIndex * rowHeight) / rowHeight
 
   // Middle band of a row → nest into it (append as its last child); automation/
-  // ability tracks are never nest targets (no children).
-  if (overTrack.type !== 'automation' && overTrack.type !== 'ability' && frac >= 0.25 && frac <= 0.75) {
+  // ability tracks are never nest targets (no children), and neither is the
+  // audio track (nothing nests under the backing track).
+  if (overTrack.type !== 'automation' && overTrack.type !== 'ability' && overTrack.type !== 'audio' && frac >= 0.25 && frac <= 0.75) {
     return { parentId: over.id, index: undefined, line: null, intoId: over.id }
   }
 
@@ -69,7 +70,10 @@ export function computeDropTarget(args: {
   const pos = siblings.indexOf(overTrackId)
   let index: number
   let top: number
-  if (frac < 0.25) {
+  // The audio track is pinned at the top: nothing may drop above it. A "before"
+  // drop over it becomes an "after" drop instead.
+  const pinnedTop = parentId == null && tracks[rootTrackIds[0]]?.type === 'audio'
+  if (frac < 0.25 && !(pinnedTop && overTrack.type === 'audio' && pos === 0)) {
     // Before `over`.
     index = pos < 0 ? 0 : pos
     top = trackRowIndex * rowHeight
@@ -80,6 +84,10 @@ export function computeDropTarget(args: {
     let j = trackRowIndex + 1
     while (j < n && rows[j].depth > trackDepth) j++
     top = j * rowHeight
+  }
+  if (pinnedTop && index === 0) {
+    index = 1
+    top = Math.max(top, rowHeight)
   }
   return { parentId, index, line: { top, left: trackDepth * INDENT_PX }, intoId: null }
 }
