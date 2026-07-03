@@ -20,6 +20,8 @@ import { TimelineArea } from './components/timeline/TimelineArea'
 import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
+import { useProjectPersistence } from './hooks/useProjectPersistence'
+import { useSaveStatus } from '../persistence/autosave'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -52,6 +54,22 @@ function BeatOverlay() {
   )
 }
 
+// Autosave status: quiet when in sync, explicit when saving or in trouble.
+function SaveStatusChip() {
+  const status = useSaveStatus((s) => s.status)
+  if (status === 'idle') return null
+  const label = status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'
+  return (
+    <span
+      className={`text-[11px] select-none whitespace-nowrap ${
+        status === 'error' ? 'text-red-400' : 'text-zinc-600'
+      }`}
+    >
+      {label}
+    </span>
+  )
+}
+
 function Header() {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, reset } = usePlayback();
@@ -69,6 +87,8 @@ function Header() {
         <ChevronLeft size={14} />
         Projects
       </Link>
+
+      <SaveStatusChip />
 
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
         <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" strokeWidth={95} />
@@ -122,6 +142,7 @@ function BottomArea() {
 }
 
 export default function EditorApp() {
+  useProjectPersistence()
   const { topFrac, containerRef, startResize } = useVerticalSplit()
 
   return (

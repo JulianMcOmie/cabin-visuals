@@ -29,6 +29,9 @@ interface HistoryState {
   undo: () => void
   redo: () => void
   clear: () => void
+  /** Clear stacks AND cancel any in-flight burst. For document loads (project
+   *  open), where the hydrate setState must not become an undoable step. */
+  reset: () => void
 }
 
 // Module-level transient state (not reactive — it's plumbing).
@@ -85,5 +88,10 @@ export const useHistoryStore = create<HistoryState>((set, get) => {
       set({ past: [...past, current], future: future.slice(0, -1) })
     },
     clear: () => set({ past: [], future: [] }),
+    reset: () => {
+      if (timer) { clearTimeout(timer); timer = null }
+      pendingBase = null
+      set({ past: [], future: [] })
+    },
   }
 })
