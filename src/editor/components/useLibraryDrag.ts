@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent }
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { flattenVisualRows } from './timeline/trackTree'
+import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
@@ -103,7 +104,7 @@ export function useLibraryDrag() {
       if (target) {
         const track = makeTrack(item, target.parentId)
         useProjectStore.getState().addTrack(track, target.index)
-        useUIStore.getState().setSelectedTrackId(track.id)
+        selectNewTrack(track.id)
         // Reveal the drop: expand the parent if it was collapsed.
         if (target.parentId) useUIStore.getState().setTrackCollapsed(target.parentId, false)
       }

@@ -13,6 +13,7 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
+import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
@@ -21,7 +22,6 @@ export function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
-  const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const maxBeat = totalBars * beatsPerBar
@@ -143,8 +143,9 @@ export function TimelineArea() {
   })
 
   function insertTrack() {
+    const id = crypto.randomUUID()
     useProjectStore.getState().addTrack({
-      id: crypto.randomUUID(),
+      id,
       name: 'Cube',
       type: 'base' as const,
       instrumentId: 'cube',
@@ -154,6 +155,8 @@ export function TimelineArea() {
       blocks: [],
       childIds: [],
     })
+    // A new instrument becomes the selection; blocks deselect.
+    selectNewTrack(id)
   }
 
   // Drag the label column's right edge to resize it (spans the ruler corner, every
@@ -269,15 +272,12 @@ export function TimelineArea() {
                   rootTrackIds.length > 0 ? 'border-t border-t-zinc-900' : ''
                 }`}
                 style={{ width: labelWidth }}
-                onPointerDown={() => setSelectedTrackId(null)}
+                onPointerDown={() => deselectTrack()}
               />
               <div
                 className="flex-1"
                 onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  setSelectedTrackId(null)
-                  handleLanePointerDown(e)
-                }}
+                onPointerDown={(e) => handleLanePointerDown(e)}
               />
             </div>
 

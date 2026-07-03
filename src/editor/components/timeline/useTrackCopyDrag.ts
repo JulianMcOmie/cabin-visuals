@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows } from './trackTree'
+import { selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
 
 interface CopyDragState {
   srcIndex: number
@@ -69,6 +70,9 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const onMove = (ev: PointerEvent) => {
       const s = sessionRef.current
       if (!s) return
+      // The drag ends with a click on the source label — it must not steal the
+      // selection from the new copy (selectNewTrack at drop).
+      suppressTrackSelectBriefly()
       moveGhost(ev.clientY)
       const k = s.rootTops.length
       const bottomOf = (j: number) => (j + 1 < k ? s.rootTops[j + 1] : s.n)
@@ -102,7 +106,8 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       sessionRef.current = null
       unlockCursor()
       if (s && s.insertIndex != null) {
-        useProjectStore.getState().insertTrackCopy(s.srcId, s.insertIndex)
+        const copyId = useProjectStore.getState().insertTrackCopy(s.srcId, s.insertIndex)
+        if (copyId) selectNewTrack(copyId)
       }
       setCopyDrag(null)
     }

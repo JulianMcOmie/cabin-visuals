@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
+import { suppressTrackSelectBriefly } from '../../utils/selection'
 import { computeDropTarget } from './trackDrop'
 
 interface Session {
@@ -69,6 +70,8 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       if (!started) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return
         started = true
+        // The drag ends with a click on the label — it must not re-select.
+        suppressTrackSelectBriefly()
         // Suppress text selection (and lock the cursor) for the duration of the drag;
         // the plain pointer-down path doesn't preventDefault so a click can still select.
         lockCursor('grabbing')

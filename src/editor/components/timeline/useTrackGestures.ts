@@ -5,6 +5,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
+import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
 import type { Note, Block } from '../../types'
 
 /** Owning track id for each visual row, so a vertical block drag maps every row it
@@ -94,6 +95,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
       if (!d) return
+      // Any in-flight drag (marquee, move, resize, draw) ends with a click on
+      // whatever row is under the pointer — that click must not select a track.
+      suppressTrackSelectBriefly()
 
       if (d.type === 'marquee') {
         const minX = Math.min(d.startClientX, e.clientX)
@@ -101,11 +105,13 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         const minY = Math.min(d.startClientY, e.clientY)
         const maxY = Math.max(d.startClientY, e.clientY)
         // Hit-test block elements by their client rects (scroll-independent).
+        // Audio blocks participate in the marquee exactly like MIDI blocks.
         const ids = new Set(d.base)
-        document.querySelectorAll<HTMLElement>('[data-block-id]').forEach((el) => {
+        document.querySelectorAll<HTMLElement>('[data-block-id], [data-audio-block-id]').forEach((el) => {
           const r = el.getBoundingClientRect()
           if (r.right >= minX && r.left <= maxX && r.bottom >= minY && r.top <= maxY) {
-            if (el.dataset.blockId) ids.add(el.dataset.blockId)
+            const id = el.dataset.blockId ?? el.dataset.audioBlockId
+            if (id) ids.add(id)
           }
         })
         setSelectedBlockIds(ids)
@@ -375,7 +381,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           const idx = selId ? store.rootTrackIds.indexOf(selId) : -1
           const copy = cloneTrack(clip.track)
           store.addTrack(copy, idx >= 0 ? idx + 1 : undefined)
-          useUIStore.getState().setSelectedTrackId(copy.id)
+          selectNewTrack(copy.id)
         }
         return
       }
@@ -393,8 +399,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
             useUIStore.getState().setSelectedTrackId(null)
           }
         }
-      } else if (e.key === 'Escape' && selectedBlockIds.size > 0) {
-        setSelectedBlockIds(new Set())
+      } else if (e.key === 'Escape') {
+        // Two-stage: first Esc clears the block selection; the next deselects
+        // the track (taking its own selected blocks with it).
+        if (selectedBlockIds.size > 0) setSelectedBlockIds(new Set())
+        else deselectTrack()
       }
     }
     document.addEventListener('keydown', onKeyDown)

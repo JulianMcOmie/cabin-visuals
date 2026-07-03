@@ -37,7 +37,8 @@ interface ProjectState {
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   deleteTrack: (trackId: string) => void
-  insertTrackCopy: (srcId: string, index: number) => void
+  /** Returns the new copy's id (for selection), or null if the source vanished. */
+  insertTrackCopy: (srcId: string, index: number) => string | null
   reorderRootTracks: (orderedIds: string[]) => void
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
@@ -60,8 +61,9 @@ interface ProjectState {
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Create the audio track (top of the root tracks) holding one block at bar 0
-   *  spanning the whole clip. The AudioBar's load path; one audio track for now. */
-  addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => void
+   *  spanning the whole clip. The AudioBar's load path; one audio track for now.
+   *  Returns the new track's id (for selection). */
+  addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => string
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
   deleteAudioBlock: (trackId: string, blockId: string) => void
@@ -206,7 +208,12 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const tracks: Record<string, Track> = {}
       for (const [id, t] of Object.entries(s.tracks)) {
         const blocks = t.blocks.filter((b) => !blockIds.has(b.id))
-        tracks[id] = blocks.length !== t.blocks.length ? { ...t, blocks } : t
+        let next = blocks.length !== t.blocks.length ? { ...t, blocks } : t
+        // Audio blocks share the selection model, so a selected one deletes too.
+        if (t.audioBlocks?.some((b) => blockIds.has(b.id))) {
+          next = { ...next, audioBlocks: t.audioBlocks.filter((b) => !blockIds.has(b.id)) }
+        }
+        tracks[id] = next
       }
       return { tracks }
     }),
@@ -249,16 +256,20 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   // Insert an identical copy of a track at a given root index (Alt-drag commit).
   // The original is left untouched.
-  insertTrackCopy: (srcId, index) =>
+  insertTrackCopy: (srcId, index) => {
+    let newId: string | null = null
     set((s) => {
       const src = s.tracks[srcId]
       if (!src) return s
       const copy = cloneTrack(src)
+      newId = copy.id
       const rootTrackIds = [...s.rootTrackIds]
       const i = Math.max(0, Math.min(rootTrackIds.length, index))
       rootTrackIds.splice(i, 0, copy.id)
       return { tracks: { ...s.tracks, [copy.id]: copy }, rootTrackIds }
-    }),
+    })
+    return newId
+  },
 
   reorderRootTracks: (orderedIds) =>
     set({ rootTrackIds: orderedIds }),
@@ -460,9 +471,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
     }),
 
-  addAudioTrack: (clip) =>
+  addAudioTrack: (clip) => {
+    const id = crypto.randomUUID()
     set((s) => {
-      const id = crypto.randomUUID()
       const track: Track = {
         id,
         name: clip.fileName,
@@ -483,7 +494,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
       // Top of the track rows — the backing track leads the arrangement.
       return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [id, ...s.rootTrackIds] }
-    }),
+    })
+    return id
+  },
 
   addAudioBlock: (trackId, block) =>
     set((s) => {

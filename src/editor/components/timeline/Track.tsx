@@ -6,6 +6,7 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { modifierColor } from '../../utils/modifierColors'
+import { selectTrack, shouldSuppressTrackSelect } from '../../utils/selection'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
@@ -38,7 +39,6 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
-  const setSelectedTrackId = useUIStore((s) => s.setSelectedTrackId)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
@@ -74,9 +74,17 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       className={`flex items-stretch border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
         isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
       }`}
-      onClick={() => setSelectedTrackId(isSelected ? null : track.id)}
     >
       <div
+        onClick={() => {
+          // Track selection is the LABEL's job — the lane (timeline grid) never
+          // selects or deselects a track. A drag that started here (nest/copy)
+          // must not hijack the selection when its trailing click lands.
+          if (shouldSuppressTrackSelect()) return
+          // No toggle: clicking the selected track keeps it selected. Foreign
+          // selected blocks are pruned; this track's stay (utils/selection).
+          selectTrack(track.id)
+        }}
         onPointerDownCapture={(e) => {
           if (e.button !== 0) return
           // The M/S buttons are not drag handles.
@@ -148,8 +156,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div
         className={`relative flex-shrink-0 ${isAutomation ? 'bg-black/10' : ''}`}
         style={{ width: timelineWidthPx }}
-        // Audio lanes have no MIDI gestures (no right-click block drawing / marquee).
-        onPointerDown={track.type === 'audio' ? undefined : (e) => onLanePointerDown(e, track.id)}
+        // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),
+        // but clicking their empty space still deselects blocks, like any lane.
+        onPointerDown={track.type === 'audio'
+          ? (e) => { if (e.button === 0 && !e.shiftKey) useUIStore.getState().setSelectedBlockIds(new Set()) }
+          : (e) => onLanePointerDown(e, track.id)}
         onContextMenu={(e) => e.preventDefault()}
       >
         {track.type === 'audio'

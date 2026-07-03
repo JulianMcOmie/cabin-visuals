@@ -6,6 +6,7 @@ import * as Tone from 'tone'
 import { useAudioStore } from '../store/AudioStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { saveAudio } from '../core/audio/audioSource'
+import { selectNewTrack } from '../utils/selection'
 
 /**
  * The one entry point for project audio: loading a file registers the clip in
@@ -43,7 +44,8 @@ export function AudioBar() {
 
     const clip = { ref, fileName: file.name, duration }
     useAudioStore.getState().addClip(clip)
-    useProjectStore.getState().addAudioTrack(clip)
+    // A new instrument becomes the selection; blocks deselect.
+    selectNewTrack(useProjectStore.getState().addAudioTrack(clip))
   }
 
   return (

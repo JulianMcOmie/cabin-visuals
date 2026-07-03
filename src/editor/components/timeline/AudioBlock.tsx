@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useAudioStore } from '../../store/AudioStore'
+import { useUIStore } from '../../store/UIStore'
+import { selectNewBlock } from '../../utils/selection'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
 import type { AudioBlock as AudioBlockType } from '../../types'
 
@@ -24,6 +26,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
   // Width follows tempo reactively — this subscription is the feature.
   const bpm = useProjectStore((s) => s.bpm)
   const clip = useAudioStore((s) => s.audioClips[block.clipRef])
+  const isSelected = useUIStore((s) => s.selectedBlockIds.has(block.id))
 
   const clipSec = Math.max(0, block.trimEnd - block.trimStart)
   const widthBars = (clipSec * bpm) / 60 / beatsPerBar
@@ -91,6 +94,20 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     e.stopPropagation() // the lane underneath must not treat this as a lane gesture
+
+    // Same selection semantics as MIDI blocks: shift toggles; a plain click on an
+    // unselected block makes it the only selected block (track selection stays);
+    // clicking an already-selected block keeps the selection.
+    const ui = useUIStore.getState()
+    if (e.shiftKey) {
+      const next = new Set(ui.selectedBlockIds)
+      if (next.has(block.id)) next.delete(block.id)
+      else next.add(block.id)
+      ui.setSelectedBlockIds(next)
+      return
+    }
+    if (!ui.selectedBlockIds.has(block.id)) selectNewBlock(block.id)
+
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
     dragRef.current = {
       mode: edgeZone(e),
@@ -164,8 +181,11 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
         left: `${left}px`,
         width: `${width}px`,
         backgroundColor: color + '22',
-        border: `1px solid ${color}66`,
+        borderTop: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        borderRight: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        borderBottom: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
         borderLeft: `2px solid ${color}`,
+        boxShadow: isSelected ? `0 0 0 1px ${color}, 0 0 8px ${color}aa` : undefined,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
