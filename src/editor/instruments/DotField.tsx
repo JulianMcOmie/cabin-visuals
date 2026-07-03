@@ -671,4 +671,5 @@ export const dotFieldInstrument: ObjectInstrumentDef = {
   params: PARAMS,
   ports: PORTS,
   component: DotFieldVisual,
+  fullFrame: true,
 }

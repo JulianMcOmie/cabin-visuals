@@ -338,4 +338,5 @@ export const particleBassRingInstrument: ObjectInstrumentDef = {
   params: PARAMS,
   ports: PORTS,
   component: ParticleBassRingVisual,
+  fullFrame: true,
 }

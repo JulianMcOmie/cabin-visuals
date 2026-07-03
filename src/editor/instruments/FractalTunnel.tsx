@@ -290,20 +290,28 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
   const offscreenInvertedRef = useRef<HTMLCanvasElement | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
 
+  // The backing canvases match the visual window's ASPECT (height fixed, width
+  // follows), so the tunnel genuinely fills the frame at any window size with no
+  // squash — the drawing is projection-based and spreads into whatever canvas it
+  // gets. Quantized so live resizes only recreate on meaningful aspect changes.
+  const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
+  const texH = 1024
+  const texW = Math.max(256, Math.min(2048, Math.round((texH * aspect) / 64) * 64))
+
   useEffect(() => {
     const canvas = document.createElement('canvas')
-    canvas.width = 1024
-    canvas.height = 1024
+    canvas.width = texW
+    canvas.height = texH
     canvasRef.current = canvas
 
     const offscreenNormal = document.createElement('canvas')
-    offscreenNormal.width = 1024
-    offscreenNormal.height = 1024
+    offscreenNormal.width = texW
+    offscreenNormal.height = texH
     offscreenNormalRef.current = offscreenNormal
 
     const offscreenInverted = document.createElement('canvas')
-    offscreenInverted.width = 1024
-    offscreenInverted.height = 1024
+    offscreenInverted.width = texW
+    offscreenInverted.height = texH
     offscreenInvertedRef.current = offscreenInverted
 
     const texture = new CanvasTexture(canvas)
@@ -314,7 +322,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     return () => {
       texture.dispose()
     }
-  }, [])
+  }, [texW])
 
   useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current
@@ -445,17 +453,19 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     texture.needsUpdate = true
 
     const material = mesh.material as MeshBasicMaterial
-    if (!material.map) {
-      material.map = texture
+    if (material.map !== texture) {
+      material.map = texture // (re)bound after an aspect-change recreation too
       material.needsUpdate = true
     }
   })
 
-  const planeSize = Math.max(viewport.width, viewport.height) * 1.5
-
+  // The plane IS the viewport (slight overscan): aspect matches the texture, so
+  // the tunnel fills the whole frame undistorted at any window size, and resizes
+  // with it. It sits at the full-frame group's origin — the distance `viewport`
+  // is measured at.
   return (
-    <mesh ref={meshRef} position={[0, 0, -5]}>
-      <planeGeometry args={[planeSize, planeSize]} />
+    <mesh ref={meshRef}>
+      <planeGeometry args={[viewport.width * 1.02, viewport.height * 1.02]} />
       <meshBasicMaterial transparent opacity={1} depthWrite={false} />
     </mesh>
   )

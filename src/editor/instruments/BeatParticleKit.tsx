@@ -976,4 +976,5 @@ export const beatParticleKitInstrument: ObjectInstrumentDef = {
   params: PARAMS,
   ports: PORTS,
   component: BeatParticleKitVisual,
+  fullFrame: true,
 }
