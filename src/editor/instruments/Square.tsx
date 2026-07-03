@@ -1,17 +1,18 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import {
   Group, Mesh, LineSegments, LineBasicMaterial, MeshBasicMaterial,
   PlaneGeometry, BufferGeometry, BufferAttribute, Color,
 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A line-outline square on a full-frame background plane,
 // driven by MIDI triggers: distinct pitches move it around, spin it, and split it into
-// top/bottom halves. Note-ons are detected from the object's activeNotes (a new
-// `${pitch}:${beat}` key = an onset). Geometry + movement/rotation/split math is
-// Tyler's verbatim; only the state reads are rewired.
+// top/bottom halves. Instead of integrating per-frame, each frame replays the track's
+// control notes up to the current beat closed-form (velocity segments for move/rotate,
+// exponential approach for split), so the visual is a pure function of `state.beat` —
+// pausing freezes it and scrubbing lands on exactly what playback shows.
 
 // MIDI pitch assignments
 const RETURN_ORIGIN_PITCH = 36 // C2
@@ -48,20 +49,6 @@ function SquareVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
-  const lastTimeRef = useRef(-1)
-
-  // State refs
-  const posXRef = useRef(0)
-  const posYRef = useRef(0)
-  const velXRef = useRef(0)
-  const velYRef = useRef(0)
-  const rotationRef = useRef(0)
-  const rotVelRef = useRef(0)
-  const splitAmountRef = useRef(0) // 0 = together, 1 = fully split
-  const splitTargetRef = useRef(0) // 0 or 1
-
-  // Onset detection: keys of notes seen last frame
-  const prevKeys = useRef<Set<string>>(new Set())
 
   // Mesh refs
   const topLineRef = useRef<LineSegments | null>(null)
@@ -151,10 +138,7 @@ function SquareVisual({ trackId }: { trackId: string }) {
     }
   }, [ready])
 
-  useFrame(() => {
-    const state = getObjectState(trackId)
-    if (!state) return
-
+  useInstrumentFrame(trackId, (state) => {
     const p = state.params
     const squareSize = p.squareSize ?? 0.3
     const moveSpeed = p.moveSpeed ?? 2
@@ -167,73 +151,100 @@ function SquareVisual({ trackId }: { trackId: string }) {
     const bgColor = state.stringParams.bgColor ?? '#8B00FF'
     const lineColor = state.stringParams.lineColor ?? '#000000'
 
-    const now = performance.now() / 1000
-    const dt = lastTimeRef.current < 0 ? 0 : now - lastTimeRef.current
-    lastTimeRef.current = now
-
     const vMin = Math.min(viewport.width, viewport.height)
     const scale = vMin * squareSize
 
-    // Onset detection: a note-on = a `${pitch}:${beat}` key newly present this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    const onsetPitches = new Set<number>()
-    for (const n of state.activeNotes) {
-      if (!prevKeys.current.has(`${n.pitch}:${n.beat}`)) onsetPitches.add(n.pitch)
-    }
-    prevKeys.current = keys
-    const wasTriggered = (pitch: number): boolean => onsetPitches.has(pitch)
+    // Replay the control-note history up to the current beat, closed-form.
+    // Position/rotation are piecewise-linear (constant-velocity segments between
+    // trigger notes); split is the exact solution of the old per-frame exponential
+    // lerp, re-anchored at each SPLIT/UNSPLIT. Same-beat ties break by ascending
+    // pitch, which reproduces the old trigger-processing order (e.g. STOP beats
+    // MOVE, RIGHT beats LEFT).
+    const events = state.notes
+      .filter((n) => n.pitch >= RETURN_ORIGIN_PITCH && n.pitch <= UNSPLIT_PITCH && n.beat <= state.beat)
+      .sort((a, b) => a.beat - b.beat || a.pitch - b.pitch)
 
-    // Process MIDI triggers
-    if (wasTriggered(RETURN_ORIGIN_PITCH)) {
-      posXRef.current = 0
-      posYRef.current = 0
-      velXRef.current = 0
-      velYRef.current = 0
-    }
-    if (wasTriggered(MOVE_LEFT_PITCH)) {
-      velXRef.current = -moveSpeed
-    }
-    if (wasTriggered(MOVE_UP_PITCH)) {
-      velYRef.current = moveSpeed
-    }
-    if (wasTriggered(MOVE_RIGHT_PITCH)) {
-      velXRef.current = moveSpeed
-    }
-    if (wasTriggered(MOVE_DOWN_PITCH)) {
-      velYRef.current = -moveSpeed
-    }
-    if (wasTriggered(STOP_MOVE_PITCH)) {
-      velXRef.current = 0
-      velYRef.current = 0
-    }
-    if (wasTriggered(ROTATE_LEFT_PITCH)) {
-      rotVelRef.current = rotateSpeed
-    }
-    if (wasTriggered(ROTATE_RIGHT_PITCH)) {
-      rotVelRef.current = -rotateSpeed
-    }
-    if (wasTriggered(STOP_ROTATE_PITCH)) {
-      rotVelRef.current = 0
-    }
-    if (wasTriggered(SPLIT_PITCH)) {
-      splitTargetRef.current = 1
-    }
-    if (wasTriggered(UNSPLIT_PITCH)) {
-      splitTargetRef.current = 0
-    }
+    let posX = 0
+    let posY = 0
+    let velX = 0
+    let velY = 0
+    let rotation = 0
+    let rotVel = 0
+    let segBeat = 0 // beat of the last velocity/rotation change
+    let splitTarget = 0 // 0 or 1
+    let splitAnchor = 0 // split amount at the last target change (0 = together, 1 = fully split)
+    let splitBeat = 0 // beat of the last target change
 
-    // Update position
-    posXRef.current += velXRef.current * dt
-    posYRef.current += velYRef.current * dt
+    // Advance position/rotation from segBeat to `beat` at the current velocities.
+    const advanceTo = (beat: number) => {
+      const dt = (beat - segBeat) * state.secPerBeat
+      posX += velX * dt
+      posY += velY * dt
+      rotation += rotVel * dt
+      segBeat = beat
+    }
+    // Split amount at `beat`: exponential approach from the last anchor.
+    const splitAt = (beat: number) =>
+      splitTarget + (splitAnchor - splitTarget) * Math.exp(-splitSpeed * (beat - splitBeat) * state.secPerBeat)
 
-    // Update rotation
-    rotationRef.current += rotVelRef.current * dt
+    for (const n of events) {
+      switch (n.pitch) {
+        case RETURN_ORIGIN_PITCH:
+          advanceTo(n.beat)
+          posX = 0
+          posY = 0
+          velX = 0
+          velY = 0
+          break
+        case MOVE_LEFT_PITCH:
+          advanceTo(n.beat)
+          velX = -moveSpeed
+          break
+        case MOVE_UP_PITCH:
+          advanceTo(n.beat)
+          velY = moveSpeed
+          break
+        case MOVE_RIGHT_PITCH:
+          advanceTo(n.beat)
+          velX = moveSpeed
+          break
+        case MOVE_DOWN_PITCH:
+          advanceTo(n.beat)
+          velY = -moveSpeed
+          break
+        case STOP_MOVE_PITCH:
+          advanceTo(n.beat)
+          velX = 0
+          velY = 0
+          break
+        case ROTATE_LEFT_PITCH:
+          advanceTo(n.beat)
+          rotVel = rotateSpeed
+          break
+        case ROTATE_RIGHT_PITCH:
+          advanceTo(n.beat)
+          rotVel = -rotateSpeed
+          break
+        case STOP_ROTATE_PITCH:
+          advanceTo(n.beat)
+          rotVel = 0
+          break
+        case SPLIT_PITCH:
+          splitAnchor = splitAt(n.beat)
+          splitTarget = 1
+          splitBeat = n.beat
+          break
+        case UNSPLIT_PITCH:
+          splitAnchor = splitAt(n.beat)
+          splitTarget = 0
+          splitBeat = n.beat
+          break
+      }
+    }
+    advanceTo(state.beat)
+    const splitAmount = splitAt(state.beat)
 
-    // Update split (smooth lerp)
-    const splitLerp = 1 - Math.exp(-splitSpeed * dt)
-    splitAmountRef.current += (splitTargetRef.current - splitAmountRef.current) * splitLerp
-
-    const splitOffset = splitAmountRef.current * splitDistance * vMin * 0.5
+    const splitOffset = splitAmount * splitDistance * vMin * 0.5
 
     // Update background
     if (bgMeshRef.current && bgMaterialRef.current) {
@@ -252,17 +263,17 @@ function SquareVisual({ trackId }: { trackId: string }) {
     }
 
     // Position the square halves
-    const baseX = posXRef.current + offsetX * vMin
-    const baseY = posYRef.current + offsetY * vMin
+    const baseX = posX + offsetX * vMin
+    const baseY = posY + offsetY * vMin
 
     if (topLineRef.current) {
       topLineRef.current.position.set(baseX, baseY + splitOffset, 0)
-      topLineRef.current.rotation.z = rotationRef.current
+      topLineRef.current.rotation.z = rotation
       topLineRef.current.scale.set(scale, scale, 1)
     }
     if (bottomLineRef.current) {
       bottomLineRef.current.position.set(baseX, baseY - splitOffset, 0)
-      bottomLineRef.current.rotation.z = rotationRef.current
+      bottomLineRef.current.rotation.z = rotation
       bottomLineRef.current.scale.set(scale, scale, 1)
     }
   })

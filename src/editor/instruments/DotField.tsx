@@ -1,7 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's DotField. A 3D field of dots arranged by golden-angle
@@ -10,13 +9,16 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // fixed world radius so the engine's placement/transform chain applies.
 //
 // Adaptation: Tyler keyed each effect to a specific MIDI pitch via `pitchNoteOnCounts`.
-// The cabin engine exposes only `activeNotes` (+ note-onset detection). So:
+// The cabin engine exposes `activeNotes` plus the full resolved note stream. So:
 //   - held notes in the low range (0-11 of the field) drive the bass shake, verbatim;
-//   - each new note-onset advances the displacement effect roster and, at intervals,
-//     spawns disruptor blades / center ripples / a scale kick — a lively note-reactive
-//     field rather than a control-surface. Displacement/shake/ripple/blade math is
-//     Tyler's verbatim. Tyler's palette color-mode is dropped; colorMode selects one of
-//     his three hardcoded schemes.
+//   - each note's ordinal position in the stream advances the displacement effect
+//     roster and, at intervals, marks disruptor-blade / center-ripple / scale-kick
+//     spawns — a lively note-reactive field rather than a control-surface. All of it
+//     is derived per frame from `state.beat` + `state.notes` (pause invariant: no
+//     wall clock, no spawn lists), with each event aged by beat-distance from its
+//     note. Displacement/shake/ripple/blade math is Tyler's verbatim. Tyler's
+//     palette color-mode is dropped; colorMode selects one of his three hardcoded
+//     schemes.
 
 // Golden angle for sunflower distribution
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
@@ -138,22 +140,16 @@ const displaceFns: DisplaceFn[] = [
 
 interface Blade {
   baseAngle: number
-  spawnTime: number
-  lifetime: number
+  age: number        // seconds since its spawn note (beat-derived)
   travelSpeed: number
   strength: number
   algo: DisruptorAlgo
 }
 
 interface CenterRipple {
-  spawnTime: number
+  age: number        // seconds since its spawn note (beat-derived)
   speed: number      // world units per second
   strength: number   // displacement amplitude in world units
-}
-
-interface ScaleKick {
-  spawnTime: number
-  strength: number   // peak scale multiplier (e.g. 0.25 = 25% outward burst)
 }
 
 interface BassNote {
@@ -267,17 +263,6 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
   const sizeBuf = useMemo(() => new Float32Array(MAX_PARTICLES), [])
   const colBuf = useMemo(() => new Float32Array(MAX_PARTICLES * 3), [])
 
-  // State refs
-  const activeBlades = useRef<Blade[]>([])
-  const algoIdx = useRef(0)
-  const centerRipples = useRef<CenterRipple[]>([])
-  const scaleKicks = useRef<ScaleKick[]>([])
-
-  // Note-onset tracking + roster cycling
-  const prevKeys = useRef<Set<string>>(new Set())
-  const onsetCounter = useRef(0)
-  const effectStart = useRef(0)
-
   // Build tracking
   const builtCount = useRef(0)
 
@@ -336,14 +321,11 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
     }
   }
 
-  useFrame(() => {
+  useInstrumentFrame(trackId, (state) => {
     const root = rootRef.current
     if (!root) return
-    const state = getObjectState(trackId)
-    if (!state) return
 
     const p = state.params
-    const now = performance.now()
 
     const particleCount = Math.round(Math.min(
       MAX_PARTICLES,
@@ -373,73 +355,61 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
 
     const n = f.count
     const R = f.radius
-    const t = now * 0.001 * speed
+    const t = state.beat * state.secPerBeat * speed
 
-    // --- Note-onset detection → drive the roster / spawn events ---
-    const keys = new Set(state.activeNotes.map((nt) => `${nt.pitch}:${nt.beat}`))
-    let onsets = 0
-    for (const nt of state.activeNotes) {
-      const k = `${nt.pitch}:${nt.beat}`
-      if (prevKeys.current.has(k)) continue
-      onsets++
-      const velocity = nt.velocity <= 1 ? nt.velocity : nt.velocity / 127
+    // --- Derive spawn events purely from the note stream (pause invariant) ---
+    // Each note's ordinal position in the sorted stream stands in for the old
+    // onset counter: every note advances the roster and kicks the field scale,
+    // every 2nd emits a center ripple, every 4th spawns a set of disruptor blades
+    // (its algo cycling per spawn). Ages come from beat-distance to the note, so
+    // a scrub to any beat reconstructs the exact same events — no spawn lists.
+    const blades: Blade[] = []
+    const cRipples: CenterRipple[] = []
+    let kickScale = 0
+    let ordinal = 0
+    let bladeSpawnIdx = 0
+    for (const nt of state.notes) {
+      if (nt.beat > state.beat) break
+      ordinal++
+      const ageSec = (state.beat - nt.beat) * state.secPerBeat
 
-      onsetCounter.current++
-      // Advance the displacement roster's window start each onset.
-      effectStart.current = (effectStart.current + 1) % EFFECT_COUNT
-
-      // Every 4th onset, spawn a set of disruptor blades (and cycle its algo).
-      if (onsetCounter.current % 4 === 0) {
-        const algo = DISRUPTOR_ALGOS[algoIdx.current]
-        algoIdx.current = (algoIdx.current + 1) % DISRUPTOR_ALGOS.length
-        const baseA = Math.random() * Math.PI * 2
-        for (let kk = 0; kk < bladeCount; kk++) {
-          activeBlades.current.push({
-            baseAngle: baseA + (kk * Math.PI * 2) / bladeCount,
-            spawnTime: now,
-            lifetime: disruptorLifetime * 1000,
-            travelSpeed: disruptorSpeed * R,
-            strength: disruptorStrength * R,
-            algo,
-          })
+      // Every 4th note, a set of disruptor blades (deterministic spawn angle).
+      if (ordinal % 4 === 0) {
+        const algo = DISRUPTOR_ALGOS[bladeSpawnIdx % DISRUPTOR_ALGOS.length]
+        bladeSpawnIdx++
+        if (ageSec < disruptorLifetime) {
+          const baseA = seededRand(nt.beat * 13 + nt.pitch * 7) * Math.PI * 2
+          for (let kk = 0; kk < bladeCount; kk++) {
+            blades.push({
+              baseAngle: baseA + (kk * Math.PI * 2) / bladeCount,
+              age: ageSec,
+              travelSpeed: disruptorSpeed * R,
+              strength: disruptorStrength * R,
+              algo,
+            })
+          }
         }
       }
 
-      // Every 2nd onset, emit a center ripple.
-      if (onsetCounter.current % 2 === 0) {
-        centerRipples.current.push({
-          spawnTime: now,
+      // Every 2nd note, a center ripple (lives 3s).
+      if (ordinal % 2 === 0 && ageSec < 3) {
+        cRipples.push({
+          age: ageSec,
           speed: rippleSpeed * R,
           strength: rippleStrength * R,
         })
       }
 
-      // Each onset kicks the field scale, scaled by velocity.
-      scaleKicks.current.push({ spawnTime: now, strength: 0.35 + velocity * 0.3 })
-    }
-    prevKeys.current = keys
-    void onsets
-
-    // Clean expired
-    activeBlades.current = activeBlades.current.filter(
-      (b) => now - b.spawnTime < b.lifetime,
-    )
-    centerRipples.current = centerRipples.current.filter(
-      (cr) => (now - cr.spawnTime) / 1000 < 3,
-    )
-    scaleKicks.current = scaleKicks.current.filter(
-      (k) => now - k.spawnTime < 700,
-    )
-
-    // --- Compute scale kick envelope (instant attack, fast decay) ---
-    let kickScale = 0
-    for (let k = 0; k < scaleKicks.current.length; k++) {
-      const kick = scaleKicks.current[k]
-      const age = (now - kick.spawnTime) / 1000 // seconds
+      // Each note kicks the field scale, scaled by velocity (lives 0.7s).
       // Damped spring: outward burst → contracts past rest → settles
-      const envelope = Math.exp(-age * 7) * Math.cos(age * 14)
-      kickScale += kick.strength * envelope
+      if (ageSec < 0.7) {
+        const velocity = nt.velocity <= 1 ? nt.velocity : nt.velocity / 127
+        const envelope = Math.exp(-ageSec * 7) * Math.cos(ageSec * 14)
+        kickScale += (0.35 + velocity * 0.3) * envelope
+      }
     }
+    // The displacement roster's window start advances once per note.
+    const effectStart = ordinal % EFFECT_COUNT
 
     // --- Collect active bass shake notes (held notes → shake) ---
     const bassNotes: BassNote[] = []
@@ -477,8 +447,6 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
     const pos = posBuf
     const sz = sizeBuf
     const col = colBuf
-    const blades = activeBlades.current
-    const cRipples = centerRipples.current
 
     for (let i = 0; i < n; i++) {
       const bx = f.baseX[i]
@@ -491,7 +459,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
 
       // Sum active displacement effects — a rolling window of the roster.
       for (let e = 0; e < activeEffects; e++) {
-        const idx = (effectStart.current + e) % EFFECT_COUNT
+        const idx = (effectStart + e) % EFFECT_COUNT
         const [ex, ey] = displaceFns[idx](bx, by, d, a, t, R)
         dx += ex * intensityP
         dy += ey * intensityP
@@ -500,7 +468,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
       // Disruptor blades
       for (let b = 0; b < blades.length; b++) {
         const blade = blades[b]
-        const age = (now - blade.spawnTime) / 1000
+        const age = blade.age
         const cosB = Math.cos(blade.baseAngle)
         const sinB = Math.sin(blade.baseAngle)
 
@@ -600,7 +568,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
       let rippleInfluence = 0
       for (let cr = 0; cr < cRipples.length; cr++) {
         const crip = cRipples[cr]
-        const crAge = (now - crip.spawnTime) / 1000
+        const crAge = crip.age
         const ringR = crAge * crip.speed
         const distToRing = Math.abs(d - ringR)
         const width = R * 0.12 // wide band for prominent visual

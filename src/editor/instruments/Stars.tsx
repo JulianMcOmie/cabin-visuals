@@ -1,15 +1,16 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A 3D warp starfield around the camera: parallax star drift
 // with directional warp/drift, barrel roll, tumble, pulse burst, streak, and per-pitch
-// background themes — all driven by held / newly-onset notes on the object's own lane.
-// Tyler's engine reads (getTrackState + pitchNoteOnCounts + seekGeneration + virtualClock)
-// are rewired to getObjectState / activeNotes / a note-onset Set / performance.now(); the
-// Points shaders and all parallax/streak/tumble math are copied verbatim.
+// background themes — all driven by notes on the object's own lane. Every frame is a
+// pure function of the current beat (the pause invariant): drift/warp are per-note
+// first-order velocity responses integrated in closed form, roll/tumble angles and the
+// pulse/streak/background envelopes are closed-form in note age, so a static playhead
+// is a static frame and scrub == playback. The Points shaders are copied verbatim.
 
 const MAX_STARS = 3000
 
@@ -104,22 +105,63 @@ const fragmentShader = `
   }
 `
 
-// --- Star generation ---
+// --- Star generation (seeded, so a reload regenerates the identical layout) ---
 
 function generateStarfield(count: number, spread: number, depth: number): Float32Array {
   const positions = new Float32Array(count * 3)
   for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * spread * 2
-    positions[i * 3 + 1] = (Math.random() - 0.5) * spread * 2
-    positions[i * 3 + 2] = (Math.random() - 0.5) * depth
+    positions[i * 3] = (seededRand(i * 3) - 0.5) * spread * 2
+    positions[i * 3 + 1] = (seededRand(i * 3 + 1) - 0.5) * spread * 2
+    positions[i * 3 + 2] = (seededRand(i * 3 + 2) - 0.5) * depth
   }
   return positions
 }
 
-// --- Pulse event ---
-interface PulseEvent {
-  spawnTime: number
-  strength: number
+// Wrap a coordinate into [-half, half) (translation displacement can be many spans out)
+function wrapCentered(v: number, half: number): number {
+  const span = half * 2
+  return ((((v + half) % span) + span) % span) - half
+}
+
+// Closed-form displacement of the old per-frame velocity smoothing: velocity chases a
+// boxcar target (V while the note holds, 0 after release) at rate 3/s — 8/s while a
+// brake note is held — and displacement is the exact integral, walked over the segments
+// between hold/brake boundaries. Re-evaluated from note data every frame, so it is pure
+// in the current time: no integration state, and scrubbing in any direction agrees.
+function noteDisplacement(
+  onSec: number,
+  durSec: number,
+  V: number,
+  tSec: number,
+  brakes: Array<[number, number]>,
+): number {
+  if (tSec <= onSec) return 0
+  const relSec = onSec + durSec
+  let v = 0
+  let disp = 0
+  let s = onSec
+  while (s < tSec - 1e-9) {
+    // Next boundary: the note's release or a brake edge, else now
+    let e = tSec
+    if (relSec > s && relSec < e) e = relSec
+    for (const b of brakes) {
+      if (b[0] > s && b[0] < e) e = b[0]
+      if (b[1] > s && b[1] < e) e = b[1]
+    }
+    const mid = (s + e) / 2
+    let braked = false
+    for (const b of brakes) {
+      if (mid >= b[0] && mid < b[1]) { braked = true; break }
+    }
+    const k = braked ? 8 : 3
+    const target = mid < relSec ? V : 0
+    const seg = e - s
+    const decay = Math.exp(-k * seg)
+    disp += target * seg + ((v - target) * (1 - decay)) / k
+    v = target + (v - target) * decay
+    s = e
+  }
+  return disp
 }
 
 const PARAMS: ParamDef[] = [
@@ -153,21 +195,12 @@ function StarsVisual({ trackId }: { trackId: string }) {
   const matRef = useRef<THREE.ShaderMaterial | null>(null)
 
   // Pre-allocated buffers (max size)
+  const basePosBuf = useRef(new Float32Array(MAX_STARS * 3))
+  const parallaxBuf = useRef(new Float32Array(MAX_STARS))
   const posBuf = useRef(new Float32Array(MAX_STARS * 3))
   const sizeBuf = useRef(new Float32Array(MAX_STARS))
   const colBuf = useRef(new Float32Array(MAX_STARS * 3))
   const alphaBuf = useRef(new Float32Array(MAX_STARS))
-
-  // State refs
-  const prevKeys = useRef<Set<string>>(new Set())
-  const streakOn = useRef(false)
-  const pulses = useRef<PulseEvent[]>([])
-
-  // Smoothed velocity for motion decay
-  const velRef = useRef({ x: 0, y: 0, z: 0 })
-  // Tumble axis precession
-  const tumbleAxis = useRef({ x: 0.3, y: 0.7, z: 0.1 })
-  const tumbleTime = useRef(0)
 
   // Build tracking
   const builtCount = useRef(0)
@@ -177,7 +210,6 @@ function StarsVisual({ trackId }: { trackId: string }) {
   // Ground plane
   const groundGroup = useRef<THREE.Group | null>(null)
   const groundBuilt = useRef(false)
-  const groundOffset = useRef({ x: 0, z: 0 })
 
   // Scratch color
   const scratchColor = useRef(new THREE.Color())
@@ -190,9 +222,18 @@ function StarsVisual({ trackId }: { trackId: string }) {
     geomRef.current?.dispose()
     matRef.current?.dispose()
 
-    // Generate initial positions into posBuf
+    // Generate the home layout; rendered positions are derived from it each frame
     const initPos = generateStarfield(count, spread, depth)
+    basePosBuf.current.set(initPos)
     posBuf.current.set(initPos)
+
+    // Fixed per-star parallax from the star's home depth: closer stars move faster.
+    // (The old code recomputed parallax from the live z each frame, so stars sped up
+    // as they neared the camera; a fixed factor keeps displacement closed-form.)
+    const depthHalf = depth / 2
+    for (let i = 0; i < count; i++) {
+      parallaxBuf.current[i] = depthHalf / (Math.abs(initPos[i * 3 + 2]) + 0.5)
+    }
 
     const geom = new THREE.BufferGeometry()
     const posAttr = new THREE.BufferAttribute(posBuf.current, 3)
@@ -287,16 +328,11 @@ function StarsVisual({ trackId }: { trackId: string }) {
     root.add(grp)
     groundGroup.current = grp
     groundBuilt.current = true
-    groundOffset.current = { x: 0, z: 0 }
   }
 
-  useFrame((_state, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const root = rootRef.current
     if (!root) return
-    const state = getObjectState(trackId)
-    if (!state) return
-
-    const dt = Math.min(delta, 0.05) // Cap delta to avoid huge jumps
 
     // Read settings
     const p = state.params
@@ -324,195 +360,177 @@ function StarsVisual({ trackId }: { trackId: string }) {
     if (!geom || !mat) return
 
     const n = starCount
-    const now = performance.now()
+    const secPerBeat = state.secPerBeat
+    const tSec = state.beat * secPerBeat
+    const notes = state.notes
 
-    // --- MIDI note-onsets (a note-on = a note key newly present in activeNotes this frame) ---
-    const keys = new Set(state.activeNotes.map((nt) => `${nt.pitch}:${nt.beat}`))
-    for (const nt of state.activeNotes) {
-      const key = `${nt.pitch}:${nt.beat}`
-      if (prevKeys.current.has(key)) continue
-      const pitch = nt.pitch
-      if (pitch === PITCH_STREAK) {
-        streakOn.current = !streakOn.current
-      }
-      if (pitch === PITCH_PULSE) {
-        pulses.current.push({ spawnTime: now, strength: 1 })
-      }
-      if (pitch in BG_THEMES) {
-        bgTargetColor.current.set(BG_THEMES[pitch])
-      }
+    // --- Brake intervals (in seconds, merged) — while a brake note holds, every
+    // velocity response below decays at 8/s instead of 3/s ---
+    let brakes: Array<[number, number]> = []
+    for (const nt of notes) {
+      if (nt.pitch !== PITCH_BRAKE) continue
+      const on = nt.beat * secPerBeat
+      if (on >= tSec) continue
+      brakes.push([on, on + nt.durationBeats * secPerBeat])
     }
-    prevKeys.current = keys
+    if (brakes.length > 1) {
+      brakes.sort((a, b) => a[0] - b[0])
+      const merged: Array<[number, number]> = [brakes[0]]
+      for (let j = 1; j < brakes.length; j++) {
+        const last = merged[merged.length - 1]
+        if (brakes[j][0] <= last[1]) last[1] = Math.max(last[1], brakes[j][1])
+        else merged.push(brakes[j])
+      }
+      brakes = merged
+    }
 
-    // Clean expired pulses
-    pulses.current = pulses.current.filter((pl) => now - pl.spawnTime < 600)
+    // --- Closed-form motion state at the current beat, summed over past notes ---
+    let dispX = 0
+    let dispY = 0
+    let dispZ = driftSpeed * tSec // Idle forward drift
+    let rollAngle = 0
+    let tumbleSec = 0
+    let pulseAmount = 0
+    let streakToggles = 0
+    let lastStreakOn = -Infinity
 
-    // --- Compute aggregate velocity from held notes ---
-    let targetVx = 0
-    let targetVy = 0
-    let targetVz = driftSpeed // Idle forward drift
-    let rollSpeed = 0
-    let tumbleActive = false
-    let brakeActive = false
-
-    for (const nt of state.activeNotes) {
+    for (const nt of notes) {
+      const onSec = nt.beat * secPerBeat
+      if (onSec > tSec) continue
+      const durSec = nt.durationBeats * secPerBeat
+      const age = tSec - onSec
+      const heldSec = Math.min(age, durSec)
       const v = nt.velocity
       const velScale = ((v <= 1 ? v : v / 127)) * speed
 
       switch (nt.pitch) {
         case PITCH_WARP_FWD:
-          targetVz += 3 * velScale
+          dispZ += noteDisplacement(onSec, durSec, 3 * velScale, tSec, brakes)
           break
         case PITCH_WARP_BWD:
-          targetVz -= 3 * velScale
+          dispZ -= noteDisplacement(onSec, durSec, 3 * velScale, tSec, brakes)
           break
         case PITCH_DRIFT_RIGHT:
-          targetVx += 2 * velScale
+          dispX += noteDisplacement(onSec, durSec, 2 * velScale, tSec, brakes)
           break
         case PITCH_DRIFT_LEFT:
-          targetVx -= 2 * velScale
+          dispX -= noteDisplacement(onSec, durSec, 2 * velScale, tSec, brakes)
           break
         case PITCH_DRIFT_UP:
-          targetVy += 2 * velScale
+          dispY += noteDisplacement(onSec, durSec, 2 * velScale, tSec, brakes)
           break
         case PITCH_DRIFT_DOWN:
-          targetVy -= 2 * velScale
+          dispY -= noteDisplacement(onSec, durSec, 2 * velScale, tSec, brakes)
           break
         case PITCH_BARREL_CW:
-          rollSpeed += 1.5 * velScale
+          rollAngle += 1.5 * velScale * heldSec
           break
         case PITCH_BARREL_CCW:
-          rollSpeed -= 1.5 * velScale
+          rollAngle -= 1.5 * velScale * heldSec
           break
         case PITCH_TUMBLE:
-          tumbleActive = true
+          tumbleSec += heldSec
           break
-        case PITCH_BRAKE:
-          brakeActive = true
+        case PITCH_PULSE:
+          // Exact integral of the old exp(-age * 8) burst push — each pulse
+          // permanently displaces stars outward by a bounded amount
+          pulseAmount += 0.5 * (1 - Math.exp(-age * 8))
+          break
+        case PITCH_STREAK:
+          streakToggles++
+          if (onSec > lastStreakOn) lastStreakOn = onSec
           break
       }
     }
 
-    // Smooth velocity with decay
-    const vel = velRef.current
-    const decayRate = brakeActive ? 8 : 3
-    vel.x += (targetVx - vel.x) * Math.min(1, decayRate * dt)
-    vel.y += (targetVy - vel.y) * Math.min(1, decayRate * dt)
-    vel.z += (targetVz - vel.z) * Math.min(1, decayRate * dt)
-
-    // Compute pulse burst
-    let pulseBurst = 0
-    for (let pi = 0; pi < pulses.current.length; pi++) {
-      const pulse = pulses.current[pi]
-      const age = (now - pulse.spawnTime) / 1000
-      pulseBurst += pulse.strength * Math.exp(-age * 8)
+    // Tumble angle and axis precession — pure functions of accumulated hold time
+    const tumbleAngle = tumbleSec * 2 * speed
+    const tt = tumbleSec * 0.3
+    let tax = Math.sin(tt * 1.3) * 0.5 + Math.cos(tt * 0.7) * 0.5
+    let tay = Math.cos(tt * 0.9) * 0.5 + Math.sin(tt * 1.1) * 0.5
+    let taz = Math.sin(tt * 0.5) * 0.3
+    const talen = Math.sqrt(tax * tax + tay * tay + taz * taz)
+    if (talen > 0) {
+      tax /= talen
+      tay /= talen
+      taz /= talen
     }
 
-    // Update tumble
-    if (tumbleActive) {
-      tumbleTime.current += dt
-      // Slowly precess the tumble axis
-      const tt = tumbleTime.current * 0.3
-      tumbleAxis.current.x = Math.sin(tt * 1.3) * 0.5 + Math.cos(tt * 0.7) * 0.5
-      tumbleAxis.current.y = Math.cos(tt * 0.9) * 0.5 + Math.sin(tt * 1.1) * 0.5
-      tumbleAxis.current.z = Math.sin(tt * 0.5) * 0.3
-      // Normalize
-      const len = Math.sqrt(
-        tumbleAxis.current.x ** 2 +
-        tumbleAxis.current.y ** 2 +
-        tumbleAxis.current.z ** 2,
-      )
-      if (len > 0) {
-        tumbleAxis.current.x /= len
-        tumbleAxis.current.y /= len
-        tumbleAxis.current.z /= len
-      }
-    }
-
-    const tumbleAngle = tumbleActive ? dt * 2 * speed : 0
-    const ta = tumbleAxis.current
-
-    // Streak factor for shader
-    const streakTarget = streakOn.current ? 1 : 0
-    const currentStreak = mat.uniforms.uStreakFactor.value as number
+    // Streak factor for shader: streak notes toggle the state; the factor eases
+    // toward the current parity from the most recent toggle (was a per-frame lerp)
+    const streakParity = streakToggles % 2
     mat.uniforms.uStreakFactor.value =
-      currentStreak + (streakTarget - currentStreak) * Math.min(1, 6 * dt)
+      streakToggles === 0
+        ? 0
+        : streakParity + (1 - 2 * streakParity) * Math.exp(-6 * (tSec - lastStreakOn))
 
     // Tint color for distant stars
     const tintHue = tint / 360
     const sc = scratchColor.current
 
+    const base = basePosBuf.current
+    const par = parallaxBuf.current
     const pos = posBuf.current
     const sz = sizeBuf.current
     const col = colBuf.current
     const alp = alphaBuf.current
 
+    const cosRoll = Math.cos(rollAngle)
+    const sinRoll = Math.sin(rollAngle)
+    const cosT = Math.cos(tumbleAngle)
+    const sinT = Math.sin(tumbleAngle)
+
     for (let i = 0; i < n; i++) {
-      let x = pos[i * 3]
-      let y = pos[i * 3 + 1]
-      let z = pos[i * 3 + 2]
+      const parallax = par[i]
 
-      // Parallax factor: closer stars (small |z|) move faster
-      const absZ = Math.abs(z) + 0.5
-      const parallax = depthHalf / absZ
-
-      // Apply translation velocity with parallax
-      x += vel.x * parallax * dt
-      y += vel.y * parallax * dt
-      z += vel.z * parallax * dt
+      // Translation displacement with parallax, wrapped back into the volume
+      let x = wrapCentered(base[i * 3] + dispX * parallax, spread)
+      let y = wrapCentered(base[i * 3 + 1] + dispY * parallax, spread)
+      let z = wrapCentered(base[i * 3 + 2] + dispZ * parallax, depthHalf)
 
       // Pulse burst — radial push outward from center in XY
-      if (pulseBurst > 0) {
-        const px = x
-        const py = y
-        const pDist = Math.sqrt(px * px + py * py)
+      if (pulseAmount > 0) {
+        const pDist = Math.sqrt(x * x + y * y)
         if (pDist > 0.01) {
-          const pushStr = pulseBurst * parallax * dt * 4
-          x += (px / pDist) * pushStr
-          y += (py / pDist) * pushStr
+          const pushStr = pulseAmount * parallax
+          x += (x / pDist) * pushStr
+          y += (y / pDist) * pushStr
         }
       }
 
-      // Barrel roll (rotate XY around Z axis — incremental per frame)
-      if (rollSpeed !== 0) {
-        const incCos = Math.cos(rollSpeed * dt)
-        const incSin = Math.sin(rollSpeed * dt)
+      // Barrel roll (rotate XY around Z axis by the accumulated roll angle)
+      if (rollAngle !== 0) {
         const tmpX = x
         const tmpY = y
-        x = tmpX * incCos - tmpY * incSin
-        y = tmpX * incSin + tmpY * incCos
+        x = tmpX * cosRoll - tmpY * sinRoll
+        y = tmpX * sinRoll + tmpY * cosRoll
       }
 
-      // Tumble (arbitrary axis rotation)
+      // Tumble (arbitrary axis rotation by the accumulated tumble angle)
       if (tumbleAngle > 0) {
-        const cosT = Math.cos(tumbleAngle)
-        const sinT = Math.sin(tumbleAngle)
-        const dot = ta.x * x + ta.y * y + ta.z * z
-        const cx = ta.y * z - ta.z * y
-        const cy = ta.z * x - ta.x * z
-        const cz = ta.x * y - ta.y * x
-        const nx = x * cosT + cx * sinT + ta.x * dot * (1 - cosT)
-        const ny = y * cosT + cy * sinT + ta.y * dot * (1 - cosT)
-        const nz = z * cosT + cz * sinT + ta.z * dot * (1 - cosT)
+        const dot = tax * x + tay * y + taz * z
+        const cx = tay * z - taz * y
+        const cy = taz * x - tax * z
+        const cz = tax * y - tay * x
+        const nx = x * cosT + cx * sinT + tax * dot * (1 - cosT)
+        const ny = y * cosT + cy * sinT + tay * dot * (1 - cosT)
+        const nz = z * cosT + cz * sinT + taz * dot * (1 - cosT)
         x = nx
         y = ny
         z = nz
       }
 
-      // Wrap coordinates
-      const spreadLimit = spread
-      if (x > spreadLimit) x -= spreadLimit * 2
-      else if (x < -spreadLimit) x += spreadLimit * 2
-      if (y > spreadLimit) y -= spreadLimit * 2
-      else if (y < -spreadLimit) y += spreadLimit * 2
-      if (z > depthHalf) z -= depth
-      else if (z < -depthHalf) z += depth
+      // Wrap coordinates (pulse push and rotations can carry stars back out)
+      x = wrapCentered(x, spread)
+      y = wrapCentered(y, spread)
+      z = wrapCentered(z, depthHalf)
 
       pos[i * 3] = x
       pos[i * 3 + 1] = y
       pos[i * 3 + 2] = z
 
       // Size: perspective scaling — closer = bigger
+      const absZ = Math.abs(z) + 0.5
       const perspSize = dotSize * (depthHalf / absZ)
       sz[i] = Math.max(0.5, perspSize)
 
@@ -537,17 +555,40 @@ function StarsVisual({ trackId }: { trackId: string }) {
     }
 
     // --- Background color ---
-    const bgColor = state.stringParams.bgColor ?? DEFAULTS.bgColor
-    // If no BG theme note is active, use the setting color
-    let hasBgNote = false
-    for (const nt of state.activeNotes) {
-      if (nt.pitch in BG_THEMES) { hasBgNote = true; break }
+    // Target = theme of a held BG note (latest onset wins), else the setting color.
+    // The old per-frame lerp becomes a closed-form ease from whichever color held just
+    // before the most recent BG on/off boundary (assumes that earlier transition had
+    // settled — history further back isn't replayed).
+    const bgColorParam = state.stringParams.bgColor ?? DEFAULTS.bgColor
+    const bgThemeAt = (sec: number): string => {
+      let bestOn = -Infinity
+      let theme = bgColorParam
+      for (const nt of notes) {
+        if (!(nt.pitch in BG_THEMES)) continue
+        const on = nt.beat * secPerBeat
+        if (sec < on || sec >= on + nt.durationBeats * secPerBeat) continue
+        if (on > bestOn) {
+          bestOn = on
+          theme = BG_THEMES[nt.pitch]
+        }
+      }
+      return theme
     }
-    if (!hasBgNote) {
-      bgTargetColor.current.set(bgColor)
+    let lastBgBoundary = -Infinity
+    for (const nt of notes) {
+      if (!(nt.pitch in BG_THEMES)) continue
+      const on = nt.beat * secPerBeat
+      const off = on + nt.durationBeats * secPerBeat
+      if (on <= tSec && on > lastBgBoundary) lastBgBoundary = on
+      if (off <= tSec && off > lastBgBoundary) lastBgBoundary = off
     }
-    // Smooth lerp toward target
-    bgColorObj.current.lerp(bgTargetColor.current, Math.min(1, 4 * dt))
+    bgTargetColor.current.set(bgThemeAt(tSec))
+    if (lastBgBoundary > -Infinity) {
+      bgColorObj.current.set(bgThemeAt(lastBgBoundary - 1e-4))
+      bgColorObj.current.lerp(bgTargetColor.current, 1 - Math.exp(-4 * (tSec - lastBgBoundary)))
+    } else {
+      bgColorObj.current.copy(bgTargetColor.current)
+    }
     scene.background = bgColorObj.current
     // Also update fog color to match
     if (scene.fog && scene.fog instanceof THREE.Fog) {
@@ -576,22 +617,13 @@ function StarsVisual({ trackId }: { trackId: string }) {
     if (showGround && groundGroup.current) {
       groundGroup.current.position.y = groundY
 
-      // Scroll the ground with the camera velocity, wrapping to avoid drifting away
+      // Scroll the ground with the flight displacement, wrapping to one grid cell
       const gStep = (spread * 4) / 40 // grid cell size
-      groundOffset.current.x += vel.x * dt
-      groundOffset.current.z += vel.z * dt
+      groundGroup.current.position.x = ((dispX % gStep) + gStep) % gStep
+      groundGroup.current.position.z = ((dispZ % gStep) + gStep) % gStep
 
-      // Wrap offsets to stay within one grid cell
-      groundOffset.current.x = ((groundOffset.current.x % gStep) + gStep) % gStep
-      groundOffset.current.z = ((groundOffset.current.z % gStep) + gStep) % gStep
-
-      groundGroup.current.position.x = groundOffset.current.x
-      groundGroup.current.position.z = groundOffset.current.z
-
-      // Apply roll rotation to ground too
-      if (rollSpeed !== 0) {
-        groundGroup.current.rotation.z += rollSpeed * dt
-      }
+      // Roll rotation follows the accumulated barrel-roll angle
+      groundGroup.current.rotation.z = rollAngle
 
       // Fade ground based on distance effect
       const lineMat = (groundGroup.current.children[0] as THREE.LineSegments)?.material as THREE.LineBasicMaterial

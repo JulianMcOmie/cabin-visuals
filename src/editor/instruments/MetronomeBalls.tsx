@@ -12,9 +12,9 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // foreground panels + a rotating background "flower", all built from balls that
 // pendulum outward, alternating kick/snare turns each beat. The trajectory math
 // (computePattern / computePatternBounce) is Tyler's VERBATIM. Full-frame 2D scene,
-// sized to the viewport like Square.tsx. Note-ons (a new `${pitch}:${beat}` key)
-// nudge the fg/bg angles and swap palettes; the background rotation is BEAT-synced
-// (driven by currentBeat, not wall-clock) so it tracks the transport. Tyler's
+// sized to the viewport like Square.tsx. All state is derived PURELY from the
+// current beat: angles/rotation/palette come from counting/folding the notes with
+// beat <= state.beat, so any scrub path lands on the identical picture. Tyler's
 // Managed* line/dot pools, displacement shader, ink/spiral/snare-bounce sub-effects
 // are collapsed away — this keeps the signature look with plain three primitives.
 
@@ -45,6 +45,7 @@ const PAL_PITCHES: [number, string][] = [
   [PITCH_PAL_BOTANICAL, 'botanical'], [PITCH_PAL_PLUM, 'plum'],
   [PITCH_PAL_CRIMSON, 'crimson'], [PITCH_PAL_SCARLET, 'scarlet'],
 ]
+const PAL_PITCH_MAP = new Map<number, string>(PAL_PITCHES)
 
 // --- Simulation constants (Tyler's) ---
 const SIM_BEATS = 200
@@ -198,17 +199,11 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
   const fgLineMatRef = useRef<LineBasicMaterial | null>(null)
   const fgDotMatRef = useRef<PointsMaterial | null>(null)
 
-  // Accumulated angle / rotation state
-  const fgKickAngle = useRef(0)
-  const fgSnareAngle = useRef(0)
-  const bgKickAngle = useRef(0)
-  const bgSnareAngle = useRef(0)
-  const bgRotation = useRef(0)
-  const inverted = useRef(false)
-  const paletteKey = useRef('default')
-  const initRef = useRef(false)
-  const prevKeys = useRef<Set<string>>(new Set())
-  const prevBeatRef = useRef<number | null>(null)
+  // Last-BUILT derived values (caches for the rebuild-on-change optimization —
+  // these are never accumulated, only compared against freshly derived values).
+  const builtFg = useRef<{ kick: number; snare: number; balls: number; speed: number; fgScale: number; panelWidth: number } | null>(null)
+  const builtBg = useRef<{ kick: number; snare: number; vMin: number } | null>(null)
+  const builtColors = useRef<{ pal: string; inv: boolean } | null>(null)
 
   useEffect(() => {
     const paperGeo = new PlaneGeometry(1, 1)
@@ -267,9 +262,8 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     }
   }, [ready])
 
-  function applyColors() {
-    const pal = PALETTES[paletteKey.current] ?? PALETTES.default
-    const inv = inverted.current
+  function applyColors(palKey: string, inv: boolean) {
+    const pal = PALETTES[palKey] ?? PALETTES.default
     const colBg = inv ? pal.fg : pal.bg
     const colFg = inv ? pal.bg : pal.fg
     const colAccent = inv ? pal.bg : pal.accent
@@ -280,9 +274,9 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     fgDotMatRef.current?.color.set(colFg)
   }
 
-  function rebuildFg(balls: number, speed: number, fgScale: number, panelWidth: number, dotSize: number) {
+  function rebuildFg(balls: number, kickAngle: number, snareAngle: number, speed: number, fgScale: number, panelWidth: number) {
     // Three panels: same pattern offset to x = (pi-1)*panelWidth.
-    const trajs = computePattern(balls, fgKickAngle.current, fgSnareAngle.current, speed)
+    const trajs = computePattern(balls, kickAngle, snareAngle, speed)
     const lineGeo = fgLinesRef.current!.geometry
     const dotGeo = fgDotsRef.current!.geometry
     const linePos = (lineGeo.getAttribute('position') as BufferAttribute).array as Float32Array
@@ -315,17 +309,14 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     dotGeo.setDrawRange(0, d)
     ;(dotGeo.getAttribute('position') as BufferAttribute).needsUpdate = true
     dotGeo.computeBoundingSphere()
-    if (fgDotMatRef.current) fgDotMatRef.current.size = dotSize * 2.5
   }
 
-  function rebuildBg(dotSize: number) {
-    const trajs = computePattern(BG_BALLS, bgKickAngle.current, bgSnareAngle.current, BG_SPEED)
+  function rebuildBg(kickAngle: number, snareAngle: number, vMin: number) {
+    const trajs = computePattern(BG_BALLS, kickAngle, snareAngle, BG_SPEED)
     // Background scaled to fill roughly the viewport; scale keyed off min dimension.
-    const vMin = Math.min(viewport.width, viewport.height)
     const bgScale = (vMin / PATTERN_EXTENT) * BG_SCALE
     fillLines(bgLinesRef.current!.geometry, trajs, BG_BALLS, bgScale, 0)
     fillDots(bgDotsRef.current!.geometry, trajs, BG_BALLS, bgScale, 0)
-    if (bgDotMatRef.current) bgDotMatRef.current.size = dotSize * 2
   }
 
   useInstrumentFrame(trackId, (state) => {
@@ -352,68 +343,64 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     // Paper backdrop sized to viewport.
     if (paperRef.current) paperRef.current.scale.set(vw * 1.2, vh * 1.2, 1)
 
-    // Initial build.
-    if (!initRef.current) {
-      initRef.current = true
-      fgKickAngle.current = deg2rad(kickStart)
-      fgSnareAngle.current = deg2rad(snareStart)
-      bgKickAngle.current = deg2rad(kickStart)
-      bgSnareAngle.current = deg2rad(snareStart)
-      applyColors()
-      rebuildFg(balls, speed, fgScale, panelWidth, dotSize)
-      rebuildBg(dotSize)
-    }
-
     if (fgLineMatRef.current) fgLineMatRef.current.opacity = lineOpacity
+    if (fgDotMatRef.current) fgDotMatRef.current.size = dotSize * 2.5
+    if (bgDotMatRef.current) bgDotMatRef.current.size = dotSize * 2
 
-    let fgDirty = false
-    let bgDirty = false
-    let colorsDirty = false
-
-    // Onset detection: a note-on = a `${pitch}:${beat}` key newly present this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    const onsetPitches = new Set<number>()
-    for (const n of state.activeNotes) {
-      if (!prevKeys.current.has(`${n.pitch}:${n.beat}`)) onsetPitches.add(n.pitch)
-    }
-    prevKeys.current = keys
-
-    if (onsetPitches.has(PITCH_FG)) {
-      fgKickAngle.current += deg2rad(kickStep) * fgMultiplier
-      fgSnareAngle.current += deg2rad(snareStep) * fgMultiplier
-      fgDirty = true
-    }
-    if (onsetPitches.has(PITCH_BG)) {
-      bgKickAngle.current += deg2rad(kickStep) * bgMultiplier
-      bgSnareAngle.current += deg2rad(snareStep) * bgMultiplier
-      bgRotation.current += BG_ROTATION_STEP
-      bgDirty = true
-    }
-    if (onsetPitches.has(PITCH_INVERT)) {
-      inverted.current = !inverted.current
-      colorsDirty = true
-    }
-    // Palette switches (last winning pitch this frame wins).
-    let winningPal: string | null = null
-    for (const [pp, key] of PAL_PITCHES) if (onsetPitches.has(pp)) winningPal = key
-    if (winningPal !== null) {
-      paletteKey.current = paletteKey.current === winningPal ? 'default' : winningPal
-      colorsDirty = true
+    // --- Pure derivation: count/fold trigger notes with beat <= state.beat. ---
+    // state.notes is the full resolved note list, sorted by beat, so the same
+    // beat always yields the same counts no matter how we scrubbed here.
+    const beat = state.beat
+    let countFg = 0
+    let countBg = 0
+    let countInvert = 0
+    const palNotes: { beat: number; pitch: number }[] = []
+    for (const n of state.notes) {
+      if (n.beat > beat) break
+      if (n.pitch === PITCH_FG) countFg++
+      else if (n.pitch === PITCH_BG) countBg++
+      else if (n.pitch === PITCH_INVERT) countInvert++
+      else if (PAL_PITCH_MAP.has(n.pitch)) palNotes.push(n)
     }
 
-    // Beat-synced background rotation — driven by the transport's currentBeat,
-    // NOT wall-clock, so the flower turns in lockstep with playback.
-    const currentBeat = state.beat
-    if (prevBeatRef.current !== null) {
-      const dBeat = currentBeat - prevBeatRef.current
-      if (dBeat !== 0) bgRotation.current += dBeat * bgRotateRate
-    }
-    prevBeatRef.current = currentBeat
-    if (bgGroupRef.current) bgGroupRef.current.rotation.z = bgRotation.current
+    const fgKick = deg2rad(kickStart) + deg2rad(kickStep) * fgMultiplier * countFg
+    const fgSnare = deg2rad(snareStart) + deg2rad(snareStep) * fgMultiplier * countFg
+    const bgKick = deg2rad(kickStart) + deg2rad(kickStep) * bgMultiplier * countBg
+    const bgSnare = deg2rad(snareStart) + deg2rad(snareStep) * bgMultiplier * countBg
+    const inverted = countInvert % 2 === 1
 
-    if (colorsDirty) applyColors()
-    if (fgDirty) rebuildFg(balls, speed, fgScale, panelWidth, dotSize)
-    if (bgDirty) rebuildBg(dotSize)
+    // Palette: fold toggles in beat order (deterministic tie-break by pitch).
+    palNotes.sort((a, b) => a.beat - b.beat || a.pitch - b.pitch)
+    let palKey = 'default'
+    for (const n of palNotes) {
+      const key = PAL_PITCH_MAP.get(n.pitch)!
+      palKey = palKey === key ? 'default' : key
+    }
+
+    // Beat-synced background rotation: one step per BG note so far, plus a
+    // continuous term from the absolute beat (pure form of the old dBeat sum).
+    if (bgGroupRef.current) {
+      bgGroupRef.current.rotation.z = BG_ROTATION_STEP * countBg + bgRotateRate * beat
+    }
+
+    // Rebuild geometry / colors only when the derived values actually changed.
+    const cf = builtFg.current
+    if (!cf || cf.kick !== fgKick || cf.snare !== fgSnare || cf.balls !== balls
+        || cf.speed !== speed || cf.fgScale !== fgScale || cf.panelWidth !== panelWidth) {
+      rebuildFg(balls, fgKick, fgSnare, speed, fgScale, panelWidth)
+      builtFg.current = { kick: fgKick, snare: fgSnare, balls, speed, fgScale, panelWidth }
+    }
+    const vMin = Math.min(vw, vh)
+    const cb = builtBg.current
+    if (!cb || cb.kick !== bgKick || cb.snare !== bgSnare || cb.vMin !== vMin) {
+      rebuildBg(bgKick, bgSnare, vMin)
+      builtBg.current = { kick: bgKick, snare: bgSnare, vMin }
+    }
+    const cc = builtColors.current
+    if (!cc || cc.pal !== palKey || cc.inv !== inverted) {
+      applyColors(palKey, inverted)
+      builtColors.current = { pal: palKey, inv: inverted }
+    }
   })
 
   useEffect(() => () => {

@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, type Material } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import type { ResolvedNote } from '../core/engine/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Eight emoji glyphs laid out in a 2×4 grid across the full
@@ -9,12 +10,14 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // CW/CCW, flip the layout axis, a whole-180 flip, per-row rotations, and a held "3D depth"
 // trigger that spawns depth trails zooming toward the camera. Emoji are unicode drawn to a
 // canvas + CanvasTexture (no image assets, no IndexedDB). Tyler's seek handling and palette
-// are dropped; note-onsets come from the object's activeNotes.
+// are dropped.
 //
 // Adapter notes: Tyler read note-on edges from `pitchNoteOnCounts` (per-pitch counts) and
-// held pitches from an `activeNotes` Set. Here onsets are detected the cabin way — a
-// `${pitch}:${beat}` key newly present in state.activeNotes this frame is an onset — and a
-// pitch is "held" if any active note has that pitch. Tyler's layout / rotation / trail math
+// accumulated layout state across frames. Here everything is refolded from state.notes up
+// to the playhead every frame: the layout is the fold of all trigger hits at or before the
+// current beat, the position easing and depth fade are closed-form exponentials anchored
+// at the driving note's beat, and the trail phase is total held time so far — so a paused
+// playhead is a static frame and scrub == playback. Tyler's layout / rotation / trail math
 // is copied verbatim; only the trigger reads are rewired.
 
 // MIDI pitch assignments — trigger rows below the emoji selector.
@@ -36,6 +39,7 @@ const EMOJI_PITCH_MAX = 83 // B5
 const NUM_TRAIL = 6    // trail copies per emoji for the 3D effect
 const TRAIL_MAX_Z = 3  // max Z distance towards camera
 const TRAIL_SPEED = 1.5 // how fast trails cycle through Z
+const DEPTH_FADE_RATE = 6 // s⁻¹ — matches the old per-frame `1 - exp(-6·dt)` fade lerp
 
 const NUM_EMOJIS = 8
 
@@ -92,6 +96,198 @@ const CORNER_SIGNS: [number, number][] = [
   [1, -1],  // BR
 ]
 
+// Logical layout at some beat, rebuilt each frame by replaying trigger notes up to the
+// playhead (the beat-pure replacement for the old accumulated refs): which emoji index
+// occupies each corner of each half (TL, TR, BL, BR), plus the toggles and row angles.
+interface LayoutState {
+  leftCorners: number[]
+  rightCorners: number[]
+  halvesSwapped: boolean
+  vertical: boolean
+  whole180: boolean  // toggled each hit
+  topRowAngle: number // 45° steps, mod 8
+  bottomRowAngle: number
+}
+
+function initialLayout(): LayoutState {
+  return {
+    leftCorners: [0, 1, 2, 3],
+    rightCorners: [4, 5, 6, 7],
+    halvesSwapped: false,
+    vertical: false,
+    whole180: false,
+    topRowAngle: 0,
+    bottomRowAngle: 0,
+  }
+}
+
+function cloneLayout(l: LayoutState): LayoutState {
+  return { ...l, leftCorners: [...l.leftCorners], rightCorners: [...l.rightCorners] }
+}
+
+const isTriggerPitch = (pitch: number) =>
+  pitch >= BOTTOM_ROW_CCW_PITCH && pitch <= SWITCH_CORNERS_PITCH && pitch !== DEPTH_3D_PITCH
+
+// Apply one trigger-row hit to the layout (Tyler's corner/rotation ops, unchanged).
+function applyTrigger(l: LayoutState, pitch: number) {
+  switch (pitch) {
+    // Switch corners: diagonal swap within each half (TL↔BR, TR↔BL).
+    case SWITCH_CORNERS_PITCH: {
+      const lc = l.leftCorners
+      l.leftCorners = [lc[3], lc[2], lc[1], lc[0]]
+      const rc = l.rightCorners
+      l.rightCorners = [rc[3], rc[2], rc[1], rc[0]]
+      break
+    }
+    // Swap halves: toggle which side each half is on.
+    case SWAP_HALVES_PITCH:
+      l.halvesSwapped = !l.halvesSwapped
+      break
+    // Rotate CW: TL→TR→BR→BL→TL.
+    case ROTATE_CW_PITCH: {
+      const lc = l.leftCorners
+      l.leftCorners = [lc[2], lc[0], lc[3], lc[1]]
+      const rc = l.rightCorners
+      l.rightCorners = [rc[2], rc[0], rc[3], rc[1]]
+      break
+    }
+    // Rotate CCW: TL→BL→BR→TR→TL.
+    case ROTATE_CCW_PITCH: {
+      const lc = l.leftCorners
+      l.leftCorners = [lc[1], lc[3], lc[0], lc[2]]
+      const rc = l.rightCorners
+      l.rightCorners = [rc[1], rc[3], rc[0], rc[2]]
+      break
+    }
+    // Flip axis: toggle horizontal (left/right) vs vertical (top/bottom) layout.
+    case FLIP_AXIS_PITCH:
+      l.vertical = !l.vertical
+      break
+    case WHOLE_180_PITCH:
+      l.whole180 = !l.whole180
+      break
+    case TOP_ROW_CW_PITCH:
+      l.topRowAngle = (l.topRowAngle + 1) % 8
+      break
+    case TOP_ROW_CCW_PITCH:
+      l.topRowAngle = (l.topRowAngle + 7) % 8 // +7 = -1 mod 8
+      break
+    case BOTTOM_ROW_CW_PITCH:
+      l.bottomRowAngle = (l.bottomRowAngle + 1) % 8
+      break
+    case BOTTOM_ROW_CCW_PITCH:
+      l.bottomRowAngle = (l.bottomRowAngle + 7) % 8
+      break
+  }
+}
+
+// Compute each emoji's target position for a layout (Tyler's grid math, unchanged).
+function computeTargets(
+  layout: LayoutState,
+  usableW: number,
+  usableH: number,
+  spread: number,
+): { x: Float64Array; y: Float64Array } {
+  const cellW = usableW / 4
+  const cellH = usableH / 2
+
+  // Half centers (before swap).
+  const leftCenterX = -usableW / 4
+  const rightCenterX = usableW / 4
+
+  // Corner offsets from half center.
+  const dx = cellW / 2
+  const dy = cellH / 2
+
+  const targetX = new Float64Array(NUM_EMOJIS)
+  const targetY = new Float64Array(NUM_EMOJIS)
+
+  // Half centers and corner offsets depend on axis orientation.
+  let halfACX: number, halfACY: number
+  let halfBCX: number, halfBCY: number
+  let cdx: number, cdy: number
+
+  if (layout.vertical) {
+    // Vertical: halves stacked top/bottom.
+    halfACX = 0
+    halfACY = usableH / 4 * spread
+    halfBCX = 0
+    halfBCY = -usableH / 4 * spread
+    cdx = usableW / 4 * spread
+    cdy = usableH / 8 * spread
+  } else {
+    // Horizontal: halves side by side left/right (default).
+    halfACX = leftCenterX * spread
+    halfACY = 0
+    halfBCX = rightCenterX * spread
+    halfBCY = 0
+    cdx = dx * spread
+    cdy = dy * spread
+  }
+
+  // Apply halves swap.
+  const lCX = layout.halvesSwapped ? halfBCX : halfACX
+  const lCY = layout.halvesSwapped ? halfBCY : halfACY
+  const rCX = layout.halvesSwapped ? halfACX : halfBCX
+  const rCY = layout.halvesSwapped ? halfACY : halfBCY
+
+  for (let c = 0; c < 4; c++) {
+    const lEmojiIdx = layout.leftCorners[c]
+    targetX[lEmojiIdx] = lCX + CORNER_SIGNS[c][0] * cdx
+    targetY[lEmojiIdx] = lCY + CORNER_SIGNS[c][1] * cdy
+
+    const rEmojiIdx = layout.rightCorners[c]
+    targetX[rEmojiIdx] = rCX + CORNER_SIGNS[c][0] * cdx
+    targetY[rEmojiIdx] = rCY + CORNER_SIGNS[c][1] * cdy
+  }
+
+  // --- Per-row rotations around each row's center ---
+  // Top row = emojis at TL/TR corners (indices 0,1) from each half.
+  // Bottom row = emojis at BL/BR corners (indices 2,3) from each half.
+  const topEmojis = [
+    layout.leftCorners[0], layout.leftCorners[1],
+    layout.rightCorners[0], layout.rightCorners[1],
+  ]
+  const bottomEmojis = [
+    layout.leftCorners[2], layout.leftCorners[3],
+    layout.rightCorners[2], layout.rightCorners[3],
+  ]
+
+  const applyRowRotation = (emojiIndices: number[], angleSteps: number) => {
+    if (angleSteps === 0) return
+    let cx = 0, cy = 0
+    for (const idx of emojiIndices) {
+      cx += targetX[idx]
+      cy += targetY[idx]
+    }
+    cx /= emojiIndices.length
+    cy /= emojiIndices.length
+
+    const angle = -(angleSteps * Math.PI / 4) // each step = 45° CW
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    for (const idx of emojiIndices) {
+      const ddx = targetX[idx] - cx
+      const ddy = targetY[idx] - cy
+      targetX[idx] = cx + ddx * cos - ddy * sin
+      targetY[idx] = cy + ddx * sin + ddy * cos
+    }
+  }
+
+  applyRowRotation(topEmojis, layout.topRowAngle)
+  applyRowRotation(bottomEmojis, layout.bottomRowAngle)
+
+  // --- Whole structure 180° rotation around center ---
+  if (layout.whole180) {
+    for (let i = 0; i < NUM_EMOJIS; i++) {
+      targetX[i] = -targetX[i]
+      targetY[i] = -targetY[i]
+    }
+  }
+
+  return { x: targetX, y: targetY }
+}
+
 interface TrailEntity {
   mesh: Mesh
   material: MeshBasicMaterial
@@ -102,8 +298,6 @@ interface EmojiEntity {
   material: MeshBasicMaterial
   texture: CanvasTexture
   lastToken: string
-  currentX: number
-  currentY: number
   trails: TrailEntity[]
 }
 
@@ -126,33 +320,6 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
-  const lastTimeRef = useRef(-1)
-
-  // Logical state: which emoji index occupies each corner of each half (indices into
-  // the 8-emoji array): TL, TR, BL, BR.
-  const leftCornersRef = useRef([0, 1, 2, 3])
-  const rightCornersRef = useRef([4, 5, 6, 7])
-  const halvesSwappedRef = useRef(false)
-  const verticalRef = useRef(false)
-
-  // 3D depth effect state.
-  const depthPhaseRef = useRef(0) // cycles 0→1 continuously while held
-  const depthFadeRef = useRef(0)  // 0 = hidden, 1 = fully visible (smooth transition)
-
-  // Whole structure + per-row rotation state.
-  const whole180Ref = useRef(false)  // toggled each hit
-  const topRowAngleRef = useRef(0)   // 45° steps, mod 8
-  const bottomRowAngleRef = useRef(0)
-
-  // Onset detection: keys of notes seen last frame (the cabin analogue of Tyler's
-  // per-pitch note-on counts).
-  const prevKeys = useRef<Set<string>>(new Set())
-
-  // Emoji selector: last token chosen by a selector-pitch onset.
-  const currentTokenRef = useRef('😀')
-
-  // Snap to target on first frame, lerp after.
-  const initializedRef = useRef(false)
 
   useEffect(() => {
     const geo = new PlaneGeometry(1, 1)
@@ -174,7 +341,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
         trails.push({ mesh: trailMesh, material: trailMat })
       }
 
-      entities.push({ mesh, material: mat, texture: tex, lastToken: '', currentX: 0, currentY: 0, trails })
+      entities.push({ mesh, material: mat, texture: tex, lastToken: '', trails })
     }
     entitiesRef.current = entities
     setReady(true)
@@ -205,9 +372,8 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
     }
   }, [ready])
 
-  useFrame(() => {
-    const state = getObjectState(trackId)
-    if (!state || !groupRef.current) return
+  useInstrumentFrame(trackId, (state) => {
+    if (!groupRef.current) return
 
     const p = state.params
     const emojisStr = state.stringParams.emojis ?? DEFAULT_EMOJIS
@@ -218,9 +384,8 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
     const spread = p.spread ?? 1
 
     const tokens = emojisStr.split(/\s+/).filter(Boolean)
-    const now = performance.now() / 1000
-    const dt = lastTimeRef.current < 0 ? 0 : now - lastTimeRef.current
-    lastTimeRef.current = now
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
 
     const vMin = Math.min(viewport.width, viewport.height)
     const scale = vMin * 0.5 * fontSize
@@ -228,192 +393,97 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
     // Grid layout computation.
     const usableW = viewport.width * (1 - 2 * padding)
     const usableH = viewport.height * (1 - 2 * padding)
-    const cellW = usableW / 4
-    const cellH = usableH / 2
 
-    // Half centers (before swap).
-    const leftCenterX = -usableW / 4
-    const rightCenterX = usableW / 4
+    // --- Replay the trigger history up to the playhead (pure in state.beat/notes) ---
+    // The layout is the fold of every trigger hit at or before the current beat; the
+    // snapshot taken just before the latest hit is the transition's start layout. The
+    // token is set by the highest emoji-selector pitch struck at the latest onset beat.
+    let layout = initialLayout()
+    let prevLayout = layout
+    let lastChangeBeat = -Infinity
+    let tokenBeat = -Infinity
+    let tokenPitch = -1
+    const depthNotes: ResolvedNote[] = []
+    let groupBeat = NaN
+    let groupPitches: Set<number> | null = null
 
-    // Corner offsets from half center.
-    const dx = cellW / 2
-    const dy = cellH / 2
-
-    // --- Onset detection: a new `${pitch}:${beat}` key this frame is a note-on ---
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    const onsetPitches = new Set<number>()
-    let highestEmojiOnset = -1
-    for (const n of state.activeNotes) {
-      const k = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(k)) continue
-      onsetPitches.add(n.pitch)
-      if (n.pitch >= EMOJI_PITCH_MIN && n.pitch <= EMOJI_PITCH_MAX && n.pitch > highestEmojiOnset) {
-        highestEmojiOnset = n.pitch
-      }
-    }
-    prevKeys.current = keys
-    const wasTriggered = (pitch: number): boolean => onsetPitches.has(pitch)
-
-    // --- Emoji selection: highest emoji-selector pitch struck this frame sets the token ---
-    if (highestEmojiOnset >= 0) {
-      const idx = highestEmojiOnset - EMOJI_PITCH_MIN
-      currentTokenRef.current = tokens[idx % tokens.length] ?? '❓'
-    }
-
-    // --- Trigger row hits ---
-    // Switch corners: diagonal swap within each half (TL↔BR, TR↔BL).
-    if (wasTriggered(SWITCH_CORNERS_PITCH)) {
-      const l = leftCornersRef.current
-      leftCornersRef.current = [l[3], l[2], l[1], l[0]]
-      const r = rightCornersRef.current
-      rightCornersRef.current = [r[3], r[2], r[1], r[0]]
-    }
-
-    // Swap halves: toggle which side each half is on.
-    if (wasTriggered(SWAP_HALVES_PITCH)) {
-      halvesSwappedRef.current = !halvesSwappedRef.current
-    }
-
-    // Rotate CW: TL→TR→BR→BL→TL.
-    if (wasTriggered(ROTATE_CW_PITCH)) {
-      const l = leftCornersRef.current
-      leftCornersRef.current = [l[2], l[0], l[3], l[1]]
-      const r = rightCornersRef.current
-      rightCornersRef.current = [r[2], r[0], r[3], r[1]]
-    }
-
-    // Rotate CCW: TL→BL→BR→TR→TL.
-    if (wasTriggered(ROTATE_CCW_PITCH)) {
-      const l = leftCornersRef.current
-      leftCornersRef.current = [l[1], l[3], l[0], l[2]]
-      const r = rightCornersRef.current
-      rightCornersRef.current = [r[1], r[3], r[0], r[2]]
-    }
-
-    // Flip axis: toggle horizontal (left/right) vs vertical (top/bottom) layout.
-    if (wasTriggered(FLIP_AXIS_PITCH)) {
-      verticalRef.current = !verticalRef.current
-    }
-
-    // --- Compute target positions for each emoji ---
-    const targetX = new Float64Array(NUM_EMOJIS)
-    const targetY = new Float64Array(NUM_EMOJIS)
-
-    const isVertical = verticalRef.current
-
-    // Half centers and corner offsets depend on axis orientation.
-    let halfACX: number, halfACY: number
-    let halfBCX: number, halfBCY: number
-    let cdx: number, cdy: number
-
-    if (isVertical) {
-      // Vertical: halves stacked top/bottom.
-      halfACX = 0
-      halfACY = usableH / 4 * spread
-      halfBCX = 0
-      halfBCY = -usableH / 4 * spread
-      cdx = usableW / 4 * spread
-      cdy = usableH / 8 * spread
-    } else {
-      // Horizontal: halves side by side left/right (default).
-      halfACX = leftCenterX * spread
-      halfACY = 0
-      halfBCX = rightCenterX * spread
-      halfBCY = 0
-      cdx = dx * spread
-      cdy = dy * spread
-    }
-
-    // Apply halves swap.
-    const lCX = halvesSwappedRef.current ? halfBCX : halfACX
-    const lCY = halvesSwappedRef.current ? halfBCY : halfACY
-    const rCX = halvesSwappedRef.current ? halfACX : halfBCX
-    const rCY = halvesSwappedRef.current ? halfACY : halfBCY
-
-    for (let c = 0; c < 4; c++) {
-      const lEmojiIdx = leftCornersRef.current[c]
-      targetX[lEmojiIdx] = lCX + CORNER_SIGNS[c][0] * cdx
-      targetY[lEmojiIdx] = lCY + CORNER_SIGNS[c][1] * cdy
-
-      const rEmojiIdx = rightCornersRef.current[c]
-      targetX[rEmojiIdx] = rCX + CORNER_SIGNS[c][0] * cdx
-      targetY[rEmojiIdx] = rCY + CORNER_SIGNS[c][1] * cdy
-    }
-
-    // --- Rotation triggers ---
-    if (wasTriggered(WHOLE_180_PITCH)) {
-      whole180Ref.current = !whole180Ref.current
-    }
-    if (wasTriggered(TOP_ROW_CW_PITCH)) {
-      topRowAngleRef.current = (topRowAngleRef.current + 1) % 8
-    }
-    if (wasTriggered(TOP_ROW_CCW_PITCH)) {
-      topRowAngleRef.current = (topRowAngleRef.current + 7) % 8 // +7 = -1 mod 8
-    }
-    if (wasTriggered(BOTTOM_ROW_CW_PITCH)) {
-      bottomRowAngleRef.current = (bottomRowAngleRef.current + 1) % 8
-    }
-    if (wasTriggered(BOTTOM_ROW_CCW_PITCH)) {
-      bottomRowAngleRef.current = (bottomRowAngleRef.current + 7) % 8
-    }
-
-    // --- Per-row rotations around each row's center ---
-    // Top row = emojis at TL/TR corners (indices 0,1) from each half.
-    // Bottom row = emojis at BL/BR corners (indices 2,3) from each half.
-    const topEmojis = [
-      leftCornersRef.current[0], leftCornersRef.current[1],
-      rightCornersRef.current[0], rightCornersRef.current[1],
-    ]
-    const bottomEmojis = [
-      leftCornersRef.current[2], leftCornersRef.current[3],
-      rightCornersRef.current[2], rightCornersRef.current[3],
-    ]
-
-    const applyRowRotation = (emojiIndices: number[], angleSteps: number) => {
-      if (angleSteps === 0) return
-      let cx = 0, cy = 0
-      for (const idx of emojiIndices) {
-        cx += targetX[idx]
-        cy += targetY[idx]
-      }
-      cx /= emojiIndices.length
-      cy /= emojiIndices.length
-
-      const angle = -(angleSteps * Math.PI / 4) // each step = 45° CW
-      const cos = Math.cos(angle)
-      const sin = Math.sin(angle)
-      for (const idx of emojiIndices) {
-        const ddx = targetX[idx] - cx
-        const ddy = targetY[idx] - cy
-        targetX[idx] = cx + ddx * cos - ddy * sin
-        targetY[idx] = cy + ddx * sin + ddy * cos
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break // notes are sorted by beat
+      const pitch = n.pitch
+      if (pitch === DEPTH_3D_PITCH) {
+        depthNotes.push(n)
+      } else if (pitch >= EMOJI_PITCH_MIN && pitch <= EMOJI_PITCH_MAX) {
+        if (n.beat > tokenBeat || (n.beat === tokenBeat && pitch > tokenPitch)) {
+          tokenBeat = n.beat
+          tokenPitch = pitch
+        }
+      } else if (isTriggerPitch(pitch)) {
+        // One hit per (pitch, beat) — the old per-frame onset set collapsed same-beat
+        // duplicates of a pitch into a single trigger.
+        if (n.beat !== groupBeat) {
+          groupBeat = n.beat
+          groupPitches = new Set()
+        }
+        if (groupPitches!.has(pitch)) continue
+        groupPitches!.add(pitch)
+        if (n.beat > lastChangeBeat) {
+          prevLayout = cloneLayout(layout)
+          lastChangeBeat = n.beat
+        }
+        applyTrigger(layout, pitch)
       }
     }
 
-    applyRowRotation(topEmojis, topRowAngleRef.current)
-    applyRowRotation(bottomEmojis, bottomRowAngleRef.current)
+    const activeToken = tokenPitch >= 0
+      ? tokens[(tokenPitch - EMOJI_PITCH_MIN) % tokens.length] ?? '❓'
+      : '😀'
 
-    // --- Whole structure 180° rotation around center ---
-    if (whole180Ref.current) {
-      for (let i = 0; i < NUM_EMOJIS; i++) {
-        targetX[i] = -targetX[i]
-        targetY[i] = -targetY[i]
+    // --- Target positions, easing from the pre-hit layout (closed form) ---
+    // The old per-frame lerp `1 - exp(-moveSpeed·dt)` compounds to exactly
+    // exp(-moveSpeed·age), so this reproduces playback and holds still on pause.
+    const cur = computeTargets(layout, usableW, usableH, spread)
+    let blend = 0
+    if (lastChangeBeat > -Infinity) {
+      const ageSec = (currentBeat - lastChangeBeat) * secPerBeat
+      blend = Math.exp(-moveSpeed * ageSec)
+    }
+    const prev = blend > 0.001 ? computeTargets(prevLayout, usableW, usableH, spread) : null
+
+    // --- 3D depth: closed-form fade + phase from the depth-note hold history ---
+    // Merge overlapping holds into spans, then evaluate the old per-frame fade lerp
+    // analytically: rise toward 1 across each held span, decay toward 0 across each
+    // gap. The trail phase is the total held time so far times TRAIL_SPEED.
+    let depthFade = 0
+    let depthHeldSec = 0
+    let spanStart = -Infinity
+    let spanEnd = -Infinity
+    const flushSpan = () => {
+      if (spanEnd === -Infinity) return
+      const heldSec = (Math.min(spanEnd, currentBeat) - spanStart) * secPerBeat
+      depthFade = 1 + (depthFade - 1) * Math.exp(-DEPTH_FADE_RATE * heldSec)
+      depthHeldSec += heldSec
+    }
+    for (const n of depthNotes) {
+      if (n.beat <= spanEnd) {
+        spanEnd = Math.max(spanEnd, n.beat + n.durationBeats)
+        continue
       }
+      flushSpan()
+      if (spanEnd > -Infinity) {
+        depthFade *= Math.exp(-DEPTH_FADE_RATE * (n.beat - spanEnd) * secPerBeat)
+      }
+      spanStart = n.beat
+      spanEnd = n.beat + n.durationBeats
     }
-
-    // --- 3D depth: held = show trails, released = fade out ---
-    const depthHeld = state.activeNotes.some((n) => n.pitch === DEPTH_3D_PITCH)
-    const fadeLerp = 1 - Math.exp(-6 * dt)
-    depthFadeRef.current += ((depthHeld ? 1 : 0) - depthFadeRef.current) * fadeLerp
-    if (depthHeld) {
-      depthPhaseRef.current = (depthPhaseRef.current + dt * TRAIL_SPEED) % 1
+    flushSpan()
+    if (spanEnd > -Infinity && currentBeat > spanEnd) {
+      // Released before the playhead: keep decaying toward 0.
+      depthFade *= Math.exp(-DEPTH_FADE_RATE * (currentBeat - spanEnd) * secPerBeat)
     }
-    const depthVisible = depthFadeRef.current > 0.01
+    const depthPhase = (depthHeldSec * TRAIL_SPEED) % 1
+    const depthVisible = depthFade > 0.01
 
     // --- Update each emoji ---
-    const activeToken = currentTokenRef.current
-    const lerpFactor = dt > 0 ? 1 - Math.exp(-moveSpeed * dt) : 1
-
     for (let i = 0; i < NUM_EMOJIS; i++) {
       const entity = entitiesRef.current[i]
       if (!entity) continue
@@ -429,18 +499,13 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
         }
       }
 
-      if (!initializedRef.current) {
-        entity.currentX = targetX[i]
-        entity.currentY = targetY[i]
-      } else {
-        entity.currentX += (targetX[i] - entity.currentX) * lerpFactor
-        entity.currentY += (targetY[i] - entity.currentY) * lerpFactor
-      }
+      const x = prev ? cur.x[i] + (prev.x[i] - cur.x[i]) * blend : cur.x[i]
+      const y = prev ? cur.y[i] + (prev.y[i] - cur.y[i]) * blend : cur.y[i]
 
       entity.material.opacity = baseOpacity
       entity.mesh.visible = true
       entity.mesh.scale.set(scale, scale, 1)
-      entity.mesh.position.set(entity.currentX, entity.currentY, -0.001 * i)
+      entity.mesh.position.set(x, y, -0.001 * i)
 
       // --- Trail copies for 3D depth ---
       for (let t = 0; t < NUM_TRAIL; t++) {
@@ -449,19 +514,17 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
           trail.mesh.visible = false
           continue
         }
-        const copyPhase = (depthPhaseRef.current + t / NUM_TRAIL) % 1
+        const copyPhase = (depthPhase + t / NUM_TRAIL) % 1
         const z = copyPhase * TRAIL_MAX_Z
         const trailScale = scale * (1 + copyPhase * 0.8)
-        const trailOpacity = baseOpacity * (1 - copyPhase) * depthFadeRef.current * 0.6
+        const trailOpacity = baseOpacity * (1 - copyPhase) * depthFade * 0.6
 
         trail.material.opacity = trailOpacity
         trail.mesh.visible = trailOpacity > 0.005
         trail.mesh.scale.set(trailScale, trailScale, 1)
-        trail.mesh.position.set(entity.currentX, entity.currentY, z)
+        trail.mesh.position.set(x, y, z)
       }
     }
-
-    initializedRef.current = true
   })
 
   if (!ready) return null

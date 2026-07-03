@@ -1,17 +1,17 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A radial kite-quad lattice drawn to a 2D canvas that
 // backs a full-frame plane. Kick/Snare MIDI triggers morph the arm-swing direction,
 // Hat flips rotation, Spread/Swell/Mirror/Glow toggle, Spawn injects an outward layer,
 // and a bank of palette + colour-filter triggers restyle it live. Lattice geometry,
-// drawUnit math, chase easing, and layer/mirror/depth passes are Tyler's verbatim; the
-// state reads are rewired to getObjectState + activeNotes onset detection, virtualClock
-// → performance.now(), and Tyler's clone-plugin / seekGeneration paths are dropped.
+// drawUnit math, and layer/mirror/depth passes are Tyler's verbatim; all animation
+// state is a pure function of the playhead beat — toggles are onset-count parity,
+// chases are closed-form exponentials anchored at the last onset — so scrub shows
+// exactly what playback shows. Tyler's clone-plugin / seekGeneration paths are dropped.
 
 const CANVAS_W = 1920
 const CANVAS_H = 1080
@@ -56,6 +56,8 @@ const COLOR_FILTERS: Record<number, string> = {
   [HIGH_CONTRAST]: 'contrast(2) brightness(1.1)',
   [BLEACH]: 'brightness(1.6) contrast(0.7) saturate(0.5)',
 }
+
+const FILTER_PITCHES = [INVERT, HUE_ROTATE, SATURATE, DESATURATE, WARM, COOL, HIGH_CONTRAST, BLEACH]
 
 // Map palette pitches to scheme keys
 const PALETTE_PITCH_MAP: Record<number, string> = {
@@ -186,9 +188,7 @@ const DEFAULTS = {
 // ── Spawn layer type ────────────────────────────────────────────────────────
 
 interface SpawnLayer {
-  currentRadius: number
-  currentSlot: number // smooth interpolated slot position
-  age: number // discrete target slot (0 = center)
+  slot: number // smooth interpolated slot position (0 = center)
   opacity: number
 }
 
@@ -257,46 +257,6 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
 
-  // Animation state refs
-  const lastTimeRef = useRef(0)
-
-  // Onset detection: `${pitch}:${beat}` keys seen last frame
-  const prevKeys = useRef<Set<string>>(new Set())
-
-  // Kick/snare arm swing state
-  const kickAngleRef = useRef(0) // current interpolated angle
-  const snareAngleRef = useRef(0)
-  const kickDirRef = useRef(1) // +1 or -1, flipped on trigger
-  const snareDirRef = useRef(1)
-
-  // Rotation state
-  const rotAccumRef = useRef(0)
-  const rotDirRef = useRef(1) // +1 or -1, reversed on Hat
-
-  // Toggle states
-  const spreadActiveRef = useRef(false)
-  const swellActiveRef = useRef(false)
-  const mirrorActiveRef = useRef(false)
-
-  // Palette override (null = use settings value)
-  const paletteOverrideRef = useRef<string | null>(null)
-
-  // Active color filters (toggled on/off independently)
-  const activeFiltersRef = useRef(new Set<number>())
-
-  // Gap chase state
-  const currentGapRef = useRef(DEFAULTS.layerGap)
-
-  // Size slope chase state
-  const currentSlopeRef = useRef(0)
-
-  // Spawn layers
-  const spawnLayersRef = useRef<SpawnLayer[]>([])
-
-  // Glow state
-  const glowActiveRef = useRef(false)
-  const currentGlowRef = useRef(0)
-
   useEffect(() => {
     const canvas = document.createElement('canvas')
     canvas.width = CANVAS_W
@@ -314,9 +274,8 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame(() => {
-    const state = getObjectState(trackId)
-    if (!state || !canvasRef.current || !textureRef.current || !meshRef.current) return
+  useInstrumentFrame(trackId, (state) => {
+    if (!canvasRef.current || !textureRef.current || !meshRef.current) return
 
     const ctx = canvasRef.current.getContext('2d')!
     const params = state.params
@@ -349,125 +308,122 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
     const mirrorSpacing = params.mirrorSpacing ?? DEFAULTS.mirrorSpacing
     const opacity = params.opacity ?? DEFAULTS.opacity
 
-    const activeSchemeKey = paletteOverrideRef.current ?? colorScheme
-    const scheme = COLOR_SCHEMES[activeSchemeKey] ?? COLOR_SCHEMES.neon
+    // Time — the playhead beat is THE time source; seconds-tuned motion converts.
+    const timeSec = state.beat * state.secPerBeat
+    const timeMs = timeSec * 1000
 
-    // Time
-    const now = performance.now()
-    const dt = lastTimeRef.current === 0 ? 0 : (now - lastTimeRef.current) / 1000
-    lastTimeRef.current = now
-    const clampedDt = Math.min(dt, 0.1)
-    const timeMs = now
-
-    // Detect new note-ons: a `${pitch}:${beat}` key newly present this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    const newTriggers = new Set<number>()
-    for (const n of state.activeNotes) {
-      if (!prevKeys.current.has(`${n.pitch}:${n.beat}`)) newTriggers.add(n.pitch)
-    }
-    prevKeys.current = keys
-
-    // Process MIDI triggers
-    for (const pitch of newTriggers) {
+    // Tally trigger onsets at or before the playhead in one pass over the resolved
+    // notes (sorted by beat): per-pitch onset count + latest onset beat, Hat/Spawn
+    // onset beat lists, and the last palette pick. Every stateful behavior below is
+    // a pure function of these, so a scrub to any beat matches playback there.
+    const tallies = new Map<number, { count: number; lastBeat: number }>()
+    const hatBeats: number[] = []
+    const spawnBeats: number[] = []
+    let paletteOverride: string | null = null
+    for (const n of state.notes) {
+      if (n.beat > state.beat) break
       // Palette switches
-      if (PALETTE_PITCH_MAP[pitch]) {
-        paletteOverrideRef.current = PALETTE_PITCH_MAP[pitch]
+      if (PALETTE_PITCH_MAP[n.pitch]) {
+        paletteOverride = PALETTE_PITCH_MAP[n.pitch]
         continue
       }
-      switch (pitch) {
-        case KICK:
-          kickDirRef.current *= -1
-          break
-        case SNARE:
-          snareDirRef.current *= -1
-          break
-        case HAT:
-          rotDirRef.current *= -1
-          break
-        case SPREAD:
-          spreadActiveRef.current = !spreadActiveRef.current
-          break
-        case SWELL:
-          swellActiveRef.current = !swellActiveRef.current
-          break
-        case MIRROR:
-          mirrorActiveRef.current = !mirrorActiveRef.current
-          break
-        case GLOW:
-          glowActiveRef.current = !glowActiveRef.current
-          break
-        case INVERT:
-        case HUE_ROTATE:
-        case SATURATE:
-        case DESATURATE:
-        case WARM:
-        case COOL:
-        case HIGH_CONTRAST:
-        case BLEACH: {
-          const filters = activeFiltersRef.current
-          if (filters.has(pitch)) filters.delete(pitch)
-          else filters.add(pitch)
-          break
-        }
-        case SPAWN: {
-          // Push all existing layers outward
-          const layers = spawnLayersRef.current
-          for (const sl of layers) {
-            sl.age += 1
-          }
-          // Insert new layer at center
-          layers.unshift({
-            currentRadius: 0,
-            currentSlot: 0,
-            age: 0,
-            opacity: 1,
-          })
-          break
-        }
+      const t = tallies.get(n.pitch)
+      if (t) {
+        t.count += 1
+        t.lastBeat = n.beat
+      } else {
+        tallies.set(n.pitch, { count: 1, lastBeat: n.beat })
       }
+      if (n.pitch === HAT) hatBeats.push(n.beat)
+      else if (n.pitch === SPAWN) spawnBeats.push(n.beat)
     }
+    const tally = (pitch: number) => tallies.get(pitch) ?? { count: 0, lastBeat: 0 }
+    const toggledOn = (pitch: number) => tally(pitch).count % 2 === 1
 
-    // ── Update animation state ──────────────────────────────────────────
+    const activeSchemeKey = paletteOverride ?? colorScheme
+    const scheme = COLOR_SCHEMES[activeSchemeKey] ?? COLOR_SCHEMES.neon
+
+    // ── Derive animation state (pure functions of the playhead) ─────────
+
+    // Closed-form exponential chase: the value that was `from` at `startSec` and
+    // has eased toward `to` at `rate`/s ever since — the pure replacement for the
+    // old per-frame `value += (target - value) * (1 - exp(-rate * dt))` easing.
+    const chaseFrom = (from: number, to: number, startSec: number, rate: number) =>
+      to + (from - to) * Math.exp(-rate * Math.max(0, timeSec - startSec))
 
     // Swing oscillation
     const effectiveSwingOsc = 1 + (swingOsc / 100) * Math.sin(timeMs / 700)
     const effectiveSwing = swingDeg * effectiveSwingOsc
 
-    // Frame-rate-independent exponential chase. Lower rate = longer settle.
-    const chase = (rate: number) => 1 - Math.exp(-rate * clampedDt)
+    // Kick/snare angle — the swing direction is the parity of onsets so far; the
+    // angle eases toward ±swing from the last onset, taking the previous chase as
+    // settled (rapid retriggers and swing oscillation make this an approximation).
+    const armAngle = (pitch: number) => {
+      const { count, lastBeat } = tally(pitch)
+      const dir = count % 2 === 0 ? 1 : -1
+      if (count === 0) return chaseFrom(0, effectiveSwing, 0, 5) // ease in from rest at beat 0
+      return chaseFrom(-dir * effectiveSwing, dir * effectiveSwing, lastBeat * state.secPerBeat, 5)
+    }
+    const kickAngle = armAngle(KICK)
+    const snareAngle = armAngle(SNARE)
 
-    // Kick/snare angle
-    const kickTarget = kickDirRef.current * effectiveSwing
-    const snareTarget = snareDirRef.current * effectiveSwing
-    kickAngleRef.current += (kickTarget - kickAngleRef.current) * chase(5)
-    snareAngleRef.current += (snareTarget - snareAngleRef.current) * chase(5)
-
-    // Accumulated rotation
-    rotAccumRef.current += clampedDt * rotDirRef.current
+    // Accumulated rotation — the spin direction flips on each Hat onset, so the
+    // accumulator is the signed sum of segment durations between flips.
+    let rotAccum = 0
+    {
+      let rotDir = 1
+      let prevSec = 0
+      for (const hb of hatBeats) {
+        const s = hb * state.secPerBeat
+        rotAccum += rotDir * (s - prevSec)
+        prevSec = s
+        rotDir = -rotDir
+      }
+      rotAccum += rotDir * (timeSec - prevSec)
+    }
 
     // Gap chase
-    const gapTarget = spreadActiveRef.current ? layerGap + spreadRange : layerGap - spreadRange
-    currentGapRef.current += (gapTarget - currentGapRef.current) * chase(2)
+    const spread = tally(SPREAD)
+    const spreadOn = spread.count % 2 === 1
+    const gapTarget = spreadOn ? layerGap + spreadRange : layerGap - spreadRange
+    const currentGap = spread.count === 0
+      ? chaseFrom(layerGap, gapTarget, 0, 2)
+      : chaseFrom(spreadOn ? layerGap - spreadRange : layerGap + spreadRange, gapTarget, spread.lastBeat * state.secPerBeat, 2)
 
     // Size slope chase
-    const slopeTarget = swellActiveRef.current ? sizeSlope + swellRange : sizeSlope - swellRange
-    currentSlopeRef.current += (slopeTarget - currentSlopeRef.current) * chase(2)
+    const swell = tally(SWELL)
+    const swellOn = swell.count % 2 === 1
+    const slopeTarget = swellOn ? sizeSlope + swellRange : sizeSlope - swellRange
+    const currentSlope = swell.count === 0
+      ? chaseFrom(0, slopeTarget, 0, 2)
+      : chaseFrom(swellOn ? sizeSlope - swellRange : sizeSlope + swellRange, slopeTarget, swell.lastBeat * state.secPerBeat, 2)
 
-    // Update spawn layers
-    const spawnLayers = spawnLayersRef.current
-    const spawnSlotFactor = chase(1.5)
-    const spawnOpacityFactor = chase(1.2)
-    for (const sl of spawnLayers) {
-      sl.currentSlot += (sl.age - sl.currentSlot) * spawnSlotFactor
-      const targetOpacity = Math.max(0, 1 - sl.currentSlot / numLayers)
-      sl.opacity += (targetOpacity - sl.opacity) * spawnOpacityFactor
+    // Spawn layers — the layer born at Spawn onset i is pushed one slot outward by
+    // each later onset, so its slot target between onsets j and j+1 is j - i. The
+    // slot chase (rate 1.5) is rebuilt exactly, segment by segment, in closed form;
+    // the opacity chase (rate 1.2) tracks a target that moves with the slot, so
+    // it's approximated as easing from 1 toward the current target since the spawn.
+    // Only the newest 64 layers are considered — older ones have long faded out.
+    const spawnLayers: SpawnLayer[] = []
+    const spawnSecs = spawnBeats.map((b) => b * state.secPerBeat)
+    for (let i = Math.max(0, spawnSecs.length - 64); i < spawnSecs.length; i++) {
+      let slot = 0
+      for (let j = i; j < spawnSecs.length; j++) {
+        const segEnd = j + 1 < spawnSecs.length ? Math.min(spawnSecs[j + 1], timeSec) : timeSec
+        const slotTarget = j - i
+        slot = slotTarget + (slot - slotTarget) * Math.exp(-1.5 * (segEnd - spawnSecs[j]))
+      }
+      const targetOpacity = Math.max(0, 1 - slot / numLayers)
+      const layerOpacity = targetOpacity + (1 - targetOpacity) * Math.exp(-1.2 * (timeSec - spawnSecs[i]))
+      // Skip faded-out layers (matches the old cull threshold)
+      if (layerOpacity > 0.01) spawnLayers.push({ slot, opacity: layerOpacity })
     }
-    // Remove faded-out layers
-    spawnLayersRef.current = spawnLayers.filter((sl) => sl.opacity > 0.01)
 
     // Glow chase
-    const glowTarget = glowActiveRef.current ? 1 : 0
-    currentGlowRef.current += (glowTarget - currentGlowRef.current) * chase(3)
+    const glowOn = toggledOn(GLOW)
+    const currentGlow = tally(GLOW).count === 0
+      ? 0
+      : chaseFrom(glowOn ? 0 : 1, glowOn ? 1 : 0, tally(GLOW).lastBeat * state.secPerBeat, 3)
 
     // ── Dimension-relative sizing ───────────────────────────────────────
 
@@ -481,11 +437,9 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
     // Size oscillation
     const sizeOscMult = 1 + (sizeOsc / 100) * Math.sin(timeMs / 600)
 
-    // Breath oscillation (radius), synced to BPM: one full cycle = breathMultSetting beats
-    const bpm = useProjectStore.getState().bpm
-    const beatMs = 60000 / bpm // ms per beat
-    const breathPeriodMs = beatMs * breathMultSetting
-    const breathOsc = 1 + (breathAmount / 100) * Math.sin((timeMs / breathPeriodMs) * Math.PI * 2)
+    // Breath oscillation (radius), synced to BPM: one full cycle = breathMultSetting
+    // beats, phase-locked to the playhead
+    const breathOsc = 1 + (breathAmount / 100) * Math.sin((state.beat / breathMultSetting) * Math.PI * 2)
 
     // ── Draw ────────────────────────────────────────────────────────────
 
@@ -497,12 +451,12 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
     const cx = CANVAS_W / 2
     const cy = CANVAS_H / 2
 
-    const altRot = mirrorActiveRef.current
+    const altRot = toggledOn(MIRROR)
     const halfStep = (Math.PI * 2) / symmetry / 2
-    const slopeFrac = currentSlopeRef.current / 100
-    const kickAng = kickAngleRef.current * DEG
-    const snareAng = snareAngleRef.current * DEG
-    const glowIntensity = currentGlowRef.current * glowAmount
+    const slopeFrac = currentSlope / 100
+    const kickAng = kickAngle * DEG
+    const snareAng = snareAngle * DEG
+    const glowIntensity = currentGlow * glowAmount
 
     // Draw function for a single kite-quad unit
     const drawUnit = (
@@ -601,9 +555,9 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
     }
 
     // Spawn layers
-    for (const sl of spawnLayersRef.current) {
+    for (const sl of spawnLayers) {
       renderLayers.push({
-        slot: sl.currentSlot,
+        slot: sl.slot,
         layerIdx: 0,
         layerOpacity: sl.opacity,
         isSpawn: true,
@@ -634,10 +588,10 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
         const layerArm = baseArm * sizeScale
         const layerPerp = basePerp * sizeScale
 
-        const layerRadius = (baseRadius + slot * Math.max(10, currentGapRef.current)) * breathOsc * radiusMult * latticeScale
+        const layerRadius = (baseRadius + slot * Math.max(10, currentGap)) * breathOsc * radiusMult * latticeScale
 
         const layerDir = altRot ? Math.cos(slot * Math.PI) : 1
-        const layerRot = rotAccumRef.current * (rotSpeed + slot * rotStagger) * layerDir * DEG + slot * halfStep
+        const layerRot = rotAccum * (rotSpeed + slot * rotStagger) * layerDir * DEG + slot * halfStep
 
         const angleStep = (Math.PI * 2) / symmetry
         const fillColor = scheme.colors(rl.isSpawn ? Math.floor(slot) % numLayers : rl.layerIdx, numLayers)
@@ -711,20 +665,17 @@ function DiamondLatticeVisual({ trackId }: { trackId: string }) {
 
     ctx.globalAlpha = 1
 
-    // Apply active color filters by redrawing canvas onto itself
-    if (activeFiltersRef.current.size > 0) {
-      // Compose all active filters into a single filter string
-      const filterStr = Array.from(activeFiltersRef.current)
-        .map((pitch) => COLOR_FILTERS[pitch])
-        .filter(Boolean)
-        .join(' ')
-      if (filterStr) {
-        ctx.save()
-        ctx.filter = filterStr
-        ctx.drawImage(canvasRef.current, 0, 0)
-        ctx.filter = 'none'
-        ctx.restore()
-      }
+    // Apply active color filters (onset-count parity per pitch) by redrawing
+    // the canvas onto itself, all composed into a single filter string
+    const filterStr = FILTER_PITCHES.filter(toggledOn)
+      .map((pitch) => COLOR_FILTERS[pitch])
+      .join(' ')
+    if (filterStr) {
+      ctx.save()
+      ctx.filter = filterStr
+      ctx.drawImage(canvasRef.current, 0, 0)
+      ctx.filter = 'none'
+      ctx.restore()
     }
 
     // Update texture

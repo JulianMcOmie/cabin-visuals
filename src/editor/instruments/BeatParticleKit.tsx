@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import {
   BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Vector3, Points,
 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's BeatParticleKit. A white-background drum/guitar/chord kit
 // where each drum pitch triggers its own bespoke particle effect: kick/snare/clap/rim/hat/
 // cymbal spheres, three triangle "pings", a chord flash, and a morphing guitar-note crystal
-// wall. Note-onsets are detected per (pitch,beat) key; each pitch maps to its own effect
-// exactly as Tyler does. All particle geometry, ADSR, rotation and shader math are Tyler's
-// verbatim; only the state reads, onset detection and param schema are rewired. Tyler's
-// palette/activePalette and seekGeneration reset are dropped.
+// wall. Hits are derived fresh each frame from the note stream (latest note at or before
+// the playhead per drum kind, live guitar notes inside a fixed window; hit age = beats
+// since onset, in seconds at the current tempo), so every frame is a pure function of
+// state.beat — a paused playhead is a static frame and scrub == playback. All particle
+// geometry, ADSR, rotation and shader math are Tyler's verbatim; only the state reads,
+// hit derivation and param schema are rewired. Tyler's palette/activePalette and
+// seekGeneration reset are dropped.
 
 // ── Drum-pitch map (Tyler's DRUM_PITCHES + hardcoded pitches, verbatim) ───────
 const PITCH_KICK = 36
@@ -73,18 +74,19 @@ interface ChordParticle {
   phase: number
 }
 
-interface HitState {
-  time: number
+interface Hit {
+  ageSec: number
   velocity: number
-  gate: number
 }
 
 interface GuitarHit {
-  time: number
+  ageSec: number
   velocity: number
-  gate: number
   pitch: number
 }
+
+// Seconds a guitar hit keeps contributing after onset (Tyler's 2.5s filter window).
+const GUITAR_HIT_WINDOW = 2.5
 
 const DEFAULTS = {
   detail: 3,
@@ -190,14 +192,13 @@ function num(params: Record<string, number>, key: string, fallback: number): num
   return typeof params[key] === 'number' ? params[key] : fallback
 }
 
-function adsr(now: number, hit: HitState, attack: number, decay: number, sustain: number, release: number): number {
-  const t = now - hit.time
-  if (t < 0) return 0
-  const attackCurve = 1 - Math.exp(-t / Math.max(0.0005, attack))
-  const transient = Math.exp(-t / Math.max(0.001, decay))
-  const body = Math.exp(-t / Math.max(0.001, release))
+function adsr(ageSec: number, velocity: number, attack: number, decay: number, sustain: number, release: number): number {
+  if (ageSec < 0) return 0
+  const attackCurve = 1 - Math.exp(-ageSec / Math.max(0.0005, attack))
+  const transient = Math.exp(-ageSec / Math.max(0.001, decay))
+  const body = Math.exp(-ageSec / Math.max(0.001, release))
   const bodyMix = clamp(sustain, 0, 1)
-  return clamp(attackCurve * (transient * (1 - bodyMix) + body * bodyMix) * hit.velocity, 0, 1)
+  return clamp(attackCurve * (transient * (1 - bodyMix) + body * bodyMix) * velocity, 0, 1)
 }
 
 function rotatePoint(
@@ -358,19 +359,35 @@ function colorFor(kind: string, colorMode: string, hueShift = 0): Color {
   return color
 }
 
-function makeInitialHits(): Record<HitKey, HitState> {
+// Pitch → drum-hit slot; guitar pitches (GUITAR_MIN..GUITAR_MAX) are handled separately.
+const PITCH_TO_HIT: Record<number, HitKey> = {
+  [PITCH_KICK]: 'kick',
+  [PITCH_RIM]: 'rim',
+  [PITCH_RIM_PAIR]: 'rimPair',
+  [PITCH_SNARE]: 'snare',
+  [PITCH_CLAP]: 'clap',
+  [PITCH_HIHAT]: 'hihat',
+  [PITCH_CYMBAL]: 'cymbal',
+  [PITCH_TRIANGLE_A]: 'triangleA',
+  [PITCH_TRIANGLE_B]: 'triangleB',
+  [PITCH_TRIANGLE_C]: 'triangleC',
+  [PITCH_CHORD]: 'chord',
+}
+
+// "Never hit": infinite age decays every envelope to zero, velocity 0 seals it.
+function makeEmptyHits(): Record<HitKey, Hit> {
   return {
-    kick: { time: -999, velocity: 0, gate: 0.08 },
-    rim: { time: -999, velocity: 0, gate: 0.07 },
-    rimPair: { time: -999, velocity: 0, gate: 0.07 },
-    snare: { time: -999, velocity: 0, gate: 0.1 },
-    clap: { time: -999, velocity: 0, gate: 0.09 },
-    hihat: { time: -999, velocity: 0, gate: 0.04 },
-    cymbal: { time: -999, velocity: 0, gate: 0.28 },
-    triangleA: { time: -999, velocity: 0, gate: 0.05 },
-    triangleB: { time: -999, velocity: 0, gate: 0.05 },
-    triangleC: { time: -999, velocity: 0, gate: 0.05 },
-    chord: { time: -999, velocity: 0, gate: 0.4 },
+    kick: { ageSec: Infinity, velocity: 0 },
+    rim: { ageSec: Infinity, velocity: 0 },
+    rimPair: { ageSec: Infinity, velocity: 0 },
+    snare: { ageSec: Infinity, velocity: 0 },
+    clap: { ageSec: Infinity, velocity: 0 },
+    hihat: { ageSec: Infinity, velocity: 0 },
+    cymbal: { ageSec: Infinity, velocity: 0 },
+    triangleA: { ageSec: Infinity, velocity: 0 },
+    triangleB: { ageSec: Infinity, velocity: 0 },
+    triangleC: { ageSec: Infinity, velocity: 0 },
+    chord: { ageSec: Infinity, velocity: 0 },
   }
 }
 
@@ -451,12 +468,6 @@ const PORTS: PortDef[] = [
 
 function BeatParticleKitVisual({ trackId }: { trackId: string }) {
   const pointsRef = useRef<Points>(null)
-  // Note-onset detection: newly-seen (pitch,beat) keys are fresh note-ons this frame.
-  const prevKeys = useRef<Set<string>>(new Set())
-  const guitarHitsRef = useRef<GuitarHit[]>([])
-  const currentGuitarRef = useRef<Float32Array | null>(null)
-
-  const hitRef = useRef<Record<HitKey, HitState>>(makeInitialHits())
 
   const sphereParticles = useMemo(() => makeSphereParticles(MAX_SPHERE_PARTICLES), [])
   const guitarParticles = useMemo(() => makeGuitarParticles(MAX_GUITAR_PARTICLES), [])
@@ -486,16 +497,14 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
   }), [])
 
   useEffect(() => () => {
-    guitarHitsRef.current = []
     geometry.dispose()
     material.dispose()
   }, [geometry, material])
 
-  useFrame(({ clock }, delta) => {
-    const state = getObjectState(trackId)
-    if (!state) return
-
-    const now = clock.elapsedTime
+  useInstrumentFrame(trackId, (state) => {
+    // Musical wall-clock: seconds at the current tempo. THE phase source for all
+    // rotation/shimmer/orbit motion — static while paused, identical under scrub.
+    const t = state.beat * state.secPerBeat
     const params = state.params
     const detail = clamp(num(params, 'detail', DEFAULTS.detail), 0.5, 3)
     const dotSize = num(params, 'dotSize', DEFAULTS.dotSize)
@@ -519,131 +528,127 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
     const chordOpacity = clamp(num(params, 'chordOpacity', DEFAULTS.chordOpacity), 0, 1)
     const guitarOpacity = clamp(num(params, 'guitarOpacity', DEFAULTS.guitarOpacity), 0, 1)
 
-    // Onset detection: a note-on is a (pitch,beat) key newly present in activeNotes.
-    const secPerBeat = 60 / useProjectStore.getState().bpm
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
-      const key = `${n.pitch}:${n.beat}`
-      if (prevKeys.current.has(key)) continue
-
-      const pitch = n.pitch
+    // Derive hits fresh from the note stream — no onset detection, no spawn-time
+    // state. For each drum kind the latest note at or before the playhead drives
+    // its envelope (a new hit replaces the old, matching Tyler's overwrite); live
+    // guitar notes each contribute while younger than the hit window. Ages are
+    // beats since onset, in seconds at the current tempo, so scrub == playback.
+    const secPerBeat = state.secPerBeat
+    const hits = makeEmptyHits()
+    const guitarHits: GuitarHit[] = []
+    // The crystal re-forms from the wall at each guitar phrase — a run of guitar
+    // notes separated by gaps shorter than the hit window; track the phrase start.
+    let guitarPhraseStartBeat = -Infinity
+    let prevGuitarBeat = -Infinity
+    for (const n of state.notes) {
+      if (n.beat > state.beat) break // notes are sorted; the rest are in the future
       const velocity = clamp((n.velocity <= 1 ? n.velocity : n.velocity / 127), 0.05, 1)
-      const durationSec = Math.max(0, n.durationBeats || 0) * secPerBeat
-      const gate = Math.max(0.025, durationSec * 0.5)
-
-      if (pitch === PITCH_KICK) hitRef.current.kick = { time: now, velocity, gate }
-      else if (pitch === PITCH_RIM) hitRef.current.rim = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_RIM_PAIR) hitRef.current.rimPair = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_SNARE) hitRef.current.snare = { time: now, velocity, gate }
-      else if (pitch === PITCH_CLAP) hitRef.current.clap = { time: now, velocity, gate }
-      else if (pitch === PITCH_HIHAT) hitRef.current.hihat = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_CYMBAL) hitRef.current.cymbal = { time: now, velocity, gate: Math.max(gate, 0.28) }
-      else if (pitch === PITCH_TRIANGLE_A) hitRef.current.triangleA = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_TRIANGLE_B) hitRef.current.triangleB = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_TRIANGLE_C) hitRef.current.triangleC = { time: now, velocity, gate: Math.min(gate, 0.08) }
-      else if (pitch === PITCH_CHORD) hitRef.current.chord = { time: now, velocity, gate: Math.max(gate, 0.25) }
-      else if (pitch >= GUITAR_MIN && pitch <= GUITAR_MAX) {
-        guitarHitsRef.current.push({ time: now, velocity, gate: Math.max(gate, 0.08), pitch })
+      const ageSec = (state.beat - n.beat) * secPerBeat
+      const key = PITCH_TO_HIT[n.pitch]
+      if (key) {
+        hits[key] = { ageSec, velocity }
+      } else if (n.pitch >= GUITAR_MIN && n.pitch <= GUITAR_MAX) {
+        if ((n.beat - prevGuitarBeat) * secPerBeat >= GUITAR_HIT_WINDOW) guitarPhraseStartBeat = n.beat
+        prevGuitarBeat = n.beat
+        if (ageSec < GUITAR_HIT_WINDOW) guitarHits.push({ ageSec, velocity, pitch: n.pitch })
       }
     }
-    prevKeys.current = keys
 
     const kickAmp = adsr(
-      now,
-      hitRef.current.kick,
+      hits.kick.ageSec,
+      hits.kick.velocity,
       num(params, 'kickAttack', DEFAULTS.kickAttack),
       num(params, 'kickDecay', DEFAULTS.kickDecay),
       num(params, 'kickSustain', DEFAULTS.kickSustain),
       num(params, 'kickRelease', DEFAULTS.kickRelease)
     )
     const snareAmp = adsr(
-      now,
-      hitRef.current.snare,
+      hits.snare.ageSec,
+      hits.snare.velocity,
       num(params, 'snareAttack', DEFAULTS.snareAttack),
       num(params, 'snareDecay', DEFAULTS.snareDecay),
       num(params, 'snareSustain', DEFAULTS.snareSustain),
       num(params, 'snareRelease', DEFAULTS.snareRelease)
     )
     const rimAmp = adsr(
-      now,
-      hitRef.current.rim,
+      hits.rim.ageSec,
+      hits.rim.velocity,
       num(params, 'rimAttack', DEFAULTS.rimAttack),
       num(params, 'rimDecay', DEFAULTS.rimDecay),
       num(params, 'rimSustain', DEFAULTS.rimSustain),
       num(params, 'rimRelease', DEFAULTS.rimRelease)
     )
     const rimPairAmp = adsr(
-      now,
-      hitRef.current.rimPair,
+      hits.rimPair.ageSec,
+      hits.rimPair.velocity,
       num(params, 'rimAttack', DEFAULTS.rimAttack),
       num(params, 'rimDecay', DEFAULTS.rimDecay),
       num(params, 'rimSustain', DEFAULTS.rimSustain),
       num(params, 'rimRelease', DEFAULTS.rimRelease)
     )
     const clapAmp = adsr(
-      now,
-      hitRef.current.clap,
+      hits.clap.ageSec,
+      hits.clap.velocity,
       num(params, 'clapAttack', DEFAULTS.clapAttack),
       num(params, 'clapDecay', DEFAULTS.clapDecay),
       num(params, 'clapSustain', DEFAULTS.clapSustain),
       num(params, 'clapRelease', DEFAULTS.clapRelease)
     )
     const hatAmp = adsr(
-      now,
-      hitRef.current.hihat,
+      hits.hihat.ageSec,
+      hits.hihat.velocity,
       num(params, 'hatAttack', DEFAULTS.hatAttack),
       num(params, 'hatDecay', DEFAULTS.hatDecay),
       num(params, 'hatSustain', DEFAULTS.hatSustain),
       num(params, 'hatRelease', DEFAULTS.hatRelease)
     )
     const cymbalAmp = adsr(
-      now,
-      hitRef.current.cymbal,
+      hits.cymbal.ageSec,
+      hits.cymbal.velocity,
       num(params, 'cymbalAttack', DEFAULTS.cymbalAttack),
       num(params, 'cymbalDecay', DEFAULTS.cymbalDecay),
       num(params, 'cymbalSustain', DEFAULTS.cymbalSustain),
       num(params, 'cymbalRelease', DEFAULTS.cymbalRelease)
     )
     const triangleAmpA = adsr(
-      now,
-      hitRef.current.triangleA,
+      hits.triangleA.ageSec,
+      hits.triangleA.velocity,
       num(params, 'triangleAttack', DEFAULTS.triangleAttack),
       num(params, 'triangleDecay', DEFAULTS.triangleDecay),
       num(params, 'triangleSustain', DEFAULTS.triangleSustain),
       num(params, 'triangleRelease', DEFAULTS.triangleRelease)
     )
     const triangleAmpB = adsr(
-      now,
-      hitRef.current.triangleB,
+      hits.triangleB.ageSec,
+      hits.triangleB.velocity,
       num(params, 'triangleAttack', DEFAULTS.triangleAttack),
       num(params, 'triangleDecay', DEFAULTS.triangleDecay) * 1.25,
       num(params, 'triangleSustain', DEFAULTS.triangleSustain),
       num(params, 'triangleRelease', DEFAULTS.triangleRelease) * 1.2
     )
     const triangleAmpC = adsr(
-      now,
-      hitRef.current.triangleC,
+      hits.triangleC.ageSec,
+      hits.triangleC.velocity,
       num(params, 'triangleAttack', DEFAULTS.triangleAttack),
       num(params, 'triangleDecay', DEFAULTS.triangleDecay) * 1.1,
       num(params, 'triangleSustain', DEFAULTS.triangleSustain),
       num(params, 'triangleRelease', DEFAULTS.triangleRelease) * 1.35
     )
     const chordAmp = adsr(
-      now,
-      hitRef.current.chord,
+      hits.chord.ageSec,
+      hits.chord.velocity,
       num(params, 'chordAttack', DEFAULTS.chordAttack),
       num(params, 'chordDecay', DEFAULTS.chordDecay),
       num(params, 'chordSustain', DEFAULTS.chordSustain),
       num(params, 'chordRelease', DEFAULTS.chordRelease)
     )
 
-    guitarHitsRef.current = guitarHitsRef.current.filter((hit) => now - hit.time < 2.5)
     let guitarAmp = 0
     let guitarPitchHue = 0
-    for (const hit of guitarHitsRef.current) {
+    for (const hit of guitarHits) {
       const amp = adsr(
-        now,
-        hit,
+        hit.ageSec,
+        hit.velocity,
         num(params, 'guitarAttack', DEFAULTS.guitarAttack),
         num(params, 'guitarDecay', DEFAULTS.guitarDecay),
         num(params, 'guitarSustain', DEFAULTS.guitarSustain),
@@ -690,34 +695,34 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
       opacityMul = 1
     ) => {
       if (amp <= 0.004) return
-      const hitAge = Math.max(0, now - hitRef.current[kind].time)
+      const hitAge = hits[kind].ageSec
       const clapLike = kind === 'clap' || kind === 'rim' || kind === 'rimPair'
       const metalLike = kind === 'hihat' || kind === 'cymbal'
       const attackPop = Math.exp(-hitAge / (kind === 'kick' ? 0.055 : kind === 'snare' ? 0.035 : clapLike ? 0.032 : kind === 'cymbal' ? 0.038 : 0.016))
       const bodyPulse = Math.exp(-hitAge / (kind === 'kick' ? 0.24 : kind === 'snare' ? 0.12 : clapLike ? 0.1 : kind === 'cymbal' ? 0.18 : 0.055))
       const spin = rotationSpeed * rotationAmount
       const rotateY = kind === 'kick'
-        ? now * 0.34 * spin
+        ? t * 0.34 * spin
         : kind === 'snare'
-          ? now * 0.27 * spin
+          ? t * 0.27 * spin
           : clapLike
-            ? now * (kind === 'rim' || kind === 'rimPair' ? 0.24 : -0.22) * spin
+            ? t * (kind === 'rim' || kind === 'rimPair' ? 0.24 : -0.22) * spin
             : metalLike
-              ? now * (kind === 'cymbal' ? 0.14 : 0.22) * spin
-              : now * 0.22 * spin
+              ? t * (kind === 'cymbal' ? 0.14 : 0.22) * spin
+              : t * 0.22 * spin
       const rotateX = kind === 'snare'
-        ? Math.sin(now * 0.38 * Math.max(0.1, rotationSpeed)) * 0.18 * rotationAmount
+        ? Math.sin(t * 0.38 * Math.max(0.1, rotationSpeed)) * 0.18 * rotationAmount
         : clapLike
-          ? Math.sin(now * (kind === 'rim' ? 0.5 : 0.44) * Math.max(0.1, rotationSpeed)) * 0.12 * rotationAmount
+          ? Math.sin(t * (kind === 'rim' ? 0.5 : 0.44) * Math.max(0.1, rotationSpeed)) * 0.12 * rotationAmount
         : metalLike
-          ? (kind === 'cymbal' ? 0.96 : 1.08) + Math.sin(now * (kind === 'cymbal' ? 0.42 : 0.62) * Math.max(0.1, rotationSpeed)) * (kind === 'cymbal' ? 0.1 : 0.08) * rotationAmount
+          ? (kind === 'cymbal' ? 0.96 : 1.08) + Math.sin(t * (kind === 'cymbal' ? 0.42 : 0.62) * Math.max(0.1, rotationSpeed)) * (kind === 'cymbal' ? 0.1 : 0.08) * rotationAmount
           : 0
       const rotateZ = kind === 'snare'
-        ? Math.cos(now * 0.21 * Math.max(0.1, rotationSpeed)) * 0.08 * rotationAmount
+        ? Math.cos(t * 0.21 * Math.max(0.1, rotationSpeed)) * 0.08 * rotationAmount
         : clapLike
-          ? Math.cos(now * (kind === 'rim' ? 0.29 : 0.33) * Math.max(0.1, rotationSpeed)) * 0.18 * rotationAmount
+          ? Math.cos(t * (kind === 'rim' ? 0.29 : 0.33) * Math.max(0.1, rotationSpeed)) * 0.18 * rotationAmount
           : metalLike
-            ? now * (kind === 'cymbal' ? 0.1 : 0.16) * spin
+            ? t * (kind === 'cymbal' ? 0.1 : 0.16) * spin
             : 0
       const sphereScale = kind === 'kick'
         ? 1 + attackPop * 0.18 + amp * 0.06
@@ -742,7 +747,7 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
       for (let i = 0; i < sphereCount; i++) {
         const p = sphereParticles[i]
         if (topOnly && p.y < 1 / 3) continue
-        const jitter = Math.sin(now * (kind === 'hihat' ? 120 : kind === 'cymbal' ? 72 : 38) + p.phase * (metalLike ? 3.2 : 1)) * turbulence * p.weight
+        const jitter = Math.sin(t * (kind === 'hihat' ? 120 : kind === 'cymbal' ? 72 : 38) + p.phase * (metalLike ? 3.2 : 1)) * turbulence * p.weight
         const localX = p.x * sphereScale + p.x * jitter
         const localY = p.y * sphereScale + p.y * jitter + (kind === 'kick' ? attackPop * 0.055 + amp * 0.025 : 0)
         const localZ = p.z * sphereScale + p.z * jitter
@@ -778,7 +783,7 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
       opacityMul = 1
     ) => {
       if (amp <= 0.004) return
-      const hitAge = Math.max(0, now - hitRef.current[kind].time)
+      const hitAge = hits[kind].ageSec
       const attackPop = Math.exp(-hitAge / 0.018)
       const pingGlow = Math.exp(-hitAge / (kind === 'triangleA' ? 0.11 : kind === 'triangleB' ? 0.16 : 0.19))
       const descendProgress = clamp(hitAge / 0.42, 0, 1)
@@ -853,8 +858,8 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
           normalY *= -1
         }
 
-        const shimmer = Math.sin(now * (kind === 'triangleA' ? 78 : 64) + p.phase * 2.4 + edge * 1.7)
-        const orbitPhase = now * (1.8 + dotMotion * 0.35) + p.phase + edge * 1.9
+        const shimmer = Math.sin(t * (kind === 'triangleA' ? 78 : 64) + p.phase * 2.4 + edge * 1.7)
+        const orbitPhase = t * (1.8 + dotMotion * 0.35) + p.phase + edge * 1.9
         const edgeJitter = (p.weight - 0.75) * 0.022 + shimmer * attackPop * 0.012
         const inwardPulse = (0.008 + pingGlow * 0.016) * Math.max(0, Math.sin(orbitPhase))
         const tangentDrift = Math.cos(orbitPhase) * 0.018 * (0.35 + pingGlow)
@@ -892,7 +897,7 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
       const color = colorFor('chord', colorMode)
       for (let i = 0; i < chordCount; i++) {
         const p = chordParticles[i]
-        const breathe = 1 + chordAmp * 0.32 + Math.sin(now * 3 + p.phase) * 0.015
+        const breathe = 1 + chordAmp * 0.32 + Math.sin(t * 3 + p.phase) * 0.015
         writePoint(
           p.x * breathe,
           p.y * breathe,
@@ -905,22 +910,17 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
     }
 
     const guitarCount = showGuitar ? Math.floor(760 * detail) : 0
-    if (showGuitar && (!currentGuitarRef.current || currentGuitarRef.current.length !== guitarCount * 3)) {
-      currentGuitarRef.current = new Float32Array(guitarCount * 3)
-      for (let i = 0; i < guitarCount; i++) {
-        const p = guitarParticles[i]
-        currentGuitarRef.current[i * 3] = p.wall.x
-        currentGuitarRef.current[i * 3 + 1] = p.wall.y
-        currentGuitarRef.current[i * 3 + 2] = p.wall.z
-      }
-    }
-
-    const guitarPositions = currentGuitarRef.current
-    const lerp = clamp(delta * morphSpeed, 0, 1)
+    // Closed-form stand-in for Tyler's per-frame lerp toward the crystal target:
+    // a first-order approach with the same rate (factor morphSpeed/60 per 60fps
+    // frame), anchored at the current phrase's start beat so the wall→crystal
+    // morph is a pure function of state.beat. Between phrases the particles sit
+    // fully formed (progress → 1), invisible while guitarAmp is zero.
+    const morphRate = -Math.log(1 - clamp(morphSpeed / 60, 0.001, 0.98)) * 60
+    const morphProgress = 1 - Math.exp(-morphRate * (state.beat - guitarPhraseStartBeat) * secPerBeat)
     const guitarBaseOpacity = crystalMode === 'freeform' ? 0.12 : 0.18
     const guitarPresence = Math.pow(smooth01(guitarAmp * 1.8), 2.4)
     const guitarColor = colorFor('guitar', colorMode, guitarPitchHue * 0.12)
-    for (let i = 0; guitarPositions && i < guitarCount; i++) {
+    for (let i = 0; i < guitarCount; i++) {
       const p = guitarParticles[i]
       const crystal = crystalMode === 'octahedron'
         ? p.octahedron
@@ -933,18 +933,11 @@ function BeatParticleKitVisual({ trackId }: { trackId: string }) {
               : p.wall
       const target = crystalMode === 'freeform' ? p.wall : crystal
       const ripple = guitarAmp * (0.2 + (p.strand % 3) * 0.04)
-      const wave = Math.sin(now * 1.6 + p.phase + guitarPitchHue * Math.PI * 2) * guitarAmp * 0.1
-      const tx = target.x + p.side * ripple
-      const ty = target.y + wave
-      const tz = target.z + Math.cos(now * 1.2 + p.phase) * guitarAmp * 0.08
-      const i3 = i * 3
-      guitarPositions[i3] += (tx - guitarPositions[i3]) * lerp
-      guitarPositions[i3 + 1] += (ty - guitarPositions[i3 + 1]) * lerp
-      guitarPositions[i3 + 2] += (tz - guitarPositions[i3 + 2]) * lerp
+      const wave = Math.sin(t * 1.6 + p.phase + guitarPitchHue * Math.PI * 2) * guitarAmp * 0.1
       writePoint(
-        guitarPositions[i3],
-        guitarPositions[i3 + 1],
-        guitarPositions[i3 + 2],
+        p.wall.x + (target.x - p.wall.x) * morphProgress + p.side * ripple,
+        p.wall.y + (target.y - p.wall.y) * morphProgress + wave,
+        p.wall.z + (target.z - p.wall.z) * morphProgress + Math.cos(t * 1.2 + p.phase) * guitarAmp * 0.08,
         dotSize * 0.42,
         clamp((guitarBaseOpacity + guitarAmp * 0.5) * guitarPresence * guitarOpacity, 0, 0.82),
         guitarColor

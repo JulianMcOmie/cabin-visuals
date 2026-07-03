@@ -1,8 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
+import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A procedurally-drawn Windows XP "Luna" desktop rendered to a
@@ -14,11 +13,13 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // Adaptation notes: Tyler loaded the real XP wallpaper bitmaps from archive.org URLs; those
 // external images (and the IndexedDB/palette machinery) are dropped — everything is drawn
 // procedurally, so drawBackground always uses the canvas-drawn "Bliss" fallback (sky +
-// clouds + rolling green hills), tinted per wallpaper index. State reads are rewired:
-// engine.getTrackState → getObjectState, pitchNoteOnCounts(Map) → onset detection from
-// activeNotes via `${pitch}:${beat}` keys, activeNotes.has(pitch) → activeNotes.some(),
-// virtualClock.now() → performance.now(), useUIStore.currentBeat → useTimeStore.currentBeat.
-// seekGeneration is skipped.
+// clouds + rolling green hills), tinted per wallpaper index. State reads are rewired to the
+// pause invariant: no wall clock, no onset detection, no accumulated drift. Every frame is
+// derived fresh from state.notes + state.beat — drift offset is driftSpeed * beat-seconds,
+// windows/sprites/shake are enumerated from notes at/before the playhead with ages in
+// beat-derived seconds, and per-entity "randomness" is seeded from note beat/pitch. A static
+// playhead is a static frame; scrubbing in either direction is exact. seekGeneration is
+// skipped (nothing accumulates, so there is nothing to reset).
 
 // ── XP Luna color palette ──────────────────────────────────────────────────
 
@@ -169,11 +170,6 @@ function springEase(t: number): number {
     }
   }
   return 1
-}
-
-function seededRand(seed: number): number {
-  const x = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453
-  return x - Math.floor(x)
 }
 
 // ── Bliss wallpaper (always procedural — no external bitmaps) ────────────────
@@ -898,27 +894,24 @@ function drawFileIcon(
   }
 }
 
-// ── State types ────────────────────────────────────────────────────────────
+// ── Derived draw types ─────────────────────────────────────────────────────
+// Rebuilt from the note list every frame — nothing persists across frames.
 
-interface SpawnedWindow {
-  id: number
+interface DerivedWindow {
   x: number
   y: number
   width: number
   height: number
   type: WindowType
   title: string
-  birthOffset: number
-  spawnTime: number
+  springT: number
 }
 
-interface SpawnedSprite {
-  id: number
+interface DerivedSprite {
   x: number
   y: number
   iconType: IconType
   label: string
-  birthOffset: number
 }
 
 // ── Params & ports ─────────────────────────────────────────────────────────
@@ -949,19 +942,6 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
 
-  // State refs
-  const windowsRef = useRef<SpawnedWindow[]>([])
-  const spritesRef = useRef<SpawnedSprite[]>([])
-  const posOffsetRef = useRef(0)
-  const lastTimeRef = useRef(0)
-  const idCounterRef = useRef(0)
-  const wallpaperIndexRef = useRef(0)
-  const lastIconSubdivRef = useRef(-1) // last 8th-note subdivision that spawned icons
-  const shakeTimeRef = useRef(0) // remaining shake duration in ms
-
-  // Onset detection: keys of notes present last frame (`${pitch}:${beat}`).
-  const prevKeysRef = useRef<Set<string>>(new Set())
-
   useEffect(() => {
     const canvas = document.createElement('canvas')
     canvas.width = CANVAS_W
@@ -979,9 +959,8 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame(() => {
-    const state = getObjectState(trackId)
-    if (!state || !canvasRef.current || !textureRef.current || !meshRef.current) return
+  useInstrumentFrame(trackId, (state) => {
+    if (!canvasRef.current || !textureRef.current || !meshRef.current) return
 
     const ctx = canvasRef.current.getContext('2d')!
     const params = state.params
@@ -996,108 +975,105 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
     const opacity = params.opacity ?? 1.0
     const spawnX = params.spawnX ?? 0.66
 
-    // Time
-    const now = performance.now()
-    const dt = lastTimeRef.current === 0 ? 0 : (now - lastTimeRef.current) / 1000
-    lastTimeRef.current = now
-    const clampedDt = Math.min(dt, 0.1)
+    // Time: the playhead in seconds is the only clock. Drift is closed-form from it,
+    // so a static playhead is a static frame and scrubbing is exact.
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
+    const posOffset = driftSpeed * (currentBeat * secPerBeat)
 
-    // Drift
-    posOffsetRef.current += driftSpeed * clampedDt
-
-    // Onset detection: `${pitch}:${beat}` keys newly present this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    const onsets: { pitch: number }[] = []
-    for (const n of state.activeNotes) {
-      if (!prevKeysRef.current.has(`${n.pitch}:${n.beat}`)) onsets.push({ pitch: n.pitch })
-    }
-    prevKeysRef.current = keys
-
-    // Wallpaper switching (C1-B1): most recent onset selects wallpaper tint.
-    for (const o of onsets) {
-      if (o.pitch >= WALLPAPER_PITCH_MIN && o.pitch <= WALLPAPER_PITCH_MAX) {
-        wallpaperIndexRef.current = (o.pitch - WALLPAPER_PITCH_MIN) % WALLPAPER_POOL.length
+    // Wallpaper (C1-B1): the latest wallpaper note at/before the playhead picks the
+    // tint. (state.notes is sorted by beat, so the last match wins.)
+    let wallpaperIndex = 0
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break
+      if (n.pitch >= WALLPAPER_PITCH_MIN && n.pitch <= WALLPAPER_PITCH_MAX) {
+        wallpaperIndex = (n.pitch - WALLPAPER_PITCH_MIN) % WALLPAPER_POOL.length
       }
     }
 
-    // Spawn windows (C2-B3): one window per onset in the band.
-    for (const o of onsets) {
-      const pitch = o.pitch
-      if (pitch < WINDOW_PITCH_MIN || pitch > WINDOW_PITCH_MAX) continue
-      const pitchNorm = (pitch - WINDOW_PITCH_MIN) / (WINDOW_PITCH_MAX - WINDOW_PITCH_MIN)
+    // Windows (C2-B3): one window per note onset, derived fresh from the note list —
+    // age in beat-seconds gives the drift-back position and the spring phase; size and
+    // pool pick are seeded from the note itself so a rescrub regenerates them exactly.
+    const windows: DerivedWindow[] = []
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break
+      if (n.pitch < WINDOW_PITCH_MIN || n.pitch > WINDOW_PITCH_MAX) continue
+      const ageSec = (currentBeat - n.beat) * secPerBeat
+      const pitchNorm = (n.pitch - WINDOW_PITCH_MIN) / (WINDOW_PITCH_MAX - WINDOW_PITCH_MIN)
       const yNorm = 1 - pitchNorm
       const yMargin = 40
-      const seed = idCounterRef.current * 7 + pitch
+      const seed = Math.floor(n.beat * 13) + n.pitch * 7
       const w = windowMinW + seededRand(seed) * (windowMaxW - windowMinW)
       const h = windowMinH + seededRand(seed + 1) * (windowMaxH - windowMinH)
       const y = yMargin + yNorm * (CANVAS_H - h - yMargin * 2)
       const poolIndex = Math.floor(seededRand(seed + 2) * WINDOW_POOL.length)
       const poolEntry = WINDOW_POOL[poolIndex]
-      windowsRef.current.push({
-        id: idCounterRef.current++,
-        x: CANVAS_W * spawnX,
+      const screenX = CANVAS_W * spawnX - driftSpeed * ageSec
+      if (screenX + w <= -50) continue // drifted off the left edge
+      windows.push({
+        x: screenX,
         y,
         width: w,
         height: h,
         type: poolEntry.type,
         title: poolEntry.title,
-        birthOffset: posOffsetRef.current,
-        spawnTime: now,
+        springT: enableSpring ? (ageSec * 1000) / SPRING_DURATION : 1,
       })
     }
 
-    // Spawn file icon sprites (C4-B4) — 8 per beat while note is held.
-    const currentBeat = useTimeStore.getState().currentBeat
-    const subdiv = Math.floor(currentBeat * 8) // current 8th-note subdivision
-    if (subdiv !== lastIconSubdivRef.current) {
-      lastIconSubdivRef.current = subdiv
-      for (let pitch = ICON_PITCH_MIN; pitch <= ICON_PITCH_MAX; pitch++) {
-        if (state.activeNotes.some((n) => n.pitch === pitch)) {
-          const pitchNorm = (pitch - ICON_PITCH_MIN) / Math.max(1, ICON_PITCH_MAX - ICON_PITCH_MIN)
-          const yNorm = 1 - pitchNorm
-          const spriteSize = 72 * iconScale
-          const y = 40 + yNorm * (CANVAS_H - spriteSize - 100)
-          const poolIdx = Math.floor(seededRand(idCounterRef.current) * ICON_POOL.length)
-          spritesRef.current.push({
-            id: idCounterRef.current++,
-            x: CANVAS_W * spawnX,
-            y,
-            iconType: ICON_POOL[poolIdx].type,
-            label: ICON_POOL[poolIdx].label,
-            birthOffset: posOffsetRef.current,
-          })
-        }
-      }
-    }
-
-    // Shake trigger (C5)
-    for (const o of onsets) {
-      if (o.pitch === SHAKE_PITCH) {
-        shakeTimeRef.current = 400 // 400ms shake
-      }
-    }
-
-    // Cull off-screen windows
-    windowsRef.current = windowsRef.current.filter((win) => {
-      const screenX = win.x - (posOffsetRef.current - win.birthOffset)
-      return screenX + win.width > -50
-    })
-
-    // Cull off-screen sprites
+    // File icon sprites (C4-B4) — 8 per beat while a note is held. Enumerate the
+    // 8th-note subdivisions each note covers (up to the playhead) instead of spawning
+    // on live subdivision changes; each subdivision k is one sprite, seeded by k+pitch.
     const spriteSize = 72 * iconScale
-    spritesRef.current = spritesRef.current.filter((spr) => {
-      const screenX = spr.x - (posOffsetRef.current - spr.birthOffset)
-      return screenX + spriteSize > -80
-    })
+    const sprites: DerivedSprite[] = []
+    // Oldest age still on screen — older sprites have drifted past the left edge, so
+    // skip their subdivisions entirely (unbounded when there is no drift).
+    const maxAgeBeats = driftSpeed > 0
+      ? (CANVAS_W * spawnX + spriteSize + 80) / driftSpeed / secPerBeat
+      : Infinity
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break
+      if (n.pitch < ICON_PITCH_MIN || n.pitch > ICON_PITCH_MAX) continue
+      const endBeat = n.beat + n.durationBeats
+      let kMin = Math.ceil(n.beat * 8)
+      if (Number.isFinite(maxAgeBeats)) {
+        kMin = Math.max(kMin, Math.ceil((currentBeat - maxAgeBeats) * 8))
+      }
+      const kMax = Math.floor(Math.min(currentBeat, endBeat) * 8)
+      for (let k = kMin; k <= kMax; k++) {
+        const spawnBeat = k / 8
+        if (spawnBeat >= endBeat) break // note released before this subdivision
+        const ageSec = (currentBeat - spawnBeat) * secPerBeat
+        const screenX = CANVAS_W * spawnX - driftSpeed * ageSec
+        if (screenX + spriteSize <= -80) continue // drifted off the left edge
+        const pitchNorm = (n.pitch - ICON_PITCH_MIN) / Math.max(1, ICON_PITCH_MAX - ICON_PITCH_MIN)
+        const yNorm = 1 - pitchNorm
+        const y = 40 + yNorm * (CANVAS_H - spriteSize - 100)
+        const poolIdx = Math.floor(seededRand(k * 7 + n.pitch * 13) * ICON_POOL.length)
+        sprites.push({
+          x: screenX,
+          y,
+          iconType: ICON_POOL[poolIdx].type,
+          label: ICON_POOL[poolIdx].label,
+        })
+      }
+    }
 
-    // ── Shake decay ──
+    // ── Shake (C5) ──
+    // Envelope + jitter are closed-form from the triggering note's age. The jitter
+    // re-rolls at ~60Hz, but from a hash of the quantized age — a paused frame holds
+    // still, and a retrigger wins because later notes overwrite (notes are sorted).
     let shakeX = 0
     let shakeY = 0
-    if (shakeTimeRef.current > 0) {
-      shakeTimeRef.current = Math.max(0, shakeTimeRef.current - clampedDt * 1000)
-      const intensity = (shakeTimeRef.current / 400) * 18 // max 18px, decays linearly
-      shakeX = (Math.random() * 2 - 1) * intensity
-      shakeY = (Math.random() * 2 - 1) * intensity
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break
+      if (n.pitch !== SHAKE_PITCH) continue
+      const ageSec = (currentBeat - n.beat) * secPerBeat
+      if (ageSec >= 0.4) continue // 400ms shake
+      const intensity = (1 - ageSec / 0.4) * 18 // max 18px, decays linearly
+      const jitterSeed = Math.floor(ageSec * 60) * 7.13 + n.beat * 13
+      shakeX = (seededRand(jitterSeed + 1) * 2 - 1) * intensity
+      shakeY = (seededRand(jitterSeed + 2) * 2 - 1) * intensity
     }
 
     // ── Draw ──
@@ -1109,26 +1085,22 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
     ctx.translate(shakeX, shakeY)
 
     // Background (procedural Bliss, tinted per wallpaper index)
-    drawBackground(ctx, CANVAS_W, CANVAS_H, posOffsetRef.current, wallpaperIndexRef.current)
+    drawBackground(ctx, CANVAS_W, CANVAS_H, posOffset, wallpaperIndex)
 
     // Desktop icons
     drawDesktopIcons(ctx)
 
     // Draw windows
-    for (const win of windowsRef.current) {
-      const screenX = win.x - (posOffsetRef.current - win.birthOffset)
-      const elapsed = now - win.spawnTime
-      const springT = enableSpring ? elapsed / SPRING_DURATION : 1
-      drawWindow(ctx, screenX, win.y, win.width, win.height, win.title, win.type, springT)
+    for (const win of windows) {
+      drawWindow(ctx, win.x, win.y, win.width, win.height, win.title, win.type, win.springT)
     }
 
     // Taskbar
     drawTaskbar(ctx, CANVAS_W, CANVAS_H)
 
     // Drifting file icon sprites (on top of windows and taskbar)
-    for (const spr of spritesRef.current) {
-      const screenX = spr.x - (posOffsetRef.current - spr.birthOffset)
-      drawFileIcon(ctx, screenX, spr.y, spr.iconType, spr.label, spriteSize)
+    for (const spr of sprites) {
+      drawFileIcon(ctx, spr.x, spr.y, spr.iconType, spr.label, spriteSize)
     }
 
     // Watermark
