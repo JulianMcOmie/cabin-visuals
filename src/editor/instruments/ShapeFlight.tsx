@@ -1,9 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, ShaderMaterial, Color, Vector2, AdditiveBlending } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Spirograph / polygon / polar shapes stream toward the camera
@@ -218,11 +216,9 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
     matRef.current?.dispose()
   }, [])
 
-  useFrame(() => {
+  useInstrumentFrame(trackId, (state) => {
     const geo = geoRef.current
     if (!geo) return
-    const state = getObjectState(trackId)
-    if (!state) return
     const notes = state.notes
     if (!notes.length) { geo.setDrawRange(0, 0); return }
 
@@ -256,9 +252,8 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
       matRef.current.uniforms.uLineWidth.value = lineWidth
     }
 
-    const currentBeat = useTimeStore.getState().currentBeat
-    const bpm = useProjectStore.getState().bpm
-    const secPerBeat = 60 / bpm
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
 
     // Accumulate rotation from beat progression.
     const prevBeat = lastBeatRef.current

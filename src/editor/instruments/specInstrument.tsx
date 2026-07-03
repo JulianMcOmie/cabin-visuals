@@ -1,8 +1,6 @@
 import { useRef, type ReactElement } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { useTimeStore } from '../store/TimeStore'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/engine/renderSpec'
 import type { ObjectInstrumentDef, ParamDef, PortDef, LocalTransform, TransformCtx } from './types'
 
@@ -36,14 +34,12 @@ interface CompiledAppearance {
  *  appearance bindings are evaluated onto the material each frame. */
 function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { trackId: string; primitive: Primitive; appearance: CompiledAppearance; paramDefaults: Record<string, number> }) {
   const meshRef = useRef<Mesh>(null)
-  useFrame(() => {
+  useInstrumentFrame(trackId, (state) => {
     if (!meshRef.current) return
-    const state = getObjectState(trackId)
-
     const mat = meshRef.current.material as MeshStandardMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an
     // unset param reads its default (not 0) — a fresh track has no params yet.
-    const scope: Scope = { param: { ...paramDefaults, ...state?.params }, port: state?.portValues ?? {}, beat: useTimeStore.getState().currentBeat }
+    const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: state.portValues, beat: state.beat }
     if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
     if (appearance.opacity) { mat.transparent = true; mat.opacity = appearance.opacity(scope) }

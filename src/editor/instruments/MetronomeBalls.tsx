@@ -1,13 +1,11 @@
 import { useRef, useEffect, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import {
   Group, Mesh, LineSegments, Points,
   PlaneGeometry, MeshBasicMaterial, LineBasicMaterial, PointsMaterial,
   BufferGeometry, BufferAttribute, Color,
 } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Generative metronome-ball line drawings: three
@@ -330,10 +328,8 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     if (bgDotMatRef.current) bgDotMatRef.current.size = dotSize * 2
   }
 
-  useFrame(() => {
+  useInstrumentFrame(trackId, (state) => {
     if (!groupRef.current) return
-    const state = getObjectState(trackId)
-    if (!state) return
     const p = state.params
 
     const balls = Math.floor(p.balls ?? 24)
@@ -407,9 +403,7 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
 
     // Beat-synced background rotation — driven by the transport's currentBeat,
     // NOT wall-clock, so the flower turns in lockstep with playback.
-    const currentBeat = useTimeStore.getState().currentBeat
-    const _bpm = useProjectStore.getState().bpm // (kept for tempo-awareness parity)
-    void _bpm
+    const currentBeat = state.beat
     if (prevBeatRef.current !== null) {
       const dBeat = currentBeat - prevBeatRef.current
       if (dBeat !== 0) bgRotation.current += dBeat * bgRotateRate

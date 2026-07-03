@@ -20,6 +20,7 @@ export interface ProjectSnapshot {
   tracks: Record<string, Track>
   rootTrackIds: string[]
   beatsPerBar: number
+  bpm: number
 }
 
 /** Track ids in depth-first order across the whole forest (roots, then each one's

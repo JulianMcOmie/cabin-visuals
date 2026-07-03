@@ -90,6 +90,12 @@ export interface ResolvedGraph {
 
 /** Per-frame state the renderer pulls for one object. */
 export interface ObjectState {
+  /** The playhead this frame (fractional beats) — THE time source for instruments.
+   *  The pause invariant: every visual is a pure function of this (+ params/notes),
+   *  so a static playhead is a static frame and scrub == playback. */
+  beat: number
+  /** Seconds per beat (60/bpm this frame), for beat-age → seconds conversions. */
+  secPerBeat: number
   params: Record<string, number>
   portValues: Record<string, number>
   /** True this frame if a mute modifier's region covers the current beat (hide it). */

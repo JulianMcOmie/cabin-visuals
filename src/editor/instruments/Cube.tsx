@@ -1,8 +1,6 @@
 import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The cube's definition lives next to its visual — schema and component can't drift.
@@ -59,12 +57,11 @@ export function Cube({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const fragRefs = useRef<(Mesh | null)[]>([])
 
-  useFrame(() => {
+  useInstrumentFrame(trackId, (state) => {
     if (!meshRef.current) return
-    const state = getObjectState(trackId)
     // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
-    const energy = state?.portValues.energy ?? 0
-    const baseHue = state?.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
+    const energy = state.portValues.energy ?? 0
+    const baseHue = state.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
 
     const mat = meshRef.current.material as MeshStandardMaterial
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
@@ -75,8 +72,8 @@ export function Cube({ trackId }: { trackId: string }) {
     // onset and decays back over the note (the cube flies apart, then reassembles), so
     // the on-grid beat you actually land on when scrubbing (the playhead snaps to 1/4
     // beat) is the peak — not a zero-crossing. Overlapping notes take the strongest.
-    const beat = useTimeStore.getState().currentBeat
-    const events = state?.abilityEvents.get('shatter') ?? []
+    const beat = state.beat
+    const events = state.abilityEvents.get('shatter') ?? []
     let a = 0
     let vel = 0
     for (const n of events) {

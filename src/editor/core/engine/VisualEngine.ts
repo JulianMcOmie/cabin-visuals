@@ -10,6 +10,9 @@ import type { ResolvedGraph, ObjectState } from './types'
 // useFrame. The only React-visible signal is the object LIST (see below).
 
 let graph: ResolvedGraph = { objects: [], modulators: [], routingsByPort: new Map(), tagIndex: new Map() }
+// Project bpm, mirrored on every setProject/syncParams — computeAtBeat derives
+// secPerBeat from it so instruments can convert beat-ages to seconds.
+let bpm = 120
 const states = new Map<string, ObjectState>()
 // World transforms, reused across frames (one Matrix4 per object). Also the source
 // of each object's parent transform during composition.
@@ -29,6 +32,7 @@ function publishList() {
 /** Re-derive the graph from the project (called debounced, off the edit path). */
 export function setProject(p: ProjectSnapshot) {
   graph = resolveProject(p)
+  bpm = p.bpm
   // Drop per-object caches for tracks that no longer resolve to an object.
   const live = new Set(graph.objects.map((o) => o.trackId))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)
@@ -45,6 +49,7 @@ export function setProject(p: ProjectSnapshot) {
  * in the graph are skipped; the debounced setProject reconciles structure shortly.
  */
 export function syncParams(p: ProjectSnapshot) {
+  bpm = p.bpm
   for (const obj of graph.objects) {
     const track = p.tracks[obj.trackId]
     if (track) obj.params = track.params ?? {}
@@ -56,6 +61,7 @@ export function syncParams(p: ProjectSnapshot) {
  *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
  *  parent's world is always ready when its children compose. */
 export function computeAtBeat(beat: number) {
+  const secPerBeat = 60 / bpm
   const portValuesByObject = new Map<string, Record<string, number>>()
   runMatrix(graph, beat, portValuesByObject)
   for (const obj of graph.objects) {
@@ -83,7 +89,7 @@ export function computeAtBeat(beat: number) {
     // Notes live at this beat — pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
-    states.set(obj.trackId, { params, portValues, world, blackedOut, stringParams: obj.stringParams, abilityEvents: obj.abilityEvents, notes: obj.notes, activeNotes })
+    states.set(obj.trackId, { beat, secPerBeat, params, portValues, world, blackedOut, stringParams: obj.stringParams, abilityEvents: obj.abilityEvents, notes: obj.notes, activeNotes })
   }
 }
 
