@@ -1,7 +1,7 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 /** Offset the R and B channels in opposite directions (glitch / lens fringe). */
-export const chromaticAberrationPlugin: VisualPlugin = {
+export const chromaticAberrationPlugin: VisualEffect = {
   id: 'chromaticAberration',
   name: 'Chromatic Aberration',
   category: 'shader',

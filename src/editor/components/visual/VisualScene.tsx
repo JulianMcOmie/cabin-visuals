@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { subscribeObjects, getObjectList } from '../../core/engine/VisualEngine'
+import { subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
 import { ObjectRenderer } from './ObjectRenderer'
 
 /**

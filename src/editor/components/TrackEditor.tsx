@@ -6,10 +6,10 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
-import { getPlugin, type VisualPlugin } from '../plugins'
+import { getEffect, type VisualEffect } from '../effects'
 import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Routing, PluginInstance } from '../types'
+import type { Routing, EffectInstance } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -303,8 +303,8 @@ function TagEditor({
 function EffectItem({
   plugin, inst, onToggle, onRemove, onSetSetting,
 }: {
-  plugin: VisualPlugin
-  inst: PluginInstance
+  plugin: VisualEffect
+  inst: EffectInstance
   onToggle: () => void
   onRemove: () => void
   onSetSetting: (key: string, value: number) => void
@@ -519,7 +519,7 @@ export function TrackEditor() {
                 </p>
               ) : (
                 (track.visualPlugins ?? []).map((inst) => {
-                  const plugin = getPlugin(inst.pluginId)
+                  const plugin = getEffect(inst.pluginId)
                   if (!plugin) return null
                   return (
                     <EffectItem

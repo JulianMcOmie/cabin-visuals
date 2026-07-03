@@ -1,10 +1,10 @@
 import { Matrix4, Vector3, Quaternion } from 'three'
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const IDENT_Q = new Quaternion()
 
 /** A 2D grid of copies on a chosen plane, optionally centered and row-staggered. */
-export const tilePlugin: VisualPlugin = {
+export const tilePlugin: VisualEffect = {
   id: 'tile',
   name: 'Tile',
   category: 'clone',

@@ -14,7 +14,7 @@ export interface CloneSpec {
   getOpacity?: (index: number, settings: Record<string, number>, time: number) => number
 }
 
-export interface VisualPlugin {
+export interface VisualEffect {
   id: string
   name: string
   category: EffectCategory

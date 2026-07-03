@@ -1,8 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
-import type { ResolvedNote } from '../core/engine/types'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Displays text a word at a time, advancing on each MIDI note

@@ -4,8 +4,8 @@ import * as THREE from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
-import type { ResolvedNote } from '../core/engine/types'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A neon 3D Hopf fibration — nested interlocking tori of

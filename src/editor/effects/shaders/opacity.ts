@@ -1,7 +1,7 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 /** Fade the whole layer. */
-export const opacityPlugin: VisualPlugin = {
+export const opacityPlugin: VisualEffect = {
   id: 'opacity',
   name: 'Opacity',
   category: 'shader',

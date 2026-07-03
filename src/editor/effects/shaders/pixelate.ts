@@ -1,7 +1,7 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 /** Quantize to a coarse pixel grid (retro). */
-export const pixelatePlugin: VisualPlugin = {
+export const pixelatePlugin: VisualEffect = {
   id: 'pixelate',
   name: 'Pixelate',
   category: 'shader',

@@ -2,9 +2,9 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Vector3 } from 'three'
 import { getInstrument } from '../../instruments'
-import { getObjectState } from '../../core/engine/VisualEngine'
+import { getObjectState } from '../../core/visual/VisualEngine'
 import { useProjectStore } from '../../store/ProjectStore'
-import { getPlugin } from '../../plugins'
+import { getEffect } from '../../effects'
 import { TransformWrapper } from './TransformWrapper'
 import { CloneWrapper } from './CloneWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
@@ -21,7 +21,7 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
   const plugins = useProjectStore((s) => s.tracks[trackId]?.visualPlugins) ?? []
-  const shaderInstances = plugins.filter((p) => p.enabled && getPlugin(p.pluginId)?.category === 'shader')
+  const shaderInstances = plugins.filter((p) => p.enabled && getEffect(p.pluginId)?.category === 'shader')
 
   const isFullFrame = !!def?.fullFrame
 

@@ -4,7 +4,7 @@ import { Group, Vector2, Color } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's NeonPolar. A 3D neon polar harmonograph: 6 oscillator

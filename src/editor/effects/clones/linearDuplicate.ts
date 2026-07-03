@@ -1,10 +1,10 @@
 import { Matrix4, Vector3, Quaternion } from 'three'
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const IDENT_Q = new Quaternion()
 
 /** Copies spread evenly along one axis, shrinking/fading toward the ends. */
-export const linearDuplicatePlugin: VisualPlugin = {
+export const linearDuplicatePlugin: VisualEffect = {
   id: 'linearDuplicate',
   name: 'Linear Duplicate',
   category: 'clone',

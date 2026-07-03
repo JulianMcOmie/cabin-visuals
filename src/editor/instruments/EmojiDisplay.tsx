@@ -1,8 +1,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, type Material } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
-import type { ResolvedNote } from '../core/engine/types'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Eight emoji glyphs laid out in a 2×4 grid across the full

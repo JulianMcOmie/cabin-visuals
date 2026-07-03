@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { InstancedMesh, InstancedBufferAttribute, Object3D, Color } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's CircleGrid (the "circles" shape — a 3D grid of glowing

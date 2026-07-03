@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { CanvasTexture, LinearFilter, Mesh } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A radial kite-quad lattice drawn to a 2D canvas that

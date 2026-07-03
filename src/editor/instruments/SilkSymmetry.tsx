@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, MeshBasicMaterial, LinearFilter } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Flowing silk-like line patterns with radial (kaleidoscopic)

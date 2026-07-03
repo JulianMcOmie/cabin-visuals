@@ -3,7 +3,7 @@ import {
   Group, LineSegments, LineBasicMaterial, EdgesGeometry, IcosahedronGeometry, Color, AdditiveBlending,
   type BufferGeometry,
 } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Nested icosahedron wireframes spawn on each note and expand

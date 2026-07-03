@@ -4,7 +4,7 @@ import {
   InstancedMesh, InstancedBufferAttribute, SphereGeometry, MeshBasicMaterial,
   Object3D, Color, Vector3, AdditiveBlending,
 } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's ParticleBurst. Each note is an InstancedMesh burst of

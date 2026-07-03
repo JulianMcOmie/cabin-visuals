@@ -1,4 +1,4 @@
-import type { ResolvedNote } from '../../core/engine/types'
+import type { ResolvedNote } from '../../core/visual/types'
 import type { ModulatorInstrumentDef } from '../types'
 
 // The library def: a Pulse modulator targets the (internal) `energy` port of

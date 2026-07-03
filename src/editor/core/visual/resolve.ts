@@ -10,7 +10,7 @@ import type {
   ResolvedRouting,
   BlackoutRegion,
 } from './types'
-import { isModifierType, combineModifier } from './trackTypes'
+import { isModifierType, combineModifier } from '../trackTypes'
 import { extractKeyframes } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 

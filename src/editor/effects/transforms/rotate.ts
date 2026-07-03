@@ -1,8 +1,8 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const DEG = Math.PI / 180
 
-export const rotatePlugin: VisualPlugin = {
+export const rotatePlugin: VisualEffect = {
   id: 'rotate',
   name: 'Rotate',
   category: 'transform',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Mesh } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A long-building upward particle riser with an accelerating

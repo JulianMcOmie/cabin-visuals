@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The cube's definition lives next to its visual — schema and component can't drift.

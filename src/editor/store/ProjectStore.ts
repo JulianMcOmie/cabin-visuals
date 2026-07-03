@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { getPlugin } from '../plugins'
-import type { Track, TrackType, Block, Note, PluginInstance, InterpolationMode } from '../types'
+import { getEffect } from '../effects'
+import type { Track, TrackType, Block, Note, EffectInstance, InterpolationMode } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -480,11 +480,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addEffect: (trackId, pluginId) =>
     set((s) => {
       const track = s.tracks[trackId]
-      const plugin = getPlugin(pluginId)
+      const plugin = getEffect(pluginId)
       if (!track || !plugin) return s
       const settings: Record<string, number> = {}
       for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
-      const instance: PluginInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
+      const instance: EffectInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
       return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: [...(track.visualPlugins ?? []), instance] } } }
     }),
 

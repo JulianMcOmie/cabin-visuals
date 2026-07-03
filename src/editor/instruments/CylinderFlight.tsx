@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, CylinderGeometry, MeshBasicMaterial, Color, AdditiveBlending, DoubleSide } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Interlocked cylinders fly toward the camera; each note is a

@@ -1,6 +1,6 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
-export const scalePlugin: VisualPlugin = {
+export const scalePlugin: VisualEffect = {
   id: 'scale',
   name: 'Scale',
   category: 'transform',

@@ -1,10 +1,10 @@
 import { Matrix4, Vector3, Quaternion } from 'three'
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const IDENT_Q = new Quaternion()
 
 /** Trailing copies along a (rotating) offset, shrinking and fading with each step. */
-export const echoPlugin: VisualPlugin = {
+export const echoPlugin: VisualEffect = {
   id: 'echo',
   name: 'Echo',
   category: 'clone',

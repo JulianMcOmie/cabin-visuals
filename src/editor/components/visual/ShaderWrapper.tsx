@@ -6,9 +6,9 @@ import {
   type IUniform, type Texture,
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
-import { getObjectState } from '../../core/engine/VisualEngine'
-import { getPlugin } from '../../plugins'
-import type { PluginInstance } from '../../types'
+import { getObjectState } from '../../core/visual/VisualEngine'
+import { getEffect } from '../../effects'
+import type { EffectInstance } from '../../types'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
 // the target regardless of camera. Passthrough fragment blits the final texture.
@@ -36,7 +36,7 @@ const OUTPUT_FRAG = `
  * as a clip-space fullscreen overlay (depth-test off) over the 3D scene. So a shaded object
  * becomes a full-frame post-processed layer; un-shaded objects render normally, unaffected.
  */
-export function ShaderWrapper({ trackId, plugins, children }: { trackId: string; plugins: PluginInstance[]; children: ReactNode }) {
+export function ShaderWrapper({ trackId, plugins, children }: { trackId: string; plugins: EffectInstance[]; children: ReactNode }) {
   const { gl, camera, size } = useThree()
   const outMeshRef = useRef<Mesh>(null)
 
@@ -67,9 +67,9 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
 
   // One ShaderMaterial per shader plugin instance (rebuilt if the instance set or size changes).
   const passes = useMemo(() => {
-    const map = new Map<string, { plugin: ReturnType<typeof getPlugin>; mat: ShaderMaterial }>()
+    const map = new Map<string, { plugin: ReturnType<typeof getEffect>; mat: ShaderMaterial }>()
     for (const inst of plugins) {
-      const plugin = getPlugin(inst.pluginId)
+      const plugin = getEffect(inst.pluginId)
       const uniforms: Record<string, IUniform> = {
         tDiffuse: { value: null }, time: { value: 0 }, resolution: { value: new Vector2(size.width, size.height) },
       }

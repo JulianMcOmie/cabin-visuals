@@ -4,7 +4,7 @@ import {
   Group, Mesh, LineSegments, LineBasicMaterial, MeshBasicMaterial,
   PlaneGeometry, BufferGeometry, BufferAttribute, Color,
 } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A line-outline square on a full-frame background plane,

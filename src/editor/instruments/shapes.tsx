@@ -1,6 +1,6 @@
 import { specInstrument } from './specInstrument'
 import type { ParamDef, PortDef } from './types'
-import type { Primitive } from '../core/engine/renderSpec'
+import type { Primitive } from '../core/visual/renderSpec'
 
 // Basic shapes share the Cube's params/ports so they self-pulse and respond to the same
 // modulators — the only difference between them is the geometry primitive. Their whole

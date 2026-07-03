@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, DoubleSide } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. 3D folder icons fly backward into z-depth — each note in the

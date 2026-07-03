@@ -1,11 +1,11 @@
 import { Matrix4, Vector3, Quaternion } from 'three'
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const Z = new Vector3(0, 0, 1)
 const IDENT_Q = new Quaternion()
 
 /** Copies evenly spaced around a circle (2D radial), optionally spinning and facing out. */
-export const radialSymmetryPlugin: VisualPlugin = {
+export const radialSymmetryPlugin: VisualEffect = {
   id: 'radialSymmetry',
   name: 'Radial Symmetry',
   category: 'clone',

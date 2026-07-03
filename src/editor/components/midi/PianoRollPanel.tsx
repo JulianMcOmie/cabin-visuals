@@ -11,7 +11,7 @@ import { generateRows, generateAutomationRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
-import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX } from '../../core/engine/automation'
+import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
 /** Automation editor context: the param a lane drives, and its value bounds. */

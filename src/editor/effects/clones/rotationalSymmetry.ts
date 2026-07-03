@@ -1,5 +1,5 @@
 import { Matrix4, Vector3, Quaternion } from 'three'
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 const IDENT_Q = new Quaternion()
 const UP = new Vector3(0, 1, 0)
@@ -13,7 +13,7 @@ function rand(n: number): number {
 }
 
 /** Copies arranged in 3D — a sphere (Fibonacci), a ring, a helix, or a random cloud. */
-export const rotationalSymmetryPlugin: VisualPlugin = {
+export const rotationalSymmetryPlugin: VisualEffect = {
   id: 'rotationalSymmetry',
   name: 'Rotational Symmetry',
   category: 'clone',

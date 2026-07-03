@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, ShaderMaterial, Color, Vector2, AdditiveBlending } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Spirograph / polygon / polar shapes stream toward the camera

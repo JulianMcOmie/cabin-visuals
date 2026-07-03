@@ -1,6 +1,6 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
-export const offsetPlugin: VisualPlugin = {
+export const offsetPlugin: VisualEffect = {
   id: 'offset',
   name: 'Offset',
   category: 'transform',

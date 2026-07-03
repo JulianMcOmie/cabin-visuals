@@ -34,7 +34,7 @@ export interface Routing {
 }
 
 /** A visual effect plugin attached to a track: which plugin, on/off, param values. */
-export interface PluginInstance {
+export interface EffectInstance {
   id: string
   pluginId: string
   enabled: boolean
@@ -67,7 +67,7 @@ export interface Track {
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
-  visualPlugins?: PluginInstance[]
+  visualPlugins?: EffectInstance[]
   /**
    * Per-ability note streams, keyed by the instrument's `AbilityLaneDef.key`. Each
    * lane holds full blocks + notes and is edited like a track. A PARALLEL structure

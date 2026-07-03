@@ -5,7 +5,7 @@ import {
   PlaneGeometry, MeshBasicMaterial, LineBasicMaterial, PointsMaterial,
   BufferGeometry, BufferAttribute, Color,
 } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Generative metronome-ball line drawings: three

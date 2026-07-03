@@ -6,7 +6,7 @@ import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
-import { PLUGIN_LIST } from '../plugins'
+import { PLUGIN_LIST } from '../effects'
 import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an

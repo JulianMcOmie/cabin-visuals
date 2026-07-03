@@ -1,7 +1,7 @@
 import { useRef, type ReactElement } from 'react'
 import { Mesh, MeshStandardMaterial } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
-import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/engine/renderSpec'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/visual/renderSpec'
 import type { ObjectInstrumentDef, ParamDef, PortDef, LocalTransform, TransformCtx } from './types'
 
 const ZERO: Compiled = () => 0

@@ -1,7 +1,7 @@
-import type { VisualPlugin } from '../types'
+import type { VisualEffect } from '../types'
 
 /** Fold the image into mirrored radial segments, with spin, zoom, and a hue shift. */
-export const kaleidoscopePlugin: VisualPlugin = {
+export const kaleidoscopePlugin: VisualEffect = {
   id: 'kaleidoscope',
   name: 'Kaleidoscope',
   category: 'shader',

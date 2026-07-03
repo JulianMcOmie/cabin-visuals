@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Vector3, Points,
 } from 'three'
-import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's BeatParticleKit. A white-background drum/guitar/chord kit

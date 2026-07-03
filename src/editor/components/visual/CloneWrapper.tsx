@@ -2,8 +2,8 @@ import { useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, type Material } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
-import { getPlugin } from '../../plugins'
-import type { PluginInstance } from '../../types'
+import { getEffect } from '../../effects'
+import type { EffectInstance } from '../../types'
 
 function setOpacity(material: Material | Material[], opacity: number) {
   const mats = Array.isArray(material) ? material : [material]
@@ -21,8 +21,8 @@ function setOpacity(material: Material | Material[], opacity: number) {
  * from `getOpacity`, for trails). Copies are real R3F subtrees — matches Excellent DAW —
  * fine for the modest counts these plugins produce. Disabled → a single pass-through copy.
  */
-function SingleClone({ instance, children }: { instance: PluginInstance; children: ReactNode }) {
-  const plugin = getPlugin(instance.pluginId)
+function SingleClone({ instance, children }: { instance: EffectInstance; children: ReactNode }) {
+  const plugin = getEffect(instance.pluginId)
   const spec = instance.enabled ? plugin?.getClones?.(instance.settings) : undefined
   const count = spec ? Math.max(1, Math.floor(spec.count)) : 1
 
@@ -67,8 +67,8 @@ function SingleClone({ instance, children }: { instance: PluginInstance; childre
  * transform chain (plan order: transform ▸ clone), so each copy is the transformed object.
  * Multiple clone plugins nest (clones-of-clones, e.g. a ring of tiles).
  */
-export function CloneWrapper({ plugins, children }: { plugins: PluginInstance[]; children: ReactNode }) {
-  const clones = plugins.filter((i) => getPlugin(i.pluginId)?.category === 'clone')
+export function CloneWrapper({ plugins, children }: { plugins: EffectInstance[]; children: ReactNode }) {
+  const clones = plugins.filter((i) => getEffect(i.pluginId)?.category === 'clone')
   let element: ReactNode = children
   for (let i = clones.length - 1; i >= 0; i--) {
     element = <SingleClone key={clones[i].id} instance={clones[i]}>{element}</SingleClone>

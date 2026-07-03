@@ -1,4 +1,4 @@
-import { isModifierType } from '../core/engine/trackTypes'
+import { isModifierType } from '../core/trackTypes'
 import type { Track } from '../types'
 
 // Event-modifier rows/blocks are colour-coded by what they do, so they read as

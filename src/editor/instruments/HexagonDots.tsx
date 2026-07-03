@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, SphereGeometry, MeshBasicMaterial, Color, Vector3 } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Each note spawns a ring of six glowing dots out at a distant

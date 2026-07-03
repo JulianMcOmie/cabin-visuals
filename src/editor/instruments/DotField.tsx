@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's DotField. A 3D field of dots arranged by golden-angle

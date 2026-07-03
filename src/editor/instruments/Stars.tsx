@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useInstrumentFrame, seededRand } from '../core/engine/instrumentFrame'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A 3D warp starfield around the camera: parallax star drift

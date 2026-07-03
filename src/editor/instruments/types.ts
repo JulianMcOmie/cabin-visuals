@@ -86,7 +86,7 @@ export interface AbilityLaneDef {
 
 /** An object's transform relative to its parent (identity-ish defaults). Position in
  *  world units, rotation as XYZ Euler radians, scale uniform or per-axis. The engine
- *  composes these down the hierarchy into a world transform (see core/engine). */
+ *  composes these down the hierarchy into a world transform (see core/visual). */
 export interface LocalTransform {
   position?: [number, number, number]
   rotation?: [number, number, number]
