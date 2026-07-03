@@ -61,9 +61,9 @@ export function startAutosave(projectId: string): () => void {
   const unsubProject = useProjectStore.subscribe((state, prev) => {
     if (state !== prev) markDirty()
   })
-  // The audio clip descriptor rides in the document too.
+  // The audioClips catalog rides in the document too.
   const unsubAudio = useAudioStore.subscribe((state, prev) => {
-    if (state.clip !== prev.clip) markDirty()
+    if (state.audioClips !== prev.audioClips) markDirty()
   })
 
   // Flush-on-exit so the debounce window can't eat the last edit. `hidden`

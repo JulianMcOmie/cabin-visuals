@@ -20,7 +20,7 @@ const _camForward = new Vector3()
 export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; instrumentId: string }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
-  const plugins = useProjectStore((s) => s.tracks[trackId]?.visualPlugins) ?? []
+  const plugins = useProjectStore((s) => s.tracks[trackId]?.effects) ?? []
   const shaderInstances = plugins.filter((p) => p.enabled && getEffect(p.pluginId)?.category === 'shader')
 
   const isFullFrame = !!def?.fullFrame

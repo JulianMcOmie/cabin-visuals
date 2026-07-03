@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import type { Track, TrackType, Block, Note, EffectInstance, InterpolationMode } from '../types'
+import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -69,6 +69,12 @@ interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
+  /** Create the audio track (top of the root tracks) holding one block at bar 0
+   *  spanning the whole clip. The AudioBar's load path; one audio track for now. */
+  addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => void
+  addAudioBlock: (trackId: string, block: AudioBlock) => void
+  updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
+  deleteAudioBlock: (trackId: string, blockId: string) => void
   // Visual effects (plugins) on a track.
   addEffect: (trackId: string, pluginId: string) => void
   removeEffect: (trackId: string, instanceId: string) => void
@@ -477,6 +483,70 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
     }),
 
+  addAudioTrack: (clip) =>
+    set((s) => {
+      const id = crypto.randomUUID()
+      const track: Track = {
+        id,
+        name: clip.fileName,
+        type: 'audio',
+        instrumentId: '',
+        color: '#38bdf8',
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        audioBlocks: [{
+          id: crypto.randomUUID(),
+          clipRef: clip.ref,
+          startBar: 0,
+          trimStart: 0,
+          trimEnd: clip.duration,
+        }],
+      }
+      // Top of the track rows — the backing track leads the arrangement.
+      return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [id, ...s.rootTrackIds] }
+    }),
+
+  addAudioBlock: (trackId, block) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (track?.type !== 'audio') return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, audioBlocks: [...(track.audioBlocks ?? []), block] },
+        },
+      }
+    }),
+
+  updateAudioBlock: (trackId, blockId, updates) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.audioBlocks) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: {
+            ...track,
+            audioBlocks: track.audioBlocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
+          },
+        },
+      }
+    }),
+
+  deleteAudioBlock: (trackId, blockId) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.audioBlocks) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: { ...track, audioBlocks: track.audioBlocks.filter((b) => b.id !== blockId) },
+        },
+      }
+    }),
+
   addEffect: (trackId, pluginId) =>
     set((s) => {
       const track = s.tracks[trackId]
@@ -485,24 +555,24 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const settings: Record<string, number> = {}
       for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
       const instance: EffectInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
-      return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: [...(track.visualPlugins ?? []), instance] } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, effects: [...(track.effects ?? []), instance] } } }
     }),
 
   removeEffect: (trackId, instanceId) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track?.visualPlugins) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, visualPlugins: track.visualPlugins.filter((e) => e.id !== instanceId) } } }
+      if (!track?.effects) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, effects: track.effects.filter((e) => e.id !== instanceId) } } }
     }),
 
   setEffectSetting: (trackId, instanceId, key, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track?.visualPlugins) return s
+      if (!track?.effects) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, visualPlugins: track.visualPlugins.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
+          [trackId]: { ...track, effects: track.effects.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
         },
       }
     }),
@@ -510,11 +580,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   toggleEffect: (trackId, instanceId) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track?.visualPlugins) return s
+      if (!track?.effects) return s
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, visualPlugins: track.visualPlugins.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
+          [trackId]: { ...track, effects: track.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
         },
       }
     }),

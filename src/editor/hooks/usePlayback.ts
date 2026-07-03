@@ -35,8 +35,11 @@ export function usePlayback() {
     // If parked at (or past) the end, start over from 0 instead of no-op'ing.
     const start = currentBeat >= maxBeat ? 0 : currentBeat;
     // Make sure the buffer is decoded before we start the transport.
-    const clip = useAudioStore.getState().clip;
-    await engine.loadAudio(clip ? clip.ref : null);
+    // INTERIM (until the audio engine lands): play the first audio block's clip
+    // pinned to beat 0 — exact for the bar-0 block the AudioBar creates.
+    const { tracks } = useProjectStore.getState();
+    const firstBlock = Object.values(tracks).find((t) => t.type === 'audio' && !t.muted)?.audioBlocks?.[0];
+    await engine.loadAudio(firstBlock ? firstBlock.clipRef : null);
     useTimeStore.getState().setCurrentBeat(start);
     engine.play(start);
     setIsPlaying(true);

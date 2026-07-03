@@ -513,12 +513,12 @@ export function TrackEditor() {
               data-effects-drop
               className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-indigo-500/60 bg-indigo-500/5' : ''}`}
             >
-              {(track.visualPlugins ?? []).length === 0 ? (
+              {(track.effects ?? []).length === 0 ? (
                 <p className="text-xs text-zinc-600 text-center mt-8">
                   {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
                 </p>
               ) : (
-                (track.visualPlugins ?? []).map((inst) => {
+                (track.effects ?? []).map((inst) => {
                   const plugin = getEffect(inst.pluginId)
                   if (!plugin) return null
                   return (

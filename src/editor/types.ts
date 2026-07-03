@@ -14,7 +14,31 @@ export interface Block {
   notes: Note[]
 }
 
-export type TrackType = 'base' | 'add' | 'mute' | 'suppress' | 'override' | 'automation' | 'ability'
+export type TrackType = 'base' | 'add' | 'mute' | 'suppress' | 'override' | 'automation' | 'ability' | 'audio'
+
+/**
+ * A positioned, trimmed reference to an audio clip — the audio analogue of a MIDI
+ * Block. The clip (bytes + descriptor) is the material; this is the placement.
+ * The beat window it occupies is DERIVED at schedule time from startBar + trim +
+ * tempo, never stored: audio is fixed seconds, so its width in beats follows the
+ * project bpm (audio is never resampled).
+ */
+export interface AudioBlock {
+  id: string
+  /** → AudioClip.ref (AudioStore's audioClips catalog; bytes via core/audio). */
+  clipRef: string
+  /** Timeline position (mirrors Block.startBar). */
+  startBar: number
+  /** Seconds into the clip where playback begins (default 0). */
+  trimStart: number
+  /** Seconds into the clip where playback ends (default = clip duration). */
+  trimEnd: number
+  /** Per-block volume (linear, 1 = unity). */
+  gain?: number
+  /** Edge fades in seconds — reserved for a later phase. */
+  fadeIn?: number
+  fadeOut?: number
+}
 
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
@@ -67,7 +91,9 @@ export interface Track {
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
-  visualPlugins?: EffectInstance[]
+  effects?: EffectInstance[]
+  /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */
+  audioBlocks?: AudioBlock[]
   /**
    * Per-ability note streams, keyed by the instrument's `AbilityLaneDef.key`. Each
    * lane holds full blocks + notes and is edited like a track. A PARALLEL structure

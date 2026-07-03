@@ -1,15 +1,26 @@
 'use client'
 
 import { useRef } from 'react'
-import { FileAudio, X, Volume2 } from 'lucide-react'
+import { FileAudio, Volume2 } from 'lucide-react'
 import * as Tone from 'tone'
 import { useAudioStore } from '../store/AudioStore'
-import { saveAudio, removeAudio } from '../core/audioSource'
-import { getPlaybackEngine } from '../core/playback'
+import { useProjectStore } from '../store/ProjectStore'
+import { saveAudio } from '../core/audioSource'
 
+/**
+ * The one entry point for project audio: loading a file registers the clip in
+ * the audioClips catalog and auto-creates the audio track (top of the track
+ * rows) with a block at bar 0. One audio track for now — while one exists the
+ * bar is inert; deleting the track re-enables it.
+ */
 export function AudioBar() {
-  const clip = useAudioStore((s) => s.clip)
-  const setClip = useAudioStore((s) => s.setClip)
+  const hasAudioTrack = useProjectStore((s) =>
+    s.rootTrackIds.some((id) => s.tracks[id]?.type === 'audio'),
+  )
+  const audioTrackName = useProjectStore((s) => {
+    const id = s.rootTrackIds.find((tid) => s.tracks[tid]?.type === 'audio')
+    return id ? s.tracks[id]?.name : undefined
+  })
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,29 +41,19 @@ export function AudioBar() {
       console.warn('Could not decode audio for duration', err)
     }
 
-    setClip({ ref, fileName: file.name, duration })
-  }
-
-  const handleClear = () => {
-    if (clip) removeAudio(clip.ref)
-    setClip(null)
-    getPlaybackEngine().loadAudio(null)
+    const clip = { ref, fileName: file.name, duration }
+    useAudioStore.getState().addClip(clip)
+    useProjectStore.getState().addAudioTrack(clip)
   }
 
   return (
     <div className="h-9 flex-shrink-0 flex items-center gap-3 px-4 border-t border-zinc-800 bg-[#1e1e21] select-none">
       <span className="text-xs text-zinc-500">Audio:</span>
 
-      {clip ? (
-        <div className="flex items-center gap-1.5">
-          <FileAudio size={13} className="text-zinc-400" />
-          <span className="text-xs text-zinc-300">{clip.fileName}</span>
-          <button
-            onClick={handleClear}
-            className="text-zinc-600 hover:text-zinc-400 transition-colors"
-          >
-            <X size={12} />
-          </button>
+      {hasAudioTrack ? (
+        <div className="flex items-center gap-1.5 opacity-60" title="One audio track for now — delete the audio track to load a different file">
+          <FileAudio size={13} className="text-zinc-500" />
+          <span className="text-xs text-zinc-500">{audioTrackName ?? 'Audio track'}</span>
         </div>
       ) : (
         <button
@@ -71,10 +72,10 @@ export function AudioBar() {
         onChange={handleFileChange}
       />
 
-      {clip && (
-        <div className="ml-auto flex items-center gap-1.5 text-zinc-500">
+      {hasAudioTrack && (
+        <div className="ml-auto flex items-center gap-1.5 text-zinc-600">
           <Volume2 size={12} />
-          <span className="text-xs">Audio loaded</span>
+          <span className="text-xs">Audio on the timeline</span>
         </div>
       )}
     </div>
