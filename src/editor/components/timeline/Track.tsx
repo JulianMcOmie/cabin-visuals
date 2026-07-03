@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { Block } from './Block'
+import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { modifierColor } from '../../utils/modifierColors'
@@ -147,21 +148,33 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div
         className={`relative flex-shrink-0 ${isAutomation ? 'bg-black/10' : ''}`}
         style={{ width: timelineWidthPx }}
-        onPointerDown={(e) => onLanePointerDown(e, track.id)}
+        // Audio lanes have no MIDI gestures (no right-click block drawing / marquee).
+        onPointerDown={track.type === 'audio' ? undefined : (e) => onLanePointerDown(e, track.id)}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {track.blocks.map((block) => (
-          <Block
-            key={block.id}
-            block={block}
-            trackId={track.id}
-            barWidthPx={barWidthPx}
-            beatsPerBar={beatsPerBar}
-            color={blockColor}
-            isSelected={selectedBlockIds.has(block.id)}
-            onBlockPointerDown={onBlockPointerDown}
-          />
-        ))}
+        {track.type === 'audio'
+          ? (track.audioBlocks ?? []).map((block) => (
+              <AudioBlock
+                key={block.id}
+                block={block}
+                trackId={track.id}
+                barWidthPx={barWidthPx}
+                beatsPerBar={beatsPerBar}
+                color={blockColor}
+              />
+            ))
+          : track.blocks.map((block) => (
+              <Block
+                key={block.id}
+                block={block}
+                trackId={track.id}
+                barWidthPx={barWidthPx}
+                beatsPerBar={beatsPerBar}
+                color={blockColor}
+                isSelected={selectedBlockIds.has(block.id)}
+                onBlockPointerDown={onBlockPointerDown}
+              />
+            ))}
       </div>
     </div>
   )
