@@ -10,11 +10,9 @@ interface BlockProps {
   color: string
   isSelected: boolean
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
-  /** Set when this block lives in an ability lane, so double-click opens that lane. */
-  laneKey?: string
 }
 
-export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, onBlockPointerDown, laneKey }: BlockProps) {
+export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const isEditing = editingBlock?.blockId === block.id
@@ -52,7 +50,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
-        setEditingBlock({ trackId, blockId: block.id, laneKey })
+        setEditingBlock({ trackId, blockId: block.id })
       }}
     >
       {block.notes.map((note) => {

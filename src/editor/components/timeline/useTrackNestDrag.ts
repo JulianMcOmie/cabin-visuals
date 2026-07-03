@@ -4,7 +4,6 @@ import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { computeDropTarget } from './trackDrop'
-import { abilityLanesOf } from './abilityLanes'
 
 interface Session {
   activeId: string
@@ -35,7 +34,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     // re-parented or moved to the root. (A plain pointer-down still selects the row.)
     if (tracks[trackId].type === 'automation' || tracks[trackId].type === 'ability') return
     const rowHeight = useUIStore.getState().tracksRowHeight
-    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, abilityLanesOf)
+    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     if (rows.findIndex((r) => r.kind === 'track' && r.id === trackId) < 0) return
 
     const scRect = sc.getBoundingClientRect()

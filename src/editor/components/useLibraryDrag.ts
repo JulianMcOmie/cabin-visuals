@@ -3,7 +3,6 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { flattenVisualRows } from './timeline/trackTree'
 import { computeDropTarget } from './timeline/trackDrop'
-import { abilityLanesOf } from './timeline/abilityLanes'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
@@ -84,7 +83,7 @@ export function useLibraryDrag() {
           const { tracks, rootTrackIds } = useProjectStore.getState()
           drop = computeDropTarget({
             tracks, rootTrackIds,
-            rows: flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, abilityLanesOf),
+            rows: flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds),
             listTop: r.top - sc.scrollTop,
             rowHeight: useUIStore.getState().tracksRowHeight,
             clientY: ev.clientY,

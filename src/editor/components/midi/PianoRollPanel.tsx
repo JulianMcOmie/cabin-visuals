@@ -49,9 +49,7 @@ export function PianoRollPanel() {
   const tracks = useProjectStore((s) => s.tracks)
 
   const track = editingBlock ? tracks[editingBlock.trackId] : undefined
-  // A lane block lives in track.lanes[laneKey]; a normal block in track.blocks.
-  const blockList = editingBlock?.laneKey ? track?.lanes?.[editingBlock.laneKey] : track?.blocks
-  const block = blockList?.find((b) => b.id === editingBlock?.blockId)
+  const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
 
   // Auto-close if the block disappeared (track/block deleted)
   useEffect(() => {
@@ -86,7 +84,6 @@ export function PianoRollPanel() {
     <PianoRollContent
       key={block.id}
       trackId={track.id}
-      laneKey={editingBlock.laneKey}
       trackName={track.name}
       trackColor={modColor ?? track.color}
       noteColor={modColor ?? undefined}
@@ -99,7 +96,6 @@ export function PianoRollPanel() {
 
 interface PianoRollContentProps {
   trackId: string
-  laneKey?: string
   trackName: string
   trackColor: string
   /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
@@ -110,7 +106,7 @@ interface PianoRollContentProps {
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, automation, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
@@ -126,7 +122,6 @@ function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, 
     trackId,
     block,
     defaultQuantize: DEFAULT_QUANTIZE,
-    laneKey,
   })
 
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
@@ -268,7 +263,6 @@ function PianoRollContent({ trackId, laneKey, trackName, trackColor, noteColor, 
       {/* Piano roll grid */}
       <MidiEditor
         trackId={trackId}
-        laneKey={laneKey}
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}

@@ -5,13 +5,12 @@ import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
-import { abilityLanesOf } from './abilityLanes'
 import type { Note, Block } from '../../types'
 
-/** Owning track id for each visual row (a track row → itself; a lane sub-row → its
- *  parent track), so a vertical block drag maps every row it crosses to a real track. */
+/** Owning track id for each visual row, so a vertical block drag maps every row it
+ *  crosses to a real track. */
 function rowTrackIdsOf(rows: ReturnType<typeof flattenVisualRows>): string[] {
-  return rows.map((r) => (r.kind === 'track' ? r.id : r.trackId))
+  return rows.map((r) => r.id)
 }
 
 interface BlockOrigin {
@@ -270,7 +269,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     const { tracks: allTracks, rootTrackIds } = useProjectStore.getState()
-    const rows = flattenVisualRows(allTracks, rootTrackIds, useUIStore.getState().collapsedTrackIds, abilityLanesOf)
+    const rows = flattenVisualRows(allTracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     dragRef.current = {
       type,
       startX: e.clientX,

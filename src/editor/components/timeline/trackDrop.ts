@@ -47,29 +47,21 @@ export function computeDropTarget(args: {
 
   const overIndex = Math.max(0, Math.min(n - 1, rawIndex))
   const over = rows[overIndex]
-  const overTrackId = over.kind === 'track' ? over.id : over.trackId
+  const overTrackId = over.id
   const overTrack = tracks[overTrackId]
   if (!overTrack || excludeSubtree?.has(overTrackId)) return null
 
-  // The flat index + depth of the *track* row that owns this row (itself, or — for a
-  // lane sub-row — the nearest track row above it). All sibling/subtree math is in
-  // terms of the track, never the lane.
-  let trackRowIndex = overIndex
-  if (over.kind === 'lane') {
-    while (trackRowIndex > 0 && !(rows[trackRowIndex].kind === 'track' && (rows[trackRowIndex] as { id: string }).id === overTrackId)) {
-      trackRowIndex--
-    }
-  }
+  const trackRowIndex = overIndex
   const trackDepth = rows[trackRowIndex].depth
   const frac = (contentY - overIndex * rowHeight) / rowHeight
 
-  // Middle band of a *track* row → nest into it (append as its last child). A lane
-  // sub-row is never a nest target, nor is an automation/ability track (no children).
-  if (over.kind === 'track' && overTrack.type !== 'automation' && overTrack.type !== 'ability' && frac >= 0.25 && frac <= 0.75) {
+  // Middle band of a row → nest into it (append as its last child); automation/
+  // ability tracks are never nest targets (no children).
+  if (overTrack.type !== 'automation' && overTrack.type !== 'ability' && frac >= 0.25 && frac <= 0.75) {
     return { parentId: over.id, index: undefined, line: null, intoId: over.id }
   }
 
-  // Edge (or anywhere over a lane row) → sibling drop in the track's parent.
+  // Edge → sibling drop in the track's parent.
   const parentId = overTrack.parentId ?? null
   const siblings = (parentId == null ? rootTrackIds : tracks[parentId]?.childIds ?? []).filter(
     (id) => !excludeSubtree?.has(id),
@@ -77,12 +69,12 @@ export function computeDropTarget(args: {
   const pos = siblings.indexOf(overTrackId)
   let index: number
   let top: number
-  if (over.kind === 'track' && frac < 0.25) {
+  if (frac < 0.25) {
     // Before `over`.
     index = pos < 0 ? 0 : pos
     top = trackRowIndex * rowHeight
   } else {
-    // After the track and its whole subtree (DFS-contiguous: lanes + descendants all
+    // After the track and its whole subtree (DFS-contiguous: descendants all
     // have depth > the track's).
     index = pos < 0 ? siblings.length : pos + 1
     let j = trackRowIndex + 1

@@ -4,9 +4,6 @@ import { TRACK_LABEL_WIDTH } from '../constants'
 interface EditingBlockRef {
   trackId: string
   blockId: string
-  /** Set when the block lives in an ability lane (`track.lanes[laneKey]`) rather than
-   *  the track's own blocks. Undefined = main track lane. */
-  laneKey?: string
 }
 
 interface UIState {

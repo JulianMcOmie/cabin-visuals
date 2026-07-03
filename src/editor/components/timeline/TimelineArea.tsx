@@ -13,7 +13,6 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
-import { abilityLanesOf } from './abilityLanes'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
@@ -56,7 +55,7 @@ export function TimelineArea() {
   // parents hide their descendant rows. Each object track's ability lanes are
   // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
-  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds, abilityLanesOf)
+  const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds)
 
   // Right-click-a-track menu (add ability / automation), positioned at the cursor.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null)
@@ -228,8 +227,6 @@ export function TimelineArea() {
           >
             {visualRows.map((row, i) => {
               const isLast = i === visualRows.length - 1
-              // Abilities are `ability` child tracks now — no separate lane rows.
-              if (row.kind === 'lane') return null
               const track = tracks[row.id]
               return track ? (
                 <Track

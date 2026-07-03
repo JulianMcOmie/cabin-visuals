@@ -94,14 +94,4 @@ export interface Track {
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */
   audioBlocks?: AudioBlock[]
-  /**
-   * Per-ability note streams, keyed by the instrument's `AbilityLaneDef.key`. Each
-   * lane holds full blocks + notes and is edited like a track. A PARALLEL structure
-   * on the object track — deliberately NOT child tracks in the hierarchy.
-   */
-  lanes?: Record<string, Block[]>
-  /** Per-ability-lane mute/solo (keyed by ability key). Additive to `lanes` so the
-   *  block-editing path is untouched. Mute stops the ability firing; solo is cosmetic
-   *  (mirrors track solo, which the engine doesn't honor). */
-  laneMeta?: Record<string, { muted?: boolean; solo?: boolean }>
 }

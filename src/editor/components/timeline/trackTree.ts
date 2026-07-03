@@ -29,40 +29,18 @@ export function flattenTracks(
   return out
 }
 
-/** A row in the timeline's vertical flow: either a track, or one of a track's ability
- *  lanes (a parallel sub-row — NOT a child track). Every row is the same height, so
- *  Y↔index math stays uniform. */
-export type VisualRow =
-  | { kind: 'track'; id: string; depth: number }
-  | { kind: 'lane'; trackId: string; laneKey: string; label: string; color?: string; depth: number }
+/** A row in the timeline's vertical flow. Historically this was a union with ability
+ *  "lane" sub-rows; abilities became real child tracks, so a row IS a track now. The
+ *  `kind` tag stays so future non-track rows slot back in without churn. */
+export type VisualRow = { kind: 'track'; id: string; depth: number }
 
-/** Like `flattenTracks`, but interleaves each object track's ability-lane sub-rows
- *  (from `lanesOf`) right after the track, indented one level. Lanes come before the
- *  track's child tracks; both sit at depth+1, so a track's subtree stays DFS-contiguous
- *  (every descendant row has depth > the track's). A collapsed track hides both its
- *  lanes and its children. With no abilities declared this equals `flattenTracks`. */
+/** `flattenTracks` in VisualRow clothing — the timeline's visual row order. */
 export function flattenVisualRows(
   tracks: Record<string, Track>,
   rootTrackIds: string[],
   collapsed: Set<string> | undefined,
-  lanesOf: (track: Track) => { key: string; label: string; color?: string }[],
 ): VisualRow[] {
-  const out: VisualRow[] = []
-  const seen = new Set<string>()
-  const visit = (id: string, depth: number) => {
-    if (seen.has(id)) return
-    const t = tracks[id]
-    if (!t) return
-    seen.add(id)
-    out.push({ kind: 'track', id, depth })
-    if (collapsed?.has(id)) return
-    for (const lane of lanesOf(t)) {
-      out.push({ kind: 'lane', trackId: id, laneKey: lane.key, label: lane.label, color: lane.color, depth: depth + 1 })
-    }
-    for (const childId of t.childIds ?? []) visit(childId, depth + 1)
-  }
-  for (const id of rootTrackIds) visit(id, 0)
-  return out
+  return flattenTracks(tracks, rootTrackIds, collapsed).map(({ id, depth }) => ({ kind: 'track' as const, id, depth }))
 }
 
 /** A track plus all its descendants — you can't drop a track into its own subtree. */
