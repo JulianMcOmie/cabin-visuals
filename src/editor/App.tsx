@@ -15,6 +15,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
 import { BpmControl } from './components/BpmControl'
+import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { usePlayback } from './hooks/usePlayback'
@@ -81,7 +82,7 @@ function Header() {
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
       <Link
-        href="/"
+        href="/projects"
         className="flex-shrink-0 flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
       >
         <ChevronLeft size={14} />
@@ -126,6 +127,7 @@ function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+        <ProjectLengthControl />
         <BpmControl />
         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors">
           <Upload size={12} strokeWidth={2.5} />

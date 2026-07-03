@@ -12,7 +12,9 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
     // Color as a hue slider (0–360) — keeps every param numeric.
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
-    { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 }
+    { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 },
+    // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
+    { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
   // Modulation inputs modulators target (resting at default until the matrix wires
   // them up). `energy` is what the Cube's pulse becomes; scale/hue are headroom.
@@ -28,16 +30,17 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'shatter', label: 'Shatter', color: '#f472b6' },
   ],
   // The cube's transform as data, so the engine can compose it with its parent's:
-  // position from the X param, a steady spin from the beat, and a breathing scale
+  // position from the X param, an opt-in spin from the beat, and a breathing scale
   // boosted by the energy port. The engine writes the composed world matrix to state.
   localTransform: ({ params, ports, beat }) => {
     const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
+    const spinSpeed = params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
     const energy = ports.energy ?? 0
     const breathe = 1.15 + Math.sin(beat * 0.9) * 0.2
     return {
       position: [baseXPosition, 0, 0],
-      rotation: [beat * 0.09, beat * 0.22, 0],
+      rotation: [beat * 0.09 * spinSpeed, beat * 0.22 * spinSpeed, 0],
       scale: (baseSize / 1.6) * breathe * (1 + energy * 0.35),
     }
   },

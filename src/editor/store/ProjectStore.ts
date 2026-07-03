@@ -4,6 +4,8 @@ import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, Interpo
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
+export const MIN_TOTAL_BARS = 1
+export const MAX_TOTAL_BARS = 512
 
 // Deep-clone with fresh IDs at every level (used by paste + alt-drag duplicate).
 const cloneNote = (n: Note): Note => ({ ...n, id: crypto.randomUUID() })
@@ -73,6 +75,7 @@ interface ProjectState {
   setEffectSetting: (trackId: string, instanceId: string, key: string, value: number) => void
   toggleEffect: (trackId: string, instanceId: string) => void
   setBpm: (bpm: number) => void
+  setTotalBars: (bars: number) => void
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -588,4 +591,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }),
 
   setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),
+
+  // Blocks past the new end are left alone (the timeline just ends sooner);
+  // the transport clamps the playhead to the project length on its own.
+  setTotalBars: (bars) => set({ totalBars: Math.max(MIN_TOTAL_BARS, Math.min(MAX_TOTAL_BARS, Math.round(bars))) }),
 }))

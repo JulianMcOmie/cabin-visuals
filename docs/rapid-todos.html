@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rapid TODOs — Cabin Visuals</title>
+<style>
+  :root{
+    --bg:#ffffff; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656;
+    --code:#ffffff; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:6px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em;vertical-align:middle}
+  .b-done{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-inv{border-style:dashed;border-color:#666}
+  .b-design{border-color:#999;color:#444}
+  .item{border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin:12px 0;background:#fff}
+  .item h3{font-size:19px;margin:0 0 6px;color:var(--ink)}
+  .item p{margin:6px 0;font-size:17px}
+  .where{font-size:15px;color:var(--muted);font-family:"SF Mono",Menlo,monospace}
+  .note{border-left:4px solid #c2c2c2;background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}
+    .item,.note,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Triage</span>
+  <h1>Rapid TODOs</h1>
+  <p class="sub">The whole list, sorted by how fast it ships: already-done → easy wins → medium → hard/long-term. Within each tier, items that touch the same code are grouped so they batch naturally.</p>
+</header>
+
+<!-- DONE -->
+<h2>✅ Already done (shipped this week — cross these off)</h2>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Audio as its own track</h3>
+  <p>"make audio its own track so you can move around the audio block in the timeline" — shipped: the <code>'audio'</code> track type, the audio engine, a waveform block you can drag and trim (no snap), pinned at the top, one-per-project via the AudioBar.</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Pause invariant — audit + enforcement</h3>
+  <p>"nothing should move if the playhead is static and paused… audit all instruments… enforced somehow" — shipped: all ~28 instruments rewritten as pure functions of <code>state.beat</code>, ESLint bans on <code>useFrame</code>/<code>performance.now</code>/<code>Math.random</code>/clock in instrument code, plus the dev-mode pause canary that names any object that moves while paused.</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Change animation curve for automated parameters (per-lane)</h3>
+  <p>Exists but hidden: open an automation lane's block in the piano roll and an <strong>"Interp" dropdown appears in the toolbar</strong> (between grid resolution and the zoom sliders) — step / linear / ease-in / ease-out / ease-in-out / exponential / smooth-step, applied to the whole lane. Easy to miss; see the follow-ups in the easy/medium tiers below.</p>
+  <p class="where">components/midi/PianoRollPanel.tsx (Interp select) · core/visual/automation.ts (ease fns)</p>
+</div>
+
+<!-- EASY -->
+<h2>🟢 Easy — the low-hanging fruit (each is minutes-to-an-hour)</h2>
+<p class="muted small">Batch A+B are one sitting each.</p>
+
+<p><strong>Batch A — one-line-ish fixes</strong></p>
+
+<div class="item">
+  <h3>Projects button → projects page</h3>
+  <p>The editor header's "Projects" link points at <code>/</code> (home). Point it at <code>/projects</code>. One attribute.</p>
+  <p class="where">editor/App.tsx (Header)</p>
+</div>
+
+<div class="item">
+  <h3>Cube shouldn't default-spin</h3>
+  <p>The spin lives in Cube's <code>localTransform</code> (<code>rotation: [beat*0.09, beat*0.22, 0]</code>). Either delete it or, nicer, make it a <code>spinSpeed</code> param defaulting to 0 so spin becomes opt-in.</p>
+  <p class="where">instruments/Cube.tsx</p>
+</div>
+
+<div class="item">
+  <h3>Change the project length</h3>
+  <p><code>totalBars</code> already lives in ProjectStore (persisted, undoable, drives <code>maxBeat</code>). It just has no UI. Add a small drag-number next to the BPM control, same interaction pattern.</p>
+  <p class="where">components/BpmControl.tsx (sibling control) · editor/App.tsx header</p>
+</div>
+
+<p><strong>Batch B — timeline/store behaviors</strong></p>
+
+<div class="item">
+  <h3>Deleting a parent track deletes its whole subtree</h3>
+  <p>Agreed on semantics: recursive delete (automation, ability, and nested children all go). Today <code>deleteTrack</code> <em>promotes</em> children to the parent's slot. Swap promotion for a recursive collect-and-delete; also clear any selections/routings pointing into the deleted subtree (the routing cleanup partially exists).</p>
+  <p class="where">store/ProjectStore.ts (deleteTrack)</p>
+</div>
+
+<div class="item">
+  <h3>Rename tracks</h3>
+  <p>Double-click the label → inline input → <code>renameTrack(id, name)</code> store action (undoable for free via the generic snapshot). The label already owns click-to-select; double-click is unclaimed on tracks.</p>
+  <p class="where">store/ProjectStore.ts · components/timeline/Track.tsx</p>
+</div>
+
+<div class="item">
+  <h3>MIDI blocks: show pitch in note previews</h3>
+  <p>Block previews render notes as full-height vertical slivers. Make each sliver a short dash positioned vertically by pitch (normalize pitch across the block's range, or a fixed C1–C7 span). Small render-math change in one component.</p>
+  <p class="where">components/timeline/Block.tsx</p>
+</div>
+
+<div class="item">
+  <h3>Make the interpolation picker discoverable</h3>
+  <p>The per-lane "Interp" dropdown exists but is buried in the piano-roll toolbar and only renders when the parent instrument's param lookup succeeds. Two small fixes: give it visual weight (label it "Curve", pull it out of the toolbar crowd, and/or add it to the automation lane's right-click menu in the timeline), and show it even when the param lookup fails (fall back to generic 0–1 bounds instead of hiding the whole control).</p>
+  <p class="where">components/midi/PianoRollPanel.tsx · timeline context menu</p>
+</div>
+
+<div class="item">
+  <h3>Automate y/z position (the params half)</h3>
+  <p>Automation can already target any numeric instrument param — Cube just only exposes <code>baseXPosition</code>. Add <code>baseYPosition</code>/<code>baseZPosition</code> params (and to any instrument that wants them) and they're automatable immediately. The row-scaling/hiding half of your note is a separate medium item below.</p>
+  <p class="where">instruments/Cube.tsx (+ whichever instruments want it)</p>
+</div>
+
+<p><strong>Batch C — quick investigations (probably small fixes, size unknown until reproduced)</strong></p>
+
+<div class="item">
+  <h3><span class="badge b-inv">investigate</span>Play from start skips the first note (Tyler)</h3>
+  <p>Likely a boundary condition: a note at beat 0 with playback starting exactly at 0 — the visual envelope starts <em>at</em> onset so scrub-landing shows the peak, but a play-through may evaluate the first frame past it, or audio lookahead swallows it. Repro first; the fix is probably a ≥/&gt; boundary or arming order in the transport.</p>
+  <p class="where">core/playback.ts · core/visual/VisualEngine.ts (activeNotes window)</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-inv">investigate</span>Automating a param "changes a copy" (Tyler)</h3>
+  <p>Best guess: it's the TrackEditor slider not reflecting the automated value — automation overlays params inside the engine per frame (by design, the base param is untouched), so the panel shows the base while the visual follows the lane. If that's what Tyler saw, the fix is UI feedback (show the live value / mark the param as automated), not an engine bug. Repro against his project to confirm there isn't a real aliasing bug.</p>
+  <p class="where">core/visual/VisualEngine.ts (computeAtBeat overlay) · components/TrackEditor.tsx</p>
+</div>
+
+<!-- MEDIUM -->
+<h2>🟡 Medium — real features, each a focused session</h2>
+
+<div class="item">
+  <h3>MIDI import (file → blocks/notes)</h3>
+  <p><code>@tonejs/midi</code> and <code>midi-file</code> are already in package.json. Parse → one block per MIDI track (or per region), notes mapped to beats via the file's PPQ and your bpm. Drop-target or a button next to Add Track.</p>
+  <p><span class="badge b-design">design</span> Your row-reconciliation question: for instruments with narrow pitch ranges (drum-style/trigger lanes), imported notes outside the range need a policy — clamp, fold into range (mod), or drop with a count shown. Recommend: import faithfully into the block (data keeps full pitch), and let the <em>editor view</em> handle display (ties into row-hiding below); instruments already ignore pitches they don't map.</p>
+  <p class="where">new core/midiImport.ts · components (drop/button UI)</p>
+</div>
+
+<div class="item">
+  <h3>Piano roll: hide rows / row scaling / scale filtering</h3>
+  <p>The other half of the y-scaling note, and the display answer to MIDI-import reconciliation: options to hide unused rows, compress row height, and show only notes in a chosen scale. Also the natural home for "add midi at fixed long distances" (hide the in-between rows). Worth designing together with midi-vim so the hotkeys bind to the same model.</p>
+  <p class="where">components/midi/* (rows generation, editor state)</p>
+</div>
+
+<div class="item">
+  <h3>Loop MIDI blocks via right-edge resize</h3>
+  <p>The <code>loop</code> flag exists on Block but nothing consumes it — <code>flattenBlocks</code> plays notes once. Two parts: resolve expands looped blocks (repeat the note pattern to fill <code>durationBars</code>), and the timeline right-edge resize past the content length sets <code>loop</code> + shows the repeat boundary in the preview. The resize gesture itself already exists.</p>
+  <p class="where">core/visual/resolve.ts (flattenBlocks) · components/timeline/Block.tsx · useTrackGestures.ts</p>
+</div>
+
+<div class="item">
+  <h3>Effects picker: nested pop-up menu (like the automation menu)</h3>
+  <p>Reuse the right-click nested-menu component the automation/ability menu uses, populated from the effects registry (transform/clone/shader categories), as an alternative to drag-in. Mostly wiring, some menu polish.</p>
+  <p class="where">components/TrackEditor.tsx (effects tab) · the existing context-menu component</p>
+</div>
+
+<div class="item">
+  <h3>Effects designed for automation (e.g. radial copy with automatable radius)</h3>
+  <p>The effect itself is easy — <code>radialSymmetry</code> already exists; add radius/count params shaped for animation. But it only pays off once <strong>effect params are automatable</strong> (below), so sequence it right after.</p>
+  <p class="where">effects/clones/* (new or extended effect defs)</p>
+</div>
+
+<div class="item">
+  <h3>Per-keyframe animation curves</h3>
+  <p>If per-lane isn't enough: today one <code>interpolation</code> mode applies to the whole automation lane. Per-keyframe means each segment carries its own curve (like DAW automation nodes) — a schema addition on notes-as-keyframes, <code>sampleLane</code> reading the mode per segment, and UI to set it (right-click a keyframe, or drag the segment's midpoint to bend it). The engine half is small; the segment-editing UI is what makes it medium.</p>
+  <p class="where">types.ts (Note/keyframe) · core/visual/automation.ts (sampleLane) · midi editor UI</p>
+</div>
+
+<div class="item">
+  <h3>Automation for effect parameters</h3>
+  <p>Automation currently targets instrument params (<code>track.targetParam</code> → engine overlay). Effect params live in <code>track.effects[i].settings</code>, so lanes need a richer target (<code>effectInstanceId + settingKey</code>), resolve/engine need to sample and overlay them, and the wrappers (Transform/Clone/Shader) need to read overlaid values. Medium-hard; touches the automation model end to end — and it's the enabler for the symmetric-effects item.</p>
+  <p class="where">types.ts · resolve.ts · VisualEngine.ts · components/visual/*Wrapper.tsx · the add-automation menu</p>
+</div>
+
+<div class="item">
+  <h3>Drag-highlight affordances (two small UX items, same drag systems)</h3>
+  <p>(a) When dragging an instrument from the library, highlight the track-label region / drop line more strongly so it's obvious where to drop. (b) When hovering a tag/track option in the modulator target picker, highlight the corresponding object(s) in the 3D view — needs a tiny "hovered target" channel in UIStore that ObjectRenderer reads (emissive boost or outline). Neither is hard; (b) crosses into the renderer.</p>
+  <p class="where">useLibraryDrag.ts · trackDrop.ts (a) · TrackEditor.tsx + UIStore + ObjectRenderer.tsx (b)</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-design">design</span> Mute/solo semantics for the nested hierarchy</h3>
+  <p>Implementation is easy once the semantics are decided (does muting a parent mute the subtree? does solo isolate within siblings or globally? what do child solos mean?). Get Tyler's model, write it down, then it's an afternoon in resolve + the audio engine's arm-time check (audio must match visuals).</p>
+  <p class="where">core/visual/resolve.ts · core/audio/AudioEngine.ts · timeline M/S buttons</p>
+</div>
+
+<!-- HARD -->
+<h2>🔴 Hard / long-term — plan before touching</h2>
+
+<div class="item">
+  <h3>Per-instrument "plugin" UI (the Logic-style instrument window)</h3>
+  <p>The real problem you named: param-adjustment friction. This is an architecture piece — a per-instrument custom editor surface (draggable/resizable manipulation, immediate feedback), a registry hook like <code>def.editorComponent</code>, and probably direct-manipulation overlays in the 3D view. Worth a design doc of its own; start by picking ONE instrument (Cube?) as the pilot. Interim cheap win: better slider UX (type-in values, fine-drag modifier).</p>
+</div>
+
+<div class="item">
+  <h3>MIDI vim</h3>
+  <p>A modal editing language for the piano roll. Big, and it deliberately overlaps with row-hiding/scaling and fixed-distance note entry — design them together (the row-model work above is the foundation). Needs its own doc + keymap design before any code.</p>
+</div>
+
+<div class="item">
+  <h3>Incremental resolve</h3>
+  <p>Known and deliberately deferred: today an edit re-resolves the whole project (debounced 80ms, params fast-path is separate) and the docs sketch the incremental design (per-track caching, reference dirty-diffing). Don't build it until a real project makes edits feel slow — full resolve is cheap at current scale, and incremental invalidation across modifier chains + routings + (now) loops is genuinely fiddly.</p>
+  <p class="where">core/visual/resolve.ts · VisualEngine.ts</p>
+</div>
+
+<hr/>
+<div class="rec"><strong>Suggested order of attack:</strong> Batch A in one sitting (three tiny fixes) → Batch B (four small timeline/store features) → the two investigations while Tyler's reports are fresh → MIDI import (the deps are already installed) → loop blocks + effects menu → effect-param automation (which unlocks the symmetric effects) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time — it blocks an easy implementation, not a hard one.</div>
+
+<p class="small muted">Triage of the running TODO list as of 2026-07-03. "Done" items shipped in the persistence / pause-invariant / audio-track pushes on <code>dev</code>. Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · effects/ · timeline components).</p>
+
+</div>
+</body>
+</html>
