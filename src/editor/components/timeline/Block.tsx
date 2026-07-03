@@ -53,18 +53,45 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         setEditingBlock({ trackId, blockId: block.id })
       }}
     >
-      {block.notes.map((note) => {
-        const notePct = totalBeatsInBlock > 0
-          ? (note.startBeat / totalBeatsInBlock) * 100
-          : 0
+      <NotePreview notes={block.notes} totalBeats={totalBeatsInBlock} color={color} />
+    </div>
+  )
+}
+
+/** Miniature of the block's notes: x/width from time, y from pitch — normalized to
+ *  the block's own pitch range (at least an octave, so near-monotone lines stay
+ *  calm), dashes long notes read as dashes and hits as ticks. */
+function NotePreview({ notes, totalBeats, color }: { notes: BlockType['notes']; totalBeats: number; color: string }) {
+  if (notes.length === 0 || totalBeats <= 0) return null
+  let minPitch = Infinity
+  let maxPitch = -Infinity
+  for (const n of notes) {
+    if (n.pitch < minPitch) minPitch = n.pitch
+    if (n.pitch > maxPitch) maxPitch = n.pitch
+  }
+  const span = Math.max(12, maxPitch - minPitch)
+  const lo = (minPitch + maxPitch) / 2 - span / 2
+  return (
+    <>
+      {notes.map((note) => {
+        const leftPct = (note.startBeat / totalBeats) * 100
+        const widthPct = (note.durationBeats / totalBeats) * 100
+        // Top pitch at the top; 8%–88% band keeps dashes inside the rounded border.
+        const topPct = 8 + (1 - (note.pitch - lo) / span) * 80
         return (
           <div
             key={note.id}
-            className="absolute top-1 bottom-1 w-0.5 rounded-full pointer-events-none"
-            style={{ left: `${notePct}%`, backgroundColor: color + 'cc' }}
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: `${leftPct}%`,
+              width: `max(${widthPct}%, 3px)`,
+              top: `${topPct}%`,
+              height: 2,
+              backgroundColor: color + 'cc',
+            }}
           />
         )
       })}
-    </div>
+    </>
   )
 }
