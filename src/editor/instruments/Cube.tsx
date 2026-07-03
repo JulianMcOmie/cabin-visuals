@@ -13,6 +13,8 @@ export const cubeInstrument: ObjectInstrumentDef = {
     // Color as a hue slider (0–360) — keeps every param numeric.
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
     { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 },
+    { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 0 },
+    { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 0 },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
@@ -35,11 +37,13 @@ export const cubeInstrument: ObjectInstrumentDef = {
   localTransform: ({ params, ports, beat }) => {
     const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
+    const baseYPosition = params.baseYPosition ?? paramDefault(cubeInstrument, 'baseYPosition')
+    const baseZPosition = params.baseZPosition ?? paramDefault(cubeInstrument, 'baseZPosition')
     const spinSpeed = params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
     const energy = ports.energy ?? 0
     const breathe = 1.15 + Math.sin(beat * 0.9) * 0.2
     return {
-      position: [baseXPosition, 0, 0],
+      position: [baseXPosition, baseYPosition, baseZPosition],
       rotation: [beat * 0.09 * spinSpeed, beat * 0.22 * spinSpeed, 0],
       scale: (baseSize / 1.6) * breathe * (1 + energy * 0.35),
     }
