@@ -103,9 +103,11 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current
     if (!drag) {
-      // Hover cursor feedback: resize at the edges, grab in the body.
+      // Edge-only cursor feedback (matches the MIDI Block): resize at the trim
+      // edges, default everywhere else. During a trim drag the ew-resize set
+      // here persists; during a move the cursor stays default.
       const mode = edgeZone(e)
-      e.currentTarget.style.cursor = mode === 'move' ? 'grab' : 'ew-resize'
+      e.currentTarget.style.cursor = mode === 'move' ? 'default' : 'ew-resize'
       return
     }
     const { mode, startX, orig } = drag
