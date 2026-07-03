@@ -1,16 +1,15 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, MeshBasicMaterial, LinearFilter } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Flowing silk-like line patterns with radial (kaleidoscopic)
 // symmetry, drawn to an offscreen 2D canvas and mapped onto a full-frame plane. When the
 // object has any active notes, the spiral direction inverts. Line generation / oscillator /
 // symmetry-fold math is Tyler's verbatim; only the state reads are rewired (getTrackState →
-// getObjectState, Tyler's activeNotes Map → state.activeNotes ResolvedNote[], project bpm
-// from useProjectStore). Tyler's canvas-2D renderer is preserved as-is (not a GLSL shader).
+// getObjectState, Tyler's activeNotes Map → state.activeNotes ResolvedNote[], time from the
+// playhead via state.beat). Tyler's canvas-2D renderer is preserved as-is (not a GLSL shader).
 
 interface Point {
   x: number
@@ -314,7 +313,6 @@ function SilkSymmetryVisual({ trackId }: { trackId: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
   const materialRef = useRef<MeshBasicMaterial | null>(null)
-  const beatsRef = useRef(0)
 
   const oscillators = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => createOscillator(i * 17.3))
@@ -336,7 +334,7 @@ function SilkSymmetryVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current
     const texture = textureRef.current
     const mesh = meshRef.current
@@ -345,14 +343,12 @@ function SilkSymmetryVisual({ trackId }: { trackId: string }) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const state = getObjectState(trackId)
-    const params = state?.params ?? {}
-    const hasActiveNotes = state ? state.activeNotes.length > 0 : false
+    const params = state.params
+    const hasActiveNotes = state.activeNotes.length > 0
     const spiralDirection = hasActiveNotes ? -1 : 1
 
-    const bpm = useProjectStore.getState().bpm
-    const beatsPerSecond = bpm / 60
-    beatsRef.current += delta * beatsPerSecond
+    // Pattern time is the playhead beat (was a wall-clock accumulator).
+    const beats = state.beat
 
     ctx.fillStyle = '#050508'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
@@ -372,8 +368,8 @@ function SilkSymmetryVisual({ trackId }: { trackId: string }) {
       lissB: params.lissB ?? CONFIG.lissB,
     }
 
-    const rotation = beatsRef.current * 0.05 * spiralDirection
-    const lines = generateLines(beatsRef.current, oscillators, spiralDirection, genParams)
+    const rotation = beats * 0.05 * spiralDirection
+    const lines = generateLines(beats, oscillators, spiralDirection, genParams)
     renderLines(ctx, lines, canvas.width, canvas.height, rotation, 1.0, params)
     renderVignette(ctx, canvas.width, canvas.height)
 

@@ -173,8 +173,6 @@ const PORTS: PortDef[] = [
 function ShapeFlightVisual({ trackId }: { trackId: string }) {
   const geoRef = useRef<BufferGeometry>(null)
   const matRef = useRef<ShaderMaterial>(null)
-  const accRotationRef = useRef(0)
-  const lastBeatRef = useRef(-1)
   const { size } = useThree()
 
   // Pre-allocated batch buffers.
@@ -255,13 +253,9 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
     const currentBeat = state.beat
     const secPerBeat = state.secPerBeat
 
-    // Accumulate rotation from beat progression.
-    const prevBeat = lastBeatRef.current
-    if (prevBeat >= 0) {
-      const beatDelta = currentBeat - prevBeat
-      if (beatDelta > 0 && beatDelta < 2) accRotationRef.current += rotationStep * beatDelta
-    }
-    lastBeatRef.current = currentBeat
+    // Rotation is a pure function of the beat (not an accumulator), so a paused
+    // playhead holds still and any scrub lands on the same rotation.
+    const accRotation = currentBeat * rotationStep
 
     // Visible beat window for early exit (notes are sorted by beat).
     const maxVisibleSecAgo = fadeOutZ / speed
@@ -347,7 +341,7 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
 
         const finalScale = shapeSize * scaleDefault * (1 + approachProgress * approachGrowth)
 
-        const rot = accRotationRef.current + ci * copySpacing
+        const rot = accRotation + ci * copySpacing
         const cosR = Math.cos(rot)
         const sinR = Math.sin(rot)
 

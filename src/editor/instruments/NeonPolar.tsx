@@ -1,11 +1,10 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, extend, useThree } from '@react-three/fiber'
+import { extend, useThree } from '@react-three/fiber'
 import { Group, Vector2, Color } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's NeonPolar. A 3D neon polar harmonograph: 6 oscillator
@@ -242,7 +241,6 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 function NeonPolarVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const layerLinesRef = useRef<CurveObjects[]>([])
-  const timeRef = useRef(0)
   const { size } = useThree()
   const resolutionRef = useRef(new Vector2(size.width, size.height))
   const baseColor = useRef(new Color())
@@ -275,11 +273,9 @@ function NeonPolarVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
 
     const p = state.params
     const speed = p.speed ?? 1
@@ -296,12 +292,8 @@ function NeonPolarVisual({ trackId }: { trackId: string }) {
     const energy = ports.energy ?? 0
     const scalePort = ports.scale ?? 0
 
-    // currentBeat is available if a beat-locked motion is desired; here time advances
-    // freely so the curves keep drifting even when transport is paused.
-    void useTimeStore.getState().currentBeat
-
-    timeRef.current += delta
-    const t = timeRef.current
+    // Beat-time in seconds — the drift/jitter frequencies were tuned in seconds.
+    const t = state.beat * state.secPerBeat
 
     // --- MIDI: jitter notes + freq shift (velocity-scaled) ---
     const jitterNotes: JitterNote[] = []

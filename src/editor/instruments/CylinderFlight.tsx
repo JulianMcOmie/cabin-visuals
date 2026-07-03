@@ -1,9 +1,6 @@
 import { useRef, useEffect } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, CylinderGeometry, MeshBasicMaterial, Color, AdditiveBlending, DoubleSide } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useTimeStore } from '../store/TimeStore'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. Interlocked cylinders fly toward the camera; each note is a
@@ -47,7 +44,6 @@ const PORTS: PortDef[] = [
 function CylinderFlightVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const poolRef = useRef<Pooled[]>([])
-  const timeRef = useRef(0)
 
   useEffect(() => () => {
     const g = groupRef.current
@@ -68,11 +64,9 @@ function CylinderFlightVisual({ trackId }: { trackId: string }) {
     return entry
   }
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
     const notes = state.notes
     if (!notes.length) return
     const p = state.params
@@ -93,10 +87,11 @@ function CylinderFlightVisual({ trackId }: { trackId: string }) {
     const fadeOutZ = p.fadeOutZ ?? 15
     const segments = p.segments ?? 16
 
-    const currentBeat = useTimeStore.getState().currentBeat
-    const secPerBeat = 60 / useProjectStore.getState().bpm
-    timeRef.current += delta
-    const time = timeRef.current
+    const currentBeat = state.beat
+    const secPerBeat = state.secPerBeat
+    // Decorative rotation runs on beat-time (not wall-clock), so it freezes with
+    // the playhead and scrubs deterministically.
+    const time = currentBeat * secPerBeat
 
     for (const pm of poolRef.current) { pm.active = false; pm.mesh.visible = false }
 

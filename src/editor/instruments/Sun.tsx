@@ -1,7 +1,6 @@
 import { useRef, useEffect } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, SphereGeometry, PlaneGeometry, ShaderMaterial, AdditiveBlending, DoubleSide } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A fiery orb with an animated fbm-noise surface, limb
@@ -11,6 +10,8 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 const PITCH_FLASH = 48
 const PITCH_COLOR_PULSE = 49
 const PULSE_COLORS = [0.58, 0.83, 0.30, 0.12, 0.50, 0.75]
+const FLASH_WINDOW = 0.6 // seconds a flash contributes
+const PULSE_WINDOW = 0.8 // seconds a colour pulse contributes
 
 const NOISE_GLSL = `
   vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
@@ -124,11 +125,6 @@ function SunVisual({ trackId }: { trackId: string }) {
   const sunMatRef = useRef<ShaderMaterial | null>(null)
   const coronaMatRef = useRef<ShaderMaterial | null>(null)
   const coronaMeshRef = useRef<Mesh | null>(null)
-  const elapsedRef = useRef(0)
-  const prevKeys = useRef<Set<string>>(new Set())
-  const flashes = useRef<number[]>([])
-  const pulses = useRef<{ t: number; hue: number }[]>([])
-  const pulseIdx = useRef(0)
 
   useEffect(() => {
     const group = groupRef.current
@@ -161,15 +157,12 @@ function SunVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame((_s, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     const sunMat = sunMatRef.current
     const coronaMat = coronaMatRef.current
     if (!group || !sunMat || !coronaMat) return
-    const state = getObjectState(trackId)
-    if (!state) return
 
-    elapsedRef.current += Math.min(delta, 0.05)
     const p = state.params
     const size = p.size ?? 2.5
     const intensity = p.intensity ?? 1.5
@@ -179,32 +172,26 @@ function SunVisual({ trackId }: { trackId: string }) {
     const coronaSize = p.coronaSize ?? 0.3
     const z = p.z ?? -6
 
-    const now = performance.now()
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const n of state.activeNotes) {
-      if (prevKeys.current.has(`${n.pitch}:${n.beat}`)) continue
-      if (n.pitch === PITCH_FLASH) flashes.current.push(now)
-      else if (n.pitch === PITCH_COLOR_PULSE) { pulses.current.push({ t: now, hue: PULSE_COLORS[pulseIdx.current % PULSE_COLORS.length] }); pulseIdx.current++ }
+    // Flashes/pulses derive purely from the note list + current beat (no spawn
+    // lists), so a paused playhead is a frozen frame and scrub-back is exact.
+    let flashMix = 0, newestFlashAge = -1
+    let pulseMix = 0, pulseHue = 0, newestPulseAge = -1
+    let pulseIdx = 0
+    for (const n of state.notes) {
+      if (n.pitch !== PITCH_FLASH && n.pitch !== PITCH_COLOR_PULSE) continue
+      const age = (state.beat - n.beat) * state.secPerBeat
+      if (n.pitch === PITCH_FLASH) {
+        if (age < 0 || age >= FLASH_WINDOW) continue
+        flashMix = Math.min(1, flashMix + Math.min(1, age / 0.008) * Math.exp(-age * 8))
+        if (newestFlashAge < 0 || age < newestFlashAge) newestFlashAge = age
+      } else {
+        const hue = PULSE_COLORS[pulseIdx % PULSE_COLORS.length]; pulseIdx++
+        if (age < 0 || age >= PULSE_WINDOW) continue
+        pulseMix = Math.min(1, pulseMix + Math.min(1, age / 0.01) * Math.exp(-age * 5))
+        if (newestPulseAge < 0 || age < newestPulseAge) { newestPulseAge = age; pulseHue = hue }
+      }
     }
-    prevKeys.current = keys
-
-    flashes.current = flashes.current.filter((t) => now - t < 600)
-    pulses.current = pulses.current.filter((f) => now - f.t < 800)
-
-    let flashMix = 0, newest = 0
-    for (const t of flashes.current) {
-      const age = (now - t) / 1000
-      flashMix = Math.min(1, flashMix + Math.min(1, age / 0.008) * Math.exp(-age * 8))
-      if (t > newest) newest = t
-    }
-    const flashPhase = newest > 0 ? Math.max(0, 1 - ((now - newest) / 1000) * 12) : 0
-
-    let pulseMix = 0, pulseHue = 0, newestP = 0
-    for (const f of pulses.current) {
-      const age = (now - f.t) / 1000
-      if (f.t > newestP) { newestP = f.t; pulseHue = f.hue }
-      pulseMix = Math.min(1, pulseMix + Math.min(1, age / 0.01) * Math.exp(-age * 5))
-    }
+    const flashPhase = newestFlashAge >= 0 ? Math.max(0, 1 - newestFlashAge * 12) : 0
 
     const totalIntensity = intensity + flashMix * 2 + pulseMix
     group.position.z = z
@@ -212,7 +199,8 @@ function SunVisual({ trackId }: { trackId: string }) {
     const coronaMesh = coronaMeshRef.current
     if (coronaMesh) { const cs = 2 + (coronaSize + flashMix * 0.8) * 2; coronaMesh.scale.set(cs, cs, 1) }
 
-    const t = elapsedRef.current
+    // Surface time follows the transport (beat → seconds), freezing on pause.
+    const t = state.beat * state.secPerBeat
     const su = sunMat.uniforms
     su.uTime.value = t; su.uIntensity.value = totalIntensity; su.uBaseHue.value = baseHue
     su.uTurbulence.value = turbulence; su.uSpeed.value = speed

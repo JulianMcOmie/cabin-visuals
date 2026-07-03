@@ -1,8 +1,7 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
-import { useProjectStore } from '../store/ProjectStore'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A hypnotic fractal-flower tunnel: a recursive branching
@@ -10,9 +9,9 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // simple perspective onto a 2D canvas that's mapped to a full-frame plane. The spiral,
 // spread and hue slowly oscillate over musical beats; new notes bump the hue (or spawn
 // colour-inversion pulse rings). Drawing math is Tyler's verbatim; only the state reads
-// are rewired: engine getTrackState → getObjectState, activeNotes(Map) → activeNotes
-// array with `${pitch}:${beat}` onset detection, virtualClock → performance.now, bpm
-// from the project store.
+// are rewired: engine getTrackState → getObjectState, and all motion derives from
+// `state.beat` — hue bumps and pulse rings are computed from `state.notes` each frame
+// (note-onset ages, not a spawned list), so scrub == playback.
 
 interface Point3D {
   x: number
@@ -26,11 +25,6 @@ interface Branch {
   points: Point3D[]
   generation: number
   hue: number
-}
-
-interface ColorPulse {
-  id: number
-  spawnTime: number
 }
 
 interface BranchParams {
@@ -295,12 +289,6 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
   const offscreenNormalRef = useRef<HTMLCanvasElement | null>(null)
   const offscreenInvertedRef = useRef<HTMLCanvasElement | null>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
-  const elapsedRef = useRef(0)
-  const virtualBeatRef = useRef(0)
-  const hueOffsetRef = useRef(0)
-  const prevKeysRef = useRef<Set<string>>(new Set())
-  const pulsesRef = useRef<ColorPulse[]>([])
-  const pulseIdRef = useRef(0)
 
   useEffect(() => {
     const canvas = document.createElement('canvas')
@@ -328,7 +316,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     }
   }, [])
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current
     const texture = textureRef.current
     const mesh = meshRef.current
@@ -337,23 +325,13 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const state = getObjectState(trackId)
-    if (!state) return
+    // Time source: the playhead beat (seconds-tuned motion uses beat * secPerBeat).
+    const elapsed = state.beat * state.secPerBeat
+    const beat = state.beat * CONFIG.oscSpeed
 
-    elapsedRef.current += delta
-    const elapsed = elapsedRef.current
-
-    const bpm = useProjectStore.getState().bpm
-    const beatsPerSecond = bpm / 60
-    const deltaBeat = delta * beatsPerSecond * CONFIG.oscSpeed
-
-    // Onset detection: a new `${pitch}:${beat}` key this frame = a new note.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    let newNoteCount = 0
-    for (const n of state.activeNotes) {
-      if (!prevKeysRef.current.has(`${n.pitch}:${n.beat}`)) newNoteCount++
-    }
-    prevKeysRef.current = keys
+    // Notes whose onset the playhead has passed — the pure replacement for onset
+    // detection: hue bumps and pulse rings derive from these each frame.
+    const pastNotes = state.notes.filter((n) => n.beat <= state.beat)
 
     const p = state.params
     const sp = state.stringParams
@@ -362,14 +340,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     const pulseBandWidth = p.pulseBandWidth ?? 40
     const pulseFadeDuration = p.pulseFadeDuration ?? 2.0
 
-    if (newNoteCount > 0) {
-      if (!colorPulse) {
-        hueOffsetRef.current = (hueOffsetRef.current + 30 * newNoteCount) % 360
-      }
-    }
-
-    virtualBeatRef.current += deltaBeat
-    const beat = virtualBeatRef.current
+    const hueOffset = colorPulse ? 0 : (pastNotes.length * 30) % 360
 
     // Read settings from params
     const symmetry = p.symmetry ?? 6
@@ -391,28 +362,20 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
       lengthDecay: lengthDecay + Math.sin(beat * Math.PI / 16 + 2) * 0.15,
       spreadAngle: spreadAngle + Math.sin(beat * Math.PI / 8 + 1) * 0.4,
       hueShift,
-      baseHue: (baseHue + beat / 64 + hueOffsetRef.current / 360) % 1,
-    }
-
-    if (colorPulse && newNoteCount > 0) {
-      pulsesRef.current.push({
-        id: pulseIdRef.current++,
-        spawnTime: elapsed,
-      })
+      baseHue: (baseHue + beat / 64 + hueOffset / 360) % 1,
     }
 
     const activePulses: { radius: number; bandWidth: number; opacity: number }[] = []
     if (colorPulse) {
-      pulsesRef.current = pulsesRef.current.filter(pulse => {
-        const age = elapsed - pulse.spawnTime
+      for (const note of pastNotes) {
+        const age = (state.beat - note.beat) * state.secPerBeat
         const radius = age * pulseSpeed
         const opacity = Math.max(0, 1 - age / pulseFadeDuration)
 
-        if (opacity <= 0) return false
+        if (opacity <= 0) continue
 
         activePulses.push({ radius, bandWidth: pulseBandWidth, opacity })
-        return true
-      })
+      }
     }
 
     const frontBranches = generateBranches(

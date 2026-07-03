@@ -1,15 +1,14 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { InstancedMesh, InstancedBufferAttribute, Object3D, Color } from 'three'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW's CircleGrid (the "circles" shape — a 3D grid of glowing
 // dots, NOT full-frame). Layout + toggle-mode math is Tyler's verbatim; only state
 // reads are rewired. Tyler's `noteOnCount` (which drives the toggle modes) isn't in
-// ObjectState, so we derive it here by counting note-onsets (new pitch:beat keys in
-// activeNotes each frame). The platonic-solids sub-mode + shape switch are dropped —
-// this instrument is a grid of circles only.
+// ObjectState, so we derive it purely as the count of notes whose onset is at or
+// before the playhead (scrub == playback). The platonic-solids sub-mode + shape
+// switch are dropped — this instrument is a grid of circles only.
 
 const MAX_INSTANCES = 1024 // 32 rows * 32 cols
 
@@ -201,29 +200,22 @@ const PORTS: PortDef[] = [
 
 function CircleGridVisual({ trackId }: { trackId: string }) {
   const meshRef = useRef<InstancedMesh>(null)
-  const timeRef = useRef(0)
   const dummy = useMemo(() => new Object3D(), [])
   const color = useMemo(() => new Color(), [])
   const colors = useMemo(() => new Float32Array(MAX_INSTANCES * 3), [])
-  const prevKeys = useRef<Set<string>>(new Set())
-  const noteOnCountRef = useRef(0)
 
   useEffect(() => {
     if (meshRef.current) meshRef.current.instanceColor = new InstancedBufferAttribute(colors, 3)
   }, [colors])
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     if (!mesh) return
-    const state = getObjectState(trackId)
-    if (!state) return
     const p = state.params
 
-    // Derive noteOnCount from note-onsets (Tyler's engine tracked this itself).
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const k of keys) if (!prevKeys.current.has(k)) noteOnCountRef.current++
-    prevKeys.current = keys
-    const noteOnCount = noteOnCountRef.current
+    // Derive noteOnCount purely: onsets at or before the playhead (Tyler's engine tracked this itself).
+    let noteOnCount = 0
+    for (const n of state.notes) if (n.beat <= state.beat) noteOnCount++
 
     const rows = Math.floor(p.rows ?? 4)
     const cols = Math.floor(p.cols ?? 4)
@@ -235,8 +227,8 @@ function CircleGridVisual({ trackId }: { trackId: string }) {
     const hueRange = p.hueRange ?? 0.2
     const rotationSpeed = p.rotationSpeed ?? 0
 
-    timeRef.current += delta
-    const time = timeRef.current
+    // Time source is the playhead: beat-seconds keep the seconds-tuned frequencies at default bpm.
+    const time = state.beat * state.secPerBeat
 
     const total = Math.min(rows * cols, MAX_INSTANCES)
     const scale = spacing * Math.max(rows, cols) * 0.5

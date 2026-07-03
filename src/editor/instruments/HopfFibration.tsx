@@ -1,16 +1,18 @@
 import { useRef, useEffect } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
-import { getObjectState } from '../core/engine/VisualEngine'
+import { useInstrumentFrame } from '../core/engine/instrumentFrame'
+import type { ResolvedNote } from '../core/engine/types'
 import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 
 // Ported from Excellent DAW. A neon 3D Hopf fibration — nested interlocking tori of
 // fiber curves, driven by 12 octave-looped MIDI transformations. The Hopf map / quaternion /
 // stereographic-projection math and fiber-curve geometry are Tyler's verbatim; only the
-// state reads are rewired (activeNotes array + note-onset detection via a Set of pitch:beat).
+// state reads are rewired (the note history is folded into the fibration state each frame,
+// so everything is a pure function of the playhead — pause is static, scrub == playback).
 // Tyler's palette is dropped. Not full-frame — it renders fiber curves in 3D space.
 
 // ────────────────────────────────────────────
@@ -125,13 +127,12 @@ function disposeNeonFiber(parent: THREE.Group, fiber: NeonFiber) {
 }
 
 // ────────────────────────────────────────────
-// Fibration state (smooth + MIDI-discrete)
+// Fibration state (recomputed per frame — pure in the playhead)
 // ────────────────────────────────────────────
 
 interface HopfState {
-  // Continuous — evolve smoothly each frame
-  rotX: number; rotY: number; rotZ: number
-  phaseFlow: number
+  // Continuous — rotation-direction integral, in signed beat-time seconds
+  rotTime: number
 
   // Discrete — changed instantly by MIDI note-ons
   thetaBase: number    // Base latitude on S² (which torus family)
@@ -154,6 +155,111 @@ interface HopfState {
 //  E (4) invert projection · F (5) θ+60° · F# (6) φ+90° · G (7) Dehn twist
 //  G# (8) mirror · A (9) scale burst · A# (10) hue shift · B (11) reverse rotation
 // ────────────────────────────────────────────
+
+/**
+ * Fold the note history up to `beat` into the fibration state. A pure function of
+ * the playhead: discrete transforms replay from all note-ons at or before `beat`,
+ * and the pulse envelopes decay by note age instead of per-frame deltas — so a
+ * static playhead is a static frame, and scrubbing reproduces playback exactly.
+ * `notes` must be sorted by beat.
+ */
+function computeHopfState(notes: ResolvedNote[], beat: number, secPerBeat: number): HopfState {
+  const hs: HopfState = {
+    rotTime: 0,
+    thetaBase: Math.PI / 2, // Start at Clifford torus (most symmetric)
+    polePulse: 0,
+    brightPulse: 0,
+    layerCount: 3,
+    projSign: 1,
+    thetaShift: 0,
+    phiShift: 0,
+    twist: 0,
+    axisFlip: 1,
+    scalePulse: 1,
+    hueOffset: 0,
+    rotDir: 1,
+  }
+
+  let lastBeat = 0
+  for (const note of notes) {
+    if (note.beat > beat) break
+
+    const n = ((note.pitch % 12) + 12) % 12
+    const v = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    const ageSec = (beat - note.beat) * secPerBeat
+    // Flash decay 0.05^age drops below the 0.005 cutoff within 2s — skip older notes.
+    const flashDecay = ageSec < 2 ? Math.pow(0.05, ageSec) : 0
+
+    // Integrate signed rotation time up to this note (B notes reverse direction)
+    hs.rotTime += (note.beat - lastBeat) * secPerBeat * hs.rotDir
+    lastBeat = note.beat
+
+    switch (n) {
+      case 0: // C — Shift fiber family θ
+        hs.thetaBase += (Math.PI / 6) * (0.5 + v * 0.5)
+        if (hs.thetaBase > Math.PI * 2) hs.thetaBase -= Math.PI * 2
+        hs.brightPulse = Math.max(hs.brightPulse, v * 0.5 * flashDecay)
+        break
+
+      case 1: // C# — Pole burst
+        hs.polePulse = (0.4 + v * 0.6) * Math.pow(0.01, ageSec)
+        hs.brightPulse = Math.max(hs.brightPulse, v * flashDecay)
+        break
+
+      case 2: // D — Add torus layer
+        hs.layerCount = Math.min(hs.layerCount + 1, 6)
+        hs.brightPulse = Math.max(hs.brightPulse, 0.3 * flashDecay)
+        break
+
+      case 3: // D# — Remove torus layer
+        hs.layerCount = Math.max(1, hs.layerCount - 1)
+        break
+
+      case 4: // E — Invert projection (inside-out)
+        hs.projSign *= -1
+        hs.brightPulse = Math.max(hs.brightPulse, v * 0.7 * flashDecay)
+        break
+
+      case 5: // F — θ rotation 60°
+        hs.thetaShift += (Math.PI / 3) * (0.5 + v * 0.5)
+        hs.brightPulse = Math.max(hs.brightPulse, v * 0.4 * flashDecay)
+        break
+
+      case 6: // F# — φ rotation 90°
+        hs.phiShift += (Math.PI / 2) * (0.5 + v * 0.5)
+        break
+
+      case 7: // G — Dehn twist (phase offset)
+        hs.twist += (Math.PI / 4) * (0.5 + v * 0.5)
+        break
+
+      case 8: // G# — Mirror flip
+        hs.axisFlip *= -1
+        hs.brightPulse = Math.max(hs.brightPulse, v * 0.5 * flashDecay)
+        break
+
+      case 9: // A — Scale burst
+        hs.scalePulse = 1 + (0.5 + v * 1.0) * Math.exp(-5 * ageSec)
+        hs.brightPulse = Math.max(hs.brightPulse, v * 0.8 * flashDecay)
+        break
+
+      case 10: // A# — Hue rotation
+        hs.hueOffset = (hs.hueOffset + 1 / 6 + v / 6) % 1
+        break
+
+      case 11: // B — Reverse rotation
+        hs.rotDir *= -1
+        break
+    }
+  }
+  // Signed rotation time from the last note-on to the playhead
+  hs.rotTime += (beat - lastBeat) * secPerBeat * hs.rotDir
+
+  if (hs.polePulse < 0.005) hs.polePulse = 0
+  if (hs.brightPulse < 0.005) hs.brightPulse = 0
+
+  return hs
+}
 
 // Reusable color to avoid per-frame allocations
 const _tmpColor = new THREE.Color()
@@ -179,24 +285,8 @@ const PORTS: PortDef[] = [
 function HopfFibrationVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<THREE.Group>(null)
   const fibersRef = useRef<NeonFiber[]>([])
-  const hsRef = useRef<HopfState>({
-    rotX: 0, rotY: 0, rotZ: 0,
-    phaseFlow: 0,
-    thetaBase: Math.PI / 2, // Start at Clifford torus (most symmetric)
-    polePulse: 0,
-    brightPulse: 0,
-    layerCount: 3,
-    projSign: 1,
-    thetaShift: 0,
-    phiShift: 0,
-    twist: 0,
-    axisFlip: 1,
-    scalePulse: 1,
-    hueOffset: 0,
-    rotDir: 1,
-  })
-  const prevKeys = useRef<Set<string>>(new Set())
-  const timeRef = useRef(0)
+  // Beat-sorted view of state.notes, cached per resolve (state.notes is static between resolves)
+  const notesCache = useRef<{ src: ResolvedNote[]; sorted: ResolvedNote[] }>({ src: [], sorted: [] })
   const { size } = useThree()
   const resRef = useRef(new THREE.Vector2(size.width, size.height))
 
@@ -216,11 +306,9 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
     fibersRef.current = []
   }, [])
 
-  useFrame((_, delta) => {
+  useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
     if (!group) return
-    const state = getObjectState(trackId)
-    if (!state) return
 
     // ── Read settings ──
     const par = state.params
@@ -235,94 +323,23 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
     const flowSpd = par.flowSpeed ?? 0.15
     const tSpread = par.thetaSpread ?? 0.9
 
-    const hs = hsRef.current
-    timeRef.current += delta
-    const t = timeRef.current
+    // Beat-time in seconds — the drift/flow/rotation frequencies were tuned in seconds.
+    const t = state.beat * state.secPerBeat
 
-    // ── Process MIDI note-ons ──
-    // A note-on = a note key (pitch:beat) newly present in activeNotes this frame.
-    const keys = new Set(state.activeNotes.map((n) => `${n.pitch}:${n.beat}`))
-    for (const note of state.activeNotes) {
-      const key = `${note.pitch}:${note.beat}`
-      if (prevKeys.current.has(key)) continue
-
-      const n = ((note.pitch % 12) + 12) % 12
-      const v = note.velocity <= 1 ? note.velocity : note.velocity / 127
-
-      switch (n) {
-        case 0: // C — Shift fiber family θ
-          hs.thetaBase += (Math.PI / 6) * (0.5 + v * 0.5)
-          if (hs.thetaBase > Math.PI * 2) hs.thetaBase -= Math.PI * 2
-          hs.brightPulse = Math.max(hs.brightPulse, v * 0.5)
-          break
-
-        case 1: // C# — Pole burst
-          hs.polePulse = 0.4 + v * 0.6
-          hs.brightPulse = Math.max(hs.brightPulse, v)
-          break
-
-        case 2: // D — Add torus layer
-          hs.layerCount = Math.min(hs.layerCount + 1, 6)
-          hs.brightPulse = Math.max(hs.brightPulse, 0.3)
-          break
-
-        case 3: // D# — Remove torus layer
-          hs.layerCount = Math.max(1, hs.layerCount - 1)
-          break
-
-        case 4: // E — Invert projection (inside-out)
-          hs.projSign *= -1
-          hs.brightPulse = Math.max(hs.brightPulse, v * 0.7)
-          break
-
-        case 5: // F — θ rotation 60°
-          hs.thetaShift += (Math.PI / 3) * (0.5 + v * 0.5)
-          hs.brightPulse = Math.max(hs.brightPulse, v * 0.4)
-          break
-
-        case 6: // F# — φ rotation 90°
-          hs.phiShift += (Math.PI / 2) * (0.5 + v * 0.5)
-          break
-
-        case 7: // G — Dehn twist (phase offset)
-          hs.twist += (Math.PI / 4) * (0.5 + v * 0.5)
-          break
-
-        case 8: // G# — Mirror flip
-          hs.axisFlip *= -1
-          hs.brightPulse = Math.max(hs.brightPulse, v * 0.5)
-          break
-
-        case 9: // A — Scale burst
-          hs.scalePulse = 1.5 + v * 1.0
-          hs.brightPulse = Math.max(hs.brightPulse, v * 0.8)
-          break
-
-        case 10: // A# — Hue rotation
-          hs.hueOffset = (hs.hueOffset + 1 / 6 + v / 6) % 1
-          break
-
-        case 11: // B — Reverse rotation
-          hs.rotDir *= -1
-          break
+    // ── Fold note history into fibration state (pure in the playhead) ──
+    if (notesCache.current.src !== state.notes) {
+      notesCache.current = {
+        src: state.notes,
+        sorted: [...state.notes].sort((a, b) => a.beat - b.beat || a.pitch - b.pitch),
       }
     }
-    prevKeys.current = keys
+    const hs = computeHopfState(notesCache.current.sorted, state.beat, state.secPerBeat)
 
-    // ── Decay pulse effects ──
-    hs.polePulse *= Math.pow(0.01, delta)
-    if (hs.polePulse < 0.005) hs.polePulse = 0
-
-    hs.brightPulse *= Math.pow(0.05, delta)
-    if (hs.brightPulse < 0.005) hs.brightPulse = 0
-
-    hs.scalePulse += (1 - hs.scalePulse) * Math.min(delta * 5, 1)
-
-    // ── Smooth continuous evolution ──
-    hs.rotX += delta * rSpeed * 0.6 * hs.rotDir
-    hs.rotY += delta * rSpeed * hs.rotDir
-    hs.rotZ += delta * rSpeed * 0.25 * hs.rotDir
-    hs.phaseFlow += delta * flowSpd
+    // ── Rotation / flow as pure products of beat-time ──
+    const rotX = hs.rotTime * rSpeed * 0.6
+    const rotY = hs.rotTime * rSpeed
+    const rotZ = hs.rotTime * rSpeed * 0.25
+    const phaseFlow = t * flowSpd
 
     // ── Resize fiber pool ──
     const totalFibers = hs.layerCount * fpl
@@ -368,7 +385,7 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
           + Math.cos(t * drift * 0.7 + fi * 0.4) * 0.06
 
         // Phase offset: Dehn twist + continuous flow + per-fiber offset
-        const phase = hs.twist + hs.phaseFlow + ff * Math.PI * 0.3 + li * 0.4
+        const phase = hs.twist + phaseFlow + ff * Math.PI * 0.3 + li * 0.4
 
         // Generate 3D positions via Hopf → stereographic projection
         const pos = generateFiberPositions(theta, phi, nPts, phase, effScale, maxD)
@@ -403,9 +420,9 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
     }
 
     // ── Apply smooth 3-axis rotation to entire structure ──
-    group.rotation.x = hs.rotX
-    group.rotation.y = hs.rotY
-    group.rotation.z = hs.rotZ
+    group.rotation.x = rotX
+    group.rotation.y = rotY
+    group.rotation.z = rotZ
   })
 
   return <group ref={groupRef} />
