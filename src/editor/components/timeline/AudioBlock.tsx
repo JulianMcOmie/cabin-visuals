@@ -66,26 +66,85 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
     return () => { cancelled = true }
   }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color])
 
-  // ── Drag to move: self-contained pointer gesture writing startBar ──
-  const dragRef = useRef<{ startX: number; origStartBar: number } | null>(null)
+  // ── Drag gestures: move (body), trim (edges) — all snapped to the beat grid ──
+  // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
+  // the audio you keep stays aligned to its original beats (classic DAW left-trim).
+  type DragMode = 'move' | 'trim-l' | 'trim-r'
+  const dragRef = useRef<{
+    mode: DragMode
+    startX: number
+    orig: { startBar: number; trimStart: number; trimEnd: number }
+  } | null>(null)
+
+  const MIN_CLIP_SEC = 0.05
+  const secPerBar = (60 / bpm) * beatsPerBar
+  const snapBars = (bars: number) => Math.round(bars * beatsPerBar) / beatsPerBar
+
+  const edgeZone = (e: ReactPointerEvent<HTMLDivElement>): DragMode => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const edge = Math.min(8, rect.width / 4)
+    const localX = e.clientX - rect.left
+    if (localX < edge) return 'trim-l'
+    if (localX > rect.width - edge) return 'trim-r'
+    return 'move'
+  }
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     e.stopPropagation() // the lane underneath must not treat this as a lane gesture
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
-    dragRef.current = { startX: e.clientX, origStartBar: block.startBar }
-  }
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag) return
-    const deltaBars = (e.clientX - drag.startX) / barWidthPx
-    // Snap to the beat grid, clamped to the timeline start.
-    const raw = drag.origStartBar + deltaBars
-    const snapped = Math.max(0, Math.round(raw * beatsPerBar) / beatsPerBar)
-    if (snapped !== block.startBar) {
-      useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar: snapped })
+    dragRef.current = {
+      mode: edgeZone(e),
+      startX: e.clientX,
+      orig: { startBar: block.startBar, trimStart: block.trimStart, trimEnd: block.trimEnd },
     }
   }
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag) {
+      // Hover cursor feedback: resize at the edges, grab in the body.
+      const mode = edgeZone(e)
+      e.currentTarget.style.cursor = mode === 'move' ? 'grab' : 'ew-resize'
+      return
+    }
+    const { mode, startX, orig } = drag
+    const deltaBars = snapBars((e.clientX - startX) / barWidthPx)
+
+    if (mode === 'move') {
+      const startBar = Math.max(0, snapBars(orig.startBar + deltaBars))
+      if (startBar !== block.startBar) {
+        useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar })
+      }
+      return
+    }
+
+    if (mode === 'trim-r') {
+      // The right edge moves in bars; trimEnd follows in seconds at current tempo.
+      const deltaSec = deltaBars * secPerBar
+      const trimEnd = Math.min(
+        clip?.duration ?? orig.trimEnd,
+        Math.max(orig.trimStart + MIN_CLIP_SEC, orig.trimEnd + deltaSec),
+      )
+      if (trimEnd !== block.trimEnd) {
+        useProjectStore.getState().updateAudioBlock(trackId, block.id, { trimEnd })
+      }
+      return
+    }
+
+    // trim-l: clamp the applied delta in seconds, then move start + trim together.
+    const wantedSec = deltaBars * secPerBar
+    const appliedSec = Math.min(
+      orig.trimEnd - MIN_CLIP_SEC - orig.trimStart, // can't trim past the end
+      Math.max(-orig.trimStart, wantedSec), // can't reveal audio before the clip starts
+    )
+    const startBar = Math.max(0, orig.startBar + appliedSec / secPerBar)
+    const trimStart = orig.trimStart + appliedSec
+    if (startBar !== block.startBar || trimStart !== block.trimStart) {
+      useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar, trimStart })
+    }
+  }
+
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) {
       try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
@@ -97,7 +156,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
     <div
       data-audio-block-id={block.id}
       title={clip ? `${clip.fileName} — drag to move` : 'Audio block'}
-      className="absolute top-1 bottom-1 rounded overflow-hidden cursor-grab active:cursor-grabbing"
+      className="absolute top-1 bottom-1 rounded overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${width}px`,
