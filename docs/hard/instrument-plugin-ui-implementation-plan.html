@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Instrument Plugin UI — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Instrument Plugin UI</span>
+  <h1>Instrument Plugin UI — Implementation Plan</h1>
+  <p class="sub">Four phases matching the architecture's layers — slider upgrades, the registry seam with a Cube pilot, the widget kit with a second pilot, then scene gizmos. Every phase is a stable stopping point; commit to the next only after using the last.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>ParamSlider upgrades · <code>editorComponent</code> seam · InstrumentEditorProps contract · widget kit (XY pad, dial, hue ring) · Cube + FractalTunnel pilots · scene gizmos for spatial params</td><td>Floating windows · third-party plugin API · editors for modulators/effects (same seam could serve them later; not now) · touch</td></tr>
+  </tbody>
+</table>
+
+<h2>B · The seam</h2>
+<pre><code>// instruments/types.ts
+export interface InstrumentEditorProps {
+  trackId: string
+  params: Record&lt;string, number | string&gt;      // merged view for display (live marker included)
+  baseParams: Record&lt;string, number | string&gt;  // what the sliders edit
+  setParam: (key: string, value: number | string) =&gt; void   // the ONLY write path
+  automatedKeys: Set&lt;string&gt;                    // render "driven by a lane" affordances
+}
+// ObjectInstrumentDef gains: editorComponent?: ComponentType&lt;InstrumentEditorProps&gt;</code></pre>
+<p class="small muted">TrackEditor: <code>def.editorComponent ? &lt;def.editorComponent …/&gt; : &lt;generic sliders&gt;</code>, plus the "raw params" disclosure under every custom editor.</p>
+
+<h2>C · Phase-by-phase</h2>
+
+<h3>Phase 1 — Slider upgrades <span class="badge b-edit">ParamSlider</span> (independent quick win)</h3>
+<ul class="small">
+  <li>Double-click → type-in (number input, Enter/Esc); Shift-drag → 10× finer; Alt-click → reset to def default; wheel over slider → step nudge. All through the existing onChange.</li>
+  <li>Verify on three params with very different ranges (hue 0–360, size 0.2–4, position −10–10); undo granularity stays one-burst-per-gesture.</li>
+</ul>
+
+<h3>Phase 2 — Seam + Cube pilot <span class="badge b-edit">types · TrackEditor</span> <span class="badge b-new">CubeEditor</span></h3>
+<ul class="small">
+  <li>Land the seam exactly as §B; generic path untouched when the field is absent (zero-risk to 27 instruments).</li>
+  <li><span class="badge b-new">new</span> <span class="file">instruments/editors/CubeEditor.tsx</span>: XY pad (baseX × baseY, z dial beside), size dial, hue ring, spin dial; automated params render the live-dot treatment.</li>
+  <li>Verify: one-drag positioning; automation on baseX moves the pad dot while the base stays editable; raw-params disclosure shows everything; the OTHER instruments' panels byte-identical.</li>
+</ul>
+
+<h3>Phase 3 — Widget kit + second pilot <span class="badge b-new">components/instrument-widgets/*</span></h3>
+<ul class="small">
+  <li>Extract from the Cube editor: <code>XYPad · Dial · HueRing · WidgetRow</code> with one shared look (size/spacing tokens, the live-dot affordance built in).</li>
+  <li>Second pilot: FractalTunnel editor (symmetry as a radial segment picker, branches/generations dials, spiral dial) — proves the kit against a non-spatial instrument.</li>
+  <li>Verify: both editors compose from the kit only; a third instrument could be built by pattern-matching (that's the review question).</li>
+</ul>
+
+<h3>Phase 4 — Scene gizmos <span class="badge b-new">GizmoLayer</span> (the direct-manipulation layer)</h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">components/visual/GizmoLayer.tsx</span> in the canaryIgnore overlay group: when the selected track's def declares spatial params (a small <code>gizmos?: [{kind:'position', keys:{x,y,z}}]</code> hint on the def), render a drag handle at the object's position; drag raycasts against a camera-facing plane → <code>setParam</code> per frame (undo burst-collapses, as slider drags do).</li>
+  <li>Selection-scoped: gizmos only for the selected track; Esc/deselect hides them.</li>
+  <li>Verify: dragging the cube in the viewport writes baseX/Y (and Z with a modifier); canary silent while parked with gizmos visible; export unaffected (overlay group never captured — it renders only when NOT pinned... confirm the export pin hides gizmos: pin() should also hide the overlay group — one line, listed here so it isn't forgotten).</li>
+</ul>
+
+<h2>D · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">components/TrackEditor.tsx</span> (ParamSlider)</td><td>Phase 1 upgrades · phase 2 seam branch + raw-params disclosure.</td></tr>
+    <tr><td><span class="file">instruments/types.ts</span></td><td>InstrumentEditorProps · editorComponent? · gizmos? hint.</td></tr>
+    <tr><td><span class="file">instruments/editors/CubeEditor.tsx · FractalTunnelEditor.tsx</span></td><td><span class="badge b-new">new</span> pilots.</td></tr>
+    <tr><td><span class="file">components/instrument-widgets/*</span></td><td><span class="badge b-new">new</span> kit (XYPad/Dial/HueRing/WidgetRow).</td></tr>
+    <tr><td><span class="file">components/visual/GizmoLayer.tsx</span> · ExportDriver pin</td><td>Phase 4 + overlay-hidden-during-export line.</td></tr>
+    <tr><td>Stores · engines · document</td><td>Untouched — the whole feature writes through setTrackParam.</td></tr>
+  </tbody>
+</table>
+
+<h2>E · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Editor sprawl</strong> — 28 bespoke editors is a maintenance cliff. The kit + "compositions only" review rule is the fence; instruments without obvious spatial/visual metaphors simply keep sliders.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Gizmo drags fighting camera controls</strong> if/when orbit controls exist — gizmo pointer-down must capture before any camera handler; design the z-order now (overlay on top), revisit when a camera rig lands.</li>
+  <li><span class="badge b-risk">open</span> Whether the editor panel needs MORE SPACE for custom editors (the TrackEditor column is ~narrow) — the Cube pilot answers it; a pop-out is the fallback, not the premise.</li>
+  <li><span class="badge b-risk">note</span> Phases 1 and 2 are genuinely independent — phase 1 could ship in the next easy batch while this doc's remainder waits.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> one optional def field and a strict "write only through setParam" contract buy instrument-native editors without forking the document's truth — pilot on Cube, extract the kit, and let gizmos be the overlay group's second tenant.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">instrument-plugin-ui-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Instrument Plugin UI — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Instrument Plugin UI</span>
+  <h1>Instrument Plugin UI — Architecture</h1>
+  <p class="sub">The underlying problem, in Julia's words: UI friction when adjusting instrument params. The Logic instinct — every instrument gets its own editor — decomposed into three independently shippable layers, so the architecture never demands a big bang.</p>
+</header>
+
+<h2>1 · Three layers, three ship dates</h2>
+<figure class="fig">
+  <div class="figtitle">Each layer is useful without the next</div>
+  <svg viewBox="0 0 900 400" role="img" aria-label="Layered plan">
+    <rect x="20" y="24" width="860" height="106" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="40" y="54" font-size="17" font-weight="700" fill="#141414">Layer 1 — Better generic controls (ship first, benefits all 28 instruments)</text>
+    <text x="40" y="82" font-size="15" fill="#565656">ParamSlider grows: type-in values (double-click), fine-drag (Shift), reset-to-default (Alt-click), scroll-nudge.</text>
+    <text x="40" y="104" font-size="15" fill="#565656">Kills most of the friction for a day's work; no architecture at all.</text>
+    <rect x="20" y="146" width="860" height="106" rx="10" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="40" y="176" font-size="17" font-weight="700" fill="#141414">Layer 2 — def.editorComponent: the registry hook (the actual architecture)</text>
+    <text x="40" y="204" font-size="15" fill="#565656">An instrument def may declare a custom editor React component; the TrackEditor renders it in place of the generic</text>
+    <text x="40" y="226" font-size="15" fill="#565656">slider list. It receives {trackId, params, setParam} — same store path as sliders, so undo/autosave/automation are free.</text>
+    <rect x="20" y="268" width="860" height="106" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="40" y="298" font-size="17" font-weight="700" fill="#141414">Layer 3 — Direct manipulation in the 3D view (the dream, explicitly last)</text>
+    <text x="40" y="326" font-size="15" fill="#565656">Drag handles/gizmos over the canvas (position pads, radius rings) rendered in the canary-ignored overlay group,</text>
+    <text x="40" y="348" font-size="15" fill="#565656">writing setTrackParam on drag. Builds on layer 2's editors + the HighlightOverlay escape hatch.</text>
+  </svg>
+  <figcaption>Julia's note said it herself: "that doesn't need to be the solution I choose — the underlying problem is friction." Layer 1 attacks friction directly this week; layers 2–3 are the instrument-native experience.</figcaption>
+</figure>
+
+<h2>2 · Layer 2's contract — the part worth getting right</h2>
+<table>
+  <thead><tr><th>Rule</th><th>Why it's load-bearing</th></tr></thead>
+  <tbody>
+    <tr><td>Editors write ONLY through <code>setParam</code> (→ setTrackParam / setTrackStringParam)</td><td>Undo bursts, autosave, the params fast-path (syncParams at 60fps), and automation overlays all hang off the store path. An editor with private state forks the document — the one way this feature can rot the codebase.</td></tr>
+    <tr><td>Editors read params as props, render-pure</td><td>They're views of the document, not owners; an automation lane driving a param must visibly move the custom editor's controls (same live-value affordance as sliders).</td></tr>
+    <tr><td>Generic sliders remain the fallback and the escape hatch</td><td>No editor is required; a "show raw params" toggle on custom editors keeps every value reachable when a bespoke UI hides something.</td></tr>
+    <tr><td>Docked panel first, floating windows maybe never</td><td>The TrackEditor panel is already the instrument's home; Logic's floating windows solve a multi-plugin-visibility problem this app doesn't have yet. Re-evaluate after three pilots.</td></tr>
+    <tr><td>A small kit, not 28 bespoke castles</td><td>Ship an editor-widgets kit (XY pad · hue ring · curve/enum pickers · labeled dial) so custom editors are compositions, and visual language stays coherent across instruments.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · The pilot — Cube</h2>
+<p>One instrument proves the seam: Cube's editor = an <strong>XY position pad</strong> (x/y params; z as a side dial), a <strong>size dial</strong>, the <strong>hue ring</strong>, and spin. Success criteria: positioning the cube takes one drag instead of three slider hunts; automation of x still moves the pad's dot live; nothing about the generic path regressed for the other 27 instruments. Second pilot should be a 2D-canvas instrument (FractalTunnel — sliders for symmetry/branches beg for a radial widget) to prove the kit generalizes beyond transforms.</p>
+
+<h2>4 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Layer order is the roadmap</td><td>1 (friction now) → 2 (seam + Cube pilot) → widgets kit + second pilot → 3 (gizmos). Each stop is a stable resting point.</td></tr>
+    <tr><td>The registry hook is one optional field</td><td><code>editorComponent?: ComponentType&lt;InstrumentEditorProps&gt;</code> on the def — the same pattern as <code>fullFrame</code> and <code>abilities</code>: instruments declare, the shell honors.</td></tr>
+    <tr><td>Layer 3 rides the canaryIgnore overlay</td><td>Gizmos are UI furniture in the scene — the drag-highlights pair establishes the escape hatch; gizmos are its second tenant, not a new invariant exception.</td></tr>
+    <tr><td>Non-goals</td><td>Floating/multi-window management · third-party plugin API · editor-in-canvas overlays for ALL params (gizmos are for spatial params; dials stay dials) · touch support.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> fix the sliders this week, add one optional def field that lets an instrument bring its own editor next, grow a small widget kit through two pilots — and only then put drag handles in the scene, through the same canary escape hatch the hover highlights use.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">instrument-plugin-ui-implementation-plan.html</span>. Related: <span class="file">drag-highlights-*</span> (the overlay escape hatch), automation-copy-bug pair (live-value affordance shared with custom editors).</p>
+
+</div>
+</body>
+</html>
