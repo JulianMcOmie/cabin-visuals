@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Effects Picker Menu — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Effects Picker Menu</span>
+  <h1>Effects Picker Menu — Implementation Plan</h1>
+  <p class="sub">Extract the nested-menu shell into a shared component (it's about to have three consumers), generate its items from the effects registry, and mount it behind an "+ Add effect" slot. Small, but it pays down the one-off-menu debt on the way through.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Shared NestedMenu extraction · registry-driven items · "+ Add effect" slot + right-click on the effects list</td><td>Menu search · effect reordering · removing drag-in · greying duplicates (allowed by design)</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Extract the shared menu <span class="badge b-new">components/NestedMenu.tsx</span></h3>
+<ul class="small">
+  <li>Lift TrackContextMenu's shell into a generic <code>NestedMenu({ x, y, groups, onPick, onClose })</code>: fixed positioning with the flip-up/clamp measurement, hover-open submenus via the existing SubMenu (viewport-safe), outside-click/Escape close. Data shape: <code>groups: { label, items: { id, label, icon?, disabled?, checked? }[] }[]</code>.</li>
+  <li>Re-implement TrackContextMenu ON the shared shell (its two groups + one-lane-per-param disabling map cleanly). Zero behavior change — verified against the flip-up tests that already exist as manual checks.</li>
+  <li>This is the debt payment: automation menu, effects picker, and the future interp Curve menu become three data sets over one component.</li>
+</ul>
+
+<h3>Phase 1 — The slot + the menu <span class="badge b-edit">TrackEditor.tsx</span></h3>
+<ul class="small">
+  <li>Effects tab: after the instance list, an "+ Add effect" row (dashed border, plus icon — reads as an empty Logic slot). Click → NestedMenu at the slot's rect with groups built from <code>PLUGIN_LIST</code> grouped by <code>category</code> (Transform · Clone · Shader, fixed order).</li>
+  <li>Pick → <code>addEffect(track.id, pluginId)</code> — the same action drag-in calls; new instance appears expanded (its settings open) so the add flows straight into tweaking.</li>
+  <li>Right-click anywhere in the effects list opens the same menu at the cursor.</li>
+</ul>
+
+<h3>Phase 2 — Verify</h3>
+<ul class="small">
+  <li>Every category and plugin appears; picking each adds a working instance (spot-check one per category renders its wrapper: transform moves, clone multiplies, shader posts).</li>
+  <li>Menu opened near the panel bottom flips up; submenus clamp (the SubMenu behavior, inherited).</li>
+  <li>Registry regression: add a dummy plugin to the registry in a scratch branch → it appears in library AND menu with no other edits.</li>
+  <li>Automation menu unchanged after the extraction (right-click a track label: same items, same disabling, same flip behavior).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">components/NestedMenu.tsx</span></td><td><span class="badge b-new">new</span> — shared shell (flip/clamp/submenus), extracted not invented.</td></tr>
+    <tr><td><span class="file">components/timeline/TrackContextMenu.tsx</span></td><td>Becomes data + NestedMenu.</td></tr>
+    <tr><td><span class="file">components/TrackEditor.tsx</span></td><td>"+ Add effect" slot · right-click · groups from registry.</td></tr>
+    <tr><td><span class="file">effects/index.ts</span> · store · document</td><td>Untouched — the registry and addEffect already do everything.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>The extraction regressing the automation menu</strong> — it's the only consumer with disabled+checked states; port its tests-by-hand (added items greyed with checkmarks) explicitly.</li>
+  <li><span class="badge b-risk">note</span> Sequencing: land this AFTER the menu flip-up fix is committed (it builds on SubMenu) — already true on dev.</li>
+  <li><span class="badge b-risk">note</span> The interp-discoverability phase 2 (Curve right-click) should be built on NestedMenu too — if that ships first, extract here anyway and migrate it.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> pay the one-off-menu debt by extracting the shell once, then the picker is a data transform: registry → groups → NestedMenu → addEffect.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">effects-picker-menu-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
