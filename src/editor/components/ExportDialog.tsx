@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Film } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
-import { exportAndDownload } from '../core/export/exportEngine'
+import { runExport } from '../core/export/exportEngine'
+import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
 import { defaultBitrate, defaultSettings, RESOLUTIONS, type ExportSettings } from '../core/export/types'
@@ -14,7 +15,8 @@ const SETTINGS_KEY = 'cabin.exportSettings'
 type Phase =
   | { kind: 'settings' }
   | { kind: 'running'; frame: number; total: number; startedAt: number }
-  | { kind: 'done'; fileName: string }
+  // The finished file waits here — nothing downloads until the user asks.
+  | { kind: 'done'; fileName: string; blob: Blob }
   | { kind: 'error'; message: string }
 
 function loadSavedSettings(): ExportSettings {
@@ -86,7 +88,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     abortRef.current = ctrl
     setPhase({ kind: 'running', frame: 0, total: 1, startedAt: performance.now() })
     try {
-      const finished = await exportAndDownload(
+      const { blob } = await runExport(
         effective,
         { bpm, beatsPerBar, totalBars, audioTracks },
         {
@@ -95,7 +97,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             setPhase((p) => (p.kind === 'running' ? { ...p, frame, total } : p)),
         },
       )
-      setPhase(finished ? { kind: 'done', fileName: effective.fileName } : { kind: 'settings' })
+      setPhase(blob ? { kind: 'done', fileName: effective.fileName, blob } : { kind: 'settings' })
     } catch (err) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -192,7 +194,16 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 
         {phase.kind === 'done' && (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-zinc-300">Saved <span className="font-mono text-zinc-100">{phase.fileName}.mp4</span> to your downloads.</p>
+            <p className="text-xs text-zinc-300">
+              <span className="font-mono text-zinc-100">{phase.fileName}.mp4</span> is ready
+              <span className="text-zinc-500"> · {(phase.blob.size / 1e6).toFixed(1)} MB</span>
+            </p>
+            <button
+              onClick={() => downloadBlob(phase.blob, phase.fileName)}
+              className="h-8 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+            >
+              Download
+            </button>
             <button onClick={onClose} className="h-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors">Close</button>
           </div>
         )}

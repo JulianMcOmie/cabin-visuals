@@ -7,7 +7,7 @@
 import type { Track } from '../../types'
 import { makeTimebase, type ExportSettings, type ExportTimebase } from './types'
 import { getFrameDriver, type FrameDriver } from './frameDriver'
-import { Mp4Writer, downloadBlob } from './mux'
+import { Mp4Writer } from './mux'
 import { createVideoEncodeSession } from './videoEncode'
 import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
 
@@ -116,16 +116,4 @@ export async function runExport(
     // at the untouched store beat, exactly where the user left it.
     driver.unpin()
   }
-}
-
-/** runExport + hand the file to the browser. Returns false on abort. */
-export async function exportAndDownload(
-  settings: ExportSettings,
-  project: ProjectTime,
-  hooks: WalkHooks = {},
-): Promise<boolean> {
-  const { blob } = await runExport(settings, project, hooks)
-  if (!blob) return false
-  downloadBlob(blob, settings.fileName)
-  return true
 }
