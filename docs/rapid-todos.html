@@ -58,6 +58,7 @@
 
 <!-- AT A GLANCE -->
 <div class="glance">
+  <p class="small muted" style="margin:8px 0 0">★ = blocked on investigation or someone's input before the work can start.</p>
   <h3>✅ Completed</h3>
   <ul>
     <li><strong>Audio track</strong> — audio is its own timeline track (drag, trim, waveform) with a dedicated engine.</li>
@@ -77,18 +78,20 @@
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
+    <li><strong>First-note bug ★</strong> — investigate Tyler's report that play-from-start skips the first note.</li>
+    <li><strong>Automation copy bug ★</strong> — investigate Tyler's report that automating changes a copy; likely a slider-feedback gap, not an engine bug.</li>
+    <li><strong>Automatable mute ★</strong> — verify the Mute modifier already covers Tyler's "remove an instrument via MIDI" ask.</li>
     <li><strong>Interp discoverability</strong> — surface the buried per-lane curve dropdown and show it even when the param lookup fails.</li>
-    <li><strong>First-note bug</strong> — investigate Tyler's report that play-from-start skips the first note.</li>
-    <li><strong>Automation copy bug</strong> — investigate Tyler's report that automating changes a copy; likely a slider-feedback gap, not an engine bug.</li>
     <li><strong>Overscroll back-swipe</strong> — stop leftward timeline scroll from navigating the browser back.</li>
     <li><strong>Menu flip-up</strong> — context menus should open upward when there's no room below.</li>
     <li><strong>Mass mute/solo</strong> — drag across M/S buttons to paint one state over many tracks, Logic-style.</li>
     <li><strong>Fullscreen visual</strong> — a button/hotkey to take the canvas fullscreen.</li>
     <li><strong>Export filename</strong> — default to the project name instead of "export".</li>
-    <li><strong>Automatable mute</strong> — verify the Mute modifier already covers Tyler's "remove an instrument via MIDI" ask.</li>
   </ul>
   <h3>🟡 Medium remaining</h3>
   <ul>
+    <li><strong>Nested mute/solo ★</strong> — decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
+    <li><strong>Copy-paste automation ★</strong> — move automation lanes between instruments (needs Tyler's clarification first).</li>
     <li><strong>MIDI import</strong> — parse .mid files into blocks/notes; keep full pitch data and let the editor view reconcile narrow instruments.</li>
     <li><strong>Row hiding/scaling</strong> — piano-roll options to hide rows, compress row height, and filter to a scale.</li>
     <li><strong>Loop blocks</strong> — right-edge resize past the content repeats the pattern (the loop flag exists, nothing consumes it).</li>
@@ -97,11 +100,9 @@
     <li><strong>Per-keyframe curves</strong> — each automation segment carries its own curve instead of one mode per lane.</li>
     <li><strong>Effect-param automation</strong> — automation lanes that target an effect instance's settings, not just instrument params.</li>
     <li><strong>Drag highlights</strong> — stronger drop-target affordance for library drags, and highlight objects when hovering modulator targets.</li>
-    <li><strong>Nested mute/solo</strong> — decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
     <li><strong>Export ranges</strong> — export a section of the project (and later, the loop region).</li>
     <li><strong>Envelope modulator</strong> — a generic ADSR that targets any numeric param (opacity being the headline use).</li>
     <li><strong>Tag automation</strong> — one automation lane drives a param across every instrument carrying a tag.</li>
-    <li><strong>Copy-paste automation</strong> — move automation lanes between instruments (needs Tyler's clarification first).</li>
     <li><strong>3D model import</strong> — a Model instrument for uploaded glTF meme assets, bytes stored like audio.</li>
   </ul>
   <h3>🔴 Hard</h3>
