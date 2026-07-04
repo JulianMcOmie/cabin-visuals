@@ -233,8 +233,7 @@ function RunningView({ phase, fps, onCancel }: { phase: Extract<Phase, { kind: '
       <div className="flex justify-between text-[11px] text-zinc-500 font-mono tabular-nums">
         <span>{phase.frame} / {phase.total} frames</span>
         <span>
-          {speed > 0 ? `${speed.toFixed(1)}× realtime` : '…'}
-          {remaining != null && ` · ~${Math.max(1, Math.round(remaining))}s left`}
+          {remaining != null && `~${Math.max(1, Math.round(remaining))}s left`}
         </span>
       </div>
       <button onClick={onCancel} className="h-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors">Cancel</button>
