@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nested Mute/Solo — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Nested Mute/Solo</span>
+  <h1>Nested Mute/Solo — Architecture</h1>
+  <p class="sub">Three semantic questions the M/S buttons don't currently answer for nested tracks — with the current behavior mapped, an industry-default recommendation, and the parts that wait for Tyler's model (★).</p>
+</header>
+
+<h2>1 · What the buttons mean today</h2>
+<figure class="fig">
+  <div class="figtitle">Current semantics — flat, per-track, subtree-blind</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Current semantics">
+    <rect x="20" y="24" width="860" height="80" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="40" y="54" font-size="17" font-weight="700" fill="#141414">Mute — strictly per-track</text>
+    <text x="40" y="80" font-size="15" fill="#565656">muting a parent hides ITS object; children keep playing. Nothing cascades.</text>
+    <rect x="20" y="118" width="860" height="80" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="40" y="148" font-size="17" font-weight="700" fill="#141414">Solo — global across OBJECT tracks only</text>
+    <text x="40" y="174" font-size="15" fill="#565656">any object solo → all non-soloed objects off. Deliberate carve-out: modulators, modifiers, and automation are never</text>
+    <text x="40" y="194" font-size="15" fill="#565656">solo-killed, so soloing an object keeps its own control lanes alive.</text>
+    <rect x="20" y="212" width="860" height="72" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="40" y="242" font-size="17" font-weight="700" fill="#141414">Audio tracks — a parallel copy of the same flat rule</text>
+    <text x="40" y="266" font-size="15" fill="#565656">audible = !muted && !(anySolo && !solo), folded at arm time in the audio engine. Whatever changes must change here too.</text>
+  </svg>
+  <figcaption>The carve-out for control lanes is a good decision to preserve: solo means "show me this object," never "disconnect its wiring."</figcaption>
+</figure>
+
+<h2>2 · The three questions ★</h2>
+<table>
+  <thead><tr><th>Question</th><th>Options</th><th>Recommendation (pending Tyler)</th></tr></thead>
+  <tbody>
+    <tr><td>Does parent MUTE cascade?</td><td>(a) No — today's behavior. (b) Yes — muting a group silences the subtree, children remember their own state.</td><td><strong>(b).</strong> It's what every DAW does and what grouping is FOR. Render the inherited state differently (dim amber) so a child shows "muted because of my parent," like Logic's dark-vs-light mute.</td></tr>
+    <tr><td>Does parent SOLO include the subtree?</td><td>(a) Solo = this object only. (b) Solo = this subtree — the group performs together.</td><td><strong>(b).</strong> Soloing a branch you built as a unit should show the unit. Implementation is "effective solo = own solo OR any ancestor's."</td></tr>
+    <tr><td>What does a CHILD's solo mean?</td><td>(a) Global, same as any solo (isolates that child against the whole project). (b) Scoped: isolates only among its siblings, parent context keeps playing.</td><td><strong>(a)</strong> for now — one rule everywhere, no hidden scoping. (b) is the power-user feature to revisit if Tyler asks for in-group auditioning.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · The shape of the implementation (once decided)</h2>
+<p>All three answers become one pure pass at resolve time: walk each track's ancestry once and compute <code>effectiveMuted</code> / <code>effectiveSolo</code>, then feed those to the exact two places the flat flags feed today — resolve's <code>objectOff</code> for visuals, and the audio engine's audibility fold. No per-frame work, no schema change (the document keeps storing only the user's own clicks; effective state is derived).</p>
+
+<h2>4 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Derived, never stored</td><td>Only the clicked state persists; effective state is recomputed. Undo, autosave, and the document stay untouched.</td></tr>
+    <tr><td>Visuals and audio decide identically</td><td>One helper (<code>effectiveMuteSolo(trackId)</code>) consumed by both engines — the audio-track plan's lesson (shared placement math) applied to audibility.</td></tr>
+    <tr><td>Control lanes stay solo-immune</td><td>The existing carve-out survives every option: solo never severs an object from its own automation/modifiers/modulators.</td></tr>
+    <tr><td>★ blocked on Tyler for Q1–Q3</td><td>The table above is a proposal to react to, not a decision — "tyler probably has a decent idea" is the task's first line.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> keep storing only what was clicked, derive what's audible/visible by walking ancestors in one resolve-time pass, feed both engines from the same helper — and let Tyler's answers to three questions fill in the truth table before any code.</div>
+
+<hr/>
+<p class="small muted">Architecture — build steps in <span class="file">nested-mute-solo-implementation-plan.html</span>. Current logic: <span class="file">core/visual/resolve.ts</span> (objectOff, anyObjectSolo) · <span class="file">core/audio/AudioEngine.setBlocks</span> · M/S buttons in <span class="file">timeline/Track.tsx</span> (now with paint-drag).</p>
+
+</div>
+</body>
+</html>

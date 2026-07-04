@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nested Mute/Solo — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Nested Mute/Solo</span>
+  <h1>Nested Mute/Solo — Implementation Plan</h1>
+  <p class="sub">Phase 0 is a conversation; the code is one derived-state helper consumed by both engines, plus a two-tone button treatment. An afternoon once the truth table is signed.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>The semantics decision (with Tyler) · effective-state derivation · both engines consuming it · inherited-state button styling</td><td>Sibling-scoped solo (Q3 option b — revisit on request) · solo-safe flags · mute automation (separate item) · any schema change</td></tr>
+  </tbody>
+</table>
+
+<h2>B · The derived-state helper</h2>
+<pre><code>// core/trackTypes.ts (or a sibling) — pure, resolve-time, no per-frame work
+function effectiveMuteSolo(tracks, trackId): { muted: boolean; soloed: boolean } {
+  let muted = false, soloed = false
+  for (let t = tracks[trackId]; t; t = t.parentId ? tracks[t.parentId] : undefined) {
+    muted ||= t.muted          // Q1(b): any ancestor's mute silences you
+    soloed ||= t.solo          // Q2(b): any ancestor's solo includes you
+  }
+  return { muted, soloed }
+}
+// anySolo remains "any OBJECT track effectively soloed";
+// objectOff = eff.muted || (anySolo && !eff.soloed)   — same formula, effective inputs</code></pre>
+<p class="small muted">O(depth) per track, computed once per resolve. If Tyler's answers differ from the recommendation, only this helper changes — that's the point of it.</p>
+
+<h2>C · Phase-by-phase</h2>
+
+<h3>Phase 0 — Sign the truth table <span class="badge b-risk">★ Tyler</span></h3>
+<ul class="small">
+  <li>Walk him through the three questions in the architecture doc; capture the answers as a literal truth table in that doc (parent muted × child solo × …). Fifteen rows cover it.</li>
+</ul>
+
+<h3>Phase 1 — Visual engine <span class="badge b-edit">resolve.ts</span></h3>
+<ul class="small">
+  <li>Replace the flat reads in <code>objectOff</code>/<code>anyObjectSolo</code> with the helper. The control-lane carve-out (modifiers/automation/modulators never solo-killed) is preserved by construction — it lives downstream of objectOff.</li>
+  <li>Verify: 3-level tree; mute the root → whole subtree dark; solo a mid parent → its subtree plays, the rest dark; child keeps its own M state visibly remembered when parent unmutes.</li>
+</ul>
+
+<h3>Phase 2 — Audio engine <span class="badge b-edit">AudioEngine.setBlocks</span> <span class="badge b-edit">usePlayback</span></h3>
+<ul class="small">
+  <li>The audibility fold uses the same helper (audio tracks are flat today — one pinned track — but the rule must be uniform for when they aren't). The gather in usePlayback passes the tracks map through.</li>
+  <li>Verify: mute/solo changes mid-playback re-arm correctly (the existing live-edit subscription path).</li>
+</ul>
+
+<h3>Phase 3 — Button states <span class="badge b-edit">Track.tsx</span></h3>
+<ul class="small">
+  <li>Three visual states per button: off · own (solid amber/green, as today) · inherited (dim amber/green, not clickable-off from the child — clicking sets the CHILD's own flag, Logic-style).</li>
+  <li>The paint-drag gesture keeps painting OWN state only; inherited rendering is display-only.</li>
+  <li>Verify: dim state appears on all descendants when a parent mutes; a dim child clicked becomes solid (own mute layered under parent's).</li>
+</ul>
+
+<h2>D · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/trackTypes.ts</span></td><td><span class="badge b-new">new</span> effectiveMuteSolo — the one place ancestry semantics live.</td></tr>
+    <tr><td><span class="file">core/visual/resolve.ts</span></td><td>objectOff/anySolo read effective state.</td></tr>
+    <tr><td><span class="file">core/audio/AudioEngine.ts</span> · <span class="file">hooks/usePlayback.ts</span></td><td>Audibility fold reads effective state.</td></tr>
+    <tr><td><span class="file">components/timeline/Track.tsx</span></td><td>Two-tone inherited styling on M/S.</td></tr>
+    <tr><td>Document schema · stores</td><td>Untouched — effective state is derived.</td></tr>
+  </tbody>
+</table>
+
+<h2>E · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">★ open</span> <strong>The truth table itself.</strong> Everything below phase 0 assumes the (b)/(b)/(a) recommendation; different answers change only the helper + button styling, but don't start before the sign-off.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Divergence between engines</strong> — prevented structurally: neither engine computes its own ancestry walk; both import the helper.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Solo UX confusion with modulators:</strong> soloing an object whose modulator lives OUTSIDE its subtree still works (carve-out), but the modulator's row doesn't light up — consider a subtle "active under solo" hint later, not now.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> one pure ancestry-walking helper becomes the single source of "who's audible/visible," both engines import it, the buttons learn a dim inherited tone — and the whole feature is however Tyler fills in three blanks.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">nested-mute-solo-architecture.html</span>; related earlier notes in <span class="file">docs/mute-solo-tradeoffs.html</span>.</p>
+
+</div>
+</body>
+</html>
