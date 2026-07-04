@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Model Import — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · 3D Model Import</span>
+  <h1>3D Model Import — Architecture</h1>
+  <p class="sub">"Borderline, but it's made out of Tame Impala's face" — a Model instrument that renders a user-uploaded glTF and behaves like every other instrument (params, ports, modulators, effects, export). The bytes problem is already solved once: copy the audio pattern verbatim, aimed at a models bucket.</p>
+</header>
+
+<h2>1 · Two pipelines, one proven shape</h2>
+<figure class="fig">
+  <div class="figtitle">The audio-bytes pattern, transplanted</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Bytes pattern transplant">
+    <defs><marker id="a18" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <text x="40" y="40" font-size="15.5" font-weight="700" fill="#565656">AUDIO (shipped)</text>
+    <rect x="20" y="52" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="120" y="78" text-anchor="middle" font-size="14.5" fill="#141414">project-audio bucket</text>
+    <text x="120" y="98" text-anchor="middle" font-size="13.5" fill="#565656">opaque ref in the doc</text>
+    <rect x="260" y="52" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="360" y="78" text-anchor="middle" font-size="14.5" fill="#141414">audioSource.ts</text>
+    <text x="360" y="98" text-anchor="middle" font-size="13.5" fill="#565656">session URL cache</text>
+    <rect x="500" y="52" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="600" y="78" text-anchor="middle" font-size="14.5" fill="#141414">waveform.ts</text>
+    <text x="600" y="98" text-anchor="middle" font-size="13.5" fill="#565656">decode-once cache</text>
+    <rect x="740" y="52" width="140" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="810" y="88" text-anchor="middle" font-size="14.5" fill="#141414">players</text>
+    <text x="40" y="180" font-size="15.5" font-weight="700" fill="#141414">MODELS (this pair)</text>
+    <rect x="20" y="192" width="200" height="60" rx="8" fill="#141414"/>
+    <text x="120" y="218" text-anchor="middle" font-size="14.5" fill="#fff">project-models bucket</text>
+    <text x="120" y="238" text-anchor="middle" font-size="13.5" fill="#fff">opaque ref in the doc</text>
+    <rect x="260" y="192" width="200" height="60" rx="8" fill="#141414"/>
+    <text x="360" y="218" text-anchor="middle" font-size="14.5" fill="#fff">modelSource.ts</text>
+    <text x="360" y="238" text-anchor="middle" font-size="13.5" fill="#fff">session URL cache</text>
+    <rect x="500" y="192" width="200" height="60" rx="8" fill="#141414"/>
+    <text x="600" y="218" text-anchor="middle" font-size="14.5" fill="#fff">modelCache.ts</text>
+    <text x="600" y="238" text-anchor="middle" font-size="13.5" fill="#fff">GLTFLoader parse-once</text>
+    <rect x="740" y="192" width="140" height="60" rx="8" fill="#141414"/>
+    <text x="810" y="222" text-anchor="middle" font-size="14.5" fill="#fff">Model</text>
+    <text x="810" y="242" text-anchor="middle" font-size="13.5" fill="#fff">instrument</text>
+    <path d="M220,82 L252,82 M460,82 L492,82 M700,82 L732,82" stroke="#141414" stroke-width="2" marker-end="url(#a18)"/>
+    <path d="M220,222 L252,222 M460,222 L492,222 M700,222 L732,222" stroke="#141414" stroke-width="2" marker-end="url(#a18)"/>
+    <text x="450" y="300" text-anchor="middle" font-size="14.5" fill="#565656">same seams, same names, same session-cache semantics — a reviewer of the audio code can review this blind</text>
+  </svg>
+  <figcaption>The document stores a <code>modelAssets</code> catalog (ref → fileName, mirroring <code>audioClips</code>) and the Model instrument's track stores which ref it wears — a string param, which <code>setTrackStringParam</code> already supports.</figcaption>
+</figure>
+
+<h2>2 · The Model instrument</h2>
+<table>
+  <thead><tr><th>Aspect</th><th>Design</th></tr></thead>
+  <tbody>
+    <tr><td>Params</td><td>modelRef (string, set via upload/picker UI — not a slider) · the standard family: baseSize, baseX/Y/Z, baseHue as a TINT (lerp material color toward hue, amount param) · spinSpeed (opt-in, 0 default — the Cube convention).</td></tr>
+    <tr><td>Ports / notes</td><td>energy/scale/hue ports like the basic shapes; note hits pulse scale via the shared breathe/energy pattern — a meme face that thumps on the kick with zero extra work.</td></tr>
+    <tr><td>Normalization</td><td>On parse: center to bounding-box center, uniform-scale to a 1.6-unit box (the Cube's footprint) — so baseSize means the same thing for a 2cm and a 200m model.</td></tr>
+    <tr><td>Abilities/effects</td><td>None bespoke; clone/transform/shader effects apply as to any object (radial-copied meme faces are exactly the point).</td></tr>
+    <tr><td>Fallback</td><td>Missing/unloaded ref renders a placeholder wireframe box — never a crash, never an empty scene mystery.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>glTF/GLB only, 25&nbsp;MB cap</td><td>The one format with a first-class three.js loader and embedded textures (GLB). OBJ/FBX conversions happen outside the app. The cap keeps buckets and load times sane; raise later if it pinches.</td></tr>
+    <tr><td><code>modelAssets</code> catalog beside <code>audioClips</code></td><td>Optional document field (absent = empty) → no version bump; serialize/hydrate mirror the audioClips special-case.</td></tr>
+    <tr><td>Bytes pattern copied, not abstracted</td><td>Two similar 50-line modules beat one premature generic asset layer; if a THIRD asset type appears, extract then.</td></tr>
+    <tr><td>Static geometry v1</td><td>glTF animations are wall-clock temptations — the pause invariant forbids playing them as-is. If wanted later: sample animation clips BY BEAT (clip.time = f(beat)), a deliberate follow-up.</td></tr>
+    <tr><td>Non-goals</td><td>Model marketplace/library UI beyond a per-project list · draco/meshopt compression · skeletal animation · per-mesh material editing.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> a fourth basic shape whose geometry comes from a bucket — the audio-bytes seams copied name-for-name, the mesh normalized into the Cube's footprint, and every existing system (ports, effects, export) treats it as furniture it already knows.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">model-import-implementation-plan.html</span>. The pattern source: <span class="file">core/audio/audioSource.ts</span> · <span class="file">persistence/audioStorage.ts</span> · <code>AudioStore.audioClips</code>.</p>
+
+</div>
+</body>
+</html>

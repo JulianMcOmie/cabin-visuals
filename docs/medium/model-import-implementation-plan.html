@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3D Model Import — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · 3D Model Import</span>
+  <h1>3D Model Import — Implementation Plan</h1>
+  <p class="sub">Four phases, three of them transcriptions of shipped audio code: bucket + source cache, catalog + persistence ride-along, the Model instrument, upload UI. The only genuinely new engineering is glTF normalization and the parse cache.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>project-models bucket + RLS · modelSource/modelCache · modelAssets catalog through serialize/hydrate · Model instrument (normalized, tinted, ports) · upload tile + per-project model picker · placeholder fallback · 25MB cap</td><td>Skeletal/keyframe animation (beat-sampled clips = named follow-up) · draco compression · shared asset library across projects · OBJ/FBX</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 1 — Bytes plumbing <span class="badge b-new">persistence + core</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">persistence/modelStorage.ts</span>: transcribe audioStorage (upload/getUrl/delete) against a <code>project-models</code> bucket; same RLS policy shape, applied via the Drizzle RLS setup like the audio bucket was.</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/visual/modelSource.ts</span>: transcribe audioSource — saveModel(File)→ref with the no-project session fallback, getModelUrl(ref) with the object-URL cache, removeModel.</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/visual/modelCache.ts</span>: <code>getModelScene(ref): Promise&lt;Group&gt;</code> — fetch → GLTFLoader.parse (cached by ref, failures uncached) → NORMALIZE: recenter to bbox center, uniform scale into a 1.6 box; return a template the instrument CLONES per use (two tracks wearing one ref must not share mutable transforms).</li>
+  <li>Verify: node-side none (browser APIs); in-app: upload → ref resolves → parse logs dimensions → normalization puts any test model in a ~1.6 box.</li>
+</ul>
+
+<h3>Phase 2 — Catalog + persistence <span class="badge b-edit">stores · serialize</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">store/ModelStore.ts</span>: <code>modelAssets: Record&lt;ref, {fileName: string}&gt;</code> + add/remove — AudioStore's twin.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">persistence/serialize.ts</span>: doc gains <code>modelAssets</code> beside audioClips (pick + hydrate with <code>?? {}</code>); <span class="file">persistence/types.ts</span> optional field. No version bump — absent reads as empty.</li>
+  <li>Verify: save/reload round-trips the catalog; an old document loads with an empty catalog silently.</li>
+</ul>
+
+<h3>Phase 3 — The instrument <span class="badge b-new">instruments/Model.tsx</span></h3>
+<ul class="small">
+  <li>Def: params (baseSize/baseX/Y/Z/spinSpeed sliders + <code>modelRef</code> as a string param), the standard ports, <code>localTransform</code> copied from Cube's (breathe × energy, opt-in spin).</li>
+  <li>Component: <code>useInstrumentFrame</code> for tint/emissive (hue-tint params lerp cached material colors — clone materials once per instance); suspense-free async load: placeholder wireframe box until getModelScene resolves, then swap the cloned scene in.</li>
+  <li>Registry + library tile ("Model" under Object). Selecting a Model track shows a "Choose model…" row in the TrackEditor: existing assets from the catalog + an Upload button (file input → saveModel → catalog add → setTrackStringParam('modelRef', ref)).</li>
+  <li>Verify: upload a GLB → renders normalized; notes pulse it; a clone effect multiplies it; export includes it (nothing special — it's scene furniture); missing ref (asset deleted) → placeholder + no crash; two tracks, one ref → independent transforms.</li>
+</ul>
+
+<h3>Phase 4 — Guardrails</h3>
+<ul class="small">
+  <li>25MB pre-upload check with a readable toast; accept .glb/.gltf only (.gltf with external buffers is rejected with "use GLB" guidance — the single-file constraint keeps the bucket model trivial).</li>
+  <li>Poly sanity: log triangle count on parse; above ~500k warn in the picker row ("heavy model — may drop frames"). No hard block.</li>
+  <li>Asset delete from the picker: removes catalog entry + bucket object (fire-and-forget like audio); tracks wearing it fall back to placeholder.</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">persistence/modelStorage.ts</span> · bucket + RLS migration</td><td><span class="badge b-new">new</span> — audioStorage transcription.</td></tr>
+    <tr><td><span class="file">core/visual/modelSource.ts · modelCache.ts</span></td><td><span class="badge b-new">new</span> — ref→URL cache · parse-once + normalize + clone-out.</td></tr>
+    <tr><td><span class="file">store/ModelStore.ts</span> · <span class="file">persistence/serialize.ts · types.ts</span></td><td>Catalog + ride-along.</td></tr>
+    <tr><td><span class="file">instruments/Model.tsx</span> · <span class="file">instruments/index.ts</span></td><td><span class="badge b-new">new</span> instrument + registry.</td></tr>
+    <tr><td><span class="file">components/TrackEditor.tsx</span></td><td>Choose/upload model row for Model tracks.</td></tr>
+    <tr><td>Engines · export · upgrade chain</td><td>Untouched.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Pause invariant vs glTF content:</strong> some GLBs carry animations that drei-style helpers auto-play — the loader path must NOT start mixers. Static scene extraction only; the canary will catch violations instantly (its job).</li>
+  <li><span class="badge b-risk">risk</span> <strong>Texture memory</strong> on meme-sized PNGs inside GLBs — the 25MB cap bounds it roughly; revisit with real usage.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Material cloning double-count</strong> (tint needs clones; clone EFFECTS clone again) — the tint clones at instrument mount, effects clone via CloneSpec instancing — confirm the interaction on one test scene early in phase 3.</li>
+  <li><span class="badge b-risk">open</span> Default hue-tint amount 0 (model's own colors) — assumed; confirm with Julia.</li>
+  <li><span class="badge b-risk">note</span> Beat-sampled glTF animation is the killer follow-up ("the face lip-syncs") — the modelCache API should return clips metadata now (unused) so the follow-up doesn't re-parse.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> transcribe the audio-bytes stack against a models bucket, normalize every mesh into the Cube's 1.6 box, and ship a fourth basic shape whose geometry happens to be someone's face.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">model-import-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
