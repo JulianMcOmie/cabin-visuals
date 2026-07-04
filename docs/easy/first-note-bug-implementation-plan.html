@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>First-Note Bug — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .note{border-left:4px solid #c2c2c2;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.note,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · First-Note Bug</span>
+  <h1>First-Note Bug — Implementation Plan</h1>
+  <p class="sub">Turning <span class="file">first-note-bug-architecture.html</span> into an afternoon: reproduce, discriminate between the three hypotheses with the cheapest decisive checks, then land the one fix that outcome demands.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Reproducing Tyler's report; identifying which hypothesis holds; the matching fix (attack ramp OR first-frame guarantee OR comparator normalization)</td><td>Redesigning note envelopes generally · pre-roll/count-in as a transport feature (note it as follow-up if H1 wins and the ramp isn't enough)</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Reproduce <span class="badge b-risk">requires Tyler's project or params</span></h3>
+<ul class="small">
+  <li>Get the exact setup: which instrument, note at which beat, bpm. Failing that: Cube + one note at beat 0, 120bpm — the minimal candidate.</li>
+  <li>Record what "doesn't play" means on screen: never appears vs appears-mid-decay vs appears without attack.</li>
+</ul>
+
+<h3>Phase 1 — Discriminate (no code changes, ~15 minutes)</h3>
+<ul class="small">
+  <li><strong>H1 check:</strong> park the playhead at beat 0 (SkipBack). If the note's visual is already at full intensity while paused, nothing is being skipped — the envelope peaks at onset by design. (The pause invariant guarantees this parked frame ≡ playback's frame at 0.)</li>
+  <li><strong>H2 check:</strong> temporary log in <span class="file">core/playback.ts</span>'s RAF tick — the first 10 beats after play(). Starts at 0.000 → H2 dead. Starts at ~one-frame-worth → H2 confirmed.</li>
+  <li><strong>H3 check:</strong> <code>grep -n "beat &gt;" src/editor/instruments/</code> vs <code>"beat &gt;="</code> — comparator outliers on onset tests.</li>
+</ul>
+
+<h3>Phase 2 — The fix (one of three)</h3>
+<ul class="small">
+  <li><span class="badge b-edit">H1</span> Add a short beat-derived attack to the shared envelope shape: <code>env = attack(t) · decay(t)</code> with <code>attack(t) = min(1, t / ATTACK_BEATS)</code>, <code>ATTACK_BEATS ≈ 0.05</code>. Applied where envelopes are computed (per-instrument helpers; start with the instruments Tyler names). Still a pure function of beat — the canary stays green. <strong>Decision with Julia/Tyler first:</strong> ramp vs pre-roll vs "author notes off zero".</li>
+  <li><span class="badge b-edit">H2</span> In <span class="file">core/playback.ts</span>: on play, synchronously publish the start beat once (<code>onBeatChange(startBeat)</code>) before the first RAF tick, so frame one is exactly the pressed-play beat.</li>
+  <li><span class="badge b-edit">H3</span> Normalize onset comparators to <code>&gt;=</code> in the offending instruments; one sweep, one convention comment in <span class="file">instruments/types.ts</span>.</li>
+</ul>
+
+<h3>Phase 3 — Verify</h3>
+<ul class="small">
+  <li>Play from 0 with a note at 0: the note's attack is visible (H1) / the first frame equals beat 0 in the log (H2) / the outlier instruments now fire at 0 (H3).</li>
+  <li>Scrub-land on beat 0 still shows the documented peak (H1's ramp must not break the scrub-lands-on-peak behavior for beats &gt; 0 — the ramp only softens the first ~0.05 beat).</li>
+  <li>Export a 2-bar project with a beat-0 note — the first frames of the file show the same thing the editor shows (export shares the path, so this is free regression coverage).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/playback.ts</span></td><td>H2 only: emit the start beat synchronously at play. Otherwise untouched.</td></tr>
+    <tr><td><span class="file">instruments/*</span> (envelope call sites)</td><td>H1: attack term in the shared envelope math. H3: comparator normalization.</td></tr>
+    <tr><td><span class="file">core/visual/*</span>, stores, persistence</td><td>Untouched in every outcome.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Fixing the wrong reading.</strong> Don't code before Phase 1 discriminates — an attack ramp "fix" for what's actually a first-frame skip would mask the real defect.</li>
+  <li><span class="badge b-risk">risk</span> <strong>H1's ramp changes every instrument's feel slightly.</strong> Keep ATTACK_BEATS tiny and get a thumbs-up on one instrument before sweeping.</li>
+  <li><span class="badge b-risk">note</span> The audio track is not implicated: blocks at bar 0 arm with <code>delaySec = 0</code> against the shared <code>when</code> anchor — if audio ALSO seems to clip at play, that's a separate report.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> park the playhead where play misbehaves and read the frozen frame — fifteen minutes of discrimination picks between a two-line transport guarantee, a comparator sweep, and a design conversation about attack ramps.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Mirrors the house implementation-plan shape at investigation scale; derives its hypotheses from <span class="file">first-note-bug-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
