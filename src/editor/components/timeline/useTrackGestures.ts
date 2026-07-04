@@ -80,10 +80,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   const abortRef = useRef<AbortController | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
-  // Snap a bar position to the nearest beat (blocks snap to beats, not whole bars).
+  // Snap a bar position to the nearest quarter-beat (move, resize, and the
+  // draw gesture's growing edge all come through here).
   const snapBar = (bar: number) => {
-    const bpb = useProjectStore.getState().beatsPerBar
-    return Math.round(bar * bpb) / bpb
+    const q = useProjectStore.getState().beatsPerBar * 4 // quarter-beats per bar
+    return Math.round(bar * q) / q
   }
 
   const beginGestureTracking = useCallback(() => {
