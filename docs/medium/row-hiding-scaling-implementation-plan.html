@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Row Hiding / Scaling — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Row Hiding / Scaling</span>
+  <h1>Row Hiding / Scaling — Implementation Plan</h1>
+  <p class="sub">Phase 1 is the whole risk: route every y⟷pitch conversion through one row model. After that, filters are list comprehensions and the toolbar is a dropdown.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>rowModel module · gesture/grid/gutter migration · filters (all/used/mapped/scale) · hidden-note count chip · toolbar UI</td><td>Vim hotkeys (midi-vim binds to this later) · collapsed-row ghost markers · custom scale editor · persisting filters in the document</td></tr>
+  </tbody>
+</table>
+
+<h2>B · The row model</h2>
+<pre><code>// components/midi/rowModel.ts — pure
+export type RowFilter =
+  | { kind: 'all' }
+  | { kind: 'used'; marginOctaves?: number }
+  | { kind: 'mapped' }                        // instrument's declared pitch map
+  | { kind: 'scale'; root: number; scale: 'major' | 'minor' | 'pentatonic' }
+
+export interface RowModel {
+  rows: Row[]                                  // visible, top-first (existing Row shape)
+  indexOfPitch(pitch: number): number | -1     // -1 = hidden
+  pitchAtIndex(i: number): number
+  hiddenNoteCount(notes: Note[]): number
+}
+export function buildRowModel(filter, ctx: { notes; instrumentMap? }): RowModel</code></pre>
+<p class="small muted">Automation lanes are exempt: their value-rows already come from generateAutomationRows and never filter.</p>
+
+<h2>C · Phase-by-phase</h2>
+
+<h3>Phase 1 — Route the coordinate system ★ keystone <span class="badge b-edit">midi editor</span></h3>
+<ul class="small">
+  <li>Introduce <span class="file">rowModel.ts</span> with filter fixed to <code>all</code> — output identical to today's generateRows.</li>
+  <li>Replace every direct y⟷pitch computation with the model: <code>yToRowIndex</code> → <code>model.pitchAtIndex(y / rowHeight | 0)</code>; <code>pitchToRowIndex</code> → <code>model.indexOfPitch</code>. Call sites: note draw (right-click), move (pitch delta must step through VISIBLE rows, not raw semitones), resize hit-tests, marquee bounds, scroll-to-first-note, the drawing preview.</li>
+  <li>Verify: with filter=all, the editor is behaviorally identical (this phase must be a no-op — that's what makes it safe to land alone).</li>
+</ul>
+
+<h3>Phase 2 — Filters <span class="badge b-edit">rowModel · toolbar</span></h3>
+<ul class="small">
+  <li>Implement used/mapped/scale comprehensions. "Mapped" needs instruments to DECLARE their pitch map — add an optional <code>pitchMap?: number[] | {min,max}</code> to the instrument def type; instruments without one simply don't offer the filter.</li>
+  <li>Toolbar: a Rows dropdown (All · Used · Mapped · Scale ▸ root+kind) next to the Curve control; the hidden-note chip ("3 hidden") appears when &gt;0, click = switch to Used.</li>
+  <li>Note-move semantics across hidden rows: dragging a note vertically moves it to the next VISIBLE pitch (that's the "fixed long distances" feature working); notes cannot be dropped onto hidden pitches.</li>
+  <li>Verify: mapped filter on a narrow instrument shows exactly its lanes; scale filter refuses off-scale drawing; switching filters never moves or deletes a note.</li>
+</ul>
+
+<h3>Phase 3 — Scale polish <span class="badge b-edit">UIStore</span></h3>
+<ul class="small">
+  <li>Widen <code>midiRowScale</code> cap to 3× (7 fat rows should fill the panel); remember filter + scale in localStorage keyed globally (not per project).</li>
+  <li>Verify: 7-row mapped view at 3× fills the editor height; reload restores the view prefs.</li>
+</ul>
+
+<h2>D · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">components/midi/rowModel.ts</span></td><td><span class="badge b-new">new</span> — the one coordinate system.</td></tr>
+    <tr><td><span class="file">components/midi/MidiEditor.tsx · useNoteGestures.ts · useMidiBlockGestures.ts · PianoRollPanel.tsx</span></td><td>Consume the model; kill direct pitch arithmetic.</td></tr>
+    <tr><td><span class="file">instruments/types.ts</span> (+ narrow instruments)</td><td>Optional <code>pitchMap</code> declaration.</td></tr>
+    <tr><td><span class="file">store/UIStore.ts</span></td><td>rowFilter state · scale cap bump.</td></tr>
+    <tr><td>Document · engines</td><td>Untouched — pure view.</td></tr>
+  </tbody>
+</table>
+
+<h2>E · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>A missed y⟷pitch call site</strong> corrupts edits only when rows are hidden — phase 1's "identical under all" gate plus a phase-2 sweep-test (draw/move/marquee under each filter) is the defense.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Vertical drag semantics</strong>: visible-step movement is right for hidden rows but changes muscle memory under Scale filter (a whole-tone drag ≠ semitone) — this is the feature, but confirm the feel with Julia early.</li>
+  <li><span class="badge b-risk">open</span> Which instruments get <code>pitchMap</code> first — audit the drum-style ones when building phase 2.</li>
+  <li><span class="badge b-risk">note</span> midi-vim consumes <code>RowModel</code> as its motion space; keep the API surface small and stable.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> land a no-op row model first so every gesture speaks "visible row index," then filters are one comprehension each — and the scary part (hidden rows corrupting edits) was retired before any row ever hid.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">row-hiding-scaling-architecture.html</span>; consumed by the midi-vim design.</p>
+
+</div>
+</body>
+</html>
