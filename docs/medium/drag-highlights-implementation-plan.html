@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Drag Highlights — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Drag Highlights</span>
+  <h1>Drag Highlights — Implementation Plan</h1>
+  <p class="sub">Two independent landings: restyle the library-drag indicator (pure CSS-and-props), then the canary-safe 3D highlight overlay for the modulator target picker.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>(a) louder insert line · label-column wash during library drags · (b) hover channel · HighlightOverlay outlines · canaryIgnore flag · shared scope-expansion helper</td><td>Post-processing glow outlines · timeline-hover highlighting · touching instrument materials · persisting anything</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 1 — Library-drag presentation <span class="badge b-edit">timeline</span></h3>
+<ul class="small">
+  <li>Insert line: 1px → 3px indigo bar with 30% glow halo, full row width including the label column (today it can read as a hairline between borders).</li>
+  <li>Label-column wash: while <code>trackDrop != null</code> AND the drag source is the library (add a <code>source: 'library' | 'track'</code> field to the bridge state), the label column gets a faint indigo tint — "this is where drops live."</li>
+  <li>Empty/short list: when dragging with few tracks, render a dashed "drop to add a track" placeholder row at the list's end (the drop-below-everything case is currently invisible).</li>
+  <li>Verify: drag each library section (instrument/modulator/modifier/effect — effects highlight the TrackEditor drop zone instead, unchanged); indicator legible at every row height; nest-into ring unchanged.</li>
+</ul>
+
+<h3>Phase 2 — Hover channel + shared scope helper <span class="badge b-edit">UIStore · resolve · TrackEditor</span></h3>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">UIStore.ts</span>: <code>hoveredTargetTrackIds: string[]</code> + setter (ephemeral).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/resolve.ts</span>: export the scope→objectIds expansion as <code>expandScope(scope, tracks, rootTrackIds)</code> (promote the internal <code>objectsForScope</code>; resolve consumes the same export — one brain).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">TrackEditor.tsx</span> target picker: option rows set the hover list on pointerenter (expandScope of that option's scope), clear on leave and on picker close/unmount (a <code>useEffect</code> cleanup so a closed panel can never leave a stale glow).</li>
+</ul>
+
+<h3>Phase 3 — The overlay <span class="badge b-new">HighlightOverlay</span> <span class="badge b-edit">pauseCanary</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">components/visual/HighlightOverlay.tsx</span> (inside Canvas): for each hovered trackId with a live object, draw a wireframe box (or the object's bounding sphere) at the object's world transform, pulsing subtly via opacity — driven by the hover list, positioned from the engine's object state each frame it's visible.</li>
+  <li>The overlay group sets <code>userData.canaryIgnore = true</code>; <span class="badge b-edit">edit</span> <span class="file">pauseCanary.ts</span>: the hash walk skips subtrees flagged canaryIgnore. One explicit, documented escape hatch — grep-able, reviewed, never default.</li>
+  <li>Verify: pause the playhead, hover options — objects outline correctly per scope (single / #tag / branch), the CANARY STAYS SILENT (the acceptance test for the whole design); unhover → outlines gone; hover during playback follows moving objects.</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">components/timeline/*</span> (indicator render sites) · <span class="file">useLibraryDrag.ts</span></td><td>Phase 1 presentation + <code>source</code> on the bridge.</td></tr>
+    <tr><td><span class="file">store/UIStore.ts</span></td><td>hoveredTargetTrackIds.</td></tr>
+    <tr><td><span class="file">core/visual/resolve.ts</span></td><td>expandScope exported (logic unchanged).</td></tr>
+    <tr><td><span class="file">components/TrackEditor.tsx</span></td><td>Hover enter/leave wiring.</td></tr>
+    <tr><td><span class="file">components/visual/HighlightOverlay.tsx</span></td><td><span class="badge b-new">new</span> — outlines in a canaryIgnore group.</td></tr>
+    <tr><td><span class="file">core/visual/pauseCanary.ts</span></td><td>Skip canaryIgnore subtrees.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>canaryIgnore becoming a loophole</strong> — the flag's doc comment states the rule: UI chrome only, never instrument content; anything else found using it is a review reject.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Stale hover</strong> if the picker unmounts mid-hover — the cleanup-on-unmount in phase 2 is the guard; test by closing the panel while hovering.</li>
+  <li><span class="badge b-risk">note</span> Group-modulation targets (tag/branch) can light MANY objects — cap the overlay at ~32 outlines and dim beyond (a tag on everything shouldn't build 200 wireframes).</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> turn up the volume on the drop indicator that already exists, and answer "what will this modulator hit?" with outline ghosts in a group the canary is explicitly told is furniture, not scene.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">drag-highlights-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
