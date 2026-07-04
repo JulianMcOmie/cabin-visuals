@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MIDI Vim — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · MIDI Vim</span>
+  <h1>MIDI Vim — Architecture</h1>
+  <p class="sub">A modal editing language for the piano roll: a caret on the (beat × visible-row) grid, vim's count-motion-operator grammar aimed at notes, and view commands that drive the row model — which is exactly why the row-hiding work is this feature's substrate, not its sibling.</p>
+</header>
+
+<h2>1 · The coordinate system is the design</h2>
+<figure class="fig">
+  <div class="figtitle">Everything reduces to a caret moving on the row model's grid</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Vim layers">
+    <rect x="20" y="24" width="860" height="88" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="40" y="54" font-size="17" font-weight="700" fill="#141414">Substrate — the RowModel (row-hiding pair) + the quantize grid</text>
+    <text x="40" y="82" font-size="15" fill="#565656">caret = (beat snapped to grid, visible-row index). "j" means next VISIBLE row — under a scale filter, j/k move by scale degrees;</text>
+    <text x="40" y="103" font-size="15" fill="#565656">under Mapped, by instrument lanes. Julia's "fixed long distances" is just j with rows hidden.</text>
+    <rect x="20" y="128" width="860" height="88" rx="10" fill="#141414"/>
+    <text x="40" y="158" font-size="17" font-weight="700" fill="#fff">Grammar — [count] [operator] [motion/object], vim's actual shape</text>
+    <text x="40" y="186" font-size="15" fill="#fff">motions: h/l = grid step · j/k = visible row · w/b = next/prev note · 0/$ = block edges · counts multiply.</text>
+    <text x="40" y="207" font-size="15" fill="#fff">operators: i = insert note at caret · d = delete · y/p = yank/put · x = delete at caret · . = repeat.</text>
+    <rect x="20" y="232" width="860" height="88" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="40" y="262" font-size="17" font-weight="700" fill="#141414">View commands — the row model's knobs get keys</text>
+    <text x="40" y="290" font-size="15" fill="#565656">zf cycles filter (all/used/mapped/scale) · zs sets scale root from the caret's pitch · +/− row scale · g;/g, jump octaves.</text>
+    <text x="40" y="311" font-size="15" fill="#565656">This is the half of Julia's note that says view control IS an editing tool.</text>
+  </svg>
+  <figcaption>No text buffer emulation, no ex commands, no registers beyond one yank buffer — vim's grammar, not vim's entirety. The grammar is the part that compounds.</figcaption>
+</figure>
+
+<h2>2 · The starter keymap (the contract to argue about BEFORE code)</h2>
+<table>
+  <thead><tr><th>Keys</th><th>Action</th></tr></thead>
+  <tbody>
+    <tr><td><code>h l</code> / <code>j k</code> · counts</td><td>Caret by grid step / visible row; <code>4l</code> = a beat at 1/4 grid. Caret is visible as a cell outline; independent of selection.</td></tr>
+    <tr><td><code>i</code> / <code>a</code></td><td>Insert a note at the caret (length = quantize; velocity = last-used) / same but advance the caret one grid step after — rapid step entry is <code>i l i l…</code> or just <code>a a a</code>.</td></tr>
+    <tr><td><code>x</code> · <code>dd</code>-style <code>dw</code></td><td>Delete note under caret · delete to next note.</td></tr>
+    <tr><td><code>v</code> + motions</td><td>Visual mode: extends a note selection (the EXISTING selection set — vim drives the same selection mouse gestures use).</td></tr>
+    <tr><td><code>y p</code></td><td>Yank selection / put at caret (reuses the note-clipboard the editor already has).</td></tr>
+    <tr><td><code>&lt; &gt;</code> · <code>J K</code> on selection</td><td>Nudge selected notes by grid step · transpose by visible row.</td></tr>
+    <tr><td><code>u / Ctrl-r</code></td><td>Existing undo/redo, untouched.</td></tr>
+    <tr><td><code>Esc</code></td><td>Visual→normal · then existing Esc semantics.</td></tr>
+    <tr><td><code>zf zs + −</code></td><td>View commands per the figure.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Opt-in mode, per the piano roll only</td><td>A toolbar toggle (and one hotkey) turns vim mode on; off = today's editor untouched. The timeline never gets modes.</td></tr>
+    <tr><td>Vim drives EXISTING actions</td><td>Every operator maps to the same note-mutation paths the mouse uses (commit-per-gesture undo, same clipboard, same selection set) — the keymap is a new INPUT layer, not a new EDITING engine. This is the whole mess-avoidance strategy.</td></tr>
+    <tr><td>Row model first — hard dependency</td><td>Motions over hidden/filtered rows are the point ("fixed long distances", scale-degree movement). Building vim on raw pitches first would mean rebuilding it after.</td></tr>
+    <tr><td>Keymap doc before keystroke one</td><td>§2 is a proposal for Julia (and the promised "midi vim discussion"); the grammar is cheap to argue on paper and expensive to rewire after muscle memory forms.</td></tr>
+    <tr><td>Non-goals</td><td>Ex commands / command line · macros (record/replay — tempting, later) · registers beyond one · vim in the timeline or track editor · remapping UI (a constants file is enough for two users).</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> a caret on the row model's grid, vim's count-operator-motion grammar translated onto the editor's existing selection/clipboard/undo machinery, and view filters bound to keys — a new input layer over old truth, never a second editor.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">midi-vim-implementation-plan.html</span>. Hard dependency: <span class="file">row-hiding-scaling-*</span> (the RowModel). The keymap table above is the artifact to review with Tyler/Julia first.</p>
+
+</div>
+</body>
+</html>
