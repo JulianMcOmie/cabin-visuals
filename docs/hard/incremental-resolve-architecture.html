@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Incremental Resolve — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Incremental Resolve</span>
+  <h1>Incremental Resolve — Architecture</h1>
+  <p class="sub">Stop re-resolving the whole project on every edit — but only when a real project proves it's slow, and only by the cheapest honest trick: the store is immutable, so "did this track change?" is a reference comparison. Memoize per-track compilation; keep global assembly a full, cheap pass.</p>
+</header>
+
+<h2>1 · Split resolve at its natural joint</h2>
+<figure class="fig">
+  <div class="figtitle">Per-track compile (cacheable by reference) vs global assembly (always recomputed)</div>
+  <svg viewBox="0 0 900 360" role="img" aria-label="Resolve split">
+    <defs><marker id="a21" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="30" width="410" height="180" rx="10" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="225" y="60" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">PER-TRACK COMPILE — memoized</text>
+    <text x="225" y="90" text-anchor="middle" font-size="14.5" fill="#565656">flattenBlocks (+ loop tiling) · flattenNotes</text>
+    <text x="225" y="112" text-anchor="middle" font-size="14.5" fill="#565656">modifier application · ability events</text>
+    <text x="225" y="134" text-anchor="middle" font-size="14.5" fill="#565656">automation-lane compilation</text>
+    <text x="225" y="168" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">cache key: the track object's REFERENCE</text>
+    <text x="225" y="190" text-anchor="middle" font-size="14" fill="#565656">(+ beatsPerBar; zustand immutability = exact dirty bit)</text>
+    <rect x="470" y="30" width="410" height="180" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="675" y="60" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">GLOBAL ASSEMBLY — always full</text>
+    <text x="675" y="90" text-anchor="middle" font-size="14.5" fill="#565656">tag index · routing fan-out · solo folding</text>
+    <text x="675" y="112" text-anchor="middle" font-size="14.5" fill="#565656">tree flatten/order · routingsByPort buckets</text>
+    <text x="675" y="146" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">why not cache it: it's O(tracks) map-building</text>
+    <text x="675" y="168" text-anchor="middle" font-size="14" fill="#565656">— microseconds; caching cross-cutting state is where</text>
+    <text x="675" y="190" text-anchor="middle" font-size="14" fill="#565656">incremental systems go to die</text>
+    <path d="M225,210 L225,262" stroke="#141414" stroke-width="2" marker-end="url(#a21)"/>
+    <path d="M675,210 L675,262" stroke="#141414" stroke-width="2" marker-end="url(#a21)"/>
+    <rect x="240" y="270" width="420" height="60" rx="10" fill="#141414"/>
+    <text x="450" y="296" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">ResolvedGraph — byte-equal to today's output</text>
+    <text x="450" y="318" text-anchor="middle" font-size="14" fill="#fff">the invariant that makes this refactor safe to verify</text>
+  </svg>
+  <figcaption>Editing one track's notes re-compiles ONE track and re-runs a cheap assembly pass. The expensive-per-track work (note flattening across blocks, loop expansion, modifier folding) is exactly the part reference-keyed memoization handles perfectly.</figcaption>
+</figure>
+
+<h2>2 · Why reference-keyed memoization and nothing fancier</h2>
+<table>
+  <thead><tr><th>Alternative</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Dependency-graph invalidation (track → dependents)</td><td>Rejected. Routings/tags/solo make "dependents" cross-cutting; modeling them buys correctness risk to optimize the part that's already cheap (assembly). This is the fiddliness the backlog note warned about.</td></tr>
+    <tr><td><strong>Reference-memoized per-track compile + full assembly</strong></td><td><strong>Chosen.</strong> The store already guarantees changed track ⇒ new reference (HistoryStore and autosave both rely on it). The cache is a WeakMap from track ref → compiled output: no eviction policy, no staleness class of bugs — an unchanged ref CANNOT have changed content.</td></tr>
+    <tr><td>Web-worker resolve</td><td>Different medicine (moves cost off-thread instead of removing it); noted as the escalation if profiling shows assembly itself hurting at extreme scale.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Measure first — a numeric gate, not vibes</td><td>The feature starts with a resolve-time probe on real projects. Gate: proceed only if debounced resolve exceeds ~8ms at realistic size (or Julia feels edit lag attributable to it). Below that, close the item as "not yet".</td></tr>
+    <tr><td>Output-equality is the acceptance test</td><td>Incremental resolve must produce a graph deep-equal to the full resolve on a corpus of real documents — a property test run in CI-by-hand, not a hope.</td></tr>
+    <tr><td>beatsPerBar changes flush the cache</td><td>It's baked into flattening; it's one global key beside the WeakMap.</td></tr>
+    <tr><td>syncParams fast-path unchanged</td><td>Slider-drag reactivity already bypasses resolve; this work only shrinks the debounced structural pass.</td></tr>
+    <tr><td>Non-goals</td><td>Incremental ASSEMBLY · worker offload · caching across project loads · any change observable in the graph's shape.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> the store's immutability already computed the dirty bits — memoize the per-track half of resolve on track references, keep the cross-cutting half a dumb full pass, and gate the whole effort behind a stopwatch reading that says it's actually needed.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">incremental-resolve-implementation-plan.html</span>. Today: <span class="file">core/visual/resolve.ts</span> full pass, 80ms debounce in VisualBeatSync; the immutability contract this leans on is the same one HistoryStore's reference-diff uses.</p>
+
+</div>
+</body>
+</html>

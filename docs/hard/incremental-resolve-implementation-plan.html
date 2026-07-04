@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Incremental Resolve — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Incremental Resolve</span>
+  <h1>Incremental Resolve — Implementation Plan</h1>
+  <p class="sub">Phase 0 is a stopwatch and a gate. If the gate opens: split resolve at the compile/assembly joint, memoize compiles in a WeakMap keyed by track reference, and prove output-equality against a corpus before trusting a single cached entry.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Resolve-time probe · the compile/assembly split · WeakMap memoization (+ beatsPerBar flush) · deep-equality property test · perf before/after numbers</td><td>Incremental assembly · worker offload · cross-load caching · ANY graph shape change</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Measure, then maybe stop <span class="badge b-risk">the gate</span></h3>
+<ul class="small">
+  <li>Dev-only probe: wrap setProject's resolve in performance.mark/measure; log p50/p95 over an editing session on Julia's largest real project (plus a synthetic 100-track / 10k-note document as the stress ceiling).</li>
+  <li><strong>Gate:</strong> p95 &gt; ~8ms on real work → proceed. Under it → record the numbers in this doc, close the item as "premature", keep the probe behind a flag for the future.</li>
+  <li>Also attribute: how much of the cost is per-track compile vs assembly? If assembly dominates (unexpected), this plan's premise is wrong — stop and re-architect rather than memoizing the wrong half.</li>
+</ul>
+
+<h3>Phase 1 — The split (no caching yet) <span class="badge b-edit">resolve.ts</span></h3>
+<ul class="small">
+  <li>Refactor resolve into <code>compileTrack(track, beatsPerBar): CompiledTrack</code> (notes flattened + loop-tiled, modifiers folded, ability events, lanes) and <code>assemble(compiled[], projectState): ResolvedGraph</code> (tag index, routings, solo, ordering, port buckets). Pure functions, no cache.</li>
+  <li><strong>Acceptance:</strong> deep-equal output vs the pre-refactor resolve on a corpus: current real projects (export a few documents as fixtures) + fixtures with modifiers, abilities, tag routings, loops, tag automation. This phase carries ALL the refactor risk — land it alone, verified, before any memoization.</li>
+</ul>
+
+<h3>Phase 2 — The cache <span class="badge b-edit">resolve.ts</span> (~20 lines)</h3>
+<ul class="small">
+  <li><code>WeakMap&lt;Track, CompiledTrack&gt;</code> + a module-level <code>cachedBeatsPerBar</code> (mismatch → new WeakMap). compileTrack consults it; assemble never caches.</li>
+  <li>WeakMap on the track object ⇒ no eviction code, no leak (dropped tracks GC), no invalidation API — the immutable store IS the invalidation.</li>
+  <li>Verify: the phase-1 corpus again (cache on) → still deep-equal; then mutation sequences (edit notes on A, check B/C hit cache via a dev counter; undo restores an OLD reference — cache HIT, by design, and correct because content ≡ reference).</li>
+</ul>
+
+<h3>Phase 3 — Numbers + guardrails</h3>
+<ul class="small">
+  <li>Re-run phase 0's probe: report before/after p50/p95 on the same projects in this doc. Expected shape: single-track edits drop from O(project) to O(1 track + assembly).</li>
+  <li>Dev-flag <code>?fullResolve=1</code> forces the uncached path — the escape hatch for "is the cache lying?" debugging forever after.</li>
+  <li>Add the corpus equality check as a repeatable script (run before any future resolve change — loops, tag automation, and mute-lane features all touch compile).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/visual/resolve.ts</span></td><td>Split into compileTrack/assemble · WeakMap memo · dev counters.</td></tr>
+    <tr><td><span class="file">core/visual/VisualBeatSync.tsx</span></td><td>Probe marks around setProject (dev-only); debounce unchanged.</td></tr>
+    <tr><td><span class="file">test-fixtures/resolve/*.json</span></td><td><span class="badge b-new">new</span> — document corpus + the equality script.</td></tr>
+    <tr><td>Engine consumers · matrix · stores</td><td>Untouched — the graph's shape is frozen by the acceptance test.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Hidden cross-track reads inside per-track compile</strong> (the refactor's landmine — e.g., a modifier consulting a sibling). Phase 1's corpus equality is the detector; any such read either moves to assembly or becomes an explicit compile input.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Future features breaking the joint</strong> — tag automation and nested mute/solo both belong in ASSEMBLY (cross-cutting); the doc comment on compileTrack must say "no reads outside this track" loudly.</li>
+  <li><span class="badge b-risk">open</span> The gate number (~8ms) is a proposal — Julia may prefer "when I feel it", which is also a valid gate; write down whichever is chosen.</li>
+  <li><span class="badge b-risk">note</span> If phase 0 says "not yet": that's success too. The probe and this plan wait, and the item stops haunting the backlog.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> measure, split resolve at its compile/assembly joint with output-equality as the safety net, then let a WeakMap on immutable track references do all the invalidation — twenty lines of cache after a refactor whose only job is to make those twenty lines safe.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">incremental-resolve-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
