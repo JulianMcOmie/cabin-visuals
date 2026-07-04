@@ -9,6 +9,7 @@ import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
+import { ExportDriver } from './components/visual/ExportDriver'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { CabinLogo } from '../components/CabinLogo'
 import { LeftSidebar } from './components/LeftSidebar'
@@ -39,6 +40,7 @@ function Scene() {
       <pointLight position={[-4, -2, 3]} color="#818cf8" intensity={3} />
       <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
       <VisualBeatSync />
+      <ExportDriver />
       <VisualScene />
     </Canvas>
   )
