@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Automation Copy Bug — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Automation Copy Bug</span>
+  <h1>Automation Copy Bug — Architecture</h1>
+  <p class="sub">Tyler: "automating a parameter seems to change the parameter on a copy of the object instead of the object itself." Three readings of that sentence, ordered by likelihood, and the experiment that separates them.</p>
+</header>
+
+<h2>1 · How automation actually flows — and where a "copy" could appear</h2>
+<p>Automation lanes never write to the document's params. They're sampled per frame inside the engine and <strong>overlaid</strong> on top of the base params before the instrument sees them — the slider's stored value is deliberately untouched. Two places in that pipeline can read as "a copy changed":</p>
+
+<figure class="fig">
+  <div class="figtitle">The overlay pipeline — and the two spots that can read as "a copy"</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Automation flow">
+    <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="40" width="200" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="120" y="76" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">Base param</text>
+    <text x="120" y="102" text-anchor="middle" font-size="14.5" fill="#565656">document · the slider</text>
+    <rect x="290" y="40" width="240" height="90" rx="10" fill="#141414"/>
+    <text x="410" y="76" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">engine overlay</text>
+    <text x="410" y="102" text-anchor="middle" font-size="14.5" fill="#fff">sampleLane(beat) wins per frame</text>
+    <rect x="600" y="40" width="280" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="740" y="76" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">object renders automated</text>
+    <text x="740" y="102" text-anchor="middle" font-size="14.5" fill="#565656">(clones/effects render after this)</text>
+    <path d="M220,85 L282,85" stroke="#141414" stroke-width="2" marker-end="url(#a2)"/>
+    <path d="M530,85 L592,85" stroke="#141414" stroke-width="2" marker-end="url(#a2)"/>
+    <rect x="20" y="180" width="410" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="225" y="212" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">Reading A — the SLIDER looks stale</text>
+    <text x="225" y="238" text-anchor="middle" font-size="14.5" fill="#565656">panel shows base while the visual moves:</text>
+    <text x="225" y="258" text-anchor="middle" font-size="14.5" fill="#565656">"the real object kept its value" → UI feedback gap</text>
+    <rect x="470" y="180" width="410" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="675" y="212" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">Reading B — a CLONE moved, not the source</text>
+    <text x="675" y="238" text-anchor="middle" font-size="14.5" fill="#565656">with a clone effect (echo/tile/radial), automation of</text>
+    <text x="675" y="258" text-anchor="middle" font-size="14.5" fill="#565656">position can move copies asymmetrically → wrapper order</text>
+  </svg>
+  <figcaption>Reading A is a presentation problem (working as designed, badly communicated). Reading B would be a real bug in how effect wrappers compose with the automated transform. A third reading — a literal duplicated object — would mean a resolve/render defect and shows up instantly in the scene graph.</figcaption>
+</figure>
+
+<h2>2 · The discriminating experiment</h2>
+<p>One project, one Cube, automation on <code>Base X Position</code>, playhead parked mid-lane (the pause invariant makes the frame inspectable at leisure):</p>
+<table>
+  <thead><tr><th>Observe</th><th>Conclusion</th></tr></thead>
+  <tbody>
+    <tr><td>ONE cube, moved; slider unchanged</td><td>Reading A — engine is correct, the TrackEditor needs live-value feedback. The fix is UI: show the automated value (live readout or a second indicator on the slider) and badge the param as automated.</td></tr>
+    <tr><td>TWO cubes (source + displaced twin), no effects on the track</td><td>Real duplication bug — inspect the resolved graph and the renderer's group tree; something mounts the object twice.</td></tr>
+    <tr><td>Displacement looks wrong only WITH a clone/transform effect present</td><td>Reading B — the wrapper composition applies automation before/after cloning inconsistently; fix the order in the wrapper chain so automation always lands on the source transform, clones derive from it.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>The overlay design stays</td><td>Automation NOT writing the document is load-bearing: undo, autosave, and the slider's role as "the base value" all depend on it. Whatever the outcome, the fix is presentation or wrapper order — never "write automation into params".</td></tr>
+    <tr><td>If Reading A: show, don't merge</td><td>The slider keeps showing the base (it's editable); a separate live-value affordance (thin marker on the slider track + an "automated" badge that links to the lane) shows what the engine computed this frame.</td></tr>
+    <tr><td>Repro against Tyler's project first</td><td>His exact wording ("a copy of the object") smells like clone effects were involved — don't dismiss Reading B without his setup.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> automation is an engine-side overlay that never touches the document — so either the panel is failing to show the overlay (add live feedback), or an effect wrapper is composing the overlay in the wrong order (fix the chain); park the playhead and the frozen frame tells you which.</div>
+
+<hr/>
+<p class="small muted">Investigation architecture — steps in <span class="file">automation-copy-bug-implementation-plan.html</span>. Pipeline facts: resolve builds lanes → <code>computeAtBeat</code> samples + overlays → instruments read merged params; effect wrappers (Transform/Clone/Shader) render around the object after state is computed.</p>
+
+</div>
+</body>
+</html>
