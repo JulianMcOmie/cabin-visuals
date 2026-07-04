@@ -1,6 +1,6 @@
 # Cabin Visuals
 
-A DAW for music visuals: sequence 3D instruments on a timeline the way you'd sequence synths in Logic. MIDI notes drive visual instruments (a shattering cube, particle rings, fractal tunnels), modulators and automation shape their parameters over time, an audio track plays alongside, and the whole project exports to an MP4 — all in the browser.
+A DAW for music visuals: sequence 3D instruments on a timeline the way you'd sequence synths in Logic. MIDI notes drive visual instruments (a shattering cube, particle rings, fractal tunnels), modulators and automation shape their parameters over time, an audio track plays alongside, and the whole project exports to an MP4. All in the browser (chrome or edge best supported for video export).
 
 Built with Next.js 15 / React 19, react-three-fiber, zustand, Tone.js, and Supabase (auth + project persistence).
 
