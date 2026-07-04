@@ -11,6 +11,17 @@ import { selectTrack, shouldSuppressTrackSelect } from '../../utils/selection'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
+// Logic-style M/S painting: pointer-down on a button starts a stroke, and every
+// button of the SAME kind the pointer crosses while held gets the first
+// toggle's resulting state (painted, not flipped — sweeps stay predictable).
+// Module-level on purpose: one stroke spans many Track instances.
+let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
+
+function startMsPaint(kind: 'mute' | 'solo', value: boolean) {
+  msPaint = { kind, value }
+  window.addEventListener('pointerup', () => { msPaint = null }, { once: true })
+}
+
 interface TrackProps {
   track: TrackType
   barWidthPx: number
@@ -157,7 +168,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
         <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => toggleMute(track.id)}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              startMsPaint('mute', !track.muted)
+              toggleMute(track.id)
+            }}
+            onPointerEnter={() => {
+              if (msPaint?.kind === 'mute' && track.muted !== msPaint.value) toggleMute(track.id)
+            }}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.muted
                 ? 'bg-amber-500 text-black'
@@ -167,7 +185,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             M
           </button>
           <button
-            onClick={() => toggleSolo(track.id)}
+            onPointerDown={(e) => {
+              if (e.button !== 0) return
+              startMsPaint('solo', !track.solo)
+              toggleSolo(track.id)
+            }}
+            onPointerEnter={() => {
+              if (msPaint?.kind === 'solo' && track.solo !== msPaint.value) toggleSolo(track.id)
+            }}
             className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
               track.solo
                 ? 'bg-green-500 text-black'
