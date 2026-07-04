@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Export — Architecture</title>
+<style>
+  :root{
+    --bg:#ffffff; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656;
+    --code:#ffffff; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  ul{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .note{border-left:4px solid #c2c2c2;background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}
+    figure.fig,table,.note,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Video Export</span>
+  <h1>Video Export — Architecture</h1>
+  <p class="sub">Turning a project into an .mp4, entirely in the browser: step the beat frame by frame, render the same pure visuals playback renders, encode with WebCodecs, mix the audio offline, mux, download. No recording, no server.</p>
+</header>
+
+<!-- 1 -->
+<h2>1 · The pipeline</h2>
+<p>Export is a <strong>fourth consumer of the same clock math</strong> — after transport, visuals, and audio. A new <span class="file">core/export/</span> island steps a beat cursor through the project at exactly one frame per step, drives the existing visual engine at each beat, captures the canvas into a hardware video encoder, renders the audio track through an offline audio graph, and muxes both into an MP4. Nothing plays in real time; a 3-minute project exports as fast as the GPU and encoder can go.</p>
+
+<figure class="fig">
+  <div class="figtitle">The whole pipeline — one new island, everything else already exists</div>
+  <svg viewBox="0 0 900 560" role="img" aria-label="Export pipeline">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <!-- project doc -->
+    <rect x="20" y="30" width="230" height="96" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="135" y="66" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">PROJECT</text>
+    <text x="135" y="92" text-anchor="middle" font-size="15.5" fill="#565656">tracks · notes · params</text>
+    <text x="135" y="113" text-anchor="middle" font-size="15.5" fill="#565656">audio blocks · bpm · bars</text>
+
+    <!-- export engine -->
+    <rect x="330" y="20" width="240" height="116" rx="12" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="450" y="56" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">core/export/  ★ new</text>
+    <rect x="348" y="70" width="204" height="44" rx="5" fill="#141414"/>
+    <text x="450" y="98" text-anchor="middle" font-size="15.5" fill="#fff">frame stepper — beat(i)</text>
+
+    <path d="M250,78 L322,78" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+
+    <!-- video branch -->
+    <rect x="120" y="210" width="290" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="265" y="246" text-anchor="middle" font-size="18" font-weight="700" fill="#141414">VISUAL ENGINE (as-is)</text>
+    <text x="265" y="272" text-anchor="middle" font-size="15.5" fill="#565656">computeAtBeat(beat) → R3F canvas</text>
+    <text x="265" y="295" text-anchor="middle" font-size="15.5" fill="#565656">one advance() per frame</text>
+
+    <rect x="120" y="368" width="290" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="265" y="402" text-anchor="middle" font-size="18" font-weight="700" fill="#141414">VideoEncoder</text>
+    <text x="265" y="428" text-anchor="middle" font-size="15.5" fill="#565656">WebCodecs · H.264 · hardware</text>
+
+    <!-- audio branch -->
+    <rect x="500" y="210" width="290" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="645" y="246" text-anchor="middle" font-size="18" font-weight="700" fill="#141414">OFFLINE AUDIO MIX</text>
+    <text x="645" y="272" text-anchor="middle" font-size="15.5" fill="#565656">OfflineAudioContext — same</text>
+    <text x="645" y="295" text-anchor="middle" font-size="15.5" fill="#565656">beat⟷second math as AudioEngine</text>
+
+    <rect x="500" y="368" width="290" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="645" y="402" text-anchor="middle" font-size="18" font-weight="700" fill="#141414">AudioEncoder</text>
+    <text x="645" y="428" text-anchor="middle" font-size="15.5" fill="#565656">WebCodecs · AAC 48 kHz</text>
+
+    <!-- muxer -->
+    <rect x="310" y="492" width="280" height="56" rx="10" fill="#141414"/>
+    <text x="450" y="527" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">MP4 muxer → download</text>
+
+    <!-- arrows -->
+    <path d="M390,136 L295,204" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M510,136 L615,204" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M265,320 L265,362" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M645,320 L645,362" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M300,454 L392,488" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M610,454 L512,488" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+
+    <text x="330" y="182" font-size="15" fill="#565656">beat per frame</text>
+    <text x="508" y="182" font-size="15" fill="#565656" text-anchor="start">whole track at once</text>
+  </svg>
+  <figcaption>The visual engine and the audio math already exist — export adds a stepper in front and encoders behind. Video renders frame-by-frame; audio renders in one offline pass; the muxer interleaves them.</figcaption>
+</figure>
+
+<!-- 2 -->
+<h2>2 · Why the output is exact — the pause invariant pays off</h2>
+<p>Every instrument is a <strong>pure function of the beat</strong> (the pause invariant, enforced by lint and the canary). So the frame at beat 12.5 is the same pixels whether you played there, scrubbed there, or exported there. Export doesn't record what happened on screen — it <em>recomputes</em> it, perfectly, at any resolution and frame rate, with zero dropped frames.</p>
+
+<figure class="fig">
+  <div class="figtitle">One beat, one frame — export is scrubbing with a camera attached</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Determinism">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <rect x="30" y="40" width="180" height="66" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="120" y="68" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">frame i</text>
+    <text x="120" y="92" text-anchor="middle" font-size="15" fill="#565656">0, 1, 2, … N−1</text>
+
+    <rect x="290" y="40" width="280" height="66" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="430" y="68" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">beat(i) = i · bpm ⁄ (60 · fps)</text>
+    <text x="430" y="92" text-anchor="middle" font-size="15" fill="#565656">pure arithmetic — no wall clock</text>
+
+    <rect x="650" y="40" width="220" height="66" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="760" y="68" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">pixels = f(beat)</text>
+    <text x="760" y="92" text-anchor="middle" font-size="15" fill="#565656">the pause invariant</text>
+
+    <path d="M210,73 L282,73" stroke="#141414" stroke-width="2" marker-end="url(#ar2)"/>
+    <path d="M570,73 L642,73" stroke="#141414" stroke-width="2" marker-end="url(#ar2)"/>
+
+    <rect x="120" y="180" width="660" height="72" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="450" y="211" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">play(12.5)  ≡  scrub(12.5)  ≡  export frame at beat 12.5</text>
+    <text x="450" y="236" text-anchor="middle" font-size="15" fill="#565656">same beat in, same pixels out — the property the whole feature stands on</text>
+  </svg>
+  <figcaption>No <code>MediaRecorder</code>, no screen capture: those record a real-time performance and inherit its dropped frames and timing jitter. Recomputing per frame gives frame-exact, reproducible output — and can run faster than real time.</figcaption>
+</figure>
+
+<!-- 3 -->
+<h2>3 · The export loop</h2>
+<p>The live editor canvas is borrowed for the duration: its render loop is paused (<code>frameloop="never"</code>), it's pinned to the export resolution, and the stepper drives it one deliberate frame at a time — set the beat, advance React-Three-Fiber once, hand the canvas to the encoder, wait if the encoder queue is full, repeat. A progress overlay covers the app; on finish (or cancel) the canvas and render loop are restored.</p>
+
+<figure class="fig">
+  <div class="figtitle">Per-frame sequence — pull, not push</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Export loop sequence">
+    <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <rect x="20" y="30" width="196" height="56" rx="10" fill="#141414"/>
+    <text x="118" y="65" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">1 · set beat(i)</text>
+
+    <rect x="240" y="30" width="196" height="56" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="338" y="58" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">2 · advance()</text>
+    <text x="338" y="78" text-anchor="middle" font-size="14" fill="#565656">one R3F render</text>
+
+    <rect x="460" y="30" width="196" height="56" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="558" y="58" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">3 · VideoFrame(canvas)</text>
+    <text x="558" y="78" text-anchor="middle" font-size="14" fill="#565656">same task — no readback</text>
+
+    <rect x="680" y="30" width="196" height="56" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="778" y="58" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">4 · encode + await</text>
+    <text x="778" y="78" text-anchor="middle" font-size="14" fill="#565656">backpressure gate</text>
+
+    <path d="M216,58 L232,58" stroke="#141414" stroke-width="2" marker-end="url(#ar3)"/>
+    <path d="M436,58 L452,58" stroke="#141414" stroke-width="2" marker-end="url(#ar3)"/>
+    <path d="M656,58 L672,58" stroke="#141414" stroke-width="2" marker-end="url(#ar3)"/>
+
+    <!-- loop back -->
+    <path d="M778,86 L778,150 L118,150 L118,92" stroke="#141414" stroke-width="2" fill="none" marker-end="url(#ar3)"/>
+    <text x="450" y="142" text-anchor="middle" font-size="15" fill="#565656">i + 1 — as fast as the encoder allows (usually faster than real time)</text>
+
+    <rect x="120" y="210" width="660" height="84" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="450" y="242" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">During export: frameloop="never" · canvas pinned to export size · DPR = 1</text>
+    <text x="450" y="268" text-anchor="middle" font-size="15" fill="#565656">progress overlay with cancel · transport locked · everything restored on finish</text>
+  </svg>
+  <figcaption>Step 3 constructs a <code>VideoFrame</code> straight from the WebGL canvas in the same task as the render — no pixel readback, no <code>preserveDrawingBuffer</code>. Step 4 awaits when <code>encodeQueueSize</code> grows, so memory stays flat on long projects.</figcaption>
+</figure>
+
+<!-- 4 -->
+<h2>4 · The audio path</h2>
+<p>Audio doesn't step frame-by-frame — the whole track renders in <strong>one offline pass</strong>. Each audio block schedules its clip slice into an <code>OfflineAudioContext</code> using the same <code>(when, offset, duration)</code> placement the live <span class="file">AudioEngine</span> uses (the beat⟷second math is extracted into one shared helper so the two can never disagree). The rendered buffer is AAC-encoded and interleaved with the video by the muxer; sync is arithmetic — both timelines derive from the same bpm.</p>
+
+<figure class="fig">
+  <div class="figtitle">Audio: one offline pass, same placement math as live playback</div>
+  <svg viewBox="0 0 900 290" role="img" aria-label="Audio export path">
+    <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <!-- timeline strip -->
+    <rect x="30" y="40" width="840" height="64" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="66" y="30" font-size="14.5" fill="#565656">the audio track</text>
+    <rect x="120" y="52" width="250" height="40" rx="5" fill="#141414"/>
+    <text x="245" y="78" text-anchor="middle" font-size="14.5" fill="#fff">block · startBar 2 · trim</text>
+    <rect x="520" y="52" width="180" height="40" rx="5" fill="#141414"/>
+    <text x="610" y="78" text-anchor="middle" font-size="14.5" fill="#fff">block · startBar 14</text>
+
+    <path d="M245,104 L245,160" stroke="#141414" stroke-width="2" marker-end="url(#ar4)"/>
+    <path d="M610,104 L610,160" stroke="#141414" stroke-width="2" marker-end="url(#ar4)"/>
+
+    <rect x="90" y="168" width="700" height="56" rx="10" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="440" y="203" text-anchor="middle" font-size="17" font-weight="700" fill="#141414">OfflineAudioContext — source.start(when, offset, duration) per block → one stereo buffer</text>
+
+    <path d="M440,224 L440,252" stroke="#141414" stroke-width="2" marker-end="url(#ar4)"/>
+    <text x="440" y="280" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">AAC (WebCodecs AudioEncoder) → muxer</text>
+  </svg>
+  <figcaption>when = startBar · beatsPerBar · secPerBeat, from t = 0 — the trivial case of the live engine's three-case arm math. Rendering offline means export never waits on real-time audio, and the mix is bit-identical run to run.</figcaption>
+</figure>
+
+<!-- 5 -->
+<h2>5 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Client-side, WebCodecs</td><td>Hardware encoders in the browser; no server, no upload, project data never leaves the machine. Chrome-first (WebCodecs); a capability gate greys the button elsewhere.</td></tr>
+    <tr><td>MP4 · H.264 + AAC</td><td>Plays everywhere she'll post it. Muxed in-browser (<code>mp4-muxer</code>). WebM/VP9+Opus is the named fallback if an AAC encoder is missing.</td></tr>
+    <tr><td>Audio is optional</td><td>An "Include audio" toggle in the dialog (on by default) — off skips the offline mix entirely and produces a video-only MP4.</td></tr>
+    <tr><td>Recompute, don't record</td><td><code>MediaRecorder</code>/capture rejected: real-time only, drops frames, non-deterministic. The pause invariant makes exact offline recompute free.</td></tr>
+    <tr><td>Fixed export resolution</td><td>1080p (16:9) default, independent of the window — same principle as the aspect-aware instruments: output is unified regardless of how big the editing window was.</td></tr>
+    <tr><td>Borrow the live canvas</td><td>One visual-engine singleton, one WebGL context. Pin its size during export behind a progress overlay; restore after. A second hidden canvas would double-drive the engine.</td></tr>
+    <tr><td>Whole project, one file</td><td>Range/region export, image sequences, alpha, and server rendering are all explicitly later.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> export walks the beat from 0 to the end at one frame per step, asks the same pure visual engine "what do you look like here?", feeds the answers to a hardware encoder, renders the audio track once through the same placement math, and zips the two streams into an MP4 — determinism the pause invariant already guarantees, pointed at a file instead of the screen.</div>
+
+<hr/>
+<p class="small muted">Architecture only — the file-by-file build lives in <span class="file">video-export-implementation-plan.html</span>. Companion to <span class="file">audio-track-architecture.html</span> (three engines, one clock — export is the fourth consumer). Greyscale, print-ready, ~5 pages.</p>
+
+</div>
+</body>
+</html>

@@ -71,60 +71,32 @@
   <p class="where">components/midi/PianoRollPanel.tsx (Interp select) · core/visual/automation.ts (ease fns)</p>
 </div>
 
+<div class="item">
+  <h3><span class="badge b-done">done</span>Batch A — the three one-line-ish fixes (2026-07-03)</h3>
+  <p>All shipped: the <strong>Projects button</strong> links to <code>/projects</code>; the <strong>Cube no longer default-spins</strong> (spin is an opt-in <code>Spin Speed</code> param, 0 by default, 1 = the old tumble); and <strong>project length is editable</strong> — a <code>BARS</code> drag-scrubber in the header next to BPM (clamped 1–512, undoable, persisted; shrinking never destroys blocks past the end).</p>
+  <p class="where">App.tsx · instruments/Cube.tsx · components/ProjectLengthControl.tsx · ProjectStore.setTotalBars</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Batch B — timeline/store features (2026-07-03, one commit each)</h3>
+  <p><strong>Recursive track delete</strong> (<code>ba4afbc</code>): deleting a parent takes the whole subtree — automation, ability, and nested children — and drops routings pointing into it. <strong>Track rename</strong> (<code>f3d391c</code>): double-click the timeline label → inline input; Enter/blur commits, Esc cancels, empty = cancel. <strong>Pitch in block previews</strong> (<code>1d3d781</code>): note slivers became a miniature — x/length from time, y from pitch (block-relative range, one-octave minimum); automation blocks get a free value-curve preview. <strong>Automatable y/z position</strong> (<code>b0cf3d2</code>): <code>Base Y/Z Position</code> on Cube, Circle, and Triangle, all appearing in the add-automation menu.</p>
+  <p class="where">ProjectStore.ts · Track.tsx · Block.tsx · instruments/Cube.tsx + shapes.tsx</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Rename from the track editor too <span class="muted small">(uncommitted)</span></h3>
+  <p>Follow-up to the rename work: the track name in the <strong>track editor header</strong> is also renamable — same double-click contract, plus a pencil icon that fades in on hover as the affordance (invisible at rest, click it to rename directly).</p>
+  <p class="where">components/TrackEditor.tsx (EditableTrackName)</p>
+</div>
+
 <!-- EASY -->
 <h2>🟢 Easy — the low-hanging fruit (each is minutes-to-an-hour)</h2>
-<p class="muted small">Batch A+B are one sitting each.</p>
-
-<p><strong>Batch A — one-line-ish fixes</strong></p>
-
-<div class="item">
-  <h3>Projects button → projects page</h3>
-  <p>The editor header's "Projects" link points at <code>/</code> (home). Point it at <code>/projects</code>. One attribute.</p>
-  <p class="where">editor/App.tsx (Header)</p>
-</div>
-
-<div class="item">
-  <h3>Cube shouldn't default-spin</h3>
-  <p>The spin lives in Cube's <code>localTransform</code> (<code>rotation: [beat*0.09, beat*0.22, 0]</code>). Either delete it or, nicer, make it a <code>spinSpeed</code> param defaulting to 0 so spin becomes opt-in.</p>
-  <p class="where">instruments/Cube.tsx</p>
-</div>
-
-<div class="item">
-  <h3>Change the project length</h3>
-  <p><code>totalBars</code> already lives in ProjectStore (persisted, undoable, drives <code>maxBeat</code>). It just has no UI. Add a small drag-number next to the BPM control, same interaction pattern.</p>
-  <p class="where">components/BpmControl.tsx (sibling control) · editor/App.tsx header</p>
-</div>
-
-<p><strong>Batch B — timeline/store behaviors</strong></p>
-
-<div class="item">
-  <h3>Deleting a parent track deletes its whole subtree</h3>
-  <p>Agreed on semantics: recursive delete (automation, ability, and nested children all go). Today <code>deleteTrack</code> <em>promotes</em> children to the parent's slot. Swap promotion for a recursive collect-and-delete; also clear any selections/routings pointing into the deleted subtree (the routing cleanup partially exists).</p>
-  <p class="where">store/ProjectStore.ts (deleteTrack)</p>
-</div>
-
-<div class="item">
-  <h3>Rename tracks</h3>
-  <p>Double-click the label → inline input → <code>renameTrack(id, name)</code> store action (undoable for free via the generic snapshot). The label already owns click-to-select; double-click is unclaimed on tracks.</p>
-  <p class="where">store/ProjectStore.ts · components/timeline/Track.tsx</p>
-</div>
-
-<div class="item">
-  <h3>MIDI blocks: show pitch in note previews</h3>
-  <p>Block previews render notes as full-height vertical slivers. Make each sliver a short dash positioned vertically by pitch (normalize pitch across the block's range, or a fixed C1–C7 span). Small render-math change in one component.</p>
-  <p class="where">components/timeline/Block.tsx</p>
-</div>
+<p class="muted small">Batches A and B are done (see above) — what's left here is one small UI fix and the two investigations.</p>
 
 <div class="item">
   <h3>Make the interpolation picker discoverable</h3>
   <p>The per-lane "Interp" dropdown exists but is buried in the piano-roll toolbar and only renders when the parent instrument's param lookup succeeds. Two small fixes: give it visual weight (label it "Curve", pull it out of the toolbar crowd, and/or add it to the automation lane's right-click menu in the timeline), and show it even when the param lookup fails (fall back to generic 0–1 bounds instead of hiding the whole control).</p>
   <p class="where">components/midi/PianoRollPanel.tsx · timeline context menu</p>
-</div>
-
-<div class="item">
-  <h3>Automate y/z position (the params half)</h3>
-  <p>Automation can already target any numeric instrument param — Cube just only exposes <code>baseXPosition</code>. Add <code>baseYPosition</code>/<code>baseZPosition</code> params (and to any instrument that wants them) and they're automatable immediately. The row-scaling/hiding half of your note is a separate medium item below.</p>
-  <p class="where">instruments/Cube.tsx (+ whichever instruments want it)</p>
 </div>
 
 <p><strong>Batch C — quick investigations (probably small fixes, size unknown until reproduced)</strong></p>
@@ -219,9 +191,9 @@
 </div>
 
 <hr/>
-<div class="rec"><strong>Suggested order of attack:</strong> Batch A in one sitting (three tiny fixes) → Batch B (four small timeline/store features) → the two investigations while Tyler's reports are fresh → MIDI import (the deps are already installed) → loop blocks + effects menu → effect-param automation (which unlocks the symmetric effects) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time — it blocks an easy implementation, not a hard one.</div>
+<div class="rec"><strong>Suggested order of attack:</strong> <s>Batch A</s> and <s>Batch B</s> are done → the two investigations while Tyler's reports are fresh (need his repro/project) → the interp-picker discoverability fix → MIDI import (the deps are already installed) → loop blocks + effects menu → effect-param automation (which unlocks the symmetric effects) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time — it blocks an easy implementation, not a hard one.</div>
 
-<p class="small muted">Triage of the running TODO list as of 2026-07-03. "Done" items shipped in the persistence / pause-invariant / audio-track pushes on <code>dev</code>. Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · effects/ · timeline components).</p>
+<p class="small muted">Triage of the running TODO list, updated 2026-07-03 after the Batch A/B push. Earlier "done" items shipped in the persistence / pause-invariant / audio-track pushes on <code>dev</code>; Batch B landed as commits <code>ba4afbc</code>–<code>b0cf3d2</code>. Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · effects/ · timeline components).</p>
 
 </div>
 </body>
