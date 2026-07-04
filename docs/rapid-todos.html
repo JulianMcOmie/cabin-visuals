@@ -75,18 +75,18 @@
     <li><strong>Per-lane automation curves</strong> — already existed: the "Interp" dropdown in the piano-roll toolbar.</li>
     <li><strong>Video export</strong> — deterministic in-browser MP4 (H.264+AAC, include-audio toggle, frozen UI while exporting, explicit Download step).</li>
     <li><strong>Quarter-beat snapping</strong> — blocks snap to 1/4 beat on move, resize, and draw.</li>
+    <li><strong>Overscroll back-swipe</strong> — leftward scroll can no longer navigate the browser back.</li>
+    <li><strong>Menu flip-up</strong> — context menus open upward (submenus too) when there's no room below.</li>
+    <li><strong>Mass mute/solo</strong> — drag across M/S buttons to paint one state over many tracks, Logic-style.</li>
+    <li><strong>Fullscreen visual</strong> — button on the canvas panel or F takes the visual fullscreen.</li>
+    <li><strong>Export filename</strong> — defaults to the project's name (sanitized); quality settings still remembered, name isn't.</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
     <li><strong>First-note bug ★</strong> — investigate Tyler's report that play-from-start skips the first note.</li>
     <li><strong>Automation copy bug ★</strong> — investigate Tyler's report that automating changes a copy; likely a slider-feedback gap, not an engine bug.</li>
     <li><strong>Automatable mute ★</strong> — verify the Mute modifier already covers Tyler's "remove an instrument via MIDI" ask.</li>
-    <li><strong>Interp discoverability</strong> — surface the buried per-lane curve dropdown and show it even when the param lookup fails.</li>
-    <li><strong>Overscroll back-swipe</strong> — stop leftward timeline scroll from navigating the browser back.</li>
-    <li><strong>Menu flip-up</strong> — context menus should open upward when there's no room below.</li>
-    <li><strong>Mass mute/solo</strong> — drag across M/S buttons to paint one state over many tracks, Logic-style.</li>
-    <li><strong>Fullscreen visual</strong> — a button/hotkey to take the canvas fullscreen.</li>
-    <li><strong>Export filename</strong> — default to the project name instead of "export".</li>
+    <li><strong>Interp discoverability ★</strong> — surface the buried per-lane curve dropdown; UI treatment undecided.</li>
   </ul>
   <h3>🟡 Medium remaining</h3>
   <ul>
@@ -163,6 +163,12 @@
 </div>
 
 <div class="item">
+  <h3><span class="badge b-done">done</span>Batch D — five quick fixes (2026-07-03, one commit each)</h3>
+  <p><strong>Overscroll back-swipe</strong> (<code>7b56202</code>): <code>overscroll-behavior-x: none</code> globally — leftward scroll can't leave the app. <strong>Menu flip-up</strong> (<code>73d6508</code>): the track context menu measures itself before paint and flips upward near the bottom edge (submenus bottom-align when flipped; x clamps too). <strong>Mass mute/solo</strong> (<code>aafced5</code>): pointer-down on M or S starts a stroke that paints the first toggle's state across every same-kind button crossed. <strong>Fullscreen visual</strong> (<code>9097404</code>): button on the canvas panel or the F key. <strong>Export filename</strong> (<code>f9fd85f</code>): defaults to the project's name, sanitized; quality settings persist across sessions but the name is per-project.</p>
+  <p class="where">globals.css · TrackContextMenu.tsx · Track.tsx · App.tsx (VisualPanel) · ExportDialog.tsx + UIStore.projectName</p>
+</div>
+
+<div class="item">
   <h3><span class="badge b-done">done</span>Fix: every project opened the same data</h3>
   <p>The editor latched <code>?project</code> from a one-shot <code>window.location</code> read at mount — stale or frozen under client-side navigation, so the first project stayed bound forever. Now the id comes reactively from <code>useSearchParams()</code>, and every rebind blanks the stores before loading so another project's data can never bleed through. Projects opened before the fix may have cross-saved data in their rows — eyeball old projects once.</p>
   <p class="where">hooks/useProjectPersistence.ts · app/editor/page.tsx</p>
@@ -170,40 +176,10 @@
 
 <!-- EASY -->
 <h2>🟢 Easy — the low-hanging fruit (each is minutes-to-an-hour)</h2>
-<p class="muted small">Batches A and B are done (see above). The first five below would make a natural Batch D.</p>
+<p class="muted small">Batches A, B, and D are done (see above) — everything left in this tier is ★-blocked on investigation or a decision.</p>
 
 <div class="item">
-  <h3>Stop leftward scroll from leaving the page</h3>
-  <p>Horizontal overscroll triggers the browser's back-swipe. <code>overscroll-behavior-x: none</code> on the timeline scrollers (or globally on the editor body) kills the navigation gesture while keeping normal scrolling — this is exactly what the property exists for. If any browser ignores it, the fallback is hotkey/scrollbar alternatives, but try the one-liner first.</p>
-  <p class="where">globals.css / editor root · timeline + piano-roll scroll containers</p>
-</div>
-
-<div class="item">
-  <h3>Context menus flip up when there's no room below</h3>
-  <p>The add-automation/ability menu renders at the click point and runs off-screen near the bottom. On open, measure the menu against the viewport and flip the y (and clamp x) — same treatment for the submenus, which can also overflow the right edge.</p>
-  <p class="where">components/timeline/TrackContextMenu.tsx</p>
-</div>
-
-<div class="item">
-  <h3>Drag across M/S buttons to mass-toggle (Logic-style)</h3>
-  <p>Pointer-down on a Mute button starts a "painting" gesture: every M button the pointer crosses gets set to the SAME state as the first toggle (not flipped independently — that's the Logic behavior that makes sweeps predictable). Same for Solo. A small shared hook over the two button columns.</p>
-  <p class="where">components/timeline/Track.tsx (M/S buttons) · small new hook</p>
-</div>
-
-<div class="item">
-  <h3>Fullscreen for the visual</h3>
-  <p>A button (and hotkey) on the canvas panel calling <code>requestFullscreen()</code> on the canvas container; Esc exits natively. R3F's resize handling adapts automatically — and the aspect-aware instruments re-compose, which is the same path the export pin already exercises.</p>
-  <p class="where">editor/App.tsx (Scene panel)</p>
-</div>
-
-<div class="item">
-  <h3>Default export filename from the project name</h3>
-  <p><code>projectStorage.load()</code> already returns the name — it's just dropped on the floor. Stash it at hydrate time (tiny meta store or UIStore field) and use it as the ExportDialog's default instead of "export". Saved settings should stop overriding the name once it's per-project.</p>
-  <p class="where">hooks/useProjectPersistence.ts · components/ExportDialog.tsx</p>
-</div>
-
-<div class="item">
-  <h3>Make the interpolation picker discoverable</h3>
+  <h3><span class="badge b-inv">undecided</span>Make the interpolation picker discoverable</h3>
   <p>The per-lane "Interp" dropdown exists but is buried in the piano-roll toolbar and only renders when the parent instrument's param lookup succeeds. Two small fixes: give it visual weight (label it "Curve", pull it out of the toolbar crowd, and/or add it to the automation lane's right-click menu in the timeline), and show it even when the param lookup fails (fall back to generic 0–1 bounds instead of hiding the whole control).</p>
   <p class="where">components/midi/PianoRollPanel.tsx · timeline context menu</p>
 </div>
