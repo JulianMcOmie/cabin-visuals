@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Horizontal overscroll must never trigger the browser's back/forward swipe —
+   scrolling left past the timeline's start was navigating away from the app. */
+html,
+body {
+  overscroll-behavior-x: none;
+}
+
 /* Basic Global Colors - Defined outside Tailwind layers */
 :root {
   --text: #ffffff;
