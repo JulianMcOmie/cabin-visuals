@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Automatable Mute — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Automatable Mute</span>
+  <h1>Automatable Mute — Implementation Plan</h1>
+  <p class="sub">Verify what the Mute modifier lane actually does to a persistent object; then either write two sentences of documentation or wire the lane into the renderer's existing hide-switch.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Verification on both instrument shapes · the <code>hiddenByLane</code> wiring if the gap is real · a README line either way</td><td>Opacity fades (envelope modulator item) · parent/child mute semantics (nested mute/solo design) · audio-track interaction (the Mute lane is a visual-track construct)</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Verify on both instrument shapes (~10 minutes, no code)</h3>
+<ul class="small">
+  <li>Track A: a note-driven instrument (Particle Burst-like). Add a Mute modifier lane, draw a region over bars 2–4, play through. Expected: flashes stop inside the region.</li>
+  <li>Track B: a persistent-body instrument (Cube). Same lane, same region. The question: does the cube body disappear during the region, or only its note responses?</li>
+  <li>Also confirm scrubbing INTO the region shows the muted state instantly (pure-function-of-beat check).</li>
+</ul>
+
+<h3>Phase 1a — If the body already hides: document, done</h3>
+<ul class="small">
+  <li>One line in the README's editor tour ("Mute modifier = timed mute, M button = static mute") and a message to Tyler. Close the item.</li>
+</ul>
+
+<h3>Phase 1b — If the body persists: wire the lane to the hide-switch</h3>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/resolve.ts</span>: where the parent's modifier lanes are gathered, emit the Mute lane's regions as beat-ranges on the resolved object (<code>muteRegions: {start, end}[]</code>) — data, not per-frame work.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/VisualEngine.ts</span> (computeAtBeat): object hidden = <code>track.muted || inAnyMuteRegion(beat)</code> — same flag the M-button path sets on the object state.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">components/visual/ObjectRenderer.tsx</span>: no change if it already reads the single hidden flag — the point of routing both mutes through one switch.</li>
+  <li>Region edges are hard cuts on the beat — deterministic, scrub-exact, export-exact.</li>
+</ul>
+
+<h3>Phase 2 — Verify</h3>
+<ul class="small">
+  <li>Cube + Mute region bars 2–4: visible → gone at bar 2 exactly → back at bar 4 exactly, identical under play, scrub, and a 4-bar export.</li>
+  <li>M button and Mute lane compose: M-muted track stays hidden regardless of lane regions.</li>
+  <li>Canary green while parked inside and outside the region.</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/visual/resolve.ts</span></td><td>1b: Mute-lane regions onto the resolved object.</td></tr>
+    <tr><td><span class="file">core/visual/VisualEngine.ts</span></td><td>1b: fold regions into the hidden flag at computeAtBeat.</td></tr>
+    <tr><td><span class="file">README.md</span></td><td>Either outcome: name the pattern.</td></tr>
+    <tr><td>Document schema, stores, timeline UI</td><td>Untouched — the lane, its blocks, and its persistence already exist.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Semantic surprise:</strong> someone may WANT "mute events but keep the body." If so, that argues for keeping Mute = events-only and adding a separate Hide modifier type instead — surface this to Julia/Tyler before choosing 1b's exact semantics.</li>
+  <li><span class="badge b-risk">note</span> Trigger-style instruments already behave as "gone" under the event mute — the verification's track A vs track B split is what makes the decision informed.</li>
+  <li><span class="badge b-risk">note</span> Fades stay out: one fade system (envelope modulator) later, not a second one here.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> ten minutes of verification decides between two sentences of documentation and a two-file change that lets the Mute lane throw the renderer's existing hide-switch on the beat.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">automatable-mute-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
