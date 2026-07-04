@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MIDI Import — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · MIDI Import</span>
+  <h1>MIDI Import — Implementation Plan</h1>
+  <p class="sub">One pure parser module, one store action, two entry points (button + drop), one summary toast. The deps are already installed; the beat domain does the hard part.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>.mid → new tracks/blocks/notes · import button + drag-drop of .mid files · out-of-range count toast · totalBars growth</td><td>Tempo/time-sig import · CC→automation (follow-up after richer automation targets) · import into an EXISTING track · split-at-silence blocks · MIDI export</td></tr>
+  </tbody>
+</table>
+
+<h2>B · The parser module</h2>
+<pre><code>// core/midiImport.ts — pure: bytes in, document-shaped data out. No store access.
+import { Midi } from '@tonejs/midi'
+
+export interface ImportedTrack { name: string; notes: Note[]; endBeat: number }
+
+export function parseMidiFile(bytes: ArrayBuffer): ImportedTrack[] {
+  const midi = new Midi(bytes)
+  return midi.tracks
+    .map((t) => ({
+      name: t.name || t.instrument?.name || 'MIDI track',
+      notes: t.notes.map((n) => ({
+        id: crypto.randomUUID(),
+        pitch: n.midi,
+        startBeat: n.ticks / midi.header.ppq,          // ticks/PPQ = beats — no seconds
+        durationBeats: Math.max(0.05, n.durationTicks / midi.header.ppq),
+        velocity: Math.round(n.velocity * 127),
+      })),
+      endBeat: 0, // filled below from the last note
+    }))
+    .filter((t) => t.notes.length > 0)
+}</code></pre>
+<p class="small muted">Pure and testable with a fixture .mid checked into the repo (a 2-track, 8-bar file with known note positions).</p>
+
+<h2>C · Phase-by-phase</h2>
+
+<h3>Phase 1 — Parser + store action <span class="badge b-new">core/midiImport.ts</span> <span class="badge b-edit">ProjectStore</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> <span class="file">core/midiImport.ts</span> as above.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">store/ProjectStore.ts</span>: <code>importMidiTracks(imported: ImportedTrack[])</code> — per track: new track (default instrument <code>cube</code>, color from the palette rotation, name from the file), ONE block at bar 0 with <code>durationBars = ceil(maxEndBeat / beatsPerBar)</code>, notes block-relative (they already are — block starts at 0). Bump <code>totalBars</code> if the content overruns. One <code>set()</code> → one undo step for the whole import.</li>
+  <li>Verify with the fixture: node-side unit check of parse output (beat positions exact), then in-app: import → tracks appear, undo removes them all at once.</li>
+</ul>
+
+<h3>Phase 2 — Entry points <span class="badge b-edit">timeline UI</span></h3>
+<ul class="small">
+  <li>Button: an import icon next to the Tracks + button — <code>&lt;input type="file" accept=".mid,.midi"&gt;</code>, read bytes, parse, dispatch.</li>
+  <li>Drop: the timeline area accepts a dragged .mid (dragover/drop with type sniff) — same dispatch. Audio-file drops are NOT claimed (the AudioBar owns those).</li>
+  <li>Summary toast per import: "3 tracks · 412 notes" plus, per track whose instrument has a narrow map, "N notes outside range" (computed against the instrument's declared pitch mapping where one exists; skip the count where the instrument maps all pitches).</li>
+</ul>
+
+<h3>Phase 3 — Verify end-to-end</h3>
+<ul class="small">
+  <li>A Logic-exported 2-track .mid: both tracks land, first note of each at its exact bar:beat under the ruler, playback triggers visuals on the grid.</li>
+  <li>A file longer than 32 bars grows totalBars; undo restores the old length with the tracks.</li>
+  <li>A 200k-note stress file parses off the main thread's critical path (parse is fast; if it ever isn't, the seam is "parse in a worker" — noted, not built).</li>
+  <li>Pitch fidelity: reopen the block in the piano roll — full-spectrum notes visible, block previews show the contour.</li>
+</ul>
+
+<h2>D · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">core/midiImport.ts</span></td><td><span class="badge b-new">new</span> — pure parse (the only file that imports @tonejs/midi).</td></tr>
+    <tr><td><span class="file">store/ProjectStore.ts</span></td><td>importMidiTracks action (single undoable set).</td></tr>
+    <tr><td><span class="file">components/timeline/TimelineArea.tsx</span> (+ header of the tracks column)</td><td>Import button · .mid drop target · toasts.</td></tr>
+    <tr><td><span class="file">test-fixtures/*.mid</span></td><td><span class="badge b-new">new</span> — known-content fixture(s).</td></tr>
+    <tr><td>Engines · persistence · piano roll</td><td>Untouched — imported notes are ordinary notes.</td></tr>
+  </tbody>
+</table>
+
+<h2>E · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Type-0 files</strong> (everything on one MIDI track, channels instead of tracks): v1 imports it as one dense track — acceptable; channel-splitting is a refinement if it annoys.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Files with pickup/offset silence</strong>: notes land where the file says (bar 3 stays bar 3). If people want "snap content to bar 1," that's a checkbox later.</li>
+  <li><span class="badge b-risk">open</span> <strong>Default instrument per imported track</strong> — Cube for all, or cycle the library? Cosmetic; decide at build time.</li>
+  <li><span class="badge b-risk">note</span> CC lanes (mod wheel etc.) are parsed by @tonejs/midi and deliberately dropped in v1 — the natural target is the envelope/automation system once richer targets exist; leave a TODO naming it.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> a pure ticks-over-PPQ walk mints ordinary tracks/blocks/notes in one undoable store write, reachable from a button and a drop — and every hard-sounding problem (tempo, range, display) was already dissolved by the beat domain and the import-faithfully decision.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">midi-import-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
