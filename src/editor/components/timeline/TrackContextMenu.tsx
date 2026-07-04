@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronRight, Check } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
@@ -25,6 +25,22 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   const [openSub, setOpenSub] = useState<'ability' | 'automation' | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+
+  // Near the viewport's bottom/right edge the menu flips/clamps instead of
+  // running off-screen. Measured before paint so it never flashes misplaced;
+  // flipped menus also open their submenus upward (bottom-aligned).
+  const [placement, setPlacement] = useState<{ left: number; top: number; up: boolean }>({ left: x, top: y, up: false })
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const up = y + height > window.innerHeight - 8 && y - height >= 8
+    setPlacement({
+      left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+      top: up ? y - height : Math.min(y, Math.max(8, window.innerHeight - height - 8)),
+      up,
+    })
+  }, [x, y])
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -56,7 +72,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     <div
       ref={ref}
       className="fixed z-50 min-w-[168px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
-      style={{ left: x, top: y }}
+      style={{ left: placement.left, top: placement.top }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {!hasAny && <div className="px-3 py-1.5 text-zinc-500">Nothing to add</div>}
@@ -68,7 +84,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
             <ChevronRight size={12} className="text-zinc-500" />
           </div>
           {openSub === 'ability' && (
-            <div className="absolute left-full top-0 -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50">
+            <div className={`absolute left-full ${placement.up ? 'bottom-0' : 'top-0'} -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50`}>
               {abilities.map((a) => {
                 const added = addedAbilities.has(a.key)
                 return (
@@ -100,7 +116,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
             <ChevronRight size={12} className="text-zinc-500" />
           </div>
           {openSub === 'automation' && (
-            <div className="absolute left-full top-0 -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50">
+            <div className={`absolute left-full ${placement.up ? 'bottom-0' : 'top-0'} -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50`}>
               {params.map((p) => {
                 const added = automatedParams.has(p.key)
                 return (
