@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -46,6 +46,53 @@ function Scene() {
       <ExportDriver />
       <VisualScene />
     </Canvas>
+  )
+}
+
+// The visual panel: the canvas plus a fullscreen toggle (button or F).
+// Fullscreen targets the panel div, so the beat overlay and this button ride
+// along; R3F resizes to the new box on its own, and the aspect-aware
+// instruments re-compose — the same path the export pin exercises.
+function VisualPanel() {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  const toggle = () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    // Denied requests (kiosk/embedded contexts) fail quietly — the button just does nothing.
+    else void panelRef.current?.requestFullscreen().catch(() => {})
+  }
+
+  // F toggles fullscreen (guarded like the transport keys: not while typing).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.code === 'KeyF') toggle()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  return (
+    <div ref={panelRef} className="relative h-full bg-[#09090b]">
+      <BeatOverlay />
+      <Scene />
+      <button
+        onClick={toggle}
+        title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+        className="absolute top-2 right-3 z-10 flex items-center justify-center w-6 h-6 rounded bg-zinc-900/70 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 transition-colors"
+      >
+        {isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />}
+      </button>
+    </div>
   )
 }
 
@@ -195,10 +242,7 @@ export default function EditorApp() {
 
                     {/* Canvas */}
                     <Panel>
-                      <div className="relative h-full">
-                        <BeatOverlay />
-                        <Scene />
-                      </div>
+                      <VisualPanel />
                     </Panel>
 
                   </PanelGroup>
