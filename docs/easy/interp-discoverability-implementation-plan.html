@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interp Discoverability — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Interp Discoverability</span>
+  <h1>Interp Discoverability — Implementation Plan</h1>
+  <p class="sub">One unconditional defect fix (the vanishing control), then the ★-gated surface work: promote the picker in the piano-roll toolbar and/or add a Curve entry to the automation row's context menu. Phase 0 ships regardless; phases 1–2 wait on Julia's pick.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Silent-hide fix · toolbar promotion ("Curve") · optional right-click Curve submenu on automation rows</td><td>Per-keyframe curves (own medium item) · lane-label chips (option 3 — revisit with per-keyframe UI) · any change to the easing math</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Never hide the control <span class="badge b-edit">PianoRollPanel</span> (unconditional)</h3>
+<ul class="small">
+  <li>Today: <code>automation</code> is only set when the parent instrument's param def resolves and is numeric; otherwise the whole automation treatment (value rows + Interp select) silently degrades to a note editor.</li>
+  <li>Change: for <code>track.type === 'automation'</code>, ALWAYS build the automation view — if the param def is missing, fall back to <code>{ paramLabel: track.targetParam ?? 'value', paramMin: 0, paramMax: 1 }</code> and show a small "param not found on parent" hint in the range gutter.</li>
+  <li>Verify: rename/swap the parent's instrument so the lookup fails → lane still opens as an automation lane, curve still editable.</li>
+</ul>
+
+<h3>Phase 1 — Promote in place <span class="badge b-edit">PianoRollPanel</span> (★ recommended)</h3>
+<ul class="small">
+  <li>Rename the label "Interp" → <strong>"Curve"</strong>; move the group to sit directly after the track-name cluster (before Snap/grid) when the lane is automation — the first thing an automation editor shows should be automation controls.</li>
+  <li>Slightly widen the select and title it "Animation curve between keyframes".</li>
+</ul>
+
+<h3>Phase 2 — Right-click Curve on the automation row <span class="badge b-edit">timeline</span> (★ optional)</h3>
+<ul class="small">
+  <li>Automation/ability rows currently have no own context menu (the add-lane menu belongs to the parent label). Add a minimal menu for automation rows: <strong>Curve ▸</strong> the 7 modes (check the active one) — reusing the SubMenu clamping component from TrackContextMenu.</li>
+  <li>One store write (<code>setTrackInterpolation</code>) — the piano-roll select and this menu can't desync.</li>
+  <li>Wire: <span class="file">Track.tsx</span> label <code>onContextMenu</code> branches on <code>track.type === 'automation'</code> to the new menu.</li>
+</ul>
+
+<h3>Phase 3 — Verify</h3>
+<ul class="small">
+  <li>Curve changes from either surface reflect in the other and audibly change the sampled motion (linear vs step on a position lane is unmistakable).</li>
+  <li>Undo steps the mode; persistence round-trips it (both already true — regression check only).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">components/midi/PianoRollPanel.tsx</span></td><td>Phase 0 fallback + phase 1 relabel/reposition.</td></tr>
+    <tr><td><span class="file">components/timeline/TrackContextMenu.tsx</span> (or a sibling)</td><td>Phase 2: automation-row menu with Curve submenu (reuse SubMenu).</td></tr>
+    <tr><td><span class="file">components/timeline/Track.tsx</span></td><td>Phase 2: route automation-row right-click to the new menu.</td></tr>
+    <tr><td><span class="file">core/visual/automation.ts</span> · store</td><td>Untouched — the field, action, and easing already work.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">★ gate</span> <strong>Phases 1–2 are Julia's call</strong> — she starred this because the treatment is undecided. Phase 0 is a defect fix and shouldn't wait.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Toolbar crowding</strong> at narrow panel widths — the piano-roll toolbar already holds 8 controls; if Curve doesn't fit, it wins over the zoom sliders (which have scroll-gesture equivalents).</li>
+  <li><span class="badge b-risk">note</span> Per-keyframe curves will later need segment-level UI in the lane itself; nothing here should preempt that (specifically: don't put per-LANE curve UI inside the lane grid).</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> ship the never-hide fallback now, then make the existing store field loud — a "Curve" control where automation editing starts, plus (if Julia picks it) the same seven modes one right-click away on the lane row.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">interp-discoverability-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
