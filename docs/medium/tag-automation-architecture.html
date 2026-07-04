@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tag Automation — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Tag Automation</span>
+  <h1>Tag Automation — Architecture</h1>
+  <p class="sub">"Tagging is so good for this" — one automation lane drives one param key across EVERY instrument carrying a tag. The lane goes normalized (0–1) and each instrument maps it into its own bounds, which is what makes cross-instrument fan-out coherent instead of accidental.</p>
+</header>
+
+<h2>1 · The fan-out — one lane, N instruments, per-instrument bounds</h2>
+<figure class="fig">
+  <div class="figtitle">A parentless automation track scoped to a tag</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Tag automation fan-out">
+    <defs><marker id="a17" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="40" width="300" height="110" rx="10" fill="#141414"/>
+    <text x="170" y="74" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">tag-automation track (root)</text>
+    <text x="170" y="100" text-anchor="middle" font-size="14.5" fill="#fff">tag: #drums · param key: baseHue</text>
+    <text x="170" y="122" text-anchor="middle" font-size="14.5" fill="#fff">lane is NORMALIZED 0–1</text>
+    <rect x="420" y="24" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="520" y="50" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">Kick Cube #drums</text>
+    <text x="520" y="72" text-anchor="middle" font-size="13.5" fill="#565656">baseHue 0–360 → t·360</text>
+    <rect x="420" y="102" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="520" y="128" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">Snare Burst #drums</text>
+    <text x="520" y="150" text-anchor="middle" font-size="13.5" fill="#565656">baseHue 0–360 → t·360</text>
+    <rect x="420" y="180" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="520" y="206" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">Hat Dots #drums</text>
+    <text x="520" y="228" text-anchor="middle" font-size="13.5" fill="#565656">no baseHue → skipped, listed in UI</text>
+    <path d="M320,80 L412,54" stroke="#141414" stroke-width="2" marker-end="url(#a17)"/>
+    <path d="M320,95 L412,132" stroke="#141414" stroke-width="2" marker-end="url(#a17)"/>
+    <path d="M320,110 L412,208" stroke="#141414" stroke-width="2" marker-end="url(#a17)"/>
+    <rect x="680" y="102" width="200" height="60" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="780" y="128" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">new #drums track</text>
+    <text x="780" y="150" text-anchor="middle" font-size="13.5" fill="#565656">joins the fan-out AUTOMATICALLY</text>
+    <path d="M620,132 L672,132" stroke="#141414" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a17)"/>
+  </svg>
+  <figcaption>Tags resolve at resolve time (the tagIndex modulator scopes already use), so tagging a new track mid-project instantly enrolls it — the property that makes tags "so good for this."</figcaption>
+</figure>
+
+<h2>2 · Why normalized lanes</h2>
+<table>
+  <thead><tr><th>Alternative</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Absolute values (lane in the param's units)</td><td>Whose units? #drums instruments can disagree about bounds for the same key, and unrelated keys can't share a lane at all. Dead end.</td></tr>
+    <tr><td><strong>Normalized 0–1, mapped per instrument</strong></td><td><strong>Chosen.</strong> The lane says "how far through YOUR range"; each target maps t into its own min/max. Same proportional principle copy-paste-automation already relies on. Editor shows 0–100%.</td></tr>
+    <tr><td>Per-target scaling knobs on top</td><td>Later, if wanted — a per-routing amount like modulators have. Not v1.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>A root-level automation track (parentless)</td><td>It belongs to the tag, not to any instrument — nesting it under one member would lie about its scope. It renders as a normal automation row at root, labeled <code>#drums · Base Color</code>.</td></tr>
+    <tr><td>Targets by ParamAddress KEY, tolerant fan-out</td><td>Instruments lacking the key are skipped (the lane's editor lists "drives 2 of 3 tagged"); effect-setting addresses fan out by pluginId+key match. The cluster's addressing, third consumer.</td></tr>
+    <tr><td>Merge position: same slot as per-instrument lanes</td><td>base ← lanes (instrument lane wins over tag lane when both exist — specific beats general, documented) ← modulators. One order, extended once.</td></tr>
+    <tr><td>Created from the Tracks + menu</td><td>"+ ▸ Tag automation ▸ #tag ▸ param key" (keys = union across tagged instruments). The add flow needs a tag to exist first — greyed otherwise.</td></tr>
+    <tr><td>Non-goals</td><td>Tag hierarchies · per-target offsets · tag-scoped EFFECTS (different feature) · retro-compat migration (new optional track fields only).</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> a parentless lane that says "#drums · hue: t" in normalized terms, fanned out at resolve through the same tagIndex modulators use, each instrument stretching t into its own bounds — general lanes losing to specific ones at the one documented merge point.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">tag-automation-implementation-plan.html</span>. Cluster: third consumer of ParamAddress (after effect-param automation, beside the envelope modulator). Existing tag machinery: <code>Track.tags</code> · tagIndex + <code>expandScope</code> in <span class="file">resolve.ts</span>.</p>
+
+</div>
+</body>
+</html>
