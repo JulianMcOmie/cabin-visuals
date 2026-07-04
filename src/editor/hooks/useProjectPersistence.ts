@@ -5,6 +5,7 @@ import { hydrate } from '../../persistence/serialize'
 import { emptyDocument } from '../../persistence/types'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
 import { useHistoryStore } from '../store/HistoryStore'
+import { useUIStore } from '../store/UIStore'
 
 /**
  * Binds this editor instance to its project row: reads ?project=<id> from the
@@ -35,8 +36,9 @@ export function useProjectPersistence() {
 
     ;(async () => {
       try {
-        const { document } = await projectStorage.load(projectId)
+        const { name, document } = await projectStorage.load(projectId)
         if (cancelled) return
+        useUIStore.getState().setProjectName(name)
         hydrate(document)
         // The hydrate setState must not be undoable — Ctrl+Z right after open
         // would otherwise restore an empty project.
@@ -51,6 +53,7 @@ export function useProjectPersistence() {
     return () => {
       cancelled = true
       stop?.()
+      useUIStore.getState().setProjectName(null)
     }
   }, [projectId])
 }

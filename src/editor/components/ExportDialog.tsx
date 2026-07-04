@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Film } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
+import { useUIStore } from '../store/UIStore'
 import { useTimeStore } from '../store/TimeStore'
 import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
@@ -19,13 +20,23 @@ type Phase =
   | { kind: 'done'; fileName: string; blob: Blob }
   | { kind: 'error'; message: string }
 
+/** The project's name as a safe default filename (no path/reserved characters). */
+function defaultFileName(): string {
+  const name = useUIStore.getState().projectName?.trim()
+  if (!name) return 'export'
+  const safe = name.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim()
+  return safe || 'export'
+}
+
 function loadSavedSettings(): ExportSettings {
-  const base = defaultSettings('export')
+  // Quality settings are remembered across sessions; the FILENAME is not — it
+  // defaults to the open project's name every time.
+  const base = defaultSettings(defaultFileName())
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return base
     const saved = JSON.parse(raw) as Partial<ExportSettings>
-    const merged = { ...base, ...saved }
+    const merged = { ...base, ...saved, fileName: base.fileName }
     merged.videoBitrate = defaultBitrate(merged.width, merged.fps)
     return merged
   } catch {
@@ -73,7 +84,9 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
     const effective = { ...settings, includeAudio: settings.includeAudio && audioOk, videoBitrate: defaultBitrate(settings.width, settings.fps) }
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(effective)) } catch { /* private mode */ }
+    // Persist quality preferences only — the filename belongs to the project.
+    const { fileName: _fileName, ...remembered } = effective
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)) } catch { /* private mode */ }
 
     // Freeze the visual behind the dialog: render the user's current beat once
     // (same task, so the buffer is valid) and pin that still over the canvas.

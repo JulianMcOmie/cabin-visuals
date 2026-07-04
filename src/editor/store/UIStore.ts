@@ -60,6 +60,11 @@ interface UIState {
   // to switch to its Effects tab and highlight the drop zone.
   effectDragging: boolean
   setEffectDragging: (v: boolean) => void
+
+  // The open project's row name (set at load) — display-only editor chrome, e.g.
+  // the export dialog's default filename. NOT the document (never serialized).
+  projectName: string | null
+  setProjectName: (name: string | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -116,4 +121,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   effectDragging: false,
   setEffectDragging: (v) => set({ effectDragging: v }),
+
+  projectName: null,
+  setProjectName: (name) => set({ projectName: name }),
 }));
