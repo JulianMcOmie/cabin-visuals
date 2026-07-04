@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Effect-Param Automation — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .note{border-left:4px solid #c2c2c2;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.note,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Effect-Param Automation</span>
+  <h1>Effect-Param Automation — Implementation Plan</h1>
+  <p class="sub">End-to-end through five thin layers: type, menu, resolve, overlay, wrappers. The keystone canary is a radius lane visibly breathing a radial-symmetry ring under play, scrub, AND export.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>ParamAddress type · <code>targetEffect</code> lanes · add-automation menu groups per instance · resolve + computeAtBeat overlay · wrappers read merged · not-found state on effect deletion</td><td>Envelope modulator + tag automation (consumers, own pairs) · automating <code>enabled</code> · modulator→effect routing · per-keyframe curves</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 1 — Types + store <span class="badge b-edit">types.ts · ProjectStore</span></h3>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>ParamAddress</code> union (exported — the cluster's shared type) and <code>Track.targetEffect?: { instanceId: string; key: string }</code>. Optional → no upgrade step.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">ProjectStore.ts</span>: <code>addEffectAutomationTrack(parentId, instanceId, key, label)</code> — mirror of addAutomationTrack with the one-lane-per-address duplicate check (compare instanceId+key). <code>removeEffect</code> does NOT delete its lanes (they enter not-found and stay re-aimable — same philosophy as recursive-delete keeping data decisions explicit).</li>
+</ul>
+
+<h3>Phase 2 — Menu + lane view <span class="badge b-edit">TrackContextMenu · PianoRollPanel</span></h3>
+<ul class="small">
+  <li>Menu: after the params group, one group per effect instance (label = plugin name, numbered when duplicated: "Echo 2"), items from the plugin def's numeric settings, added ones checked/disabled. (On the shared NestedMenu if the picker pair landed; inline otherwise.)</li>
+  <li>PianoRollPanel: the automation-info lookup branches — <code>targetEffect</code> lanes pull label/min/max from the plugin def's setting schema; missing instance → the not-found fallback (interp-discoverability phase 0).</li>
+</ul>
+
+<h3>Phase 3 — Resolve + overlay ★ keystone <span class="badge b-edit">resolve.ts · VisualEngine.ts</span></h3>
+<ul class="small">
+  <li>Resolve: effect-targeted lanes compile like param lanes but keyed by address: the object gains <code>effectLanes: Map&lt;instanceId, Map&lt;key, Lane&gt;&gt;</code>.</li>
+  <li>computeAtBeat: sample and merge → <code>state.effectSettings: Map&lt;instanceId, Record&lt;key, number&gt;&gt;</code> (base settings spread first, lane values over them). Same debounced-resolve / fast-param-sync split applies: editing a base setting slider stays 60fps via syncParams.</li>
+  <li><span class="badge b-edit">edit</span> wrappers (<span class="file">TransformWrapper · CloneWrapper · ShaderWrapper</span> via <span class="file">ObjectRenderer</span>): read <code>state.effectSettings.get(instance.id) ?? instance.settings</code>. One helper, three call sites.</li>
+</ul>
+<div class="note"><strong>The keystone canary:</strong> radial-symmetry radius lane 0→5 over 4 bars — the ring expands under play; park at bar 2 and the frozen radius equals play's radius at bar 2 exactly (canary green); export 4 bars and the file matches the editor frame-for-frame. If scrub ≠ play, the overlay leaked out of the pure path; stop and fix before the UI polish.</div>
+
+<h3>Phase 4 — Edge cases + verify</h3>
+<ul class="small">
+  <li>Delete the effect → lane shows not-found, keyframes intact; undo restores the pairing.</li>
+  <li>Two echoes, lanes on each — independent motion (instanceId addressing proven).</li>
+  <li>Base-setting slider drag while its lane plays: base changes, lane still wins during coverage — document this in the automated-badge affordance if the automation-copy-bug work landed its live marker (share the treatment).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">editor/types.ts</span></td><td>ParamAddress · Track.targetEffect?.</td></tr>
+    <tr><td><span class="file">store/ProjectStore.ts</span></td><td>addEffectAutomationTrack + duplicate rule.</td></tr>
+    <tr><td><span class="file">components/timeline/TrackContextMenu.tsx</span> · <span class="file">components/midi/PianoRollPanel.tsx</span></td><td>Per-instance menu groups · lane bounds from setting schema.</td></tr>
+    <tr><td><span class="file">core/visual/resolve.ts</span> · <span class="file">VisualEngine.ts</span></td><td>Effect lanes compiled · merged per frame into state.effectSettings.</td></tr>
+    <tr><td><span class="file">components/visual/ObjectRenderer.tsx</span> + wrappers</td><td>Read merged settings.</td></tr>
+    <tr><td>Persistence</td><td>Untouched — optional fields ride the generic pick.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Setting schemas must declare min/max/step</strong> for lane bounds — audit the 12 plugin defs; any unbounded numeric setting gets explicit bounds in the same commit.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Wrapper reads are the only place merged-vs-base can be confused</strong> — the one helper rule (never touch instance.settings directly in wrappers again) plus a lint-grep in review.</li>
+  <li><span class="badge b-risk">open</span> Shader uniforms update per frame already? Confirm the shader wrapper re-uploads changed uniforms cheaply (it should — FBO pipeline is per-frame by nature).</li>
+  <li><span class="badge b-risk">note</span> Sequence the symmetric-effects pair immediately after — it's this feature's demo and stress test.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> five thin layers, each the twin of something that exists — a second target field, a second menu group, a second lane compilation, a second overlay map, and wrappers that prefer the merged value; the ParamAddress you mint in layer one is the cluster's inheritance.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">effect-param-automation-architecture.html</span>; unlocks <span class="file">symmetric-effects</span>, feeds <span class="file">envelope-modulator</span> and <span class="file">tag-automation</span>.</p>
+
+</div>
+</body>
+</html>
