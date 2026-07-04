@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Film } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
+import { useTimeStore } from '../store/TimeStore'
 import { exportAndDownload } from '../core/export/exportEngine'
+import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
 import { defaultBitrate, defaultSettings, RESOLUTIONS, type ExportSettings } from '../core/export/types'
 
@@ -40,6 +42,9 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<ExportSettings>(loadSavedSettings)
   const [phase, setPhase] = useState<Phase>({ kind: 'settings' })
   const [audioOk, setAudioOk] = useState(true)
+  // While exporting, a still of the canvas at the user's beat covers the live
+  // canvas (which is busy rendering export frames) — nothing on screen scrubs.
+  const [freeze, setFreeze] = useState<{ src: string; rect: DOMRect } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const running = phase.kind === 'running'
@@ -68,6 +73,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     const effective = { ...settings, includeAudio: settings.includeAudio && audioOk, videoBitrate: defaultBitrate(settings.width, settings.fps) }
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(effective)) } catch { /* private mode */ }
 
+    // Freeze the visual behind the dialog: render the user's current beat once
+    // (same task, so the buffer is valid) and pin that still over the canvas.
+    const driver = getFrameDriver()
+    if (driver) {
+      const canvas = driver.getCanvas()
+      driver.renderFrame(useTimeStore.getState().currentBeat, 0)
+      setFreeze({ src: canvas.toDataURL('image/png'), rect: canvas.getBoundingClientRect() })
+    }
+
     const ctrl = new AbortController()
     abortRef.current = ctrl
     setPhase({ kind: 'running', frame: 0, total: 1, startedAt: performance.now() })
@@ -86,11 +100,21 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
     } finally {
       abortRef.current = null
+      getFrameDriver()?.unpin() // belt-and-braces: clears the beat override too
+      setFreeze(null)
     }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      {freeze && (
+        <img
+          src={freeze.src}
+          alt=""
+          className="fixed pointer-events-none select-none"
+          style={{ left: freeze.rect.left, top: freeze.rect.top, width: freeze.rect.width, height: freeze.rect.height }}
+        />
+      )}
       <div ref={panelRef} className="w-[340px] rounded-lg border border-zinc-700 bg-[#202024] shadow-2xl shadow-black/60 p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-zinc-200">

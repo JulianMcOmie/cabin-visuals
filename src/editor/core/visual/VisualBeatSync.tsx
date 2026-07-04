@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { setProject, syncParams, computeAtBeat } from './VisualEngine'
+import { getBeatOverride } from './beatOverride'
 import { PauseCanary } from './pauseCanary'
 
 /**
@@ -18,12 +19,14 @@ export function VisualBeatSync() {
   const canary = useRef<PauseCanary | null>(null)
   useFrame((rootState) => {
     const { currentBeat, isPlaying } = useTimeStore.getState()
-    computeAtBeat(currentBeat)
+    // Export walks time through the override so the transport never moves.
+    const beat = getBeatOverride() ?? currentBeat
+    computeAtBeat(beat)
     // Dev-only pause-invariant tripwire (see pauseCanary.ts). The project state
     // ref is the edit stamp: edits while paused legitimately change the scene.
     if (process.env.NODE_ENV !== 'production') {
       ;(canary.current ??= new PauseCanary()).check(
-        rootState.scene, currentBeat, isPlaying, useProjectStore.getState(),
+        rootState.scene, beat, isPlaying, useProjectStore.getState(),
       )
     }
   })
