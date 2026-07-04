@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Export Ranges — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Export Ranges</span>
+  <h1>Export Ranges — Architecture</h1>
+  <p class="sub">Export bars N..M instead of the whole project. The engine was built range-shaped on purpose — the stepper takes a start beat, the audio placement helper takes a <code>fromBeat</code> — so this feature is a dialog control plus threading one offset through code that already expects it.</p>
+</header>
+
+<h2>1 · One offset, three consumers</h2>
+<figure class="fig">
+  <div class="figtitle">startBeat threads through; timestamps stay file-local from zero</div>
+  <svg viewBox="0 0 900 330" role="img" aria-label="Range threading">
+    <rect x="20" y="30" width="860" height="70" rx="10" fill="#141414"/>
+    <text x="450" y="60" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">range = bars [from..to] → startBeat = from·beatsPerBar · rangeBeats = (to−from)·beatsPerBar</text>
+    <text x="450" y="86" text-anchor="middle" font-size="14.5" fill="#fff">frameCount = ceil(rangeBeats·60/bpm · fps) — the timebase just starts elsewhere</text>
+    <rect x="20" y="130" width="270" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="155" y="160" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">video walk</text>
+    <text x="155" y="186" text-anchor="middle" font-size="14.5" fill="#565656">beat(i) = startBeat + i·bpm/(60·fps)</text>
+    <text x="155" y="208" text-anchor="middle" font-size="14.5" fill="#565656">VideoFrame timestamp stays i/fps</text>
+    <rect x="315" y="130" width="270" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="450" y="160" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">audio render</text>
+    <text x="450" y="186" text-anchor="middle" font-size="14.5" fill="#565656">blockPlacement(block, startBeat, …)</text>
+    <text x="450" y="208" text-anchor="middle" font-size="14.5" fill="#565656">the three-case math built for this</text>
+    <rect x="610" y="130" width="270" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="745" y="160" text-anchor="middle" font-size="16" font-weight="700" fill="#141414">dialog</text>
+    <text x="745" y="186" text-anchor="middle" font-size="14.5" fill="#565656">Whole project · Bars [__]–[__]</text>
+    <text x="745" y="208" text-anchor="middle" font-size="14.5" fill="#565656">(later: "Loop region" preset)</text>
+    <rect x="20" y="250" width="860" height="60" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="450" y="276" text-anchor="middle" font-size="15.5" font-weight="700" fill="#141414">Mid-clip audio joins are already solved: a clip straddling the range start enters at the right in-clip offset —</text>
+    <text x="450" y="298" text-anchor="middle" font-size="14.5" fill="#565656">that's blockPlacement's mid-clip case, the same math live seek uses. Zero new audio logic.</text>
+  </svg>
+  <figcaption>The file's internal clock always starts at zero (timestamps are frame-index based); only the BEAT the renderer is asked about shifts. That separation is why nothing downstream of the walk changes.</figcaption>
+</figure>
+
+<h2>2 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Range in BARS, inclusive-exclusive [from, to)</td><td>Bars are the ruler's language; [from,to) makes "bars 1–9" mean 8 bars with no fencepost debates in the math.</td></tr>
+    <tr><td>Range lives in the dialog, not the document</td><td>Same rule as every export setting: an action parameter, remembered in localStorage, never persisted or undoable.</td></tr>
+    <tr><td>"Loop region" is a PRESET of this, later</td><td>When a transport loop region exists (it doesn't yet), it becomes a third radio that fills from/to — this feature deliberately doesn't wait for it and doesn't design it.</td></tr>
+    <tr><td>Whole-project remains the default</td><td>The range UI is a radio: Whole project (default) / Bars … – …; invalid ranges (to ≤ from, past totalBars) clamp inline rather than erroring at export time.</td></tr>
+    <tr><td>Non-goals</td><td>Multiple ranges/stitching · per-range filenames · exporting block-loop repeats specially (they're just notes; ranges slice through them like anything else).</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> the walk starts at a different beat and the audio placement is told the same beat — both were parameterized for this on the day they were written, so the feature is a from/to control and the discipline to keep file timestamps zero-based.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">export-ranges-implementation-plan.html</span>. The range-shaped seams: <span class="file">core/export/exportEngine.ts</span> (walkFrames/makeTimebase) · <span class="file">core/audio/placement.ts</span> (fromBeat) · <span class="file">ExportDialog.tsx</span>.</p>
+
+</div>
+</body>
+</html>
