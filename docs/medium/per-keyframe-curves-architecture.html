@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Per-Keyframe Curves — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Per-Keyframe Curves</span>
+  <h1>Per-Keyframe Curves — Architecture</h1>
+  <p class="sub">Each automation segment carries its own curve, DAW-node style. The engine change is two lines (the segment asks its left keyframe before falling back to the lane); the feature is really a piano-roll UI problem — which is why it's medium, not easy.</p>
+</header>
+
+<h2>1 · Where the curve lives — the left keyframe owns its segment</h2>
+<figure class="fig">
+  <div class="figtitle">Segment curve = leftKeyframe.curve ?? lane.interpolation</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Segment ownership">
+    <path d="M60,240 L860,240 M60,240 L60,50" stroke="#141414" stroke-width="2"/>
+    <circle cx="130" cy="200" r="7" fill="#141414"/>
+    <circle cx="360" cy="90" r="7" fill="#141414"/>
+    <circle cx="620" cy="170" r="7" fill="#141414"/>
+    <circle cx="820" cy="80" r="7" fill="#141414"/>
+    <path d="M130,200 C 240,200 280,90 360,90" stroke="#141414" stroke-width="3" fill="none"/>
+    <path d="M360,90 L620,170" stroke="#141414" stroke-width="3" fill="none"/>
+    <path d="M620,170 C 640,80 780,80 820,80" stroke="#141414" stroke-width="3" fill="none" stroke-dasharray="1 0"/>
+    <text x="185" y="165" font-size="14.5" fill="#565656">ease-in-out (on k1)</text>
+    <text x="450" y="120" font-size="14.5" fill="#565656">linear (on k2)</text>
+    <text x="660" y="105" font-size="14.5" fill="#565656">exponential (on k3)</text>
+    <text x="118" y="264" font-size="14" fill="#565656">k1</text>
+    <text x="350" y="264" font-size="14" fill="#565656">k2</text>
+    <text x="610" y="264" font-size="14" fill="#565656">k3</text>
+    <text x="810" y="264" font-size="14" fill="#565656">k4</text>
+  </svg>
+  <figcaption>"Left keyframe owns the curve into the next" is the convention every node-based DAW editor uses, and it makes deletion sane: removing k2 merges the segment under k1's curve, no orphan curve data.</figcaption>
+</figure>
+
+<h2>2 · Layered on the lane mode, not replacing it</h2>
+<table>
+  <thead><tr><th>Layer</th><th>Role after this feature</th></tr></thead>
+  <tbody>
+    <tr><td>Lane <code>interpolation</code> (exists)</td><td>Becomes the DEFAULT — every segment without its own curve uses it. The Curve control keeps working and now reads "default curve".</td></tr>
+    <tr><td>Keyframe <code>curve?</code> (new, optional)</td><td>Overrides the default for its one segment. Absent everywhere = exactly today's behavior — old documents are automatically valid (no upgrade).</td></tr>
+    <tr><td><code>sampleLane</code></td><td>Picks the mode per segment instead of once per call: <code>mode = left.curve ?? laneMode</code>. The ease() table is untouched.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · The UI — two tiers, ship the first</h2>
+<table>
+  <thead><tr><th>Tier</th><th>Interaction</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td>1 · Right-click the segment</td><td>Right-click between two keyframes (or on the left keyframe) in an automation lane → curve menu (the 7 modes + "Use lane default"). Selected segments show a small glyph at the midpoint when overridden.</td><td><strong>Ship this.</strong> Menu machinery exists (NestedMenu); hit-testing a segment is y-band-between-keyframes math the editor already does for notes.</td></tr>
+    <tr><td>2 · Drag the midpoint to bend</td><td>Ableton's gesture — drag a segment's middle up/down to morph between ease shapes.</td><td><strong>Defer.</strong> It implies a continuous curvature parameter, not 7 discrete modes — a different data model. Name it, don't build it.</td></tr>
+  </tbody>
+</table>
+
+<h2>4 · Decisions &amp; non-goals</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><code>curve?</code> on Note, used only by automation lanes</td><td>Keyframes ARE notes (pitch encodes value); an optional field ordinary notes never set costs nothing and avoids a parallel keyframe type. Copy/paste and undo inherit it for free.</td></tr>
+    <tr><td>Left-keyframe ownership</td><td>Deletion/merge semantics fall out cleanly; matches user expectation from other DAWs.</td></tr>
+    <tr><td>Lane mode = default, not dead</td><td>Julia's per-lane control stays the fast path ("make this whole lane exponential"); per-keyframe is the exception mechanism.</td></tr>
+    <tr><td>Non-goals</td><td>Continuous bend parameter (tier 2) · bezier handles · curves on ordinary MIDI notes (meaningless) · automation-value drawing tools.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> an optional <code>curve</code> on the left keyframe overrides the lane's default for one segment — two lines in sampleLane, one context menu in the lane, and old projects don't even know the field exists.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">per-keyframe-curves-implementation-plan.html</span>. Today: <span class="file">core/visual/automation.ts</span> (sampleLane + ease) · lane mode via <code>setTrackInterpolation</code> · keyframes are Notes in automation-lane blocks.</p>
+
+</div>
+</body>
+</html>

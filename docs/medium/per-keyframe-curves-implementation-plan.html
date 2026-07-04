@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Per-Keyframe Curves — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Per-Keyframe Curves</span>
+  <h1>Per-Keyframe Curves — Implementation Plan</h1>
+  <p class="sub">Engine first (two lines + tests-by-hand), UI second (segment hit-test + curve menu + override glyphs). The lane's Curve control survives as the default.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td><code>Note.curve?</code> · per-segment sampleLane · segment right-click menu · override glyph rendering · "Use lane default" reset</td><td>Drag-to-bend (continuous curvature — named tier 2) · bezier handles · lane-curve UI changes beyond relabeling to "default"</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 1 — Data + engine <span class="badge b-edit">types.ts · automation.ts · resolve</span></h3>
+<ul class="small">
+  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>Note.curve?: InterpolationMode</code>. Optional → no upgrade; cloneNote spreads → copy/paste inherits.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/automation.ts</span>: <code>sampleLane</code> resolves the mode per segment — <code>left.curve ?? laneMode</code>; step's special-casing unchanged.</li>
+  <li>Resolve passes keyframes through with curve intact (they already ride as notes — confirm the lane compilation copies the field).</li>
+  <li>Verify by hand-writing curves into two keyframes via a temp store call: one lane, three segments, three visibly different shapes on a position param; scrub ≡ play; canary green; save/reload round-trips the field.</li>
+</ul>
+
+<h3>Phase 2 — Segment UI <span class="badge b-edit">midi editor</span></h3>
+<ul class="small">
+  <li><strong>Hit-test:</strong> in automation lanes, a right-click that lands between two keyframes (x between their beats, anywhere in the lane's value area) selects that segment; on a keyframe = the segment it owns (to its right).</li>
+  <li><strong>Menu:</strong> NestedMenu with the 7 modes + <em>Use lane default</em> (clears <code>curve</code>); the active mode checked. Multi-selected keyframes: apply to all their owned segments.</li>
+  <li><strong>Glyph:</strong> overridden segments draw a small mode marker at the segment midpoint (a 10px curve icon or 3-letter tag); no glyph = following the lane default. The lane's toolbar Curve control relabels to "Default curve".</li>
+  <li>Deletion semantics for free: removing a keyframe removes its owned curve with it; the merged segment uses the surviving left keyframe's curve.</li>
+</ul>
+
+<h3>Phase 3 — Verify</h3>
+<ul class="small">
+  <li>Author the classic shape: slow-in rise (ease-in), hard cut (step), springy fall (exponential) on one lane — reads correctly in motion and parked.</li>
+  <li>Change the lane default → only non-overridden segments change.</li>
+  <li>Copy the lane to another instrument (copy-paste-automation pair) → curves travel.</li>
+  <li>Export: the eased motion in the file matches the editor (free, but look once).</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">editor/types.ts</span></td><td><code>Note.curve?</code>.</td></tr>
+    <tr><td><span class="file">core/visual/automation.ts</span></td><td>Per-segment mode pick in sampleLane.</td></tr>
+    <tr><td><span class="file">core/visual/resolve.ts</span></td><td>Keyframe field pass-through (likely zero-change; confirm).</td></tr>
+    <tr><td><span class="file">components/midi/MidiEditor.tsx · useNoteGestures.ts</span></td><td>Segment hit-test · curve menu · glyphs.</td></tr>
+    <tr><td><span class="file">components/midi/PianoRollPanel.tsx</span></td><td>"Curve" → "Default curve" label.</td></tr>
+    <tr><td>Persistence · stores</td><td>Untouched.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Right-click collision:</strong> right-click in automation lanes currently DRAWS a keyframe — the segment menu must only claim clicks that land clearly between keyframes vertically near the curve path, or move segment-menu to a modifier (Alt+right-click) if disambiguation feels bad. Prototype the feel first; this is the one UX risk.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Glyph clutter</strong> on dense lanes — cap glyph rendering below a keyframe-density threshold (they're overrides; dense lanes are usually uniform anyway).</li>
+  <li><span class="badge b-risk">note</span> Tier 2 (drag-to-bend) would replace the mode enum with a curvature scalar — if Julia asks for it, that's the moment to design a real curve model rather than extending this one.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> the engine change is "ask the left keyframe first"; everything else is teaching the lane to right-click a SEGMENT — and the draw-vs-menu click arbitration is the only part worth prototyping before committing.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">per-keyframe-curves-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
