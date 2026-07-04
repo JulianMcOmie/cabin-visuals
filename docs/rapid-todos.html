@@ -34,6 +34,10 @@
   .note{border-left:4px solid #c2c2c2;background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
   .rec{border-left:4px solid var(--ink);background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
   .muted{color:var(--muted)}.small{font-size:16px}
+  .glance{border:2px solid var(--ink);border-radius:var(--radius);padding:10px 20px 14px;margin:0 0 8px;background:#fff}
+  .glance h3{font-size:16px;margin:10px 0 2px;color:var(--ink);text-transform:uppercase;letter-spacing:.06em}
+  .glance ul{margin:4px 0 6px;padding-left:20px}
+  .glance li{margin:1px 0;font-size:15px;line-height:1.45}
   hr{border:none;border-top:1px solid var(--border);margin:40px 0}
   @media print{
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -51,6 +55,62 @@
   <h1>Rapid TODOs</h1>
   <p class="sub">The whole list, sorted by how fast it ships: already-done → easy wins → medium → hard/long-term. Within each tier, items that touch the same code are grouped so they batch naturally.</p>
 </header>
+
+<!-- AT A GLANCE -->
+<div class="glance">
+  <h3>✅ Completed</h3>
+  <ul>
+    <li><strong>Audio track</strong> — audio is its own timeline track (drag, trim, waveform) with a dedicated engine.</li>
+    <li><strong>Pause invariant</strong> — every instrument is a pure function of the beat; lint bans + dev canary enforce it.</li>
+    <li><strong>Persistence</strong> — projects autosave to Supabase, and the everything-opens-one-project bug is fixed.</li>
+    <li><strong>Projects button</strong> — the header link goes to /projects instead of the home page.</li>
+    <li><strong>Cube spin</strong> — no default spin; it's an opt-in Spin Speed param (0 by default).</li>
+    <li><strong>Project length</strong> — editable via the BARS drag-scrubber in the header, undoable and persisted.</li>
+    <li><strong>Recursive delete</strong> — deleting a parent track takes its whole subtree (automation, abilities, children).</li>
+    <li><strong>Track rename</strong> — double-click the timeline label (or the track editor name) to rename inline.</li>
+    <li><strong>Pitch previews</strong> — timeline blocks show notes as a miniature contour, vertical position from pitch.</li>
+    <li><strong>Y/Z position params</strong> — Cube, Circle, and Triangle expose automatable Base Y/Z Position.</li>
+    <li><strong>Rename in the track editor</strong> — editable name with a hover-pencil affordance.</li>
+    <li><strong>Per-lane automation curves</strong> — already existed: the "Interp" dropdown in the piano-roll toolbar.</li>
+    <li><strong>Video export</strong> — deterministic in-browser MP4 (H.264+AAC, include-audio toggle, frozen UI while exporting, explicit Download step).</li>
+    <li><strong>Quarter-beat snapping</strong> — blocks snap to 1/4 beat on move, resize, and draw.</li>
+  </ul>
+  <h3>🟢 Easy remaining</h3>
+  <ul>
+    <li><strong>Interp discoverability</strong> — surface the buried per-lane curve dropdown and show it even when the param lookup fails.</li>
+    <li><strong>First-note bug</strong> — investigate Tyler's report that play-from-start skips the first note.</li>
+    <li><strong>Automation copy bug</strong> — investigate Tyler's report that automating changes a copy; likely a slider-feedback gap, not an engine bug.</li>
+    <li><strong>Overscroll back-swipe</strong> — stop leftward timeline scroll from navigating the browser back.</li>
+    <li><strong>Menu flip-up</strong> — context menus should open upward when there's no room below.</li>
+    <li><strong>Mass mute/solo</strong> — drag across M/S buttons to paint one state over many tracks, Logic-style.</li>
+    <li><strong>Fullscreen visual</strong> — a button/hotkey to take the canvas fullscreen.</li>
+    <li><strong>Export filename</strong> — default to the project name instead of "export".</li>
+    <li><strong>Automatable mute</strong> — verify the Mute modifier already covers Tyler's "remove an instrument via MIDI" ask.</li>
+  </ul>
+  <h3>🟡 Medium remaining</h3>
+  <ul>
+    <li><strong>MIDI import</strong> — parse .mid files into blocks/notes; keep full pitch data and let the editor view reconcile narrow instruments.</li>
+    <li><strong>Row hiding/scaling</strong> — piano-roll options to hide rows, compress row height, and filter to a scale.</li>
+    <li><strong>Loop blocks</strong> — right-edge resize past the content repeats the pattern (the loop flag exists, nothing consumes it).</li>
+    <li><strong>Effects picker menu</strong> — choose effects from a nested pop-up in the track editor, like the automation menu.</li>
+    <li><strong>Symmetric effects</strong> — effects built to be automated, e.g. radial copy with an animatable radius.</li>
+    <li><strong>Per-keyframe curves</strong> — each automation segment carries its own curve instead of one mode per lane.</li>
+    <li><strong>Effect-param automation</strong> — automation lanes that target an effect instance's settings, not just instrument params.</li>
+    <li><strong>Drag highlights</strong> — stronger drop-target affordance for library drags, and highlight objects when hovering modulator targets.</li>
+    <li><strong>Nested mute/solo</strong> — decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
+    <li><strong>Export ranges</strong> — export a section of the project (and later, the loop region).</li>
+    <li><strong>Envelope modulator</strong> — a generic ADSR that targets any numeric param (opacity being the headline use).</li>
+    <li><strong>Tag automation</strong> — one automation lane drives a param across every instrument carrying a tag.</li>
+    <li><strong>Copy-paste automation</strong> — move automation lanes between instruments (needs Tyler's clarification first).</li>
+    <li><strong>3D model import</strong> — a Model instrument for uploaded glTF meme assets, bytes stored like audio.</li>
+  </ul>
+  <h3>🔴 Hard</h3>
+  <ul>
+    <li><strong>Instrument plugin UI</strong> — per-instrument Logic-style editors with direct manipulation; the answer to param-adjustment friction.</li>
+    <li><strong>MIDI vim</strong> — a modal editing language for the piano roll, designed together with the row-model work.</li>
+    <li><strong>Incremental resolve</strong> — only re-resolve what an edit touched; deferred until full resolve actually feels slow.</li>
+  </ul>
+</div>
 
 <!-- DONE -->
 <h2>✅ Already done (shipped this week — cross these off)</h2>
@@ -84,14 +144,62 @@
 </div>
 
 <div class="item">
-  <h3><span class="badge b-done">done</span>Rename from the track editor too <span class="muted small">(uncommitted)</span></h3>
+  <h3><span class="badge b-done">done</span>Rename from the track editor too</h3>
   <p>Follow-up to the rename work: the track name in the <strong>track editor header</strong> is also renamable — same double-click contract, plus a pencil icon that fades in on hover as the affordance (invisible at rest, click it to rename directly).</p>
   <p class="where">components/TrackEditor.tsx (EditableTrackName)</p>
 </div>
 
+<div class="item">
+  <h3><span class="badge b-done">done</span>Video export (2026-07-03, five commits + two follow-ups)</h3>
+  <p>Deterministic in-browser MP4 export, designed in <code>video-export-architecture.html</code>: a <code>core/export/</code> island walks the beat one frame per step through the untouched visual engine (the pause invariant makes every frame exact), encodes with WebCodecs (H.264 + AAC via <code>mp4-muxer</code>), and mixes the audio track offline through placement math now <em>shared</em> with the live AudioEngine. 1080p/720p, 60/30 fps, include-audio toggle, Chrome-first gate. Follow-ups: nothing on screen scrubs during export (beat override + frozen canvas still), and the file waits behind a <strong>Download</strong> button instead of auto-downloading.</p>
+  <p class="where">core/export/* · core/audio/placement.ts · components/ExportDialog.tsx · components/visual/ExportDriver.tsx</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Blocks snap to 1/4 beat</h3>
+  <p>Move, both resize edges, and the draw gesture's growing edge all snap to quarter-beats now (they funnel through the one <code>snapBar</code>). Draw <em>start</em> still lands on whole beats and minimum length is still 1 beat — flag it if either should go finer.</p>
+  <p class="where">components/timeline/useTrackGestures.ts (snapBar)</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-done">done</span>Fix: every project opened the same data</h3>
+  <p>The editor latched <code>?project</code> from a one-shot <code>window.location</code> read at mount — stale or frozen under client-side navigation, so the first project stayed bound forever. Now the id comes reactively from <code>useSearchParams()</code>, and every rebind blanks the stores before loading so another project's data can never bleed through. Projects opened before the fix may have cross-saved data in their rows — eyeball old projects once.</p>
+  <p class="where">hooks/useProjectPersistence.ts · app/editor/page.tsx</p>
+</div>
+
 <!-- EASY -->
 <h2>🟢 Easy — the low-hanging fruit (each is minutes-to-an-hour)</h2>
-<p class="muted small">Batches A and B are done (see above) — what's left here is one small UI fix and the two investigations.</p>
+<p class="muted small">Batches A and B are done (see above). The first five below would make a natural Batch D.</p>
+
+<div class="item">
+  <h3>Stop leftward scroll from leaving the page</h3>
+  <p>Horizontal overscroll triggers the browser's back-swipe. <code>overscroll-behavior-x: none</code> on the timeline scrollers (or globally on the editor body) kills the navigation gesture while keeping normal scrolling — this is exactly what the property exists for. If any browser ignores it, the fallback is hotkey/scrollbar alternatives, but try the one-liner first.</p>
+  <p class="where">globals.css / editor root · timeline + piano-roll scroll containers</p>
+</div>
+
+<div class="item">
+  <h3>Context menus flip up when there's no room below</h3>
+  <p>The add-automation/ability menu renders at the click point and runs off-screen near the bottom. On open, measure the menu against the viewport and flip the y (and clamp x) — same treatment for the submenus, which can also overflow the right edge.</p>
+  <p class="where">components/timeline/TrackContextMenu.tsx</p>
+</div>
+
+<div class="item">
+  <h3>Drag across M/S buttons to mass-toggle (Logic-style)</h3>
+  <p>Pointer-down on a Mute button starts a "painting" gesture: every M button the pointer crosses gets set to the SAME state as the first toggle (not flipped independently — that's the Logic behavior that makes sweeps predictable). Same for Solo. A small shared hook over the two button columns.</p>
+  <p class="where">components/timeline/Track.tsx (M/S buttons) · small new hook</p>
+</div>
+
+<div class="item">
+  <h3>Fullscreen for the visual</h3>
+  <p>A button (and hotkey) on the canvas panel calling <code>requestFullscreen()</code> on the canvas container; Esc exits natively. R3F's resize handling adapts automatically — and the aspect-aware instruments re-compose, which is the same path the export pin already exercises.</p>
+  <p class="where">editor/App.tsx (Scene panel)</p>
+</div>
+
+<div class="item">
+  <h3>Default export filename from the project name</h3>
+  <p><code>projectStorage.load()</code> already returns the name — it's just dropped on the floor. Stash it at hydrate time (tiny meta store or UIStore field) and use it as the ExportDialog's default instead of "export". Saved settings should stop overriding the name once it's per-project.</p>
+  <p class="where">hooks/useProjectPersistence.ts · components/ExportDialog.tsx</p>
+</div>
 
 <div class="item">
   <h3>Make the interpolation picker discoverable</h3>
@@ -111,6 +219,12 @@
   <h3><span class="badge b-inv">investigate</span>Automating a param "changes a copy" (Tyler)</h3>
   <p>Best guess: it's the TrackEditor slider not reflecting the automated value — automation overlays params inside the engine per frame (by design, the base param is untouched), so the panel shows the base while the visual follows the lane. If that's what Tyler saw, the fix is UI feedback (show the live value / mark the param as automated), not an engine bug. Repro against his project to confirm there isn't a real aliasing bug.</p>
   <p class="where">core/visual/VisualEngine.ts (computeAtBeat overlay) · components/TrackEditor.tsx</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-inv">investigate</span>Automating mute (Tyler: "have to move instruments offscreen to remove them")</h3>
+  <p>You suspected this already works via a mute child track — verify: the <strong>Mute modifier</strong> in the library is exactly this (a control lane whose notes silence the target while active). If it does what Tyler needs, this is a docs/onboarding gap, not a feature; if the modifier doesn't reach visuals the way he expects, promote it to a real item. Also related to the generic envelope idea below (opacity ADSR is the smoother version of hard mute).</p>
+  <p class="where">modifiers (Mute) · core/visual/resolve.ts (modifier application)</p>
 </div>
 
 <!-- MEDIUM -->
@@ -171,6 +285,36 @@
   <p class="where">core/visual/resolve.ts · core/audio/AudioEngine.ts · timeline M/S buttons</p>
 </div>
 
+<div class="item">
+  <h3>Export sections/ranges (and loops, once loops exist)</h3>
+  <p>Named as deferred in the export plan; now a real item. The engine is already range-shaped — <code>walkFrames</code> just needs a start beat and the audio render an offset (the placement helper's <code>fromBeat</code> argument literally exists for this). The work is UI: a range picker in the ExportDialog (bar in/out), and later "export the loop region" becomes one preset of the same range.</p>
+  <p class="where">core/export/exportEngine.ts (start/end beats) · audioRender.ts (fromBeat) · ExportDialog.tsx</p>
+</div>
+
+<div class="item">
+  <h3>Generic envelope modulator — target any param (ADSR → opacity, etc.)</h3>
+  <p>Two of your notes converge here: "midi applies an ADSR to opacity easily" and Tyler's "generic ability for any property." Today modulators target instruments' <em>ports</em> (fixed, per-instrument); the missing piece is a modulator whose target is <strong>any numeric param</strong> — an Envelope modulator with A/D/S/R params, driven by its own MIDI lane, writing into the same per-frame param overlay automation uses. Needs a param-picker in the routing UI (params, not just ports) and an <code>opacity</code> param on instruments that lack one. This is the expressive middle ground between hard Mute and hand-drawn automation.</p>
+  <p class="where">instruments/modulators/* (new Envelope) · routing targets (param addressing) · VisualEngine overlay</p>
+</div>
+
+<div class="item">
+  <h3>Automation on tags</h3>
+  <p>"Tagging is so good for this" — let an automation lane target a tag so one lane drives a param across every tagged instrument. The overlay already applies per-object; the new part is tag-scoped targeting (same addressing problem as effect-param automation and the envelope modulator above — solve the richer automation target once, all three land on it).</p>
+  <p class="where">types.ts (automation target) · resolve/VisualEngine (fan-out to tagged tracks) · add-automation UI</p>
+</div>
+
+<div class="item">
+  <h3><span class="badge b-inv">needs clarification</span>Copy-paste automation tracks across instruments (Tyler)</h3>
+  <p>Parked until you get specifics from Tyler. Plausible reading: copy an automation child (keyframes + interpolation + target param) from one instrument and paste it onto another, mapping by param key when the target has the same param (or prompting to pick one). The track clipboard already exists; the new part is the re-target step on paste.</p>
+  <p class="where">ClipboardStore · useTrackGestures paste path · ProjectStore.addAutomationTrack</p>
+</div>
+
+<div class="item">
+  <h3>Memey 3D model import ("borderline but it's made out of tame impala's face")</h3>
+  <p>High-leverage for content: a <strong>Model instrument</strong> that loads a user-uploaded glTF/GLB and gives it the standard shape params (size, position, hue-tint) + ports so modulators/automation work on it like any primitive. Three.js side is easy (GLTFLoader); the real work is bytes plumbing — reuse the audio pattern verbatim: upload to a <code>project-models</code> bucket, opaque ref in the document, session object-URL cache. Watch poly counts (fine to punt with a size cap first).</p>
+  <p class="where">new instruments/Model.tsx · persistence bucket (mirror audioStorage) · library UI (upload tile)</p>
+</div>
+
 <!-- HARD -->
 <h2>🔴 Hard / long-term — plan before touching</h2>
 
@@ -191,9 +335,9 @@
 </div>
 
 <hr/>
-<div class="rec"><strong>Suggested order of attack:</strong> <s>Batch A</s> and <s>Batch B</s> are done → the two investigations while Tyler's reports are fresh (need his repro/project) → the interp-picker discoverability fix → MIDI import (the deps are already installed) → loop blocks + effects menu → effect-param automation (which unlocks the symmetric effects) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time — it blocks an easy implementation, not a hard one.</div>
+<div class="rec"><strong>Suggested order of attack:</strong> <s>Batch A</s>, <s>Batch B</s>, and <s>video export</s> are done → Batch D (the five new easy fixes in one sitting) → the three investigations while Tyler's reports are fresh → the interp-picker discoverability fix → MIDI import (the deps are already installed) → loop blocks + effects menu → the "richer automation target" cluster (effect params + envelope modulator + tag automation share one addressing design — design it once, then they're three medium items instead of three hard ones) → then pick fights with the big three. The mute/solo design conversation with Tyler can happen in parallel any time.</div>
 
-<p class="small muted">Triage of the running TODO list, updated 2026-07-03 after the Batch A/B push. Earlier "done" items shipped in the persistence / pause-invariant / audio-track pushes on <code>dev</code>; Batch B landed as commits <code>ba4afbc</code>–<code>b0cf3d2</code>. Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · effects/ · timeline components).</p>
+<p class="small muted">Triage of the running TODO list, updated 2026-07-03 after the Batch A/B + video-export pushes and the new-todos intake (export ranges, envelope modulator, tag automation, copy-paste automation, model import, and the Batch D quick fixes). Effort tiers assume familiarity with the current codebase layout (core/visual · core/audio · core/export · effects/ · timeline components).</p>
 
 </div>
 </body>
