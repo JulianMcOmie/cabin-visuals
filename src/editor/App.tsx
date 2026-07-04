@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft } from 'lucide-react'
@@ -17,6 +18,8 @@ import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
 import { BpmControl } from './components/BpmControl'
 import { ProjectLengthControl } from './components/ProjectLengthControl'
+import { ExportDialog } from './components/ExportDialog'
+import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { usePlayback } from './hooks/usePlayback'
@@ -81,6 +84,13 @@ function Header() {
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
+  // Export: capability-gated (Chrome-first — WebCodecs or nothing).
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
+  useEffect(() => {
+    void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
+  }, [])
+
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
       <Link
@@ -131,11 +141,17 @@ function Header() {
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         <ProjectLengthControl />
         <BpmControl />
-        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors">
+        <button
+          onClick={() => setExportOpen(true)}
+          disabled={exportGate?.ok === false}
+          title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-semibold transition-colors"
+        >
           <Upload size={12} strokeWidth={2.5} />
           Export
         </button>
       </div>
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
     </div>
   )
 }

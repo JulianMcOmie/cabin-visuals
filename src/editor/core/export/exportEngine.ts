@@ -5,6 +5,7 @@
 // where encoding plugs in, and its awaits are the loop's backpressure.
 
 import type { Track } from '../../types'
+import { useTimeStore } from '../../store/TimeStore'
 import { makeTimebase, type ExportSettings, type ExportTimebase } from './types'
 import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer, downloadBlob } from './mux'
@@ -93,6 +94,9 @@ export async function runExport(
   })
   const video = createVideoEncodeSession(settings, writer)
 
+  // The walk drives the playhead like a fast scrub — put it back afterwards.
+  const beatBefore = useTimeStore.getState().currentBeat
+
   driver.pin(settings.width, settings.height)
   try {
     const completed = await walkFrames(
@@ -113,6 +117,7 @@ export async function runExport(
     throw err
   } finally {
     driver.unpin()
+    useTimeStore.getState().setCurrentBeat(beatBefore)
   }
 }
 
