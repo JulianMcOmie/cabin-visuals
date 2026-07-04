@@ -1,6 +1,7 @@
 import * as Tone from 'tone'
 import type { AudioBlock, Track } from '../../types'
 import { getBuffer } from './waveform'
+import { blockPlacement } from './placement'
 
 // The audio engine: everything that makes sound, behind one door. A module
 // singleton beside the transport (core/playback.ts) and the visual engine
@@ -89,34 +90,21 @@ class AudioEngine {
   }
 
   /**
-   * The one place beat⟷second math lives. Three cases per block at any
-   * transport event: past (idle), future (schedule ahead), mid-clip (join at
-   * an in-clip offset). play, seek, and the bpm re-arm all call this, so they
-   * cannot diverge.
+   * Arm one player at a transport event. The three-case beat⟷second math lives
+   * in placement.ts (shared with the offline export render — they cannot
+   * diverge); play, seek, and the bpm re-arm all come through here.
    */
   private armBlock(sb: ScheduledBlock, atBeat: number, when: number, bpm: number, beatsPerBar: number) {
     const entry = this.entries.get(sb.block.id)
     if (!entry || !entry.loaded) return
     const { player } = entry
-    const b = sb.block
 
     player.stop(when)
     if (!sb.audible) return
 
-    const startBeat = b.startBar * beatsPerBar
-    const clipSec = Math.max(0, b.trimEnd - b.trimStart)
-    const endBeat = startBeat + (clipSec * bpm) / 60
-
-    if (atBeat >= endBeat) return // past — leave idle
-    if (atBeat <= startBeat) {
-      // future — Tone's scheduler holds it; no polling to start a block.
-      const delaySec = ((startBeat - atBeat) * 60) / bpm
-      player.start(when + delaySec, b.trimStart, clipSec)
-    } else {
-      // mid-clip — join with an in-clip offset.
-      const offset = b.trimStart + ((atBeat - startBeat) * 60) / bpm
-      player.start(when, offset, Math.max(0, b.trimEnd - offset))
-    }
+    const p = blockPlacement(sb.block, atBeat, bpm, beatsPerBar)
+    if (!p) return // past — leave idle
+    player.start(when + p.delaySec, p.offset, p.duration)
   }
 
   /** Re-window every block at `atBeat`, all against the same `when` anchor. */

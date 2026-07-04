@@ -4,10 +4,12 @@
 // (the same path scrubbing takes) and hands the frame to a sink; the sink is
 // where encoding plugs in, and its awaits are the loop's backpressure.
 
+import type { Track } from '../../types'
 import { makeTimebase, type ExportSettings, type ExportTimebase } from './types'
 import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer, downloadBlob } from './mux'
 import { createVideoEncodeSession } from './videoEncode'
+import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
 
 export interface WalkHooks {
   /** Called about once a second of output (every `fps` frames) and once at the end. */
@@ -50,6 +52,8 @@ export interface ProjectTime {
   bpm: number
   beatsPerBar: number
   totalBars: number
+  /** The project's audio tracks — rendered offline when settings.includeAudio. */
+  audioTracks?: Track[]
 }
 
 export interface ExportResult {
@@ -73,7 +77,20 @@ export async function runExport(
   if (!driver) throw new Error('Export driver is not mounted')
 
   const timebase = makeTimebase(project.bpm, project.beatsPerBar, project.totalBars, settings.fps)
-  const writer = new Mp4Writer({ width: settings.width, height: settings.height })
+
+  // Audio first: the muxer must know at construction whether the file has an
+  // audio track. One offline pass, off the frame loop's critical path.
+  const audioBuffer =
+    settings.includeAudio && project.audioTracks?.length
+      ? await renderAudioTrack(project.audioTracks, project.bpm, project.beatsPerBar, timebase.durationSec)
+      : null
+  if (hooks.signal?.aborted) return { blob: null, frameCount: timebase.frameCount }
+
+  const writer = new Mp4Writer({
+    width: settings.width,
+    height: settings.height,
+    audio: audioBuffer ? { sampleRate: audioBuffer.sampleRate, numberOfChannels: 2 } : undefined,
+  })
   const video = createVideoEncodeSession(settings, writer)
 
   driver.pin(settings.width, settings.height)
@@ -89,6 +106,7 @@ export async function runExport(
       return { blob: null, frameCount: timebase.frameCount }
     }
     await video.flush()
+    if (audioBuffer) await encodeAudioIntoWriter(audioBuffer, writer)
     return { blob: writer.finalize(), frameCount: timebase.frameCount }
   } catch (err) {
     video.dispose()
