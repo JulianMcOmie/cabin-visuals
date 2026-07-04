@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Copy-Paste Automation — Architecture</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}figure.fig,table,.rec{break-inside:avoid}h1,h2,.figtitle{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Copy-Paste Automation</span>
+  <h1>Copy-Paste Automation — Architecture</h1>
+  <p class="sub">Tyler: "copy paste automation tracks — from one instrument to another, and it adds the automation track to the other." Parked (★) until he clarifies, but the plausible spec is clear enough to design: the clipboard already carries tracks; the missing move is <em>re-parenting with a re-target step</em> on paste.</p>
+</header>
+
+<h2>1 · What breaks today when you try</h2>
+<figure class="fig">
+  <div class="figtitle">Copying an automation lane works; pasting it orphans it</div>
+  <svg viewBox="0 0 900 280" role="img" aria-label="Current failure">
+    <defs><marker id="a6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="40" width="260" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="150" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">Ctrl+C on the lane</text>
+    <text x="150" y="98" text-anchor="middle" font-size="14.5" fill="#565656">clipboard: kind 'track' — keyframes,</text>
+    <text x="150" y="118" text-anchor="middle" font-size="14.5" fill="#565656">targetParam, interpolation all ride</text>
+    <rect x="330" y="40" width="240" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="450" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">Ctrl+V</text>
+    <text x="450" y="98" text-anchor="middle" font-size="14.5" fill="#565656">pastes as a ROOT track</text>
+    <text x="450" y="118" text-anchor="middle" font-size="14.5" fill="#565656">next to the selection</text>
+    <rect x="620" y="40" width="260" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="750" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">orphaned lane</text>
+    <text x="750" y="98" text-anchor="middle" font-size="14.5" fill="#565656">no parent instrument → param lookup</text>
+    <text x="750" y="118" text-anchor="middle" font-size="14.5" fill="#565656">fails, drives nothing, renders odd</text>
+    <path d="M280,85 L322,85" stroke="#141414" stroke-width="2" marker-end="url(#a6)"/>
+    <path d="M570,85 L612,85" stroke="#141414" stroke-width="2" marker-end="url(#a6)"/>
+    <rect x="20" y="176" width="860" height="80" rx="10" fill="#141414"/>
+    <text x="450" y="208" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">The fix is a paste rule, not a new clipboard: automation in the clipboard + an instrument selected</text>
+    <text x="450" y="234" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">→ paste as that instrument's automation CHILD, re-targeted to its params</text>
+  </svg>
+  <figcaption>Everything needed is already serialized in the copied track; the paste path just doesn't know automation is special.</figcaption>
+</figure>
+
+<h2>2 · The re-target rules</h2>
+<table>
+  <thead><tr><th>Case at paste time</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr><td>Target instrument has the SAME param key (e.g. baseXPosition → baseXPosition)</td><td>Paste silently, keyframes intact. Values are stored in normalized pitch-encoding, so differing min/max ranges map proportionally for free — a 0→max sweep stays a 0→max sweep.</td></tr>
+    <tr><td>Param key missing on the target</td><td>Paste and mark the lane "param not found" (the interp-discoverability work adds this state) with a param picker in the lane header — the user re-aims it in one click. No modal at paste time.</td></tr>
+    <tr><td>Target already automates that param</td><td>Paste is a no-op with a toast ("Base Size is already automated on Cube 2") — matches addAutomationTrack's existing one-lane-per-param rule.</td></tr>
+    <tr><td>No instrument selected</td><td>Fall back to today's root paste? No — block with a toast ("select an instrument to paste automation onto"). An orphan lane is never the right outcome.</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · Decisions &amp; non-goals ★</h2>
+<table>
+  <thead><tr><th>Decision</th><th>Why / status</th></tr></thead>
+  <tbody>
+    <tr><td>Reuse the track clipboard</td><td>Copy already captures everything (blocks→notes as keyframes, targetParam, interpolation). Only paste branches.</td></tr>
+    <tr><td>Proportional value mapping across ranges</td><td>Keyframes are pitch-encoded against AUTOMATION_PITCH_MIN/MAX, decoded against the target param's min/max — cross-instrument paste inherits sensible scaling with zero math added.</td></tr>
+    <tr><td>★ Confirm the spec with Tyler</td><td>The above assumes "duplicate a lane onto another instrument." If he meant copying <em>keyframe selections between existing lanes</em>, that's a piano-roll feature instead (notes copy already works inside a lane) — cheaper, different files. One question settles it.</td></tr>
+    <tr><td>Alt-drag later</td><td>Drag-a-lane-onto-another-track is the gestural version of the same operation; do keyboard first, reuse its re-target step for the drag.</td></tr>
+  </tbody>
+</table>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> the clipboard already carries the whole lane — teach paste that "automation + selected instrument" means re-parent under it and re-aim <code>targetParam</code>, with the three edge cases (missing param, duplicate lane, no selection) each getting a one-line answer.</div>
+
+<hr/>
+<p class="small muted">Architecture — build in <span class="file">copy-paste-automation-implementation-plan.html</span>. Existing pieces: <span class="file">ClipboardStore</span> · track copy/paste in <span class="file">useTrackGestures.ts</span> · <span class="file">ProjectStore.addAutomationTrack</span> (the one-lane-per-param rule).</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Copy-Paste Automation — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Copy-Paste Automation</span>
+  <h1>Copy-Paste Automation — Implementation Plan</h1>
+  <p class="sub">Phase 0 is one question to Tyler; the code is a branch in the existing paste handler plus a small re-target helper. Assumes the "duplicate a lane onto another instrument" spec from the architecture doc.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Automation-aware paste (re-parent + re-target) · the three edge cases · toast feedback</td><td>Alt-drag lane-to-track (follow-up reusing the same helper) · keyframe-selection copying between lanes (the alternate spec — different feature) · ability lanes (their key is instrument-intrinsic; copying across instruments rarely makes sense — explicitly excluded until asked)</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Phase-by-phase</h2>
+
+<h3>Phase 0 — Confirm the spec <span class="badge b-risk">★ Tyler</span></h3>
+<ul class="small">
+  <li>One question: "copy the whole lane onto another instrument, or copy selected keyframes between two existing lanes?" Whole-lane → this plan. Keyframes → close this and file a piano-roll item instead.</li>
+</ul>
+
+<h3>Phase 1 — The re-target helper <span class="badge b-new">ProjectStore</span></h3>
+<ul class="small">
+  <li><span class="badge b-new">new</span> action <code>pasteAutomationTrack(sourceTrack: Track, newParentId: string): 'ok' | 'duplicate' | 'no-param'</code>:
+    clone the lane (fresh ids via cloneTrack), set <code>parentId = newParentId</code>, append to the parent's childIds;
+    if the parent instrument has <code>targetParam</code> → keep; else keep the key but return <code>'no-param'</code> (the lane carries its keyframes and shows the param-not-found state);
+    if a sibling automation lane already targets that param → return <code>'duplicate'</code>, no mutation.</li>
+  <li>Values need no conversion: keyframes are pitch-encoded; decode happens against the CURRENT parent's param bounds at resolve time (proportional mapping is emergent).</li>
+</ul>
+
+<h3>Phase 2 — The paste branch <span class="badge b-edit">useTrackGestures</span></h3>
+<ul class="small">
+  <li>In the Ctrl+V <code>clip.kind === 'track'</code> path: if <code>clip.track.type === 'automation'</code> — require a selected track whose instrument exists; call the helper; select the new lane on 'ok'; toast on 'duplicate' / 'no-param' / no-selection (sonner is already a dependency).</li>
+  <li>Non-automation tracks keep today's root-paste behavior byte-for-byte.</li>
+</ul>
+
+<h3>Phase 3 — Verify</h3>
+<ul class="small">
+  <li>Cube A with a Base X lane (0→10 sweep) → copy → select Cube B → paste: B gains the lane, sweep plays on B, A unchanged; undo removes only B's lane.</li>
+  <li>Paste onto a track already automating Base X → toast, no change. Paste onto Circle (has the param) → works. Paste onto an instrument lacking the param → lane lands in not-found state, re-aim via the param picker.</li>
+  <li>Persistence round-trip: save/reload keeps the pasted lane's parent linkage.</li>
+</ul>
+
+<h2>C · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">store/ProjectStore.ts</span></td><td><span class="badge b-new">new</span> pasteAutomationTrack (clone + re-parent + re-target rules).</td></tr>
+    <tr><td><span class="file">components/timeline/useTrackGestures.ts</span></td><td>Paste branch for automation clips + toasts.</td></tr>
+    <tr><td><span class="file">ClipboardStore</span> · document schema</td><td>Untouched — the copied track already carries everything.</td></tr>
+  </tbody>
+</table>
+
+<h2>D · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">★ open</span> <strong>The spec.</strong> Do not build before Tyler answers — the alternate reading is a different, cheaper feature.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Proportional mapping surprises:</strong> a hue sweep (0–360) pasted onto a size param (0.2–4) is "correct" proportionally but may feel wrong; the not-found/param-picker affordance doubles as the escape hatch (re-aim + the lane keeps its shape).</li>
+  <li><span class="badge b-risk">note</span> Depends lightly on the interp-discoverability phase-0 fallback (the param-not-found lane state) — land that first or inline the same fallback here.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> paste already knows how to clone a track — teach it that a cloned automation lane belongs UNDER the selected instrument, aimed at the same-named param, and let the pitch-encoded keyframes re-scale themselves.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">copy-paste-automation-architecture.html</span>.</p>
+
+</div>
+</body>
+</html>
