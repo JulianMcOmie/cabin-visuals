@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Symmetric Effects — Implementation Plan</title>
+<style>
+  :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0} strong{color:var(--ink)}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.86em;border:1px solid var(--border);border-radius:5px;padding:2px 6px;color:#111}
+  pre{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{border:none;padding:0}
+  ul{margin:10px 0;padding-left:22px} li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none} td:first-child{color:var(--ink)}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;background:#fff}
+  .b-new{background:var(--ink);color:#fff} .b-edit{border-color:#9a9a9a} .b-risk{border-style:dashed;border-color:#666}
+  .rec{border-left:4px solid var(--ink);padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0 6px}pre,table,.rec{break-inside:avoid}h1,h2,h3{break-after:avoid}pre{white-space:pre-wrap}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Symmetric Effects</span>
+  <h1>Symmetric Effects — Implementation Plan</h1>
+  <p class="sub">One new clone plugin (Radial Copy), two upgraded ones, and three lines of authoring standard — all riding the effect-param-automation rails, which must land first.</p>
+</header>
+
+<h2>A · Scope</h2>
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr><td>Radial Copy plugin · linearDuplicate/rotationalSymmetry param upgrades · the motion-param authoring note · bounds audit for lane-readiness</td><td>New shader effects · per-clone reactivity · anything requiring render machinery beyond CloneSpec</td></tr>
+  </tbody>
+</table>
+
+<h2>B · Radial Copy — the def</h2>
+<pre><code>// effects/clones/radialCopy.ts — pure CloneSpec producer, per the house pattern
+export const radialCopyPlugin: VisualEffect = {
+  id: 'radialCopy',
+  name: 'Radial Copy',
+  category: 'clone',
+  settings: [
+    { key: 'count',        label: 'Count',         min: 2, max: 16,  step: 1,    default: 6 },
+    { key: 'radius',       label: 'Radius',        min: 0, max: 8,   step: 0.05, default: 2 },   // zero-safe
+    { key: 'angle',        label: 'Angle',         min: 0, max: 360, step: 1,    default: 0 },   // phase-complete
+    { key: 'scaleFalloff', label: 'Scale Falloff', min: 0, max: 1,   step: 0.01, default: 0 },
+  ],
+  clones: (s) => Array.from({ length: s.count }, (_, i) => {
+    const a = ((s.angle + (360 / s.count) * i) * Math.PI) / 180
+    return {
+      position: [Math.cos(a) * s.radius, Math.sin(a) * s.radius, 0],
+      scale: 1 - s.scaleFalloff * (s.radius > 0 ? 1 : 0) * (i / Math.max(1, s.count - 1)),
+    }
+  }),
+}</code></pre>
+<p class="small muted">Whether the source stays visible at the center follows the sibling clones' convention — match echo/tile, don't invent.</p>
+
+<h2>C · Phase-by-phase</h2>
+
+<h3>Phase 0 — Gate <span class="badge b-risk">dependency</span></h3>
+<ul class="small">
+  <li>Effect-param automation merged and its keystone canary green. Building these first would just add params nobody can animate.</li>
+</ul>
+
+<h3>Phase 1 — Radial Copy <span class="badge b-new">effects/clones/radialCopy.ts</span></h3>
+<ul class="small">
+  <li>New file per the def above + registry entry — it appears in the library and the picker menu automatically.</li>
+  <li>Verify statically first: sliders at rest — count/radius/angle/falloff behave; radius 0 collapses to the source (zero-safe check); angle 0 ≡ angle 360 (phase-complete check).</li>
+</ul>
+
+<h3>Phase 2 — Upgrades <span class="badge b-edit">linearDuplicate · rotationalSymmetry</span></h3>
+<ul class="small">
+  <li>linearDuplicate: spacing min → 0 (zero-safe), add <code>drift</code> (0–1 of one spacing unit, phase-complete along the line). Defaults preserve current output exactly — existing projects render identically (compare a saved scene before/after).</li>
+  <li>rotationalSymmetry: expose <code>angleOffset</code> (0–360) if internal; bounds audit for the rest.</li>
+</ul>
+
+<h3>Phase 3 — The standard <span class="badge b-edit">effects/types.ts</span></h3>
+<ul class="small">
+  <li>Three-line doc comment on the settings type: motion params are continuous, zero-safe, phase-complete where angular; counts are steps and stay coarse. Cite Radial Copy as the reference implementation.</li>
+</ul>
+
+<h3>Phase 4 — The demo verify (this feature's reason to exist)</h3>
+<ul class="small">
+  <li>Cube + Radial Copy; lanes on radius (0→5, 4 bars, smooth-step) and angle (0→360, looped block once loops land — linear until then). Play: the ring breathes and spins. Park anywhere: frozen exactly (canary). Export: file ≡ editor.</li>
+  <li>Falloff lane + radius lane together — two lanes on one instance, independent (the instanceId addressing test from the automation pair, exercised for real).</li>
+</ul>
+
+<h2>D · File inventory</h2>
+<table>
+  <thead><tr><th>File</th><th>Change</th></tr></thead>
+  <tbody>
+    <tr><td><span class="file">effects/clones/radialCopy.ts</span></td><td><span class="badge b-new">new</span> plugin.</td></tr>
+    <tr><td><span class="file">effects/index.ts</span></td><td>One registry entry.</td></tr>
+    <tr><td><span class="file">effects/clones/linearDuplicate.ts · rotationalSymmetry.ts</span></td><td>Param upgrades, output-preserving defaults.</td></tr>
+    <tr><td><span class="file">effects/types.ts</span></td><td>The authoring standard, as doc comment.</td></tr>
+    <tr><td>Renderer · engine · store</td><td>Untouched — CloneSpec plugins are data.</td></tr>
+  </tbody>
+</table>
+
+<h2>E · Risks &amp; notes</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Upgrades changing existing scenes</strong> — the phase-2 before/after render comparison is the gate; defaults must reproduce today's output bit-for-bit.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Count × clones per frame</strong>: 16 clones on a heavy instrument is 16× draw — fine for primitives; note in the plugin's About text that count multiplies cost.</li>
+  <li><span class="badge b-risk">note</span> The angle lane's perpetual-motion trick wants looped automation blocks — cross-reference the loop-blocks pair; works with a manual 0→360 ramp per section meanwhile.</li>
+</ul>
+
+<div class="rec"><strong>The one-sentence mental model:</strong> one new CloneSpec file whose params obey three adjectives, two old clones brought up to the same standard without changing a pixel of existing projects, and a demo lane that proves the whole automation-on-effects stack in one breathing ring.</div>
+
+<hr/>
+<p class="small muted">Plan only — no code changed. Derives from <span class="file">symmetric-effects-architecture.html</span>; hard-depends on <span class="file">effect-param-automation-*</span>.</p>
+
+</div>
+</body>
+</html>
