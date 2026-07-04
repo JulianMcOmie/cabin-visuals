@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
+import { Music2, Sparkles, ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
@@ -12,6 +12,50 @@ import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { Routing, EffectInstance } from '../types'
 
 type Tab = 'instrument' | 'effects'
+
+/** The track's name in the editor header — double-click to rename, same contract
+ *  as the timeline label (Enter/blur commits, Esc cancels, empty = cancel). */
+function EditableTrackName({ trackId, name }: { trackId: string; name: string }) {
+  const renameTrack = useProjectStore((s) => s.renameTrack)
+  const [renaming, setRenaming] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (renaming) inputRef.current?.select()
+  }, [renaming])
+
+  if (renaming) {
+    return (
+      <input
+        ref={inputRef}
+        defaultValue={name}
+        onBlur={(e) => { renameTrack(trackId, e.currentTarget.value); setRenaming(false) }}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') e.currentTarget.blur()
+          else if (e.key === 'Escape') { e.currentTarget.value = name; e.currentTarget.blur() }
+        }}
+        className="w-full text-sm font-semibold text-zinc-200 bg-zinc-900 border border-zinc-600 rounded px-1 py-0 mb-0.5 outline-none"
+      />
+    )
+  }
+  // The pencil only surfaces on hover — present when you look, absent when you don't.
+  return (
+    <div
+      title="Double-click to rename"
+      onDoubleClick={() => setRenaming(true)}
+      className="group flex items-center gap-1.5 mb-0.5 cursor-text select-none"
+    >
+      <p className="text-sm font-semibold text-zinc-200 truncate">{name}</p>
+      <button
+        onClick={() => setRenaming(true)}
+        aria-label="Rename track"
+        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity"
+      >
+        <Pencil size={11} />
+      </button>
+    </div>
+  )
+}
 
 function ParamSlider({
   label, value, min, max, step, onChange,
@@ -409,7 +453,7 @@ export function TrackEditor() {
           <>
             {track ? (
               <>
-                <p className="text-sm font-semibold text-zinc-200 mb-0.5">{track.name}</p>
+                <EditableTrackName trackId={track.id} name={track.name} />
                 <p className="text-[11px] text-zinc-600 mb-4 capitalize">
                   {track.type} · {track.instrumentId}
                 </p>
