@@ -3,9 +3,22 @@
 // way (engine → document), which keeps the editor independent of the engine.
 
 import type { Matrix4 } from 'three'
-import type { PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
-import type { InterpolationMode } from '../../types'
+import type { ElementLayoutCtx, PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
+import type { InterpolationMode, MidiMode, SubsetWeightSpec } from '../../types'
 import type { AutomationKeyframe } from './automation'
+import type { DimensionDef } from './dimensions/types'
+
+export interface StateVector {
+  pos: [number, number, number]
+  /** Axis-angle vector: direction = axis, length = angle in radians. */
+  rot: [number, number, number]
+  /** Uniform scale stored as ln(s); composeMatrix applies exp(). */
+  logScale: number
+  /** Material opacity. Kept out of the matrix, but interpolated with dimensions. */
+  opacity: number
+  /** Open scalar channels for later visual state (energy, hue, etc.). */
+  aux: Record<string, number>
+}
 
 /** A resolved automation lane: keyframes (pitch→value, absolute beats) driving one of
  *  the object's params, interpolated per `mode`. Sampled per frame in computeAtBeat. */
@@ -47,6 +60,10 @@ export interface ResolvedObject {
   stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
+  elementCount: number
+  layoutState?: (ctx: ElementLayoutCtx, out: StateVector) => void
+  elementMatrices: Matrix4[]
+  elementOpacities: number[]
   /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
   notes: ResolvedNote[]
   /** Blackout spans from `mute` child modifiers — the object is hidden inside them. */
@@ -58,6 +75,15 @@ export interface ResolvedObject {
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
+  /** Ordered child dimension chain. Muted dimensions are bypassed, not blacked out. */
+  dimensionChain: ResolvedDimension[]
+  scratchBase: StateVector
+  scratchA: StateVector
+  scratchB: StateVector
+  scratchEntry: StateVector
+  scratchAdd: StateVector
+  scratchInputs: Record<string, number>
+  scratchChannels: Record<string, number>
   /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
   tags: string[]
 }
@@ -77,6 +103,25 @@ export interface ResolvedRouting {
   targetObjectId: string
   targetPort: string
   amount: number
+}
+
+export interface ResolvedDimension {
+  trackId: string
+  def: DimensionDef
+  depth: number
+  bypassed: boolean
+  inputBase: Record<string, number>
+  opMode: 'transform' | 'add'
+  midiMode: MidiMode
+  midiTargetInput?: string
+  interpolation: InterpolationMode
+  envelope?: { attack: number; decay: number }
+  notes: ResolvedNote[]
+  continuousKeyframes: Record<string, AutomationKeyframe[]>
+  amountKeyframes: AutomationKeyframe[]
+  weight: SubsetWeightSpec
+  ports: Record<string, string>
+  automations: ResolvedAutomation[]
 }
 
 export interface ResolvedGraph {
@@ -103,6 +148,11 @@ export interface ObjectState {
   /** World transform (local composed with all ancestors). Reused across frames —
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
+  elementCount: number
+  /** Per-element local matrices for ensemble instruments; empty for single objects. */
+  elementMatrices: Matrix4[]
+  elementOpacities: number[]
+  opacity: number
   /** String-valued params (color / string) for the instrument component. */
   stringParams: Record<string, string>
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The

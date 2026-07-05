@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize } from 'lucide-react'
@@ -44,7 +44,9 @@ function Scene() {
       <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
       <VisualBeatSync />
       <ExportDriver />
-      <VisualScene />
+      <Suspense fallback={null}>
+        <VisualScene />
+      </Suspense>
     </Canvas>
   )
 }

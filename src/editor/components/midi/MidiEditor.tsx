@@ -396,21 +396,27 @@ export function MidiEditor({
           {rows.map((row) => (
             <div
               key={row.pitch}
+              title={row.noteLabel ? `${row.label} (${row.noteLabel})` : row.label}
               style={{
                 height: rowHeight,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'flex-end',
+                justifyContent: row.noteLabel ? 'space-between' : 'flex-end',
+                gap: 4,
+                paddingLeft: row.noteLabel ? 6 : 0,
                 paddingRight: 8,
+                backgroundColor: row.emphasized ? row.backgroundColor : undefined,
+                borderLeft: row.emphasized ? `3px solid ${row.color}` : undefined,
                 borderBottom: '1px solid rgba(255,255,255,0.05)',
+                boxSizing: 'border-box',
                 overflow: 'hidden',
               }}
             >
               <span
-                title={row.label}
                 style={{
-                  fontSize: 13,
-                  color: '#666666',
+                  fontSize: row.noteLabel ? 11 : 13,
+                  fontWeight: row.emphasized ? 700 : 400,
+                  color: row.emphasized ? row.color : '#666666',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -419,6 +425,18 @@ export function MidiEditor({
               >
                 {row.label}
               </span>
+              {row.noteLabel && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: 'rgba(255,255,255,0.35)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {row.noteLabel}
+                </span>
+              )}
             </div>
           ))}
           {/* Range label annotations */}
@@ -491,6 +509,23 @@ export function MidiEditor({
               bottom: 0,
             }}
           />
+          {rows.map((row, i) => row.emphasized ? (
+            <div
+              key={`emphasized-row-${row.pitch}`}
+              style={{
+                position: 'absolute',
+                top: i * rowHeight,
+                left: 0,
+                right: 0,
+                height: rowHeight,
+                backgroundColor: row.backgroundColor ?? 'rgba(250, 204, 21, 0.1)',
+                borderTop: `1px solid ${row.color}`,
+                borderBottom: `1px solid ${row.color}`,
+                opacity: 0.75,
+                pointerEvents: 'none',
+              }}
+            />
+          ) : null)}
           {/* Sides */}
           <div
             style={{

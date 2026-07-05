@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Group, Vector3 } from 'three'
+import { Group, Material, Vector3 } from 'three'
 import { getInstrument } from '../../instruments'
 import { getObjectState } from '../../core/visual/VisualEngine'
+import type { ObjectState } from '../../core/visual/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { TransformWrapper } from './TransformWrapper'
@@ -16,6 +17,37 @@ import { ShaderWrapper } from './ShaderWrapper'
  * The instrument component (code Cube or spec renderer) draws the mesh at local origin.
  */
 const _camForward = new Vector3()
+const BASE_OPACITY_KEY = '__cabinBaseOpacity'
+
+function clampOpacity(v: number): number {
+  return Math.max(0, Math.min(1, v))
+}
+
+function stateHasVaryingElementOpacity(state: ObjectState): boolean {
+  if (state.elementCount <= 1) return false
+  const first = state.elementOpacities[0] ?? 1
+  for (let i = 1; i < state.elementCount; i++) {
+    if (Math.abs((state.elementOpacities[i] ?? 1) - first) > 0.0001) return true
+  }
+  return false
+}
+
+function applyMaterialOpacity(root: Group, opacity: number): void {
+  const resolvedOpacity = clampOpacity(opacity)
+  root.traverse((obj) => {
+    const maybeMesh = obj as { material?: Material | Material[] }
+    if (!maybeMesh.material) return
+    const materials = Array.isArray(maybeMesh.material) ? maybeMesh.material : [maybeMesh.material]
+    for (const material of materials) {
+      const baseOpacity = typeof material.userData[BASE_OPACITY_KEY] === 'number'
+        ? material.userData[BASE_OPACITY_KEY] as number
+        : material.opacity
+      material.userData[BASE_OPACITY_KEY] = baseOpacity
+      material.transparent = resolvedOpacity < 0.999 || baseOpacity < 0.999
+      material.opacity = clampOpacity(baseOpacity * resolvedOpacity)
+    }
+  })
+}
 
 export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; instrumentId: string }) {
   const def = getInstrument(instrumentId)
@@ -30,6 +62,9 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
     if (!g) return
     const state = getObjectState(trackId)
     g.visible = !state?.blackedOut
+    if (state && instrumentId !== 'swarm' && !stateHasVaryingElementOpacity(state)) {
+      applyMaterialOpacity(g, state.opacity)
+    }
     if (isFullFrame) {
       // A full-frame instrument is a SCREEN: pinned dead-ahead of the camera and
       // parallel to it, at the same distance r3f's `viewport` sizing assumes

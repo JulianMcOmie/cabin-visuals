@@ -7,11 +7,12 @@ import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
+import { dimensionRegistry } from '../core/visual/dimensions/registry'
 import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
  *  event-modifier child track (whose `id` is the modifier's track type). */
-export type LibraryKind = 'object' | 'modulator' | 'modifier'
+export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'dimension'
 
 export interface InstrumentItem {
   id: string
@@ -25,6 +26,22 @@ const withKind = (kind: LibraryKind, items: Omit<InstrumentItem, 'kind'>[]): Ins
 
 const OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: 'Cube', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'swarm', name: 'Swarm', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="#22d3ee">
+        <circle cx="6" cy="1.5" r="0.8" /><circle cx="9.2" cy="2.8" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
+        <circle cx="9.2" cy="9.2" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="2.8" cy="9.2" r="0.8" />
+        <circle cx="1.5" cy="6" r="0.8" /><circle cx="2.8" cy="2.8" r="0.8" />
+      </g>
+    </svg>
+  )},
+  { id: 'pointLight', name: 'Point Light', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="6" cy="5" r="2.5" fill="#facc15" />
+      <path d="M4.7 8.3 H7.3 M5 10 H7" stroke="#fde68a" strokeWidth="1" strokeLinecap="round" />
+      <path d="M6 0.8 V1.8 M1.7 5 H2.7 M9.3 5 H10.3 M3 2 L3.7 2.7 M9 2 L8.3 2.7" stroke="#facc15" strokeWidth="0.8" strokeLinecap="round" />
+    </svg>
+  )},
   { id: 'circle', name: 'Circle', icon: <div className="w-3 h-3 border border-indigo-400 rounded-full" /> },
   { id: 'triangle', name: 'Triangle', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
@@ -221,6 +238,18 @@ const MODULATOR_INSTRUMENTS = withKind('modulator', [
   )},
 ])
 
+const DIMENSION_INSTRUMENTS = withKind('dimension', Object.values(dimensionRegistry).map((d) => ({
+  id: d.id,
+  name: d.label,
+  icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#22d3ee" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 6 H10" />
+      <path d="M7 3 L10 6 L7 9" />
+      <path d="M4 3 L2 6 L4 9" />
+    </svg>
+  ),
+})))
+
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
   const [infoOpen, setInfoOpen] = useState(false)
@@ -298,10 +327,12 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackModifier = useProjectStore((s) => s.setTrackModifier)
+  const setTrackDimension = useProjectStore((s) => s.setTrackDimension)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
+    else if (item.kind === 'dimension') setTrackDimension(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
@@ -340,6 +371,7 @@ export function LeftSidebar() {
           <>
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modulator" description="A Modulator instrument drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Dimension" description="A Dimension is a child transform row. Its inputs can be edited, automated, or driven by modulators." items={DIMENSION_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}

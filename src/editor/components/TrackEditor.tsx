@@ -6,10 +6,11 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
+import { DIMENSION_DEPTH_PARAM, dimensionInputParamDefs, getDimension, isDimensionMidiInput } from '../core/visual/dimensions/registry'
 import { getEffect, type VisualEffect } from '../effects'
-import type { ParamDef } from '../instruments/types'
+import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { Routing, EffectInstance } from '../types'
+import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -400,6 +401,16 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'effects', label: 'Effects', icon: <Sparkles size={11} /> },
 ]
 
+const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
+  { value: 'step', label: 'Step' },
+  { value: 'linear', label: 'Linear' },
+  { value: 'ease-in', label: 'Ease In' },
+  { value: 'ease-out', label: 'Ease Out' },
+  { value: 'ease-in-out', label: 'Ease In-Out' },
+  { value: 'exponential', label: 'Exponential' },
+  { value: 'smooth-step', label: 'Smooth Step' },
+]
+
 export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -409,6 +420,14 @@ export function TrackEditor() {
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
+  const setDimensionInput = useProjectStore((s) => s.setDimensionInput)
+  const setDimensionDepth = useProjectStore((s) => s.setDimensionDepth)
+  const setDimensionMidiMode = useProjectStore((s) => s.setDimensionMidiMode)
+  const setDimensionMidiTarget = useProjectStore((s) => s.setDimensionMidiTarget)
+  const setDimensionEnvelope = useProjectStore((s) => s.setDimensionEnvelope)
+  const setDimensionWeight = useProjectStore((s) => s.setDimensionWeight)
+  const setDimensionOpMode = useProjectStore((s) => s.setDimensionOpMode)
+  const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
@@ -458,6 +477,201 @@ export function TrackEditor() {
                   {track.type} · {track.instrumentId}
                 </p>
                 {(() => {
+                    const dimDef = track.type === 'dimension' ? getDimension(track.dimensionId) : undefined
+                  if (dimDef) {
+                    const inputs = dimensionInputParamDefs(dimDef)
+                    const midiTargetOptions = inputs.filter(isNumberParam)
+                    const inputNames = midiTargetOptions.map((p) => p.key)
+                    const midiTargetInput = isDimensionMidiInput(dimDef, track.midiTargetInput)
+                      ? track.midiTargetInput
+                      : inputNames[0]
+                    const midiMode = track.midiMode ?? 'none'
+                    const envelope = track.envelope ?? { attack: 0.05, decay: 0.4 }
+                    const weight = track.weight ?? ({ mode: 'all' } satisfies SubsetWeightSpec)
+                    const setWeightMode = (mode: SubsetWeightSpec['mode']) => {
+                      if (mode === 'gradient') setDimensionWeight(track.id, { mode, slope: 1, phase: 0 })
+                      else setDimensionWeight(track.id, { mode })
+                    }
+                    return (
+                      <>
+                        <p className="text-[11px] text-zinc-500 mb-3">Dimension:</p>
+                        <div className="mb-4">
+                          <div className="text-xs text-zinc-300 mb-1.5">Operation</div>
+                          <select
+                            value={track.opMode ?? 'transform'}
+                            onChange={(e) => setDimensionOpMode(track.id, e.target.value as 'transform' | 'add')}
+                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                          >
+                            <option value="transform">Transform</option>
+                            <option value="add">Add</option>
+                          </select>
+                        </div>
+                        <ParamControl
+                          param={DIMENSION_DEPTH_PARAM}
+                          numValue={track.depth ?? 1}
+                          strValue={undefined}
+                          onNum={(v) => setDimensionDepth(track.id, v)}
+                        />
+                        {inputs.map((p) => (
+                          <ParamControl
+                            key={p.key}
+                            param={p}
+                            numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
+                            strValue={undefined}
+                            onNum={(v) => setDimensionInput(track.id, p.key, v)}
+                          />
+                        ))}
+
+                        {!track.parentId && (() => {
+                          const objectTracks = Object.values(tracks).filter((t) => getInstrument(t.instrumentId) && t.id !== track.id)
+                          const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
+                          const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
+                          const keyOf = (r: Routing) =>
+                            r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
+                            : r.scope.kind === 'track' ? `track:${r.scope.id}`
+                            : `subtree:${r.scope.id}`
+                          const options = [
+                            ...allTags.map((tag) => ({
+                              key: `tag:${tag}`,
+                              label: `#${tag}`,
+                              routing: { port: 'dimension', scope: { kind: 'tag' as const, tag }, amount: 1 },
+                            })),
+                            ...branchTracks.map((t) => ({
+                              key: `subtree:${t.id}`,
+                              label: `${t.name} (branch)`,
+                              routing: { port: 'dimension', scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
+                            })),
+                            ...objectTracks.map((t) => ({
+                              key: `track:${t.id}`,
+                              label: t.name,
+                              routing: { port: 'dimension', scope: { kind: 'track' as const, id: t.id }, amount: 1 },
+                            })),
+                          ]
+                          const selected = new Set(track.targets?.map(keyOf))
+                          const toggle = (key: string) => {
+                            const next = (track.targets ?? []).slice()
+                            const idx = next.findIndex((r) => keyOf(r) === key)
+                            if (idx >= 0) next.splice(idx, 1)
+                            else {
+                              const opt = options.find((o) => o.key === key)
+                              if (opt) next.push(opt.routing)
+                            }
+                            setTrackTargets(track.id, next)
+                          }
+                          return (
+                            <div className="mb-4">
+                              <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
+                              {options.length === 0
+                                ? <p className="text-[11px] text-zinc-600">No objects to target</p>
+                                : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
+                            </div>
+                          )
+                        })()}
+
+                        <div className="mb-4">
+                          <div className="text-xs text-zinc-300 mb-1.5">MIDI Mode</div>
+                          <select
+                            value={midiMode}
+                            onChange={(e) => setDimensionMidiMode(track.id, e.target.value as MidiMode)}
+                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                          >
+                            <option value="none">None</option>
+                            <option value="continuous">Continuous</option>
+                            <option value="amount">Amount</option>
+                            <option value="ballistic">Ballistic</option>
+                          </select>
+                        </div>
+
+                        {(midiMode === 'continuous' || midiMode === 'amount') && (
+                          <>
+                            {midiMode === 'continuous' && (
+                              <div className="mb-4">
+                                <div className="text-xs text-zinc-300 mb-1.5">MIDI Target</div>
+                                <select
+                                  value={midiTargetInput}
+                                  onChange={(e) => setDimensionMidiTarget(track.id, e.target.value)}
+                                  className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                                >
+                                  {midiTargetOptions.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            <div className="mb-4">
+                              <div className="text-xs text-zinc-300 mb-1.5">Interpolation</div>
+                              <select
+                                value={track.interpolation ?? 'linear'}
+                                onChange={(e) => setTrackInterpolation(track.id, e.target.value as InterpolationMode)}
+                                className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                              >
+                                {INTERP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                            </div>
+                          </>
+                        )}
+
+                        {midiMode === 'ballistic' && (
+                          <>
+                            <ParamSlider
+                              label="Attack"
+                              value={envelope.attack}
+                              min={0.01}
+                              max={4}
+                              step={0.01}
+                              onChange={(attack) => setDimensionEnvelope(track.id, { ...envelope, attack })}
+                            />
+                            <ParamSlider
+                              label="Decay"
+                              value={envelope.decay}
+                              min={0.01}
+                              max={8}
+                              step={0.01}
+                              onChange={(decay) => setDimensionEnvelope(track.id, { ...envelope, decay })}
+                            />
+                          </>
+                        )}
+
+                        <div className="mb-4">
+                          <div className="text-xs text-zinc-300 mb-1.5">Weight</div>
+                          <select
+                            value={weight.mode}
+                            onChange={(e) => setWeightMode(e.target.value as SubsetWeightSpec['mode'])}
+                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                          >
+                            <option value="all">All</option>
+                            <option value="odd">Odd</option>
+                            <option value="even">Even</option>
+                            <option value="firstHalf">First half</option>
+                            <option value="secondHalf">Second half</option>
+                            <option value="checkerWhite">Checker white</option>
+                            <option value="checkerBlack">Checker black</option>
+                            <option value="gradient">Gradient</option>
+                          </select>
+                        </div>
+
+                        {weight.mode === 'gradient' && (
+                          <>
+                            <ParamSlider
+                              label="Slope"
+                              value={weight.slope}
+                              min={-4}
+                              max={4}
+                              step={0.01}
+                              onChange={(slope) => setDimensionWeight(track.id, { ...weight, slope })}
+                            />
+                            <ParamSlider
+                              label="Phase"
+                              value={weight.phase}
+                              min={-1}
+                              max={2}
+                              step={0.01}
+                              onChange={(phase) => setDimensionWeight(track.id, { ...weight, phase })}
+                            />
+                          </>
+                        )}
+                      </>
+                    )
+                  }
+
                   // Modulator track → a target picker (which object it targets).
                   // The port is internal (from the modulator's def), never shown.
                   const modDef = getModulator(track.instrumentId)
@@ -468,26 +682,45 @@ export function TrackEditor() {
                     const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
                     // Tracks with children can be targeted as a whole branch (subtree).
                     const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
+                    const dimensionPortOptions = Object.values(tracks)
+                      .filter((t) => t.type === 'dimension' && !!t.parentId)
+                      .flatMap((t) => {
+                        const parent = t.parentId ? tracks[t.parentId] : undefined
+                        const d = getDimension(t.dimensionId)
+                        if (!parent || !d) return []
+                        return Object.entries(d.inputs)
+                          .filter(([, input]) => !input.hidden && input.type !== 'select')
+                          .map(([inputName]) => ({
+                            key: `dim:${t.id}:${inputName}`,
+                            label: `${parent.name} · ${t.name}.${inputName}`,
+                            routing: {
+                              port: `dim:${t.id}:${inputName}`,
+                              scope: { kind: 'track' as const, id: parent.id },
+                              amount: 1,
+                            },
+                          }))
+                      })
                     // A target can be a tag (a group), a whole branch (subtree), or a
                     // single track. Each maps to a routing; we key options so selection
                     // survives the mix.
                     const keyOf = (r: Routing) =>
-                      r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
-                      : r.scope.kind === 'track' ? `track:${r.scope.id}`
-                      : `subtree:${r.scope.id}`
+                      r.scope.kind === 'tag' ? `${r.port}@tag:${r.scope.tag}`
+                      : r.scope.kind === 'track' ? `${r.port}@track:${r.scope.id}`
+                      : `${r.port}@subtree:${r.scope.id}`
                     const options = [
+                      ...dimensionPortOptions,
                       ...allTags.map((tag) => ({
-                        key: `tag:${tag}`,
+                        key: `${modDef.port}@tag:${tag}`,
                         label: `#${tag}`,
                         routing: { port: modDef.port, scope: { kind: 'tag' as const, tag }, amount: 1 },
                       })),
                       ...branchTracks.map((t) => ({
-                        key: `subtree:${t.id}`,
+                        key: `${modDef.port}@subtree:${t.id}`,
                         label: `${t.name} (branch)`,
                         routing: { port: modDef.port, scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
                       })),
                       ...objectTracks.map((t) => ({
-                        key: `track:${t.id}`,
+                        key: `${modDef.port}@track:${t.id}`,
                         label: t.name,
                         routing: { port: modDef.port, scope: { kind: 'track' as const, id: t.id }, amount: 1 },
                       })),

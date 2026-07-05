@@ -72,8 +72,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const modColor = modifierColor(track)
   const isModifier = modColor != null
   const blockColor = modColor ?? track.color
-  // Automation + ability tracks are attached sub-rows of their object — darkened shade.
-  const isAutomation = track.type === 'automation' || track.type === 'ability'
+  // Automation, ability, and dimension tracks are attached sub-rows of their object.
+  const isAutomation = track.type === 'automation' || track.type === 'ability' || track.type === 'dimension'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.

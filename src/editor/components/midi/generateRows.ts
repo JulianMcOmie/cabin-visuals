@@ -2,6 +2,13 @@ import type { MidiRow, RangeLabel } from './types'
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+export interface MidiRowLabelOverride {
+  label: string
+  color?: string
+  emphasized?: boolean
+  backgroundColor?: string
+}
+
 /**
  * Generate MidiRow[] for a given pitch range.
  * Higher pitches at the top (descending order).
@@ -9,6 +16,7 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
  */
 export function generateRows(
   noteRange?: { min: number; max: number },
+  labels?: Record<number, MidiRowLabelOverride>,
 ): MidiRow[] {
   const min = noteRange?.min ?? 24
   const max = noteRange?.max ?? 96
@@ -17,11 +25,16 @@ export function generateRows(
   for (let pitch = max; pitch >= min; pitch--) {
     const octave = Math.floor(pitch / 12) - 1
     const noteIndex = pitch % 12
+    const noteLabel = `${NOTE_NAMES[noteIndex]}${octave}`
     const hue = (noteIndex / 12) * 360
+    const label = labels?.[pitch]
     rows.push({
       pitch,
-      label: `${NOTE_NAMES[noteIndex]}${octave}`,
-      color: `hsl(${hue}, 70%, 55%)`,
+      label: label?.label ?? noteLabel,
+      noteLabel: label ? noteLabel : undefined,
+      color: label?.color ?? `hsl(${hue}, 70%, 55%)`,
+      emphasized: label?.emphasized,
+      backgroundColor: label?.backgroundColor,
     })
   }
 
