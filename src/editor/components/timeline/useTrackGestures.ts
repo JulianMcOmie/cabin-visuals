@@ -387,6 +387,19 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         return
       }
 
+      // Split selected MIDI blocks at the playhead. Audio blocks are ignored by the
+      // store action; no selection means leave the browser's normal bold shortcut alone.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
+        if (selectedBlockIds.size === 0) return
+        e.preventDefault()
+        const nextSelection = useProjectStore.getState().splitBlocksAtBeat(
+          selectedBlockIds,
+          useTimeStore.getState().currentBeat,
+        )
+        if (nextSelection) setSelectedBlockIds(nextSelection)
+        return
+      }
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedBlockIds.size > 0) {
           e.preventDefault()

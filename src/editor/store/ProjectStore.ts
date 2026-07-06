@@ -38,6 +38,7 @@ interface ProjectState {
   moveBlock: (fromTrackId: string, blockId: string, toTrackId: string) => void
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
+  splitBlocksAtBeat: (blockIds: Set<string>, beat: number) => Set<string> | null
   deleteTrack: (trackId: string) => void
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, index: number) => string | null
@@ -223,6 +224,84 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
       return { tracks }
     }),
+
+  splitBlocksAtBeat: (blockIds, beat) => {
+    if (blockIds.size === 0) return null
+    let nextSelection: Set<string> | null = null
+
+    set((s) => {
+      const { beatsPerBar } = s
+      const tracks: Record<string, Track> = {}
+      let changed = false
+      const splitBlockIds = new Set<string>()
+
+      for (const [id, track] of Object.entries(s.tracks)) {
+        let trackChanged = false
+        const blocks: Block[] = []
+
+        for (const block of track.blocks) {
+          if (!blockIds.has(block.id)) {
+            blocks.push(block)
+            continue
+          }
+
+          const blockStartBeat = block.startBar * beatsPerBar
+          const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
+          if (beat <= blockStartBeat || beat >= blockEndBeat) {
+            blocks.push(block)
+            continue
+          }
+
+          const splitBeat = beat - blockStartBeat
+          const leftNotes: Note[] = []
+          const rightNotes: Note[] = []
+
+          for (const note of block.notes) {
+            const noteStart = note.startBeat
+            const noteEnd = note.startBeat + note.durationBeats
+
+            if (noteEnd <= splitBeat) {
+              leftNotes.push(note)
+            } else if (noteStart >= splitBeat) {
+              rightNotes.push({ ...note, startBeat: note.startBeat - splitBeat })
+            } else {
+              leftNotes.push({ ...note, durationBeats: splitBeat - note.startBeat })
+              rightNotes.push({
+                ...note,
+                id: crypto.randomUUID(),
+                startBeat: 0,
+                durationBeats: noteEnd - splitBeat,
+              })
+            }
+          }
+
+          const rightBlock: Block = {
+            ...block,
+            id: crypto.randomUUID(),
+            startBar: beat / beatsPerBar,
+            durationBars: (blockEndBeat - beat) / beatsPerBar,
+            notes: rightNotes,
+          }
+
+          blocks.push(
+            { ...block, durationBars: splitBeat / beatsPerBar, notes: leftNotes },
+            rightBlock,
+          )
+          splitBlockIds.add(rightBlock.id)
+          trackChanged = true
+          changed = true
+        }
+
+        tracks[id] = trackChanged ? { ...track, blocks } : track
+      }
+
+      if (!changed) return s
+      nextSelection = splitBlockIds
+      return { tracks }
+    })
+
+    return nextSelection
+  },
 
   deleteTrack: (trackId) =>
     set((s) => {
