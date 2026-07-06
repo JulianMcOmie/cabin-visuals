@@ -24,6 +24,20 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
 }
 
 /**
+ * True while the playhead sits inside any of the object's blocks, derived from
+ * the block bounds each resolved note carries. Instruments with ambient
+ * baselines gate on this so a track with no block at the current beat renders
+ * NOTHING — blocks are the instrument's on-screen region, like clips in a DAW.
+ * (A block with zero notes contributes no bounds and therefore no coverage.)
+ */
+export function beatInBlock(state: ObjectState): boolean {
+  for (const n of state.notes) {
+    if (state.beat >= n.blockStartBeat && state.beat < n.blockEndBeat) return true
+  }
+  return false
+}
+
+/**
  * Deterministic stand-in for Math.random (which is banned in instruments): the
  * same seed always yields the same value in [0, 1). Seed per entity from stable
  * facts — e.g. `seededRand(note.beat * 13 + note.pitch * 7 + i)` — so a scrub to

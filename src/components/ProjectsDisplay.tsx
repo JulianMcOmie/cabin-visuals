@@ -16,6 +16,7 @@ import { createClient } from "../utils/supabase/client"
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
 import SignUpButton from "./AuthButtons/SignUpButton"
+import { TEMPLATES, type TemplateDef } from "../templates"
 
 export interface ProjectMetadata {
   id: string
@@ -45,6 +46,7 @@ interface ProjectsDisplayProps {
   onCreateProject: () => void
   onSelectProject: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
+  onCreateFromTemplate: (template: TemplateDef) => void
 }
 
 const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
@@ -60,6 +62,7 @@ export default function ProjectsDisplay({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onCreateFromTemplate,
 }: ProjectsDisplayProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const userInitials = getInitials(profile?.first_name, profile?.last_name)
@@ -153,6 +156,35 @@ export default function ProjectsDisplay({
       </div>
 
       <main className={styles.mainContent}>
+        <section className="mb-10">
+          <h2 className="text-sm font-semibold tracking-wide text-zinc-400 uppercase mb-3">
+            Start from a template
+          </h2>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {TEMPLATES.map((tpl) => (
+              <button
+                key={tpl.id}
+                onClick={() => onCreateFromTemplate(tpl)}
+                className="group flex-shrink-0 w-52 text-left rounded-xl overflow-hidden border border-zinc-800 hover:border-zinc-600 bg-zinc-900/60 transition-colors"
+                title={`Create a project from “${tpl.name}”`}
+              >
+                <div
+                  className="h-20 relative"
+                  style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
+                >
+                  <span className="absolute bottom-2 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-white/90">
+                    {tpl.bpm} BPM
+                  </span>
+                </div>
+                <div className="p-3">
+                  <h3 className="text-sm font-semibold text-zinc-100 group-hover:text-white">{tpl.name}</h3>
+                  <p className="text-xs text-zinc-500 mt-1 leading-snug">{tpl.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
         <div className={styles.projectsGrid}>
           {projects.length === 0 ? (
             <p className={styles.noProjectsText}>No projects found. Create one to get started!</p>

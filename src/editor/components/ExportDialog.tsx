@@ -208,7 +208,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
                 Free exports are 720p with a small watermark.{' '}
                 <button
                   onClick={() => void startCheckout().catch(() => {})}
-                  className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+                  className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 cursor-pointer"
                 >
                   Upgrade to Pro
                 </button>{' '}

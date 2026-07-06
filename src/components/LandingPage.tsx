@@ -121,6 +121,9 @@ export default function LandingPage() {
           Cabin Visuals
         </Link>
         <nav className="flex items-center gap-3">
+          <Link href="/pricing" className="text-sm text-zinc-300 hover:text-white transition-colors mr-2 cursor-pointer">
+            Pricing
+          </Link>
           {user ? (
             // Show profile dropdown if user is logged in
             <DropdownMenu>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as projectStorage from '../projectStorage'
 import type { ProjectSummary } from '../projectStorage'
+import type { ProjectDocument } from '../types'
 
 /**
  * The project browser's list state, backed by projectStorage. Pass
@@ -31,8 +32,8 @@ export function useProjectList(enabled: boolean) {
     return () => { mounted = false }
   }, [enabled])
 
-  const createProject = useCallback(async (name: string) => {
-    const project = await projectStorage.create(name)
+  const createProject = useCallback(async (name: string, document?: ProjectDocument) => {
+    const project = await projectStorage.create(name, document)
     setProjects((prev) => [project, ...prev])
     return project
   }, [])

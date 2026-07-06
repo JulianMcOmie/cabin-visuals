@@ -29,6 +29,11 @@ import { emojiDisplayInstrument } from './EmojiDisplay'
 import { beatParticleKitInstrument } from './BeatParticleKit'
 import { cameraControlInstrument } from './CameraControl'
 import { windowsXpInstrument } from './WindowsXP'
+import { crtScanlinesInstrument } from './CrtScanlines'
+import { paddleBounceInstrument } from './PaddleBounce'
+import { pixelBlastInstrument } from './PixelBlast'
+import { pixelInvadersInstrument } from './PixelInvaders'
+import { scoreTickerInstrument } from './ScoreTicker'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -62,6 +67,11 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [beatParticleKitInstrument.id]: beatParticleKitInstrument,
   [cameraControlInstrument.id]: cameraControlInstrument,
   [windowsXpInstrument.id]: windowsXpInstrument,
+  [crtScanlinesInstrument.id]: crtScanlinesInstrument,
+  [paddleBounceInstrument.id]: paddleBounceInstrument,
+  [pixelBlastInstrument.id]: pixelBlastInstrument,
+  [pixelInvadersInstrument.id]: pixelInvadersInstrument,
+  [scoreTickerInstrument.id]: scoreTickerInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

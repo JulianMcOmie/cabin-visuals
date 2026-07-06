@@ -1,7 +1,7 @@
 import { getSupabase } from './supabase'
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import { CURRENT_VERSION, upgradeDocument } from './upgrade'
+import { upgradeDocument } from './upgrade'
 
 // The one door for project CRUD — the only file that names the `projects`
 // table for the document. Every function runs under RLS as the signed-in user,
@@ -51,19 +51,20 @@ export async function save(id: string, doc: ProjectDocument): Promise<void> {
   if (!data.length) throw new Error(`Project ${id} not found (or not yours)`)
 }
 
-/** Create a project with a fresh empty document; returns its summary. */
-export async function create(name: string): Promise<ProjectSummary> {
+/** Create a project — empty by default, or seeded from a document (templates). */
+export async function create(name: string, document?: ProjectDocument): Promise<ProjectSummary> {
   const supabase = getSupabase()
   const { data: auth, error: authError } = await supabase.auth.getUser()
   if (authError) throw authError
   if (!auth.user) throw new Error('Not signed in')
+  const doc = document ?? emptyDocument()
   const { data, error } = await supabase
     .from('projects')
     .insert({
       name,
       user_id: auth.user.id,
-      data: emptyDocument(),
-      schema_version: CURRENT_VERSION,
+      data: doc,
+      schema_version: doc.schemaVersion,
     })
     .select('id, name, updated_at')
     .single()

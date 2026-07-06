@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
@@ -108,6 +109,20 @@ function BeatOverlay() {
   )
 }
 
+// In ?template= demo mode nothing persists — say so, and point at signup.
+function TemplateDemoChip() {
+  const search = useSearchParams()
+  if (search.get('project') || !search.get('template')) return null
+  return (
+    <span className="text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+      Demo project — {' '}
+      <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
+        sign up to save it
+      </Link>
+    </span>
+  )
+}
+
 // Autosave status: quiet when in sync, explicit when saving or in trouble.
 function SaveStatusChip() {
   const status = useSaveStatus((s) => s.status)
@@ -152,6 +167,7 @@ function Header() {
       </Link>
 
       <SaveStatusChip />
+      <TemplateDemoChip />
 
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
         <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" strokeWidth={95} />
@@ -195,7 +211,7 @@ function Header() {
           <button
             onClick={() => void startCheckout().catch(() => {})}
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 text-xs font-semibold transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 text-xs font-semibold transition-colors cursor-pointer"
           >
             <Sparkles size={12} strokeWidth={2.5} />
             Upgrade
@@ -205,7 +221,7 @@ function Header() {
           <button
             onClick={() => void openBillingPortal().catch(() => {})}
             title="Manage your Pro subscription"
-            className="px-2 py-1 rounded bg-amber-500/15 text-amber-400 text-[11px] font-semibold tracking-wide hover:bg-amber-500/25 transition-colors"
+            className="px-2 py-1 rounded bg-amber-500/15 text-amber-400 text-[11px] font-semibold tracking-wide hover:bg-amber-500/25 transition-colors cursor-pointer"
           >
             PRO
           </button>
@@ -214,7 +230,7 @@ function Header() {
           onClick={() => setExportOpen(true)}
           disabled={exportGate?.ok === false}
           title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-semibold transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-semibold transition-colors cursor-pointer disabled:cursor-default"
         >
           <Upload size={12} strokeWidth={2.5} />
           Export

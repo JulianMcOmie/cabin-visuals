@@ -6,6 +6,7 @@ import { emptyDocument } from '../../persistence/types'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
 import { useHistoryStore } from '../store/HistoryStore'
 import { useUIStore } from '../store/UIStore'
+import { getTemplate } from '../../templates'
 
 /**
  * Binds this editor instance to its project row: reads ?project=<id> from the
@@ -21,7 +22,26 @@ import { useUIStore } from '../store/UIStore'
  * "every project opens the same data" bug.
  */
 export function useProjectPersistence() {
-  const projectId = useSearchParams().get('project')
+  const search = useSearchParams()
+  const projectId = search.get('project')
+  const templateId = search.get('template')
+
+  // Template demo mode: ?template=<id> (and no project) hydrates a canned
+  // document straight into the stores — no DB row, no autosave, works signed
+  // out. The whole point is that a stranger can play with a full project one
+  // click after landing; signing up and saving comes later.
+  useEffect(() => {
+    if (projectId || !templateId) return
+    const tpl = getTemplate(templateId)
+    if (!tpl) return
+    hydrate(emptyDocument())
+    hydrate(structuredClone(tpl.document))
+    useUIStore.getState().setProjectName(tpl.name)
+    useHistoryStore.getState().reset()
+    return () => {
+      useUIStore.getState().setProjectName(null)
+    }
+  }, [projectId, templateId])
 
   useEffect(() => {
     if (!projectId) return
