@@ -1,6 +1,6 @@
 import { useRef } from 'react'
-import { Mesh, MeshStandardMaterial } from 'three'
-import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { Group, Mesh, MeshStandardMaterial } from 'three'
+import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The cube's definition lives next to its visual — schema and component can't drift.
@@ -62,6 +62,9 @@ const CORNERS: [number, number, number][] = [
 // appearance (color/emissive) plus its signature Shatter ability.
 export function Cube({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
+  // The gesture group wraps everything the cube is (core + fragments), so a hop
+  // or a shake carries the shatter debris along with it.
+  const gestureRef = useRef<Group>(null)
   const fragRefs = useRef<(Mesh | null)[]>([])
 
   useInstrumentFrame(trackId, (state) => {
@@ -93,6 +96,78 @@ export function Cube({ trackId }: { trackId: string }) {
     const nvel = vel <= 1 ? vel : vel / 127 // tolerate 0–1 or 0–127 velocity scales
     const spread = 1.4 + Math.min(1, nvel) * 2.2
 
+    // Per-row moves: each MIDI row of the cube's main lane is its own gesture,
+    // not one shared parameter. Pitch class picks the move (any octave works),
+    // velocity sets how hard the cube commits to it, and the note's length is the
+    // gesture's length — every move starts and ends at rest, so gestures on
+    // different rows layer cleanly. Same pure-function-of-beat sampling as
+    // Shatter above: scrubbing mirrors playback. Overlaps on one row keep the
+    // strongest gesture.
+    let nod = 0     // C  — bows toward the camera and back up
+    let shake = 0   // C# — a "no" head-shake around Y, dying out
+    let hop = 0     // D  — a parabolic jump off its spot
+    let spin = 0    // D# — one full pirouette
+    let squash = 0  // E  — cartoon squash-and-stretch
+    let tilt = 0    // F  — a quizzical head-cock to the side
+    let shiver = 0  // F# — a cold shiver (jitter amplitude)
+    let shiverSeed = 0
+    for (const n of state.notes) {
+      const dur = n.durationBeats || 0.5
+      if (beat < n.beat || beat >= n.beat + dur) continue
+      const t = (beat - n.beat) / dur
+      const v = Math.min(1, n.velocity <= 1 ? n.velocity : n.velocity / 127)
+      switch (n.pitch % 12) {
+        case 0: { // The Nod: skewing t makes the dip fast and the recovery slow —
+          // reads as a nod, not a metronome.
+          const env = Math.sin(Math.PI * Math.pow(t, 0.7)) * (0.4 + 0.6 * v)
+          if (env > nod) nod = env
+          break
+        }
+        case 1: { // The Shake: three swings, each smaller than the last.
+          const env = Math.sin(t * Math.PI * 6) * (1 - t) * (0.15 + 0.35 * v)
+          if (Math.abs(env) > Math.abs(shake)) shake = env
+          break
+        }
+        case 2: { // The Hop: up and back down by note end, velocity is leg strength.
+          const env = 4 * t * (1 - t) * (0.5 + 1.5 * v)
+          if (env > hop) hop = env
+          break
+        }
+        case 3: { // The Pirouette: exactly one turn, eased so it launches and lands
+          // softly. Velocity is ignored — a pirouette is a pirouette.
+          const env = t * t * (3 - 2 * t) * Math.PI * 2
+          if (env > spin) spin = env
+          break
+        }
+        case 4: { // Squash-and-stretch: flattens mid-note, springs back tall.
+          const env = Math.sin(Math.PI * t) * (0.2 + 0.4 * v)
+          if (env > squash) squash = env
+          break
+        }
+        case 5: { // The Head-cock: a curious sideways lean, then back.
+          const env = Math.sin(Math.PI * Math.pow(t, 0.7)) * (0.25 + 0.4 * v)
+          if (env > tilt) tilt = env
+          break
+        }
+        case 6: { // The Shiver: amplitude fades as the note warms up.
+          const env = (1 - t) * (0.05 + 0.12 * v)
+          if (env > shiver) { shiver = env; shiverSeed = n.beat }
+          break
+        }
+      }
+    }
+    if (gestureRef.current) {
+      const g = gestureRef.current
+      // Shiver jitter re-rolls every 1/24 beat — frantic to the eye, but seeded
+      // from the beat so a scrub to the same spot shivers identically.
+      const tick = Math.floor(beat * 24)
+      const jx = shiver > 0 ? (seededRand(tick + shiverSeed * 13) - 0.5) * 2 * shiver : 0
+      const jz = shiver > 0 ? (seededRand(tick * 7 + shiverSeed * 29) - 0.5) * 2 * shiver : 0
+      g.rotation.set(nod * 0.9, shake + spin, tilt * 0.7)
+      g.position.set(jx, hop, jz)
+      g.scale.set(1 + squash * 0.6, 1 - squash, 1 + squash * 0.6)
+    }
+
     // The core shrinks as it shatters; fragments grow from nothing and fly outward.
     meshRef.current.scale.setScalar(Math.max(0.001, 1 - 0.85 * a))
     for (let i = 0; i < CORNERS.length; i++) {
@@ -108,7 +183,7 @@ export function Cube({ trackId }: { trackId: string }) {
   })
 
   return (
-    <group>
+    <group ref={gestureRef}>
       <mesh ref={meshRef}>
         <boxGeometry args={[1.6, 1.6, 1.6]} />
         <meshStandardMaterial
