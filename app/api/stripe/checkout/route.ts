@@ -34,6 +34,19 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     let customerId = row?.stripe_customer_id as string | undefined
+
+    // A stored id can be stale: created in the other Stripe mode (a test-mode
+    // checkout while developing writes a test customer into the shared DB) or
+    // deleted in the dashboard. Verify it lives in THIS mode; recreate if not.
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId)
+        if ((existing as { deleted?: boolean }).deleted) customerId = undefined
+      } catch {
+        customerId = undefined
+      }
+    }
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email ?? undefined,
