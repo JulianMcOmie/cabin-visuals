@@ -219,15 +219,15 @@ export default function LandingPage() {
                   Take me to my projects
                 </Button>
               ) : (
-                // Show "Sign Up" if not logged in
-                <Link href="/signup" className="cursor-pointer">
+                // Not logged in: drop them straight into the editor to play.
+                <Link href="/editor" className="cursor-pointer">
                   <Button
                     style={{ backgroundColor: '#00a8ff', boxShadow: '0 20px 40px rgba(0, 168, 255, 0.6)' }}
                     className="rounded-full px-12 py-7 text-xl font-bold text-white hover:opacity-80 hover:scale-105 transition-all border-0 cursor-pointer"
                     onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 20px 50px rgba(0, 168, 255, 0.8)'}
                     onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 20px 40px rgba(0, 168, 255, 0.6)'}
                   >
-                    Sign Up
+                    Try it out!
                   </Button>
                 </Link>
               )}

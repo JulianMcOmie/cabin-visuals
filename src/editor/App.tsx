@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -29,6 +29,7 @@ import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useSaveStatus } from '../persistence/autosave'
 import { usePlan, startCheckout, openBillingPortal } from '../billing/usePlan'
+import { useAuth } from '../persistence/hooks/useAuth'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -155,18 +156,28 @@ function Header() {
   }, [])
 
   const plan = usePlan()
+  const { user, loading: authLoading } = useAuth()
 
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
       <Link
-        href="/projects"
+        href={user ? '/projects' : '/'}
         className="flex-shrink-0 flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
       >
         <ChevronLeft size={14} />
-        Projects
+        {user ? 'Projects' : 'Home'}
       </Link>
 
       <SaveStatusChip />
+      {!authLoading && !user && (
+        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+          <CloudOff size={12} />
+          Your work isn&apos;t saved —{' '}
+          <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
+            sign up to keep it
+          </Link>
+        </span>
+      )}
       <TemplateDemoChip />
 
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
@@ -207,7 +218,23 @@ function Header() {
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         <ProjectLengthControl />
         <BpmControl />
-        {!plan.loading && !plan.isPro && (
+        {!authLoading && !user && (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="px-3 py-1.5 rounded text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/signup"
+              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Sign up
+            </Link>
+          </div>
+        )}
+        {!authLoading && user && !plan.loading && !plan.isPro && (
           <button
             onClick={() => void startCheckout().catch(() => {})}
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
