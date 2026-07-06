@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Canvas } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -27,6 +27,7 @@ import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useSaveStatus } from '../persistence/autosave'
+import { usePlan, startCheckout, openBillingPortal } from '../billing/usePlan'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
@@ -138,6 +139,8 @@ function Header() {
     void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
   }, [])
 
+  const plan = usePlan()
+
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
       <Link
@@ -188,6 +191,25 @@ function Header() {
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         <ProjectLengthControl />
         <BpmControl />
+        {!plan.loading && !plan.isPro && (
+          <button
+            onClick={() => void startCheckout().catch(() => {})}
+            title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 text-xs font-semibold transition-colors"
+          >
+            <Sparkles size={12} strokeWidth={2.5} />
+            Upgrade
+          </button>
+        )}
+        {plan.isPro && (
+          <button
+            onClick={() => void openBillingPortal().catch(() => {})}
+            title="Manage your Pro subscription"
+            className="px-2 py-1 rounded bg-amber-500/15 text-amber-400 text-[11px] font-semibold tracking-wide hover:bg-amber-500/25 transition-colors"
+          >
+            PRO
+          </button>
+        )}
         <button
           onClick={() => setExportOpen(true)}
           disabled={exportGate?.ok === false}
@@ -198,7 +220,7 @@ function Header() {
           Export
         </button>
       </div>
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
     </div>
   )
 }

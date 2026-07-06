@@ -13,6 +13,9 @@ export interface ExportSettings {
   videoBitrate: number
   /** Without extension; the muxer writes `${fileName}.mp4`. */
   fileName: string
+  /** Free tier: burn the "Made with Cabin Visuals" mark into every frame.
+   *  Derived from the user's plan at export time — never persisted. */
+  watermark: boolean
 }
 
 export const RESOLUTIONS = [
@@ -34,6 +37,19 @@ export function defaultSettings(fileName: string): ExportSettings {
     includeAudio: true,
     videoBitrate: defaultBitrate(1920, 60),
     fileName,
+    watermark: true,
+  }
+}
+
+/** The free-tier ceiling: 720p, watermarked. Applied to settings at dialog-open
+ *  AND at export-start, so a stale localStorage 1080p can't leak through. */
+export function clampToFreeTier(s: ExportSettings): ExportSettings {
+  return {
+    ...s,
+    width: 1280,
+    height: 720,
+    videoBitrate: defaultBitrate(1280, s.fps),
+    watermark: true,
   }
 }
 

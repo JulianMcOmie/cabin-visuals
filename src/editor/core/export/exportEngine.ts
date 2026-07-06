@@ -10,6 +10,7 @@ import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer } from './mux'
 import { createVideoEncodeSession } from './videoEncode'
 import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
+import { createWatermarkCompositor } from './watermark'
 
 export interface WalkHooks {
   /** Called about once a second of output (every `fps` frames) and once at the end. */
@@ -93,12 +94,15 @@ export async function runExport(
   })
   const video = createVideoEncodeSession(settings, writer)
 
+  const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null
+
   driver.pin(settings.width, settings.height)
   try {
     const completed = await walkFrames(
       timebase,
       settings.fps,
-      (i, _beat, d) => video.encodeFrame(d.getCanvas(), i, settings.fps),
+      (i, _beat, d) =>
+        video.encodeFrame(watermark ? watermark.compose(d.getCanvas()) : d.getCanvas(), i, settings.fps),
       hooks,
     )
     if (!completed) {

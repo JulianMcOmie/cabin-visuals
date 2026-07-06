@@ -46,6 +46,34 @@ export const projects = pgTable(
   ],
 )
 
+// One row per user who has ever touched billing. Written ONLY by the service
+// role (Stripe webhook / checkout confirm routes) — no client write policies
+// exist on purpose; the browser can read its own row and nothing else.
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    stripeCustomerId: text('stripe_customer_id').notNull(),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    // Mirrors Stripe's subscription status ('active' | 'trialing' | 'canceled' |
+    // 'past_due' | …); 'inactive' = customer created but never subscribed.
+    status: text('status').notNull().default('inactive'),
+    priceId: text('price_id'),
+    currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    pgPolicy('subscriptions_select_own', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`${authUid} = ${t.userId}`,
+    }),
+  ],
+)
+
 // Ported verbatim from the pre-Drizzle dashboard policies (including the odd
 // email-keyed update rule), so declaring them here changes no behavior.
 export const profiles = pgTable(

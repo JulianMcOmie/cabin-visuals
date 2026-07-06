@@ -9,7 +9,8 @@ import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
-import { defaultBitrate, defaultSettings, RESOLUTIONS, type ExportSettings } from '../core/export/types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, RESOLUTIONS, type ExportSettings } from '../core/export/types'
+import { startCheckout } from '../../billing/usePlan'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -28,19 +29,21 @@ function defaultFileName(): string {
   return safe || 'export'
 }
 
-function loadSavedSettings(): ExportSettings {
+function loadSavedSettings(isPro: boolean): ExportSettings {
   // Quality settings are remembered across sessions; the FILENAME is not — it
-  // defaults to the open project's name every time.
+  // defaults to the open project's name every time. The watermark flag is never
+  // trusted from storage — it's derived from the plan, here and again at start.
   const base = defaultSettings(defaultFileName())
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return base
+    if (!raw) return isPro ? { ...base, watermark: false } : clampToFreeTier(base)
     const saved = JSON.parse(raw) as Partial<ExportSettings>
     const merged = { ...base, ...saved, fileName: base.fileName }
     merged.videoBitrate = defaultBitrate(merged.width, merged.fps)
-    return merged
+    merged.watermark = !isPro
+    return isPro ? merged : clampToFreeTier(merged)
   } catch {
-    return base
+    return isPro ? { ...base, watermark: false } : clampToFreeTier(base)
   }
 }
 
@@ -51,8 +54,8 @@ function loadSavedSettings(): ExportSettings {
  * translucent on purpose — the canvas behind it renders the actual frames as
  * they export, which is the best progress bar there is.
  */
-export function ExportDialog({ onClose }: { onClose: () => void }) {
-  const [settings, setSettings] = useState<ExportSettings>(loadSavedSettings)
+export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: boolean }) {
+  const [settings, setSettings] = useState<ExportSettings>(() => loadSavedSettings(isPro))
   const [phase, setPhase] = useState<Phase>({ kind: 'settings' })
   const [audioOk, setAudioOk] = useState(true)
   // While exporting, a still of the canvas at the user's beat covers the live
@@ -83,9 +86,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const start = async () => {
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
-    const effective = { ...settings, includeAudio: settings.includeAudio && audioOk, videoBitrate: defaultBitrate(settings.width, settings.fps) }
-    // Persist quality preferences only — the filename belongs to the project.
-    const { fileName: _fileName, ...remembered } = effective
+    // Belt-and-braces: re-derive the tier gates at start, whatever the UI state says.
+    const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
+    const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(tiered.width, tiered.fps) }
+    // Persist quality preferences only — the filename belongs to the project,
+    // and the watermark flag to the plan.
+    const { fileName: _fileName, watermark: _watermark, ...remembered } = effective
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)) } catch { /* private mode */ }
 
     // Freeze the visual behind the dialog: render the user's current beat once
@@ -155,7 +161,11 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
                 }}
                 className="h-6 px-1.5 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
               >
-                {RESOLUTIONS.map((r) => <option key={r.width} value={r.width}>{r.label}</option>)}
+                {RESOLUTIONS.map((r) => (
+                  <option key={r.width} value={r.width} disabled={!isPro && r.width > 1280}>
+                    {r.label}{!isPro && r.width > 1280 ? ' — Pro' : ''}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -192,6 +202,19 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
                 className="flex-1 min-w-0 h-6 px-1.5 rounded bg-zinc-900 text-xs text-zinc-200 border border-zinc-700 outline-none focus:border-zinc-500"
               />
             </label>
+
+            {!isPro && (
+              <p className="text-[11px] text-zinc-500 leading-snug">
+                Free exports are 720p with a small watermark.{' '}
+                <button
+                  onClick={() => void startCheckout().catch(() => {})}
+                  className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+                >
+                  Upgrade to Pro
+                </button>{' '}
+                for clean 1080p.
+              </p>
+            )}
 
             <button
               onClick={() => void start()}
