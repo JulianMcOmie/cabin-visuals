@@ -1,21 +1,47 @@
 'use client'
 
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore, MIN_BPM, MAX_BPM } from '../store/ProjectStore'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 // Vertical drag sensitivity: bpm change per pixel (up = faster).
 const BPM_PER_PX = 0.5
+// Two pointer-downs within this window (ms) count as a double-click → type mode.
+const DOUBLE_CLICK_MS = 350
 
 /**
  * Tempo readout that doubles as a vertical drag scrubber — drag up to raise the
- * BPM, down to lower it. Writes the project store; the live transport follows via
- * the bpm subscription in usePlayback (which also covers undo/redo while playing).
+ * BPM, down to lower it — and a double-click-to-type field. Writes the project
+ * store; the live transport follows via the bpm subscription in usePlayback.
  */
 export function BpmControl() {
   const bpm = useProjectStore((s) => s.bpm)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const lastDownRef = useRef(0)
+
+  const commit = () => {
+    const n = parseInt(draft, 10)
+    if (!Number.isNaN(n)) {
+      useProjectStore.getState().setBpm(Math.max(MIN_BPM, Math.min(MAX_BPM, n)))
+    }
+    setEditing(false)
+  }
 
   const onPointerDown = (e: ReactPointerEvent) => {
+    // Double-click (two downs close in time) enters type-to-edit; detected by
+    // timing so it doesn't depend on pointer-event `detail`, which browsers
+    // populate inconsistently.
+    const now = e.timeStamp
+    if (now - lastDownRef.current < DOUBLE_CLICK_MS) {
+      lastDownRef.current = 0
+      e.preventDefault()
+      setDraft(String(useProjectStore.getState().bpm))
+      setEditing(true)
+      return
+    }
+    lastDownRef.current = now
+
     e.preventDefault()
     const startY = e.clientY
     const startBpm = useProjectStore.getState().bpm
@@ -37,10 +63,32 @@ export function BpmControl() {
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
   }
 
+  if (editing) {
+    return (
+      <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
+        BPM:{' '}
+        <input
+          autoFocus
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+            else if (e.key === 'Escape') setEditing(false)
+          }}
+          className="w-12 font-mono text-xs bg-zinc-800 text-zinc-100 rounded px-1 border border-zinc-600 outline-none focus:border-zinc-400 tabular-nums"
+        />
+      </span>
+    )
+  }
+
   return (
     <span
       onPointerDown={onPointerDown}
-      title="Drag up / down to change tempo"
+      title="Drag up / down to change tempo — double-click to type"
       className="font-mono text-xs text-zinc-500 select-none tabular-nums cursor-ns-resize hover:text-zinc-400 transition-colors"
     >
       BPM:{' '}

@@ -212,28 +212,14 @@ function Header() {
           <div className="font-mono text-sm text-indigo-300 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 min-w-[72px] text-center tabular-nums whitespace-nowrap">
             {formatBeat(currentBeat, beatsPerBar)}
           </div>
+
+          <div className="w-px h-5 bg-zinc-800 mx-0.5" />
+          <ProjectLengthControl />
+          <BpmControl />
         </div>
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-        <ProjectLengthControl />
-        <BpmControl />
-        {!authLoading && !user && (
-          <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className="px-3 py-1.5 rounded text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/signup"
-              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Sign up
-            </Link>
-          </div>
-        )}
         {!authLoading && user && !plan.loading && !plan.isPro && (
           <button
             onClick={() => void startCheckout().catch(() => {})}
@@ -253,6 +239,7 @@ function Header() {
             PRO
           </button>
         )}
+        {!authLoading && user && <div className="w-px h-5 bg-zinc-700 ml-1" />}
         <button
           onClick={() => setExportOpen(true)}
           disabled={exportGate?.ok === false}
