@@ -533,6 +533,44 @@ export function useNoteGestures({
         return
       }
 
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
+        if (selectedNoteIds.size === 0) return
+        e.preventDefault()
+
+        const playheadLocal = useTimeStore.getState().currentBeat - blockStartBeat
+        const splitNoteIds = new Set<string>()
+        let changed = false
+        const nextNotes: Note[] = []
+
+        for (const note of notes) {
+          const noteEnd = note.startBeat + note.durationBeats
+          if (!selectedNoteIds.has(note.id) || playheadLocal <= note.startBeat || playheadLocal >= noteEnd) {
+            nextNotes.push(note)
+            continue
+          }
+
+          const rightNote: Note = {
+            ...note,
+            id: crypto.randomUUID(),
+            startBeat: playheadLocal,
+            durationBeats: noteEnd - playheadLocal,
+          }
+
+          nextNotes.push(
+            { ...note, durationBeats: playheadLocal - note.startBeat },
+            rightNote,
+          )
+          splitNoteIds.add(rightNote.id)
+          changed = true
+        }
+
+        if (changed) {
+          onCommit(nextNotes)
+          setSelectedNoteIds(splitNoteIds)
+        }
+        return
+      }
+
       if (selectedNoteIds.size > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault()
         e.stopImmediatePropagation()
