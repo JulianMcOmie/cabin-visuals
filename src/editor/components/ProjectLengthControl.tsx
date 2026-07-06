@@ -64,10 +64,16 @@ export function ProjectLengthControl() {
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
   }
 
-  if (editing) {
-    return (
-      <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
-        BARS:{' '}
+  // Readout and input share identical box metrics (padding, border, ch-based
+  // width for the current digit count), so toggling edit mode never reflows —
+  // and a 2-digit value doesn't reserve 3 digits of dead space.
+  const box = 'inline-block box-content align-baseline font-mono text-xs tabular-nums px-1 rounded border'
+  const chWidth = (len: number) => ({ width: `${Math.max(2, len)}ch` })
+
+  return (
+    <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
+      BARS:{' '}
+      {editing ? (
         <input
           autoFocus
           type="text"
@@ -80,20 +86,20 @@ export function ProjectLengthControl() {
             if (e.key === 'Enter') commit()
             else if (e.key === 'Escape') setEditing(false)
           }}
-          className="w-12 font-mono text-xs bg-zinc-800 text-zinc-100 rounded px-1 border border-zinc-600 outline-none focus:border-zinc-400 tabular-nums"
+          style={chWidth(draft.length)}
+          className={`${box} bg-zinc-800 text-zinc-100 border-zinc-600 outline-none focus:border-zinc-400`}
         />
-      </span>
-    )
-  }
-
-  return (
-    <span
-      onPointerDown={onPointerDown}
-      title="Drag up / down to change project length — double-click to type"
-      className="font-mono text-xs text-zinc-500 select-none tabular-nums cursor-ns-resize hover:text-zinc-400 transition-colors"
-    >
-      BARS:{' '}
-      <span className="text-zinc-200">{totalBars}</span>
+      ) : (
+        // Only the number is the drag / double-click target — not the label.
+        <span
+          onPointerDown={onPointerDown}
+          title="Drag up / down to change project length — double-click to type"
+          style={chWidth(String(totalBars).length)}
+          className={`${box} border-transparent text-zinc-200 cursor-ns-resize hover:text-zinc-100 transition-colors`}
+        >
+          {totalBars}
+        </span>
+      )}
     </span>
   )
 }
