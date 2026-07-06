@@ -571,6 +571,48 @@ export function useNoteGestures({
         return
       }
 
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'j' || e.key === 'J')) {
+        if (selectedNoteIds.size === 0) return
+        e.preventDefault()
+
+        const selectedByPitch = new Map<number, Note[]>()
+        for (const note of notes) {
+          if (!selectedNoteIds.has(note.id)) continue
+          selectedByPitch.set(note.pitch, [...(selectedByPitch.get(note.pitch) ?? []), note])
+        }
+
+        const joinedById = new Map<string, Note>()
+        const removedIds = new Set<string>()
+        const joinedIds = new Set<string>()
+
+        for (const pitchNotes of selectedByPitch.values()) {
+          if (pitchNotes.length < 2) continue
+
+          const sortedNotes = [...pitchNotes].sort((a, b) => a.startBeat - b.startBeat)
+          const first = sortedNotes[0]
+          const endBeat = Math.max(...sortedNotes.map((note) => note.startBeat + note.durationBeats))
+
+          joinedById.set(first.id, {
+            ...first,
+            durationBeats: endBeat - first.startBeat,
+          })
+          joinedIds.add(first.id)
+          for (const note of sortedNotes.slice(1)) removedIds.add(note.id)
+        }
+
+        if (joinedIds.size > 0) {
+          const nextNotes = notes.flatMap((note) => {
+            const joined = joinedById.get(note.id)
+            if (joined) return [joined]
+            if (removedIds.has(note.id)) return []
+            return [note]
+          })
+          onCommit(nextNotes)
+          setSelectedNoteIds(joinedIds)
+        }
+        return
+      }
+
       if (selectedNoteIds.size > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault()
         e.stopImmediatePropagation()

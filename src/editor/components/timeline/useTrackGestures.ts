@@ -400,6 +400,15 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         return
       }
 
+      // Join selected MIDI blocks per track into one spanning block.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'j' || e.key === 'J')) {
+        if (selectedBlockIds.size === 0) return
+        e.preventDefault()
+        const nextSelection = useProjectStore.getState().joinBlocks(selectedBlockIds)
+        if (nextSelection) setSelectedBlockIds(nextSelection)
+        return
+      }
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedBlockIds.size > 0) {
           e.preventDefault()

@@ -39,6 +39,7 @@ interface ProjectState {
   deleteBlock: (trackId: string, blockId: string) => void
   deleteBlocks: (blockIds: Set<string>) => void
   splitBlocksAtBeat: (blockIds: Set<string>, beat: number) => Set<string> | null
+  joinBlocks: (blockIds: Set<string>) => Set<string> | null
   deleteTrack: (trackId: string) => void
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, index: number) => string | null
@@ -297,6 +298,69 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
       if (!changed) return s
       nextSelection = splitBlockIds
+      return { tracks }
+    })
+
+    return nextSelection
+  },
+
+  joinBlocks: (blockIds) => {
+    if (blockIds.size === 0) return null
+    let nextSelection: Set<string> | null = null
+
+    set((s) => {
+      const { beatsPerBar } = s
+      const tracks: Record<string, Track> = {}
+      const joinedBlockIds = new Set<string>()
+      let changed = false
+
+      for (const [id, track] of Object.entries(s.tracks)) {
+        const originalIndexes = new Map(track.blocks.map((block, index) => [block.id, index]))
+        const selectedBlocks = track.blocks.filter((block) => blockIds.has(block.id))
+
+        if (selectedBlocks.length < 2) {
+          tracks[id] = track
+          continue
+        }
+
+        const sortedBlocks = [...selectedBlocks].sort((a, b) =>
+          a.startBar - b.startBar || (originalIndexes.get(a.id) ?? 0) - (originalIndexes.get(b.id) ?? 0)
+        )
+        const sourceBlock = sortedBlocks[0]
+        const startBar = Math.min(...sortedBlocks.map((block) => block.startBar))
+        const endBar = Math.max(...sortedBlocks.map((block) => block.startBar + block.durationBars))
+        const joinedStartBeat = startBar * beatsPerBar
+        const selectedIds = new Set(sortedBlocks.map((block) => block.id))
+
+        const notes = sortedBlocks.flatMap((block) => {
+          const blockStartBeat = block.startBar * beatsPerBar
+          return block.notes.map((note) => ({
+            ...note,
+            startBeat: blockStartBeat + note.startBeat - joinedStartBeat,
+          }))
+        }).sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch)
+
+        const joinedBlock: Block = {
+          ...sourceBlock,
+          startBar,
+          durationBars: endBar - startBar,
+          notes,
+        }
+
+        const blocks = [
+          ...track.blocks.filter((block) => !selectedIds.has(block.id)),
+          joinedBlock,
+        ].sort((a, b) =>
+          a.startBar - b.startBar || (originalIndexes.get(a.id) ?? 0) - (originalIndexes.get(b.id) ?? 0)
+        )
+
+        tracks[id] = { ...track, blocks }
+        joinedBlockIds.add(joinedBlock.id)
+        changed = true
+      }
+
+      if (!changed) return s
+      nextSelection = joinedBlockIds
       return { tracks }
     })
 
