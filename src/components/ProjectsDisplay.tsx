@@ -1,7 +1,7 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { LogOut, ExternalLink, Plus, FileText, X } from "lucide-react"
+import { LogOut, ExternalLink, Plus, FileText, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,7 +65,12 @@ export default function ProjectsDisplay({
   onCreateFromTemplate,
 }: ProjectsDisplayProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  // The create flow: closed, the Empty/Template choice, or the template catalog.
+  const [createStep, setCreateStep] = useState<null | 'choice' | 'catalog'>(null)
   const userInitials = getInitials(profile?.first_name, profile?.last_name)
+
+  const chooseEmpty = () => { setCreateStep(null); onCreateProject() }
+  const chooseTemplate = (tpl: TemplateDef) => { setCreateStep(null); onCreateFromTemplate(tpl) }
 
   const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation()
@@ -149,42 +154,24 @@ export default function ProjectsDisplay({
       </header>
 
       <div className={styles.buttonContainer}>
-        <button className={styles.createProjectButton} onClick={onCreateProject}>
+        <button className={styles.createProjectButton} onClick={() => setCreateStep('choice')}>
           <Plus height={16} width={16} style={{ marginRight: '0.5rem' }} />
           Create Project
         </button>
       </div>
 
-      <main className={styles.mainContent}>
-        <section className="mb-10">
-          <h2 className="text-sm font-semibold tracking-wide text-zinc-400 uppercase mb-3">
-            Start from a template
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {TEMPLATES.map((tpl) => (
-              <button
-                key={tpl.id}
-                onClick={() => onCreateFromTemplate(tpl)}
-                className="group flex-shrink-0 w-52 text-left rounded-xl overflow-hidden border border-zinc-800 hover:border-zinc-600 bg-zinc-900/60 transition-colors"
-                title={`Create a project from “${tpl.name}”`}
-              >
-                <div
-                  className="h-20 relative"
-                  style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
-                >
-                  <span className="absolute bottom-2 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-white/90">
-                    {tpl.bpm} BPM
-                  </span>
-                </div>
-                <div className="p-3">
-                  <h3 className="text-sm font-semibold text-zinc-100 group-hover:text-white">{tpl.name}</h3>
-                  <p className="text-xs text-zinc-500 mt-1 leading-snug">{tpl.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+      {createStep && (
+        <CreateProjectModal
+          step={createStep}
+          onClose={() => setCreateStep(null)}
+          onPickEmpty={chooseEmpty}
+          onOpenCatalog={() => setCreateStep('catalog')}
+          onBack={() => setCreateStep('choice')}
+          onPickTemplate={chooseTemplate}
+        />
+      )}
 
+      <main className={styles.mainContent}>
         <div className={styles.projectsGrid}>
           {projects.length === 0 ? (
             <p className={styles.noProjectsText}>No projects found. Create one to get started!</p>
@@ -217,6 +204,117 @@ export default function ProjectsDisplay({
           )}
         </div>
       </main>
+    </div>
+  )
+}
+
+// The create-project overlay: a two-step flow. 'choice' offers Empty vs
+// Template; 'catalog' is a scrollable grid of every template. Click a card (or
+// the Empty option) to create and close.
+function CreateProjectModal({
+  step,
+  onClose,
+  onPickEmpty,
+  onOpenCatalog,
+  onBack,
+  onPickTemplate,
+}: {
+  step: 'choice' | 'catalog'
+  onClose: () => void
+  onPickEmpty: () => void
+  onOpenCatalog: () => void
+  onBack: () => void
+  onPickTemplate: (tpl: TemplateDef) => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-zinc-700 bg-[#161619] shadow-2xl shadow-black/60"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {step === 'choice' ? (
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-zinc-100">New project</h2>
+              <button onClick={onClose} aria-label="Close" className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <button
+                onClick={onPickEmpty}
+                className="group flex flex-col items-start gap-3 p-5 rounded-xl border border-zinc-700 hover:border-indigo-500 bg-zinc-900/50 hover:bg-indigo-950/20 text-left transition-colors cursor-pointer"
+              >
+                <FilePlus size={24} className="text-zinc-400 group-hover:text-indigo-400 transition-colors" />
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">Empty project</h3>
+                  <p className="text-xs text-zinc-500 mt-1">Start from a blank canvas.</p>
+                </div>
+              </button>
+              <button
+                onClick={onOpenCatalog}
+                className="group flex flex-col items-start gap-3 p-5 rounded-xl border border-zinc-700 hover:border-indigo-500 bg-zinc-900/50 hover:bg-indigo-950/20 text-left transition-colors cursor-pointer"
+              >
+                <LayoutTemplate size={24} className="text-zinc-400 group-hover:text-indigo-400 transition-colors" />
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-100">Start from a template</h3>
+                  <p className="text-xs text-zinc-500 mt-1">Pick a ready-made scene to customize.</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onBack}
+                  aria-label="Back"
+                  className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h2 className="text-lg font-semibold text-zinc-100">Choose a template</h2>
+              </div>
+              <button onClick={onClose} aria-label="Close" className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => onPickTemplate(tpl)}
+                  className="group text-left rounded-xl overflow-hidden border border-zinc-800 hover:border-indigo-500 bg-zinc-900/60 transition-colors cursor-pointer"
+                  title={`Create a project from “${tpl.name}”`}
+                >
+                  <div
+                    className="h-24 relative"
+                    style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
+                  >
+                    <span className="absolute bottom-2 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-white/90">
+                      {tpl.bpm} BPM
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <h3 className="text-sm font-semibold text-zinc-100 group-hover:text-white">{tpl.name}</h3>
+                    <p className="text-xs text-zinc-500 mt-1 leading-snug">{tpl.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
