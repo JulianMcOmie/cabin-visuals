@@ -64,8 +64,9 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
               <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
                 {numbered ? (
                   <>
-                    {/* Top half: bar number — 9px mono */}
-                    <span className="absolute left-1 font-mono text-[9px] text-[var(--text-faint)] leading-none" style={{ top: 3 }}>
+                    {/* Top half: bar number — 10px/500 mono, one step brighter
+                        than faint so it reads at a glance */}
+                    <span className="absolute left-1 font-mono text-[10px] font-medium text-[var(--text-3)] leading-none" style={{ top: 3 }}>
                       {bar + 1}
                     </span>
                     {/* Full-height line beside the number */}
