@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LogOut, ExternalLink, Plus, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
+import { LogOut, ExternalLink, Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Settings } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -200,6 +200,13 @@ export default function ProjectsDisplay({
                     </div>
                   )}
                   <DropdownMenuSeparator className="bg-[var(--border)]" />
+                  <DropdownMenuItem
+                    className="flex cursor-pointer items-center text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
+                    onSelect={() => { window.location.href = '/account' }}
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Account settings</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     className="flex cursor-pointer items-center text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
                     onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}

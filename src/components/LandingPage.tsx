@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, ExternalLink } from "lucide-react"
+import { LogOut, ExternalLink, Settings } from "lucide-react"
 import { CabinLogo } from "./CabinLogo"
 import {
   DropdownMenu,
@@ -143,6 +143,13 @@ export default function LandingPage() {
                     </div>
                   )}
                   <DropdownMenuSeparator className="bg-[var(--border)]" />
+                  <DropdownMenuItem
+                    className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
+                    onSelect={() => { window.location.href = '/account' }}
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Account settings</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
                     onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
