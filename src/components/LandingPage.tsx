@@ -3,78 +3,28 @@
 import { useRef, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LogOut, ExternalLink, Settings } from "lucide-react"
 import { CabinLogo } from "./CabinLogo"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
+import { ProfileMenu } from "./ProfileMenu"
 import { createClient } from "../utils/supabase/client"
-import { logout } from "../../app/(auth)/logout/actions"
 import type { User } from '@supabase/supabase-js'
-
-interface ProfileData {
-  first_name: string | null;
-  last_name: string | null;
-}
-
-const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
-  const firstInitial = firstName?.[0]?.toUpperCase() || '';
-  const lastInitial = lastName?.[0]?.toUpperCase() || '';
-  return firstInitial && lastInitial ? `${firstInitial}${lastInitial}` : (firstInitial || lastInitial || '?');
-};
 
 export default function LandingPage() {
   const videoSectionRef = useRef<HTMLElement>(null)
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     let isMounted = true
     const supabase = createClient()
 
-    // Get initial user and profile
-    const getUser = async () => {
-      const { data: { user: initialUser } } = await supabase.auth.getUser()
-
-      if (!isMounted) return
-      setUser(initialUser)
-
-      // Fetch profile if user exists
-      if (initialUser) {
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('first_name, last_name')
-          .eq('user_id', initialUser.id)
-          .single()
-
-        if (!isMounted) return
-
-        if (error) {
-          console.error('Error fetching profile:', error)
-        } else if (profileData) {
-          setProfile(profileData)
-        }
-      }
-    }
-
-    getUser()
+    supabase.auth.getUser().then(({ data }) => {
+      if (isMounted) setUser(data.user)
+    })
 
     // Listen ONLY for sign out events to update UI
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
-        if (!isMounted) return
-
-        // Only handle SIGNED_OUT event to clear state
-        if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setProfile(null)
-        }
+        if (isMounted && event === 'SIGNED_OUT') setUser(null)
       }
     )
 
@@ -84,24 +34,9 @@ export default function LandingPage() {
     }
   }, [])
 
-  const handleLogout = async () => {
-    if (isLoggingOut) return
-    setIsLoggingOut(true)
-
-    try {
-      // Call server action - it will trigger SIGNED_OUT event and redirect
-      await logout()
-    } catch (error) {
-      console.error("Logout error:", error)
-      window.location.href = '/'
-    }
-  }
-
   const scrollToVideo = () => {
     videoSectionRef.current?.scrollIntoView({ behavior: "smooth" })
   }
-
-  const userInitials = getInitials(profile?.first_name, profile?.last_name)
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-page)] text-[var(--text)] font-sans">
@@ -119,58 +54,10 @@ export default function LandingPage() {
             >
               Pricing
             </Link>
-            {user ? (
-              // Show profile dropdown if user is logged in
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="flex h-8 w-8 items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] text-[12px] font-semibold text-[var(--text)] transition-colors hover:border-[var(--border-strong)] cursor-pointer"
-                  disabled={isLoggingOut}
-                >
-                  <span>{userInitials}</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="rounded-md border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-2)] shadow-none"
-                >
-                  {(user || profile) && (
-                    <div className="px-3 py-2 text-[13px]">
-                      {profile && (profile.first_name || profile.last_name) && (
-                        <p className="truncate font-medium text-[var(--text)]">{`${profile.first_name || ''} ${profile.last_name || ''}`.trim()}</p>
-                      )}
-                      {user && (
-                        <p className="truncate text-[var(--text-3)]">{user.email}</p>
-                      )}
-                    </div>
-                  )}
-                  <DropdownMenuSeparator className="bg-[var(--border)]" />
-                  <DropdownMenuItem
-                    className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-                    onSelect={() => { window.location.href = '/account' }}
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Account settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-                    onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    <span>Discord Community</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[var(--border)]" />
-                  <DropdownMenuItem
-                    className={`flex w-full cursor-pointer items-center text-[13px] text-red-400 focus:bg-[var(--bg-elevated)] focus:text-red-400 ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    disabled={isLoggingOut}
-                    onSelect={(event) => {
-                      event.preventDefault()
-                      handleLogout()
-                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {user && !user.is_anonymous ? (
+              // Real account: the shared profile menu (anonymous sessions get
+              // the sign-in affordances instead).
+              <ProfileMenu />
             ) : (
               // Show login/signup buttons if not logged in
               <>

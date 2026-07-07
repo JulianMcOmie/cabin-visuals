@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
+import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { usePlan, openBillingPortal } from '../../src/billing/usePlan'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 
@@ -35,6 +36,7 @@ export default function AccountPage() {
         <nav className="flex items-center gap-5 text-[13px]">
           <Link href="/editor" className="text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer">Editor</Link>
           <Link href="/projects" className="text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer">Projects</Link>
+          <ProfileMenu />
         </nav>
       </header>
 

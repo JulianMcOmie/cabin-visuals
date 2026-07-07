@@ -1,19 +1,11 @@
 "use client"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LogOut, ExternalLink, Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Settings } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
+import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
 import type { User } from '@supabase/supabase-js'
-import { logout } from "../../app/(auth)/logout/actions"
-import { createClient } from "../utils/supabase/client"
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
+import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { TEMPLATES, type TemplateDef } from "../templates"
 
@@ -119,25 +111,16 @@ interface ProjectsDisplayProps {
   onCreateFromTemplate: (template: TemplateDef) => void
 }
 
-const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
-  const firstInitial = firstName?.[0]?.toUpperCase() || ''
-  const lastInitial = lastName?.[0]?.toUpperCase() || ''
-  return firstInitial && lastInitial ? `${firstInitial}${lastInitial}` : (firstInitial || lastInitial || '?')
-}
-
 export default function ProjectsDisplay({
   projects,
   user,
-  profile,
   onCreateProject,
   onSelectProject,
   onDeleteProject,
   onCreateFromTemplate,
 }: ProjectsDisplayProps) {
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
   // The create flow: closed, the Empty/Template choice, or the template catalog.
   const [createStep, setCreateStep] = useState<null | 'choice' | 'catalog'>(null)
-  const userInitials = getInitials(profile?.first_name, profile?.last_name)
 
   const chooseEmpty = () => { setCreateStep(null); onCreateProject() }
   const chooseTemplate = (tpl: TemplateDef) => { setCreateStep(null); onCreateFromTemplate(tpl) }
@@ -146,20 +129,6 @@ export default function ProjectsDisplay({
     e.stopPropagation()
     if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
       onDeleteProject(projectId)
-    }
-  }
-
-  const handleLogout = async () => {
-    if (isLoggingOut) return
-    setIsLoggingOut(true)
-    const supabase = createClient()
-    try {
-      const { error: clientSignOutError } = await supabase.auth.signOut()
-      if (clientSignOutError) console.error("Client sign out error:", clientSignOutError.message)
-      await logout()
-    } catch (error) {
-      console.error("Server logout action failed:", error)
-      setIsLoggingOut(false)
     }
   }
 
@@ -178,56 +147,10 @@ export default function ProjectsDisplay({
             >
               Pricing
             </Link>
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  title="Account"
-                  disabled={isLoggingOut}
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)]"
-                >
-                  {userInitials}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="rounded-md border-[var(--border)] bg-[var(--bg-panel)] shadow-xl shadow-black/40"
-                >
-                  {(user || profile) && (
-                    <div className="px-3 py-2 text-sm text-[var(--text)]">
-                      {profile && (profile.first_name || profile.last_name) && (
-                        <p className="truncate font-medium">{`${profile.first_name || ''} ${profile.last_name || ''}`.trim()}</p>
-                      )}
-                      {user && <p className="truncate text-[var(--text-3)]">{user.email}</p>}
-                    </div>
-                  )}
-                  <DropdownMenuSeparator className="bg-[var(--border)]" />
-                  <DropdownMenuItem
-                    className="flex cursor-pointer items-center text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-                    onSelect={() => { window.location.href = '/account' }}
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Account settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="flex cursor-pointer items-center text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-                    onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    <span>Discord Community</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[var(--border)]" />
-                  <DropdownMenuItem
-                    className={`flex w-full cursor-pointer items-center rounded-sm p-1.5 text-sm text-[#d68383] focus:bg-[var(--bg-elevated)] focus:text-[#d68383] ${isLoggingOut ? 'cursor-not-allowed opacity-50' : ''}`}
-                    disabled={isLoggingOut}
-                    onSelect={(event) => {
-                      event.preventDefault()
-                      handleLogout()
-                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {user && !user.is_anonymous ? (
+              // Real account: the shared profile menu (anonymous sessions get
+              // the sign-in affordances instead).
+              <ProfileMenu />
             ) : (
               <div className="flex items-center gap-4">
                 <LogInButton />

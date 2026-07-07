@@ -13,6 +13,7 @@ import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
+import { ProfileMenu } from '../components/ProfileMenu'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
@@ -311,6 +312,7 @@ function Header() {
           <Upload size={11} strokeWidth={2.5} />
           Export
         </button>
+        <ProfileMenu size="sm" />
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
     </div>

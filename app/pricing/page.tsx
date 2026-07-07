@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
+import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { startCheckout, usePlan } from '../../src/billing/usePlan'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 
@@ -61,6 +62,7 @@ export default function PricingPage() {
             ) : (
               <Link href="/login" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Log in</Link>
             )}
+            <ProfileMenu />
           </nav>
         </div>
       </header>
