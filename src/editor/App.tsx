@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
@@ -329,49 +330,61 @@ export default function EditorApp() {
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       <Header />
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0">
+        <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
 
-        {/* Library — fixed 208px column, full height */}
-        <div className="w-[208px] flex-shrink-0 min-w-0">
-          <LeftSidebar />
-        </div>
+          {/* Library — resizable, pre-redesign proportions */}
+          <Panel defaultSize="15%" minSize="8%" maxSize="30%">
+            <LeftSidebar />
+          </Panel>
 
-        {/* Center column: (inspector + canvas) above, tracks + audio strip below */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
+          <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
 
-            {/* Upper: TRACK inspector (280px fixed) + Canvas */}
-            <div
-              className="min-h-0 flex"
-              style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 1 }}
-            >
-              <div className="w-[280px] flex-shrink-0 h-full">
-                <TrackEditor />
+          {/* Right section: inspector + canvas above, tracks + audio strip below */}
+          <Panel>
+            <div className="flex flex-col h-full">
+              <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
+
+                {/* Upper: TRACK inspector + Canvas, resizable */}
+                <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+                  <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+
+                    <Panel defaultSize="55%" minSize="15%" maxSize="60%">
+                      <TrackEditor />
+                    </Panel>
+
+                    <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
+
+                    {/* Canvas */}
+                    <Panel>
+                      <VisualPanel />
+                    </Panel>
+
+                  </PanelGroup>
+                </div>
+
+                {/* Window-resize divider: invisible 1px line (the timeline's own border-t
+                    draws the visible rule) with a grab pad on top of its neighbours. */}
+                <div className="relative h-px bg-transparent shrink-0">
+                  <div
+                    onPointerDown={startResize}
+                    className="absolute inset-x-0 z-50 cursor-ns-resize"
+                    style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
+                  />
+                </div>
+
+                {/* Tracks / Piano Roll */}
+                <div className="flex-1 min-h-0">
+                  <BottomArea />
+                </div>
+
               </div>
-              <div className="flex-1 min-w-0 h-full">
-                <VisualPanel />
-              </div>
+
+              <AudioBar />
             </div>
+          </Panel>
 
-            {/* Window-resize divider: invisible 1px line (the timeline's own border-t
-                draws the visible rule) with a grab pad on top of its neighbours. */}
-            <div className="relative h-px bg-transparent shrink-0">
-              <div
-                onPointerDown={startResize}
-                className="absolute inset-x-0 z-50 cursor-ns-resize"
-                style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
-              />
-            </div>
-
-            {/* Tracks / Piano Roll */}
-            <div className="flex-1 min-h-[240px]">
-              <BottomArea />
-            </div>
-
-          </div>
-
-          <AudioBar />
-        </div>
+        </PanelGroup>
       </div>
     </div>
   )
