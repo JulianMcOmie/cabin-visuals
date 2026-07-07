@@ -97,9 +97,6 @@ function VisualPanel() {
       <BeatOverlay />
       <Scene />
       <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
-        <span className="font-mono text-[11px] text-[var(--text-muted)] select-none pointer-events-none">
-          16:9 · 1080p
-        </span>
         <button
           onClick={toggle}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
