@@ -12,7 +12,7 @@ import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
 // foreground panels + a rotating background "flower", all built from balls that
 // pendulum outward, alternating kick/snare turns each beat. The trajectory math
 // (computePattern / computePatternBounce) is Tyler's VERBATIM. Full-frame 2D scene,
-// sized to the viewport like Square.tsx. All state is derived PURELY from the
+// sized to the viewport. All state is derived PURELY from the
 // current beat: angles/rotation/palette come from counting/folding the notes with
 // beat <= state.beat, so any scrub path lands on the identical picture. Tyler's
 // Managed* line/dot pools, displacement shader, ink/spiral/snare-bounce sub-effects

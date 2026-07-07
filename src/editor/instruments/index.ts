@@ -6,27 +6,20 @@ import { cubeInstrument } from './Cube'
 import { circleInstrument, triangleInstrument } from './shapes'
 import { icosahedronBurstInstrument } from './IcosahedronBurst'
 import { hexagonDotsInstrument } from './HexagonDots'
-import { cylinderFlightInstrument } from './CylinderFlight'
-import { sunInstrument } from './Sun'
 import { particleRiserInstrument } from './ParticleRiser'
 import { textDisplayInstrument } from './TextDisplay'
-import { squareInstrument } from './Square'
 import { starsInstrument } from './Stars'
 import { particleBurstInstrument } from './ParticleBurst'
 import { circleGridInstrument } from './CircleGrid'
-import { silkSymmetryInstrument } from './SilkSymmetry'
 import { fractalTunnelInstrument } from './FractalTunnel'
-import { diamondLatticeInstrument } from './DiamondLattice'
 import { neonPolarInstrument } from './NeonPolar'
 import { hopfFibrationInstrument } from './HopfFibration'
 import { particleStreamsInstrument } from './ParticleStreams'
-import { particleBassRingInstrument } from './ParticleBassRing'
 import { shapeFlightInstrument } from './ShapeFlight'
 import { dotFieldInstrument } from './DotField'
 import { metronomeBallsInstrument } from './MetronomeBalls'
 import { folderFlightInstrument } from './FolderFlight'
 import { emojiDisplayInstrument } from './EmojiDisplay'
-import { beatParticleKitInstrument } from './BeatParticleKit'
 import { cameraControlInstrument } from './CameraControl'
 import { windowsXpInstrument } from './WindowsXP'
 import { crtScanlinesInstrument } from './CrtScanlines'
@@ -44,27 +37,20 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [triangleInstrument.id]: triangleInstrument,
   [icosahedronBurstInstrument.id]: icosahedronBurstInstrument,
   [hexagonDotsInstrument.id]: hexagonDotsInstrument,
-  [cylinderFlightInstrument.id]: cylinderFlightInstrument,
-  [sunInstrument.id]: sunInstrument,
   [particleRiserInstrument.id]: particleRiserInstrument,
   [textDisplayInstrument.id]: textDisplayInstrument,
-  [squareInstrument.id]: squareInstrument,
   [starsInstrument.id]: starsInstrument,
   [particleBurstInstrument.id]: particleBurstInstrument,
   [circleGridInstrument.id]: circleGridInstrument,
-  [silkSymmetryInstrument.id]: silkSymmetryInstrument,
   [fractalTunnelInstrument.id]: fractalTunnelInstrument,
-  [diamondLatticeInstrument.id]: diamondLatticeInstrument,
   [neonPolarInstrument.id]: neonPolarInstrument,
   [hopfFibrationInstrument.id]: hopfFibrationInstrument,
   [particleStreamsInstrument.id]: particleStreamsInstrument,
-  [particleBassRingInstrument.id]: particleBassRingInstrument,
   [shapeFlightInstrument.id]: shapeFlightInstrument,
   [dotFieldInstrument.id]: dotFieldInstrument,
   [metronomeBallsInstrument.id]: metronomeBallsInstrument,
   [folderFlightInstrument.id]: folderFlightInstrument,
   [emojiDisplayInstrument.id]: emojiDisplayInstrument,
-  [beatParticleKitInstrument.id]: beatParticleKitInstrument,
   [cameraControlInstrument.id]: cameraControlInstrument,
   [windowsXpInstrument.id]: windowsXpInstrument,
   [crtScanlinesInstrument.id]: crtScanlinesInstrument,

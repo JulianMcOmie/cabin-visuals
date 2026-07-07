@@ -41,19 +41,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="none" stroke="#4ecdc4" strokeWidth="1.1" />
     </svg>
   )},
-  { id: 'cylinderFlight', name: 'Cylinder Flight', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <ellipse cx="6" cy="3" rx="3.5" ry="1.3" fill="none" stroke="#ec4899" strokeWidth="1.1" />
-      <path d="M2.5 3 V9 M9.5 3 V9" stroke="#ec4899" strokeWidth="1.1" />
-      <path d="M2.5 9 A3.5 1.3 0 0 0 9.5 9" fill="none" stroke="#ec4899" strokeWidth="1.1" />
-    </svg>
-  )},
-  { id: 'sun', name: 'Sun', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <circle cx="6" cy="6" r="2.5" fill="none" stroke="#ff9d00" strokeWidth="1.2" />
-      <path d="M6 0.5V2 M6 10V11.5 M0.5 6H2 M10 6H11.5 M2.3 2.3L3.3 3.3 M8.7 8.7L9.7 9.7 M9.7 2.3L8.7 3.3 M3.3 8.7L2.3 9.7" stroke="#ff9d00" strokeWidth="1" strokeLinecap="round" />
-    </svg>
-  )},
   { id: 'particleRiser', name: 'Particle Riser', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M4 11 Q4 6 6 1 Q8 6 8 11" fill="none" stroke="#a78bfa" strokeWidth="1.1" />
@@ -63,12 +50,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'textDisplay', name: 'Text Display', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
-    </svg>
-  )},
-  { id: 'square', name: 'Square', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="#8B00FF" strokeWidth="1.2" />
-      <path d="M2.5 6 H9.5" stroke="#8B00FF" strokeWidth="1" />
     </svg>
   )},
   { id: 'stars', name: 'Stars', icon: (
@@ -96,24 +77,11 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
-  { id: 'silkSymmetry', name: 'Silk Symmetry', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="none" stroke="#8b5cf6" strokeWidth="1">
-        <circle cx="6" cy="6" r="4.5" /><path d="M6 1.5 Q9 6 6 10.5 Q3 6 6 1.5" /><path d="M1.5 6 Q6 9 10.5 6 Q6 3 1.5 6" />
-      </g>
-    </svg>
-  )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <g fill="none" stroke="#8b5cf6" strokeWidth="1">
         <circle cx="6" cy="6" r="1.5" /><circle cx="6" cy="6" r="3.5" /><circle cx="6" cy="6" r="5.5" />
       </g>
-    </svg>
-  )},
-  { id: 'diamondLattice', name: 'Diamond Lattice', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <polygon points="6,1 9,6 6,11 3,6" fill="none" stroke="#ec4899" strokeWidth="1.2" />
-      <polygon points="6,3.5 7.5,6 6,8.5 4.5,6" fill="none" stroke="#ec4899" strokeWidth="1" />
     </svg>
   )},
   { id: 'neonPolar', name: 'Neon Polar', icon: (
@@ -131,13 +99,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <g fill="#60a5fa">
         <circle cx="6" cy="6" r="1.3" /><circle cx="9" cy="4" r="0.8" /><circle cx="10.5" cy="3" r="0.5" /><circle cx="8.5" cy="8.5" r="0.8" /><circle cx="10" cy="10" r="0.5" />
         <circle cx="3" cy="4" r="0.8" /><circle cx="1.5" cy="3" r="0.5" /><circle cx="3.5" cy="8.5" r="0.8" /><circle cx="2" cy="10" r="0.5" />
-      </g>
-    </svg>
-  )},
-  { id: 'particleBassRing', name: 'Particle Bass Ring', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="#f472b6">
-        <circle cx="6" cy="1.5" r="0.8" /><circle cx="9.2" cy="2.8" r="0.8" /><circle cx="10.5" cy="6" r="0.8" /><circle cx="9.2" cy="9.2" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="2.8" cy="9.2" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="2.8" cy="2.8" r="0.8" />
       </g>
     </svg>
   )},
@@ -170,12 +131,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="5.5" fill="#ffcc00" />
       <circle cx="4" cy="5" r="1" fill="#000" /><circle cx="8" cy="5" r="1" fill="#000" />
       <path d="M3.5 7.5 Q6 10 8.5 7.5" fill="none" stroke="#000" strokeWidth="1" strokeLinecap="round" />
-    </svg>
-  )},
-  { id: 'beatParticleKit', name: 'Beat Particle Kit', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect width="12" height="12" rx="2" fill="#e2e8f0" />
-      <circle cx="4" cy="7" r="2.4" fill="#111827" /><circle cx="8.4" cy="4.6" r="1.5" fill="#111827" /><circle cx="9" cy="8.6" r="0.9" fill="#111827" />
     </svg>
   )},
   { id: 'cameraControl', name: 'Camera', icon: (
