@@ -29,7 +29,7 @@ import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
-import { usePlan, startCheckout, openBillingPortal } from '../billing/usePlan'
+import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
 
 function formatBeat(beat: number, beatsPerBar: number): string {
@@ -233,14 +233,14 @@ function Header() {
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
         {permanent && !plan.loading && !plan.isPro && (
-          <button
-            onClick={() => void startCheckout().catch(() => {})}
+          <Link
+            href="/pricing"
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 text-xs font-semibold transition-colors cursor-pointer"
           >
             <Sparkles size={12} strokeWidth={2.5} />
             Upgrade
-          </button>
+          </Link>
         )}
         {plan.isPro && (
           <button

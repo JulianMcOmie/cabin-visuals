@@ -10,7 +10,6 @@ import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
 import { clampToFreeTier, defaultBitrate, defaultSettings, RESOLUTIONS, type ExportSettings } from '../core/export/types'
-import { startCheckout } from '../../billing/usePlan'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -206,12 +205,15 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             {!isPro && (
               <p className="text-[11px] text-zinc-500 leading-snug">
                 Free exports are 720p with a small watermark.{' '}
-                <button
-                  onClick={() => void startCheckout().catch(() => {})}
+                {/* New tab: mid-export (possibly unsaved demo work) shouldn't be navigated away. */}
+                <a
+                  href="/pricing"
+                  target="_blank"
+                  rel="noreferrer"
                   className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 cursor-pointer"
                 >
                   Upgrade to Pro
-                </button>{' '}
+                </a>{' '}
                 for clean 1080p.
               </p>
             )}
