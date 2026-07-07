@@ -27,6 +27,7 @@ import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
+import * as projectStorage from '../persistence/projectStorage'
 import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
 
@@ -114,6 +115,60 @@ function BeatOverlay() {
   )
 }
 
+// The project name in the top bar: double-click to rename (same contract as
+// track rename — Enter/blur commits, Escape cancels). The name is a spine
+// column, not part of the autosaved document, so the commit writes it through
+// projectStorage.rename when a project row is bound; in unsaved demo mode the
+// rename is local-only.
+function EditableProjectName() {
+  const projectName = useUIStore((s) => s.projectName)
+  const projectId = useSearchParams().get('project')
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const commit = () => {
+    const name = draft.trim()
+    setEditing(false)
+    if (!name || name === projectName) return
+    useUIStore.getState().setProjectName(name)
+    if (projectId) {
+      void projectStorage.rename(projectId, name).catch((err) => {
+        console.error('Project rename failed:', err)
+      })
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.target.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          else if (e.key === 'Escape') setEditing(false)
+        }}
+        className="w-[180px] text-xs font-medium bg-[var(--bg-app)] text-[var(--text)] rounded-[4px] px-1.5 py-0.5 border border-[var(--border-strong)] outline-none focus:border-[var(--accent)]"
+      />
+    )
+  }
+
+  return (
+    <span
+      onDoubleClick={() => {
+        setDraft(projectName ?? 'Untitled Project')
+        setEditing(true)
+      }}
+      title="Double-click to rename"
+      className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px] cursor-text select-none"
+    >
+      {projectName ?? 'Untitled Project'}
+    </span>
+  )
+}
+
 // In ?template= demo mode nothing persists — say so, and point at signup.
 function TemplateDemoChip() {
   const search = useSearchParams()
@@ -151,7 +206,6 @@ function Header() {
   useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  const projectName = useUIStore((s) => s.projectName)
 
   // Export: capability-gated (Chrome-first — WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
@@ -175,9 +229,7 @@ function Header() {
         {user ? 'Projects' : 'Home'}
       </Link>
       <div className="w-px h-4 bg-[var(--border)] flex-shrink-0" />
-      <span className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px]">
-        {projectName ?? 'Untitled Project'}
-      </span>
+      <EditableProjectName />
 
       <SaveStatusChip />
       {!authLoading && !user && (

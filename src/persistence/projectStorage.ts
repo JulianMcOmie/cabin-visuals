@@ -72,6 +72,18 @@ export async function create(name: string, document?: ProjectDocument): Promise<
   return { id: data.id, name: data.name, updatedAt: data.updated_at }
 }
 
+/** Rename a project. The name is a spine column, not part of the document, so
+ *  autosave never touches it — this is the one write path for it. */
+export async function rename(id: string, name: string): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('projects')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id')
+  if (error) throw error
+  if (!data.length) throw new Error(`Project ${id} not found (or not yours)`)
+}
+
 /** Delete a project row (the document goes with it). */
 export async function remove(id: string): Promise<void> {
   const { error } = await getSupabase().from('projects').delete().eq('id', id)
