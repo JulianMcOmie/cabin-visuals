@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
@@ -34,6 +34,16 @@ export default function PricingPage() {
     // Success navigates away (Stripe or /login); only a failure needs a reset.
     void startCheckout().catch(() => setOpening(false))
   }
+
+  // Browser-back from Stripe restores this page from the back/forward cache
+  // with the pending state frozen in — reset it so the button is usable again.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setOpening(false)
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-zinc-200">
@@ -111,7 +121,7 @@ export default function PricingPage() {
               <button
                 onClick={handleUpgrade}
                 disabled={opening}
-                className="mt-8 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-800 disabled:text-indigo-200 text-white text-sm font-semibold transition-colors cursor-pointer disabled:cursor-wait flex items-center justify-center gap-2"
+                className="mt-8 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-800 disabled:text-indigo-200 text-white text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 {opening ? (
                   <>
