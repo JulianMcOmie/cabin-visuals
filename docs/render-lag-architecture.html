@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Render Performance — Architecture</title>
+<style>
+  :root{
+    --bg:#ffffff; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656;
+    --code:#ffffff; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  p{margin:10px 0}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  ul{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .note{border-left:4px solid #c2c2c2;background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#fff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  figure.fig{margin:22px 0;border:1px solid var(--border);border-radius:var(--radius);background:#fff;padding:14px 16px 6px}
+  figure.fig svg{display:block;width:100%;height:auto}
+  .figtitle{font-size:13.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink);font-weight:700;margin:0 0 8px}
+  figcaption{font-size:16px;color:var(--muted);margin-top:8px;line-height:1.5}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}
+    figure.fig,table,.note,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,.figtitle{break-after:avoid;page-break-after:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Render Performance</span>
+  <h1>Render Performance — Architecture</h1>
+  <p class="sub">Keeping the editor responsive no matter how heavy the visuals get: a render governor that idles the loop when the picture is static, scales quality to the machine when it isn't, and — for the worst offenders — moves the per-frame bitmap upload off the CPU entirely. Everything hangs off the pause invariant that already makes the pixels deterministic.</p>
+</header>
+
+<!-- 1 -->
+<h2>1 · The problem, in one loop</h2>
+<p>The editor renders through a single R3F <code>&lt;Canvas&gt;</code> whose loop runs <strong>on the main thread</strong> — the same thread as React, the timeline, and input. The loop is <code>frameloop="always"</code>: it renders every frame forever, whether or not anything changed, at up to 2× device pixel ratio, with no quality throttle (all verified — there are zero perf guards outside the export path). So the cost of one frame is charged directly against UI responsiveness: a 40&nbsp;ms instrument frame is a 40&nbsp;ms input stall.</p>
+
+<figure class="fig">
+  <div class="figtitle">One thread does everything — that's why a heavy instrument freezes the whole editor</div>
+  <svg viewBox="0 0 900 300" role="img" aria-label="Single main thread">
+    <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+    <rect x="20" y="24" width="860" height="150" rx="12" fill="#fff" stroke="#141414" stroke-width="2.5"/>
+    <text x="40" y="52" font-size="15" font-weight="700" fill="#141414">BROWSER MAIN THREAD</text>
+
+    <rect x="40" y="70" width="150" height="80" rx="8" fill="#fff" stroke="#141414" stroke-width="1.5"/>
+    <text x="115" y="100" text-anchor="middle" font-size="14.5" fill="#565656">React · timeline</text>
+    <text x="115" y="120" text-anchor="middle" font-size="14.5" fill="#565656">clicks · drags</text>
+
+    <rect x="210" y="70" width="180" height="80" rx="8" fill="#141414"/>
+    <text x="300" y="100" text-anchor="middle" font-size="14.5" fill="#fff">computeAtBeat</text>
+    <text x="300" y="120" text-anchor="middle" font-size="14.5" fill="#fff">+ instrument frames</text>
+
+    <rect x="410" y="70" width="200" height="80" rx="8" fill="#141414"/>
+    <text x="510" y="96" text-anchor="middle" font-size="14.5" fill="#fff">canvas 2D draw (7–8 MB)</text>
+    <text x="510" y="118" text-anchor="middle" font-size="14.5" fill="#fff">+ texImage2D upload</text>
+    <text x="510" y="138" text-anchor="middle" font-size="13" fill="#c9c9c9">← Windows-expensive</text>
+
+    <rect x="630" y="70" width="150" height="80" rx="8" fill="#fff" stroke="#141414" stroke-width="1.5"/>
+    <text x="705" y="100" text-anchor="middle" font-size="14.5" fill="#565656">GL draw calls</text>
+    <text x="705" y="120" text-anchor="middle" font-size="14.5" fill="#565656">(→ GPU)</text>
+
+    <path d="M190,110 L206,110" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M390,110 L406,110" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+    <path d="M610,110 L626,110" stroke="#141414" stroke-width="2" marker-end="url(#ar)"/>
+
+    <text x="450" y="212" font-size="16" fill="#565656">Everything above is serialized on one thread. The two black boxes are the render loop —</text>
+    <text x="450" y="234" font-size="16" fill="#565656">while they run, the white boxes (the editor UI) cannot. Overrun the frame budget and the editor stutters.</text>
+    <line x1="20" y1="252" x2="880" y2="252" stroke="#dddddd"/>
+    <text x="40" y="278" font-size="15" fill="#141414" font-weight="700">Only the GPU rasterization (far right, off-thread) is parallel — everything preparing it is not.</text>
+  </svg>
+  <figcaption>The fix is not "make the frame faster" alone — it's "don't run the loop when the picture is static," "shrink the frame to fit the machine when it isn't," and "stop paying the CPU upload for the worst instruments."</figcaption>
+</figure>
+
+<!-- 2 -->
+<h2>2 · The lever the pause invariant hands us</h2>
+<p>Every instrument is a <strong>pure function of the beat</strong> (enforced by lint and the dev canary). The corollary the render loop never exploited: <strong>a paused editor is a static frame</strong>. If the beat isn't moving, the picture isn't either — so there is nothing to render. Today the loop redraws that identical frame 60 times a second anyway, uploading megabytes of unchanged canvas each time.</p>
+<p>That makes <strong>render-on-demand</strong> not just an optimization but a provably correct default while paused: switch <code>frameloop</code> to <code>"demand"</code> and render exactly one frame per real change — play, scrub, an edit, a resize. The main thread goes quiet the instant you stop the transport, so <em>editing</em> is responsive on any machine no matter what's mounted. This is the same determinism the export pipeline leans on, pointed at idleness instead of a file.</p>
+
+<figure class="fig">
+  <div class="figtitle">Render-on-demand — one frame per change, nothing while static</div>
+  <svg viewBox="0 0 900 250" role="img" aria-label="Render on demand">
+    <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <rect x="30" y="40" width="200" height="150" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="130" y="66" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">CHANGE EVENTS</text>
+    <text x="130" y="94" text-anchor="middle" font-size="14.5" fill="#565656">play / pause</text>
+    <text x="130" y="116" text-anchor="middle" font-size="14.5" fill="#565656">scrub playhead</text>
+    <text x="130" y="138" text-anchor="middle" font-size="14.5" fill="#565656">edit / param drag</text>
+    <text x="130" y="160" text-anchor="middle" font-size="14.5" fill="#565656">panel resize</text>
+
+    <rect x="350" y="72" width="200" height="86" rx="10" fill="#141414"/>
+    <text x="450" y="106" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">render governor</text>
+    <text x="450" y="130" text-anchor="middle" font-size="14" fill="#c9c9c9">playing? always : demand</text>
+
+    <rect x="670" y="72" width="200" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="770" y="100" text-anchor="middle" font-size="15" font-weight="700" fill="#141414">invalidate()</text>
+    <text x="770" y="124" text-anchor="middle" font-size="14" fill="#565656">→ exactly one frame</text>
+    <text x="770" y="145" text-anchor="middle" font-size="14" fill="#565656">then idle</text>
+
+    <path d="M230,115 L346,115" stroke="#141414" stroke-width="2" marker-end="url(#ar2)"/>
+    <path d="M550,115 L666,115" stroke="#141414" stroke-width="2" marker-end="url(#ar2)"/>
+    <text x="240" y="225" font-size="15" fill="#565656">While playing, the governor sets frameloop=always (the beat moves every frame, so every frame is a real change).</text>
+  </svg>
+  <figcaption>Correct because of the pause invariant: paused beat ⇒ frozen picture ⇒ nothing to draw. The dev canary already guarantees no instrument moves while paused, so demand-mode can never miss motion.</figcaption>
+</figure>
+
+<!-- 3 -->
+<h2>3 · Scaling the frame to the machine</h2>
+<p>Render-on-demand fixes <em>editing</em> but not <em>playback</em> — during playback the beat moves every frame, so the loop is legitimately always-on and a heavy scene still overruns on a slow machine. The answer is to make the frame's <em>size</em> adapt: a governor measures a rolling average frame time and drives a single <strong>quality scalar</strong> that feeds three knobs — canvas DPR, the full-frame instruments' canvas resolution, and particle counts. Over budget → scale down; comfortable headroom → scale back up.</p>
+<p>This is the direct answer to "lags on Windows but not Mac": the same scene downscales on the Windows laptop until it fits 16.7&nbsp;ms and stays full-resolution on the fast Mac — the app adapts to the machine instead of assuming one. R3F provides the primitive (the <code>performance</code>/<code>regress()</code> API) to build the governor on.</p>
+
+<figure class="fig">
+  <div class="figtitle">Adaptive quality — a feedback loop around the frame budget</div>
+  <svg viewBox="0 0 900 220" role="img" aria-label="Adaptive quality loop">
+    <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
+
+    <rect x="40" y="80" width="180" height="70" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="130" y="110" text-anchor="middle" font-size="14.5" font-weight="700" fill="#141414">measure frame time</text>
+    <text x="130" y="132" text-anchor="middle" font-size="13.5" fill="#565656">rolling average</text>
+
+    <rect x="300" y="80" width="180" height="70" rx="10" fill="#141414"/>
+    <text x="390" y="110" text-anchor="middle" font-size="14.5" font-weight="700" fill="#fff">quality scalar</text>
+    <text x="390" y="132" text-anchor="middle" font-size="13.5" fill="#c9c9c9">1.0 · 0.75 · 0.5</text>
+
+    <rect x="560" y="52" width="300" height="126" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
+    <text x="710" y="78" text-anchor="middle" font-size="14.5" font-weight="700" fill="#141414">knobs</text>
+    <text x="710" y="102" text-anchor="middle" font-size="13.5" fill="#565656">canvas DPR</text>
+    <text x="710" y="124" text-anchor="middle" font-size="13.5" fill="#565656">full-frame canvas resolution</text>
+    <text x="710" y="146" text-anchor="middle" font-size="13.5" fill="#565656">particle counts</text>
+
+    <path d="M220,115 L296,115" stroke="#141414" stroke-width="2" marker-end="url(#ar3)"/>
+    <path d="M480,115 L556,115" stroke="#141414" stroke-width="2" marker-end="url(#ar3)"/>
+    <path d="M710,178 C710,205 130,205 130,154" fill="none" stroke="#141414" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar3)"/>
+    <text x="420" y="200" font-size="14" fill="#565656">next frame is cheaper → measured time drops → scalar recovers</text>
+  </svg>
+  <figcaption>Standard dynamic-resolution-scaling. The scene finds the resolution that fits the machine's frame budget on its own; the Windows/Mac gap becomes a difference in steady-state quality, not a difference between "smooth" and "frozen."</figcaption>
+</figure>
+
+<!-- 4 -->
+<h2>4 · Removing the cost at the source</h2>
+<p>The two tiers above manage the symptom brilliantly but the underlying operation — draw a full-screen 2D canvas, then <code>texImage2D</code> it to the GPU every frame — is inherently wrong for animated content, and it's exactly the operation ANGLE makes expensive on Windows. Two structural options delete it, independently:</p>
+
+<table>
+  <tr><th>Option</th><th>What it removes</th><th>Cost</th><th>When</th></tr>
+  <tr><td><strong>A · Shader-port the worst Canvas-2D instruments</strong></td><td>The per-frame 2D draw AND the upload — the effect is computed in a fragment shader on a fullscreen plane, reading <code>beat</code> as a uniform. No canvas, no <code>texImage2D</code>.</td><td>A real rewrite per instrument (FractalTunnel, CrtScanlines, DiamondLattice, SilkSymmetry). GLSL already runs in the codebase (the effects <code>ShaderWrapper</code>).</td><td>The durable per-instrument Windows fix. Do the top four, biggest-first.</td></tr>
+  <tr><td><strong>B · OffscreenCanvas in a Web Worker</strong></td><td>The coupling itself — the render loop runs on a worker, so a heavy frame stalls the worker, not the editor UI.</td><td>Large: stores/engine/instruments assume main-thread + DOM; Canvas-2D instruments need OffscreenCanvas-2D in the worker; the export path borrows the live canvas.</td><td>Only if playback responsiveness during heavy visuals is still unacceptable after A.</td></tr>
+</table>
+<div class="note"><strong>A and B are not either/or.</strong> A attacks the cost of the frame; B attacks the coupling of the frame to the UI. Shipping A first is almost always right — it's cheaper, it helps <em>every</em> platform (not just the responsiveness of the main thread), and it shrinks whatever B would eventually have to move. B is the architecturally pure answer but the last-resort one.</div>
+
+<!-- 5 -->
+<h2>5 · Decisions &amp; non-goals</h2>
+<table>
+  <tr><th>Decision</th><th>Call</th></tr>
+  <tr><td>Render-on-demand while paused</td><td><strong>Yes</strong> — provably safe under the pause invariant; the highest-leverage cheap win. The governor owns <code>frameloop</code>.</td></tr>
+  <tr><td>Default DPR cap</td><td><strong>Yes</strong> — clamp to ~1.5 (or 1 on Windows) for the editor canvas; export already pins DPR 1 independently.</td></tr>
+  <tr><td>Gate <code>needsUpdate</code> on change</td><td><strong>Yes</strong> — a shared helper in the instrument-frame layer; belt-and-suspenders with demand-mode.</td></tr>
+  <tr><td>Adaptive quality scalar</td><td><strong>Yes</strong> — the self-correcting fix for the platform gap; built on R3F's <code>performance</code> API.</td></tr>
+  <tr><td>Fixed-1080p canvas offenders</td><td><strong>Aspect-scale + cap them</strong> (DiamondLattice, WindowsXP) — no reason to draw 1080p for a small viewport.</td></tr>
+  <tr><td>Shader-port the top Canvas-2D instruments</td><td><strong>Yes, staged</strong> — the durable source-level fix; four candidates named.</td></tr>
+  <tr><td>OffscreenCanvas worker</td><td><strong>Deferred</strong> — designed as a seam, built only if 1–3 leave heavy playback unacceptable.</td></tr>
+  <tr><td>Change instrument authoring contract</td><td><strong>No</strong> — instruments stay pure functions of the beat; the governor and caps are invisible to them (they read a quality scalar at most).</td></tr>
+  <tr><td>Touch the export path</td><td><strong>No</strong> — export already pins its own frameloop/DPR/size; the governor is a live-editing concern only.</td></tr>
+</table>
+
+<hr/>
+<div class="rec"><strong>The one-sentence mental model:</strong> a render governor sits on top of the untouched instruments and does three things the pause invariant makes safe — idles the loop when the beat is static so editing is instant, scales the frame's resolution to whatever budget the machine can hit so playback self-corrects, and (for the four worst offenders) trades a per-frame CPU canvas upload for a GPU shader so the Windows-expensive operation stops happening at all.</div>
+
+<p class="small muted">Written 2026-07-07. Companion: <span class="file">render-lag-deep-dive-and-recommendation.html</span> (findings + why Windows) and <span class="file">render-lag-implementation-plan.html</span> (phased build). The single-thread loop, unconditional uploads, canvas/particle sizes, and absent perf guards are verified in source; the ANGLE-vs-Metal upload-cost gap is the established mechanism and should be confirmed with a Windows DevTools capture before the tier-3 shader work.</p>
+
+</div>
+</body>
+</html>

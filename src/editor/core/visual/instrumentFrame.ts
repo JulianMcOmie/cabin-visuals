@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { getObjectState } from './VisualEngine'
 import type { ObjectState } from './types'
@@ -12,14 +13,64 @@ import type { ObjectState } from './types'
  * the current beat (+ params/ports/notes). A static playhead is a static frame;
  * scrubbing to a beat shows exactly what playback would show there.
  *
+ * The same purity is also a per-object skip condition: if none of an object's
+ * inputs changed since its last run, its callback would repaint identical pixels
+ * — so it isn't called. That is what makes paused-editing cheap: muting a track
+ * or dragging a block re-renders a frame (RenderGovernor), but a heavy full-frame
+ * instrument whose own inputs didn't move skips its multi-MB canvas redraw and
+ * texture re-upload. The signature covers everything a callback can legally read:
+ * ObjectState (beat first — during playback it changes every frame and short-
+ * circuits the comparison), canvas size/DPR, and the camera pose (some
+ * instruments do CPU-side billboard math against it).
+ *
  * Runs after VisualBeatSync's computeAtBeat (r3f calls useFrame subscribers in
  * mount order, and VisualBeatSync mounts first), so state is always this frame's.
  * Skipped while the object isn't resolved yet.
  */
 export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void) {
-  useFrame(() => {
+  // Signature buffer, reused across frames (write-and-compare, no allocation).
+  const buf = useRef<unknown[]>([]).current
+  useFrame((root) => {
     const state = getObjectState(trackId)
-    if (state) cb(state)
+    if (!state) {
+      // Unresolved: clear so the first resolved frame always runs.
+      buf.length = 0
+      return
+    }
+    let i = 0
+    let dirty = false
+    const put = (v: unknown) => {
+      if (!Object.is(buf[i], v)) {
+        dirty = true
+        buf[i] = v
+      }
+      i++
+    }
+    put(state.beat)
+    put(state.secPerBeat)
+    put(state.blackedOut)
+    put(root.size.width)
+    put(root.size.height)
+    put(root.viewport.dpr)
+    // Stable references per resolve — a structural re-resolve replaces them.
+    put(state.notes)
+    put(state.stringParams)
+    put(state.abilityEvents)
+    // Mutated in place each computeAtBeat: compare by element.
+    const w = state.world.elements
+    for (let k = 0; k < 16; k++) put(w[k])
+    const cam = root.camera
+    put(cam.position.x); put(cam.position.y); put(cam.position.z)
+    put(cam.quaternion.x); put(cam.quaternion.y); put(cam.quaternion.z); put(cam.quaternion.w)
+    put(state.activeNotes.length)
+    for (const n of state.activeNotes) put(n)
+    for (const k in state.params) { put(k); put(state.params[k]) }
+    for (const k in state.portValues) { put(k); put(state.portValues[k]) }
+    if (buf.length !== i) {
+      buf.length = i
+      dirty = true
+    }
+    if (dirty) cb(state)
   })
 }
 

@@ -12,6 +12,7 @@ import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
+import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { ProfileMenu } from '../components/ProfileMenu'
 import { LeftSidebar } from './components/LeftSidebar'
@@ -40,8 +41,12 @@ function formatBeat(beat: number, beatsPerBar: number): string {
 }
 
 function Scene() {
+  // Paused → 'demand': the render loop idles instead of redrawing a static
+  // frame 60×/s (heavy instruments were starving the editor UI even while
+  // paused). RenderGovernor requests single frames when an input changes.
+  const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    <Canvas camera={{ position: [0, 1.2, 5], fov: 55 }} gl={{ antialias: true }}>
+    <Canvas frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 1.2, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[4, 6, 4]} intensity={1.4} castShadow />
@@ -49,6 +54,7 @@ function Scene() {
       <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
       <VisualBeatSync />
       <ExportDriver />
+      <RenderGovernor />
       <VisualScene />
     </Canvas>
   )
