@@ -223,11 +223,11 @@ function Header() {
   return (
     <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-panel)] relative">
       <Link
-        href={user ? '/projects' : '/'}
+        href="/projects"
         className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] transition-colors"
       >
         <ChevronLeft size={13} />
-        {user ? 'Projects' : 'Home'}
+        Projects
       </Link>
       <div className="w-px h-4 bg-[var(--border)] flex-shrink-0" />
       <EditableProjectName />
