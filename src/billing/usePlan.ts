@@ -57,6 +57,11 @@ export async function startCheckout(): Promise<void> {
     window.location.href = '/login'
     return
   }
+  if (res.status === 403) {
+    // Anonymous session — a subscription needs a real account first.
+    window.location.href = '/signup'
+    return
+  }
   const body = await res.json()
   if (body.url) window.location.href = body.url
   else throw new Error(body.error ?? 'Checkout failed')

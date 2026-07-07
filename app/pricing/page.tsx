@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
 import { startCheckout, usePlan } from '../../src/billing/usePlan'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
@@ -21,8 +22,18 @@ const PRO_FEATURES = [
 ]
 
 export default function PricingPage() {
-  const { user } = useAuth()
+  const { user, isAnonymous } = useAuth()
+  // Anonymous sessions count as "no account" for every CTA on this page.
+  const hasAccount = !!user && !isAnonymous
   const plan = usePlan()
+  const [opening, setOpening] = useState(false)
+
+  const handleUpgrade = () => {
+    if (opening) return
+    setOpening(true)
+    // Success navigates away (Stripe or /login); only a failure needs a reset.
+    void startCheckout().catch(() => setOpening(false))
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0b0f] text-zinc-200">
@@ -33,7 +44,7 @@ export default function PricingPage() {
         </Link>
         <nav className="flex items-center gap-5 text-sm">
           <Link href="/editor" className="text-zinc-400 hover:text-zinc-100 transition-colors">Editor</Link>
-          {user ? (
+          {hasAccount ? (
             <Link href="/projects" className="text-zinc-400 hover:text-zinc-100 transition-colors">Projects</Link>
           ) : (
             <Link href="/login" className="text-zinc-400 hover:text-zinc-100 transition-colors">Log in</Link>
@@ -66,10 +77,10 @@ export default function PricingPage() {
               ))}
             </ul>
             <Link
-              href={user ? '/projects' : '/signup'}
+              href={hasAccount ? '/projects' : '/signup'}
               className="mt-8 h-10 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-200 text-sm font-semibold flex items-center justify-center transition-colors cursor-pointer"
             >
-              {user ? 'Go to your projects' : 'Start creating'}
+              {hasAccount ? 'Go to your projects' : 'Start creating'}
             </Link>
           </div>
 
@@ -98,10 +109,18 @@ export default function PricingPage() {
               </div>
             ) : (
               <button
-                onClick={() => void startCheckout().catch(() => {})}
-                className="mt-8 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-sm font-semibold transition-colors cursor-pointer"
+                onClick={handleUpgrade}
+                disabled={opening}
+                className="mt-8 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-800 disabled:text-indigo-200 text-white text-sm font-semibold transition-colors cursor-pointer disabled:cursor-wait flex items-center justify-center gap-2"
               >
-                Upgrade to Pro
+                {opening ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Opening secure checkout…
+                  </>
+                ) : (
+                  'Upgrade to Pro'
+                )}
               </button>
             )}
           </div>

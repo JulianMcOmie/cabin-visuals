@@ -104,6 +104,16 @@ body {
 
 html {
   scroll-behavior: smooth;
+  /* The app is dark everywhere: paint the DOCUMENT dark so route transitions,
+     chunk loads, and full-page redirects never flash white. (The body's
+     bg-background utility resolves to hsl(#1e1e1e) — invalid — so without
+     this the document background was white.) color-scheme keeps native UI
+     (scrollbars, form controls) dark too. */
+  background: #0b0b0f;
+  color-scheme: dark;
+}
+body {
+  background: #0b0b0f;
 }
 
 /* Success animation */

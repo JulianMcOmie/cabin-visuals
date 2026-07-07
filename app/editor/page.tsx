@@ -2,14 +2,29 @@
 
 import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
+import { CabinLogo } from '@/components/CabinLogo'
 
-const EditorApp = dynamic(() => import('@/editor/App'), { ssr: false })
+// The editor bundle is heavy (three.js + the instrument library), so the gap
+// between navigation and first paint is real — fill it with a dark shell
+// instead of a blank document. Used for BOTH the dynamic() chunk load and the
+// Suspense boundary (useSearchParams requires one in the App Router).
+function EditorLoadingShell() {
+  return (
+    <div className="w-screen h-screen flex flex-col items-center justify-center gap-4 bg-[#1e1e21]">
+      <CabinLogo className="h-24 w-auto animate-pulse" strokeWidth={95} />
+      <p className="text-sm text-zinc-500 select-none">Loading the studio…</p>
+    </div>
+  )
+}
 
-// Suspense: the editor reads useSearchParams (its ?project binding), which
-// requires a boundary on the page in the App Router.
+const EditorApp = dynamic(() => import('@/editor/App'), {
+  ssr: false,
+  loading: () => <EditorLoadingShell />,
+})
+
 export default function EditorPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<EditorLoadingShell />}>
       <EditorApp />
     </Suspense>
   )
