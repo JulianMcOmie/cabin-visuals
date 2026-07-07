@@ -31,6 +31,9 @@ function SignupPageContent() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
+  // once the script is actually available (it usually loads after mount).
+  const [gsiReady, setGsiReady] = useState(false);
 
   async function handleGoogleSignInCallback(response: any) {
     console.log("Google Sign-In CredentialResponse (Signup Page):", response);
@@ -89,7 +92,7 @@ function SignupPageContent() {
       delete window.handleGoogleSignInCallback;
     };
     // Note: pathname dependency might not be necessary unless GSI logic depends on path
-  }, [pathname]);
+  }, [pathname, gsiReady]);
 
   return (
     <AuthShell footnote="Anonymous work carries over when you sign up">
@@ -121,11 +124,12 @@ function SignupPageContent() {
 
       <div className="flex flex-col items-center">
          <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signup" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
-         {/* GSI draws its own button; the wrapper supplies the dark --bg-elevated
-             surface + 1px --border the design asks for. */}
-         <div className="w-full overflow-hidden rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] transition-colors duration-100 hover:border-[var(--border-strong)]">
-           <div id="google-signin-button-container" className="g_id_signin flex justify-center"></div>
-         </div>
+         {/* GSI draws its own (dark, filled_black) button via the imperative
+             renderButton call — no g_id_signin class (that triggers GSI's
+             declarative auto-render with WHITE defaults, overriding our theme)
+             and no styled wrapper (a mismatched container strip looks wrong
+             behind whatever width GSI decides to render). */}
+         <div id="google-signin-button-container" className="flex justify-center"></div>
       </div>
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
@@ -133,7 +137,7 @@ function SignupPageContent() {
         <Link href="/login" className={authLinkClass}>Log in</Link>
       </p>
 
-      <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => console.log('Google GSI script loaded.')}></Script>
+      <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)}></Script>
     </AuthShell>
   );
 }

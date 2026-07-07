@@ -75,6 +75,13 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
+/* The global color-scheme:dark makes Chrome paint cross-origin iframes'
+   TRANSPARENT backgrounds opaque white (the Google sign-in button grew a
+   white frame). Declaring the frame light restores its transparency. */
+#google-signin-button-container iframe {
+  color-scheme: light;
+}
+
 /* Blob animations */
 .blob-container {
   position: fixed;
