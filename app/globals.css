@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Map Tailwind's font-sans/font-mono utilities onto the next/font variables
+   (IBM Plex Sans / IBM Plex Mono, set on <html> in app/layout.tsx). */
+@theme inline {
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
 /* Horizontal overscroll must never trigger the browser's back/forward swipe —
    scrolling left past the timeline's start was navigating away from the app. */
 html,
@@ -7,23 +14,65 @@ body {
   overscroll-behavior-x: none;
 }
 
-/* Basic Global Colors - Defined outside Tailwind layers */
+/* ============================================================
+   "Console" design tokens (docs: design_handoff_console_redesign)
+   Flat panels, 1px borders, one electric-blue accent, IBM Plex.
+   ============================================================ */
 :root {
-  --text: #ffffff;
-  --accent: #5a8ea3;
-  --highlight: #c8a45b;
+  /* Surfaces */
+  --bg-app: #0e0e11;          /* editor app background */
+  --bg-page: #0a0a0c;         /* marketing/auth page background */
+  --bg-panel: #131316;        /* panels, cards, top bars */
+  --bg-panel-raised: #17171b; /* label columns, corner cells */
+  --bg-elevated: #1e1e23;     /* buttons, chips, hover surfaces */
+  --bg-canvas: #09090b;       /* 3D viewport */
+  --bg-canvas-deep: #060608;
+  --bg-timeline: #101013;
+
+  /* Borders */
+  --border: #26262c;
+  --border-subtle: #1c1c21;
+  --border-strong: #3a3a42;
+
+  /* Text */
+  --text: #ecedef;
+  --text-2: #c6c7cd;
+  --text-3: #9a9ba3;
+  --text-muted: #5d5e66;
+  --text-faint: #7a7b84;
+
+  /* Accent — THE blue */
+  --accent: #35a7e6;
+  --accent-hover: #6fc0ee;
+  --on-accent: #0a0a0c; /* dark text on accent buttons */
+  --warn: #d0a04c;
+
+  /* Track palette */
+  --track-1: #35a7e6;
+  --track-2: #4ec3c9;
+  --track-3: #c583d6;
+  --track-4: #8d8ff0;
+  --track-5: #d6839e;
+
+  /* Legacy names remapped onto the console palette (pre-redesign CSS/components
+     that still reference them land on-palette instead of on the old theme). */
+  --highlight: #d0a04c;
   --green: #6a9955;
-  --background: #1e1e1e;
-  --surface: #252525;
-  --lightSurface: #333333;
-  --lightSurfaceHover: #444444;
-  --border: #3a3a3a;
-  --activeBg: #2d3540;
-  --electricBlue: #00c3ff;
-  --selectedBlue: #e0f7ff;
+  --background: #0e0e11;
+  --surface: #131316;
+  --lightSurface: #1e1e23;
+  --lightSurfaceHover: #26262c;
+  --activeBg: #1e1e23;
+  --electricBlue: #35a7e6;
+  --selectedBlue: #6fc0ee;
   --brightGreen: #00e676;
   --brightYellow: #ffdd00;
-  --windowSelectionColor: rgb(59, 99, 146); /* Selection highlight color */
+  --windowSelectionColor: rgba(53, 167, 230, 0.35);
+}
+
+/* Buttons/inputs inherit IBM Plex instead of UA fonts. */
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 /* Blob animations */
@@ -105,15 +154,14 @@ body {
 html {
   scroll-behavior: smooth;
   /* The app is dark everywhere: paint the DOCUMENT dark so route transitions,
-     chunk loads, and full-page redirects never flash white. (The body's
-     bg-background utility resolves to hsl(#1e1e1e) — invalid — so without
-     this the document background was white.) color-scheme keeps native UI
-     (scrollbars, form controls) dark too. */
-  background: #0b0b0f;
+     chunk loads, and full-page redirects never flash white. color-scheme keeps
+     native UI (scrollbars, form controls) dark too. */
+  background: var(--bg-page, #0a0a0c);
   color-scheme: dark;
 }
 body {
-  background: #0b0b0f;
+  background: var(--bg-page, #0a0a0c);
+  color: var(--text, #ecedef);
 }
 
 /* Success animation */

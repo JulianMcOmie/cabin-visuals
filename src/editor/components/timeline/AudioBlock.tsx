@@ -176,16 +176,16 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
     <div
       data-audio-block-id={block.id}
       title={clip ? `${clip.fileName} — drag to move` : 'Audio block'}
-      className="absolute top-1 bottom-1 rounded overflow-hidden"
+      className="absolute top-1 bottom-1 rounded-[3px] overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${width}px`,
-        backgroundColor: color + '22',
-        borderTop: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
-        borderRight: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
-        borderBottom: isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        backgroundColor: color + '24',
+        borderTop: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderRight: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderBottom: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
         borderLeft: `2px solid ${color}`,
-        boxShadow: isSelected ? `0 0 0 1px ${color}, 0 0 8px ${color}aa` : undefined,
+        boxShadow: isSelected ? `0 0 0 1px ${color}` : undefined,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

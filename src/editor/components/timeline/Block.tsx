@@ -25,18 +25,16 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
     <div
       data-block-id={block.id}
       title="Double-click to edit notes"
-      className="absolute top-1 bottom-1 rounded overflow-hidden"
+      className="absolute top-1 bottom-1 rounded-[3px] overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${Math.max(width, 4)}px`,
-        backgroundColor: color + '28',
-        borderTop: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
-        borderRight: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
-        borderBottom: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}66`,
+        backgroundColor: color + '24',
+        borderTop: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderRight: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderBottom: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
         borderLeft: `2px solid ${color}`,
-        boxShadow: isSelected
-          ? `0 0 0 1px ${color}, 0 0 8px ${color}aa`
-          : isEditing ? `0 0 6px ${color}88` : undefined,
+        boxShadow: isSelected || isEditing ? `0 0 0 1px ${color}` : undefined,
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {

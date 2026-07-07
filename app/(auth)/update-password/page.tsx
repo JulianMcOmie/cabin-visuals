@@ -4,6 +4,15 @@ import { useState, useEffect, Suspense } from 'react'
 import { updatePassword } from './actions'
 import { createClient } from '../../../src/utils/supabase/client'
 import Link from 'next/link';
+import {
+  AuthShell,
+  AuthTitle,
+  AuthBanner,
+  authLabelClass,
+  authInputClass,
+  authSubmitClass,
+  authLinkClass,
+} from '../auth-ui';
 
 function UpdatePasswordFormInternal() {
   const [password, setPassword] = useState('')
@@ -64,50 +73,47 @@ function UpdatePasswordFormInternal() {
 
   if (!showPage) {
      return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-white"><p>Verifying access...</p></div>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-[13px] text-[var(--text-3)]"><p>Verifying access…</p></div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md rounded-lg bg-gray-900/50 p-8 shadow-md border border-gray-800">
-        <h1 className="mb-6 text-center text-2xl font-bold text-white">Update Your Password</h1>
+    <AuthShell>
+      <AuthTitle title="Update password" sub="Choose a new password for your account." />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300">New Password (min. 6 characters)</label>
-            <input id="password" name="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full rounded-full border border-gray-700 bg-black/50 px-4 py-3 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm placeholder-gray-500" placeholder="Enter new password" disabled={isSubmitting || !!message} />
-          </div>
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">Confirm New Password</label>
-            <input id="confirmPassword" name="confirmPassword" type="password" required minLength={6} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-1 block w-full rounded-full border border-gray-700 bg-black/50 px-4 py-3 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm placeholder-gray-500" placeholder="Confirm new password" disabled={isSubmitting || !!message} />
-          </div>
+      {message && <AuthBanner kind="success">{message}</AuthBanner>}
+      {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
-          {message && ( <p className="text-sm text-green-500">{message}</p> )}
-          {error && ( <p className="text-sm text-red-500">{error}</p> )}
-
-          <div className="pt-2">
-            <button type="submit" className="w-full justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50" disabled={isSubmitting || !password || password !== confirmPassword || password.length < 6 || !!message}>
-              {isSubmitting ? 'Updating...' : 'Update Password'}
-            </button>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-[14px]">
+        <div>
+          <div className="mb-[6px] flex items-baseline justify-between">
+            <label htmlFor="password" className={authLabelClass}>New password</label>
+            <span className="text-[11px] text-[var(--text-muted)]">Min. 6 characters</span>
           </div>
-        </form>
-        {!message && (
-            <div className="mt-6 text-center text-sm">
-                <Link href="/login" legacyBehavior>
-                    <a className="font-medium text-indigo-400 hover:text-indigo-300">Cancel and go to Login</a>
-                </Link>
-            </div>
-        )}
-      </div>
-    </div>
+          <input id="password" name="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className={authInputClass} placeholder="••••••••" disabled={isSubmitting || !!message} />
+        </div>
+        <div>
+          <label htmlFor="confirmPassword" className={`mb-[6px] block ${authLabelClass}`}>Confirm new password</label>
+          <input id="confirmPassword" name="confirmPassword" type="password" required minLength={6} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={authInputClass} placeholder="••••••••" disabled={isSubmitting || !!message} />
+        </div>
+
+        <button type="submit" className={`mt-1 ${authSubmitClass}`} disabled={isSubmitting || !password || password !== confirmPassword || password.length < 6 || !!message}>
+          {isSubmitting ? 'Updating…' : 'Update password'}
+        </button>
+      </form>
+      {!message && (
+        <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
+          <Link href="/login" className={authLinkClass}>Cancel and go to sign in</Link>
+        </p>
+      )}
+    </AuthShell>
   );
 }
 
 export default function UpdatePasswordPage() {
     return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white"><p>Loading...</p></div>}> 
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-[13px] text-[var(--text-3)]"><p>Loading…</p></div>}>
             <UpdatePasswordFormInternal />
         </Suspense>
     );
-} 
+}

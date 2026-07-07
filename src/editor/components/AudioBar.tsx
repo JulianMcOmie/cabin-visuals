@@ -49,18 +49,18 @@ export function AudioBar() {
   }
 
   return (
-    <div className="h-9 flex-shrink-0 flex items-center gap-3 px-4 border-t border-zinc-800 bg-[#1e1e21] select-none">
-      <span className="text-xs text-zinc-500">Audio:</span>
+    <div className="h-7 flex-shrink-0 flex items-baseline gap-2.5 px-3 pt-[7px] border-t border-[var(--border)] bg-[var(--bg-panel)] select-none">
+      <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] leading-none">AUDIO</span>
 
       {hasAudioTrack ? (
-        <div className="flex items-center gap-1.5 opacity-60" title="One audio track for now — delete the audio track to load a different file">
-          <FileAudio size={13} className="text-zinc-500" />
-          <span className="text-xs text-zinc-500">{audioTrackName ?? 'Audio track'}</span>
-        </div>
+        <span className="flex items-baseline gap-1.5 opacity-70" title="One audio track for now — delete the audio track to load a different file">
+          <FileAudio size={11} className="text-[var(--text-muted)] translate-y-[2px]" />
+          <span className="text-[11px] text-[var(--text-3)] leading-none">{audioTrackName ?? 'Audio track'}</span>
+        </span>
       ) : (
         <button
           onClick={() => inputRef.current?.click()}
-          className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          className="text-[11px] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer bg-transparent border-none p-0 leading-none"
         >
           Click to load audio…
         </button>
@@ -75,10 +75,10 @@ export function AudioBar() {
       />
 
       {hasAudioTrack && (
-        <div className="ml-auto flex items-center gap-1.5 text-zinc-600">
-          <Volume2 size={12} />
-          <span className="text-xs">Audio on the timeline</span>
-        </div>
+        <span className="ml-auto flex items-baseline gap-1.5 text-[var(--text-muted)]">
+          <Volume2 size={11} className="translate-y-[2px]" />
+          <span className="text-[11px] leading-none">Audio on the timeline</span>
+        </span>
       )}
     </div>
   )

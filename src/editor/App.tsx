@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore } from './store/ProjectStore'
@@ -13,7 +12,6 @@ import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { CabinLogo } from '../components/CabinLogo'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
@@ -86,16 +84,21 @@ function VisualPanel() {
   }, [])
 
   return (
-    <div ref={panelRef} className="relative h-full bg-[#09090b]">
+    <div ref={panelRef} className="relative h-full bg-[var(--bg-canvas)]">
       <BeatOverlay />
       <Scene />
-      <button
-        onClick={toggle}
-        title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-        className="absolute top-2 right-3 z-10 flex items-center justify-center w-6 h-6 rounded bg-zinc-900/70 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 transition-colors"
-      >
-        {isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />}
-      </button>
+      <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
+        <span className="font-mono text-[11px] text-[var(--text-muted)] select-none pointer-events-none">
+          16:9 · 1080p
+        </span>
+        <button
+          onClick={toggle}
+          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+          className="flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
+        >
+          {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
+        </button>
+      </div>
     </div>
   )
 }
@@ -104,8 +107,8 @@ function BeatOverlay() {
   const currentBeat = useTimeStore((s) => s.currentBeat)
   return (
     <div className="absolute top-2 left-3 z-10 pointer-events-none select-none">
-      <span className="text-xs text-zinc-500 font-mono tabular-nums">
-        Beat: {currentBeat.toFixed(2)}
+      <span className="font-mono text-[11px] text-[var(--text-muted)] tabular-nums">
+        BEAT {currentBeat.toFixed(2)}
       </span>
     </div>
   )
@@ -116,9 +119,9 @@ function TemplateDemoChip() {
   const search = useSearchParams()
   if (search.get('project') || !search.get('template')) return null
   return (
-    <span className="text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+    <span className="text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
       Demo project — {' '}
-      <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
+      <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
         sign up to save it
       </Link>
     </span>
@@ -133,7 +136,7 @@ function SaveStatusChip() {
   return (
     <span
       className={`text-[11px] select-none whitespace-nowrap ${
-        status === 'error' ? 'text-red-400' : 'text-zinc-600'
+        status === 'error' ? 'text-red-400' : 'text-[var(--text-muted)]'
       }`}
     >
       {label}
@@ -148,6 +151,7 @@ function Header() {
   useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const projectName = useUIStore((s) => s.projectName)
 
   // Export: capability-gated (Chrome-first — WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
@@ -162,83 +166,77 @@ function Header() {
   const permanent = !authLoading && !!user && !isAnonymous
 
   return (
-    <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
+    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-panel)] relative">
       <Link
         href={user ? '/projects' : '/'}
-        className="flex-shrink-0 flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+        className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] transition-colors"
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={13} />
         {user ? 'Projects' : 'Home'}
       </Link>
+      <div className="w-px h-4 bg-[var(--border)] flex-shrink-0" />
+      <span className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px]">
+        {projectName ?? 'Untitled Project'}
+      </span>
 
       <SaveStatusChip />
       {!authLoading && !user && (
-        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
           <CloudOff size={12} />
-          Your work isn&apos;t saved —{' '}
-          <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
-            sign up to keep it
+          Not saved —{' '}
+          <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
+            sign up to save
           </Link>
         </span>
       )}
       {!authLoading && user && isAnonymous && (
-        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
           <CloudOff size={12} />
           Saved on this device —{' '}
-          <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
+          <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
             sign up to keep it forever
           </Link>
         </span>
       )}
       <TemplateDemoChip />
 
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-10 pointer-events-none select-none">
-        <CabinLogo className="h-10 w-auto -translate-y-0 pointer-events-auto" strokeWidth={95} />
+      {/* Center transport — absolutely centered on the bar. */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={isPlaying ? pause : reset}
+            title={isPlaying ? 'Pause' : 'Return to start'}
+            className="flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+          >
+            {isPlaying
+              ? <Square size={10} fill="currentColor" />
+              : <SkipBack size={11} fill="currentColor" />}
+          </button>
+          <button
+            onClick={isPlaying ? reset : play}
+            title={isPlaying ? 'Restart from beginning' : 'Play (Space)'}
+            className="flex items-center justify-center w-[34px] h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] transition-colors cursor-pointer"
+          >
+            <Play size={12} fill="currentColor" />
+          </button>
 
-        {/* Transport + beat readout — its own group, right of centre with a gap from
-            the logo (which sits left of centre), so the pair straddles the page centre. */}
-        <div className="flex items-center gap-2.5 pointer-events-auto">
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={isPlaying ? pause : reset}
-              title={isPlaying ? 'Pause' : 'Return to start'}
-              className="flex items-center justify-center w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              {isPlaying
-                ? <Square size={10} fill="currentColor" />
-                : <SkipBack size={12} fill="currentColor" />}
-            </button>
-            <button
-              onClick={isPlaying ? reset : play}
-              title={isPlaying ? 'Restart from beginning' : 'Play'}
-              className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${
-                isPlaying
-                  ? 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg shadow-indigo-950/60'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Play size={13} fill="currentColor" />
-            </button>
-          </div>
-
-          <div className="font-mono text-sm text-indigo-300 bg-zinc-900 px-3 py-1 rounded border border-zinc-800 min-w-[72px] text-center tabular-nums whitespace-nowrap">
+          <span className="font-mono text-[13px] text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border)] rounded px-2.5 py-1 min-w-[62px] text-center tabular-nums whitespace-nowrap">
             {formatBeat(currentBeat, beatsPerBar)}
-          </div>
+          </span>
 
-          <div className="w-px h-5 bg-zinc-800 mx-0.5" />
           <ProjectLengthControl />
           <BpmControl />
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+      <div className="ml-auto flex items-center gap-2 flex-shrink-0">
         {permanent && !plan.loading && !plan.isPro && (
           <Link
             href="/pricing"
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 text-xs font-semibold transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
           >
-            <Sparkles size={12} strokeWidth={2.5} />
+            <Sparkles size={11} strokeWidth={2.5} />
             Upgrade
           </Link>
         )}
@@ -246,19 +244,18 @@ function Header() {
           <button
             onClick={() => void openBillingPortal().catch(() => {})}
             title="Manage your Pro subscription"
-            className="px-2 py-1 rounded bg-amber-500/15 text-amber-400 text-[11px] font-semibold tracking-wide hover:bg-amber-500/25 transition-colors cursor-pointer"
+            className="h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] text-[11px] font-semibold tracking-wide hover:border-[var(--border-strong)] transition-colors cursor-pointer"
           >
             PRO
           </button>
         )}
-        {permanent && <div className="w-px h-5 bg-zinc-700 ml-1" />}
         <button
           onClick={() => setExportOpen(true)}
           disabled={exportGate?.ok === false}
           title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-semibold transition-colors cursor-pointer disabled:cursor-default"
+          className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
         >
-          <Upload size={12} strokeWidth={2.5} />
+          <Upload size={11} strokeWidth={2.5} />
           Export
         </button>
       </div>
@@ -278,63 +275,51 @@ export default function EditorApp() {
   const { topFrac, containerRef, startResize } = useVerticalSplit()
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#1e1e21]">
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       <Header />
-      <div className="flex-1 min-h-0">
-        <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+      <div className="flex-1 min-h-0 flex">
 
-          {/* Library */}
-          <Panel defaultSize="15%" minSize="8%" maxSize="30%">
-            <LeftSidebar />
-          </Panel>
+        {/* Library — fixed 208px column, full height */}
+        <div className="w-[208px] flex-shrink-0 min-w-0">
+          <LeftSidebar />
+        </div>
 
-          <PanelResizeHandle className="w-px bg-zinc-800 cursor-col-resize outline-none focus:outline-none" />
+        {/* Center column: (inspector + canvas) above, tracks + audio strip below */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
-          {/* Right section: TrackEditor + Canvas above, Tracks + AudioBar below */}
-          <Panel>
-            <div className="flex flex-col h-full">
-              <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
-
-                {/* Upper: TrackEditor + Canvas */}
-                <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
-
-                    <Panel defaultSize="55%" minSize="15%" maxSize="60%">
-                      <TrackEditor />
-                    </Panel>
-
-                    <PanelResizeHandle className="w-px bg-zinc-800 cursor-col-resize outline-none focus:outline-none" />
-
-                    {/* Canvas */}
-                    <Panel>
-                      <VisualPanel />
-                    </Panel>
-
-                  </PanelGroup>
-                </div>
-
-                {/* Window-resize divider: a 1px line (unchanged look) with an invisible
-                    grab pad on top of its neighbours — see note above. */}
-                <div className="relative h-px bg-zinc-800/60 shrink-0">
-                  <div
-                    onPointerDown={startResize}
-                    className="absolute inset-x-0 z-50 cursor-ns-resize"
-                    style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
-                  />
-                </div>
-
-                {/* Tracks / Piano Roll */}
-                <div className="flex-1 min-h-0">
-                  <BottomArea />
-                </div>
-
+            {/* Upper: TRACK inspector (280px fixed) + Canvas */}
+            <div
+              className="min-h-0 flex"
+              style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 1 }}
+            >
+              <div className="w-[280px] flex-shrink-0 h-full">
+                <TrackEditor />
               </div>
-
-              <AudioBar />
+              <div className="flex-1 min-w-0 h-full">
+                <VisualPanel />
+              </div>
             </div>
-          </Panel>
 
-        </PanelGroup>
+            {/* Window-resize divider: invisible 1px line (the timeline's own border-t
+                draws the visible rule) with a grab pad on top of its neighbours. */}
+            <div className="relative h-px bg-transparent shrink-0">
+              <div
+                onPointerDown={startResize}
+                className="absolute inset-x-0 z-50 cursor-ns-resize"
+                style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
+              />
+            </div>
+
+            {/* Tracks / Piano Roll */}
+            <div className="flex-1 min-h-[240px]">
+              <BottomArea />
+            </div>
+
+          </div>
+
+          <AudioBar />
+        </div>
       </div>
     </div>
   )

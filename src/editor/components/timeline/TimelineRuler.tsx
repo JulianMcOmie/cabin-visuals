@@ -40,25 +40,22 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
   const beats = Array.from({ length: totalBars * beatsPerBar }, (_, i) => i).filter((i) => i % beatsPerBar !== 0)
 
   return (
-    <div className="flex h-10 border-b border-zinc-800 bg-zinc-900 select-none" style={{ paddingRight: gutterPx }}>
-      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-zinc-800 bg-[#202024]">
+    <div className="flex h-8 border-b border-[var(--border)] bg-[var(--bg-timeline)] select-none" style={{ paddingRight: gutterPx }}>
+      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--border)] bg-[var(--bg-panel-raised)]">
         {corner}
       </div>
       <div
-        className="relative flex-1 overflow-hidden bg-zinc-900 cursor-ew-resize"
+        className="relative flex-1 overflow-hidden cursor-ew-resize"
         onPointerDown={onScrubStart}
       >
-        
-        
-
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
 
-          {/* dark divider between bottom and top half of ruler */}
-          <div className="absolute left-0 right-0 h-px bg-zinc-700 opacity-40 pointer-events-none" style={{ top: '50%' }} />
+          {/* mid divider between top and bottom half of the ruler */}
+          <div className="absolute left-0 right-0 h-px bg-[var(--border-strong)] opacity-40 pointer-events-none" style={{ top: '50%' }} />
 
           {/* Faint, short beat ticks */}
           {beats.map((beat) => (
-            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-zinc-700/60" style={{ left: beat * pixelsPerBeat, top: '72%' }} />
+            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '65%' }} />
           ))}
 
           {bars.map((bar) => {
@@ -67,16 +64,16 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
               <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
                 {numbered ? (
                   <>
-                    {/* Top half: bar number */}
-                    <span className="absolute top-0 left-1 text-[10px] text-zinc-400 leading-none pt-1">
+                    {/* Top half: bar number — 9px mono */}
+                    <span className="absolute left-1 font-mono text-[9px] text-[var(--text-faint)] leading-none" style={{ top: 3 }}>
                       {bar + 1}
                     </span>
-                    {/* Full-height tick line beside the number */}
-                    <div className="absolute top-0 bottom-0 w-px bg-zinc-600" />
+                    {/* Full-height line beside the number */}
+                    <div className="absolute top-0 bottom-0 w-px bg-[var(--border-strong)]" />
                   </>
                 ) : (
-                  /* Blank bar: short grey tick, same as the beat ticks */
-                  <div className="absolute bottom-0 w-px bg-zinc-700/60" style={{ top: '72%' }} />
+                  /* Blank bar: short tick, same as the beat ticks */
+                  <div className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ top: '65%' }} />
                 )}
               </div>
             )
@@ -96,12 +93,12 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
             <div
               className="absolute top-0"
               style={{
-                left: -PLAYHEAD_TRIANGLE_HALF,
+                left: -5,
                 width: 0,
                 height: 0,
-                borderLeft: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-                borderRight: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-                borderTop: '20px solid #ffffff',
+                borderLeft: '5px solid transparent',
+                borderRight: '5px solid transparent',
+                borderTop: '15px solid #ecedef',
               }}
             />
           </div>

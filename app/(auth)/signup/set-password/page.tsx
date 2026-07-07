@@ -6,17 +6,26 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
+import {
+  AuthShell,
+  AuthTitle,
+  AuthBanner,
+  authLabelClass,
+  authInputClass,
+  authSubmitClass,
+  authLinkClass,
+} from '../../auth-ui';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button 
-      type="submit" 
-      className="w-full justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
+    <button
+      type="submit"
+      className={`mt-1 ${authSubmitClass}`}
       disabled={pending}
       aria-disabled={pending}
     >
-      {pending ? 'Creating Account...' : 'Complete Sign Up'}
+      {pending ? 'Creating account…' : 'Complete sign up'}
     </button>
   );
 }
@@ -93,91 +102,90 @@ function SetPasswordFormInternal() {
   }, [searchParams, email, firstName, lastName]);
 
   if (!email || !firstName || !lastName) {
-      return (<div className="flex min-h-screen items-center justify-center bg-black text-white"><p>Loading user details...</p></div>);
+      return (<div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-[13px] text-[var(--text-3)]"><p>Loading user details…</p></div>);
   }
 
   // Conversion succeeded: the email is pending confirmation; the session (and
   // every project it owns) keeps working in the meantime.
   if (convertedEmail) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-white">
-        <div className="w-full max-w-md rounded-lg bg-gray-900/50 p-8 shadow-md border border-gray-800 text-center">
-          <h1 className="mb-4 text-2xl font-bold text-white">Check your inbox</h1>
-          <p className="text-sm text-gray-300">
-            We sent a confirmation link to <strong className="text-white">{convertedEmail}</strong>.
-            Click it to finish creating your account.
-          </p>
-          <p className="mt-3 text-sm text-gray-400">
-            Your work is saved and stays right here in the meantime.
-          </p>
-          <Link
-            href="/editor"
-            className="mt-6 inline-block rounded-full bg-indigo-600 px-6 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-          >
-            Back to the editor
-          </Link>
-        </div>
-      </div>
+      <AuthShell>
+        <AuthTitle
+          title="Check your inbox"
+          sub={
+            <>
+              We sent a confirmation link to <strong className="font-semibold text-[var(--text)]">{convertedEmail}</strong>.
+              Click it to finish creating your account.
+            </>
+          }
+        />
+        <p className="mb-[22px] text-[13px] text-[var(--text-3)]">
+          Your work is saved and stays right here in the meantime.
+        </p>
+        <Link
+          href="/editor"
+          className="flex h-[38px] w-full cursor-pointer items-center justify-center rounded-[5px] bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)] hover:text-[var(--on-accent)]"
+        >
+          Back to the editor
+        </Link>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md rounded-lg bg-gray-900/50 p-8 shadow-md border border-gray-800">
-        <h1 className="mb-2 text-center text-2xl font-bold text-white">Sign Up</h1>
-        <p className="mb-6 text-center text-sm text-gray-400">Setting password for: {email}</p>
-        {anonUid && (
-          <p className="mb-4 text-center text-xs text-emerald-300/90">
-            Your in-progress work will stay with this account.
-          </p>
-        )}
-        {errorMessage && ( <div className="mb-4 rounded border border-red-600 bg-red-900/30 p-3 text-center text-sm text-red-300">{errorMessage}</div> )}
+    <AuthShell>
+      <AuthTitle title="Sign up" sub={<>Setting a password for <span className="text-[var(--text-2)]">{email}</span>.</>} />
 
-        <form
-          action={anonUid ? undefined : completeSignup}
-          onSubmit={anonUid ? handleConvert : undefined}
-          className="space-y-4"
-        >
-          <input type="hidden" name="email" value={email || ''} />
-          <input type="hidden" name="firstName" value={firstName || ''} />
-          <input type="hidden" name="lastName" value={lastName || ''} />
+      {anonUid && (
+        <AuthBanner kind="success">Your in-progress work will stay with this account.</AuthBanner>
+      )}
+      {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300">Create Password (min. 6 characters)</label>
-            <input id="password" name="password" type="password" required minLength={6} className="mt-1 block w-full rounded-full border border-gray-700 bg-black/50 px-4 py-3 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm placeholder-gray-500" placeholder="Create password" />
+      <form
+        action={anonUid ? undefined : completeSignup}
+        onSubmit={anonUid ? handleConvert : undefined}
+        className="flex flex-col gap-[14px]"
+      >
+        <input type="hidden" name="email" value={email || ''} />
+        <input type="hidden" name="firstName" value={firstName || ''} />
+        <input type="hidden" name="lastName" value={lastName || ''} />
+
+        <div>
+          <div className="mb-[6px] flex items-baseline justify-between">
+            <label htmlFor="password" className={authLabelClass}>Password</label>
+            <span className="text-[11px] text-[var(--text-muted)]">Min. 6 characters</span>
           </div>
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">Confirm Password</label>
-            <input id="confirmPassword" name="confirmPassword" type="password" required minLength={6} className="mt-1 block w-full rounded-full border border-gray-700 bg-black/50 px-4 py-3 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm placeholder-gray-500" placeholder="Confirm password" />
-          </div>
-          <div className="pt-2">
-            {anonUid ? (
-              <button
-                type="submit"
-                disabled={converting}
-                className="w-full justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
-              >
-                {converting ? 'Creating Account...' : 'Complete Sign Up'}
-              </button>
-            ) : (
-              <SubmitButton />
-            )}
-          </div>
-        </form>
-        <div className="mt-6 text-center text-sm">
-           <Link href="/signup" legacyBehavior>
-             <a className="font-medium text-indigo-400 hover:text-indigo-300">&lt; Back</a>
-           </Link>
+          <input id="password" name="password" type="password" required minLength={6} className={authInputClass} placeholder="••••••••" />
         </div>
-      </div>
-    </div>
+        <div>
+          <label htmlFor="confirmPassword" className={`mb-[6px] block ${authLabelClass}`}>Confirm password</label>
+          <input id="confirmPassword" name="confirmPassword" type="password" required minLength={6} className={authInputClass} placeholder="••••••••" />
+        </div>
+
+        {anonUid ? (
+          <button
+            type="submit"
+            disabled={converting}
+            className={`mt-1 ${authSubmitClass}`}
+          >
+            {converting ? 'Creating account…' : 'Complete sign up'}
+          </button>
+        ) : (
+          <SubmitButton />
+        )}
+      </form>
+
+      <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
+        <Link href="/signup" className={authLinkClass}>&lsaquo; Back</Link>
+      </p>
+    </AuthShell>
   );
 }
 
 export default function SetPasswordPage() {
     return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-black text-white"><p>Loading...</p></div>}> 
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-[13px] text-[var(--text-3)]"><p>Loading…</p></div>}>
             <SetPasswordFormInternal />
         </Suspense>
     );
-} 
+}

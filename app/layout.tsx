@@ -1,13 +1,24 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-// Configure Inter font
-const inter = Inter({ subsets: ["latin"] });
+// Console design system: IBM Plex Sans for UI, IBM Plex Mono for numerics,
+// readouts, and section labels. Both exposed as CSS variables so utilities
+// (font-mono via --font-mono) and plain CSS can reach them.
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-sans",
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+});
 
 export const metadata: Metadata = {
-  title: "Visual DAW",
-  description: "A digital audio workstation with visual synthesis",
+  title: "Cabin Visuals",
+  description: "The visual music workstation",
 };
 
 export default function RootLayout({
@@ -16,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.className}>
-      <body className="bg-background text-foreground">{children}</body>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} ${plexSans.className}`}>
+      <body>{children}</body>
     </html>
   );
 }

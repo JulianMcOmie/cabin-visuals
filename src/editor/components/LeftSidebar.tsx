@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles, Info } from 'lucide-react'
+import { ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles, Info } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
@@ -253,28 +253,28 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
 
   return (
     <div>
-      <div className="flex items-center px-3 py-1.5 text-xs font-medium text-zinc-400 select-none">
+      <div className="flex items-center justify-between px-3 pt-3 pb-1 select-none">
+        {/* Caps section row — clicking the label still collapses/expands the list. */}
         <button
           onClick={() => setOpen(!open)}
-          className="flex items-center gap-1 hover:text-zinc-200 transition-colors"
+          className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--text-2)] transition-colors cursor-pointer"
         >
           {title}
-          {open ? <ChevronDown size={11} className="text-zinc-500" /> : <ChevronRight size={11} className="text-zinc-500" />}
+          {!open && <ChevronRight size={10} className="text-[var(--text-muted)]" />}
         </button>
-        <div className="flex-1" />
         <div
           className="relative flex items-center"
           onMouseEnter={openAfterDelay}
           onMouseLeave={cancelHover}
         >
           <button
-            className={`transition-colors ${infoOpen ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-300'}`}
+            className={`transition-colors cursor-pointer ${infoOpen ? 'text-[var(--text-2)]' : 'text-[var(--border-strong)] hover:text-[var(--text-2)]'}`}
             aria-label={`About ${title}`}
           >
-            <Info size={12} />
+            <Info size={11} />
           </button>
           {infoOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-40 w-52 p-2.5 rounded border border-zinc-700 bg-[#202024] text-[11px] font-normal leading-relaxed text-zinc-300 shadow-lg shadow-black/50">
+            <div className="absolute right-0 top-full mt-1.5 z-40 w-52 p-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[11px] font-normal normal-case tracking-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
               {description}
             </div>
           )}
@@ -288,12 +288,12 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               onPointerDown={(e) => onItemPointerDown(e, item)}
               onDoubleClick={() => onItemDoubleClick(item)}
               title={`Drag ${item.name} into the track list to add it, or double-click to set the selected track's instrument`}
-              className="flex items-center gap-2.5 px-4 py-1.5 cursor-default hover:bg-zinc-800/60 transition-colors select-none"
+              className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
             >
-              <span className="flex-shrink-0 flex items-center justify-center w-4">
+              <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                 {item.icon}
               </span>
-              <span className="text-xs text-zinc-300">{item.name}</span>
+              <span className="text-xs text-[var(--text-2)] truncate">{item.name}</span>
             </div>
           ))}
         </div>
@@ -321,36 +321,34 @@ export function LeftSidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full border-r border-zinc-800 bg-[#1e1e21] overflow-hidden">
-      <div className="px-3 pt-2 pb-1.5 border-b border-zinc-800">
-        <div className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2">
-          Library
-        </div>
-        <div className="flex gap-0.5 bg-zinc-800 rounded p-0.5">
-          <button
-            onClick={() => setTab('instruments')}
-            className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${
-              tab === 'instruments'
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Instruments
-          </button>
-          <button
-            onClick={() => setTab('effects')}
-            className={`flex-1 py-1 text-[11px] font-medium rounded transition-colors ${
-              tab === 'effects'
-                ? 'bg-zinc-700 text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            Effects
-          </button>
-        </div>
+    <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)] overflow-hidden">
+      <div className="h-8 flex-shrink-0 flex items-center px-3 border-b border-[var(--border)] text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">
+        LIBRARY
+      </div>
+      <div className="flex flex-shrink-0 border-b border-[var(--border)]">
+        <button
+          onClick={() => setTab('instruments')}
+          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
+            tab === 'instruments'
+              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+          }`}
+        >
+          Instruments
+        </button>
+        <button
+          onClick={() => setTab('effects')}
+          className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
+            tab === 'effects'
+              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+          }`}
+        >
+          Effects
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto timeline-scrollbar">
+      <div className="flex-1 overflow-y-auto timeline-scrollbar pb-4">
         {tab === 'instruments' && (
           <>
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
@@ -359,18 +357,18 @@ export function LeftSidebar() {
           </>
         )}
         {tab === 'effects' && (
-          <div>
+          <div className="pt-1">
             {PLUGIN_LIST.map((plugin) => (
               <div
                 key={plugin.id}
                 onPointerDown={(e) => startEffectDrag(e, plugin)}
                 title={`Drag ${plugin.name} onto a track's Effects panel`}
-                className="flex items-center gap-2.5 px-4 py-1.5 cursor-default hover:bg-zinc-800/60 transition-colors select-none"
+                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
               >
-                <span className="flex-shrink-0 flex items-center justify-center w-4">
+                <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                   <Sparkles size={12} className="text-zinc-400" />
                 </span>
-                <span className="text-xs text-zinc-300">{plugin.name}</span>
+                <span className="text-xs text-[var(--text-2)] truncate">{plugin.name}</span>
               </div>
             ))}
           </div>
@@ -383,10 +381,10 @@ export function LeftSidebar() {
       {ghostName && (
         <div
           ref={ghostRef}
-          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-zinc-700 bg-[#202024] text-xs font-medium text-white shadow-lg shadow-black/40"
+          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
           style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
         >
-          {droppable && <Plus size={13} className="text-green-400" strokeWidth={2.5} />}
+          {droppable && <Plus size={13} className="text-[var(--accent)]" strokeWidth={2.5} />}
           {ghostName}
         </div>
       )}
@@ -395,7 +393,7 @@ export function LeftSidebar() {
       {effectGhostName && (
         <div
           ref={effectGhostRef}
-          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-zinc-700 bg-[#202024] text-xs font-medium text-white shadow-lg shadow-black/40"
+          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
           style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
         >
           <Sparkles size={12} className="text-zinc-400" />

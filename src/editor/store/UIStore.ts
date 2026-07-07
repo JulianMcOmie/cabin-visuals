@@ -99,7 +99,7 @@ export const useUIStore = create<UIState>((set) => ({
   setTracksPixelsPerBeat: (pixels) =>
     set({ tracksPixelsPerBeat: Math.max(2, Math.min(100, pixels)) }),
 
-  tracksRowHeight: 48,
+  tracksRowHeight: 44,
   setTracksRowHeight: (px) =>
     set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
 
@@ -107,7 +107,7 @@ export const useUIStore = create<UIState>((set) => ({
   setTracksLabelWidth: (px) =>
     set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
 
-  topPanelFraction: 0.45,
+  topPanelFraction: 0.66,
   // Clamp ≈ the panels' old min sizes (top ≥ 30%, bottom ≥ 15%).
   setTopPanelFraction: (f) =>
     set({ topPanelFraction: Math.max(0.3, Math.min(0.85, f)) }),

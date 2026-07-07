@@ -1,4 +1,4 @@
-export const TRACK_LABEL_WIDTH = 160
+export const TRACK_LABEL_WIDTH = 168
 
 /** Playhead scrubbing snaps to this beat resolution (1/4 beat) everywhere. */
 export const PLAYHEAD_SNAP_BEATS = 0.25
@@ -8,7 +8,7 @@ export const PLAYHEAD_SNAP_BEATS = 0.25
  * this width to the left of the timeline (right of the label column) so the
  * triangle's left half shows at beat 0 instead of being clipped by the label.
  */
-export const PLAYHEAD_TRIANGLE_HALF = 10
+export const PLAYHEAD_TRIANGLE_HALF = 6
 
 /**
  * Window-resize hit area (px) of the bottom panel's top Separator. Half of it

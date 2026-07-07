@@ -135,14 +135,14 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
           style={{ left: freeze.rect.left, top: freeze.rect.top, width: freeze.rect.width, height: freeze.rect.height }}
         />
       )}
-      <div ref={panelRef} className="w-[340px] rounded-lg border border-zinc-700 bg-[#202024] shadow-2xl shadow-black/60 p-4">
+      <div ref={panelRef} className="w-[340px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] shadow-2xl shadow-black/60 p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
-            <Film size={14} className="text-indigo-400" />
+          <span className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+            <Film size={14} className="text-[var(--accent)]" />
             Export video
           </span>
           {!running && (
-            <button onClick={onClose} className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200">
+            <button onClick={onClose} className="flex items-center justify-center w-5 h-5 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-3)] hover:text-[var(--text)] cursor-pointer">
               <X size={12} />
             </button>
           )}
@@ -150,7 +150,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
 
         {phase.kind === 'settings' && (
           <div className="flex flex-col gap-3">
-            <label className="flex items-center justify-between text-xs text-zinc-400">
+            <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
               Resolution
               <select
                 value={settings.width}
@@ -158,7 +158,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
                   const r = RESOLUTIONS.find((r) => r.width === Number(e.target.value)) ?? RESOLUTIONS[0]
                   setSettings((s) => ({ ...s, width: r.width, height: r.height }))
                 }}
-                className="h-6 px-1.5 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                className="h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
               >
                 {RESOLUTIONS.map((r) => (
                   <option key={r.width} value={r.width} disabled={!isPro && r.width > 1280}>
@@ -168,49 +168,49 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
               </select>
             </label>
 
-            <label className="flex items-center justify-between text-xs text-zinc-400">
+            <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
               Frame rate
               <select
                 value={settings.fps}
                 onChange={(e) => setSettings((s) => ({ ...s, fps: Number(e.target.value) as 30 | 60 }))}
-                className="h-6 px-1.5 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+                className="h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
               >
                 <option value={60}>60 fps</option>
                 <option value={30}>30 fps</option>
               </select>
             </label>
 
-            <label className={`flex items-center justify-between text-xs ${audioOk ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            <label className={`flex items-center justify-between text-xs ${audioOk ? 'text-[var(--text-3)]' : 'text-[var(--text-muted)]'}`}>
               Include audio
               <input
                 type="checkbox"
                 checked={settings.includeAudio && audioOk}
                 disabled={!audioOk}
                 onChange={(e) => setSettings((s) => ({ ...s, includeAudio: e.target.checked }))}
-                className="accent-indigo-500 w-3.5 h-3.5"
+                className="accent-[#35a7e6] w-3.5 h-3.5 cursor-pointer"
               />
             </label>
-            {!audioOk && <p className="text-[11px] text-zinc-600 -mt-2">No AAC encoder in this browser — exporting video only.</p>}
+            {!audioOk && <p className="text-[11px] text-[var(--text-muted)] -mt-2">No AAC encoder in this browser — exporting video only.</p>}
 
-            <label className="flex items-center justify-between gap-3 text-xs text-zinc-400">
+            <label className="flex items-center justify-between gap-3 text-xs text-[var(--text-3)]">
               File name
               <input
                 value={settings.fileName}
                 onChange={(e) => setSettings((s) => ({ ...s, fileName: e.target.value }))}
                 spellCheck={false}
-                className="flex-1 min-w-0 h-6 px-1.5 rounded bg-zinc-900 text-xs text-zinc-200 border border-zinc-700 outline-none focus:border-zinc-500"
+                className="flex-1 min-w-0 h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none focus:border-[var(--accent)]"
               />
             </label>
 
             {!isPro && (
-              <p className="text-[11px] text-zinc-500 leading-snug">
+              <p className="text-[11px] text-[var(--text-muted)] leading-snug">
                 Free exports are 720p with a small watermark.{' '}
                 {/* New tab: mid-export (possibly unsaved demo work) shouldn't be navigated away. */}
                 <a
                   href="/pricing"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 cursor-pointer"
+                  className="text-[var(--accent)] hover:text-[var(--accent-hover)] underline underline-offset-2 cursor-pointer"
                 >
                   Upgrade to Pro
                 </a>{' '}
@@ -221,7 +221,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             <button
               onClick={() => void start()}
               disabled={!settings.fileName.trim()}
-              className="mt-1 h-8 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-semibold transition-colors"
+              className="mt-1 h-8 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer disabled:cursor-default"
             >
               Export
             </button>
@@ -232,24 +232,24 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
 
         {phase.kind === 'done' && (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-zinc-300">
-              <span className="font-mono text-zinc-100">{phase.fileName}.mp4</span> is ready
-              <span className="text-zinc-500"> · {(phase.blob.size / 1e6).toFixed(1)} MB</span>
+            <p className="text-xs text-[var(--text-2)]">
+              <span className="font-mono text-[var(--text)]">{phase.fileName}.mp4</span> is ready
+              <span className="text-[var(--text-muted)]"> · {(phase.blob.size / 1e6).toFixed(1)} MB</span>
             </p>
             <button
               onClick={() => downloadBlob(phase.blob, phase.fileName)}
-              className="h-8 rounded bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+              className="h-8 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer"
             >
               Download
             </button>
-            <button onClick={onClose} className="h-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors">Close</button>
+            <button onClick={onClose} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Close</button>
           </div>
         )}
 
         {phase.kind === 'error' && (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-red-400 break-words">Export failed: {phase.message}</p>
-            <button onClick={() => setPhase({ kind: 'settings' })} className="h-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors">Back</button>
+            <button onClick={() => setPhase({ kind: 'settings' })} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Back</button>
           </div>
         )}
       </div>
@@ -265,16 +265,16 @@ function RunningView({ phase, fps, onCancel }: { phase: Extract<Phase, { kind: '
   const remaining = speed > 0 ? ((phase.total - phase.frame) / fps) / speed : null
   return (
     <div className="flex flex-col gap-3">
-      <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-        <div className="h-full bg-indigo-500 transition-[width] duration-200" style={{ width: `${pct}%` }} />
+      <div className="h-2 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
+        <div className="h-full bg-[var(--accent)] transition-[width] duration-200" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex justify-between text-[11px] text-zinc-500 font-mono tabular-nums">
+      <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-mono tabular-nums">
         <span>{phase.frame} / {phase.total} frames</span>
         <span>
           {remaining != null && `~${Math.max(1, Math.round(remaining))}s left`}
         </span>
       </div>
-      <button onClick={onCancel} className="h-8 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors">Cancel</button>
+      <button onClick={onCancel} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Cancel</button>
     </div>
   )
 }

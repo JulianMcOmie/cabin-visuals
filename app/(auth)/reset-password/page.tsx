@@ -3,6 +3,15 @@
 import { requestPasswordReset } from './actions';
 import { useState } from 'react';
 import Link from 'next/link';
+import {
+  AuthShell,
+  AuthTitle,
+  AuthBanner,
+  authLabelClass,
+  authInputClass,
+  authSubmitClass,
+  authLinkClass,
+} from '../auth-ui';
 
 export default function ResetPasswordPage() {
   const [message, setMessage] = useState<string | null>(null);
@@ -25,33 +34,26 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black text-white">
-      <div className="w-full max-w-md rounded-lg bg-gray-900/50 p-8 shadow-md border border-gray-800">
-        <h1 className="mb-6 text-center text-2xl font-bold text-white">
-          Reset Your Password
-        </h1>
+    <AuthShell>
+      <AuthTitle title="Reset password" sub="We'll email you a link to set a new one." />
 
-        <form id="reset-password-form" action={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300">Enter your email address</label>
-            <input id="email" name="email" type="email" required className="mt-1 block w-full rounded-full border border-gray-700 bg-black/50 px-4 py-3 text-white shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm placeholder-gray-500" placeholder="Enter your email address" disabled={isSubmitting || !!message} />
-          </div>
+      {message && <AuthBanner kind="success">{message}</AuthBanner>}
+      {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
-          {message && ( <p className="text-sm text-green-500">{message}</p> )}
-          {error && ( <p className="text-sm text-red-500">{error}</p> )}
-
-          <div className="pt-2">
-            <button type="submit" className="w-full justify-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50" disabled={isSubmitting || !!message}>
-              {isSubmitting ? 'Sending...' : 'Send Reset Link'}
-            </button>
-          </div>
-        </form>
-         <div className="mt-6 text-center text-sm">
-          <Link href="/login" legacyBehavior>
-            <a className="font-medium text-indigo-400 hover:text-indigo-300">Back to Login</a>
-          </Link>
+      <form id="reset-password-form" action={handleSubmit} className="flex flex-col gap-[14px]">
+        <div>
+          <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
+          <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" disabled={isSubmitting || !!message} />
         </div>
-      </div>
-    </div>
+
+        <button type="submit" className={`mt-1 ${authSubmitClass}`} disabled={isSubmitting || !!message}>
+          {isSubmitting ? 'Sending…' : 'Send reset link'}
+        </button>
+      </form>
+
+      <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
+        <Link href="/login" className={authLinkClass}>Back to sign in</Link>
+      </p>
+    </AuthShell>
   );
-} 
+}

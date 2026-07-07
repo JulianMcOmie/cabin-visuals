@@ -67,12 +67,12 @@ export function ProjectLengthControl() {
   // Readout and input share identical box metrics (padding, border, ch-based
   // width for the current digit count), so toggling edit mode never reflows —
   // and a 2-digit value doesn't reserve 3 digits of dead space.
-  const box = 'inline-block box-content align-baseline font-mono text-xs tabular-nums px-1 rounded border'
+  const box = 'inline-block box-content align-baseline font-mono text-[11px] tabular-nums px-1 rounded border'
   const chWidth = (len: number) => ({ width: `${Math.max(2, len)}ch` })
 
   return (
-    <span className="font-mono text-xs text-zinc-500 select-none tabular-nums">
-      BARS:{' '}
+    <span className="font-mono text-[11px] text-[var(--text-muted)] select-none tabular-nums">
+      BARS{' '}
       {editing ? (
         <input
           autoFocus
@@ -87,7 +87,7 @@ export function ProjectLengthControl() {
             else if (e.key === 'Escape') setEditing(false)
           }}
           style={chWidth(draft.length)}
-          className={`${box} bg-zinc-800 text-zinc-100 border-zinc-600 outline-none focus:border-zinc-400`}
+          className={`${box} bg-[var(--bg-elevated)] text-[var(--text)] border-[var(--border-strong)] outline-none focus:border-[var(--accent)]`}
         />
       ) : (
         // Only the number is the drag / double-click target — not the label.
@@ -95,7 +95,7 @@ export function ProjectLengthControl() {
           onPointerDown={onPointerDown}
           title="Drag up / down to change project length — double-click to type"
           style={chWidth(String(totalBars).length)}
-          className={`${box} border-transparent text-zinc-200 cursor-ns-resize hover:text-zinc-100 transition-colors`}
+          className={`${box} border-transparent text-[var(--text)] cursor-ns-resize hover:text-white transition-colors`}
         >
           {totalBars}
         </span>

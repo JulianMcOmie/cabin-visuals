@@ -10,9 +10,9 @@ import { CabinLogo } from '@/components/CabinLogo'
 // Suspense boundary (useSearchParams requires one in the App Router).
 function EditorLoadingShell() {
   return (
-    <div className="w-screen h-screen flex flex-col items-center justify-center gap-4 bg-[#1e1e21]">
-      <CabinLogo className="h-24 w-auto animate-pulse" strokeWidth={95} />
-      <p className="text-sm text-zinc-500 select-none">Loading the studio…</p>
+    <div className="w-screen h-screen flex flex-col items-center justify-center gap-4 bg-[var(--bg-app)]">
+      <CabinLogo className="h-24 w-auto animate-pulse" />
+      <p className="text-sm text-[var(--text-muted)] select-none">Loading the studio…</p>
     </div>
   )
 }

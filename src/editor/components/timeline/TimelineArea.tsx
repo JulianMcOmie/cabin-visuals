@@ -149,7 +149,7 @@ export function TimelineArea() {
       name: 'Cube',
       type: 'base' as const,
       instrumentId: 'cube',
-      color: '#6366f1',
+      color: '#35a7e6',
       muted: false,
       solo: false,
       blocks: [],
@@ -175,7 +175,7 @@ export function TimelineArea() {
   }
 
   return (
-    <div className="relative flex flex-col h-full border-t border-zinc-800 bg-zinc-900">
+    <div className="relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -191,13 +191,13 @@ export function TimelineArea() {
           playheadHeadRef={playheadHeadRef}
           corner={
             <div className="flex items-center gap-2 px-3 w-full">
-              <span className="text-xs font-medium text-zinc-300">Tracks</span>
+              <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">TRACKS</span>
               <button
-                className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
                 onClick={insertTrack}
                 title={`Add track`}
               >
-                <Plus size={12} />
+                <Plus size={11} />
               </button>
             </div>
           }
@@ -213,8 +213,8 @@ export function TimelineArea() {
       <div className="relative flex-1 min-h-0 overflow-hidden">
         {rootTrackIds.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <p className="text-xs text-zinc-600 text-center px-4">
-              No tracks yet. Click <span className="text-zinc-400 text-lg">+</span> to add a track, then right-click a lane to draw blocks.
+            <p className="text-xs text-[var(--text-muted)] text-center px-4">
+              No tracks yet. Click <span className="text-[var(--text-3)] text-lg">+</span> to add a track, then right-click a lane to draw blocks.
             </p>
           </div>
         )}
@@ -260,7 +260,7 @@ export function TimelineArea() {
                 className="absolute z-30 pointer-events-none"
                 style={{ top: trackDrop.line.top - 1, left: 0, right: 0, height: 2 }}
               >
-                <div className="h-full bg-indigo-400" style={{ marginLeft: trackDrop.line.left }} />
+                <div className="h-full bg-[var(--accent)]" style={{ marginLeft: trackDrop.line.left }} />
               </div>
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the
@@ -268,8 +268,8 @@ export function TimelineArea() {
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-zinc-800/60 bg-[#202024] ${
-                  rootTrackIds.length > 0 ? 'border-t border-t-zinc-900' : ''
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-panel-raised)] ${
+                  rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}
                 onPointerDown={() => deselectTrack()}
@@ -289,13 +289,13 @@ export function TimelineArea() {
             >
               {marqueeRect && (
                 <div
-                  className="absolute z-20 border border-indigo-400"
+                  className="absolute z-20 border border-[var(--accent)]"
                   style={{
                     left: marqueeRect.left,
                     top: marqueeRect.top,
                     width: marqueeRect.width,
                     height: marqueeRect.height,
-                    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                    backgroundColor: 'rgba(53, 167, 230, 0.15)',
                   }}
                 />
               )}
@@ -310,7 +310,7 @@ export function TimelineArea() {
             under the label edge, and never draws over the scrollbars. */}
         <div ref={clipRef} className="absolute top-0 overflow-hidden pointer-events-none" style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}>
           <div ref={playheadRef} className="absolute top-0 bottom-0" style={{ left: 0, width: 0 }}>
-            <div className="absolute top-0 bottom-0" style={{ left: -0.5, width: 1, backgroundColor: '#ffffff' }} />
+            <div className="absolute top-0 bottom-0" style={{ left: -0.5, width: 1, backgroundColor: '#ecedef' }} />
             <div
               className="absolute top-0 bottom-0 pointer-events-auto cursor-ew-resize"
               style={{ left: -5, width: 10 }}
@@ -325,15 +325,15 @@ export function TimelineArea() {
       {copyDrag && (
         <div
           ref={ghostRef}
-          className="fixed z-50 pointer-events-none flex items-center gap-2 px-3 border-r border-r-zinc-800/60 shadow-lg shadow-black/40"
-          style={{ left: copyDrag.labelLeft, width: labelWidth, height: copyDrag.rowHeight, backgroundColor: '#202024', opacity: 0.8 }}
+          className="fixed z-50 pointer-events-none flex items-center gap-2 px-3 border border-[var(--border)] shadow-lg shadow-black/40"
+          style={{ left: copyDrag.labelLeft, width: labelWidth, height: copyDrag.rowHeight, backgroundColor: 'var(--bg-elevated)', opacity: 0.8 }}
         >
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium truncate text-white">{copyDrag.name}</div>
+            <div className="text-[11px] font-medium truncate text-[var(--text)]">{copyDrag.name}</div>
           </div>
           <div className="flex gap-1 flex-shrink-0">
-            <div className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${copyDrag.muted ? 'bg-amber-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>M</div>
-            <div className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${copyDrag.solo ? 'bg-green-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>S</div>
+            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.muted ? 'bg-[var(--warn)] text-[#0a0a0c]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>M</div>
+            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.solo ? 'bg-[var(--accent)] text-[#0a0a0c]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>S</div>
           </div>
         </div>
       )}

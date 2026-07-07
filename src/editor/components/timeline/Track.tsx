@@ -91,8 +91,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         position: 'relative',
         height: rowHeight,
       }}
-      className={`flex items-stretch border-b border-zinc-800/60 last:border-b-0 cursor-default transition-colors duration-100 ${
-        isSelected ? 'bg-zinc-800/40' : 'hover:bg-zinc-900/40'
+      className={`flex items-stretch border-b border-[rgba(38,38,44,0.6)] last:border-b-0 cursor-default transition-colors duration-100 ${
+        isSelected ? 'bg-[rgba(53,167,230,0.05)]' : 'hover:bg-white/[0.02]'
       }`}
     >
       <div
@@ -123,18 +123,20 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-zinc-800/60 transition-colors duration-100 ${
-          isLast ? '' : 'border-b border-b-zinc-900'
+        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)] transition-colors duration-100 ${
+          isLast ? '' : 'border-b border-b-[var(--border-subtle)]'
         } ${
-          dropInto ? 'bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : isSelected ? 'bg-zinc-700' : isAutomation ? 'bg-[#1d1d21]' : 'bg-[#202024]'
+          dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isAutomation ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
         }`}
       >
+        {/* 3px colour spine — the row's track colour, full label height. */}
+        <span
+          className="w-[3px] flex-shrink-0 self-stretch my-1.5 rounded-[2px]"
+          style={{ backgroundColor: blockColor }}
+        />
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          {isModifier && (
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: blockColor }} />
-          )}
           {renaming ? (
             <input
               ref={renameRef}
@@ -145,12 +147,13 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 if (e.key === 'Enter') e.currentTarget.blur()
                 else if (e.key === 'Escape') { e.currentTarget.value = track.name; e.currentTarget.blur() }
               }}
-              className="w-full min-w-0 text-xs font-medium text-white bg-zinc-900 border border-zinc-600 rounded px-1 py-0 outline-none"
+              className="w-full min-w-0 text-[11px] font-medium text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none"
             />
           ) : (
             <span
               onDoubleClick={() => setRenaming(true)}
-              className={`text-xs font-medium truncate ${isModifier ? 'text-zinc-300' : 'text-white'}`}
+              title="Double-click to rename"
+              className={`text-[11px] font-medium truncate ${isModifier ? 'text-[var(--text-2)]' : 'text-[var(--text)]'}`}
             >
               {track.name}
             </span>
@@ -158,7 +161,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); setTrackCollapsed(track.id, !isCollapsed) }}
-              className="flex-shrink-0 flex items-center justify-center text-zinc-500 hover:text-zinc-200"
+              className="flex-shrink-0 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-2)] cursor-pointer"
               aria-label={isCollapsed ? 'Expand track' : 'Collapse track'}
             >
               {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -176,10 +179,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onPointerEnter={() => {
               if (msPaint?.kind === 'mute' && track.muted !== msPaint.value) toggleMute(track.id)
             }}
-            className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-colors cursor-pointer ${
               track.muted
-                ? 'bg-amber-500 text-black'
-                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                ? 'bg-[var(--warn)] text-[#0a0a0c]'
+                : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             M
@@ -193,10 +196,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onPointerEnter={() => {
               if (msPaint?.kind === 'solo' && track.solo !== msPaint.value) toggleSolo(track.id)
             }}
-            className={`w-5 h-5 rounded text-[10px] font-bold transition-colors ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-colors cursor-pointer ${
               track.solo
-                ? 'bg-green-500 text-black'
-                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                ? 'bg-[var(--accent)] text-[#0a0a0c]'
+                : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             S

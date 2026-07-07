@@ -46,82 +46,85 @@ export default function PricingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0b0b0f] text-zinc-200">
-      <header className="flex items-center justify-between px-6 py-4 max-w-5xl mx-auto">
-        <Link href="/" className="flex items-center gap-2 select-none">
-          <CabinLogo className="h-10 w-auto" />
-          <span className="text-lg text-zinc-200">Cabin Visuals</span>
-        </Link>
-        <nav className="flex items-center gap-5 text-sm">
-          <Link href="/editor" className="text-zinc-400 hover:text-zinc-100 transition-colors">Editor</Link>
-          {hasAccount ? (
-            <Link href="/projects" className="text-zinc-400 hover:text-zinc-100 transition-colors">Projects</Link>
-          ) : (
-            <Link href="/login" className="text-zinc-400 hover:text-zinc-100 transition-colors">Log in</Link>
-          )}
-        </nav>
+    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text)] font-sans">
+      {/* Nav — 64px, hairline border (same as Landing) */}
+      <header className="border-b border-[var(--border-subtle)]">
+        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6">
+          <Link href="/" className="flex items-center gap-2.5 select-none cursor-pointer">
+            <CabinLogo className="h-[30px] w-auto" />
+            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
+          </Link>
+          <nav className="flex items-center gap-5 text-[13px]">
+            <Link href="/editor" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Editor</Link>
+            {hasAccount ? (
+              <Link href="/projects" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Projects</Link>
+            ) : (
+              <Link href="/login" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Log in</Link>
+            )}
+          </nav>
+        </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 pb-24">
-        <div className="text-center mt-12 mb-14">
-          <h1 className="text-4xl font-extrabold text-white">Make music you can see</h1>
-          <p className="mt-3 text-zinc-400 max-w-xl mx-auto">
+      <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
+        <div className="mt-16 mb-12 text-center">
+          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Make music you can see</h1>
+          <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
             Start free. Upgrade when you want your exports clean and full-res.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="mx-auto grid max-w-[760px] gap-5 md:grid-cols-2">
           {/* Free */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 flex flex-col">
-            <h2 className="text-lg font-semibold text-zinc-100">Free</h2>
-            <p className="mt-1 text-sm text-zinc-500">Everything you need to start creating.</p>
-            <div className="mt-5 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold text-white">$0</span>
+          <div className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
+            <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">FREE</span>
+            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">Everything you need to start creating.</p>
+            <div className="mt-[18px] flex items-baseline gap-1">
+              <span className="text-[36px] font-bold text-[var(--text)]">$0</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm flex-1">
+            <ul className="m-0 mt-[22px] flex flex-1 list-none flex-col gap-[11px] p-0 text-[13px]">
               {FREE_FEATURES.map((f) => (
                 <li key={f} className="flex gap-2.5">
-                  <Check size={16} className="text-zinc-500 shrink-0 mt-0.5" />
-                  <span className="text-zinc-300">{f}</span>
+                  <Check size={15} className="mt-0.5 shrink-0 text-[var(--text-muted)]" />
+                  <span className="text-[var(--text-2)]">{f}</span>
                 </li>
               ))}
             </ul>
             <Link
-              href={hasAccount ? '/projects' : '/signup'}
-              className="mt-8 h-10 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-200 text-sm font-semibold flex items-center justify-center transition-colors cursor-pointer"
+              href={hasAccount ? '/projects' : '/editor'}
+              className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] border border-[var(--border)] text-[13px] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
             >
               {hasAccount ? 'Go to your projects' : 'Start creating'}
             </Link>
           </div>
 
           {/* Pro */}
-          <div className="rounded-2xl border border-indigo-500/60 bg-indigo-950/20 p-8 flex flex-col relative">
-            <span className="absolute -top-3 right-6 text-[11px] font-bold tracking-wide px-2.5 py-1 rounded-full bg-indigo-600 text-white">
+          <div className="relative flex flex-col rounded-lg border border-[rgba(53,167,230,0.5)] bg-[var(--bg-panel)] p-7">
+            <span className="absolute -top-2.5 right-5 rounded px-[9px] py-[3px] font-mono text-[10px] font-bold tracking-[0.08em] bg-[var(--accent)] text-[var(--on-accent)]">
               PRO
             </span>
-            <h2 className="text-lg font-semibold text-zinc-100">Pro</h2>
-            <p className="mt-1 text-sm text-zinc-500">For visuals you publish.</p>
-            <div className="mt-5 flex items-baseline gap-1">
-              <span className="text-4xl font-extrabold text-white">$9</span>
-              <span className="text-zinc-500 text-sm">/ month</span>
+            <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--accent)]">PRO</span>
+            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">For visuals you publish.</p>
+            <div className="mt-[18px] flex items-baseline gap-1.5">
+              <span className="text-[36px] font-bold text-[var(--text)]">$9</span>
+              <span className="font-mono text-[13px] text-[var(--text-muted)]">/ month</span>
             </div>
-            <ul className="mt-6 space-y-3 text-sm flex-1">
+            <ul className="m-0 mt-[22px] flex flex-1 list-none flex-col gap-[11px] p-0 text-[13px]">
               {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex gap-2.5">
-                  <Check size={16} className="text-indigo-400 shrink-0 mt-0.5" />
-                  <span className="text-zinc-200">{f}</span>
+                  <Check size={15} className="mt-0.5 shrink-0 text-[var(--accent)]" />
+                  <span className="text-[var(--text)]">{f}</span>
                 </li>
               ))}
             </ul>
             {plan.isPro ? (
-              <div className="mt-8 h-10 rounded-lg bg-zinc-800 text-zinc-400 text-sm font-semibold flex items-center justify-center">
+              <div className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] bg-[var(--bg-elevated)] text-[13px] font-semibold text-[var(--text-3)]">
                 You&apos;re on Pro — thank you!
               </div>
             ) : (
               <button
                 onClick={handleUpgrade}
                 disabled={opening}
-                className="mt-8 h-10 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-indigo-800 disabled:text-indigo-200 text-white text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="mt-7 flex h-[38px] items-center justify-center gap-2 rounded-[5px] border-0 bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:hover:bg-[var(--accent)] cursor-pointer"
               >
                 {opening ? (
                   <>
@@ -136,7 +139,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-zinc-600 mt-10">
+        <p className="mt-9 text-center text-[12px] text-[var(--text-muted)]">
           Cancel anytime from the billing portal, your projects stay yours either way.
         </p>
       </main>

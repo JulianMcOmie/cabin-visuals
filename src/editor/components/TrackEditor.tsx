@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Music2, Sparkles, ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
@@ -13,7 +13,7 @@ import type { Routing, EffectInstance } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
-/** The track's name in the editor header — double-click to rename, same contract
+/** The track's name in the inspector header — double-click to rename, same contract
  *  as the timeline label (Enter/blur commits, Esc cancels, empty = cancel). */
 function EditableTrackName({ trackId, name }: { trackId: string; name: string }) {
   const renameTrack = useProjectStore((s) => s.renameTrack)
@@ -34,7 +34,7 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
           if (e.key === 'Enter') e.currentTarget.blur()
           else if (e.key === 'Escape') { e.currentTarget.value = name; e.currentTarget.blur() }
         }}
-        className="w-full text-sm font-semibold text-zinc-200 bg-zinc-900 border border-zinc-600 rounded px-1 py-0 mb-0.5 outline-none"
+        className="w-32 text-[11px] font-semibold text-right text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none focus:border-[var(--accent)]"
       />
     )
   }
@@ -43,20 +43,21 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
     <div
       title="Double-click to rename"
       onDoubleClick={() => setRenaming(true)}
-      className="group flex items-center gap-1.5 mb-0.5 cursor-text select-none"
+      className="group flex items-center gap-1.5 min-w-0 cursor-text select-none"
     >
-      <p className="text-sm font-semibold text-zinc-200 truncate">{name}</p>
+      <span className="text-[11px] font-semibold text-[var(--accent)] truncate">{name}</span>
       <button
         onClick={() => setRenaming(true)}
         aria-label="Rename track"
-        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-200 transition-opacity"
+        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
       >
-        <Pencil size={11} />
+        <Pencil size={10} />
       </button>
     </div>
   )
 }
 
+/** One param row: label | 3px accent slider | mono value — 100px / 1fr / 44px. */
 function ParamSlider({
   label, value, min, max, step, onChange,
 }: {
@@ -90,25 +91,25 @@ function ParamSlider({
   }
 
   return (
-    <div className="mb-4">
-      <div className="flex justify-between items-center mb-1.5">
-        <span className="text-xs text-zinc-300">{label}</span>
-        <span className="text-xs text-zinc-500 tabular-nums">{value.toFixed(2)}</span>
-      </div>
+    <div className="grid grid-cols-[100px_1fr_44px] items-center gap-2.5 mb-[13px]">
+      <span className="text-[11px] text-[var(--text-3)] truncate" title={label}>{label}</span>
       <div
         ref={trackRef}
         onPointerDown={onPointerDown}
-        className="relative h-1 bg-zinc-800 rounded-full cursor-pointer select-none"
+        className="relative h-[3px] bg-[var(--border)] rounded-full cursor-pointer select-none"
       >
         <div
-          className="absolute left-0 top-0 h-full rounded-full bg-cyan-500"
+          className="absolute left-0 top-0 h-full rounded-full bg-[var(--accent)]"
           style={{ width: `${pct}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-cyan-400 border-2 border-zinc-900"
-          style={{ left: `calc(${pct}% - 5px)` }}
+          className="absolute top-1/2 -translate-y-1/2 w-[9px] h-[9px] rounded-full bg-[var(--text)]"
+          style={{ left: `calc(${pct}% - 4px)` }}
         />
       </div>
+      <span className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">
+        {value.toFixed(2)}
+      </span>
     </div>
   )
 }
@@ -125,12 +126,12 @@ function ParamControl({ param, numValue, strValue, onNum, onStr }: {
 }) {
   if (param.type === 'select') {
     return (
-      <div className="mb-4">
-        <div className="text-xs text-zinc-300 mb-1.5">{param.label}</div>
+      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
+        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <select
           value={numValue ?? param.default}
           onChange={(e) => onNum(Number(e.target.value))}
-          className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
+          className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
         >
           {param.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -140,39 +141,43 @@ function ParamControl({ param, numValue, strValue, onNum, onStr }: {
   if (param.type === 'boolean') {
     const on = (numValue ?? param.default) >= 0.5
     return (
-      <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs text-zinc-300">{param.label}</span>
-        <button
-          onClick={() => onNum(on ? 0 : 1)}
-          className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${on ? 'bg-cyan-600' : 'bg-zinc-700'}`}
-          aria-label={param.label}
-        >
-          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
-        </button>
+      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
+        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
+        <div className="flex justify-end">
+          <button
+            onClick={() => onNum(on ? 0 : 1)}
+            className={`w-8 h-4 rounded-full relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+            aria-label={param.label}
+          >
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-[var(--text)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
+        </div>
       </div>
     )
   }
   if (param.type === 'color') {
     return (
-      <div className="mb-4 flex items-center justify-between">
-        <span className="text-xs text-zinc-300">{param.label}</span>
-        <input
-          type="color"
-          value={strValue ?? param.default}
-          onChange={(e) => onStr?.(e.target.value)}
-          className="w-8 h-6 rounded bg-transparent border border-zinc-700 cursor-pointer flex-shrink-0"
-        />
+      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
+        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
+        <div className="flex justify-end">
+          <input
+            type="color"
+            value={strValue ?? param.default}
+            onChange={(e) => onStr?.(e.target.value)}
+            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0"
+          />
+        </div>
       </div>
     )
   }
   if (param.type === 'string') {
     const value = strValue ?? param.default
     return (
-      <div className="mb-4">
-        <div className="text-xs text-zinc-300 mb-1.5">{param.label}</div>
+      <div className="mb-[13px]">
+        <div className="text-[11px] text-[var(--text-3)] mb-1.5">{param.label}</div>
         {param.multiline
-          ? <textarea value={value} onChange={(e) => onStr?.(e.target.value)} rows={3} className="w-full px-2 py-1 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none resize-y" />
-          : <input type="text" value={value} onChange={(e) => onStr?.(e.target.value)} className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none" />}
+          ? <textarea value={value} onChange={(e) => onStr?.(e.target.value)} rows={3} className="w-full px-2 py-1 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none focus:border-[var(--accent)] resize-y" />
+          : <input type="text" value={value} onChange={(e) => onStr?.(e.target.value)} className="w-full h-6 px-2 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none focus:border-[var(--accent)]" />}
       </div>
     )
   }
@@ -215,27 +220,27 @@ function TargetSelect({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full h-7 px-2 flex items-center justify-between gap-2 rounded bg-zinc-800 text-[11px] border border-zinc-700 outline-none hover:border-zinc-600"
+        className="w-full h-7 px-2 flex items-center justify-between gap-2 rounded bg-[var(--bg-app)] text-[11px] border border-[var(--border)] outline-none hover:border-[var(--border-strong)] cursor-pointer"
       >
-        <span className={`truncate ${chosen.length === 0 ? 'text-zinc-500' : 'text-zinc-300'}`}>{summary}</span>
-        <ChevronDown size={13} className="flex-shrink-0 text-zinc-500" />
+        <span className={`truncate ${chosen.length === 0 ? 'text-[var(--text-muted)]' : 'text-[var(--text-2)]'}`}>{summary}</span>
+        <ChevronDown size={13} className="flex-shrink-0 text-[var(--text-muted)]" />
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-zinc-800 border border-zinc-700 shadow-lg shadow-black/40 py-1">
+        <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-[var(--bg-elevated)] border border-[var(--border)] shadow-lg shadow-black/40 py-1">
           {options.map((o) => {
             const isChecked = selected.has(o.key)
             return (
               <button
                 key={o.key}
                 onClick={() => onToggle(o.key)}
-                className="w-full px-2 h-7 flex items-center gap-2 text-[11px] text-zinc-300 hover:bg-zinc-700"
+                className="w-full px-2 h-7 flex items-center gap-2 text-[11px] text-[var(--text-2)] hover:bg-[var(--border)] cursor-pointer"
               >
                 <span
                   className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
-                    isChecked ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+                    isChecked ? 'bg-[var(--accent)] border-[var(--accent)]' : 'border-[var(--border-strong)]'
                   }`}
                 >
-                  {isChecked && <Check size={11} className="text-white" strokeWidth={3} />}
+                  {isChecked && <Check size={11} className="text-[var(--on-accent)]" strokeWidth={3} />}
                 </span>
                 <span className="truncate">{o.label}</span>
               </button>
@@ -248,8 +253,8 @@ function TargetSelect({
 }
 
 /** Add/remove a track's tags. Tags are the group labels a modulator can route to.
- *  The add box is a combobox: type a new tag, or pick an existing project tag from
- *  the dropdown (`suggestions` = every tag used elsewhere in the project). */
+ *  Chips on --bg-elevated plus a dashed "+ add" chip; clicking it opens the same
+ *  combobox as before (type a new tag, or pick an existing project tag). */
 function TagEditor({
   tags, suggestions, onChange,
 }: {
@@ -257,24 +262,35 @@ function TagEditor({
   suggestions: string[]
   onChange: (tags: string[]) => void
 }) {
+  const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!open) return
+    if (adding) inputRef.current?.focus()
+  }, [adding])
+
+  useEffect(() => {
+    if (!adding) return
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setAdding(false)
+        setOpen(false)
+        setDraft('')
+      }
     }
     window.addEventListener('mousedown', onDown)
     return () => window.removeEventListener('mousedown', onDown)
-  }, [open])
+  }, [adding])
 
   const addTag = (value: string) => {
     const t = value.trim()
     if (t && !tags.includes(t)) onChange([...tags, t])
     setDraft('')
     setOpen(false)
+    setAdding(false)
   }
 
   // Existing project tags not already on this track, narrowed by what's typed.
@@ -282,62 +298,75 @@ function TagEditor({
   const matches = suggestions.filter((s) => !tags.includes(s) && s.toLowerCase().includes(q))
 
   return (
-    <div className="mt-5">
-      <p className="text-[11px] text-zinc-500 mb-2">Tags:</p>
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {tags.length === 0 && <span className="text-[11px] text-zinc-600">No tags</span>}
+    <div className="mt-[18px] pt-3.5 border-t border-[var(--border)]">
+      <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">TAGS</span>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {tags.map((t) => (
           <span
             key={t}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[11px] text-zinc-300"
+            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-[3px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[11px] text-[var(--text-3)]"
           >
             {t}
             <button
               onClick={() => onChange(tags.filter((x) => x !== t))}
-              className="text-zinc-500 hover:text-zinc-200"
+              className="text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
               aria-label={`Remove tag ${t}`}
             >
-              <X size={11} />
+              <X size={10} />
             </button>
           </span>
         ))}
-      </div>
-      <div ref={ref} className="relative">
-        <div className="flex items-center gap-1 h-7 pl-2 pr-1 rounded bg-zinc-800 border border-zinc-700 focus-within:border-zinc-600">
-          <input
-            value={draft}
-            onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(draft) } }}
-            placeholder="Add a tag…"
-            className="flex-1 min-w-0 bg-transparent text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
-          />
+        {!adding && (
           <button
-            onClick={() => setOpen((v) => !v)}
-            className="flex-shrink-0 text-zinc-500 hover:text-zinc-300"
-            aria-label="Show existing tags"
+            onClick={() => setAdding(true)}
+            className="px-2 py-0.5 rounded-[3px] border border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-3)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
           >
-            <ChevronDown size={13} />
+            + add
           </button>
-        </div>
-        {open && matches.length > 0 && (
-          <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-zinc-800 border border-zinc-700 shadow-lg shadow-black/40 py-1">
-            {matches.map((s) => (
-              <button
-                key={s}
-                onClick={() => addTag(s)}
-                className="w-full px-2 h-7 flex items-center text-[11px] text-zinc-300 hover:bg-zinc-700 truncate"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
         )}
       </div>
-      {/* While open, reserve flow space below the input so the absolutely-positioned
-          list isn't clipped against the panel's bottom edge and can scroll into view
-          (the panel's pb keeps a gap beneath it). */}
-      {open && matches.length > 0 && <div aria-hidden className="h-36" />}
+      {adding && (
+        <div ref={ref} className="relative mt-2">
+          <div className="flex items-center gap-1 h-7 pl-2 pr-1 rounded bg-[var(--bg-app)] border border-[var(--border)] focus-within:border-[var(--accent)]">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); addTag(draft) }
+                else if (e.key === 'Escape') { setAdding(false); setOpen(false); setDraft('') }
+              }}
+              placeholder="Add a tag…"
+              className="flex-1 min-w-0 bg-transparent text-[11px] text-[var(--text-2)] outline-none placeholder:text-[var(--text-muted)]"
+            />
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] cursor-pointer"
+              aria-label="Show existing tags"
+            >
+              <ChevronDown size={13} />
+            </button>
+          </div>
+          {open && matches.length > 0 && (
+            <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-[var(--bg-elevated)] border border-[var(--border)] shadow-lg shadow-black/40 py-1">
+              {matches.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => addTag(s)}
+                  className="w-full px-2 h-7 flex items-center text-[11px] text-[var(--text-2)] hover:bg-[var(--border)] truncate cursor-pointer"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* While open, reserve flow space below the input so the absolutely-positioned
+              list isn't clipped against the panel's bottom edge and can scroll into view
+              (the panel's pb keeps a gap beneath it). */}
+          {open && matches.length > 0 && <div aria-hidden className="h-36" />}
+        </div>
+      )}
     </div>
   )
 }
@@ -360,25 +389,25 @@ function EffectItem({
         <div className="flex items-center gap-1.5 min-w-0">
           <button
             onClick={onToggle}
-            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center ${
-              inst.enabled ? 'bg-indigo-500 border-indigo-500' : 'border-zinc-600'
+            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center cursor-pointer ${
+              inst.enabled ? 'bg-[var(--accent)] border-[var(--accent)]' : 'border-[var(--border-strong)]'
             }`}
             aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
           >
-            {inst.enabled && <Check size={11} className="text-white" strokeWidth={3} />}
+            {inst.enabled && <Check size={11} className="text-[var(--on-accent)]" strokeWidth={3} />}
           </button>
           <button
             onClick={() => setCollapsed((c) => !c)}
-            className="flex items-center gap-1 min-w-0"
+            className="flex items-center gap-1 min-w-0 cursor-pointer"
             aria-label={collapsed ? 'Expand settings' : 'Collapse settings'}
           >
-            <span className={`text-xs font-semibold truncate ${inst.enabled ? 'text-zinc-200' : 'text-zinc-500'}`}>
+            <span className={`text-[11px] font-semibold truncate ${inst.enabled ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
               {plugin.name}
             </span>
-            {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-zinc-500" /> : <ChevronDown size={12} className="flex-shrink-0 text-zinc-500" />}
+            {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" /> : <ChevronDown size={12} className="flex-shrink-0 text-[var(--text-muted)]" />}
           </button>
         </div>
-        <button onClick={onRemove} className="flex-shrink-0 text-zinc-500 hover:text-zinc-200" aria-label="Remove effect">
+        <button onClick={onRemove} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer" aria-label="Remove effect">
           <X size={12} />
         </button>
       </div>
@@ -395,9 +424,9 @@ function EffectItem({
   )
 }
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'instrument', label: 'Instrument', icon: <Music2 size={11} /> },
-  { id: 'effects', label: 'Effects', icon: <Sparkles size={11} /> },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'instrument', label: 'Instrument' },
+  { id: 'effects', label: 'Effects' },
 ]
 
 export function TrackEditor() {
@@ -423,29 +452,32 @@ export function TrackEditor() {
   useEffect(() => { if (effectDragging) setTab('effects') }, [effectDragging])
 
   return (
-    <div className="flex flex-col h-full border-r border-zinc-800 bg-zinc-900">
-      <div className="border-b border-zinc-800">
-        <div className="px-3 pt-2 pb-1">
-          <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium">
-            Track Editor
-          </span>
-        </div>
-        <div className="flex px-1 pb-0">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1 flex-1 justify-center py-1.5 text-[11px] font-medium transition-colors border-b-2 ${
-                tab === t.id
-                  ? 'text-indigo-400 border-indigo-500'
-                  : 'text-zinc-500 hover:text-zinc-300 border-transparent'
-              }`}
-            >
-              {t.icon}
-              {t.label}
-            </button>
-          ))}
-        </div>
+    <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
+      {/* Header: TRACK caps label + accent track name (double-click renames). */}
+      <div className="h-8 flex-shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)]">
+        <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">TRACK</span>
+        {track
+          ? <EditableTrackName trackId={track.id} name={track.name} />
+          : <span className="text-[11px] text-[var(--text-muted)] select-none">—</span>}
+      </div>
+
+      {/* Tabs — flat segmented row, inset accent underline on the active tab. */}
+      <div className="flex flex-shrink-0 border-b border-[var(--border)]">
+        {TABS.map((t, i) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
+              i < TABS.length - 1 ? 'border-r border-[var(--border)]' : ''
+            } ${
+              tab === t.id
+                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+                : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-2)]'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
@@ -453,10 +485,6 @@ export function TrackEditor() {
           <>
             {track ? (
               <>
-                <EditableTrackName trackId={track.id} name={track.name} />
-                <p className="text-[11px] text-zinc-600 mb-4 capitalize">
-                  {track.type} · {track.instrumentId}
-                </p>
                 {(() => {
                   // Modulator track → a target picker (which object it targets).
                   // The port is internal (from the modulator's def), never shown.
@@ -505,9 +533,9 @@ export function TrackEditor() {
                     }
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
+                        <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">TARGETS</p>
                         {options.length === 0 ? (
-                          <p className="text-[11px] text-zinc-600">No objects to target</p>
+                          <p className="text-[11px] text-[var(--text-muted)]">No objects to target</p>
                         ) : (
                           <TargetSelect options={options} selected={selected} onToggle={toggle} />
                         )}
@@ -521,10 +549,10 @@ export function TrackEditor() {
                   return (
                     <>
                       {!def || def.params.length === 0 ? (
-                        <p className="text-[11px] text-zinc-600">No parameters</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                       ) : (
                         <>
-                          <p className="text-[11px] text-zinc-500 mb-3">Parameters:</p>
+                          <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">PARAMETERS</p>
                           {def.params.map((p) => (
                             <ParamControl
                               key={p.key}
@@ -547,7 +575,7 @@ export function TrackEditor() {
                 })()}
               </>
             ) : (
-              <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>
+              <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
             )}
           </>
         )}
@@ -555,10 +583,10 @@ export function TrackEditor() {
           track ? (
             <div
               data-effects-drop
-              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-indigo-500/60 bg-indigo-500/5' : ''}`}
+              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
             >
               {(track.effects ?? []).length === 0 ? (
-                <p className="text-xs text-zinc-600 text-center mt-8">
+                <p className="text-xs text-[var(--text-muted)] text-center mt-8">
                   {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
                 </p>
               ) : (
@@ -579,7 +607,7 @@ export function TrackEditor() {
               )}
             </div>
           ) : (
-            <p className="text-xs text-zinc-600 text-center mt-8">No track selected</p>
+            <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
           )
         )}
       </div>

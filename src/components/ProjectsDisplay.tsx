@@ -1,7 +1,7 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { LogOut, ExternalLink, Plus, FileText, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
+import { LogOut, ExternalLink, Plus, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
-import styles from '../../app/projects/projects.module.css'
 import type { User } from '@supabase/supabase-js'
 import { logout } from "../../app/(auth)/logout/actions"
 import { createClient } from "../utils/supabase/client"
@@ -24,14 +23,85 @@ export interface ProjectMetadata {
   updatedAt: string
 }
 
+// Mono-caps edited stamp for the card footer: TODAY / 1D AGO / … / date.
 const formatLastEdited = (iso: string): string => {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000)
-  if (days <= 0) return 'Edited today'
-  if (days === 1) return 'Edited yesterday'
-  if (days < 30) return `Edited ${days} days ago`
-  return `Edited ${date.toLocaleDateString()}`
+  if (days <= 0) return 'TODAY'
+  if (days < 30) return `${days}D AGO`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
+}
+
+const TRACK_PALETTE = ['var(--track-1)', 'var(--track-2)', 'var(--track-3)', 'var(--track-4)', 'var(--track-5)']
+const TRACK_HEX = ['#35a7e6', '#4ec3c9', '#c583d6', '#8d8ff0', '#d6839e']
+
+// The project list carries no document data, so the mini-timeline thumbnail is
+// generated deterministically from the project id (placeholder until real
+// per-project track data is available): hash the id into a seed, then draw a
+// stable pseudo-random arrangement of rows/blocks from it.
+const hashSeed = (s: string): number => {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return ((h >>> 0) % 2147483646) + 1 // 1..2147483646 (LCG needs a non-zero seed)
+}
+
+const seededRandom = (seed: number) => {
+  let s = seed
+  return () => {
+    s = (s * 16807) % 2147483647
+    return s / 2147483647
+  }
+}
+
+interface ThumbBlock { left: number; width: number }
+interface ThumbRow { colorIndex: number; blocks: ThumbBlock[] }
+
+const buildThumbRows = (projectId: string): ThumbRow[] => {
+  const rnd = seededRandom(hashSeed(projectId))
+  const rowCount = 3 + Math.floor(rnd() * 2) // 3–4 rows
+  const paletteStart = Math.floor(rnd() * TRACK_HEX.length)
+  return Array.from({ length: rowCount }, (_, ri) => ({
+    colorIndex: (paletteStart + ri) % TRACK_HEX.length,
+    blocks: Array.from({ length: 2 + Math.floor(rnd() * 2) }, () => ({
+      left: rnd() * 60,
+      width: 12 + rnd() * 28,
+    })),
+  }))
+}
+
+// Mini timeline: rows of 14px blocks styled like editor blocks (translucent
+// fill, 1px border, 2px color spine) in the track palette.
+function ProjectThumbnail({ projectId }: { projectId: string }) {
+  const rows = useMemo(() => buildThumbRows(projectId), [projectId])
+  return (
+    <div className="flex h-full flex-col justify-center gap-1.5">
+      {rows.map((row, ri) => {
+        const hex = TRACK_HEX[row.colorIndex]
+        const varColor = TRACK_PALETTE[row.colorIndex]
+        return (
+          <div key={ri} className="relative h-3.5">
+            {row.blocks.map((b, bi) => (
+              <div
+                key={bi}
+                className="absolute inset-y-0 rounded-[3px]"
+                style={{
+                  left: `${b.left}%`,
+                  width: `${b.width}%`,
+                  backgroundColor: hex + '24',
+                  border: `1px solid ${hex}55`,
+                  borderLeft: `2px solid ${varColor}`,
+                }}
+              />
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 interface ProfileData {
@@ -94,71 +164,72 @@ export default function ProjectsDisplay({
   }
 
   return (
-    <div className={styles.pageContainer}>
-      <div className={styles.blobContainer}>
-        <div className={styles.blob1}></div>
-        <div className={styles.blob2}></div>
-        <div className={styles.blob3}></div>
-      </div>
-
-      <header className={styles.header}>
-        <Link href="/" className="flex items-center gap-2 select-none">
-          <CabinLogo className="h-12 w-auto" />
-          <span className="text-xl text-zinc-200 translate-y-2">Cabin Visuals</span>
-        </Link>
-        <h1 className={`${styles.headerTitle} font-extrabold absolute left-1/2 -translate-x-1/2`}>Projects</h1>
-        <nav className={styles.headerNav}>
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger className={styles.dropdownTriggerPlaceholder} disabled={isLoggingOut}>
-                <span className={styles.dropdownTriggerText}>{userInitials}</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-gray-900 border-gray-800">
-                {(user || profile) && (
-                  <div className="px-3 py-2 text-sm text-white">
-                    {profile && (profile.first_name || profile.last_name) && (
-                      <p className="font-medium truncate">{`${profile.first_name || ''} ${profile.last_name || ''}`.trim()}</p>
-                    )}
-                    {user && <p className="text-gray-300 truncate">{user.email}</p>}
-                  </div>
-                )}
-                <DropdownMenuSeparator className="bg-gray-800" />
-                <DropdownMenuItem
-                  className="flex items-center cursor-pointer text-white hover:bg-gray-700"
-                  onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  <span>Discord Community</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-gray-800" />
-                <DropdownMenuItem
-                  className={`flex items-center w-full text-red-400 cursor-pointer hover:bg-gray-700 rounded-sm text-sm p-1.5 focus:bg-gray-700 focus:text-red-400 ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+    <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
+      <header className="border-b border-[var(--border-subtle)]">
+        <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
+          <Link href="/" className="flex select-none items-center gap-2.5">
+            <CabinLogo className="h-[30px] w-auto" />
+            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
+          </Link>
+          <nav className="flex items-center gap-5">
+            <Link
+              href="/pricing"
+              className="text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)]"
+            >
+              Pricing
+            </Link>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  title="Account"
                   disabled={isLoggingOut}
-                  onSelect={(event) => {
-                    event.preventDefault()
-                    handleLogout()
-                  }}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)]"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div className="flex items-center space-x-4">
-              <LogInButton />
-              <SignUpButton />
-            </div>
-          )}
-        </nav>
+                  {userInitials}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="rounded-md border-[var(--border)] bg-[var(--bg-panel)] shadow-xl shadow-black/40"
+                >
+                  {(user || profile) && (
+                    <div className="px-3 py-2 text-sm text-[var(--text)]">
+                      {profile && (profile.first_name || profile.last_name) && (
+                        <p className="truncate font-medium">{`${profile.first_name || ''} ${profile.last_name || ''}`.trim()}</p>
+                      )}
+                      {user && <p className="truncate text-[var(--text-3)]">{user.email}</p>}
+                    </div>
+                  )}
+                  <DropdownMenuSeparator className="bg-[var(--border)]" />
+                  <DropdownMenuItem
+                    className="flex cursor-pointer items-center text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
+                    onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    <span>Discord Community</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-[var(--border)]" />
+                  <DropdownMenuItem
+                    className={`flex w-full cursor-pointer items-center rounded-sm p-1.5 text-sm text-[#d68383] focus:bg-[var(--bg-elevated)] focus:text-[#d68383] ${isLoggingOut ? 'cursor-not-allowed opacity-50' : ''}`}
+                    disabled={isLoggingOut}
+                    onSelect={(event) => {
+                      event.preventDefault()
+                      handleLogout()
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center gap-4">
+                <LogInButton />
+                <SignUpButton />
+              </div>
+            )}
+          </nav>
+        </div>
       </header>
-
-      <div className={styles.buttonContainer}>
-        <button className={styles.createProjectButton} onClick={() => setCreateStep('choice')}>
-          <Plus height={16} width={16} style={{ marginRight: '0.5rem' }} />
-          Create Project
-        </button>
-      </div>
 
       {createStep && (
         <CreateProjectModal
@@ -171,37 +242,57 @@ export default function ProjectsDisplay({
         />
       )}
 
-      <main className={styles.mainContent}>
-        <div className={styles.projectsGrid}>
-          {projects.length === 0 ? (
-            <p className={styles.noProjectsText}>No projects found. Create one to get started!</p>
-          ) : (
-            projects.map((project) => (
-              <div
-                key={project.id}
-                className={styles.projectCard}
-                onClick={() => onSelectProject(project.id)}
-              >
-                <div className={styles.cardImageWrapper}>
-                  <div className={styles.cardIconPlaceholder}>
-                    <FileText className={styles.cardIcon} />
-                  </div>
-                  <button
-                    className={styles.deleteButton}
-                    onClick={(e) => handleDeleteProject(e, project.id)}
-                    aria-label="Delete project"
-                    title="Delete project"
-                  >
-                    <X className={styles.deleteIcon} />
-                  </button>
+      <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
+            <span className="font-mono text-xs text-[var(--text-muted)]">{projects.length}</span>
+          </div>
+          <button
+            onClick={() => setCreateStep('choice')}
+            className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            New project
+          </button>
+        </div>
+
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          {projects.map((project) => (
+            <div
+              key={project.id}
+              onClick={() => onSelectProject(project.id)}
+              className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
+            >
+              <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
+                <div className="absolute inset-x-3 inset-y-2.5">
+                  <ProjectThumbnail projectId={project.id} />
                 </div>
-                <div className={styles.cardContent}>
-                  <h3 className={styles.cardTitle}>{project.name}</h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">{formatLastEdited(project.updatedAt)}</p>
-                </div>
+                <button
+                  onClick={(e) => handleDeleteProject(e, project.id)}
+                  aria-label="Delete project"
+                  title="Delete project"
+                  className="absolute right-2 top-2 flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border border-[var(--border)] bg-[rgba(14,14,17,0.8)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[#d68383]"
+                >
+                  <X size={11} />
+                </button>
               </div>
-            ))
-          )}
+              <div className="flex items-baseline justify-between gap-3 px-3.5 pb-[13px] pt-3">
+                <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
+                <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                  {formatLastEdited(project.updatedAt)}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={() => setCreateStep('choice')}
+            className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)]"
+          >
+            <Plus size={18} />
+            <span className="text-xs">Empty or from a template</span>
+          </button>
         </div>
       </main>
     </div>
@@ -234,80 +325,92 @@ function CreateProjectModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-zinc-700 bg-[#161619] shadow-2xl shadow-black/60"
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] shadow-2xl shadow-black/60"
         onClick={(e) => e.stopPropagation()}
       >
         {step === 'choice' ? (
           <div className="p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-zinc-100">New project</h2>
-              <button onClick={onClose} aria-label="Close" className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-3)]">
+                New project
+              </h2>
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+              >
                 <X size={18} />
               </button>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <button
                 onClick={onPickEmpty}
-                className="group flex flex-col items-start gap-3 p-5 rounded-xl border border-zinc-700 hover:border-indigo-500 bg-zinc-900/50 hover:bg-indigo-950/20 text-left transition-colors cursor-pointer"
+                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
               >
-                <FilePlus size={24} className="text-zinc-400 group-hover:text-indigo-400 transition-colors" />
+                <FilePlus size={24} className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--accent)]" />
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">Empty project</h3>
-                  <p className="text-xs text-zinc-500 mt-1">Start from a blank canvas.</p>
+                  <h3 className="text-[13px] font-semibold text-[var(--text)]">Empty project</h3>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Start from a blank canvas.</p>
                 </div>
               </button>
               <button
                 onClick={onOpenCatalog}
-                className="group flex flex-col items-start gap-3 p-5 rounded-xl border border-zinc-700 hover:border-indigo-500 bg-zinc-900/50 hover:bg-indigo-950/20 text-left transition-colors cursor-pointer"
+                className="group flex cursor-pointer flex-col items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-app)] p-5 text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
               >
-                <LayoutTemplate size={24} className="text-zinc-400 group-hover:text-indigo-400 transition-colors" />
+                <LayoutTemplate size={24} className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--accent)]" />
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">Start from a template</h3>
-                  <p className="text-xs text-zinc-500 mt-1">Pick a ready-made scene to customize.</p>
+                  <h3 className="text-[13px] font-semibold text-[var(--text)]">Start from a template</h3>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Pick a ready-made scene to customize.</p>
                 </div>
               </button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] p-5">
               <div className="flex items-center gap-2">
                 <button
                   onClick={onBack}
                   aria-label="Back"
-                  className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <h2 className="text-lg font-semibold text-zinc-100">Choose a template</h2>
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--text-3)]">
+                  Choose a template
+                </h2>
               </div>
-              <button onClick={onClose} aria-label="Close" className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer">
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="cursor-pointer rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+              >
                 <X size={18} />
               </button>
             </div>
-            <div className="overflow-y-auto p-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid gap-4 overflow-y-auto p-5 sm:grid-cols-2 lg:grid-cols-3">
               {TEMPLATES.map((tpl) => (
                 <button
                   key={tpl.id}
                   onClick={() => onPickTemplate(tpl)}
-                  className="group text-left rounded-xl overflow-hidden border border-zinc-800 hover:border-indigo-500 bg-zinc-900/60 transition-colors cursor-pointer"
+                  className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
                   title={`Create a project from “${tpl.name}”`}
                 >
                   <div
-                    className="h-24 relative"
+                    className="relative h-24"
                     style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
                   >
-                    <span className="absolute bottom-2 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-white/90">
+                    <span className="absolute bottom-2 right-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white/90">
                       {tpl.bpm} BPM
                     </span>
                   </div>
                   <div className="p-3">
-                    <h3 className="text-sm font-semibold text-zinc-100 group-hover:text-white">{tpl.name}</h3>
-                    <p className="text-xs text-zinc-500 mt-1 leading-snug">{tpl.description}</p>
+                    <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>
+                    <p className="mt-1 text-xs leading-snug text-[var(--text-muted)]">{tpl.description}</p>
                   </div>
                 </button>
               ))}
