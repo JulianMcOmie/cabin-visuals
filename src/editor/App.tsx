@@ -27,6 +27,7 @@ import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
+import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
 import { usePlan, startCheckout, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
@@ -156,7 +157,9 @@ function Header() {
   }, [])
 
   const plan = usePlan()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, isAnonymous } = useAuth()
+  // "Has an account" — anonymous sessions are signed in for persistence only.
+  const permanent = !authLoading && !!user && !isAnonymous
 
   return (
     <div className="h-14 flex-shrink-0 flex items-center gap-3 px-3 border-b border-zinc-800 bg-[#1e1e21] relative">
@@ -175,6 +178,15 @@ function Header() {
           Your work isn&apos;t saved —{' '}
           <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
             sign up to keep it
+          </Link>
+        </span>
+      )}
+      {!authLoading && user && isAnonymous && (
+        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-amber-400/90 select-none whitespace-nowrap">
+          <CloudOff size={12} />
+          Saved on this device —{' '}
+          <Link href="/signup" className="underline underline-offset-2 hover:text-amber-300">
+            sign up to keep it forever
           </Link>
         </span>
       )}
@@ -220,7 +232,7 @@ function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-        {!authLoading && user && !plan.loading && !plan.isPro && (
+        {permanent && !plan.loading && !plan.isPro && (
           <button
             onClick={() => void startCheckout().catch(() => {})}
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
@@ -239,7 +251,7 @@ function Header() {
             PRO
           </button>
         )}
-        {!authLoading && user && <div className="w-px h-5 bg-zinc-700 ml-1" />}
+        {permanent && <div className="w-px h-5 bg-zinc-700 ml-1" />}
         <button
           onClick={() => setExportOpen(true)}
           disabled={exportGate?.ok === false}
@@ -262,6 +274,7 @@ function BottomArea() {
 
 export default function EditorApp() {
   useProjectPersistence()
+  useAnonymousAdoption()
   const { topFrac, containerRef, startResize } = useVerticalSplit()
 
   return (

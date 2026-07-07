@@ -6,6 +6,7 @@ import { useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react'; // Import Suspense
 import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
+import { stashAnonWork } from '../../../src/persistence/carryover';
 
 declare global {
   interface Window {
@@ -25,6 +26,9 @@ function SignupPageContent() {
     console.log("Google Sign-In CredentialResponse (Signup Page):", response);
     if (response.credential) {
       try {
+        // Google sign-in replaces any anonymous session — stash its work so
+        // the projects page can carry it into the resulting account.
+        await stashAnonWork();
         await handleSignInWithGoogle(response.credential);
         // Assuming successful handleSignInWithGoogle navigates or updates state elsewhere
       } catch (error) {
@@ -47,6 +51,13 @@ function SignupPageContent() {
     const message = searchParams.get('message');
     if (message) setErrorMessage(message);
   }, [searchParams]);
+
+  // Stash any anonymous work on arrival: covers the Google path and the
+  // "email already exists → log in" handoff. (Email/password conversion never
+  // needs it — same uuid — and takeCarryover self-cleans in that case.)
+  useEffect(() => {
+    void stashAnonWork();
+  }, []);
 
   // Effect for Google Sign-In setup and rendering
   useEffect(() => {

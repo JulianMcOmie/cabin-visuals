@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to upgrade' }, { status: 401 })
+  // A subscription must never attach to a discardable identity — convert first.
+  if (user.is_anonymous) {
+    return NextResponse.json({ error: 'Create an account to upgrade' }, { status: 403 })
+  }
 
   let returnTo = '/projects'
   try {

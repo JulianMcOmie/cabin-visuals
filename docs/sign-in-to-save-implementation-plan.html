@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign-in-to-Save Implementation Plan — Cabin Visuals</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#ffffff; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .b-dec{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  .where{font-size:15px;color:var(--muted);font-family:"SF Mono",Menlo,monospace}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
+    pre,table,.card,.note,.warn,.rec{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3{break-after:avoid;page-break-after:avoid}
+    pre{white-space:pre-wrap;overflow-x:visible;word-break:break-word}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Implementation Plan</span>
+  <h1>Sign-in-to-Save — Implementation Plan</h1>
+  <p class="sub">The phased build order for <a href="sign-in-to-save-architecture.html">the architecture</a>: anonymous sessions born on first edit, autosave on existing rails, in-place conversion at signup, carry-over at login. Each phase ships alone and degrades to today's behavior if stopped.</p>
+</header>
+
+<div class="rec"><strong>Sequencing principle:</strong> the flag-off state is exactly today's app. Phases 0–2 make anonymous work persist; the feature is already user-visible value at that point. Phases 3–4 make the exit doors (signup/login) honor it. Phase 5 is hygiene. Stop anywhere and nothing is broken.</div>
+
+<h2>Phase 0 — Supabase dashboard (manual, 5 minutes)</h2>
+<ul>
+  <li>Enable <em>Authentication → Sign In / Up → Allow anonymous sign-ins</em>.</li>
+  <li>Leave CAPTCHA off; note the default anonymous rate limit (per-IP) in case testing trips it.</li>
+  <li>Add <code>NEXT_PUBLIC_ANON_SESSIONS=1</code> to <span class="file">.env.local</span> and Vercel (the code ships behind this flag; unset = feature off).</li>
+</ul>
+
+<h2>Phase 1 — Auth plumbing (the <code>isAnonymous</code> bit everywhere)</h2>
+<div class="card">
+  <h3>1a · <span class="file">src/persistence/hooks/useAuth.ts</span></h3>
+  <p>Expose the flag: return <code>&#123; user, loading, isAnonymous: user?.is_anonymous ?? false &#125;</code>. Every "is this a real person" branch in the app switches to <code>user &amp;&amp; !isAnonymous</code>.</p>
+  <h3>1b · <span class="file">src/persistence/anonSession.ts</span> (new)</h3>
+  <p><code>ensureSession()</code>: returns the current user if any; otherwise <code>signInAnonymously()</code> (behind the env flag) and returns the new user; returns <code>null</code> on failure so callers fall back to in-memory mode. Single-flight (one in-flight promise) so double-triggers can't race two sign-ins.</p>
+  <h3>1c · Identity-vs-persistence branches</h3>
+  <p>Editor header (<span class="file">src/editor/App.tsx</span>): the amber chip and hidden-Upgrade logic key on <code>!user || isAnonymous</code>; the Projects/Home link keys on the same. Checkout route (<span class="file">app/api/stripe/checkout/route.ts</span>): reject <code>user.is_anonymous</code> with 403 "Create an account to upgrade".</p>
+  <p class="where">useAuth.ts · anonSession.ts (new) · App.tsx · checkout/route.ts</p>
+</div>
+
+<h2>Phase 2 — Adoption: first edit becomes a saved project</h2>
+<div class="card">
+  <h3>2a · The trigger</h3>
+  <p>A small hook (<span class="file">useAnonymousAdoption</span>, mounted next to <span class="file">useProjectPersistence</span>) that, when there's no <code>?project</code> bound and no permanent user, subscribes to the project store and fires <strong>once</strong> on the first meaningful mutation (tracks/blocks/audio change — not bpm scrubs alone).</p>
+  <h3>2b · The flow</h3>
+  <pre><code>const user = await ensureSession()            // anon sign-in if needed; null → stay in-memory
+if (!user) return
+const doc = serialize()                        // the edit that triggered us is already in here
+const p = await projectStorage.create(nameFor(doc), doc)   // 'Untitled' or the template's name
+router.replace(`/editor?project=${p.id}`)      // existing persistence flow arms autosave</code></pre>
+  <p>The rebind hydrates the just-saved document, so the user sees no change — except the save chip going to work.</p>
+  <h3>2c · Template path joins the same rails</h3>
+  <p><span class="file">app/projects/page.tsx</span> / template modal: signed-out template click currently routes to <code>?template=&lt;id&gt;</code> demo mode. With the flag on, it instead runs <code>ensureSession()</code> → <code>create(template.name, clone(document))</code> → <code>?project=&lt;id&gt;</code>. Demo mode stays as the fallback when <code>ensureSession()</code> returns null.</p>
+  <h3>2d · Copy change</h3>
+  <p>Chip for anonymous users: <em>"Saved on this device — sign up to keep it forever"</em> (it IS saved now; the risk is losing the browser session, not the tab).</p>
+  <p class="where">hooks/useAnonymousAdoption.ts (new) · useProjectPersistence.ts · App.tsx (chip) · projects/page.tsx</p>
+</div>
+<div class="note"><strong>Ship gate for Phase 2:</strong> fresh incognito → "Try it out" → add a track → refresh the tab → the work is still there (URL has <code>?project=</code>, autosave chip cycles). That single loop is the feature.</div>
+
+<h2>Phase 3 — Conversion at signup (same uuid, no migration)</h2>
+<div class="card">
+  <h3>3a · Signup page detects anonymous</h3>
+  <p><span class="file">app/(auth)/signup</span>: when the current session is anonymous, swap <code>signUp()</code> for the conversion flow — <code>updateUser(&#123; email &#125;)</code> → "check your inbox" state → on confirmed, <code>updateUser(&#123; password &#125;)</code> → create the <code>profiles</code> row (first/last name from the form). Google button: <code>linkIdentity(&#123; provider: 'google' &#125;)</code> instead of <code>signInWithOAuth</code>.</p>
+  <h3>3b · The already-registered email</h3>
+  <p><code>updateUser</code> fails if the email has an account → show "That email already has an account — log in instead" and hand off to the Phase-4 login carry so the work still survives.</p>
+  <h3>3c · Post-conversion</h3>
+  <p>Nothing to do — the uuid kept every row. Land on <code>/projects</code>; their anonymous project is simply there, owned.</p>
+  <p class="where">app/(auth)/signup/* · profiles insert (mirror existing signup)</p>
+</div>
+<div class="warn"><strong>Test with email confirmation ON</strong> (production setting): the limbo between <code>updateUser(&#123;email&#125;)</code> and the click-through is where this flow breaks if the UI loses the session or the user closes the tab. Abandoning mid-conversion must leave them a working anonymous session.</div>
+
+<h2>Phase 4 — Carry-over at login (existing account)</h2>
+<div class="card">
+  <p><span class="file">app/(auth)/login</span>: if the current session is anonymous <em>and</em> owns a project, serialize the open document <em>before</em> <code>signInWithPassword()</code>, then after login create it in the real account (<code>projectStorage.create(name, carried)</code>). If the account is at the free one-project limit, prompt: replace the carry with a discard, or send them to pricing. The stranded anonymous user is left for cleanup.</p>
+  <p class="where">app/(auth)/login/* · a small carryOver helper beside anonSession.ts</p>
+</div>
+
+<h2>Phase 5 — Hygiene: cleanup &amp; guardrails</h2>
+<ul>
+  <li><strong>Stale-user sweep</strong> (Supabase SQL editor now; pg_cron weekly later):
+  <pre><code>delete from auth.users
+where is_anonymous is true and created_at &lt; now() - interval '30 days';</code></pre>
+  Projects cascade; storage objects don't (known fossils gap — same bucket sweep persistence already owes).</li>
+  <li><strong>Checkout rejection test</strong> — anonymous POST to <code>/api/stripe/checkout</code> returns 403.</li>
+  <li><strong>Rate-limit sanity</strong> — hammer <code>ensureSession()</code> in a loop locally; confirm graceful null-fallback when Supabase says no.</li>
+</ul>
+
+<h2>Verification checklist (manual, ~10 minutes end to end)</h2>
+<ol>
+  <li>Incognito → landing → <strong>Try it out</strong> → add a track + block → URL gains <code>?project=</code> → hard refresh → work persists.</li>
+  <li>Same session → template modal → pick a template → it saves as a project (no demo chip).</li>
+  <li>Same session → <strong>sign up</strong> with a new email (confirmation ON) → confirm → land on /projects → the project is there → export works, watermark still applies (free).</li>
+  <li>New incognito → build something → <strong>log in</strong> to the account from step 3 → carried project appears alongside; free-limit prompt fires if at cap.</li>
+  <li>Anonymous session → attempt checkout via devtools → 403.</li>
+  <li>Kill switch: unset <code>NEXT_PUBLIC_ANON_SESSIONS</code> → behavior is exactly pre-feature (in-memory + honest chip).</li>
+</ol>
+
+<h2>Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>Junk anonymous users pile up</td><td>Lazy creation (first edit, not pageview) + 30-day sweep.</td></tr>
+  <tr><td>Conversion limbo (email confirm) strands users</td><td>Anonymous session keeps working throughout; conversion retryable; test with confirmation ON before shipping Phase 3.</td></tr>
+  <tr><td>Adoption trigger fires on trivial input</td><td>Trigger = structural mutations only; single-flight ensureSession(); idempotent (bails once <code>?project</code> exists).</td></tr>
+  <tr><td>Anonymous Pro subscription</td><td>Server-side 403 in checkout — not just hidden UI.</td></tr>
+  <tr><td>Supabase anonymous auth off/failing in prod</td><td>Every entry point falls back to in-memory demo mode; flag kills the feature outright.</td></tr>
+</table>
+
+<hr/>
+<p class="small muted">Companion: <a href="sign-in-to-save-architecture.html">sign-in-to-save-architecture.html</a>. Written 2026-07-06. Estimated shape: Phases 0–2 are one focused session (the visible feature); Phase 3 is the fiddly one (email-confirmation UX); Phases 4–5 are small.</p>
+
+</div>
+</body>
+</html>

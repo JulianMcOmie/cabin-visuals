@@ -90,6 +90,7 @@
   </ul>
   <h3>🟡 Medium remaining</h3>
   <ul>
+    <li><strong>Sign-in-to-save</strong> — anonymous Supabase sessions: logged-out work autosaves and converts in place at signup (designed 2026-07-06, docs ready).</li>
     <li><strong>Nested mute/solo ★</strong> — decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
     <li><strong>Copy-paste automation ★</strong> — move automation lanes between instruments (needs Tyler's clarification first).</li>
     <li><strong>MIDI import</strong> — parse .mid files into blocks/notes; keep full pitch data and let the editor view reconcile narrow instruments.</li>
@@ -206,6 +207,12 @@
 
 <!-- MEDIUM -->
 <h2>🟡 Medium — real features, each a focused session</h2>
+
+<div class="item">
+  <h3><span class="badge b-design">designed</span>Sign-in-to-save (anonymous sessions) — added 2026-07-06</h3>
+  <p>The other half of the "Try it out" funnel: a logged-out visitor's first real edit lazily creates a <strong>Supabase anonymous session</strong> + a real project row, so their work autosaves on the existing rails; signing up later <strong>converts the same user in place</strong> (<code>updateUser</code>/<code>linkIdentity</code> — same uuid, zero data migration), and logging into an existing account carries the open project across client-side. Ships behind <code>NEXT_PUBLIC_ANON_SESSIONS</code>; flag-off is exactly today's behavior. Design + phased plan are written: <a href="sign-in-to-save-architecture.html">architecture</a> · <a href="sign-in-to-save-implementation-plan.html">implementation plan</a>. Phases 0–2 (persist anonymous work) are the visible win and one focused session; Phase 3 (signup conversion with email confirmation) is the fiddly part.</p>
+  <p class="where">persistence/anonSession.ts (new) · hooks/useAuth.ts · editor adoption hook (new) · app/(auth)/signup + login · stripe checkout guard</p>
+</div>
 
 <div class="item">
   <h3>MIDI import (file → blocks/notes)</h3>

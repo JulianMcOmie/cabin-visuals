@@ -5,6 +5,7 @@ import Script from 'next/script';
 import { handleSignInWithGoogle, login } from './actions';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
+import { stashAnonWork } from '../../../src/persistence/carryover';
 
 declare global {
   interface Window {
@@ -27,6 +28,9 @@ function LoginPageContent() {
       setIsLoading(true);
       setError(null);
       try {
+        // Logging in replaces any anonymous session — stash its work first so
+        // the projects page can carry it into this account.
+        await stashAnonWork();
         await handleSignInWithGoogle(response.credential);
       } catch (error) {
         // Next.js throws NEXT_REDIRECT as a mechanism to perform redirects in Server Actions
@@ -44,6 +48,12 @@ function LoginPageContent() {
       setIsLoading(false);
     }
   }
+
+  // Stash any anonymous work as soon as the login page opens — the password
+  // form posts to a server action, so this is the reliable pre-auth moment.
+  useEffect(() => {
+    void stashAnonWork();
+  }, []);
 
   useEffect(() => {
     const msg = searchParams.get('message');
