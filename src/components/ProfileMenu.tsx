@@ -70,11 +70,15 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const box = size === 'sm' ? 'h-7 w-7 text-[11px]' : 'h-8 w-8 text-[12px]'
 
   return (
-    <DropdownMenu>
+    // modal={false}: Radix's modal mode sets pointer-events:none on the page
+    // while open, which killed the trigger's hover style and cursor. Non-modal
+    // keeps them alive; the data-[state=open] classes pin the highlight on
+    // while the menu is up either way.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger
         title="Account"
         disabled={isLoggingOut}
-        className={`flex ${box} cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]`}
+        className={`flex ${box} cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]`}
       >
         {getInitials(profile)}
       </DropdownMenuTrigger>
