@@ -15,6 +15,7 @@ import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { ProfileMenu } from '../components/ProfileMenu'
+import { track } from '../analytics/analytics'
 import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
@@ -254,7 +255,7 @@ function Header() {
       {!authLoading && user && isAnonymous && (
         <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
           <CloudOff size={12} />
-          Saved on this device —{' '}
+          Saved on this device -{' '}
           <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
             sign up to keep it forever
           </Link>
@@ -296,6 +297,7 @@ function Header() {
         {permanent && !plan.loading && !plan.isPro && (
           <Link
             href="/pricing"
+            onClick={() => track('editor_upgrade_clicked')}
             title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
             className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
           >
@@ -313,7 +315,7 @@ function Header() {
           </button>
         )}
         <button
-          onClick={() => setExportOpen(true)}
+          onClick={() => { track('export_clicked'); setExportOpen(true) }}
           disabled={exportGate?.ok === false}
           title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
           className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"

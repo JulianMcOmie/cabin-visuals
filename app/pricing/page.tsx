@@ -6,6 +6,7 @@ import { Check, Loader2 } from 'lucide-react'
 import { CabinLogo } from '../../src/components/CabinLogo'
 import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { startCheckout, usePlan } from '../../src/billing/usePlan'
+import { track } from '../../src/analytics/analytics'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 
 const FREE_FEATURES = [
@@ -31,6 +32,7 @@ export default function PricingPage() {
 
   const handleUpgrade = () => {
     if (opening) return
+    track('pricing_upgrade_clicked')
     setOpening(true)
     // Success navigates away (Stripe or /login); only a failure needs a reset.
     void startCheckout().catch(() => setOpening(false))

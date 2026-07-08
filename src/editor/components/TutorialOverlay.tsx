@@ -5,6 +5,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { useUIStore } from '../store/UIStore'
 import { getPlaybackEngine } from '../core/playback'
+import { track } from '../../analytics/analytics'
 
 const DONE_KEY = 'cabin:tutorial:pulse-cube:v1'
 // Set on every editor open: its absence is what "first time in the editor" means.
@@ -141,6 +142,7 @@ export function TutorialOverlay() {
     if (!celebrating) return
     localStorage.setItem(DONE_KEY, 'done')
     sessionStorage.removeItem(ACTIVE_KEY)
+    track('tutorial_completed')
   }, [celebrating])
 
   // Track the target's rect (layout moves: panel resize, scroll, zoom).
@@ -205,6 +207,7 @@ export function TutorialOverlay() {
   const skip = () => {
     localStorage.setItem(DONE_KEY, 'done')
     sessionStorage.removeItem(ACTIVE_KEY)
+    track('tutorial_skipped', { step })
     setEngaged(false)
   }
 

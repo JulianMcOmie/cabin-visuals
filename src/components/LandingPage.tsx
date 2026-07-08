@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { CabinLogo } from "./CabinLogo"
 import { ProfileMenu } from "./ProfileMenu"
 import { createClient } from "../utils/supabase/client"
+import { track } from "../analytics/analytics"
 import type { User } from '@supabase/supabase-js'
 
 export default function LandingPage() {
@@ -107,6 +108,7 @@ export default function LandingPage() {
                 // Not logged in: drop them straight into the editor to play.
                 <Link
                   href="/editor"
+                  onClick={() => track('try_it_out_clicked')}
                   className="inline-flex h-[46px] items-center justify-center rounded-md bg-[var(--accent)] px-7 text-[15px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
                 >
                   Try it out

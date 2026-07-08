@@ -7,6 +7,7 @@ import { useEffect, useState, Suspense } from 'react'; // Import Suspense
 import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
+import { track } from '../../../src/analytics/analytics';
 import {
   AuthShell,
   AuthTitle,
@@ -100,7 +101,7 @@ function SignupPageContent() {
 
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
-      <form action={initiateSignup} className="flex flex-col gap-[14px]">
+      <form action={initiateSignup} onSubmit={() => track('signup_started')} className="flex flex-col gap-[14px]">
         <div className="flex gap-3">
           <div className="flex-1">
             <label htmlFor="firstName" className={`mb-[6px] block ${authLabelClass}`}>First name</label>
