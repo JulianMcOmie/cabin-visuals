@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
+import { firstDimensionMidiInput, getDimension } from '../core/visual/dimensions/registry'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
@@ -8,17 +9,27 @@ import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'dimension' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // A modifier is a no-instrument child track whose type IS the modifier (its id);
   // objects/modulators carry an instrumentId and the default 'base' type.
   const isModifier = item.kind === 'modifier'
+  const isDimension = item.kind === 'dimension'
+  const def = isDimension ? getDimension(item.id) : undefined
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isModifier ? (item.id as TrackType) : 'base',
-    instrumentId: isModifier ? '' : item.id,
+    type: isModifier ? (item.id as TrackType) : isDimension ? 'dimension' : 'base',
+    instrumentId: isModifier || isDimension ? '' : item.id,
+    dimensionId: isDimension ? item.id : undefined,
+    depth: isDimension ? 1 : undefined,
+    inputValues: isDimension ? {} : undefined,
+    envelope: isDimension ? { attack: 0.05, decay: 0.4 } : undefined,
+    midiMode: isDimension ? 'none' : undefined,
+    midiTargetInput: isDimension && def ? firstDimensionMidiInput(def) : undefined,
+    weight: isDimension ? { mode: 'all' } : undefined,
+    opMode: isDimension ? 'transform' : undefined,
     color: '#6366f1',
     muted: false,
     solo: false,

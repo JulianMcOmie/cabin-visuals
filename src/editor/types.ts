@@ -11,10 +11,33 @@ export interface Block {
   startBar: number
   durationBars: number
   loop: boolean
+  /** Optional source-loop length; when absent, looped blocks infer it from note contents. */
+  loopLengthBars?: number
   notes: Note[]
 }
 
-export type TrackType = 'base' | 'add' | 'mute' | 'suppress' | 'override' | 'automation' | 'ability' | 'audio'
+export type TrackType =
+  | 'base'
+  | 'add'
+  | 'mute'
+  | 'suppress'
+  | 'override'
+  | 'automation'
+  | 'ability'
+  | 'dimension'
+  | 'audio'
+
+export type MidiMode = 'none' | 'continuous' | 'amount' | 'ballistic'
+
+export type SubsetWeightSpec =
+  | { mode: 'all' }
+  | { mode: 'odd' }
+  | { mode: 'even' }
+  | { mode: 'firstHalf' }
+  | { mode: 'secondHalf' }
+  | { mode: 'checkerWhite' }
+  | { mode: 'checkerBlack' }
+  | { mode: 'gradient'; slope: number; phase: number }
 
 /**
  * A positioned, trimmed reference to an audio clip — the audio analogue of a MIDI
@@ -90,6 +113,17 @@ export interface Track {
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
+  /** For a `dimension` track: which dimension def this row applies. */
+  dimensionId?: string
+  /** Dimension wet/dry. Muting a dimension bypasses it; it never blackouts the parent. */
+  depth?: number
+  /** Dimension input base values, keyed by the def's input names. */
+  inputValues?: Record<string, number>
+  envelope?: { attack: number; decay: number }
+  midiMode?: MidiMode
+  midiTargetInput?: string
+  weight?: SubsetWeightSpec
+  opMode?: 'transform' | 'add'
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */

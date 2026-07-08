@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { Note, Block, Track } from '../types'
+import type { Note, Block } from '../types'
+import type { TrackTreeSnapshot } from './ProjectStore'
 
 /**
  * In-app clipboard shared across both editors. Snapshots are normalized at copy
@@ -9,7 +10,7 @@ import type { Note, Block, Track } from '../types'
 export type Clip =
   | { kind: 'notes'; notes: Note[] }
   | { kind: 'blocks'; blocks: Block[]; sourceTrackId: string }
-  | { kind: 'track'; track: Track }
+  | { kind: 'track'; tree: TrackTreeSnapshot }
 
 interface ClipboardState {
   clip: Clip | null

@@ -3,6 +3,7 @@ import { ChevronRight, Check } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
+import { dimensionInputParamDefs, dimensionRegistry, getDimension } from '../../core/visual/dimensions/registry'
 
 /**
  * A submenu panel that keeps itself on-screen: it renders top-aligned to its
@@ -49,8 +50,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const tracks = useProjectStore((s) => s.tracks)
   const addAbilityTrack = useProjectStore((s) => s.addAbilityTrack)
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
+  const addDimensionTrack = useProjectStore((s) => s.addDimensionTrack)
 
-  const [openSub, setOpenSub] = useState<'ability' | 'automation' | null>(null)
+  const [openSub, setOpenSub] = useState<'ability' | 'automation' | 'dimension' | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Near the viewport's bottom/right edge the menu flips/clamps instead of
@@ -85,14 +87,18 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   if (!track) return null
   const def = getInstrument(track.instrumentId)
+  const dimDef = track.type === 'dimension' ? getDimension(track.dimensionId) : undefined
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number).
-  const params = (def?.params ?? []).filter(isNumberParam)
+  const params = track.type === 'dimension' && dimDef
+    ? dimensionInputParamDefs(dimDef).filter(isNumberParam)
+    : (def?.params ?? []).filter(isNumberParam)
+  const dimensions = def ? Object.values(dimensionRegistry) : []
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
 
-  const hasAny = abilities.length > 0 || params.length > 0
+  const hasAny = abilities.length > 0 || params.length > 0 || dimensions.length > 0
 
   return (
     <div
@@ -130,6 +136,28 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
                   </button>
                 )
               })}
+            </SubMenu>
+          )}
+        </div>
+      )}
+
+      {dimensions.length > 0 && (
+        <div className="relative" onMouseEnter={() => setOpenSub('dimension')} onMouseLeave={() => setOpenSub(null)}>
+          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
+            <span>Add dimension track</span>
+            <ChevronRight size={12} className="text-zinc-500" />
+          </div>
+          {openSub === 'dimension' && (
+            <SubMenu>
+              {dimensions.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => { addDimensionTrack(trackId, d.id, d.label); onClose() }}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60"
+                >
+                  <span className="truncate">{d.label}</span>
+                </button>
+              ))}
             </SubMenu>
           )}
         </div>

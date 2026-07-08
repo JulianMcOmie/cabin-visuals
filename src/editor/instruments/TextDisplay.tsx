@@ -43,19 +43,90 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 const TEXT_CANVAS_SIZE = 1024
+const TEXT_ALPHA_TEST = 0.001
+
+interface TextEntry {
+  text: string
+  layoutText: string
+  syllableStart: number
+  syllableCount: number
+  cacheKey: string
+}
+
+function singleTextEntry(text: string): TextEntry {
+  return {
+    text,
+    layoutText: text,
+    syllableStart: 0,
+    syllableCount: 1,
+    cacheKey: text,
+  }
+}
+
+function entriesForWord(raw: string): TextEntry[] {
+  if (!raw.includes('|')) return [singleTextEntry(raw)]
+
+  const parts = raw.split('|').filter((p) => p.length > 0)
+  if (parts.length <= 1) return parts.length === 1 ? [singleTextEntry(parts[0])] : []
+
+  const layoutText = parts.join('')
+  const entries: TextEntry[] = []
+  let start = 0
+  for (const part of parts) {
+    entries.push({
+      text: part,
+      layoutText,
+      syllableStart: start,
+      syllableCount: parts.length,
+      cacheKey: `${layoutText}|${start}|${part}`,
+    })
+    start += part.length
+  }
+  return entries
+}
+
+function parsePipeAwareSegment(segment: string): TextEntry[] {
+  const result: TextEntry[] = []
+  let i = 0
+
+  while (i < segment.length) {
+    while (i < segment.length && /\s/.test(segment[i])) i++
+    if (i >= segment.length) break
+
+    if (segment[i] === '|') {
+      const close = segment.indexOf('|', i + 1)
+      if (close !== -1) {
+        const grouped = segment.slice(i + 1, close).trim()
+        if (grouped) {
+          if (/\s/.test(grouped)) result.push(singleTextEntry(grouped))
+          else result.push(...entriesForWord(grouped))
+        }
+        i = close + 1
+        continue
+      }
+    }
+
+    const start = i
+    while (i < segment.length && !/\s/.test(segment[i])) i++
+    result.push(...entriesForWord(segment.slice(start, i)))
+  }
+
+  return result
+}
 
 // Shared canvas cache keyed by (word, stroke, font, color, strokeColor).
 const canvasCache = new Map<string, HTMLCanvasElement>()
 const CANVAS_CACHE_MAX = 64
 
 function createTextCanvas(
-  word: string,
+  word: TextEntry | string,
   strokeWidth: number,
   family: string,
   color: string,
   strokeColor: string,
 ): HTMLCanvasElement {
-  const key = `${word}|${strokeWidth}|${family}|${color}|${strokeColor}`
+  const entry = typeof word === 'string' ? singleTextEntry(word) : word
+  const key = `${entry.cacheKey}|${strokeWidth}|${family}|${color}|${strokeColor}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -72,16 +143,24 @@ function createTextCanvas(
   ctx.font = fontStr(fontSize)
 
   const maxWidth = TEXT_CANVAS_SIZE * 0.9
-  const measured = ctx.measureText(word)
+  const layoutText = entry.layoutText || entry.text
+  const measured = ctx.measureText(layoutText)
   if (measured.width > maxWidth && measured.width > 0) {
     fontSize *= maxWidth / measured.width
     ctx.font = fontStr(fontSize)
   }
 
   ctx.textBaseline = 'middle'
-  ctx.textAlign = 'center'
   const cx = TEXT_CANVAS_SIZE / 2
   const cy = TEXT_CANVAS_SIZE / 2
+  const layoutWidth = ctx.measureText(layoutText).width
+  const prefixWidth = entry.syllableCount > 1
+    ? ctx.measureText(layoutText.slice(0, entry.syllableStart)).width
+    : 0
+  const drawX = entry.syllableCount > 1
+    ? cx - layoutWidth / 2 + prefixWidth
+    : cx
+  ctx.textAlign = entry.syllableCount > 1 ? 'left' : 'center'
 
   if (strokeWidth > 0) {
     ctx.lineWidth = Math.max(1, strokeWidth * fontSize)
@@ -95,10 +174,10 @@ function createTextCanvas(
       const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
       ctx.strokeStyle = luminance > 0.5 ? 'black' : 'white'
     }
-    ctx.strokeText(word, cx, cy)
+    ctx.strokeText(entry.text, drawX, cy)
   }
   ctx.fillStyle = color
-  ctx.fillText(word, cx, cy)
+  ctx.fillText(entry.text, drawX, cy)
 
   if (canvasCache.size >= CANVAS_CACHE_MAX) {
     const firstKey = canvasCache.keys().next().value
@@ -108,16 +187,18 @@ function createTextCanvas(
   return canvas
 }
 
-// Parse text into words, treating !...! groups as single entries.
-function parseWords(text: string): string[] {
-  const result: string[] = []
+// Parse text into display entries. Whitespace separates words, !...! keeps a
+// phrase together, |inside| a word can split syllables, and |... ...| groups
+// a phrase with spaces into one display entry.
+function parseTextEntries(text: string): TextEntry[] {
+  const result: TextEntry[] = []
   const parts = text.split('!')
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 0) {
-      for (const w of parts[i].split(/\s+/)) if (w) result.push(w)
+      result.push(...parsePipeAwareSegment(parts[i]))
     } else {
       const grouped = parts[i].trim()
-      if (grouped) result.push(grouped)
+      if (grouped) result.push(...entriesForWord(grouped))
     }
   }
   return result
@@ -208,7 +289,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       echoTex.magFilter = LinearFilter
       textures.push(echoTex)
       lastWords.push('')
-      const mat = new MeshBasicMaterial({ map: echoTex, transparent: true, depthWrite: false, opacity: 0 })
+      const mat = new MeshBasicMaterial({ map: echoTex, transparent: true, alphaTest: TEXT_ALPHA_TEST, depthWrite: false, opacity: 0 })
       const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
       mesh.visible = false
       meshes.push(mesh)
@@ -246,7 +327,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const texture = new CanvasTexture(createTextCanvas('', 0.05, fontStack(0), '#ffffff', '#000000'))
     texture.minFilter = LinearFilter
     texture.magFilter = LinearFilter
-    const mat = new MeshBasicMaterial({ map: texture, transparent: true, opacity: 1, side: DoubleSide, depthWrite: false, toneMapped: false })
+    const mat = new MeshBasicMaterial({ map: texture, transparent: true, alphaTest: TEXT_ALPHA_TEST, opacity: 1, side: DoubleSide, depthWrite: false, toneMapped: false })
     const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
     group.add(mesh)
     const entry: FlightPooled = { mesh, texture, mat, key: '', active: true }
@@ -283,8 +364,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
 
-    const words = parseWords(text)
-    if (words.length === 0) { meshRef.current.visible = false; return }
+    const entries = parseTextEntries(text)
+    if (entries.length === 0) { meshRef.current.visible = false; return }
 
     const currentBeat = state.beat
     const secPerBeat = state.secPerBeat
@@ -307,6 +388,17 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       } else if (n.pitch >= PITCH_HEIGHT_MIN && n.pitch <= PITCH_HEIGHT_MAX) {
         heightNotes.push(n)
       }
+    }
+
+    if (nextWordNotes.length === 0) {
+      meshRef.current.visible = false
+      ;(meshRef.current.material as MeshBasicMaterial).opacity = 0
+      for (const mesh of echoMeshesRef.current) mesh.visible = false
+      for (const spr of flightPoolRef.current) {
+        spr.active = false
+        spr.mesh.visible = false
+      }
+      return
     }
 
     // Is some word note sounding at beat b? (gates flight spawns / release fade)
@@ -343,7 +435,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
     const wordCount = nextWordNotes.length
     const lastWordNote = wordCount > 0 ? nextWordNotes[wordCount - 1] : null
-    const currentWord = words[(Math.max(1, wordCount) - 1) % words.length] ?? words[0]
+    const currentEntry = entries[(Math.max(1, wordCount) - 1) % entries.length] ?? entries[0]
     const isNoteHeld = currentBeat < lastWordEndBeat
     const currentYOffset = yOffsetAt(currentBeat)
 
@@ -355,10 +447,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const baseScale = Math.min(viewport.width, viewport.height) * 0.6 * fontSize
 
     // Re-render main texture when the word or styling changes.
-    const renderKey = `${currentWord}|${strokeWidth}|${family}|${effectiveColor}|${strokeColor}`
+    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${family}|${effectiveColor}|${strokeColor}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      textureRef.current.image = createTextCanvas(currentWord, strokeWidth, family, effectiveColor, strokeColor)
+      textureRef.current.image = createTextCanvas(currentEntry, strokeWidth, family, effectiveColor, strokeColor)
       textureRef.current.needsUpdate = true
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
@@ -380,7 +472,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const depth = flightSpeed * ageSec
         if (depth > flightMaxDepth) continue
 
-        const sprWord = words[(Math.max(1, wordCountAt(spawnBeat)) - 1) % words.length] ?? words[0]
+        const sprEntry = entries[(Math.max(1, wordCountAt(spawnBeat)) - 1) % entries.length] ?? entries[0]
         const sprColor = rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color
         const seed = k * 13 + 7
         const vx = (seededRand(seed) - 0.5) * flightDrift
@@ -389,10 +481,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const tumbleY = (seededRand(seed + 3) - 0.5) * flightTumble
 
         const spr = acquireFlightSprite(groupRef.current)
-        const sprKey = `${sprWord}|${strokeWidth}|${family}|${sprColor}|${strokeColor}`
+        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${family}|${sprColor}|${strokeColor}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          spr.texture.image = createTextCanvas(sprWord, strokeWidth, family, sprColor, strokeColor)
+          spr.texture.image = createTextCanvas(sprEntry, strokeWidth, family, sprColor, strokeColor)
           spr.texture.needsUpdate = true
         }
         spr.mesh.position.set(
@@ -417,7 +509,6 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
       releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
     }
-    // (before any word note has played, the first word shows at full opacity)
     meshRef.current.visible = releaseOpacity > 0
 
     const onsetDuration = 0.12
@@ -464,11 +555,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const echoDuration = heldSec > 0 ? heldSec : delayTime
       if (echoAge > echoDuration) { mesh.visible = false; continue }
 
-      const echoWord = words[echoIdx % words.length]
+      const echoEntry = entries[echoIdx % entries.length]
       const tex = echoTexturesRef.current[tap]
-      const echoKey = `${echoWord}|${effectiveColor}|${strokeColor}`
+      const echoKey = `${echoEntry.cacheKey}|${effectiveColor}|${strokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        tex.image = createTextCanvas(echoWord, strokeWidth, family, effectiveColor, strokeColor)
+        tex.image = createTextCanvas(echoEntry, strokeWidth, family, effectiveColor, strokeColor)
         tex.needsUpdate = true
         echoLastWordsRef.current[tap] = echoKey
       }
@@ -489,7 +580,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     <group ref={groupRef}>
       <mesh ref={meshRef}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial map={textureRef.current} transparent depthWrite={false} />
+        <meshBasicMaterial map={textureRef.current} transparent alphaTest={TEXT_ALPHA_TEST} depthWrite={false} />
       </mesh>
     </group>
   )
@@ -501,6 +592,14 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   kind: 'object',
   params: PARAMS,
   ports: PORTS,
+  midiRowLabels: {
+    [PITCH_NEXT_WORD]: {
+      label: 'Next Word',
+      color: '#facc15',
+      emphasized: true,
+      backgroundColor: 'rgba(250, 204, 21, 0.12)',
+    },
+  },
   component: TextDisplayVisual,
   fullFrame: true,
 }

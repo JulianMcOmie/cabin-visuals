@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode } from '../types'
+import { firstDimensionMidiInput, getDimension, isDimensionMidiInput } from '../core/visual/dimensions/registry'
+import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -14,12 +15,184 @@ export const cloneBlock = (b: Block): Block => ({
   id: crypto.randomUUID(),
   notes: b.notes.map(cloneNote),
 })
+const cloneAudioBlock = (b: AudioBlock): AudioBlock => ({ ...b, id: crypto.randomUUID() })
+const BLOCK_SPLIT_EPSILON_BEATS = 0.000001
+
+type IdFactory = () => string
+
+function splitNotePart(note: Note, startBeat: number, endBeat: number, shiftBeat: number, id: string | IdFactory): Note | null {
+  const noteStart = note.startBeat
+  const noteEnd = note.startBeat + note.durationBeats
+  const clippedStart = Math.max(startBeat, noteStart)
+  const clippedEnd = Math.min(endBeat, noteEnd)
+  if (clippedEnd - clippedStart <= BLOCK_SPLIT_EPSILON_BEATS) return null
+  return {
+    ...note,
+    id: typeof id === 'function' ? id() : id,
+    startBeat: clippedStart - shiftBeat,
+    durationBeats: clippedEnd - clippedStart,
+  }
+}
+
+export function splitBlockAtBeat(
+  block: Block,
+  splitBeat: number,
+  beatsPerBar: number,
+  makeId: IdFactory = () => crypto.randomUUID(),
+): { left: Block; right: Block } | null {
+  const blockStartBeat = block.startBar * beatsPerBar
+  const blockDurationBeats = block.durationBars * beatsPerBar
+  const blockEndBeat = blockStartBeat + blockDurationBeats
+  if (
+    splitBeat <= blockStartBeat + BLOCK_SPLIT_EPSILON_BEATS
+    || splitBeat >= blockEndBeat - BLOCK_SPLIT_EPSILON_BEATS
+  ) {
+    return null
+  }
+
+  const splitOffsetBeats = splitBeat - blockStartBeat
+  const leftDurationBars = splitOffsetBeats / beatsPerBar
+  const rightDurationBars = (blockEndBeat - splitBeat) / beatsPerBar
+  const left: Block = {
+    ...block,
+    durationBars: leftDurationBars,
+  }
+  const right: Block = {
+    ...block,
+    id: makeId(),
+    startBar: splitBeat / beatsPerBar,
+    durationBars: rightDurationBars,
+  }
+
+  if (block.loop) {
+    return {
+      left,
+      right: {
+        ...right,
+        notes: block.notes.map((note) => ({
+          ...note,
+          id: makeId(),
+          startBeat: note.startBeat - splitOffsetBeats,
+        })),
+      },
+    }
+  }
+
+  const leftNotes: Note[] = []
+  const rightNotes: Note[] = []
+  for (const note of block.notes) {
+    const leftPart = splitNotePart(note, 0, splitOffsetBeats, 0, note.id)
+    if (leftPart) leftNotes.push(leftPart)
+
+    const rightPart = splitNotePart(note, splitOffsetBeats, blockDurationBeats, splitOffsetBeats, makeId)
+    if (rightPart) rightNotes.push(rightPart)
+  }
+
+  return {
+    left: { ...left, notes: leftNotes },
+    right: { ...right, notes: rightNotes },
+  }
+}
+
+export interface TrackTreeSnapshot {
+  rootId: string
+  tracks: Record<string, Track>
+}
+
+function cloneRoutingScope(scope: NonNullable<Track['targets']>[number]['scope'], idMap: Map<string, string>): NonNullable<Track['targets']>[number]['scope'] {
+  if (scope.kind === 'tag') return { ...scope }
+  return { ...scope, id: idMap.get(scope.id) ?? scope.id }
+}
+
+function cloneTrackRecord(t: Track, id: string, parentId: string | null, childIds: string[], idMap: Map<string, string>): Track {
+  return {
+    ...t,
+    id,
+    params: t.params ? { ...t.params } : undefined,
+    stringParams: t.stringParams ? { ...t.stringParams } : undefined,
+    blocks: t.blocks.map(cloneBlock),
+    childIds,
+    parentId: parentId ?? undefined,
+    tags: t.tags ? [...t.tags] : undefined,
+    targets: t.targets?.map((r) => ({ ...r, scope: cloneRoutingScope(r.scope, idMap) })),
+    inputValues: t.inputValues ? { ...t.inputValues } : undefined,
+    envelope: t.envelope ? { ...t.envelope } : undefined,
+    weight: t.weight ? { ...t.weight } : undefined,
+    effects: t.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),
+    audioBlocks: t.audioBlocks?.map(cloneAudioBlock),
+  }
+}
+
 export const cloneTrack = (t: Track): Track => ({
-  ...t,
-  id: crypto.randomUUID(),
-  blocks: t.blocks.map(cloneBlock),
-  childIds: [],
+  ...cloneTrackRecord(t, crypto.randomUUID(), t.parentId ?? null, [], new Map()),
 })
+
+export function snapshotTrackTree(rootId: string, tracks: Record<string, Track>): TrackTreeSnapshot | null {
+  if (!tracks[rootId]) return null
+  const out: Record<string, Track> = {}
+  const seen = new Set<string>()
+  const visit = (id: string) => {
+    if (seen.has(id)) return
+    const track = tracks[id]
+    if (!track) return
+    seen.add(id)
+    out[id] = track
+    for (const childId of track.childIds) visit(childId)
+  }
+  visit(rootId)
+  return { rootId, tracks: out }
+}
+
+export function cloneTrackTree(snapshot: TrackTreeSnapshot, parentId?: string | null): Track[] {
+  const root = snapshot.tracks[snapshot.rootId]
+  if (!root) return []
+  const ids = Object.keys(snapshot.tracks)
+  const idMap = new Map(ids.map((id) => [id, crypto.randomUUID()]))
+  const out: Track[] = []
+  const visit = (oldId: string, nextParentId: string | null) => {
+    const src = snapshot.tracks[oldId]
+    const nextId = idMap.get(oldId)
+    if (!src || !nextId) return
+    const nextChildIds = src.childIds
+      .filter((childId) => snapshot.tracks[childId])
+      .map((childId) => idMap.get(childId)!)
+    out.push(cloneTrackRecord(src, nextId, nextParentId, nextChildIds, idMap))
+    for (const childId of src.childIds) {
+      if (snapshot.tracks[childId]) visit(childId, nextId)
+    }
+  }
+  visit(snapshot.rootId, parentId === undefined ? root.parentId ?? null : parentId)
+  return out
+}
+
+function insertTrackTreeIntoState(
+  s: ProjectState,
+  tree: Track[],
+  atIndex?: number,
+): Pick<ProjectState, 'tracks'> | Pick<ProjectState, 'tracks' | 'rootTrackIds'> {
+  if (tree.length === 0) return { tracks: s.tracks }
+  const root = tree[0]
+  const tracks = { ...s.tracks }
+  for (const track of tree) tracks[track.id] = track
+
+  if (root.parentId) {
+    const parent = tracks[root.parentId]
+    if (parent) {
+      const childIds = parent.childIds.filter((id) => id !== root.id)
+      const i = atIndex == null || atIndex < 0 || atIndex > childIds.length ? childIds.length : atIndex
+      childIds.splice(i, 0, root.id)
+      tracks[root.parentId] = { ...parent, childIds }
+      return { tracks }
+    }
+    tracks[root.id] = { ...root, parentId: undefined }
+  }
+
+  const rootTrackIds = [...s.rootTrackIds]
+  const min = tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
+  if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(root.id)
+  else rootTrackIds.splice(Math.max(min, atIndex), 0, root.id)
+  return { tracks, rootTrackIds }
+}
 
 interface ProjectState {
   tracks: Record<string, Track>
@@ -43,6 +216,7 @@ interface ProjectState {
   deleteTrack: (trackId: string) => void
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, index: number) => string | null
+  addTrackTree: (tree: Track[], atIndex?: number) => void
   reorderRootTracks: (orderedIds: string[]) => void
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
@@ -55,6 +229,16 @@ interface ProjectState {
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into an event modifier of the given type (no instrument). */
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
+  /** Convert a track into a dimension row (no instrument). */
+  setTrackDimension: (trackId: string, dimensionId: string, name: string) => void
+  addDimensionTrack: (parentId: string, dimensionId: string, dimensionLabel: string) => void
+  setDimensionInput: (trackId: string, key: string, value: number) => void
+  setDimensionDepth: (trackId: string, value: number) => void
+  setDimensionMidiMode: (trackId: string, mode: MidiMode) => void
+  setDimensionMidiTarget: (trackId: string, input: string | undefined) => void
+  setDimensionEnvelope: (trackId: string, envelope: { attack: number; decay: number }) => void
+  setDimensionWeight: (trackId: string, weight: SubsetWeightSpec) => void
+  setDimensionOpMode: (trackId: string, mode: 'transform' | 'add') => void
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
@@ -402,22 +586,23 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks, rootTrackIds }
     }),
 
-  // Insert an identical copy of a track at a given root index (Alt-drag commit).
-  // The original is left untouched.
+  // Insert an identical copy of a track subtree at a given sibling/root index
+  // (Alt-drag commit). The original is left untouched.
   insertTrackCopy: (srcId, index) => {
     let newId: string | null = null
     set((s) => {
+      const snapshot = snapshotTrackTree(srcId, s.tracks)
+      if (!snapshot) return s
       const src = s.tracks[srcId]
-      if (!src) return s
-      const copy = cloneTrack(src)
-      newId = copy.id
-      const rootTrackIds = [...s.rootTrackIds]
-      const i = Math.max(0, Math.min(rootTrackIds.length, index))
-      rootTrackIds.splice(i, 0, copy.id)
-      return { tracks: { ...s.tracks, [copy.id]: copy }, rootTrackIds }
+      const tree = cloneTrackTree(snapshot, src.parentId ?? null)
+      newId = tree[0]?.id ?? null
+      return insertTrackTreeIntoState(s, tree, index)
     })
     return newId
   },
+
+  addTrackTree: (tree, atIndex) =>
+    set((s) => insertTrackTreeIntoState(s, tree, atIndex)),
 
   reorderRootTracks: (orderedIds) =>
     set({ rootTrackIds: orderedIds }),
@@ -530,7 +715,21 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, instrumentId, params: {}, name: name ?? track.name },
+          [trackId]: {
+            ...track,
+            type: 'base',
+            instrumentId,
+            params: {},
+            stringParams: {},
+            dimensionId: undefined,
+            depth: undefined,
+            inputValues: undefined,
+            envelope: undefined,
+            midiMode: undefined,
+            midiTargetInput: undefined,
+            weight: undefined,
+            name: name ?? track.name,
+          },
         },
       }
     }),
@@ -543,9 +742,143 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: { ...track, type, instrumentId: '', params: {}, name },
+          [trackId]: {
+            ...track,
+            type,
+            instrumentId: '',
+            params: {},
+            stringParams: {},
+            dimensionId: undefined,
+            depth: undefined,
+            inputValues: undefined,
+            envelope: undefined,
+            midiMode: undefined,
+            midiTargetInput: undefined,
+            weight: undefined,
+            name,
+          },
         },
       }
+    }),
+
+  setTrackDimension: (trackId, dimensionId, name) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      const def = getDimension(dimensionId)
+      if (!track || !def) return s
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: {
+            ...track,
+            type: 'dimension',
+            instrumentId: '',
+            dimensionId,
+            depth: track.depth ?? 1,
+            inputValues: {},
+            envelope: track.envelope ?? { attack: 0.05, decay: 0.4 },
+            midiMode: track.midiMode ?? 'none',
+            midiTargetInput: isDimensionMidiInput(def, track.midiTargetInput)
+              ? track.midiTargetInput
+              : firstDimensionMidiInput(def),
+            weight: track.weight ?? { mode: 'all' },
+            opMode: track.opMode ?? 'transform',
+            params: {},
+            stringParams: {},
+            name,
+          },
+        },
+      }
+    }),
+
+  addDimensionTrack: (parentId, dimensionId, dimensionLabel) =>
+    set((s) => {
+      const parent = s.tracks[parentId]
+      const def = getDimension(dimensionId)
+      if (!parent || !def) return s
+      const id = crypto.randomUUID()
+      const track: Track = {
+        id,
+        name: dimensionLabel,
+        type: 'dimension',
+        instrumentId: '',
+        dimensionId,
+        depth: 1,
+        inputValues: {},
+        envelope: { attack: 0.05, decay: 0.4 },
+        midiMode: 'none',
+        midiTargetInput: firstDimensionMidiInput(def),
+        weight: { mode: 'all' },
+        opMode: 'transform',
+        color: parent.color,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        parentId,
+      }
+      return {
+        tracks: {
+          ...s.tracks,
+          [id]: track,
+          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
+        },
+      }
+    }),
+
+  setDimensionInput: (trackId, key, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
+    }),
+
+  setDimensionDepth: (trackId, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, depth: value } } }
+    }),
+
+  setDimensionMidiMode: (trackId, mode) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      const def = getDimension(track.dimensionId)
+      const midiTargetInput = mode === 'continuous' && def && !isDimensionMidiInput(def, track.midiTargetInput)
+        ? firstDimensionMidiInput(def)
+        : track.midiTargetInput
+      return { tracks: { ...s.tracks, [trackId]: { ...track, midiMode: mode, midiTargetInput } } }
+    }),
+
+  setDimensionMidiTarget: (trackId, input) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      const def = getDimension(track.dimensionId)
+      if (!def || !isDimensionMidiInput(def, input)) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, midiTargetInput: input } } }
+    }),
+
+  setDimensionEnvelope: (trackId, envelope) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, envelope } } }
+    }),
+
+  setDimensionWeight: (trackId, weight) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, weight } } }
+    }),
+
+  setDimensionOpMode: (trackId, opMode) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'dimension') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, opMode } } }
     }),
 
   addAutomationTrack: (parentId, paramKey, paramLabel) =>

@@ -4,6 +4,7 @@
 // component; the registry (./index) just collects them.
 
 import type { FC } from 'react'
+import type { StateVector } from '../core/visual/types'
 
 // A param is either numeric-valued (number / select / boolean — stored in track.params)
 // or string-valued (color / string — stored in track.stringParams). The union keeps the
@@ -84,6 +85,14 @@ export interface AbilityLaneDef {
   color?: string
 }
 
+/** Optional semantic row labels for an instrument's main MIDI editor. */
+export interface MidiRowLabelDef {
+  label: string
+  color?: string
+  emphasized?: boolean
+  backgroundColor?: string
+}
+
 /** An object's transform relative to its parent (identity-ish defaults). Position in
  *  world units, rotation as XYZ Euler radians, scale uniform or per-axis. The engine
  *  composes these down the hierarchy into a world transform (see core/visual). */
@@ -100,6 +109,12 @@ export interface TransformCtx {
   beat: number
 }
 
+export interface ElementLayoutCtx extends TransformCtx {
+  i: number
+  N: number
+  channels: Record<string, number>
+}
+
 /** An object / source / shape instrument — renders something. */
 export interface ObjectInstrumentDef {
   id: string
@@ -110,10 +125,15 @@ export interface ObjectInstrumentDef {
   /** This instrument's signature abilities — each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
+  /** Semantic labels for special MIDI pitches in this object's main piano roll. */
+  midiRowLabels?: Record<number, MidiRowLabelDef>
   /** This object's transform relative to its parent, per frame. The engine composes
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */
   localTransform?: (ctx: TransformCtx) => LocalTransform
+  /** Ensemble instruments can ask the engine to evaluate one state vector per element. */
+  elementCount?: (params: Record<string, number>) => number
+  layoutState?: (ctx: ElementLayoutCtx, out: StateVector) => void
   /** The R3F visual; pulls its per-frame state by trackId from the engine. */
   component: FC<{ trackId: string }>
   /** A full-frame instrument sizes itself to the viewport (a screen-filling plane) rather

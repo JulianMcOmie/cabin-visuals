@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Magnet } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -11,7 +12,8 @@ import { generateRows, generateAutomationRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
-import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX } from '../../core/trackTypes'
+import { firstDimensionMidiInput, getDimension, isDimensionMidiInput } from '../../core/visual/dimensions/registry'
+import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
 /** Automation editor context: the param a lane drives, and its value bounds. */
@@ -28,6 +30,7 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
   { value: 'ease-out', label: 'Ease Out' },
   { value: 'ease-in-out', label: 'Ease In-Out' },
   { value: 'exponential', label: 'Exponential' },
+  { value: 'smooth-step', label: 'Smooth Step' },
 ]
 
 const DEFAULT_QUANTIZE = 0.25
@@ -71,13 +74,29 @@ export function PianoRollPanel() {
   // editor by the modifier so it reads consistently with its timeline row.
   const modColor = modifierColor(track)
 
-  // An automation track edits param VALUES (rows labelled by value), not pitches: look
-  // up the param it drives on its parent object's instrument for the value bounds.
+  // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
+  // Automation tracks target their parent; continuous dimensions target their own input.
   let automation: AutomationInfo | undefined
-  if (track.type === 'automation' && track.targetParam) {
+  if (track.type === 'dimension') {
+    if (track.midiMode === 'amount') {
+      automation = { paramLabel: 'amount', paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX }
+    } else if (track.midiMode === 'continuous') {
+      const dim = getDimension(track.dimensionId)
+      const target = dim && isDimensionMidiInput(dim, track.midiTargetInput)
+        ? track.midiTargetInput
+        : dim ? firstDimensionMidiInput(dim) : undefined
+      const input = dim && target ? dim.inputs[target] : undefined
+      if (input && target) automation = { paramLabel: input.label ?? target, paramMin: input.min, paramMax: input.max }
+    }
+  } else if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
-    const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
-    if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
+    if (parent?.type === 'dimension') {
+      const input = getDimension(parent.dimensionId)?.inputs[track.targetParam]
+      if (input) automation = { paramLabel: track.targetParam, paramMin: input.min, paramMax: input.max }
+    } else {
+      const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
+      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
+    }
   }
 
   return (
@@ -100,7 +119,7 @@ interface PianoRollContentProps {
   trackColor: string
   /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
   noteColor?: string
-  /** Set for an automation track — rows are value-labelled and an interp picker shows. */
+  /** Set for value-keyframe tracks — rows are value-labelled and an interp picker shows. */
   automation?: AutomationInfo
   block: Block
   onClose: () => void
@@ -109,6 +128,7 @@ interface PianoRollContentProps {
 function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
+  const track = useProjectStore((s) => s.tracks[trackId])
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
   const midiRowScale = useUIStore((s) => s.midiRowScale)
@@ -127,16 +147,19 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
 
-  // Automation tracks show value rows (pitch → param value) with the param name in the
-  // range gutter; modifiers get flat-coloured rows; everything else is the note rainbow.
+  // Value lanes show value rows (pitch → param/input value) with the target name in
+  // the range gutter; modifiers get flat-coloured rows; everything else is the note rainbow.
+  const rowLabels = !automation && track?.type === 'base'
+    ? getInstrument(track.instrumentId)?.midiRowLabels
+    : undefined
   const auto = automation
     ? generateAutomationRows({ min: AUTOMATION_PITCH_MIN, max: AUTOMATION_PITCH_MAX }, automation.paramMin, automation.paramMax, automation.paramLabel)
     : null
   const rows = auto
     ? auto.rows
     : noteColor
-      ? generateRows().map((r) => ({ ...r, color: noteColor }))
-      : generateRows()
+      ? generateRows(undefined, rowLabels).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
+      : generateRows(undefined, rowLabels)
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
@@ -223,7 +246,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             <select
               value={interpolation}
               onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
-              title="Interpolation between automation keyframes"
+              title="Interpolation between value keyframes"
               className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
             >
               {INTERP_OPTIONS.map((o) => (

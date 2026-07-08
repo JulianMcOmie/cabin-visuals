@@ -1,5 +1,6 @@
 import type { Block, InterpolationMode } from '../../types'
 import { pitchToValue } from '../trackTypes'
+import { flattenBlocks } from './noteFlatten'
 
 /** One automation keyframe: a target param value at an absolute project beat. */
 export interface AutomationKeyframe {
@@ -9,16 +10,17 @@ export interface AutomationKeyframe {
 
 /** Flatten an automation track's blocks into value keyframes (absolute beats, sorted).
  *  Each note is a keyframe: its beat is the time, its pitch encodes the value. */
-export function extractKeyframes(blocks: Block[], beatsPerBar: number, paramMin: number, paramMax: number): AutomationKeyframe[] {
-  const kf: AutomationKeyframe[] = []
-  for (const block of blocks) {
-    const blockStartBeat = block.startBar * beatsPerBar
-    for (const note of block.notes) {
-      kf.push({ beat: blockStartBeat + note.startBeat, value: pitchToValue(note.pitch, paramMin, paramMax) })
-    }
-  }
-  kf.sort((a, b) => a.beat - b.beat)
-  return kf
+export function extractKeyframes(
+  blocks: Block[],
+  beatsPerBar: number,
+  paramMin: number,
+  paramMax: number,
+  totalBars?: number,
+): AutomationKeyframe[] {
+  return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
+    beat: note.beat,
+    value: pitchToValue(note.pitch, paramMin, paramMax),
+  }))
 }
 
 /** Ease a normalized 0..1 fraction per the interpolation mode. */

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas } from '@react-three/fiber'
@@ -56,7 +56,10 @@ function Scene() {
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
-      <VisualScene />
+      {/* Suspense: Swarm's GLB model loads through useLoader. */}
+      <Suspense fallback={null}>
+        <VisualScene />
+      </Suspense>
     </Canvas>
   )
 }

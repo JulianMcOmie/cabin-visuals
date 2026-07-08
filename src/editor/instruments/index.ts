@@ -27,6 +27,8 @@ import { paddleBounceInstrument } from './PaddleBounce'
 import { pixelBlastInstrument } from './PixelBlast'
 import { pixelInvadersInstrument } from './PixelInvaders'
 import { scoreTickerInstrument } from './ScoreTicker'
+import { swarmInstrument } from './Swarm'
+import { pointLightInstrument } from './PointLightObject'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
@@ -58,6 +60,8 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [pixelBlastInstrument.id]: pixelBlastInstrument,
   [pixelInvadersInstrument.id]: pixelInvadersInstrument,
   [scoreTickerInstrument.id]: scoreTickerInstrument,
+  [swarmInstrument.id]: swarmInstrument,
+  [pointLightInstrument.id]: pointLightInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

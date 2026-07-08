@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { useProjectStore, cloneBlock, cloneTrack } from '../../store/ProjectStore'
+import { useProjectStore, cloneBlock, cloneTrackTree, snapshotTrackTree } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, pruneSelectionAfterTrackDelete } from '../../utils/selection'
-import type { Note, Block } from '../../types'
+import type { Note, Block, Track } from '../../types'
+import type { TrackTreeSnapshot } from '../../store/ProjectStore'
 
 /** Owning track id for each visual row, so a vertical block drag maps every row it
  *  crosses to a real track. */
@@ -23,6 +24,57 @@ interface BlockOrigin {
 }
 
 const EDGE_PX = 8
+
+function rootAncestorId(tracks: Record<string, Track>, id: string): string {
+  let cur = id
+  for (let parentId = tracks[cur]?.parentId; parentId; parentId = tracks[cur]?.parentId) {
+    cur = parentId
+  }
+  return cur
+}
+
+function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
+  if (track.type === 'audio') return false
+  if (copiedRoot.type === 'dimension') return track.type === 'base' && !track.parentId
+  if (copiedRoot.type === 'ability') return track.type === 'base'
+  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'dimension'
+  return true
+}
+
+function pasteTargetForTrackTree(
+  tree: TrackTreeSnapshot,
+  tracks: Record<string, Track>,
+  rootTrackIds: string[],
+  selectedTrackId: string | null,
+): { parentId: string | null; index: number | undefined } {
+  const copiedRoot = tree.tracks[tree.rootId]
+  const selected = selectedTrackId ? tracks[selectedTrackId] : undefined
+  if (!copiedRoot) return { parentId: null, index: undefined }
+
+  if (copiedRoot.parentId) {
+    if (selected && canPasteChildUnder(selected, copiedRoot)) {
+      return { parentId: selected.id, index: undefined }
+    }
+    const parentId = selected?.parentId ?? copiedRoot.parentId
+    const parent = parentId ? tracks[parentId] : undefined
+    const selectedSiblingIndex = selected && selected.parentId === parentId
+      ? parent?.childIds.indexOf(selected.id) ?? -1
+      : -1
+    return {
+      parentId: parent ? parentId : null,
+      index: selectedSiblingIndex >= 0 ? selectedSiblingIndex + 1 : undefined,
+    }
+  }
+
+  const selectedRootId = selectedTrackId && tracks[selectedTrackId]
+    ? rootAncestorId(tracks, selectedTrackId)
+    : null
+  const selectedRootIndex = selectedRootId ? rootTrackIds.indexOf(selectedRootId) : -1
+  return {
+    parentId: null,
+    index: selectedRootIndex >= 0 ? selectedRootIndex + 1 : undefined,
+  }
+}
 
 // moving/resizing carry block origins; marquee carries the pre-drag selection
 // to union against, and works in client coordinates (robust to scroll).
@@ -349,10 +401,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           })
         } else {
           const trackId = useUIStore.getState().selectedTrackId
-          const track = trackId ? useProjectStore.getState().tracks[trackId] : null
-          if (!track) return
+          const { tracks } = useProjectStore.getState()
+          const tree = trackId ? snapshotTrackTree(trackId, tracks) : null
+          if (!tree) return
           e.preventDefault()
-          useClipboardStore.getState().setClip({ kind: 'track', track })
+          useClipboardStore.getState().setClip({ kind: 'track', tree })
         }
         return
       }
@@ -379,16 +432,20 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         } else if (clip.kind === 'track') {
           e.preventDefault()
           const selId = useUIStore.getState().selectedTrackId
-          const idx = selId ? store.rootTrackIds.indexOf(selId) : -1
-          const copy = cloneTrack(clip.track)
-          store.addTrack(copy, idx >= 0 ? idx + 1 : undefined)
-          selectNewTrack(copy.id)
+          const target = pasteTargetForTrackTree(clip.tree, store.tracks, store.rootTrackIds, selId)
+          const tree = cloneTrackTree(clip.tree, target.parentId)
+          if (tree.length === 0) return
+          store.addTrackTree(tree, target.index)
+          selectNewTrack(tree[0].id)
+          if (target.parentId) useUIStore.getState().setTrackCollapsed(target.parentId, false)
         }
         return
       }
 
       // Split selected MIDI blocks at the playhead. Audio blocks are ignored by the
       // store action; no selection means leave the browser's normal bold shortcut alone.
+      // (Tyler's branch had the same feature on Cmd/Ctrl+E with the pre-split API —
+      // superseded by this one.)
       if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
         if (selectedBlockIds.size === 0) return
         e.preventDefault()
