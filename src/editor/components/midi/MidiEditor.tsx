@@ -493,6 +493,7 @@ export function MidiEditor({
           />
           {/* Sides */}
           <div
+            data-midi-block-region=""
             style={{
               position: 'absolute',
               borderLeft: '1px solid rgba(129, 140, 248, 0.6)',

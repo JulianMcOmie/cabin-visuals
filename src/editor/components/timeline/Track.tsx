@@ -212,6 +212,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div className="flex-shrink-0" style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
+        data-track-lane={track.id}
         className={`relative flex-shrink-0 ${isAutomation ? 'bg-black/10' : ''}`}
         style={{ width: timelineWidthPx }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),

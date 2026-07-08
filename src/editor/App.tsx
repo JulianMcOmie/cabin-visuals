@@ -15,6 +15,7 @@ import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { ProfileMenu } from '../components/ProfileMenu'
+import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
@@ -96,6 +97,7 @@ function VisualPanel() {
     <div ref={panelRef} className="relative h-full bg-[var(--bg-canvas)]">
       <BeatOverlay />
       <Scene />
+      <TutorialOverlay />
       <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
         <button
           onClick={toggle}
@@ -272,6 +274,7 @@ function Header() {
           <button
             onClick={isPlaying ? reset : play}
             title={isPlaying ? 'Restart from beginning' : 'Play (Space)'}
+            data-tutorial-play=""
             className="flex items-center justify-center w-[34px] h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] transition-colors cursor-pointer"
           >
             <Play size={12} fill="currentColor" />

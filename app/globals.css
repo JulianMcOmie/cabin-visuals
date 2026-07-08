@@ -354,6 +354,12 @@ body.drag-moving * {
   pointer-events: none !important;
 }
 
+/* First-time tutorial (TutorialOverlay): the spotlight cutout's ring. */
+@keyframes tutorial-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(53, 167, 230, 0.5); }
+  50%      { box-shadow: 0 0 0 5px rgba(53, 167, 230, 0.12); }
+}
+
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */
 .timeline-scrollbar {
   scrollbar-width: thin;                                   /* Firefox */

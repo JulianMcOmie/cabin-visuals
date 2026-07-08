@@ -240,6 +240,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
           {items.map((item) => (
             <div
               key={item.id}
+              data-instrument-id={item.id}
               onPointerDown={(e) => onItemPointerDown(e, item)}
               onDoubleClick={() => onItemDoubleClick(item)}
               title={`Drag ${item.name} into the track list to add it, or double-click to set the selected track's instrument`}
