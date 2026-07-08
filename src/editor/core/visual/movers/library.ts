@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three'
 import { cloneSVInto } from '../stateVector'
 import type { StateVector } from '../types'
-import type { DimensionDef } from './types'
+import type { MoverDef } from './types'
 
 const TAU = Math.PI * 2
 const _axis = new Vector3()
@@ -37,7 +37,7 @@ function copyBase(inState: StateVector, out: StateVector): void {
   if (out !== inState) cloneSVInto(out, inState)
 }
 
-export const translateDimension: DimensionDef = {
+export const translateMover: MoverDef = {
   id: 'translate',
   label: 'Translate',
   amountInputs: ['dx', 'dy', 'dz'],
@@ -54,7 +54,7 @@ export const translateDimension: DimensionDef = {
   },
 }
 
-export const spinDimension: DimensionDef = {
+export const spinMover: MoverDef = {
   id: 'spin',
   label: 'Spin',
   amountInputs: ['angle', 'rate'],
@@ -109,7 +109,7 @@ export const spinDimension: DimensionDef = {
   },
 }
 
-export const breatheDimension: DimensionDef = {
+export const breatheMover: MoverDef = {
   id: 'breathe',
   label: 'Breathe',
   amountInputs: ['amount'],
@@ -124,7 +124,7 @@ export const breatheDimension: DimensionDef = {
   },
 }
 
-export const orbitDimension: DimensionDef = {
+export const orbitMover: MoverDef = {
   id: 'orbit',
   label: 'Orbit',
   amountInputs: ['radius'],
@@ -145,7 +145,7 @@ export const orbitDimension: DimensionDef = {
   },
 }
 
-export const dotWaveDimension: DimensionDef = {
+export const dotWaveMover: MoverDef = {
   id: 'dotWave',
   label: 'Dot Wave',
   amountInputs: ['amount'],
@@ -164,7 +164,7 @@ export const dotWaveDimension: DimensionDef = {
   },
 }
 
-export const opacityDimension: DimensionDef = {
+export const opacityMover: MoverDef = {
   id: 'opacity',
   label: 'Opacity',
   amountInputs: ['opacity'],
@@ -177,11 +177,11 @@ export const opacityDimension: DimensionDef = {
   },
 }
 
-export const DIMENSIONS: Record<string, DimensionDef> = {
-  [translateDimension.id]: translateDimension,
-  [spinDimension.id]: spinDimension,
-  [breatheDimension.id]: breatheDimension,
-  [orbitDimension.id]: orbitDimension,
-  [dotWaveDimension.id]: dotWaveDimension,
-  [opacityDimension.id]: opacityDimension,
+export const MOVERS: Record<string, MoverDef> = {
+  [translateMover.id]: translateMover,
+  [spinMover.id]: spinMover,
+  [breatheMover.id]: breatheMover,
+  [orbitMover.id]: orbitMover,
+  [dotWaveMover.id]: dotWaveMover,
+  [opacityMover.id]: opacityMover,
 }

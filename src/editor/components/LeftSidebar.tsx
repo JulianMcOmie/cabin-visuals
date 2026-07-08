@@ -7,12 +7,12 @@ import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
-import { dimensionRegistry } from '../core/visual/dimensions/registry'
+import { moverRegistry } from '../core/visual/movers/registry'
 import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
  *  event-modifier child track (whose `id` is the modifier's track type). */
-export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'dimension'
+export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover'
 
 export interface InstrumentItem {
   id: string
@@ -208,7 +208,7 @@ const MODULATOR_INSTRUMENTS = withKind('modulator', [
   )},
 ])
 
-const DIMENSION_INSTRUMENTS = withKind('dimension', Object.values(dimensionRegistry).map((d) => ({
+const MOVER_INSTRUMENTS = withKind('mover', Object.values(moverRegistry).map((d) => ({
   id: d.id,
   name: d.label,
   icon: (
@@ -298,12 +298,12 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackModifier = useProjectStore((s) => s.setTrackModifier)
-  const setTrackDimension = useProjectStore((s) => s.setTrackDimension)
+  const setTrackMover = useProjectStore((s) => s.setTrackMover)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
-    else if (item.kind === 'dimension') setTrackDimension(selectedTrackId, item.id, item.name)
+    else if (item.kind === 'mover') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
@@ -340,7 +340,7 @@ export function LeftSidebar() {
           <>
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modulator" description="A Modulator instrument drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Dimension" description="A Dimension is a child transform row. Its inputs can be edited, automated, or driven by modulators." items={DIMENSION_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Mover" description="A Mover is a child transform row. Its inputs can be edited, automated, or driven by modulators." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}

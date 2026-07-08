@@ -4,7 +4,7 @@ import type { Track, AudioBlock, EffectInstance } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 2
+export const CURRENT_VERSION = 3
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -63,6 +63,24 @@ UPGRADES[1] = (doc) => {
   }
 
   return { ...rest, tracks, rootTrackIds, audioClips }
+}
+
+// ── v2 → v3 ──────────────────────────────────────────────────────────────────
+// The dimension → mover rename: track type 'dimension' becomes 'mover' and
+// dimensionId becomes moverId. Everything else on those tracks (inputValues,
+// depth, envelope, midiMode, weight, opMode) is unchanged.
+UPGRADES[2] = (doc) => {
+  const rest = doc as { tracks?: Record<string, Track & { dimensionId?: string }> } & Record<string, unknown>
+  const tracks: Record<string, Track> = {}
+  for (const [id, t] of Object.entries(rest.tracks ?? {})) {
+    if ((t.type as string) === 'dimension') {
+      const { dimensionId, ...track } = t
+      tracks[id] = { ...track, type: 'mover', moverId: dimensionId } as Track
+    } else {
+      tracks[id] = t as Track
+    }
+  }
+  return { ...rest, tracks }
 }
 
 /**

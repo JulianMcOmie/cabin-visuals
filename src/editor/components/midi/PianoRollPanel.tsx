@@ -12,7 +12,7 @@ import { generateRows, generateAutomationRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
-import { firstDimensionMidiInput, getDimension, isDimensionMidiInput } from '../../core/visual/dimensions/registry'
+import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
 import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
@@ -75,23 +75,23 @@ export function PianoRollPanel() {
   const modColor = modifierColor(track)
 
   // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
-  // Automation tracks target their parent; continuous dimensions target their own input.
+  // Automation tracks target their parent; continuous movers target their own input.
   let automation: AutomationInfo | undefined
-  if (track.type === 'dimension') {
+  if (track.type === 'mover') {
     if (track.midiMode === 'amount') {
       automation = { paramLabel: 'amount', paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX }
     } else if (track.midiMode === 'continuous') {
-      const dim = getDimension(track.dimensionId)
-      const target = dim && isDimensionMidiInput(dim, track.midiTargetInput)
+      const dim = getMover(track.moverId)
+      const target = dim && isMoverMidiInput(dim, track.midiTargetInput)
         ? track.midiTargetInput
-        : dim ? firstDimensionMidiInput(dim) : undefined
+        : dim ? firstMoverMidiInput(dim) : undefined
       const input = dim && target ? dim.inputs[target] : undefined
       if (input && target) automation = { paramLabel: input.label ?? target, paramMin: input.min, paramMax: input.max }
     }
   } else if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
-    if (parent?.type === 'dimension') {
-      const input = getDimension(parent.dimensionId)?.inputs[track.targetParam]
+    if (parent?.type === 'mover') {
+      const input = getMover(parent.moverId)?.inputs[track.targetParam]
       if (input) automation = { paramLabel: track.targetParam, paramMin: input.min, paramMax: input.max }
     } else {
       const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined

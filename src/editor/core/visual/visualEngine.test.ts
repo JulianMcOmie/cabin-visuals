@@ -66,9 +66,9 @@ test('computeAtBeat is deterministic across repeated calls', () => {
   const spin: Track = {
     id: 'spin',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { angle: 0.75 },
     midiMode: 'none',
@@ -106,9 +106,9 @@ test('scrubbing back to a beat reproduces the same object state', () => {
   const orbit: Track = {
     id: 'orbit',
     name: 'Orbit',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'orbit',
+    moverId: 'orbit',
     depth: 0.8,
     inputValues: { radius: 1.2, rate: 0.5, phase: 0.1, tilt: 0.2 },
     midiMode: 'none',
@@ -131,7 +131,7 @@ test('scrubbing back to a beat reproduces the same object state', () => {
   assert.deepEqual(after, before)
 })
 
-test('continuous dimension MIDI interpolates note values between onsets', () => {
+test('continuous mover MIDI interpolates note values between onsets', () => {
   const cube: Track = {
     id: 'cube-continuous',
     name: 'Cube',
@@ -147,9 +147,9 @@ test('continuous dimension MIDI interpolates note values between onsets', () => 
   const spin: Track = {
     id: 'spin-continuous',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { angle: 0 },
     midiMode: 'continuous',
@@ -185,7 +185,7 @@ test('continuous dimension MIDI interpolates note values between onsets', () => 
   assert.equal(serializeState('cube-continuous').world[12], -1)
 })
 
-test('continuous dimension MIDI ignores invalid saved targets and falls back to angle', () => {
+test('continuous mover MIDI ignores invalid saved targets and falls back to angle', () => {
   const cube: Track = {
     id: 'cube-continuous-fallback',
     name: 'Cube',
@@ -201,9 +201,9 @@ test('continuous dimension MIDI ignores invalid saved targets and falls back to 
   const spin: Track = {
     id: 'spin-continuous-fallback',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { angle: 0 },
     midiMode: 'continuous',
@@ -252,9 +252,9 @@ test('amount mode drives spin rate direction from MIDI value', () => {
   const spin: Track = {
     id: 'spin-amount',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { angle: 0, rate: 0.25 },
     midiMode: 'amount',
@@ -304,9 +304,9 @@ test('swarm produces one matrix per resolved element', () => {
   const breathe: Track = {
     id: 'breathe',
     name: 'Breathe',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'breathe',
+    moverId: 'breathe',
     depth: 1,
     inputValues: { amount: 0.2, rate: 1, phase: 0 },
     midiMode: 'none',
@@ -368,9 +368,9 @@ test('spin self space rotates a swarm element without orbiting its position', ()
   const spin: Track = {
     id: 'self-spin',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { space: 1, angle: Math.PI / 2, axisX: 0, axisY: 1, axisZ: 0 },
     midiMode: 'none',
@@ -409,9 +409,9 @@ test('spin self local x axis can pitch a swarm element like a nod', () => {
   const spin: Track = {
     id: 'self-nod',
     name: 'Spin',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'spin',
+    moverId: 'spin',
     depth: 1,
     inputValues: { space: 1, angle: Math.PI / 2, axisX: 1, axisY: 0, axisZ: 0 },
     midiMode: 'none',
@@ -450,9 +450,9 @@ test('dot wave offsets swarm elements by index', () => {
   const dotWave: Track = {
     id: 'dot-wave',
     name: 'Dot Wave',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'dotWave',
+    moverId: 'dotWave',
     depth: 1,
     inputValues: { amount: 1, rate: 0, indexStep: 0.25, phase: 0 },
     midiMode: 'none',
@@ -474,7 +474,7 @@ test('dot wave offsets swarm elements by index', () => {
   assert.equal(state.elementMatrices[2][13], 0)
 })
 
-test('opacity dimension resolves to object opacity', () => {
+test('opacity mover resolves to object opacity', () => {
   const cube: Track = {
     id: 'cube-opacity',
     name: 'Cube',
@@ -490,9 +490,9 @@ test('opacity dimension resolves to object opacity', () => {
   const opacity: Track = {
     id: 'opacity-dim',
     name: 'Opacity',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'opacity',
+    moverId: 'opacity',
     depth: 1,
     inputValues: { opacity: 0.25 },
     midiMode: 'none',
@@ -527,9 +527,9 @@ test('ballistic opacity rests at zero and peaks at full opacity by default', () 
   const opacity: Track = {
     id: 'opacity-ballistic',
     name: 'Opacity',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'opacity',
+    moverId: 'opacity',
     depth: 1,
     inputValues: {},
     midiMode: 'ballistic',
@@ -579,9 +579,9 @@ test('checker white weight targets alternating grid cells', () => {
   const opacity: Track = {
     id: 'checker-opacity',
     name: 'Opacity',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'opacity',
+    moverId: 'opacity',
     depth: 1,
     inputValues: { opacity: 0 },
     midiMode: 'none',
@@ -600,13 +600,13 @@ test('checker white weight targets alternating grid cells', () => {
   assert.deepEqual(serializeState('swarm-checker').elementOpacities, [0, 1, 1, 0])
 })
 
-function makeTranslateDimension(id: string, dx: number, dy: number, dz: number): Track {
+function makeTranslateMover(id: string, dx: number, dy: number, dz: number): Track {
   return {
     id,
     name: id,
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'translate',
+    moverId: 'translate',
     depth: 1,
     inputValues: { dx, dy, dz },
     midiMode: 'none',
@@ -621,7 +621,7 @@ function makeTranslateDimension(id: string, dx: number, dy: number, dz: number):
   }
 }
 
-test('add-mode dimensions in one run are order independent', () => {
+test('add-mode movers in one run are order independent', () => {
   const cube: Track = {
     id: 'cube-add',
     name: 'Cube',
@@ -634,9 +634,9 @@ test('add-mode dimensions in one run are order independent', () => {
     blocks: [],
     childIds: ['a', 'b', 'c'],
   }
-  const a = makeTranslateDimension('a', 1, 0, 0)
-  const b = makeTranslateDimension('b', 0, 2, 0)
-  const c = makeTranslateDimension('c', 0, 0, 3)
+  const a = makeTranslateMover('a', 1, 0, 0)
+  const b = makeTranslateMover('b', 0, 2, 0)
+  const c = makeTranslateMover('c', 0, 0, 3)
 
   setProject({ tracks: { 'cube-add': cube, a, b, c }, rootTrackIds: ['cube-add'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
   computeAtBeat(0)
@@ -666,9 +666,9 @@ test('negative depth reverses a transform delta', () => {
   const translate: Track = {
     id: 'negative-translate',
     name: 'Translate',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'translate',
+    moverId: 'translate',
     depth: -1,
     inputValues: { dx: 2, dy: 0, dz: 0 },
     midiMode: 'none',
@@ -687,9 +687,9 @@ test('negative depth reverses a transform delta', () => {
   assert.equal(serializeState('cube-negative-depth').world[12], -2)
 })
 
-test('soloed dimension is the only local dimension applied to its instrument', () => {
+test('soloed mover is the only local mover applied to its instrument', () => {
   const cube: Track = {
-    id: 'cube-dimension-solo',
+    id: 'cube-mover-solo',
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
@@ -703,9 +703,9 @@ test('soloed dimension is the only local dimension applied to its instrument', (
   const translateX: Track = {
     id: 'translate-x',
     name: 'Translate X',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'translate',
+    moverId: 'translate',
     depth: 1,
     inputValues: { dx: 2, dy: 0, dz: 0 },
     midiMode: 'none',
@@ -715,7 +715,7 @@ test('soloed dimension is the only local dimension applied to its instrument', (
     solo: false,
     blocks: [],
     childIds: [],
-    parentId: 'cube-dimension-solo',
+    parentId: 'cube-mover-solo',
   }
   const translateY: Track = {
     ...translateX,
@@ -726,20 +726,20 @@ test('soloed dimension is the only local dimension applied to its instrument', (
   }
 
   setProject({
-    tracks: { 'cube-dimension-solo': cube, 'translate-x': translateX, 'translate-y': translateY },
-    rootTrackIds: ['cube-dimension-solo'],
+    tracks: { 'cube-mover-solo': cube, 'translate-x': translateX, 'translate-y': translateY },
+    rootTrackIds: ['cube-mover-solo'],
     beatsPerBar: 4,
     bpm: 120,
     totalBars: 4,
   })
   computeAtBeat(0)
-  const world = serializeState('cube-dimension-solo').world
+  const world = serializeState('cube-mover-solo').world
 
   assert.equal(world[12], 0)
   assert.equal(world[13], 3)
 })
 
-test('top-level dimension targets tagged objects after local dimensions', () => {
+test('top-level mover targets tagged objects after local movers', () => {
   const cubeA: Track = {
     id: 'cube-a',
     name: 'A',
@@ -762,15 +762,15 @@ test('top-level dimension targets tagged objects after local dimensions', () => 
   const globalDim: Track = {
     id: 'global-dim',
     name: 'Global Translate',
-    type: 'dimension',
+    type: 'mover',
     instrumentId: '',
-    dimensionId: 'translate',
+    moverId: 'translate',
     depth: 1,
     inputValues: { dx: 2, dy: 0, dz: 0 },
     midiMode: 'none',
     weight: { mode: 'all' },
     opMode: 'transform',
-    targets: [{ port: 'dimension', scope: { kind: 'tag', tag: 'group' }, amount: 1 }],
+    targets: [{ port: 'mover', scope: { kind: 'tag', tag: 'group' }, amount: 1 }],
     color: '#22d3ee',
     muted: false,
     solo: false,

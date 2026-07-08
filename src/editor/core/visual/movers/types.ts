@@ -1,6 +1,6 @@
 import type { StateVector } from '../types'
 
-export interface DimensionInputDef {
+export interface MoverInputDef {
   default: number
   min: number
   max: number
@@ -11,23 +11,23 @@ export interface DimensionInputDef {
   hidden?: boolean
 }
 
-export interface DimensionCtx {
+export interface MoverCtx {
   beat: number
   i: number
   N: number
   channels: Record<string, number>
 }
 
-export interface DimensionDef {
+export interface MoverDef {
   id: string
   label: string
-  inputs: Record<string, DimensionInputDef>
+  inputs: Record<string, MoverInputDef>
   /** Inputs scaled by signed MIDI amount mode. Defaults should be neutral values. */
   amountInputs?: string[]
   apply: (
     inState: StateVector,
     inputs: Record<string, number>,
-    ctx: DimensionCtx,
+    ctx: MoverCtx,
     out: StateVector,
   ) => void
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR } from '../utils/modifierColors'
-import { firstDimensionMidiInput, getDimension, isDimensionMidiInput } from '../core/visual/dimensions/registry'
+import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec } from '../types'
 
 export const MIN_BPM = 20
@@ -230,16 +230,16 @@ interface ProjectState {
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into an event modifier of the given type (no instrument). */
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
-  /** Convert a track into a dimension row (no instrument). */
-  setTrackDimension: (trackId: string, dimensionId: string, name: string) => void
-  addDimensionTrack: (parentId: string, dimensionId: string, dimensionLabel: string) => void
-  setDimensionInput: (trackId: string, key: string, value: number) => void
-  setDimensionDepth: (trackId: string, value: number) => void
-  setDimensionMidiMode: (trackId: string, mode: MidiMode) => void
-  setDimensionMidiTarget: (trackId: string, input: string | undefined) => void
-  setDimensionEnvelope: (trackId: string, envelope: { attack: number; decay: number }) => void
-  setDimensionWeight: (trackId: string, weight: SubsetWeightSpec) => void
-  setDimensionOpMode: (trackId: string, mode: 'transform' | 'add') => void
+  /** Convert a track into a mover row (no instrument). */
+  setTrackMover: (trackId: string, moverId: string, name: string) => void
+  addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
+  setMoverInput: (trackId: string, key: string, value: number) => void
+  setMoverDepth: (trackId: string, value: number) => void
+  setMoverMidiMode: (trackId: string, mode: MidiMode) => void
+  setMoverMidiTarget: (trackId: string, input: string | undefined) => void
+  setMoverEnvelope: (trackId: string, envelope: { attack: number; decay: number }) => void
+  setMoverWeight: (trackId: string, weight: SubsetWeightSpec) => void
+  setMoverOpMode: (trackId: string, mode: 'transform' | 'add') => void
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
@@ -722,7 +722,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
             instrumentId,
             params: {},
             stringParams: {},
-            dimensionId: undefined,
+            moverId: undefined,
             depth: undefined,
             inputValues: undefined,
             envelope: undefined,
@@ -749,7 +749,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
             instrumentId: '',
             params: {},
             stringParams: {},
-            dimensionId: undefined,
+            moverId: undefined,
             depth: undefined,
             inputValues: undefined,
             envelope: undefined,
@@ -762,26 +762,26 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  setTrackDimension: (trackId, dimensionId, name) =>
+  setTrackMover: (trackId, moverId, name) =>
     set((s) => {
       const track = s.tracks[trackId]
-      const def = getDimension(dimensionId)
+      const def = getMover(moverId)
       if (!track || !def) return s
       return {
         tracks: {
           ...s.tracks,
           [trackId]: {
             ...track,
-            type: 'dimension',
+            type: 'mover',
             instrumentId: '',
-            dimensionId,
+            moverId,
             depth: track.depth ?? 1,
             inputValues: {},
             envelope: track.envelope ?? { attack: 0.05, decay: 0.4 },
             midiMode: track.midiMode ?? 'none',
-            midiTargetInput: isDimensionMidiInput(def, track.midiTargetInput)
+            midiTargetInput: isMoverMidiInput(def, track.midiTargetInput)
               ? track.midiTargetInput
-              : firstDimensionMidiInput(def),
+              : firstMoverMidiInput(def),
             weight: track.weight ?? { mode: 'all' },
             opMode: track.opMode ?? 'transform',
             params: {},
@@ -793,23 +793,23 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  addDimensionTrack: (parentId, dimensionId, dimensionLabel) =>
+  addMoverTrack: (parentId, moverId, moverLabel) =>
     set((s) => {
       const parent = s.tracks[parentId]
-      const def = getDimension(dimensionId)
+      const def = getMover(moverId)
       if (!parent || !def) return s
       const id = crypto.randomUUID()
       const track: Track = {
         id,
-        name: dimensionLabel,
-        type: 'dimension',
+        name: moverLabel,
+        type: 'mover',
         instrumentId: '',
-        dimensionId,
+        moverId,
         depth: 1,
         inputValues: {},
         envelope: { attack: 0.05, decay: 0.4 },
         midiMode: 'none',
-        midiTargetInput: firstDimensionMidiInput(def),
+        midiTargetInput: firstMoverMidiInput(def),
         weight: { mode: 'all' },
         opMode: 'transform',
         color: MOVER_TRACK_COLOR,
@@ -828,58 +828,58 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
-  setDimensionInput: (trackId, key, value) =>
+  setMoverInput: (trackId, key, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
+      if (!track || track.type !== 'mover') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
     }),
 
-  setDimensionDepth: (trackId, value) =>
+  setMoverDepth: (trackId, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
+      if (!track || track.type !== 'mover') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, depth: value } } }
     }),
 
-  setDimensionMidiMode: (trackId, mode) =>
+  setMoverMidiMode: (trackId, mode) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
-      const def = getDimension(track.dimensionId)
-      const midiTargetInput = mode === 'continuous' && def && !isDimensionMidiInput(def, track.midiTargetInput)
-        ? firstDimensionMidiInput(def)
+      if (!track || track.type !== 'mover') return s
+      const def = getMover(track.moverId)
+      const midiTargetInput = mode === 'continuous' && def && !isMoverMidiInput(def, track.midiTargetInput)
+        ? firstMoverMidiInput(def)
         : track.midiTargetInput
       return { tracks: { ...s.tracks, [trackId]: { ...track, midiMode: mode, midiTargetInput } } }
     }),
 
-  setDimensionMidiTarget: (trackId, input) =>
+  setMoverMidiTarget: (trackId, input) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
-      const def = getDimension(track.dimensionId)
-      if (!def || !isDimensionMidiInput(def, input)) return s
+      if (!track || track.type !== 'mover') return s
+      const def = getMover(track.moverId)
+      if (!def || !isMoverMidiInput(def, input)) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, midiTargetInput: input } } }
     }),
 
-  setDimensionEnvelope: (trackId, envelope) =>
+  setMoverEnvelope: (trackId, envelope) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
+      if (!track || track.type !== 'mover') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, envelope } } }
     }),
 
-  setDimensionWeight: (trackId, weight) =>
+  setMoverWeight: (trackId, weight) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
+      if (!track || track.type !== 'mover') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, weight } } }
     }),
 
-  setDimensionOpMode: (trackId, opMode) =>
+  setMoverOpMode: (trackId, opMode) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'dimension') return s
+      if (!track || track.type !== 'mover') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, opMode } } }
     }),
 

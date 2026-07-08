@@ -24,7 +24,7 @@ export type TrackType =
   | 'override'
   | 'automation'
   | 'ability'
-  | 'dimension'
+  | 'mover'
   | 'audio'
 
 export type MidiMode = 'none' | 'continuous' | 'amount' | 'ballistic'
@@ -113,11 +113,11 @@ export interface Track {
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
-  /** For a `dimension` track: which dimension def this row applies. */
-  dimensionId?: string
-  /** Dimension wet/dry. Muting a dimension bypasses it; it never blackouts the parent. */
+  /** For a `mover` track: which mover def this row applies. */
+  moverId?: string
+  /** Mover wet/dry. Muting a mover bypasses it; it never blackouts the parent. */
   depth?: number
-  /** Dimension input base values, keyed by the def's input names. */
+  /** Mover input base values, keyed by the def's input names. */
   inputValues?: Record<string, number>
   envelope?: { attack: number; decay: number }
   midiMode?: MidiMode

@@ -7,7 +7,7 @@ import type {
   ResolvedObject,
   ResolvedNote,
   ResolvedAutomation,
-  ResolvedDimension,
+  ResolvedMover,
   ModulatorInstance,
   ResolvedRouting,
   BlackoutRegion,
@@ -15,7 +15,7 @@ import type {
 import { isModifierType, combineModifier, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN, pitchToValue } from '../trackTypes'
 import { extractKeyframes, type AutomationKeyframe } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type PortDef } from '../../instruments/types'
-import { firstDimensionMidiInput, getDimension, isDimensionMidiInput, DEFAULT_SUBSET_WEIGHT } from './dimensions/registry'
+import { firstMoverMidiInput, getMover, isMoverMidiInput, DEFAULT_SUBSET_WEIGHT } from './movers/registry'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -88,7 +88,7 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
   return out
 }
 
-function resolveDimensionAutomations(track: Track, d: NonNullable<ReturnType<typeof getDimension>>, p: ProjectSnapshot): ResolvedAutomation[] {
+function resolveMoverAutomations(track: Track, d: NonNullable<ReturnType<typeof getMover>>, p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
   const anyAutoSolo = (track.childIds ?? []).some((cid) => {
     const c = p.tracks[cid]
@@ -126,8 +126,8 @@ function resolveAbilityEvents(track: Track, p: ProjectSnapshot): Map<string, Res
   return events
 }
 
-function resolveDimensionTrack(track: Track, p: ProjectSnapshot): ResolvedDimension | null {
-  const def = getDimension(track.dimensionId)
+function resolveMoverTrack(track: Track, p: ProjectSnapshot): ResolvedMover | null {
+  const def = getMover(track.moverId)
   if (!def) return null
   const notes = flattenTrackNotes(track, p)
   const inputBase: Record<string, number> = {}
@@ -145,9 +145,9 @@ function resolveDimensionTrack(track: Track, p: ProjectSnapshot): ResolvedDimens
       value: pitchToValue(note.pitch, input.min, input.max),
     }))
   }
-  const midiTargetInput = isDimensionMidiInput(def, track.midiTargetInput)
+  const midiTargetInput = isMoverMidiInput(def, track.midiTargetInput)
     ? track.midiTargetInput
-    : firstDimensionMidiInput(def)
+    : firstMoverMidiInput(def)
   return {
     trackId: track.id,
     def,
@@ -164,27 +164,27 @@ function resolveDimensionTrack(track: Track, p: ProjectSnapshot): ResolvedDimens
     amountKeyframes,
     weight: track.weight ?? DEFAULT_SUBSET_WEIGHT,
     ports,
-    automations: resolveDimensionAutomations(track, def, p),
+    automations: resolveMoverAutomations(track, def, p),
   }
 }
 
-function resolveDimensionChain(track: Track, p: ProjectSnapshot): ResolvedDimension[] {
-  const chain: ResolvedDimension[] = []
-  const anyDimensionSolo = (track.childIds ?? []).some((cid) => {
+function resolveMoverChain(track: Track, p: ProjectSnapshot): ResolvedMover[] {
+  const chain: ResolvedMover[] = []
+  const anyMoverSolo = (track.childIds ?? []).some((cid) => {
     const child = p.tracks[cid]
-    return !!child && child.type === 'dimension' && !!child.solo
+    return !!child && child.type === 'mover' && !!child.solo
   })
   for (const childId of track.childIds ?? []) {
     const child = p.tracks[childId]
-    if (!child || child.type !== 'dimension') continue
-    if (anyDimensionSolo && !child.solo) continue
-    const d = resolveDimensionTrack(child, p)
+    if (!child || child.type !== 'mover') continue
+    if (anyMoverSolo && !child.solo) continue
+    const d = resolveMoverTrack(child, p)
     if (d) chain.push(d)
   }
   return chain
 }
 
-function appendDimensionPorts(obj: ResolvedObject, d: ResolvedDimension) {
+function appendMoverPorts(obj: ResolvedObject, d: ResolvedMover) {
   const existing = new Set(obj.ports.map((p) => p.key))
   for (const [inputName, input] of Object.entries(d.def.inputs)) {
     if (input.hidden) continue
@@ -269,8 +269,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const paramsForCount = paramsWithDefaults(def, params)
     const elementCount = Math.max(1, Math.min(512, Math.round(def?.elementCount?.(paramsForCount) ?? 1)))
     const { notes, blackouts } = applyModifiers(track, flattenTrackNotes(track, p), p)
-    const dimensionChain = resolveDimensionChain(track, p)
-    const dimensionPorts: PortDef[] = dimensionChain.flatMap((d) =>
+    const moverChain = resolveMoverChain(track, p)
+    const moverPorts: PortDef[] = moverChain.flatMap((d) =>
       Object.entries(d.def.inputs)
         .filter(([, input]) => !input.hidden)
         .map(([inputName]) => ({
@@ -286,7 +286,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       parentId: track.parentId,
       muted: objectOff(track),
       params,
-      ports: [...(def?.ports ?? []), ...dimensionPorts],
+      ports: [...(def?.ports ?? []), ...moverPorts],
       stringParams: track.stringParams ?? {},
       localTransform: def?.localTransform,
       elementCount,
@@ -297,7 +297,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       blackouts,
       abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
-      dimensionChain,
+      moverChain,
       scratchBase: identitySV(),
       scratchA: identitySV(),
       scratchB: identitySV(),
@@ -339,13 +339,13 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
-  // Top-level dimensions are global: they target existing objects by track/tag/subtree
-  // and append after each object's local child dimensions. Root order is user-visible
+  // Top-level movers are global: they target existing objects by track/tag/subtree
+  // and append after each object's local child movers. Root order is user-visible
   // chain order, so do not sort or normalize this pass.
   for (const trackId of p.rootTrackIds) {
     const track = p.tracks[trackId]
-    if (!track || track.type !== 'dimension') continue
-    const d = resolveDimensionTrack(track, p)
+    if (!track || track.type !== 'mover') continue
+    const d = resolveMoverTrack(track, p)
     if (!d) continue
     const seenTargets = new Set<string>()
     for (const routing of track.targets ?? []) {
@@ -354,8 +354,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         seenTargets.add(targetObjectId)
         const obj = objectById.get(targetObjectId)
         if (!obj) continue
-        obj.dimensionChain.push(d)
-        appendDimensionPorts(obj, d)
+        obj.moverChain.push(d)
+        appendMoverPorts(obj, d)
       }
     }
   }

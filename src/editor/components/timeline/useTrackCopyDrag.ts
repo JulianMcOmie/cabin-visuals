@@ -45,7 +45,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (srcIndex < 0) return
     const rowHeight = useUIStore.getState().tracksRowHeight
 
-    // Visual row of each sibling (roots and child dimensions both spread apart by
+    // Visual row of each sibling (roots and child movers both spread apart by
     // descendants), so the ghost maps to the real layout, not `index * rowHeight`.
     const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     const rowIndexById = new Map<string, number>()

@@ -6,7 +6,7 @@ import type { Matrix4 } from 'three'
 import type { ElementLayoutCtx, PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
 import type { InterpolationMode, MidiMode, SubsetWeightSpec } from '../../types'
 import type { AutomationKeyframe } from './automation'
-import type { DimensionDef } from './dimensions/types'
+import type { MoverDef } from './movers/types'
 
 export interface StateVector {
   pos: [number, number, number]
@@ -14,7 +14,7 @@ export interface StateVector {
   rot: [number, number, number]
   /** Uniform scale stored as ln(s); composeMatrix applies exp(). */
   logScale: number
-  /** Material opacity. Kept out of the matrix, but interpolated with dimensions. */
+  /** Material opacity. Kept out of the matrix, but interpolated with movers. */
   opacity: number
   /** Open scalar channels for later visual state (energy, hue, etc.). */
   aux: Record<string, number>
@@ -75,8 +75,8 @@ export interface ResolvedObject {
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
-  /** Ordered child dimension chain. Muted dimensions are bypassed, not blacked out. */
-  dimensionChain: ResolvedDimension[]
+  /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
+  moverChain: ResolvedMover[]
   scratchBase: StateVector
   scratchA: StateVector
   scratchB: StateVector
@@ -105,9 +105,9 @@ export interface ResolvedRouting {
   amount: number
 }
 
-export interface ResolvedDimension {
+export interface ResolvedMover {
   trackId: string
-  def: DimensionDef
+  def: MoverDef
   depth: number
   bypassed: boolean
   inputBase: Record<string, number>

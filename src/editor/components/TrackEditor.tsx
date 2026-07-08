@@ -6,7 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getModulator } from '../instruments/modulators'
-import { DIMENSION_DEPTH_PARAM, dimensionInputParamDefs, getDimension, isDimensionMidiInput } from '../core/visual/dimensions/registry'
+import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { getEffect, type VisualEffect } from '../effects'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
@@ -449,13 +449,13 @@ export function TrackEditor() {
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
-  const setDimensionInput = useProjectStore((s) => s.setDimensionInput)
-  const setDimensionDepth = useProjectStore((s) => s.setDimensionDepth)
-  const setDimensionMidiMode = useProjectStore((s) => s.setDimensionMidiMode)
-  const setDimensionMidiTarget = useProjectStore((s) => s.setDimensionMidiTarget)
-  const setDimensionEnvelope = useProjectStore((s) => s.setDimensionEnvelope)
-  const setDimensionWeight = useProjectStore((s) => s.setDimensionWeight)
-  const setDimensionOpMode = useProjectStore((s) => s.setDimensionOpMode)
+  const setMoverInput = useProjectStore((s) => s.setMoverInput)
+  const setMoverDepth = useProjectStore((s) => s.setMoverDepth)
+  const setMoverMidiMode = useProjectStore((s) => s.setMoverMidiMode)
+  const setMoverMidiTarget = useProjectStore((s) => s.setMoverMidiTarget)
+  const setMoverEnvelope = useProjectStore((s) => s.setMoverEnvelope)
+  const setMoverWeight = useProjectStore((s) => s.setMoverWeight)
+  const setMoverOpMode = useProjectStore((s) => s.setMoverOpMode)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
@@ -505,29 +505,29 @@ export function TrackEditor() {
             {track ? (
               <>
                 {(() => {
-                    const dimDef = track.type === 'dimension' ? getDimension(track.dimensionId) : undefined
+                    const dimDef = track.type === 'mover' ? getMover(track.moverId) : undefined
                   if (dimDef) {
-                    const inputs = dimensionInputParamDefs(dimDef)
+                    const inputs = moverInputParamDefs(dimDef)
                     const midiTargetOptions = inputs.filter(isNumberParam)
                     const inputNames = midiTargetOptions.map((p) => p.key)
-                    const midiTargetInput = isDimensionMidiInput(dimDef, track.midiTargetInput)
+                    const midiTargetInput = isMoverMidiInput(dimDef, track.midiTargetInput)
                       ? track.midiTargetInput
                       : inputNames[0]
                     const midiMode = track.midiMode ?? 'none'
                     const envelope = track.envelope ?? { attack: 0.05, decay: 0.4 }
                     const weight = track.weight ?? ({ mode: 'all' } satisfies SubsetWeightSpec)
                     const setWeightMode = (mode: SubsetWeightSpec['mode']) => {
-                      if (mode === 'gradient') setDimensionWeight(track.id, { mode, slope: 1, phase: 0 })
-                      else setDimensionWeight(track.id, { mode })
+                      if (mode === 'gradient') setMoverWeight(track.id, { mode, slope: 1, phase: 0 })
+                      else setMoverWeight(track.id, { mode })
                     }
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-3">Dimension:</p>
+                        <p className="text-[11px] text-zinc-500 mb-3">Mover:</p>
                         <div className="mb-4">
                           <div className="text-xs text-zinc-300 mb-1.5">Operation</div>
                           <select
                             value={track.opMode ?? 'transform'}
-                            onChange={(e) => setDimensionOpMode(track.id, e.target.value as 'transform' | 'add')}
+                            onChange={(e) => setMoverOpMode(track.id, e.target.value as 'transform' | 'add')}
                             className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
                           >
                             <option value="transform">Transform</option>
@@ -535,10 +535,10 @@ export function TrackEditor() {
                           </select>
                         </div>
                         <ParamControl
-                          param={DIMENSION_DEPTH_PARAM}
+                          param={MOVER_DEPTH_PARAM}
                           numValue={track.depth ?? 1}
                           strValue={undefined}
-                          onNum={(v) => setDimensionDepth(track.id, v)}
+                          onNum={(v) => setMoverDepth(track.id, v)}
                         />
                         {inputs.map((p) => (
                           <ParamControl
@@ -546,7 +546,7 @@ export function TrackEditor() {
                             param={p}
                             numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
                             strValue={undefined}
-                            onNum={(v) => setDimensionInput(track.id, p.key, v)}
+                            onNum={(v) => setMoverInput(track.id, p.key, v)}
                           />
                         ))}
 
@@ -562,17 +562,17 @@ export function TrackEditor() {
                             ...allTags.map((tag) => ({
                               key: `tag:${tag}`,
                               label: `#${tag}`,
-                              routing: { port: 'dimension', scope: { kind: 'tag' as const, tag }, amount: 1 },
+                              routing: { port: 'mover', scope: { kind: 'tag' as const, tag }, amount: 1 },
                             })),
                             ...branchTracks.map((t) => ({
                               key: `subtree:${t.id}`,
                               label: `${t.name} (branch)`,
-                              routing: { port: 'dimension', scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
+                              routing: { port: 'mover', scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
                             })),
                             ...objectTracks.map((t) => ({
                               key: `track:${t.id}`,
                               label: t.name,
-                              routing: { port: 'dimension', scope: { kind: 'track' as const, id: t.id }, amount: 1 },
+                              routing: { port: 'mover', scope: { kind: 'track' as const, id: t.id }, amount: 1 },
                             })),
                           ]
                           const selected = new Set(track.targets?.map(keyOf))
@@ -600,7 +600,7 @@ export function TrackEditor() {
                           <div className="text-xs text-zinc-300 mb-1.5">MIDI Mode</div>
                           <select
                             value={midiMode}
-                            onChange={(e) => setDimensionMidiMode(track.id, e.target.value as MidiMode)}
+                            onChange={(e) => setMoverMidiMode(track.id, e.target.value as MidiMode)}
                             className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
                           >
                             <option value="none">None</option>
@@ -617,7 +617,7 @@ export function TrackEditor() {
                                 <div className="text-xs text-zinc-300 mb-1.5">MIDI Target</div>
                                 <select
                                   value={midiTargetInput}
-                                  onChange={(e) => setDimensionMidiTarget(track.id, e.target.value)}
+                                  onChange={(e) => setMoverMidiTarget(track.id, e.target.value)}
                                   className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
                                 >
                                   {midiTargetOptions.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -645,7 +645,7 @@ export function TrackEditor() {
                               min={0.01}
                               max={4}
                               step={0.01}
-                              onChange={(attack) => setDimensionEnvelope(track.id, { ...envelope, attack })}
+                              onChange={(attack) => setMoverEnvelope(track.id, { ...envelope, attack })}
                             />
                             <ParamSlider
                               label="Decay"
@@ -653,7 +653,7 @@ export function TrackEditor() {
                               min={0.01}
                               max={8}
                               step={0.01}
-                              onChange={(decay) => setDimensionEnvelope(track.id, { ...envelope, decay })}
+                              onChange={(decay) => setMoverEnvelope(track.id, { ...envelope, decay })}
                             />
                           </>
                         )}
@@ -684,7 +684,7 @@ export function TrackEditor() {
                               min={-4}
                               max={4}
                               step={0.01}
-                              onChange={(slope) => setDimensionWeight(track.id, { ...weight, slope })}
+                              onChange={(slope) => setMoverWeight(track.id, { ...weight, slope })}
                             />
                             <ParamSlider
                               label="Phase"
@@ -692,7 +692,7 @@ export function TrackEditor() {
                               min={-1}
                               max={2}
                               step={0.01}
-                              onChange={(phase) => setDimensionWeight(track.id, { ...weight, phase })}
+                              onChange={(phase) => setMoverWeight(track.id, { ...weight, phase })}
                             />
                           </>
                         )}
@@ -710,11 +710,11 @@ export function TrackEditor() {
                     const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
                     // Tracks with children can be targeted as a whole branch (subtree).
                     const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
-                    const dimensionPortOptions = Object.values(tracks)
-                      .filter((t) => t.type === 'dimension' && !!t.parentId)
+                    const moverPortOptions = Object.values(tracks)
+                      .filter((t) => t.type === 'mover' && !!t.parentId)
                       .flatMap((t) => {
                         const parent = t.parentId ? tracks[t.parentId] : undefined
-                        const d = getDimension(t.dimensionId)
+                        const d = getMover(t.moverId)
                         if (!parent || !d) return []
                         return Object.entries(d.inputs)
                           .filter(([, input]) => !input.hidden && input.type !== 'select')
@@ -736,7 +736,7 @@ export function TrackEditor() {
                       : r.scope.kind === 'track' ? `${r.port}@track:${r.scope.id}`
                       : `${r.port}@subtree:${r.scope.id}`
                     const options = [
-                      ...dimensionPortOptions,
+                      ...moverPortOptions,
                       ...allTags.map((tag) => ({
                         key: `${modDef.port}@tag:${tag}`,
                         label: `#${tag}`,

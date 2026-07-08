@@ -1,16 +1,16 @@
-import { DIMENSIONS } from './library'
-import type { DimensionDef, DimensionInputDef } from './types'
+import { MOVERS } from './library'
+import type { MoverDef, MoverInputDef } from './types'
 import type { NumberParamDef, ParamDef } from '../../../instruments/types'
 import type { SubsetWeightSpec } from '../../../types'
 
-export { DIMENSIONS as dimensionRegistry }
-export type { DimensionDef, DimensionInputDef }
+export { MOVERS as moverRegistry }
+export type { MoverDef, MoverInputDef }
 
-export function getDimension(id: string | undefined): DimensionDef | undefined {
-  return id ? DIMENSIONS[id] : undefined
+export function getMover(id: string | undefined): MoverDef | undefined {
+  return id ? MOVERS[id] : undefined
 }
 
-export function dimensionInputParamDefs(def: DimensionDef): ParamDef[] {
+export function moverInputParamDefs(def: MoverDef): ParamDef[] {
   return Object.entries(def.inputs)
     .filter(([, input]) => !input.hidden)
     .map(([key, input]) => {
@@ -34,17 +34,17 @@ export function dimensionInputParamDefs(def: DimensionDef): ParamDef[] {
     })
 }
 
-export function isDimensionMidiInput(def: DimensionDef, inputName: string | undefined): inputName is string {
+export function isMoverMidiInput(def: MoverDef, inputName: string | undefined): inputName is string {
   if (!inputName) return false
   const input = def.inputs[inputName]
   return !!input && !input.hidden && input.type !== 'select'
 }
 
-export function firstDimensionMidiInput(def: DimensionDef): string | undefined {
+export function firstMoverMidiInput(def: MoverDef): string | undefined {
   return Object.entries(def.inputs).find(([, input]) => !input.hidden && input.type !== 'select')?.[0]
 }
 
-export const DIMENSION_DEPTH_PARAM: NumberParamDef = {
+export const MOVER_DEPTH_PARAM: NumberParamDef = {
   key: 'depth',
   label: 'Depth',
   min: -1,

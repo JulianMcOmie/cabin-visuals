@@ -3,8 +3,8 @@ import { resolveProject, type ProjectSnapshot } from './resolve'
 import { runMatrix } from './matrix'
 import { sampleLane } from './automation'
 import { composeMatrix, cloneSVInto, lerpSV, localTransformToSV } from './stateVector'
-import { subsetWeight } from './dimensions/registry'
-import type { ResolvedDimension, ResolvedGraph, ObjectState, ResolvedObject, StateVector } from './types'
+import { subsetWeight } from './movers/registry'
+import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedObject, StateVector } from './types'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -57,7 +57,7 @@ export function syncParams(p: ProjectSnapshot) {
       obj.params = track.params ?? {}
       obj.stringParams = track.stringParams ?? {}
     }
-    for (const d of obj.dimensionChain) {
+    for (const d of obj.moverChain) {
       const dTrack = p.tracks[d.trackId]
       if (!dTrack) continue
       d.depth = dTrack.depth ?? 1
@@ -91,8 +91,8 @@ function clampOpacity(v: number): number {
   return clamp(v, 0, 1)
 }
 
-function sampleDimensionInputs(
-  d: ResolvedDimension,
+function sampleMoverInputs(
+  d: ResolvedMover,
   beat: number,
   portValues: Record<string, number>,
   out: Record<string, number>,
@@ -104,7 +104,7 @@ function sampleDimensionInputs(
     let value = d.inputBase[inputName] ?? input.default
     for (const auto of d.automations) {
       if (auto.param !== inputName || auto.keyframes.length === 0) continue
-      // Existing automation lanes encode an absolute value; dimensions consume it
+      // Existing automation lanes encode an absolute value; movers consume it
       // as an additive offset from the input default so base + automation behaves
       // naturally for non-zero-default inputs such as rate.
       value += sampleLane(auto.keyframes, beat, auto.mode) - input.default
@@ -125,13 +125,13 @@ function sampleDimensionInputs(
   }
 }
 
-function midiAmount(d: ResolvedDimension, beat: number): number | null {
+function midiAmount(d: ResolvedMover, beat: number): number | null {
   if (d.midiMode !== 'amount') return null
   if (d.amountKeyframes.length === 0) return 0
   return clamp(sampleLane(d.amountKeyframes, beat, d.interpolation), -1, 1)
 }
 
-function ballisticGain(d: ResolvedDimension, beat: number): number {
+function ballisticGain(d: ResolvedMover, beat: number): number {
   if (d.midiMode !== 'ballistic') return 1
   const attack = Math.max(0.0001, d.envelope?.attack ?? 0.05)
   const decay = Math.max(0.0001, d.envelope?.decay ?? 0.4)
@@ -151,14 +151,14 @@ function ballisticGain(d: ResolvedDimension, beat: number): number {
   return clamp01(gain)
 }
 
-function isBallisticOpacityDimension(d: ResolvedDimension): boolean {
+function isBallisticOpacityMover(d: ResolvedMover): boolean {
   return d.def.id === 'opacity' && d.midiMode === 'ballistic'
 }
 
 function applyBallisticOpacityTarget(
   entry: StateVector,
   inputs: Record<string, number>,
-  d: ResolvedDimension,
+  d: ResolvedMover,
   beat: number,
   out: StateVector,
 ): void {
@@ -194,7 +194,7 @@ function addWeightedDelta(dst: StateVector, entry: StateVector, result: StateVec
   }
 }
 
-function applyDimensionChain(
+function applyMoverChain(
   obj: ResolvedObject,
   base: StateVector,
   beat: number,
@@ -204,19 +204,19 @@ function applyDimensionChain(
 ): StateVector {
   const ctx = { beat, i, N, channels: obj.scratchChannels }
   cloneSVInto(obj.scratchA, base)
-  for (let index = 0; index < obj.dimensionChain.length; index++) {
-    const d = obj.dimensionChain[index]
+  for (let index = 0; index < obj.moverChain.length; index++) {
+    const d = obj.moverChain[index]
     if (d.bypassed) continue
 
     if (d.opMode === 'add') {
       cloneSVInto(obj.scratchEntry, obj.scratchA)
       cloneSVInto(obj.scratchAdd, obj.scratchEntry)
-      while (index < obj.dimensionChain.length && obj.dimensionChain[index].opMode === 'add') {
-        const addDim = obj.dimensionChain[index]
+      while (index < obj.moverChain.length && obj.moverChain[index].opMode === 'add') {
+        const addDim = obj.moverChain[index]
         if (!addDim.bypassed) {
-          sampleDimensionInputs(addDim, beat, portValues, obj.scratchInputs, midiAmount(addDim, beat))
+          sampleMoverInputs(addDim, beat, portValues, obj.scratchInputs, midiAmount(addDim, beat))
           let gain = ballisticGain(addDim, beat)
-          if (isBallisticOpacityDimension(addDim)) {
+          if (isBallisticOpacityMover(addDim)) {
             applyBallisticOpacityTarget(obj.scratchEntry, obj.scratchInputs, addDim, beat, obj.scratchB)
             gain = 1
           } else {
@@ -232,9 +232,9 @@ function applyDimensionChain(
       continue
     }
 
-    sampleDimensionInputs(d, beat, portValues, obj.scratchInputs, midiAmount(d, beat))
+    sampleMoverInputs(d, beat, portValues, obj.scratchInputs, midiAmount(d, beat))
     let gain = ballisticGain(d, beat)
-    if (isBallisticOpacityDimension(d)) {
+    if (isBallisticOpacityMover(d)) {
       applyBallisticOpacityTarget(obj.scratchA, obj.scratchInputs, d, beat, obj.scratchB)
       gain = 1
     } else {
@@ -284,7 +284,7 @@ export function computeAtBeat(beat: number) {
           const local = obj.localTransform ? obj.localTransform({ params, ports: portValues, beat }) : {}
           localTransformToSV(local, obj.scratchBase)
         }
-        const elementState = applyDimensionChain(obj, obj.scratchBase, beat, i, N, portValues)
+        const elementState = applyMoverChain(obj, obj.scratchBase, beat, i, N, portValues)
         composeMatrix(elementState, obj.elementMatrices[i])
         obj.elementOpacities[i] = clampOpacity(elementState.opacity)
       }
@@ -292,7 +292,7 @@ export function computeAtBeat(beat: number) {
       const local = obj.localTransform ? obj.localTransform({ params, ports: portValues, beat }) : {}
       localTransformToSV(local, obj.scratchBase)
       setElementChannels(obj.scratchChannels, 0, 1)
-      const localState = applyDimensionChain(obj, obj.scratchBase, beat, 0, 1, portValues)
+      const localState = applyMoverChain(obj, obj.scratchBase, beat, 0, 1, portValues)
       composeMatrix(localState, _local)
       obj.elementOpacities[0] = clampOpacity(localState.opacity)
       if (parentWorld) world.multiplyMatrices(parentWorld, _local)
