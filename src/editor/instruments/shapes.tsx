@@ -1,5 +1,5 @@
 import { specInstrument } from './specInstrument'
-import type { ParamDef, PortDef } from './types'
+import type { ParamDef } from './types'
 import type { Primitive } from '../core/visual/renderSpec'
 
 // Basic shapes share the Cube's params/ports so they self-pulse and respond to the same
@@ -13,18 +13,11 @@ const SHAPE_PARAMS: ParamDef[] = [
   { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 0 },
 ]
 
-const SHAPE_PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function basicShape(id: string, name: string, primitive: Primitive) {
   return specInstrument({
     id,
     name,
     params: SHAPE_PARAMS,
-    ports: SHAPE_PORTS,
     spec: {
       primitive,
       transform: {

@@ -17,17 +17,12 @@ export const pointLightInstrument: ObjectInstrumentDef = {
     { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 2 },
     { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 3 },
   ],
-  ports: [
-    { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-    { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  ],
-  localTransform: ({ params, ports }) => {
+  localTransform: ({ params }) => {
     const baseXPosition = params.baseXPosition ?? paramDefault(pointLightInstrument, 'baseXPosition')
     const baseYPosition = params.baseYPosition ?? paramDefault(pointLightInstrument, 'baseYPosition')
     const baseZPosition = params.baseZPosition ?? paramDefault(pointLightInstrument, 'baseZPosition')
     return {
       position: [baseXPosition, baseYPosition, baseZPosition],
-      scale: 1 + Math.max(0, ports.scale ?? 0),
     }
   },
   component: PointLightObject,
@@ -41,7 +36,7 @@ export function PointLightObject({ trackId }: { trackId: string }) {
     const light = lightRef.current
     const bulb = bulbRef.current
     const color = state.stringParams.color ?? '#ffd28a'
-    const energy = Math.max(0, state.portValues.energy ?? 0)
+    const energy = Math.max(0, state.energy)
     const intensity = state.params.intensity ?? paramDefault(pointLightInstrument, 'intensity')
     const distance = state.params.distance ?? paramDefault(pointLightInstrument, 'distance')
     const decay = state.params.decay ?? paramDefault(pointLightInstrument, 'decay')

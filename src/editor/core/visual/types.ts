@@ -3,7 +3,7 @@
 // way (engine → document), which keeps the editor independent of the engine.
 
 import type { Matrix4 } from 'three'
-import type { ElementLayoutCtx, PortDef, LocalTransform, TransformCtx } from '../../instruments/types'
+import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instruments/types'
 import type { InterpolationMode, MidiMode, SubsetWeightSpec } from '../../types'
 import type { AutomationKeyframe } from './automation'
 import type { MoverDef } from './movers/types'
@@ -54,8 +54,6 @@ export interface ResolvedObject {
   parentId?: string
   muted: boolean
   params: Record<string, number>
-  /** The instrument's ports (from its def), so the matrix knows what to fill. */
-  ports: PortDef[]
   /** String-valued params (color / string), passed straight to the instrument. */
   stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
@@ -84,25 +82,8 @@ export interface ResolvedObject {
   scratchAdd: StateVector
   scratchInputs: Record<string, number>
   scratchChannels: Record<string, number>
-  /** Cross-cutting group labels — a modulator can route to a tag (see Routing). */
+  /** Cross-cutting group labels — top-level movers target tags (see Routing). */
   tags: string[]
-}
-
-/** A modulator's resolved signal source. Its output is computed once per frame;
- *  ResolvedRoutings fan it out to object ports (one signal → many ports). */
-export interface ModulatorInstance {
-  id: string
-  kind: 'pulse'
-  triggers: ResolvedNote[]
-}
-
-/** A resolved connection: a modulator's signal drives one object's port, scaled by
- *  `amount`. Scopes (track/tag/subtree) are already expanded to concrete objects. */
-export interface ResolvedRouting {
-  modulatorId: string
-  targetObjectId: string
-  targetPort: string
-  amount: number
 }
 
 export interface ResolvedMover {
@@ -120,16 +101,12 @@ export interface ResolvedMover {
   continuousKeyframes: Record<string, AutomationKeyframe[]>
   amountKeyframes: AutomationKeyframe[]
   weight: SubsetWeightSpec
-  ports: Record<string, string>
   automations: ResolvedAutomation[]
 }
 
 export interface ResolvedGraph {
   objects: ResolvedObject[]
-  modulators: ModulatorInstance[]
-  /** Routings bucketed by target port key (the matrix's per-port input). */
-  routingsByPort: Map<string, ResolvedRouting[]>
-  /** tag → object trackIds, so tag-scoped routings expand to a group. */
+  /** tag → object trackIds, so tag-scoped mover targets expand to a group. */
   tagIndex: Map<string, string[]>
 }
 
@@ -142,7 +119,9 @@ export interface ObjectState {
   /** Seconds per beat (60/bpm this frame), for beat-age → seconds conversions. */
   secPerBeat: number
   params: Record<string, number>
-  portValues: Record<string, number>
+  /** Decaying pulse from the object's own most recent note (the old implicit
+   *  `energy` port) — the universal "a note just hit" signal instruments read. */
+  energy: number
   /** True this frame if a mute modifier's region covers the current beat (hide it). */
   blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames —

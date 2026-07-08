@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
 import { useInstrumentFrame, beatInBlock } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE — pong. A cube ball rallies between two paddles, crossing the
 // court once per beat (ambient: it rallies forever with zero notes). The ball's
@@ -36,12 +36,6 @@ const PARAMS: ParamDef[] = [
   { key: 'paddleColor', label: 'Paddle Color', type: 'color', default: '#22d3ee' },
   { key: 'courtColor', label: 'Court Color', type: 'color', default: '#4b5563' },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 /** Closed-form ball state at an arbitrary beat (pure — used for ball AND trail ghosts). */
 function ballAt(
   b: number, notes: ResolvedNote[],
@@ -228,6 +222,5 @@ export const paddleBounceInstrument: ObjectInstrumentDef = {
   name: 'Paddle Bounce',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: PaddleBounceVisual,
 }

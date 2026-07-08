@@ -6,7 +6,7 @@ import {
   BufferGeometry, BufferAttribute, Color,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Generative metronome-ball line drawings: three
 // foreground panels + a rotating background "flower", all built from balls that
@@ -173,12 +173,6 @@ const PARAMS: ParamDef[] = [
   { key: 'bgMultiplier', label: 'BG Multiplier', min: 0.1, max: 20, step: 0.1, default: 4 },
   { key: 'bgRotateRate', label: 'BG Rotate/Beat', min: 0, max: 2, step: 0.05, default: 0.5 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 const _c = new Color()
 
 function MetronomeBallsVisual({ trackId }: { trackId: string }) {
@@ -416,7 +410,6 @@ export const metronomeBallsInstrument: ObjectInstrumentDef = {
   name: 'Metronome Balls',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: MetronomeBallsVisual,
   fullFrame: true,
 }

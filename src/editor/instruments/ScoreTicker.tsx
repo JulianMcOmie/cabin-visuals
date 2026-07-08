@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { Mesh, CanvasTexture, LinearFilter, NearestFilter, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE — a giant glowing score readout in a 4x5 pixel font, drawn to a
 // canvas texture on a positioned plane (NOT fullFrame). The score is recomputed
@@ -50,12 +50,6 @@ const PARAMS: ParamDef[] = [
   { key: 'labelColor', label: 'Label Color', type: 'color', default: '#22d3ee' },
   { key: 'accentColor', label: '1UP Color', type: 'color', default: '#4ade80' },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 /** Draw a pixel-font string centered at (cx, cy); cell = pixel size in canvas px. */
 function drawText(
   ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, cell: number,
@@ -197,6 +191,5 @@ export const scoreTickerInstrument: ObjectInstrumentDef = {
   name: 'Score Ticker',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: ScoreTickerVisual,
 }

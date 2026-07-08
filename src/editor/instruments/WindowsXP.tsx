@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A procedurally-drawn Windows XP "Luna" desktop rendered to a
 // full-frame canvas + CanvasTexture. MIDI notes drive it: low pitches (C1-B1) switch the
@@ -927,12 +927,6 @@ const PARAMS: ParamDef[] = [
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 1.0 },
   { key: 'spawnX', label: 'Spawn X Position', min: 0, max: 1, step: 0.05, default: 0.66 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 // ── Main component ─────────────────────────────────────────────────────────
 
 function WindowsXPVisual({ trackId }: { trackId: string }) {
@@ -1145,7 +1139,6 @@ export const windowsXpInstrument: ObjectInstrumentDef = {
   name: 'Windows XP',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: WindowsXPVisual,
   fullFrame: true,
 }

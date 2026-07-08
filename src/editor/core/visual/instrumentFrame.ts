@@ -72,8 +72,8 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(cam.quaternion.x); put(cam.quaternion.y); put(cam.quaternion.z); put(cam.quaternion.w)
     put(state.activeNotes.length)
     for (const n of state.activeNotes) put(n)
+    put(state.energy)
     for (const k in state.params) { put(k); put(state.params[k]) }
-    for (const k in state.portValues) { put(k); put(state.portValues[k]) }
     if (buf.length !== i) {
       buf.length = i
       dirty = true

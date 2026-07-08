@@ -1,20 +1,17 @@
 import { Matrix4 } from 'three'
 import type { Track } from '../../types'
 import { getInstrument } from '../../instruments'
-import { getModulator } from '../../instruments/modulators'
 import type {
   ResolvedGraph,
   ResolvedObject,
   ResolvedNote,
   ResolvedAutomation,
   ResolvedMover,
-  ModulatorInstance,
-  ResolvedRouting,
   BlackoutRegion,
 } from './types'
 import { isModifierType, combineModifier, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN, pitchToValue } from '../trackTypes'
 import { extractKeyframes, type AutomationKeyframe } from './automation'
-import { isNumberParam, type ObjectInstrumentDef, type PortDef } from '../../instruments/types'
+import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput, DEFAULT_SUBSET_WEIGHT } from './movers/registry'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
@@ -131,7 +128,6 @@ function resolveMoverTrack(track: Track, p: ProjectSnapshot): ResolvedMover | nu
   if (!def) return null
   const notes = flattenTrackNotes(track, p)
   const inputBase: Record<string, number> = {}
-  const ports: Record<string, string> = {}
   const continuousKeyframes: Record<string, AutomationKeyframe[]> = {}
   const amountKeyframes = notes.map((note) => ({
     beat: note.beat,
@@ -139,7 +135,6 @@ function resolveMoverTrack(track: Track, p: ProjectSnapshot): ResolvedMover | nu
   }))
   for (const [inputName, input] of Object.entries(def.inputs)) {
     inputBase[inputName] = track.inputValues?.[inputName] ?? input.default
-    ports[inputName] = `dim:${track.id}:${inputName}`
     continuousKeyframes[inputName] = notes.map((note) => ({
       beat: note.beat,
       value: pitchToValue(note.pitch, input.min, input.max),
@@ -163,7 +158,6 @@ function resolveMoverTrack(track: Track, p: ProjectSnapshot): ResolvedMover | nu
     continuousKeyframes,
     amountKeyframes,
     weight: track.weight ?? DEFAULT_SUBSET_WEIGHT,
-    ports,
     automations: resolveMoverAutomations(track, def, p),
   }
 }
@@ -182,22 +176,6 @@ function resolveMoverChain(track: Track, p: ProjectSnapshot): ResolvedMover[] {
     if (d) chain.push(d)
   }
   return chain
-}
-
-function appendMoverPorts(obj: ResolvedObject, d: ResolvedMover) {
-  const existing = new Set(obj.ports.map((p) => p.key))
-  for (const [inputName, input] of Object.entries(d.def.inputs)) {
-    if (input.hidden) continue
-    const key = d.ports[inputName]
-    if (existing.has(key)) continue
-    obj.ports.push({
-      key,
-      label: `${d.def.label} ${inputName}`,
-      combine: 'add',
-      default: 0,
-    })
-    existing.add(key)
-  }
 }
 
 /** Fold a track's event-modifier children into its note stream (in child order) and
@@ -229,27 +207,20 @@ function applyModifiers(
 }
 
 /**
- * Flatten the project into objects + modulator signals + routings. A track is a
- * modulator if its instrumentId is in the modulator registry (its notes become a
- * signal, fanned out by routings to the ports of the objects its scopes resolve to);
- * otherwise it's an object track. Resolution is two-pass: objects (and the tag
- * index) first, so tag-scoped routings can expand to the objects carrying that tag.
+ * Flatten the project into resolved objects (with their mover chains) plus the tag
+ * index. Objects resolve first so tag-scoped top-level movers can expand to the
+ * objects carrying that tag.
  * Non-incremental skeleton — resolve is trivially cheap at this scale.
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
-  const modulators: ModulatorInstance[] = []
-  const routings: ResolvedRouting[] = []
   const tagIndex = new Map<string, string[]>()
-  // Defer modulator tracks to a second pass — the tag index isn't built until all
-  // objects are known.
-  const modTracks: { id: string; track: Track }[] = []
 
   // Real solo, scoped to OBJECTS: if any object is soloed, non-soloed objects go off
-  // (muted). Modulators + children (modifiers/automation) keep their own mute, so
-  // soloing an object never disables its own automation, its modifiers, or a modulator
-  // that targets it. Ability-lane solo is separate (per object, in resolveAbilityEvents).
-  const isObjectTrack = (t: Track) => !!t.instrumentId && !getModulator(t.instrumentId)
+  // (muted). Children (modifiers/automation) keep their own mute, so soloing an
+  // object never disables its own automation or its modifiers. Ability-lane solo is
+  // separate (per object, in resolveAbilityEvents).
+  const isObjectTrack = (t: Track) => !!t.instrumentId
   const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && isObjectTrack(t))
   const objectOff = (track: Track) => !!track.muted || (anyObjectSolo && !track.solo)
 
@@ -257,36 +228,21 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
 
-    if (getModulator(track.instrumentId)) {
-      if (!track.muted) modTracks.push({ id, track })
-      continue
-    }
-
     // Object track — fold its event-modifier children into its note stream.
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
+    if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing
     const params = track.params ?? {}
     const paramsForCount = paramsWithDefaults(def, params)
     const elementCount = Math.max(1, Math.min(512, Math.round(def?.elementCount?.(paramsForCount) ?? 1)))
     const { notes, blackouts } = applyModifiers(track, flattenTrackNotes(track, p), p)
     const moverChain = resolveMoverChain(track, p)
-    const moverPorts: PortDef[] = moverChain.flatMap((d) =>
-      Object.entries(d.def.inputs)
-        .filter(([, input]) => !input.hidden)
-        .map(([inputName]) => ({
-          key: d.ports[inputName],
-          label: `${d.def.label} ${inputName}`,
-          combine: 'add' as const,
-          default: 0,
-        })),
-    )
     objects.push({
       trackId: id,
       instrumentId: track.instrumentId,
       parentId: track.parentId,
       muted: objectOff(track),
       params,
-      ports: [...(def?.ports ?? []), ...moverPorts],
       stringParams: track.stringParams ?? {},
       localTransform: def?.localTransform,
       elementCount,
@@ -355,44 +311,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         const obj = objectById.get(targetObjectId)
         if (!obj) continue
         obj.moverChain.push(d)
-        appendMoverPorts(obj, d)
       }
     }
   }
 
-  // Second pass: each modulator track is one signal; its routings fan that signal
-  // out to every object their scope resolves to (deduped per object+port).
-  for (const { id, track } of modTracks) {
-    const triggers = flattenTrackNotes(track, p)
-    modulators.push({ id, kind: 'pulse', triggers })
-    const seen = new Set<string>()
-    for (const routing of track.targets ?? []) {
-      for (const targetObjectId of objectsForScope(routing.scope)) {
-        const key = `${targetObjectId}.${routing.port}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        routings.push({ modulatorId: id, targetObjectId, targetPort: routing.port, amount: routing.amount })
-      }
-    }
-  }
-
-  // Built-in: each non-muted object pulses from its own notes into its `energy`
-  // port (the Cube's original self-pulse). Explicit modulator tracks add on top.
-  for (const obj of objects) {
-    if (!obj.muted && obj.notes.length > 0) {
-      const modId = `${obj.trackId}:pulse`
-      modulators.push({ id: modId, kind: 'pulse', triggers: obj.notes })
-      routings.push({ modulatorId: modId, targetObjectId: obj.trackId, targetPort: 'energy', amount: 1 })
-    }
-  }
-
-  // Bucket routings by port — the matrix's per-port lookup.
-  const routingsByPort = new Map<string, ResolvedRouting[]>()
-  for (const r of routings) {
-    const list = routingsByPort.get(r.targetPort)
-    if (list) list.push(r)
-    else routingsByPort.set(r.targetPort, [r])
-  }
-
-  return { objects, modulators, routingsByPort, tagIndex }
+  return { objects, tagIndex }
 }

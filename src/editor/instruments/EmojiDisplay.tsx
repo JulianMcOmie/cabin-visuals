@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, type Material } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Eight emoji glyphs laid out in a 2×4 grid across the full
 // frame, rearranged by MIDI triggers: switch corners, swap halves, rotate the whole set
@@ -309,12 +309,6 @@ const PARAMS: ParamDef[] = [
   { key: 'padding', label: 'Padding', min: 0, max: 0.4, step: 0.02, default: 0.1 },
   { key: 'spread', label: 'Spread', min: 0, max: 3, step: 0.05, default: 1 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function EmojiDisplayVisual({ trackId }: { trackId: string }) {
   const entitiesRef = useRef<EmojiEntity[]>([])
   const groupRef = useRef<Group>(null)
@@ -536,7 +530,6 @@ export const emojiDisplayInstrument: ObjectInstrumentDef = {
   name: 'Emoji Display',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: EmojiDisplayVisual,
   fullFrame: true,
 }

@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A 3D warp starfield around the camera: parallax star drift
 // with directional warp/drift, barrel roll, tumble, pulse burst, streak, and per-pitch
@@ -177,12 +177,6 @@ const PARAMS: ParamDef[] = [
   { key: 'groundY', label: 'Ground Height', min: -50, max: 50, step: 0.5, default: DEFAULTS.groundY },
   { key: 'groundColor', label: 'Ground Color', type: 'color', default: DEFAULTS.groundColor },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function StarsVisual({ trackId }: { trackId: string }) {
   const rootRef = useRef<THREE.Group>(null)
   const { scene } = useThree()
@@ -673,6 +667,5 @@ export const starsInstrument: ObjectInstrumentDef = {
   name: 'Stars',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: StarsVisual,
 }

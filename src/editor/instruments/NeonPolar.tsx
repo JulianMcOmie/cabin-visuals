@@ -5,7 +5,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's NeonPolar. A 3D neon polar harmonograph: 6 oscillator
 // layers of drifting polar curves drawn as fat neon lines. Notes in the jitter range
@@ -226,12 +226,6 @@ const PARAMS: ParamDef[] = [
   { key: 'color', label: 'Color', type: 'color', default: '#d4a843' },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 0.75 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 // ---------------------------------------------------------------------------
@@ -286,11 +280,10 @@ function NeonPolarVisual({ trackId }: { trackId: string }) {
     const maxRadius = p.maxRadius ?? DEFAULT_MAX_RADIUS
     const opacity = clamp(p.opacity ?? 0.75, 0, 1)
 
-    // Ports: hue offset, energy nudges lightness/opacity, scale grows the group.
-    const ports = state.portValues
-    const hueShift = ports.hue ?? 0
-    const energy = ports.energy ?? 0
-    const scalePort = ports.scale ?? 0
+    // Energy (the note-pulse) nudges lightness/opacity; the old hue/scale ports are retired.
+    const hueShift = 0
+    const energy = state.energy
+    const scalePort = 0
 
     // Beat-time in seconds — the drift/jitter frequencies were tuned in seconds.
     const t = state.beat * state.secPerBeat
@@ -356,6 +349,5 @@ export const neonPolarInstrument: ObjectInstrumentDef = {
   name: 'Neon Polar',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: NeonPolarVisual,
 }

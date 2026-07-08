@@ -2,7 +2,7 @@ import { useRef, type ReactElement } from 'react'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/visual/renderSpec'
-import type { ObjectInstrumentDef, ParamDef, PortDef, LocalTransform, TransformCtx } from './types'
+import type { ObjectInstrumentDef, ParamDef, LocalTransform, TransformCtx } from './types'
 
 const ZERO: Compiled = () => 0
 const ONE: Compiled = () => 1
@@ -39,7 +39,7 @@ function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { track
     const mat = meshRef.current.material as MeshStandardMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an
     // unset param reads its default (not 0) — a fresh track has no params yet.
-    const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: state.portValues, beat: state.beat }
+    const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: { energy: state.energy }, beat: state.beat }
     if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
     if (appearance.opacity) { mat.transparent = true; mat.opacity = appearance.opacity(scope) }
@@ -63,7 +63,6 @@ export function specInstrument(opts: {
   id: string
   name: string
   params: ParamDef[]
-  ports: PortDef[]
   spec: RenderSpec
 }): ObjectInstrumentDef {
   const { spec } = opts
@@ -81,7 +80,7 @@ export function specInstrument(opts: {
   else { sx = sy = sz = ONE }
 
   const localTransform = (ctx: TransformCtx): LocalTransform => {
-    const s: Scope = { param: { ...paramDefaults, ...ctx.params }, port: ctx.ports, beat: ctx.beat }
+    const s: Scope = { param: { ...paramDefaults, ...ctx.params }, port: { energy: ctx.energy }, beat: ctx.beat }
     return {
       position: [px(s), py(s), pz(s)],
       rotation: [rx(s), ry(s), rz(s)],
@@ -99,5 +98,5 @@ export function specInstrument(opts: {
     <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} paramDefaults={paramDefaults} />
   )
 
-  return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, ports: opts.ports, localTransform, component: Component }
+  return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, localTransform, component: Component }
 }

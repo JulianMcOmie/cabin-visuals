@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A hypnotic fractal-flower tunnel: a recursive branching
 // "flower" is drawn twice (near + far), connected by tunnel lines, projected with a
@@ -276,12 +276,6 @@ const PARAMS: ParamDef[] = [
   { key: 'pulseBandWidth', label: 'Band Width', min: 10, max: 100, step: 5, default: 40 },
   { key: 'pulseFadeDuration', label: 'Fade Duration', min: 0.5, max: 5, step: 0.1, default: 2.0 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function FractalTunnelVisual({ trackId }: { trackId: string }) {
   const { viewport } = useThree()
   const meshRef = useRef<Mesh>(null)
@@ -476,7 +470,6 @@ export const fractalTunnelInstrument: ObjectInstrumentDef = {
   name: 'Fractal Tunnel',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: FractalTunnelVisual,
   fullFrame: true,
 }

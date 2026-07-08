@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { InstancedMesh, InstancedBufferAttribute, Object3D, Color } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's CircleGrid (the "circles" shape — a 3D grid of glowing
 // dots, NOT full-frame). Layout + toggle-mode math is Tyler's verbatim; only state
@@ -192,12 +192,6 @@ const PARAMS: ParamDef[] = [
   { key: 'rotationSpeed', label: 'Rotation Speed', min: 0, max: 2, step: 0.1, default: 0 },
 ]
 
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function CircleGridVisual({ trackId }: { trackId: string }) {
   const meshRef = useRef<InstancedMesh>(null)
   const dummy = useMemo(() => new Object3D(), [])
@@ -292,6 +286,5 @@ export const circleGridInstrument: ObjectInstrumentDef = {
   name: 'Circle Grid',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: CircleGridVisual,
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Mesh } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A long-building upward particle riser with an accelerating
 // pressure-wave front — each note triggers a riser (velocity + note length shape it).
@@ -105,12 +105,6 @@ const PARAMS: ParamDef[] = [
   { key: 'peakFlash', label: 'Peak Flash', min: 0, max: 2, step: 0.01, default: 0.55 },
   { key: 'colorMode', label: 'Color · 0 Pitch 1 Mono', min: 0, max: 1, step: 1, default: 0 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function ParticleRiserVisual({ trackId }: { trackId: string }) {
   const colorRef = useRef(new Color())
 
@@ -242,6 +236,5 @@ export const particleRiserInstrument: ObjectInstrumentDef = {
   name: 'Particle Riser',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: ParticleRiserVisual,
 }

@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE — a full-frame CRT screen: phosphor glow, horizontal scanlines, a
 // slow rolling brightness band, radial vignette and a curved-bezel barrel hint,
@@ -31,12 +31,6 @@ const PARAMS: ParamDef[] = [
   { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, default: 0.55 },
   { key: 'curvature', label: 'Barrel Curvature', min: 0, max: 1, step: 0.05, default: 0.6 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 /** Rounded-rect path (manual — ctx.roundRect isn't in every lib.dom). */
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const rr = Math.min(r, w / 2, h / 2)
@@ -225,7 +219,6 @@ export const crtScanlinesInstrument: ObjectInstrumentDef = {
   name: 'CRT Scanlines',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: CrtScanlinesVisual,
   fullFrame: true,
 }

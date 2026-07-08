@@ -24,7 +24,7 @@ function serializeState(trackId: string) {
     elementMatrices: state.elementMatrices.slice(0, state.elementCount).map((m) => m.toArray().map(round)),
     elementOpacities: state.elementOpacities.slice(0, state.elementCount).map(round),
     activeNotes: state.activeNotes.map((n) => ({ beat: n.beat, pitch: n.pitch, durationBeats: n.durationBeats })),
-    portValues: Object.fromEntries(Object.entries(state.portValues).map(([k, v]) => [k, round(v)])),
+    energy: round(state.energy),
   }
 }
 

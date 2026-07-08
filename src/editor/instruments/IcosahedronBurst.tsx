@@ -4,7 +4,7 @@ import {
   type BufferGeometry,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Nested icosahedron wireframes spawn on each note and expand
 // outward, fading as they grow. Each shell's size/opacity is closed-form in how long ago
@@ -29,12 +29,6 @@ const PARAMS: ParamDef[] = [
   { key: 'saturation', label: 'Saturation', min: 0, max: 1, step: 0.05, default: 0.9 },
   { key: 'lightness', label: 'Lightness', min: 0.1, max: 1, step: 0.05, default: 0.6 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const poolRef = useRef<Pooled[]>([])
@@ -103,6 +97,5 @@ export const icosahedronBurstInstrument: ObjectInstrumentDef = {
   name: 'Icosahedron Burst',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: IcosahedronBurstVisual,
 }

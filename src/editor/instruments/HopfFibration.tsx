@@ -6,7 +6,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A neon 3D Hopf fibration — nested interlocking tori of
 // fiber curves, driven by 12 octave-looped MIDI transformations. The Hopf map / quaternion /
@@ -276,12 +276,6 @@ const PARAMS: ParamDef[] = [
   { key: 'flowSpeed', label: 'Flow Speed', min: 0, max: 0.5, step: 0.01, default: 0.15 },
   { key: 'thetaSpread', label: 'Torus Spread', min: 0.2, max: 2.0, step: 0.1, default: 0.9 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function HopfFibrationVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<THREE.Group>(null)
   const fibersRef = useRef<NeonFiber[]>([])
@@ -433,6 +427,5 @@ export const hopfFibrationInstrument: ObjectInstrumentDef = {
   name: 'Hopf Fibration',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: HopfFibrationVisual,
 }

@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's `cameraControl`. This instrument renders NO mesh — it
 // drives the scene camera (position / rotation / fov) each frame from its params.
@@ -45,12 +45,6 @@ const PARAMS: ParamDef[] = [
   { key: 'punchDecay', label: 'Punch Decay (s)', min: 0.05, max: 3, step: 0.05, default: 0.5 },
   { key: 'shakeAmount', label: 'Note Shake (deg)', min: 0, max: 20, step: 0.25, default: 0 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 // The old cap on concurrent hits (kept so dense passages don't stack unbounded punch).
 const MAX_HITS = 8
 
@@ -60,7 +54,6 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const p = state.params
-    const ports = state.portValues
 
     const posX = p.posX ?? DEFAULTS.posX
     const posY = p.posY ?? DEFAULTS.posY
@@ -74,10 +67,10 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
     const punchDecay = Math.max(0.05, p.punchDecay ?? 0.5)
     const shakeAmount = p.shakeAmount ?? 0
 
-    // Ports: energy adds a subtle dolly-in, scale nudges fov, hue is a slow orbital drift.
-    const energy = ports.energy ?? 0
-    const scalePort = ports.scale ?? 0
-    const huePort = ports.hue ?? 0
+    // Energy (the note-pulse) adds a subtle dolly-in; the old scale/hue ports are retired.
+    const energy = state.energy
+    const scalePort = 0
+    const huePort = 0
 
     // Accumulate the decaying impulse purely from the playhead: a note "hits" while
     // its beat-age (in seconds) is inside the punch window, so paused = static frame
@@ -140,6 +133,5 @@ export const cameraControlInstrument: ObjectInstrumentDef = {
   name: 'Camera',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: CameraControlVisual,
 }

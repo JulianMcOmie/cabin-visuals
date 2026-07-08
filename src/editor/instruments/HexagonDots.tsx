@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, SphereGeometry, MeshBasicMaterial, Color, Vector3 } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Each note spawns a ring of six glowing dots out at a distant
 // hexagon; they rotate around their orbit and drift toward the camera, fading in and out.
@@ -30,12 +30,6 @@ const PARAMS: ParamDef[] = [
   { key: 'dotSpeed', label: 'Dot Speed', min: 1, max: 10, step: 0.5, default: 4 },
   { key: 'dotSize', label: 'Dot Size', min: 0.05, max: 0.5, step: 0.05, default: 0.15 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function HexagonDotsVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const poolRef = useRef<Pooled[]>([])
@@ -110,6 +104,5 @@ export const hexagonDotsInstrument: ObjectInstrumentDef = {
   name: 'Hexagon Dots',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: HexagonDotsVisual,
 }

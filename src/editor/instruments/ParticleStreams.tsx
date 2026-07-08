@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color, Vector3, Mesh } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Note-triggered particle strings that rush outward and toward the
 // camera in fast fading streams. Each note drives a burst of streams, derived per frame from
@@ -140,12 +140,6 @@ const PARAMS: ParamDef[] = [
   { key: 'colorMode', label: 'Color · 0 Mono 1 Pitch', min: 0, max: 1, step: 1, default: 0 },
   { key: 'whiteBackground', label: 'White Background', type: 'boolean', default: 1 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 const _tmpVec3A = new Vector3()
 const _tmpVec3B = new Vector3()
 const _tmpVec3C = new Vector3()
@@ -359,6 +353,5 @@ export const particleStreamsInstrument: ObjectInstrumentDef = {
   name: 'Particle Streams',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: ParticleStreamsVisual,
 }

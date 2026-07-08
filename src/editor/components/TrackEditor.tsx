@@ -5,7 +5,6 @@ import { ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
-import { getModulator } from '../instruments/modulators'
 import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { getEffect, type VisualEffect } from '../effects'
 import { isNumberParam, type ParamDef } from '../instruments/types'
@@ -695,82 +694,6 @@ export function TrackEditor() {
                               onChange={(phase) => setMoverWeight(track.id, { ...weight, phase })}
                             />
                           </>
-                        )}
-                      </>
-                    )
-                  }
-
-                  // Modulator track → a target picker (which object it targets).
-                  // The port is internal (from the modulator's def), never shown.
-                  const modDef = getModulator(track.instrumentId)
-                  if (modDef) {
-                    const objectTracks = Object.values(tracks).filter(
-                      (t) => getInstrument(t.instrumentId) && t.id !== track.id,
-                    )
-                    const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
-                    // Tracks with children can be targeted as a whole branch (subtree).
-                    const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
-                    const moverPortOptions = Object.values(tracks)
-                      .filter((t) => t.type === 'mover' && !!t.parentId)
-                      .flatMap((t) => {
-                        const parent = t.parentId ? tracks[t.parentId] : undefined
-                        const d = getMover(t.moverId)
-                        if (!parent || !d) return []
-                        return Object.entries(d.inputs)
-                          .filter(([, input]) => !input.hidden && input.type !== 'select')
-                          .map(([inputName]) => ({
-                            key: `dim:${t.id}:${inputName}`,
-                            label: `${parent.name} · ${t.name}.${inputName}`,
-                            routing: {
-                              port: `dim:${t.id}:${inputName}`,
-                              scope: { kind: 'track' as const, id: parent.id },
-                              amount: 1,
-                            },
-                          }))
-                      })
-                    // A target can be a tag (a group), a whole branch (subtree), or a
-                    // single track. Each maps to a routing; we key options so selection
-                    // survives the mix.
-                    const keyOf = (r: Routing) =>
-                      r.scope.kind === 'tag' ? `${r.port}@tag:${r.scope.tag}`
-                      : r.scope.kind === 'track' ? `${r.port}@track:${r.scope.id}`
-                      : `${r.port}@subtree:${r.scope.id}`
-                    const options = [
-                      ...moverPortOptions,
-                      ...allTags.map((tag) => ({
-                        key: `${modDef.port}@tag:${tag}`,
-                        label: `#${tag}`,
-                        routing: { port: modDef.port, scope: { kind: 'tag' as const, tag }, amount: 1 },
-                      })),
-                      ...branchTracks.map((t) => ({
-                        key: `${modDef.port}@subtree:${t.id}`,
-                        label: `${t.name} (branch)`,
-                        routing: { port: modDef.port, scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
-                      })),
-                      ...objectTracks.map((t) => ({
-                        key: `${modDef.port}@track:${t.id}`,
-                        label: t.name,
-                        routing: { port: modDef.port, scope: { kind: 'track' as const, id: t.id }, amount: 1 },
-                      })),
-                    ]
-                    const selected = new Set(track.targets?.map(keyOf))
-                    const toggle = (key: string) => {
-                      const next = (track.targets ?? []).slice()
-                      const idx = next.findIndex((r) => keyOf(r) === key)
-                      if (idx >= 0) next.splice(idx, 1)
-                      else {
-                        const opt = options.find((o) => o.key === key)
-                        if (opt) next.push(opt.routing)
-                      }
-                      setTrackTargets(track.id, next)
-                    }
-                    return (
-                      <>
-                        <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">TARGETS</p>
-                        {options.length === 0 ? (
-                          <p className="text-[11px] text-[var(--text-muted)]">No objects to target</p>
-                        ) : (
-                          <TargetSelect options={options} selected={selected} onToggle={toggle} />
                         )}
                       </>
                     )

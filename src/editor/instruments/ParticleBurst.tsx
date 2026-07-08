@@ -5,7 +5,7 @@ import {
   Object3D, Color, Vector3, AdditiveBlending,
 } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's ParticleBurst. Each note is an InstancedMesh burst of
 // particles that expands outward (7 selectable burst geometries + 5 ease curves) and fades.
@@ -269,12 +269,6 @@ const PARAMS: ParamDef[] = [
   { key: 'cylinderRadius', label: 'Cylinder Radius', min: 0, max: 20, step: 0.25, default: 0 },
 ]
 
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function ParticleBurstVisual({ trackId }: { trackId: string }) {
   const meshRef = useRef<InstancedMesh>(null)
   const { camera } = useThree()
@@ -500,6 +494,5 @@ export const particleBurstInstrument: ObjectInstrumentDef = {
   name: 'Particle Burst',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: ParticleBurstVisual,
 }

@@ -2,7 +2,7 @@ import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import { BufferGeometry, BufferAttribute, ShaderMaterial, Color, Vector2, AdditiveBlending } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Spirograph / polygon / polar shapes stream toward the camera
 // during held notes, dissolving on arrival. Each note emits a train of copies (spawnRate
@@ -164,12 +164,6 @@ const PARAMS: ParamDef[] = [
   { key: 'approachGrowth', label: 'Approach Growth', min: 0, max: 20, step: 0.5, default: 0 },
   { key: 'lineWidth', label: 'Line Width', min: 1, max: 100, step: 0.5, default: 6 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function ShapeFlightVisual({ trackId }: { trackId: string }) {
   const geoRef = useRef<BufferGeometry>(null)
   const matRef = useRef<ShaderMaterial>(null)
@@ -431,6 +425,5 @@ export const shapeFlightInstrument: ObjectInstrumentDef = {
   name: 'Shape Flight',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: ShapeFlightVisual,
 }

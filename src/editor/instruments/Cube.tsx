@@ -18,13 +18,6 @@ export const cubeInstrument: ObjectInstrumentDef = {
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
-  // Modulation inputs modulators target (resting at default until the matrix wires
-  // them up). `energy` is what the Cube's pulse becomes; scale/hue are headroom.
-  ports: [
-    { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-    { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-    { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-  ],
   // The Cube's signature ability: play a note on its Shatter lane and the cube bursts
   // into fragments that fly out and reassemble over the note's length (its velocity
   // sets the blast radius). Bespoke, intrinsic — it IS how a cube performs.
@@ -33,14 +26,13 @@ export const cubeInstrument: ObjectInstrumentDef = {
   ],
   // The cube's transform as data, so the engine can compose it with its parent's:
   // position from the X param, an opt-in spin from the beat, and a breathing scale
-  // boosted by the energy port. The engine writes the composed world matrix to state.
-  localTransform: ({ params, ports, beat }) => {
+  // boosted by the note-pulse energy. The engine writes the composed world matrix to state.
+  localTransform: ({ params, energy, beat }) => {
     const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
     const baseYPosition = params.baseYPosition ?? paramDefault(cubeInstrument, 'baseYPosition')
     const baseZPosition = params.baseZPosition ?? paramDefault(cubeInstrument, 'baseZPosition')
     const spinSpeed = params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
-    const energy = ports.energy ?? 0
     const breathe = 1.15 + Math.sin(beat * 0.9) * 0.2
     return {
       position: [baseXPosition, baseYPosition, baseZPosition],
@@ -66,8 +58,8 @@ export function Cube({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     if (!meshRef.current) return
-    // The pulse now arrives via the `energy` port (a Pulse modulator → matrix).
-    const energy = state.portValues.energy ?? 0
+    // The note-pulse signal, computed directly from the object's own notes.
+    const energy = state.energy
     const baseHue = state.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
 
     const mat = meshRef.current.material as MeshStandardMaterial

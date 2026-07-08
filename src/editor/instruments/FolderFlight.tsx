@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, DoubleSide } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. 3D folder icons fly backward into z-depth — each note in the
 // C4 octave is a folder that pops in, drifts, tumbles, and fades out at max depth. Every
@@ -91,12 +91,6 @@ const PARAMS: ParamDef[] = [
   { key: 'drift', label: 'Drift', min: 0, max: 3, step: 0.1, default: 0.5 },
   { key: 'tumble', label: 'Tumble', min: 0, max: 5, step: 0.1, default: 1 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function FolderFlightVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const poolRef = useRef<Pooled[]>([])
@@ -210,6 +204,5 @@ export const folderFlightInstrument: ObjectInstrumentDef = {
   name: 'Folder Flight',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: FolderFlightVisual,
 }

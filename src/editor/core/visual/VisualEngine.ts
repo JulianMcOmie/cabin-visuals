@@ -1,6 +1,6 @@
 import { Matrix4 } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
-import { runMatrix } from './matrix'
+import { evaluatePulse } from './energy'
 import { sampleLane } from './automation'
 import { composeMatrix, cloneSVInto, lerpSV, localTransformToSV } from './stateVector'
 import { subsetWeight } from './movers/registry'
@@ -10,7 +10,7 @@ import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedObject, StateVe
 // state must never trigger React re-renders. Renderers read it imperatively from
 // useFrame. The only React-visible signal is the object LIST (see below).
 
-let graph: ResolvedGraph = { objects: [], modulators: [], routingsByPort: new Map(), tagIndex: new Map() }
+let graph: ResolvedGraph = { objects: [], tagIndex: new Map() }
 // Project bpm, mirrored on every setProject/syncParams — computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
 let bpm = 120
@@ -94,7 +94,6 @@ function clampOpacity(v: number): number {
 function sampleMoverInputs(
   d: ResolvedMover,
   beat: number,
-  portValues: Record<string, number>,
   out: Record<string, number>,
   midiAmount: number | null,
 ) {
@@ -114,8 +113,6 @@ function sampleMoverInputs(
       const keyframes = d.continuousKeyframes[inputName]
       if (keyframes?.length) value = sampleLane(keyframes, beat, d.interpolation)
     }
-
-    value += portValues[d.ports[inputName]] ?? 0
 
     if (amountInputs?.has(inputName)) {
       value = input.default + (value - input.default) * (midiAmount ?? 0)
@@ -200,7 +197,6 @@ function applyMoverChain(
   beat: number,
   i: number,
   N: number,
-  portValues: Record<string, number>,
 ): StateVector {
   const ctx = { beat, i, N, channels: obj.scratchChannels }
   cloneSVInto(obj.scratchA, base)
@@ -214,7 +210,7 @@ function applyMoverChain(
       while (index < obj.moverChain.length && obj.moverChain[index].opMode === 'add') {
         const addDim = obj.moverChain[index]
         if (!addDim.bypassed) {
-          sampleMoverInputs(addDim, beat, portValues, obj.scratchInputs, midiAmount(addDim, beat))
+          sampleMoverInputs(addDim, beat, obj.scratchInputs, midiAmount(addDim, beat))
           let gain = ballisticGain(addDim, beat)
           if (isBallisticOpacityMover(addDim)) {
             applyBallisticOpacityTarget(obj.scratchEntry, obj.scratchInputs, addDim, beat, obj.scratchB)
@@ -232,7 +228,7 @@ function applyMoverChain(
       continue
     }
 
-    sampleMoverInputs(d, beat, portValues, obj.scratchInputs, midiAmount(d, beat))
+    sampleMoverInputs(d, beat, obj.scratchInputs, midiAmount(d, beat))
     let gain = ballisticGain(d, beat)
     if (isBallisticOpacityMover(d)) {
       applyBallisticOpacityTarget(obj.scratchA, obj.scratchInputs, d, beat, obj.scratchB)
@@ -248,16 +244,15 @@ function applyMoverChain(
   return obj.scratchA
 }
 
-/** Per frame (runs first, from VisualBeatSync): run the matrix, compose each object's
- *  world transform down the hierarchy, then stash state for the renderer to pull.
+/** Per frame (runs first, from VisualBeatSync): compose each object's world
+ *  transform down the hierarchy, then stash state for the renderer to pull.
  *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
  *  parent's world is always ready when its children compose. */
 export function computeAtBeat(beat: number) {
   const secPerBeat = 60 / bpm
-  const portValuesByObject = new Map<string, Record<string, number>>()
-  runMatrix(graph, beat, portValuesByObject)
   for (const obj of graph.objects) {
-    const portValues = portValuesByObject.get(obj.trackId) ?? {}
+    // The note-pulse signal (the old implicit `energy` port, now direct).
+    const energy = !obj.muted && obj.notes.length > 0 ? evaluatePulse(obj.notes, beat) : 0
     // Automation drives params over time: overlay each lane's sampled value onto the
     // base params for this frame (a pure function of the beat, so scrub == playback).
     let params = obj.params
@@ -278,21 +273,21 @@ export function computeAtBeat(beat: number) {
       for (let i = 0; i < N; i++) {
         if (obj.layoutState) {
           setElementChannels(obj.scratchChannels, i, N)
-          obj.layoutState({ params, ports: portValues, beat, i, N, channels: obj.scratchChannels }, obj.scratchBase)
+          obj.layoutState({ params, energy, beat, i, N, channels: obj.scratchChannels }, obj.scratchBase)
         } else {
           setElementChannels(obj.scratchChannels, i, N)
-          const local = obj.localTransform ? obj.localTransform({ params, ports: portValues, beat }) : {}
+          const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
           localTransformToSV(local, obj.scratchBase)
         }
-        const elementState = applyMoverChain(obj, obj.scratchBase, beat, i, N, portValues)
+        const elementState = applyMoverChain(obj, obj.scratchBase, beat, i, N)
         composeMatrix(elementState, obj.elementMatrices[i])
         obj.elementOpacities[i] = clampOpacity(elementState.opacity)
       }
     } else {
-      const local = obj.localTransform ? obj.localTransform({ params, ports: portValues, beat }) : {}
+      const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
       localTransformToSV(local, obj.scratchBase)
       setElementChannels(obj.scratchChannels, 0, 1)
-      const localState = applyMoverChain(obj, obj.scratchBase, beat, 0, 1, portValues)
+      const localState = applyMoverChain(obj, obj.scratchBase, beat, 0, 1)
       composeMatrix(localState, _local)
       obj.elementOpacities[0] = clampOpacity(localState.opacity)
       if (parentWorld) world.multiplyMatrices(parentWorld, _local)
@@ -308,7 +303,7 @@ export function computeAtBeat(beat: number) {
       beat,
       secPerBeat,
       params,
-      portValues,
+      energy,
       world,
       elementCount: obj.elementCount,
       elementMatrices: obj.elementMatrices,

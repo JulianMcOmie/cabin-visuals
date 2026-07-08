@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Points, BufferGeometry, BufferAttribute, DynamicDrawUsage, ShaderMaterial, Color } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's DotField. A 3D field of dots arranged by golden-angle
 // (sunflower) distribution, displaced by a rotating roster of wave/displacement effects,
@@ -239,12 +239,6 @@ const PARAMS: ParamDef[] = [
   { key: 'rippleSpeed', label: 'Ripple Speed', min: 0.3, max: 3, step: 0.1, default: DEFAULTS.rippleSpeed },
   { key: 'rippleStrength', label: 'Ripple Strength', min: 0.01, max: 0.2, step: 0.01, default: DEFAULTS.rippleStrength },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: DEFAULTS.opacity },
-]
-
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
 ]
 
 // --- Component ---
@@ -669,7 +663,6 @@ export const dotFieldInstrument: ObjectInstrumentDef = {
   name: 'Dot Field',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: DotFieldVisual,
   fullFrame: true,
 }

@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Displays text a word at a time, advancing on each MIDI note
 // and filling the frame. Words are rendered to a canvas + CanvasTexture on screen-filling
@@ -249,12 +249,6 @@ const PARAMS: ParamDef[] = [
   { key: 'rainbowEnabled', label: 'Rainbow', type: 'boolean', default: 0 },
   { key: 'rainbowCycleLength', label: 'Rainbow Cycle Length', min: 2, max: 64, step: 1, default: 12 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function TextDisplayVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)
@@ -591,7 +585,6 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   name: 'Text Display',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   midiRowLabels: {
     [PITCH_NEXT_WORD]: {
       label: 'Next Word',

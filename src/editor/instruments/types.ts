@@ -49,20 +49,6 @@ export function isNumberParam(p: ParamDef): p is NumberParamDef {
   return p.type === undefined || p.type === 'number'
 }
 
-/**
- * A modulation input on an object — a curated, shared vocabulary (scale, energy,
- * hue…) that modulator instruments target. NOT a user-facing knob: it's internal
- * plumbing, bound onto the render in code. `combine` decides how multiple
- * modulators stack on the same port. Unused until the matrix lands.
- */
-export interface PortDef {
-  key: string
-  label: string
-  combine: 'add' | 'multiply' | 'max' | 'replace'
-  default: number
-  range?: [number, number]
-}
-
 /** How an ability lane presents pitch in its MIDI editor — a free, per-lane choice
  *  (a pitched piano-roll, drum-style rows, or a single trigger row). Only `pitched`
  *  is wired initially; the field lets an instrument declare intent for later. */
@@ -105,7 +91,8 @@ export interface LocalTransform {
 /** Per-frame inputs an instrument's transform derives from. */
 export interface TransformCtx {
   params: Record<string, number>
-  ports: Record<string, number>
+  /** The object's note-pulse signal (see core/visual/energy.ts). */
+  energy: number
   beat: number
 }
 
@@ -121,7 +108,6 @@ export interface ObjectInstrumentDef {
   name: string
   kind: 'object'
   params: ParamDef[]
-  ports: PortDef[]
   /** This instrument's signature abilities — each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
@@ -140,17 +126,6 @@ export interface ObjectInstrumentDef {
    *  than sitting at a 3D position. The renderer skips the placement transform + the
    *  transform/clone effect chain for these. */
   fullFrame?: boolean
-}
-
-/** A modulator / shaper instrument — renders nothing; its trigger notes drive a
- *  port on the object(s) it's routed to. `kind` selects the engine's evaluate fn;
- *  `port` is the (internal, never user-visible) port it targets. */
-export interface ModulatorInstrumentDef {
-  id: string
-  name: string
-  kind: 'modulator'
-  signal: 'pulse'
-  port: string
 }
 
 /** A numeric param's schema default (no track/registry lookup). Non-numeric params → 0. */

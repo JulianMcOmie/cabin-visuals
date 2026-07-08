@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import { Group, InstancedMesh, BoxGeometry, MeshBasicMaterial, Color, AdditiveBlending, Matrix4, Quaternion, Vector3 } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE — rows of pixel-art space invaders (one InstancedMesh of tiny cubes
 // forming 8-bit sprites) march side-to-side in classic stepped shuffle, animation
@@ -68,12 +68,6 @@ const PARAMS: ParamDef[] = [
   { key: 'rowColor3', label: 'Row Color C', type: 'color', default: '#ff2079' },
   { key: 'laserColor', label: 'Laser Color', type: 'color', default: '#aef852' },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function PixelInvadersVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const imeshRef = useRef<InstancedMesh | null>(null)
@@ -239,6 +233,5 @@ export const pixelInvadersInstrument: ObjectInstrumentDef = {
   name: 'Pixel Invaders',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: PixelInvadersVisual,
 }

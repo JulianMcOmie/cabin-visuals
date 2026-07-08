@@ -145,11 +145,6 @@ export const swarmInstrument: ObjectInstrumentDef = {
     { key: 'size', label: 'Size', min: 0.03, max: 0.8, step: 0.01, default: 0.18 },
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 190 },
   ],
-  ports: [
-    { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-    { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-    { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-  ],
   elementCount: (params) => Math.max(1, Math.min(MAX_SWARM_COUNT, Math.round(params.count ?? 24))),
   layoutState: ({ params, i, N, channels }, out) => {
     resetSV(out)
@@ -199,7 +194,7 @@ export function Swarm({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const count = Math.min(state.elementCount, MAX_SWARM_COUNT, state.elementMatrices.length)
-    const energy = state.portValues.energy ?? 0
+    const energy = state.energy
 
     for (const mesh of meshRefs.current) {
       if (!mesh) continue

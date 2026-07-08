@@ -66,10 +66,10 @@ export interface AudioBlock {
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
 /**
- * A modulator's routing: which port it drives, over what scope, scaled by how much.
- * `scope` is what lets one modulator hit a single track, a whole tag group, or
- * (phase 5) a subtree. `port` is the target objects' port key; `amount` scales the
- * modulator's output before it's combined at the port.
+ * A targeting route for a top-level mover: `scope` picks a single track, a whole
+ * tag group, or a subtree of objects the mover applies to. (`port`/`amount` are
+ * legacy fields from the retired modulator system — still present in saved
+ * documents, ignored by the engine.)
  */
 export interface Routing {
   port: string
@@ -104,9 +104,9 @@ export interface Track {
   blocks: Block[]
   parentId?: string
   childIds: string[]
-  /** Cross-cutting labels for group modulation — a modulator can target a tag. */
+  /** Cross-cutting labels — a top-level mover can target a tag group. */
   tags?: string[]
-  /** Modulator-only: the ports this modulator drives (one modulator → many ports). */
+  /** Top-level movers only: the objects this mover applies to. */
   targets?: Routing[]
   targetParam?: string
   interpolation?: InterpolationMode

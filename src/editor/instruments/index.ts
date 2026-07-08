@@ -31,7 +31,7 @@ import { swarmInstrument } from './Swarm'
 import { pointLightInstrument } from './PointLightObject'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
-export type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+export type { ObjectInstrumentDef, ParamDef } from './types'
 
 export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [cubeInstrument.id]: cubeInstrument,

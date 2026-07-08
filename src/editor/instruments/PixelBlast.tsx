@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import type { ObjectInstrumentDef, ParamDef, PortDef } from './types'
+import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE — chunky 8-bit detonations. Every note is an explosion of square
 // particles that fly out along 16 quantized directions and SNAP to a pixel grid
@@ -38,12 +38,6 @@ const PARAMS: ParamDef[] = [
   { key: 'sizeScale', label: 'Chunk Size', min: 0.4, max: 3, step: 0.1, default: 1 },
   { key: 'blinkOut', label: 'Blink Out', type: 'boolean', default: 1 },
 ]
-const PORTS: PortDef[] = [
-  { key: 'energy', label: 'Energy', combine: 'add', default: 0 },
-  { key: 'scale', label: 'Scale', combine: 'add', default: 0 },
-  { key: 'hue', label: 'Hue', combine: 'add', default: 0 },
-]
-
 function PixelBlastVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const poolRef = useRef<Pooled[]>([])
@@ -146,6 +140,5 @@ export const pixelBlastInstrument: ObjectInstrumentDef = {
   name: 'Pixel Blast',
   kind: 'object',
   params: PARAMS,
-  ports: PORTS,
   component: PixelBlastVisual,
 }
