@@ -5,7 +5,7 @@ import { Mesh, MeshBasicMaterial, SRGBColorSpace, VideoTexture } from 'three'
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { getObjectState } from '../core/visual/VisualEngine'
-import { activeVideoAt, clipTimeAt } from '../core/video/videoTime'
+import { activeVideoAt, clipTimeAt, VIDEO_BASE_PITCH } from '../core/video/videoTime'
 import { getPlayableVideoUrl } from '../core/video/videoSource'
 import { registerFramePreparer } from '../core/export/exportEngine'
 import { useVideoStore } from '../store/VideoStore'
@@ -14,7 +14,7 @@ import { useTimeStore } from '../store/TimeStore'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // The Video instrument: an ordered bank of the user's own clips, cut by MIDI.
-// A note-on selects clip (pitch − baseNote) mod clipCount and restarts it; the
+// A note-on selects clip (pitch − VIDEO_BASE_PITCH) mod clipCount and restarts it; the
 // clip latches until the next note-on, bounded by its block (see
 // core/video/videoTime.ts — the pure time model everything here follows).
 //
@@ -115,9 +115,8 @@ function VideoComponent({ trackId }: { trackId: string }) {
       const st = getObjectState(trackId)
       const refs = st?.videoRefs
       if (!st || !refs || refs.length === 0) return
-      const baseNote = st.params.baseNote ?? paramDefault(videoInstrument, 'baseNote')
       const loop = (st.params.loop ?? paramDefault(videoInstrument, 'loop')) > 0
-      const active = activeVideoAt(st.notes, beat, baseNote, refs.length)
+      const active = activeVideoAt(st.notes, beat, VIDEO_BASE_PITCH, refs.length)
       if (!active) return
       const ref = refs[active.clipIndex]
       const rt = runtimesRef.current.get(ref)
@@ -144,9 +143,8 @@ function VideoComponent({ trackId }: { trackId: string }) {
     const mesh = meshRef.current
     if (!mesh) return
     const refs = state.videoRefs ?? []
-    const baseNote = state.params.baseNote ?? paramDefault(videoInstrument, 'baseNote')
     const loop = (state.params.loop ?? paramDefault(videoInstrument, 'loop')) > 0
-    const active = state.blackedOut ? null : activeVideoAt(state.notes, state.beat, baseNote, refs.length)
+    const active = state.blackedOut ? null : activeVideoAt(state.notes, state.beat, VIDEO_BASE_PITCH, refs.length)
 
     const activeRef = active ? refs[active.clipIndex] : null
     const runtimes = runtimesRef.current
@@ -216,8 +214,6 @@ export const videoInstrument: ObjectInstrumentDef = {
   name: 'Video',
   kind: 'object',
   params: [
-    // C3 answers clip 1; each semitone up is the next clip, wrapping.
-    { key: 'baseNote', label: 'Base Note', min: 24, max: 84, step: 1, default: 48 },
     { key: 'loop', label: 'Loop Clips', type: 'boolean' as const, default: 1 },
     {
       key: 'fit',
@@ -230,16 +226,8 @@ export const videoInstrument: ObjectInstrumentDef = {
       default: 0,
     },
   ],
-  midiRowLabels: {
-    48: { label: 'Clip 1', emphasized: true },
-    49: { label: 'Clip 2' },
-    50: { label: 'Clip 3' },
-    51: { label: 'Clip 4' },
-    52: { label: 'Clip 5' },
-    53: { label: 'Clip 6' },
-    54: { label: 'Clip 7' },
-    55: { label: 'Clip 8' },
-  },
+  // (No midiRowLabels: the Video track's MIDI editor shows only its clip rows,
+  // built live from the pad bank — see generateVideoClipRows.)
   // A full-frame layer: the renderer pins it dead-ahead of the camera, parallel
   // to it, so footage reads as a screen — never a tilted plane in space.
   fullFrame: true,

@@ -42,6 +42,47 @@ export function generateRows(
 }
 
 /**
+ * Rows for a Video track's pad bank: exactly one row per clip, growing as
+ * clips are added — never the full piano roll. The most recently added clip
+ * sits at the TOP (rows stack upward, matching pitches ascending upward).
+ * Pitches already used by notes that no longer map to a clip (bank
+ * reordered/shrunk) get dimmed extra rows so no note can silently vanish.
+ * An empty bank shows a single hint row at baseNote.
+ */
+export function generateVideoClipRows(
+  clipNames: string[],
+  baseNote: number,
+  notePitches: number[],
+): MidiRow[] {
+  const rows: MidiRow[] = []
+  const clipPitches = new Set<number>()
+  for (let i = clipNames.length - 1; i >= 0; i--) {
+    const pitch = baseNote + i
+    clipPitches.add(pitch)
+    const hue = (i / Math.max(1, clipNames.length)) * 300
+    rows.push({
+      pitch,
+      label: `${i + 1} · ${clipNames[i]}`,
+      color: `hsl(${hue}, 65%, 55%)`,
+      emphasized: i === 0,
+    })
+  }
+  const orphans = [...new Set(notePitches)].filter((p) => !clipPitches.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
+    const octave = Math.floor(pitch / 12) - 1
+    rows.push({
+      pitch,
+      label: `${NOTE_NAMES[pitch % 12]}${octave} · no clip`,
+      color: 'hsl(0, 0%, 45%)',
+    })
+  }
+  if (rows.length === 0) {
+    rows.push({ pitch: baseNote, label: 'Add clips in the inspector', color: 'hsl(0, 0%, 45%)' })
+  }
+  return rows
+}
+
+/**
  * Generate rows for automation tracks where pitch maps to a parameter value.
  * Shows value labels instead of note names. Only labels a subset of rows.
  */

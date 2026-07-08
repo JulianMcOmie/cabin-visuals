@@ -5,6 +5,11 @@ import type { ResolvedNote } from '../visual/types'
 // from (beat, notes) through these two functions, which is what makes scrub,
 // pause, and export land on identical frames.
 
+/** The fixed pitch clip 1 answers. Internal plumbing, never user-facing: the
+ *  MIDI editor shows one labelled row per clip, so the actual pitch numbers
+ *  are an implementation detail. */
+export const VIDEO_BASE_PITCH = 48
+
 export interface ActiveVideo {
   /** Index into the track's ordered videoRefs (its pad bank). */
   clipIndex: number

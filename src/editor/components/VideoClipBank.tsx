@@ -5,20 +5,14 @@ import { ArrowDown, ArrowUp, Film, Plus, X } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { saveVideo, removeVideo } from '../core/video/videoSource'
-import { paramValue } from '../instruments'
 import type { Track } from '../types'
 
 // The Video instrument's pad bank editor: upload clips, order them, remove
-// them. Order IS the MIDI mapping — row 1 answers baseNote, row 2 the next
-// semitone, and so on (docs/video-instrument-architecture.html §2).
+// them. Each clip is one row in the MIDI editor (newest at the top); the
+// underlying pitch mapping is internal (see VIDEO_BASE_PITCH).
 
 const MAX_CLIPS = 8
 const MAX_BYTES = 100 * 1024 * 1024
-
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-function noteName(midi: number): string {
-  return `${NOTE_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`
-}
 
 /** Probe duration + dimensions from the file before it enters the catalog. */
 function probeVideo(file: File): Promise<{ duration: number; width: number; height: number }> {
@@ -47,7 +41,6 @@ export function VideoClipBank({ track }: { track: Track }) {
   const videoClips = useVideoStore((s) => s.videoClips)
 
   const refs = track.videoRefs ?? []
-  const baseNote = Math.round(paramValue(track, 'baseNote'))
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -100,14 +93,14 @@ export function VideoClipBank({ track }: { track: Track }) {
       <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">CLIPS</p>
       {refs.length === 0 && (
         <p className="mb-2 text-[11px] text-[var(--text-muted)]">
-          Add clips, then play notes to cut between them — {noteName(baseNote)} is clip 1.
+          Add clips, then draw notes in the MIDI editor to cut between them.
         </p>
       )}
       {refs.map((ref, i) => {
         const clip = videoClips[ref]
         return (
           <div key={ref} className="mb-1 flex items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5">
-            <span className="w-7 flex-shrink-0 font-mono text-[10px] text-[var(--accent)]">{noteName(baseNote + i)}</span>
+            <span className="w-5 flex-shrink-0 font-mono text-[10px] text-[var(--accent)]">{i + 1}</span>
             <Film size={11} className="flex-shrink-0 text-[var(--text-muted)]" />
             <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-2)]" title={clip?.fileName ?? ref}>
               {clip?.fileName ?? 'missing clip'}

@@ -7,9 +7,11 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { generateRows, generateAutomationRows } from './generateRows'
+import { generateRows, generateAutomationRows, generateVideoClipRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
+import { useVideoStore } from '../../store/VideoStore'
 import { getInstrument } from '../../instruments'
+import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { isNumberParam } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
 import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
@@ -147,7 +149,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
 
   // Value lanes show value rows (pitch → param/input value) with the target name in
-  // the range gutter; modifiers get flat-coloured rows; everything else is the note rainbow.
+  // the range gutter; a Video track shows ONLY its clip rows (one per uploaded
+  // clip); modifiers get flat-coloured rows; everything else is the note rainbow.
+  const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
+  const videoClips = useVideoStore((s) => s.videoClips)
   const rowLabels = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRowLabels
     : undefined
@@ -156,9 +161,15 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     : null
   const rows = auto
     ? auto.rows
-    : noteColor
-      ? generateRows(undefined, rowLabels).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
-      : generateRows(undefined, rowLabels)
+    : videoTrack
+      ? generateVideoClipRows(
+          (videoTrack.videoRefs ?? []).map((ref, i) => videoClips[ref]?.fileName ?? `Clip ${i + 1}`),
+          VIDEO_BASE_PITCH,
+          notes.map((n) => n.pitch),
+        )
+      : noteColor
+        ? generateRows(undefined, rowLabels).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
+        : generateRows(undefined, rowLabels)
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
