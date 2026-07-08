@@ -72,8 +72,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const modColor = modifierColor(track)
   const isModifier = modColor != null
   const blockColor = modColor ?? track.color
-  // Automation, ability, and dimension tracks are attached sub-rows of their object.
-  const isAutomation = track.type === 'automation' || track.type === 'ability' || track.type === 'dimension'
+  // Automation and ability sub-rows render darker than their object; dimension
+  // (mover) lanes are first-class creative tracks and keep the normal surface.
+  const isDarkenedRow = track.type === 'automation' || track.type === 'ability'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
@@ -126,7 +127,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)] transition-colors duration-100 ${
           isLast ? '' : 'border-b border-b-[var(--border-subtle)]'
         } ${
-          dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isAutomation ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
+          dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
         }`}
       >
         {/* 3px colour spine — the row's track colour, full label height. */}
@@ -213,7 +214,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isAutomation ? 'bg-black/10' : ''}`}
+        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''}`}
         style={{ width: timelineWidthPx }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),
         // but clicking their empty space still deselects blocks, like any lane.
