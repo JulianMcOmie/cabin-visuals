@@ -91,7 +91,7 @@ export default function LandingPage() {
               <span> workstation</span>
             </h1>
             <p className="m-0 max-w-[620px] text-[18px] leading-[1.55] text-[var(--text-3)]">
-              The first tool dedicated to creating visual music.
+              Create visuals like you create music.
             </p>
           </div>
           <div className="flex flex-col items-center gap-[18px]">
