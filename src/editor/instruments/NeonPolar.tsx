@@ -285,7 +285,7 @@ function NeonPolarVisual({ trackId }: { trackId: string }) {
     const energy = state.energy
     const scalePort = 0
 
-    // Beat-time in seconds — the drift/jitter frequencies were tuned in seconds.
+    // Beat-time in seconds - the drift/jitter frequencies were tuned in seconds.
     const t = state.beat * state.secPerBeat
 
     // --- MIDI: jitter notes + freq shift (velocity-scaled) ---

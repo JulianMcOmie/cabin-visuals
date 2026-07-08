@@ -6,7 +6,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A 3D warp starfield around the camera: parallax star drift
 // with directional warp/drift, barrel roll, tumble, pulse burst, streak, and per-pitch
-// background themes — all driven by notes on the object's own lane. Every frame is a
+// background themes - all driven by notes on the object's own lane. Every frame is a
 // pure function of the current beat (the pause invariant): drift/warp are per-note
 // first-order velocity responses integrated in closed form, roll/tumble angles and the
 // pulse/streak/background envelopes are closed-form in note age, so a static playhead
@@ -28,7 +28,7 @@ const PITCH_PULSE = 57
 const PITCH_BRAKE = 58
 const PITCH_STREAK = 59
 
-// Background theme pitches — one per theme
+// Background theme pitches - one per theme
 const PITCH_BG_VOID = 60
 const PITCH_BG_DEEP_SPACE = 61
 const PITCH_BG_NEBULA = 62
@@ -124,8 +124,8 @@ function wrapCentered(v: number, half: number): number {
 }
 
 // Closed-form displacement of the old per-frame velocity smoothing: velocity chases a
-// boxcar target (V while the note holds, 0 after release) at rate 3/s — 8/s while a
-// brake note is held — and displacement is the exact integral, walked over the segments
+// boxcar target (V while the note holds, 0 after release) at rate 3/s - 8/s while a
+// brake note is held - and displacement is the exact integral, walked over the segments
 // between hold/brake boundaries. Re-evaluated from note data every frame, so it is pure
 // in the current time: no integration state, and scrubbing in any direction agrees.
 function noteDisplacement(
@@ -358,7 +358,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
     const tSec = state.beat * secPerBeat
     const notes = state.notes
 
-    // --- Brake intervals (in seconds, merged) — while a brake note holds, every
+    // --- Brake intervals (in seconds, merged) - while a brake note holds, every
     // velocity response below decays at 8/s instead of 3/s ---
     let brakes: Array<[number, number]> = []
     for (const nt of notes) {
@@ -426,7 +426,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
           tumbleSec += heldSec
           break
         case PITCH_PULSE:
-          // Exact integral of the old exp(-age * 8) burst push — each pulse
+          // Exact integral of the old exp(-age * 8) burst push - each pulse
           // permanently displaces stars outward by a bounded amount
           pulseAmount += 0.5 * (1 - Math.exp(-age * 8))
           break
@@ -437,7 +437,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
       }
     }
 
-    // Tumble angle and axis precession — pure functions of accumulated hold time
+    // Tumble angle and axis precession - pure functions of accumulated hold time
     const tumbleAngle = tumbleSec * 2 * speed
     const tt = tumbleSec * 0.3
     let tax = Math.sin(tt * 1.3) * 0.5 + Math.cos(tt * 0.7) * 0.5
@@ -482,7 +482,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
       let y = wrapCentered(base[i * 3 + 1] + dispY * parallax, spread)
       let z = wrapCentered(base[i * 3 + 2] + dispZ * parallax, depthHalf)
 
-      // Pulse burst — radial push outward from center in XY
+      // Pulse burst - radial push outward from center in XY
       if (pulseAmount > 0) {
         const pDist = Math.sqrt(x * x + y * y)
         if (pDist > 0.01) {
@@ -523,7 +523,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
       pos[i * 3 + 1] = y
       pos[i * 3 + 2] = z
 
-      // Size: perspective scaling — closer = bigger
+      // Size: perspective scaling - closer = bigger
       const absZ = Math.abs(z) + 0.5
       const perspSize = dotSize * (depthHalf / absZ)
       sz[i] = Math.max(0.5, perspSize)
@@ -552,7 +552,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
     // Target = theme of a held BG note (latest onset wins), else the setting color.
     // The old per-frame lerp becomes a closed-form ease from whichever color held just
     // before the most recent BG on/off boundary (assumes that earlier transition had
-    // settled — history further back isn't replayed).
+    // settled - history further back isn't replayed).
     const bgColorParam = state.stringParams.bgColor ?? DEFAULTS.bgColor
     const bgThemeAt = (sec: number): string => {
       let bestOn = -Infinity

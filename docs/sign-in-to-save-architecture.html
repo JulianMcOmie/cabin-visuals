@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sign-in-to-Save Architecture — Cabin Visuals</title>
+<title>Sign-in-to-Save Architecture - Cabin Visuals</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -64,7 +64,7 @@
 <header class="doc">
   <span class="kicker">Cabin Visuals · Onboarding &amp; Persistence Design</span>
   <h1>Sign-in-to-Save Architecture</h1>
-  <p class="sub">Letting a stranger start creating with <strong>zero friction</strong> and never lose the work: anonymous Supabase sessions make logged-out visitors real (temporary) users whose projects autosave normally — and signing up later <strong>converts the same user</strong> instead of migrating data.</p>
+  <p class="sub">Letting a stranger start creating with <strong>zero friction</strong> and never lose the work: anonymous Supabase sessions make logged-out visitors real (temporary) users whose projects autosave normally - and signing up later <strong>converts the same user</strong> instead of migrating data.</p>
 </header>
 
 <div class="card">
@@ -75,7 +75,7 @@
     <a href="#primitive">2 · The primitive: anonymous sign-ins</a>
     <a href="#states">3 · The three user states</a>
     <a href="#lazy">4 · When the session is born (lazily)</a>
-    <a href="#conversion">5 · Conversion — signup vs. login</a>
+    <a href="#conversion">5 · Conversion - signup vs. login</a>
     <a href="#guardrails">6 · RLS, billing &amp; free-tier guardrails</a>
     <a href="#cleanup">7 · Cleaning up abandoned users</a>
     <a href="#failure">8 · Failure modes &amp; fallback</a>
@@ -85,20 +85,20 @@
 
 <h2 id="internalize">★ The big picture</h2>
 <div class="keystone">
-  <p class="lead">The entire feature rests on one property of Supabase anonymous sign-ins: <strong><code>signInAnonymously()</code> creates a real auth user</strong> — a real <code>auth.users</code> row, a real JWT, a real <code>auth.uid()</code> — just flagged <code>is_anonymous: true</code>.</p>
+  <p class="lead">The entire feature rests on one property of Supabase anonymous sign-ins: <strong><code>signInAnonymously()</code> creates a real auth user</strong> - a real <code>auth.users</code> row, a real JWT, a real <code>auth.uid()</code> - just flagged <code>is_anonymous: true</code>.</p>
   <p>That means <strong>everything we already built keeps working unchanged</strong>: RLS policies key on <code>auth.uid()</code>, so an anonymous user can insert a <code>projects</code> row they own; <code>projectStorage</code> and autosave don't know the difference; the free-tier one-project limit applies because they simply have no <code>subscriptions</code> row.</p>
-  <p>And the payoff: when they sign up, we don't migrate anything. Supabase <strong>converts the anonymous user into a permanent one</strong> — <code>updateUser(&#123; email &#125;)</code> for email/password, <code>linkIdentity()</code> for Google — and the <strong>uuid never changes</strong>. Every project row they created while anonymous is already owned by their permanent account. Ownership never moves; no copy step, no merge step, no orphaned data.</p>
-  <p class="small muted">The one path that <em>does</em> need a data carry is logging into an <em>existing</em> account (§5) — you can't link an anonymous user onto an account that already exists.</p>
+  <p>And the payoff: when they sign up, we don't migrate anything. Supabase <strong>converts the anonymous user into a permanent one</strong> - <code>updateUser(&#123; email &#125;)</code> for email/password, <code>linkIdentity()</code> for Google - and the <strong>uuid never changes</strong>. Every project row they created while anonymous is already owned by their permanent account. Ownership never moves; no copy step, no merge step, no orphaned data.</p>
+  <p class="small muted">The one path that <em>does</em> need a data carry is logging into an <em>existing</em> account (§5) - you can't link an anonymous user onto an account that already exists.</p>
 </div>
 
 <h2 id="today">1 · Where we are today</h2>
-<p>A logged-out visitor can already do real work: the landing page's <strong>"Try it out"</strong> goes straight to <code>/editor</code>, and <code>?template=&lt;id&gt;</code> hydrates a full template into the in-memory stores. But nothing persists — <span class="file">useProjectPersistence</span> only arms autosave when a <code>?project</code> row is bound, and creating a row requires a signed-in user (<span class="file">projectStorage.create</span> throws "Not signed in"). The amber header chip is honest about it: <em>"Your work isn't saved — sign up to keep it."</em></p>
+<p>A logged-out visitor can already do real work: the landing page's <strong>"Try it out"</strong> goes straight to <code>/editor</code>, and <code>?template=&lt;id&gt;</code> hydrates a full template into the in-memory stores. But nothing persists - <span class="file">useProjectPersistence</span> only arms autosave when a <code>?project</code> row is bound, and creating a row requires a signed-in user (<span class="file">projectStorage.create</span> throws "Not signed in"). The amber header chip is honest about it: <em>"Your work isn't saved - sign up to keep it."</em></p>
 <p>The failure this design removes: someone spends 40 minutes on a visual, hits signup, and lands in a fresh empty account. Today the chip is a warning; after this, it becomes a promise.</p>
 
 <h2 id="primitive">2 · The primitive: anonymous sign-ins</h2>
 <ul>
-  <li><strong>Dashboard switch.</strong> Anonymous sign-ins are off by default — enable under <em>Authentication → Sign In / Up → Allow anonymous sign-ins</em>. Do it in both environments (there's only one Supabase project, so once).</li>
-  <li><strong>One call.</strong> <code>supabase.auth.signInAnonymously()</code> — the browser client persists the session in localStorage exactly like a normal login; <code>onAuthStateChange</code> fires; <span class="file">useAuth</span> sees a user.</li>
+  <li><strong>Dashboard switch.</strong> Anonymous sign-ins are off by default - enable under <em>Authentication → Sign In / Up → Allow anonymous sign-ins</em>. Do it in both environments (there's only one Supabase project, so once).</li>
+  <li><strong>One call.</strong> <code>supabase.auth.signInAnonymously()</code> - the browser client persists the session in localStorage exactly like a normal login; <code>onAuthStateChange</code> fires; <span class="file">useAuth</span> sees a user.</li>
   <li><strong>The flag.</strong> The user object and JWT carry <code>is_anonymous: true</code>. This is the single bit every UI and server decision keys on (§3, §6).</li>
   <li><strong>Abuse limits.</strong> Supabase rate-limits anonymous sign-ups per IP out of the box (~30/hour). CAPTCHA can be added later if bots become real; don't pay that UX cost speculatively.</li>
 </ul>
@@ -107,7 +107,7 @@
 <table>
   <tr><th>State</th><th>Session</th><th>Editor</th><th>Projects page</th><th>Billing</th></tr>
   <tr><td><strong>Visitor</strong></td><td>none</td><td>In-memory only (today's behavior; becomes a brief pre-first-edit window)</td><td>Empty / signed-out</td><td>Hidden</td></tr>
-  <tr><td><strong>Anonymous</strong></td><td><code>is_anonymous: true</code></td><td>Full autosave to their own rows; amber chip → <em>"Saved on this device — sign up to keep it forever"</em></td><td>Works (RLS), shows a convert banner</td><td>Blocked — Upgrade hidden, checkout rejects</td></tr>
+  <tr><td><strong>Anonymous</strong></td><td><code>is_anonymous: true</code></td><td>Full autosave to their own rows; amber chip → <em>"Saved on this device - sign up to keep it forever"</em></td><td>Works (RLS), shows a convert banner</td><td>Blocked - Upgrade hidden, checkout rejects</td></tr>
   <tr><td><strong>Permanent</strong></td><td>normal</td><td>Unchanged</td><td>Unchanged</td><td>Unchanged</td></tr>
 </table>
 <p>The key UI rule: <strong>anonymous is "signed in" for persistence and "signed out" for identity</strong>. <span class="file">useAuth</span> grows an <code>isAnonymous</code> flag, and every surface that currently branches on <code>user</code> picks which meaning it wants: autosave wants the session; the signup chip, Upgrade button, and checkout want a <em>permanent</em> user.</p>
@@ -115,35 +115,35 @@
 <h2 id="lazy">4 · When the session is born (lazily)</h2>
 <p><span class="badge b-dec">decided</span> <strong>Not on page load.</strong> Creating an auth user for every drive-by pageview manufactures junk rows and eats the IP rate limit. The session is created at the first moment there is something worth saving:</p>
 <ul>
-  <li><strong>First real edit</strong> in a blank editor (first project-store mutation — add track, draw block, drop audio), or</li>
+  <li><strong>First real edit</strong> in a blank editor (first project-store mutation - add track, draw block, drop audio), or</li>
   <li><strong>Opening a template</strong> while signed out (the click already expresses intent to make something).</li>
 </ul>
 <p>At that moment, one flow runs: <code>ensureSession()</code> (sign in anonymously if no session) → <code>projectStorage.create(name, currentDocument)</code> seeded with whatever is already in the stores → <code>router.replace('/editor?project=&lt;id&gt;')</code> → the existing <span class="file">useProjectPersistence</span> flow arms autosave. From that point the anonymous user is on the exact same rails as a logged-in one.</p>
-<div class="note">Seeding <code>create()</code> with the <em>current</em> document (not <code>emptyDocument()</code>) is what makes the adoption seamless — the edit that triggered the flow is already in the snapshot, and the rebind hydrates back the same state. The <code>?template</code> demo mode stays in the codebase as the fallback when anonymous sign-in is disabled or fails (§8).</div>
+<div class="note">Seeding <code>create()</code> with the <em>current</em> document (not <code>emptyDocument()</code>) is what makes the adoption seamless - the edit that triggered the flow is already in the snapshot, and the rebind hydrates back the same state. The <code>?template</code> demo mode stays in the codebase as the fallback when anonymous sign-in is disabled or fails (§8).</div>
 
-<h2 id="conversion">5 · Conversion — the two exits from anonymity</h2>
-<h3>5a · Signup (new account) — the happy path, zero data movement</h3>
+<h2 id="conversion">5 · Conversion - the two exits from anonymity</h2>
+<h3>5a · Signup (new account) - the happy path, zero data movement</h3>
 <p>The signup page detects <code>isAnonymous</code> and, instead of <code>signUp()</code> (which would mint a <em>different</em> user), converts in place:</p>
 <pre><code>await supabase.auth.updateUser({ email })      // sends the confirmation email
 // after the user confirms, set their password on the same session:
 await supabase.auth.updateUser({ password })</code></pre>
 <p>Google OAuth converts with <code>supabase.auth.linkIdentity({ provider: 'google' })</code>. Either way the uuid is unchanged, so their projects, and any future audio uploads, are already theirs. The <code>profiles</code> row is created at this point (it never existed for the anonymous phase).</p>
-<div class="warn"><strong>Email verification is a real interruption:</strong> with "confirm email" on, the email isn't attached until the user clicks the link, and the password can only be set after. The signup UI must handle the "check your inbox" limbo without losing the session — the session <em>is</em> the account. If the email already belongs to an existing account, <code>updateUser</code> fails — surface "that email has an account, log in instead" and route to 5b.</div>
+<div class="warn"><strong>Email verification is a real interruption:</strong> with "confirm email" on, the email isn't attached until the user clicks the link, and the password can only be set after. The signup UI must handle the "check your inbox" limbo without losing the session - the session <em>is</em> the account. If the email already belongs to an existing account, <code>updateUser</code> fails - surface "that email has an account, log in instead" and route to 5b.</div>
 
-<h3>5b · Login (existing account) — the carry-over path</h3>
-<p>An anonymous user who already has a Cabin Visuals account can't be linked — <code>signInWithPassword()</code> simply replaces the session, and the anonymous user's rows would be stranded. So the login page, when the current session is anonymous <em>and</em> a project row exists, carries the work across client-side:</p>
+<h3>5b · Login (existing account) - the carry-over path</h3>
+<p>An anonymous user who already has a Cabin Visuals account can't be linked - <code>signInWithPassword()</code> simply replaces the session, and the anonymous user's rows would be stranded. So the login page, when the current session is anonymous <em>and</em> a project row exists, carries the work across client-side:</p>
 <ol>
   <li>Serialize the open project's document (it's sitting in the stores) before authenticating.</li>
   <li>Log in normally.</li>
-  <li><code>projectStorage.create(name, carriedDocument)</code> into the real account (respecting the free-tier limit — if they're at it, offer replace-or-discard).</li>
+  <li><code>projectStorage.create(name, carriedDocument)</code> into the real account (respecting the free-tier limit - if they're at it, offer replace-or-discard).</li>
   <li>The abandoned anonymous user becomes cleanup fodder (§7).</li>
 </ol>
-<p class="small muted">Scope note: the carry covers <em>the open project</em> — the only one an anonymous user can have under the free limit, so "carry everything" and "carry the open one" are the same thing today.</p>
+<p class="small muted">Scope note: the carry covers <em>the open project</em> - the only one an anonymous user can have under the free limit, so "carry everything" and "carry the open one" are the same thing today.</p>
 
 <h2 id="guardrails">6 · RLS, billing &amp; free-tier guardrails</h2>
 <ul>
-  <li><strong>RLS: nothing to change.</strong> All policies check <code>auth.uid() = user_id</code>; anonymous users pass them for their own rows and nobody else's. (If a table ever needs to exclude anonymous users, the JWT exposes <code>is_anonymous</code> for a policy check — none needed now.)</li>
-  <li><strong>Billing: hard-block anonymous checkout.</strong> The checkout route adds a <code>user.is_anonymous</code> rejection (an anonymous Pro subscription would be attached to a discardable identity — never allow it). The header hides Upgrade for anonymous users, same as it does for visitors today.</li>
+  <li><strong>RLS: nothing to change.</strong> All policies check <code>auth.uid() = user_id</code>; anonymous users pass them for their own rows and nobody else's. (If a table ever needs to exclude anonymous users, the JWT exposes <code>is_anonymous</code> for a policy check - none needed now.)</li>
+  <li><strong>Billing: hard-block anonymous checkout.</strong> The checkout route adds a <code>user.is_anonymous</code> rejection (an anonymous Pro subscription would be attached to a discardable identity - never allow it). The header hides Upgrade for anonymous users, same as it does for visitors today.</li>
   <li><strong>Free tier applies unchanged:</strong> no <code>subscriptions</code> row → free → watermark, 720p, one project. The one-project limit conveniently caps anonymous storage abuse too.</li>
   <li><strong>Audio uploads:</strong> the storage bucket policies also key on <code>auth.uid()</code>, so anonymous users can upload a backing track; it converts with them. Counted toward cleanup (§7).</li>
 </ul>
@@ -155,22 +155,22 @@ delete from auth.users
 where is_anonymous is true
   and created_at &lt; now() - interval '30 days';</code></pre>
 <div class="warn"><strong>Storage doesn't cascade.</strong> Audio files uploaded by deleted anonymous users stay in the bucket (the same "fossils" gap persistence already has). Acceptable now; fold into a future orphan-sweep that solves both.</div>
-<p class="small muted">30 days is generous — an anonymous session lives in one browser's localStorage, so a user who hasn't returned in a month has almost certainly lost the session anyway.</p>
+<p class="small muted">30 days is generous - an anonymous session lives in one browser's localStorage, so a user who hasn't returned in a month has almost certainly lost the session anyway.</p>
 
 <h2 id="failure">8 · Failure modes &amp; the fallback ladder</h2>
 <table>
   <tr><th>Failure</th><th>Behavior</th></tr>
   <tr><td><code>signInAnonymously()</code> fails (disabled, rate-limited, offline)</td><td>Fall back to today's in-memory mode; the chip keeps its current "isn't saved" wording. The feature degrades to the status quo, never below it.</td></tr>
-  <tr><td>Browser storage cleared / different device</td><td>The anonymous session is gone and so is access to that work — inherent to anonymity. The chip's "sign up to keep it <em>forever</em>" wording is the honest mitigation.</td></tr>
+  <tr><td>Browser storage cleared / different device</td><td>The anonymous session is gone and so is access to that work - inherent to anonymity. The chip's "sign up to keep it <em>forever</em>" wording is the honest mitigation.</td></tr>
   <tr><td>Email confirmation abandoned mid-conversion (5a)</td><td>User stays anonymous and keeps working; conversion can be retried any time from the same session.</td></tr>
-  <tr><td>Two tabs racing the first edit</td><td>Both call <code>ensureSession()</code>; the Supabase client serializes it to one session. Worst case: two "Untitled" projects — free-limit prompt covers it.</td></tr>
-  <tr><td>Anonymous user hits the one-project limit</td><td>Same upgrade prompt as free users — but routed to <em>signup</em>, not pricing (an anonymous Pro must never exist).</td></tr>
+  <tr><td>Two tabs racing the first edit</td><td>Both call <code>ensureSession()</code>; the Supabase client serializes it to one session. Worst case: two "Untitled" projects - free-limit prompt covers it.</td></tr>
+  <tr><td>Anonymous user hits the one-project limit</td><td>Same upgrade prompt as free users - but routed to <em>signup</em>, not pricing (an anonymous Pro must never exist).</td></tr>
 </table>
 
 <h2 id="decisions">9 · Decisions &amp; open questions</h2>
 <table>
   <tr><th>Decision</th><th>Call</th></tr>
-  <tr><td>Session creation timing</td><td><span class="badge b-dec">decided</span> Lazy — first edit or template-open, never on page load.</td></tr>
+  <tr><td>Session creation timing</td><td><span class="badge b-dec">decided</span> Lazy - first edit or template-open, never on page load.</td></tr>
   <tr><td>Signup = conversion, not migration</td><td><span class="badge b-dec">decided</span> <code>updateUser</code>/<code>linkIdentity</code> on the same uuid; no data copy.</td></tr>
   <tr><td>Login-to-existing carries the open project</td><td><span class="badge b-dec">decided</span> Client-side serialize → create; anon user abandoned to cleanup.</td></tr>
   <tr><td>Anonymous checkout</td><td><span class="badge b-dec">decided</span> Server-rejected. Convert first, pay after.</td></tr>
@@ -181,7 +181,7 @@ where is_anonymous is true
 </table>
 
 <hr/>
-<p class="small muted">Companion: <a href="sign-in-to-save-implementation-plan.html">sign-in-to-save-implementation-plan.html</a> (phased build order). Written 2026-07-06, after the "Try it out" entry flow and template demo mode landed — this design turns that funnel's dead end into a conversion.</p>
+<p class="small muted">Companion: <a href="sign-in-to-save-implementation-plan.html">sign-in-to-save-implementation-plan.html</a> (phased build order). Written 2026-07-06, after the "Try it out" entry flow and template demo mode landed - this design turns that funnel's dead end into a conversion.</p>
 
 </div>
 </body>

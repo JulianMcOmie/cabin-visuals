@@ -1,5 +1,5 @@
 // The WebCodecs video side: one hardware VideoEncoder, chunks streamed straight
-// into the muxer, and the backpressure gate the frame loop leans on — encode()
+// into the muxer, and the backpressure gate the frame loop leans on - encode()
 // is fire-and-forget, so without the gate a fast walk would balloon the queue.
 
 import type { ExportSettings } from './types'
@@ -26,7 +26,7 @@ export function createVideoEncodeSession(settings: ExportSettings, writer: Mp4Wr
     error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
   })
   encoder.configure({
-    codec: 'avc1.64002a', // H.264 High 4.2 — covers 1080p60
+    codec: 'avc1.64002a', // H.264 High 4.2 - covers 1080p60
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,
@@ -40,7 +40,7 @@ export function createVideoEncodeSession(settings: ExportSettings, writer: Mp4Wr
   return {
     async encodeFrame(canvas, frameIndex, fps) {
       if (error) throw error
-      // Same task as the render — the GL surface still holds this frame, so no
+      // Same task as the render - the GL surface still holds this frame, so no
       // pixel readback and no preserveDrawingBuffer anywhere.
       const frame = new VideoFrame(canvas, {
         timestamp: Math.round((frameIndex * 1e6) / fps),

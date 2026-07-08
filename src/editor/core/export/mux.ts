@@ -1,5 +1,5 @@
 // The container seam: encoded chunks in, an .mp4 blob out. mp4-muxer with an
-// in-memory target — the finished file lives in RAM until download, which is
+// in-memory target - the finished file lives in RAM until download, which is
 // fine at these sizes (~90 MB/min at 12 Mbps); the named escape hatch for huge
 // projects is FileSystemWritableFileStreamTarget, one constructor swap away.
 

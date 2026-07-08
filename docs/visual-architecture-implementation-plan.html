@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visual Engine — Implementation Plan</title>
+<title>Visual Engine - Implementation Plan</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
@@ -77,7 +77,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Editor</span>
-  <h1>Visual Engine — Implementation Plan</h1>
+  <h1>Visual Engine - Implementation Plan</h1>
   <p class="sub">Turning <span class="file">visual-architecture.html</span> into specific files, types, and functions: what gets added, what gets touched, and why.</p>
 </header>
 
@@ -86,7 +86,7 @@
   <nav class="toc">
     <a href="#components">A · Architectural components (start here)</a>
     <a href="#scope">B · Scope &amp; the phase ladder</a>
-    <a href="#model">C · Data model — types &amp; where they live</a>
+    <a href="#model">C · Data model - types &amp; where they live</a>
     <a href="#engine">D · Infrastructure: the engine module</a>
     <a href="#render">E · The renderer</a>
     <a href="#phases">F · Phase-by-phase build (with files)</a>
@@ -95,10 +95,10 @@
   </nav>
 </div>
 
-<p class="muted small">This plan introduces <strong>one new directory</strong> — <span class="file">src/editor/core/engine/</span> — plus a small renderer under <span class="file">components/visual/</span>, and reshapes <span class="file">instruments/</span>. The editor (timeline, piano roll, stores) is barely touched: the engine is a <em>read-only observer</em> of the project document. Every section names the files it creates / edits / deletes so the file-level mental model is always in view.</p>
+<p class="muted small">This plan introduces <strong>one new directory</strong> - <span class="file">src/editor/core/engine/</span> - plus a small renderer under <span class="file">components/visual/</span>, and reshapes <span class="file">instruments/</span>. The editor (timeline, piano roll, stores) is barely touched: the engine is a <em>read-only observer</em> of the project document. Every section names the files it creates / edits / deletes so the file-level mental model is always in view.</p>
 
 <!-- A -->
-<h2 id="components">A · Architectural components — what gets added, and one layer down</h2>
+<h2 id="components">A · Architectural components - what gets added, and one layer down</h2>
 <p>The highest level first, then a peek at the key function / effect inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span> <span class="badge b-del">delete</span>.</p>
 
 <figure class="fig">
@@ -166,9 +166,9 @@
   <h4>2 · The resolver <span class="badge b-new">new</span> <span class="file">core/engine/resolve.ts</span> · <span class="file">core/engine/trackTypes.ts</span></h4>
   <p><strong>Adds a pure function that flattens the project tree into a "resolved graph."</strong> Deeper:</p>
   <ul class="small">
-    <li><code>resolveProject(project)</code> — flattens the track tree, expands looping blocks, runs the <em>event-modifier</em> combine chain, splits instances into <em>objects</em> vs <em>modulators</em>, and builds the <code>port → [routing]</code> and <code>tag → [objectId]</code> indices;</li>
-    <li><code>resolveTrack(track)</code> — memoized per track; returns its cached resolved output unless the track's inputs changed (detected by reference equality);</li>
-    <li><code>combine(parent, self)</code> functions in <span class="file">trackTypes.ts</span> — the event modifiers (suppress / mute / transpose / gate / rhythm / swing…), ported almost verbatim from Tyler.</li>
+    <li><code>resolveProject(project)</code> - flattens the track tree, expands looping blocks, runs the <em>event-modifier</em> combine chain, splits instances into <em>objects</em> vs <em>modulators</em>, and builds the <code>port → [routing]</code> and <code>tag → [objectId]</code> indices;</li>
+    <li><code>resolveTrack(track)</code> - memoized per track; returns its cached resolved output unless the track's inputs changed (detected by reference equality);</li>
+    <li><code>combine(parent, self)</code> functions in <span class="file">trackTypes.ts</span> - the event modifiers (suppress / mute / transpose / gate / rhythm / swing…), ported almost verbatim from Tyler.</li>
   </ul>
 </div>
 
@@ -177,7 +177,7 @@
   <p><strong>Adds an R3F component, mounted once inside the Canvas, that drives the engine.</strong> Deeper:</p>
   <ul class="small">
     <li>a <code>useFrame</code> that runs <em>first</em> each frame: reads <code>currentBeat</code> from TimeStore and calls <code>engine.computeAtBeat(beat)</code> so every object reads fresh state;</li>
-    <li>a module-level <code>useProjectStore.subscribe(...)</code> (registered on import) that <strong>debounces</strong> and calls <code>engine.setProject</code> — resolve runs off the edit's critical path, so editing never blocks.</li>
+    <li>a module-level <code>useProjectStore.subscribe(...)</code> (registered on import) that <strong>debounces</strong> and calls <code>engine.setProject</code> - resolve runs off the edit's critical path, so editing never blocks.</li>
   </ul>
 </div>
 
@@ -185,15 +185,15 @@
   <h4>4 · The modulation matrix <span class="badge b-new">new</span> <span class="file">core/engine/matrix.ts</span></h4>
   <p><strong>Adds the per-frame pass that turns modulator outputs into port values, then final props.</strong> Deeper:</p>
   <ul class="small">
-    <li><code>runMatrix(graph, modulatorOutputs)</code> — for each object, for each port: gather routings that hit it (direct + via its tags), combine per the port's rule (add/multiply/max/replace), clamp, then call the instrument's <code>resolveProps(params, portValues) → finalProps</code>.</li>
+    <li><code>runMatrix(graph, modulatorOutputs)</code> - for each object, for each port: gather routings that hit it (direct + via its tags), combine per the port's rule (add/multiply/max/replace), clamp, then call the instrument's <code>resolveProps(params, portValues) → finalProps</code>.</li>
   </ul>
 </div>
 
 <div class="comp">
   <h4>5 · Built-in modulators &amp; automation <span class="badge b-new">new</span> <span class="file">core/engine/modulators.ts</span> · <span class="file">core/engine/automation.ts</span> · <span class="file">instruments/modulators/Pulse.ts</span></h4>
   <ul class="small">
-    <li><code>modulators.ts</code> — the <code>evaluate(ctx) → number | Color</code> machinery; <span class="file">Pulse.ts</span> is the first def (the Cube's inline decay math, generalized to drive any scalar port);</li>
-    <li><code>automation.ts</code> — <code>extractKeyframes(track)</code> (note pitch → param value) and <code>sampleLane(lane, beat)</code> (binary-search + interpolate: step / linear / ease).</li>
+    <li><code>modulators.ts</code> - the <code>evaluate(ctx) → number | Color</code> machinery; <span class="file">Pulse.ts</span> is the first def (the Cube's inline decay math, generalized to drive any scalar port);</li>
+    <li><code>automation.ts</code> - <code>extractKeyframes(track)</code> (note pitch → param value) and <code>sampleLane(lane, beat)</code> (binary-search + interpolate: step / linear / ease).</li>
   </ul>
 </div>
 
@@ -201,7 +201,7 @@
   <h4>6 · The instrument model <span class="badge b-edit">edit</span> <span class="file">instruments/types.ts</span> · <span class="badge b-new">new</span> <span class="file">instruments/registry.ts</span> · <span class="badge b-edit">edit</span> <span class="file">instruments/Cube.tsx</span></h4>
   <ul class="small">
     <li><span class="file">types.ts</span> gains <code>ObjectInstrumentDef</code> (params · ports · abilities · render), <code>ModulatorInstrumentDef</code>, <code>PortDef</code>, <code>AbilityLaneDef</code>, <code>RenderSpec</code>;</li>
-    <li><span class="file">registry.ts</span> — <code>getObject(id)</code> / <code>getModulator(id)</code> over a map of defs (the library);</li>
+    <li><span class="file">registry.ts</span> - <code>getObject(id)</code> / <code>getModulator(id)</code> over a map of defs (the library);</li>
     <li><span class="file">Cube.tsx</span> becomes an <code>ObjectInstrumentDef</code> with ports (<code>scale</code>, <code>energy</code>, <code>hue</code>); its per-frame project-scan is <strong>deleted</strong> (the engine drives it now).</li>
   </ul>
 </div>
@@ -209,26 +209,26 @@
 <div class="comp">
   <h4>7 · The renderer <span class="badge b-new">new</span> <span class="file">components/visual/VisualScene.tsx</span> · <span class="file">ObjectRenderer.tsx</span></h4>
   <ul class="small">
-    <li><code>VisualScene</code> — subscribes to the resolved graph's <em>object list</em> (re-renders only when objects appear/disappear, i.e. on resolve) and maps each to an <code>&lt;ObjectRenderer&gt;</code>;</li>
-    <li><code>ObjectRenderer</code> — a <code>useFrame</code> that pulls <code>engine.getObjectState(id)</code> and applies <code>finalProps</code> to the mesh imperatively (no React re-render per frame — exactly today's <code>Cube</code> pattern, but fed by the engine).</li>
+    <li><code>VisualScene</code> - subscribes to the resolved graph's <em>object list</em> (re-renders only when objects appear/disappear, i.e. on resolve) and maps each to an <code>&lt;ObjectRenderer&gt;</code>;</li>
+    <li><code>ObjectRenderer</code> - a <code>useFrame</code> that pulls <code>engine.getObjectState(id)</code> and applies <code>finalProps</code> to the mesh imperatively (no React re-render per frame - exactly today's <code>Cube</code> pattern, but fed by the engine).</li>
   </ul>
 </div>
 
 <div class="comp">
   <h4>8 · Data-model extensions &amp; app wiring <span class="badge b-edit">edit</span> <span class="file">types.ts</span> · <span class="file">store/ProjectStore.ts</span> · <span class="file">App.tsx</span></h4>
   <ul class="small">
-    <li><span class="file">types.ts</span> — <code>Track.tags: string[]</code>, a <code>Routing</code> type, an instrument <code>kind</code> discriminator;</li>
-    <li><span class="file">ProjectStore.ts</span> — actions <code>setTrackTags</code>, <code>setRoutings</code> (and later <code>addModulatorTrack</code>); no resolve logic lives here;</li>
-    <li><span class="file">App.tsx</span> — the Canvas swaps <code>&lt;Cube/&gt;</code> for <code>&lt;VisualScene/&gt;</code> + <code>&lt;VisualBeatSync/&gt;</code>.</li>
+    <li><span class="file">types.ts</span> - <code>Track.tags: string[]</code>, a <code>Routing</code> type, an instrument <code>kind</code> discriminator;</li>
+    <li><span class="file">ProjectStore.ts</span> - actions <code>setTrackTags</code>, <code>setRoutings</code> (and later <code>addModulatorTrack</code>); no resolve logic lives here;</li>
+    <li><span class="file">App.tsx</span> - the Canvas swaps <code>&lt;Cube/&gt;</code> for <code>&lt;VisualScene/&gt;</code> + <code>&lt;VisualBeatSync/&gt;</code>.</li>
   </ul>
 </div>
 
 <!-- B -->
 <h2 id="scope">B · Scope &amp; the phase ladder</h2>
-<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc — but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive. <strong>Status: phases 1–4 are built; phase 5 (nested hierarchy) is next.</strong></p>
+<p>This plan is <strong>incremental and always-shippable</strong>: each phase leaves a working app. The order mirrors §6 of the architecture doc - but here every phase is pinned to files. Phases 1–3 are the foundation (and prove the whole thesis); 4–9 are additive. <strong>Status: phases 1–4 are built; phase 5 (nested hierarchy) is next.</strong></p>
 
 <figure class="fig">
-  <div class="figtitle">The phase ladder — and roughly where each lands in the tree</div>
+  <div class="figtitle">The phase ladder - and roughly where each lands in the tree</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Phase ladder">
     <defs><marker id="aP" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <g font-size="11" fill="#141414">
@@ -263,14 +263,14 @@
 <div class="rec"><strong>In scope here:</strong> the data model, the engine module, the renderer, the instrument model, and a phased build down to the matrix (phase 3) in detail, with file lists for all phases. <strong>Deferred (named, not detailed):</strong> the Web-worker/OffscreenCanvas escalation (we settled on incremental + deferred resolve instead), and English→spec (phase 10) which only becomes viable once the RenderSpec is stable.</p></div>
 
 <!-- C -->
-<h2 id="model">C · Data model — the types and where they live</h2>
+<h2 id="model">C · Data model - the types and where they live</h2>
 <p>Two kinds of types: the <strong>document</strong> (what the user edits, in the stores) and the <strong>resolved graph</strong> (what the engine derives, never persisted). Keeping them separate is what lets resolve be a pure, cacheable function.</p>
 
 <figure class="fig">
   <div class="figtitle">Document types vs resolved-graph types</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Data model">
     <defs><marker id="aM" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <text x="30" y="22" font-size="12" font-weight="700" fill="#141414">DOCUMENT — edited, persisted  (types.ts + instruments/types.ts)</text>
+    <text x="30" y="22" font-size="12" font-weight="700" fill="#141414">DOCUMENT - edited, persisted  (types.ts + instruments/types.ts)</text>
     <rect x="30" y="34" width="180" height="92" rx="6" fill="#f0f0f0" stroke="#141414"/>
     <text x="44" y="54" font-size="11" font-weight="700" fill="#141414">Track</text>
     <text x="44" y="72" font-size="9.5" fill="#565656">instrumentId · params</text>
@@ -292,7 +292,7 @@
     <rect x="360" y="160" width="180" height="34" rx="6" fill="#141414"/>
     <text x="450" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">resolveProject()</text>
     <path d="M300,126 C320,150 380,150 430,160" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#aM)"/>
-    <text x="30" y="232" font-size="12" font-weight="700" fill="#141414">RESOLVED GRAPH — derived, in-memory only  (core/engine/types.ts)</text>
+    <text x="30" y="232" font-size="12" font-weight="700" fill="#141414">RESOLVED GRAPH - derived, in-memory only  (core/engine/types.ts)</text>
     <rect x="30" y="244" width="250" height="44" rx="6" fill="#fff" stroke="#141414"/>
     <text x="44" y="264" font-size="10.5" font-weight="700" fill="#141414">ObjectInstance</text><text x="44" y="280" font-size="9" fill="#565656">id · def · params · ports · abilityEvents</text>
     <rect x="300" y="244" width="250" height="44" rx="6" fill="#fff" stroke="#141414"/>
@@ -301,26 +301,26 @@
     <text x="584" y="264" font-size="10.5" font-weight="700" fill="#141414">tagIndex</text><text x="584" y="280" font-size="9" fill="#565656">tag → [objectId]</text>
     <path d="M450,194 V240" stroke="#141414" stroke-width="1.4" marker-end="url(#aM)"/>
   </svg>
-  <figcaption>The user edits the top row; <code>resolveProject()</code> derives the bottom row. The renderer and matrix read only the bottom row. Nothing in the graph is saved — it's always rebuildable from the document.</figcaption>
+  <figcaption>The user edits the top row; <code>resolveProject()</code> derives the bottom row. The renderer and matrix read only the bottom row. Nothing in the graph is saved - it's always rebuildable from the document.</figcaption>
 </figure>
 
-<h3>C.1 — Document types <span class="badge b-edit">edit types.ts</span> <span class="badge b-edit">edit instruments/types.ts</span></h3>
-<pre><code><span class="c">// src/editor/types.ts — extend the existing Track</span>
+<h3>C.1 - Document types <span class="badge b-edit">edit types.ts</span> <span class="badge b-edit">edit instruments/types.ts</span></h3>
+<pre><code><span class="c">// src/editor/types.ts - extend the existing Track</span>
 <span class="k">interface</span> <span class="f">Track</span> {
   id; name; instrumentId; params?; color; muted; solo; blocks;   <span class="c">// (today)</span>
-  parentId?; childIds;            <span class="c">// nested hierarchy — becomes functional in phase 5</span>
-  tags?: <span class="k">string</span>[];               <span class="c">// ✓ phase 4 — cross-cutting modulation targeting (shipped optional)</span>
+  parentId?; childIds;            <span class="c">// nested hierarchy - becomes functional in phase 5</span>
+  tags?: <span class="k">string</span>[];               <span class="c">// ✓ phase 4 - cross-cutting modulation targeting (shipped optional)</span>
   targets?: Routing[];            <span class="c">// ✓ modulator-only: a LIST of Routings → one modulator drives MANY ports/groups</span>
-  lanes?: Record&lt;string, Block[]&gt;;  <span class="c">// ✓ phase 6 — abilities, keyed by AbilityLaneDef.key; a PARALLEL structure, NOT child tracks (shipped as Record, not the flat Block[] drawn here)</span>
+  lanes?: Record&lt;string, Block[]&gt;;  <span class="c">// ✓ phase 6 - abilities, keyed by AbilityLaneDef.key; a PARALLEL structure, NOT child tracks (shipped as Record, not the flat Block[] drawn here)</span>
 }
 <span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// ✓ shipped (phase 4) exactly as below</span>
   port: <span class="k">string</span>;
   scope: { kind: <span class="s">'track'</span>; id } | { kind: <span class="s">'tag'</span>; tag } | { kind: <span class="s">'subtree'</span>; id };
   amount: <span class="k">number</span>;
 }</code></pre>
-<p>The instrument <em>defs</em> (<code>ObjectInstrumentDef</code> / <code>ModulatorInstrumentDef</code> / <code>PortDef</code> / <code>AbilityLaneDef</code> / <code>RenderSpec</code>) extend <span class="file">instruments/types.ts</span> — they already host today's <code>InstrumentDef</code> + <code>ParamDef</code>, so this is the natural home and keeps the registry next door.</p>
+<p>The instrument <em>defs</em> (<code>ObjectInstrumentDef</code> / <code>ModulatorInstrumentDef</code> / <code>PortDef</code> / <code>AbilityLaneDef</code> / <code>RenderSpec</code>) extend <span class="file">instruments/types.ts</span> - they already host today's <code>InstrumentDef</code> + <code>ParamDef</code>, so this is the natural home and keeps the registry next door.</p>
 
-<h3>C.2 — Resolved-graph types <span class="badge b-new">new core/engine/types.ts</span></h3>
+<h3>C.2 - Resolved-graph types <span class="badge b-new">new core/engine/types.ts</span></h3>
 <pre><code><span class="k">interface</span> <span class="f">ResolvedGraph</span> {
   objects: ObjectInstance[];        modulators: ModulatorInstance[];
   routingsByPort: Map&lt;<span class="k">string</span>, Routing[]&gt;;   tagIndex: Map&lt;<span class="k">string</span>, <span class="k">string</span>[]&gt;;
@@ -330,15 +330,15 @@
   abilityEvents: Map&lt;<span class="k">string</span>, Event[]&gt;;  tags: <span class="k">string</span>[];
   portValues: Record&lt;<span class="k">string</span>,<span class="k">number</span>&gt;;  finalProps: Record&lt;<span class="k">string</span>, unknown&gt;;  <span class="c">// filled per frame</span>
 }</code></pre>
-<div class="note"><strong>Mental model:</strong> <span class="file">types.ts</span> = "what the user owns," <span class="file">core/engine/types.ts</span> = "what the engine derives." If you ever see the engine importing the <em>document</em> types that's fine; the document never imports the <em>graph</em> types — the dependency points one way (engine → document), which is what keeps the editor independent of the engine.</div>
-<div class="note"><strong>Shipped shape (through phase 4):</strong> the block above is the north-star target (it includes phase-6/8 fields). What's built today: <code>ResolvedObject</code> = <code>{ trackId; instrumentId; muted; params; ports; notes; tags }</code> — no <code>abilityEvents</code> (phase 6) or <code>finalProps</code> (phase 8) yet. And <code>ModulatorInstance</code> was split into a pure <em>signal</em> (<code>{ id; kind; triggers }</code>) plus a separate <code>ResolvedRouting</code> (<code>{ modulatorId; targetObjectId; targetPort; amount }</code>); <code>routingsByPort</code> buckets the latter. So one signal is evaluated once per frame and fanned out to every object its scopes resolved to. <code>tagIndex</code> (tag → objectIds) is built in <span class="file">resolve.ts</span> exactly as drawn.</div>
+<div class="note"><strong>Mental model:</strong> <span class="file">types.ts</span> = "what the user owns," <span class="file">core/engine/types.ts</span> = "what the engine derives." If you ever see the engine importing the <em>document</em> types that's fine; the document never imports the <em>graph</em> types - the dependency points one way (engine → document), which is what keeps the editor independent of the engine.</div>
+<div class="note"><strong>Shipped shape (through phase 4):</strong> the block above is the north-star target (it includes phase-6/8 fields). What's built today: <code>ResolvedObject</code> = <code>{ trackId; instrumentId; muted; params; ports; notes; tags }</code> - no <code>abilityEvents</code> (phase 6) or <code>finalProps</code> (phase 8) yet. And <code>ModulatorInstance</code> was split into a pure <em>signal</em> (<code>{ id; kind; triggers }</code>) plus a separate <code>ResolvedRouting</code> (<code>{ modulatorId; targetObjectId; targetPort; amount }</code>); <code>routingsByPort</code> buckets the latter. So one signal is evaluated once per frame and fanned out to every object its scopes resolved to. <code>tagIndex</code> (tag → objectIds) is built in <span class="file">resolve.ts</span> exactly as drawn.</div>
 
 <!-- D -->
 <h2 id="engine">D · Infrastructure: the engine module</h2>
 <p class="pill-row"><span class="badge b-new">core/engine/resolve.ts</span><span class="badge b-new">core/engine/VisualEngine.ts</span><span class="badge b-new">core/engine/matrix.ts</span><span class="badge b-new">core/engine/VisualBeatSync.tsx</span><span class="badge b-new">core/engine/trackTypes.ts</span><span class="badge b-new">core/engine/modulators.ts</span><span class="badge b-new">core/engine/automation.ts</span><span class="badge b-new">core/engine/types.ts</span></p>
 
 <figure class="fig">
-  <div class="figtitle">Runtime data-flow — and which file owns each step</div>
+  <div class="figtitle">Runtime data-flow - and which file owns each step</div>
   <svg viewBox="0 0 900 330" role="img" aria-label="Runtime data flow">
     <defs><marker id="aD" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <!-- edit -->
@@ -353,7 +353,7 @@
     <path d="M170,131 H214" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
     <rect x="216" y="100" width="180" height="62" rx="6" fill="#fff" stroke="#141414" stroke-width="1.4"/>
     <text x="306" y="122" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">resolve (incremental)</text>
-    <text x="306" y="139" text-anchor="middle" font-size="9" fill="#565656">resolve.ts — only the</text>
+    <text x="306" y="139" text-anchor="middle" font-size="9" fill="#565656">resolve.ts - only the</text>
     <text x="306" y="153" text-anchor="middle" font-size="9" fill="#565656">dirty track re-resolves</text>
     <path d="M396,131 H440" stroke="#141414" stroke-width="1.4" marker-end="url(#aD)"/>
     <rect x="442" y="100" width="150" height="62" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
@@ -382,8 +382,8 @@
   <figcaption>Top row = "on edit" (debounced, incremental, off the critical path). Dashed band = "every frame." The edit path and the frame path meet only at the cached <code>ResolvedGraph</code>.</figcaption>
 </figure>
 
-<h3>D.1 — <span class="file">resolve.ts</span> &amp; incremental caching</h3>
-<p>Because the store is immutable, "what changed" is a reference diff — the subscription already hands you <code>(state, prev)</code>:</p>
+<h3>D.1 - <span class="file">resolve.ts</span> &amp; incremental caching</h3>
+<p>Because the store is immutable, "what changed" is a reference diff - the subscription already hands you <code>(state, prev)</code>:</p>
 <pre><code><span class="c">// core/engine/resolve.ts</span>
 <span class="k">const</span> cache = <span class="k">new</span> Map&lt;<span class="k">string</span>, ResolvedTrack&gt;();   <span class="c">// trackId → resolved output</span>
 
@@ -394,39 +394,39 @@
     cache.get(id) ?? <span class="f">resolveTrack</span>(project.tracks[id], project));   <span class="c">// reuse or recompute</span>
   <span class="k">return</span> <span class="f">buildGraph</span>(resolved);   <span class="c">// split objects/modulators, build routing + tag indices</span>
 }</code></pre>
-<p><span class="file">resolveTrack</span> runs the event-modifier <code>combine</code> chain from <span class="file">trackTypes.ts</span> (its child modifiers — mute, suppress… — fold <em>into the parent's</em> event stream) and stamps the cache. One edited note → one track object changes identity → one <code>resolveTrack</code> call. <em>O(change), not O(project)</em> — the fix for the EDAW lag.</p>
-<div class="warn"><strong>Dependency edges — which way they point.</strong> There are <em>two</em> relationships, and invalidation follows each. <strong>(1) A modifier child modifies its parent</strong> — you nest a <code>mute</code> / <code>suppress</code> track <em>under</em> the object track to modify the object, so editing that child (or adding / removing one) re-resolves the <strong>parent</strong>. <strong>(2) An object child inherits its parent's stream</strong> (the parent feeds it), so editing the parent re-resolves its <strong>children</strong>. Tyler's resolver states it directly: "modifier tracks affect the parent's output; regular tracks inherit it." Build a small <code>dependents: Map&lt;id, id[]&gt;</code> that captures both directions; start by invalidating the edited track plus its parent and subtree, then tighten.</div>
+<p><span class="file">resolveTrack</span> runs the event-modifier <code>combine</code> chain from <span class="file">trackTypes.ts</span> (its child modifiers - mute, suppress… - fold <em>into the parent's</em> event stream) and stamps the cache. One edited note → one track object changes identity → one <code>resolveTrack</code> call. <em>O(change), not O(project)</em> - the fix for the EDAW lag.</p>
+<div class="warn"><strong>Dependency edges - which way they point.</strong> There are <em>two</em> relationships, and invalidation follows each. <strong>(1) A modifier child modifies its parent</strong> - you nest a <code>mute</code> / <code>suppress</code> track <em>under</em> the object track to modify the object, so editing that child (or adding / removing one) re-resolves the <strong>parent</strong>. <strong>(2) An object child inherits its parent's stream</strong> (the parent feeds it), so editing the parent re-resolves its <strong>children</strong>. Tyler's resolver states it directly: "modifier tracks affect the parent's output; regular tracks inherit it." Build a small <code>dependents: Map&lt;id, id[]&gt;</code> that captures both directions; start by invalidating the edited track plus its parent and subtree, then tighten.</div>
 
-<h3>D.2 — <span class="file">VisualEngine.ts</span> (a module singleton, not a React store)</h3>
+<h3>D.2 - <span class="file">VisualEngine.ts</span> (a module singleton, not a React store)</h3>
 <p>Deliberately <em>not</em> a zustand store: per-frame <code>finalProps</code> must never trigger React re-renders. It's a plain module holding mutable state, read imperatively from <code>useFrame</code>.</p>
 <pre><code><span class="c">// core/engine/VisualEngine.ts</span>
 <span class="k">let</span> graph: ResolvedGraph | null = null;
 <span class="k">export function</span> <span class="f">setProject</span>(p, prev) { graph = <span class="f">resolveProject</span>(p, prev); bumpObjectList(); }
 <span class="k">export function</span> <span class="f">computeAtBeat</span>(beat) {
   <span class="k">const</span> outs = <span class="f">evaluateModulators</span>(graph, beat);   <span class="c">// modulators.ts + automation.ts</span>
-  <span class="f">runMatrix</span>(graph, outs);                       <span class="c">// matrix.ts — fills finalProps</span>
+  <span class="f">runMatrix</span>(graph, outs);                       <span class="c">// matrix.ts - fills finalProps</span>
 }
 <span class="k">export const</span> <span class="f">getObjectState</span> = (id) =&gt; graph?.objectsById.get(id);</code></pre>
-<p><code>bumpObjectList()</code> notifies <span class="file">VisualScene</span> (a tiny external-store subscription) only when the <em>set</em> of objects changes — so React reconciles the scene tree on resolve, never per frame.</p>
+<p><code>bumpObjectList()</code> notifies <span class="file">VisualScene</span> (a tiny external-store subscription) only when the <em>set</em> of objects changes - so React reconciles the scene tree on resolve, never per frame.</p>
 
-<h3>D.3 — <span class="file">VisualBeatSync.tsx</span> — the only React-side glue</h3>
-<pre><code><span class="c">// core/engine/VisualBeatSync.tsx — mounted once inside &lt;Canvas&gt;</span>
+<h3>D.3 - <span class="file">VisualBeatSync.tsx</span> - the only React-side glue</h3>
+<pre><code><span class="c">// core/engine/VisualBeatSync.tsx - mounted once inside &lt;Canvas&gt;</span>
 <span class="k">export function</span> <span class="f">VisualBeatSync</span>() {
   <span class="f">useFrame</span>(() =&gt; <span class="f">computeAtBeat</span>(useTimeStore.getState().currentBeat));  <span class="c">// runs first</span>
   <span class="k">return</span> <span class="k">null</span>;
 }
-<span class="c">// module scope — set up once on import: deferred, debounced resolve</span>
+<span class="c">// module scope - set up once on import: deferred, debounced resolve</span>
 <span class="k">let</span> t; useProjectStore.subscribe((s, prev) =&gt; {
   clearTimeout(t); t = setTimeout(() =&gt; <span class="f">setProject</span>(s, prev), 80);  <span class="c">// never blocks the edit</span>
 });</code></pre>
-<div class="note"><strong>Files this leans on, and why:</strong> <span class="file">TimeStore</span> (the clock — already exists), <span class="file">ProjectStore</span> (the document — subscribe only, no writes), and R3F's <code>useFrame</code> (already used by today's <span class="file">Cube</span>). Nothing in the editor changes to support this; it's pure observation.</p></div>
+<div class="note"><strong>Files this leans on, and why:</strong> <span class="file">TimeStore</span> (the clock - already exists), <span class="file">ProjectStore</span> (the document - subscribe only, no writes), and R3F's <code>useFrame</code> (already used by today's <span class="file">Cube</span>). Nothing in the editor changes to support this; it's pure observation.</p></div>
 
 <!-- E -->
 <h2 id="render">E · The renderer</h2>
 <p class="pill-row"><span class="badge b-new">components/visual/VisualScene.tsx</span><span class="badge b-new">components/visual/ObjectRenderer.tsx</span><span class="badge b-edit">App.tsx</span><span class="badge b-edit">instruments/Cube.tsx</span></p>
 
 <figure class="fig">
-  <div class="figtitle">Render tree — React reconciles on resolve, useFrame pulls per frame</div>
+  <div class="figtitle">Render tree - React reconciles on resolve, useFrame pulls per frame</div>
   <svg viewBox="0 0 900 220" role="img" aria-label="Render tree">
     <defs><marker id="aR" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="86" width="150" height="46" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.4"/>
@@ -446,98 +446,98 @@
     <rect x="690" y="90" width="190" height="40" rx="6" fill="#141414"/><text x="785" y="108" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">useFrame → getObjectState</text><text x="785" y="123" text-anchor="middle" font-size="9" fill="#dcdcdc">apply finalProps to mesh</text>
     <path d="M654,110 H686" stroke="#141414" stroke-width="1.3" marker-end="url(#aR)"/>
   </svg>
-  <figcaption>One <code>ObjectRenderer</code> per resolved object. Its <code>useFrame</code> pulls the engine's latest <code>finalProps</code> and mutates the mesh imperatively — no React state churn at 60fps.</figcaption>
+  <figcaption>One <code>ObjectRenderer</code> per resolved object. Its <code>useFrame</code> pulls the engine's latest <code>finalProps</code> and mutates the mesh imperatively - no React state churn at 60fps.</figcaption>
 </figure>
 
 <ul>
-  <li><span class="badge b-new">new</span> <span class="file">VisualScene.tsx</span> — subscribes to <code>VisualEngine</code>'s object-list signal; renders <code>graph.objects.map(o =&gt; &lt;ObjectRenderer key={o.id} id={o.id}/&gt;)</code>. Re-renders only when objects are added/removed.</li>
-  <li><span class="badge b-new">new</span> <span class="file">ObjectRenderer.tsx</span> — looks up the object's <code>def.render</code>; if it's a code component, render it; if a <code>RenderSpec</code> (phase 8), hand it to the interpreter. Either way a <code>useFrame</code> reads <code>getObjectState(id).finalProps</code> and applies it.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> — <code>&lt;Scene&gt;</code>'s <code>&lt;Cube/&gt;</code> becomes <code>&lt;VisualBeatSync/&gt;&lt;VisualScene/&gt;</code>. The lights/grid stay.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">instruments/Cube.tsx</span> — keep the mesh/material JSX as the Cube object's renderer, but <strong>delete</strong> <code>computePulse</code> and the project-scan <code>useFrame</code>; values now arrive as <code>finalProps</code>. The pulse math moves to <span class="file">instruments/modulators/Pulse.ts</span>.</li>
+  <li><span class="badge b-new">new</span> <span class="file">VisualScene.tsx</span> - subscribes to <code>VisualEngine</code>'s object-list signal; renders <code>graph.objects.map(o =&gt; &lt;ObjectRenderer key={o.id} id={o.id}/&gt;)</code>. Re-renders only when objects are added/removed.</li>
+  <li><span class="badge b-new">new</span> <span class="file">ObjectRenderer.tsx</span> - looks up the object's <code>def.render</code>; if it's a code component, render it; if a <code>RenderSpec</code> (phase 8), hand it to the interpreter. Either way a <code>useFrame</code> reads <code>getObjectState(id).finalProps</code> and applies it.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> - <code>&lt;Scene&gt;</code>'s <code>&lt;Cube/&gt;</code> becomes <code>&lt;VisualBeatSync/&gt;&lt;VisualScene/&gt;</code>. The lights/grid stay.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">instruments/Cube.tsx</span> - keep the mesh/material JSX as the Cube object's renderer, but <strong>delete</strong> <code>computePulse</code> and the project-scan <code>useFrame</code>; values now arrive as <code>finalProps</code>. The pulse math moves to <span class="file">instruments/modulators/Pulse.ts</span>.</li>
 </ul>
 
 <!-- F -->
 <h2 id="phases">F · Phase-by-phase build (with files)</h2>
 
-<h3>Phase 1 — Engine skeleton <span class="badge b-new">✓ shipped</span></h3>
+<h3>Phase 1 - Engine skeleton <span class="badge b-new">✓ shipped</span></h3>
 <p>Stand up resolve → compute → pull with <em>zero behavior change</em>: the Cube still pulses, but now the engine drives it.</p>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/engine/types.ts</span>, <span class="file">core/engine/resolve.ts</span> (non-incremental first), <span class="file">core/engine/VisualEngine.ts</span>, <span class="file">core/engine/VisualBeatSync.tsx</span>, <span class="file">components/visual/VisualScene.tsx</span> + <span class="file">ObjectRenderer.tsx</span>.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> (mount the scene), <span class="file">instruments/Cube.tsx</span> (read <code>finalProps</code>, drop the scan).</li>
 </ul>
 
-<h3>Phase 2 — Object defs + params + ports <span class="badge b-new">✓ shipped</span> <span class="badge b-new">✓ automation shipped (own phase)</span></h3>
+<h3>Phase 2 - Object defs + params + ports <span class="badge b-new">✓ shipped</span> <span class="badge b-new">✓ automation shipped (own phase)</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">instruments/types.ts</span> (def types), <span class="badge b-new">new</span> <span class="file">instruments/registry.ts</span>, <span class="badge b-new">new</span> <span class="file">core/engine/automation.ts</span>.</li>
-  <li>Give Cube <code>params</code> (size/hue) + <code>ports</code> (scale/energy/hue) and the <code>resolveProps</code> binding. <span class="badge b-edit">edit</span> <span class="file">TrackEditor.tsx</span> so its sliders read <code>def.params</code>; <span class="badge b-edit">edit</span> <span class="file">resolve.ts</span> to attach automation lanes. Ports rest at defaults — nothing drives them yet.</li>
+  <li>Give Cube <code>params</code> (size/hue) + <code>ports</code> (scale/energy/hue) and the <code>resolveProps</code> binding. <span class="badge b-edit">edit</span> <span class="file">TrackEditor.tsx</span> so its sliders read <code>def.params</code>; <span class="badge b-edit">edit</span> <span class="file">resolve.ts</span> to attach automation lanes. Ports rest at defaults - nothing drives them yet.</li>
 </ul>
 
-<h3>Phase 3 — Modulators + the matrix ★ keystone <span class="badge b-new">✓ shipped</span></h3>
+<h3>Phase 3 - Modulators + the matrix ★ keystone <span class="badge b-new">✓ shipped</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/engine/matrix.ts</span>, <span class="file">core/engine/modulators.ts</span>, <span class="file">instruments/modulators/Pulse.ts</span>.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">VisualEngine.ts</span> (call <code>runMatrix</code> in <code>computeAtBeat</code>), <span class="file">ProjectStore.ts</span> (a <code>setRoutings</code> action). First real "drop a Size-Pulse on a shape" (drives the <code>scale</code> port). The routing UI is a small inspector add (defer polish).</li>
 </ul>
-<div class="note"><strong>As-built deltas (phases 1–3):</strong> a few names landed differently than drawn above. The registry is <span class="file">instruments/index.ts</span> (not <code>registry.ts</code>); the routing store action is <code>setTrackTargets</code> (not <code>setRoutings</code>); the Cube reads per-frame values from <code>getObjectState().portValues</code>/<code>params</code> (the <code>finalProps</code> name arrives with the RenderSpec, phase 8). Behavior matches the plan; only these labels differ. <em>(Automation shipped later as its own phase — see below.)</em></div>
+<div class="note"><strong>As-built deltas (phases 1–3):</strong> a few names landed differently than drawn above. The registry is <span class="file">instruments/index.ts</span> (not <code>registry.ts</code>); the routing store action is <code>setTrackTargets</code> (not <code>setRoutings</code>); the Cube reads per-frame values from <code>getObjectState().portValues</code>/<code>params</code> (the <code>finalProps</code> name arrives with the RenderSpec, phase 8). Behavior matches the plan; only these labels differ. <em>(Automation shipped later as its own phase - see below.)</em></div>
 
-<h3>Phase 4 — Tags + group routing <span class="badge b-new">✓ shipped</span></h3>
+<h3>Phase 4 - Tags + group routing <span class="badge b-new">✓ shipped</span></h3>
 <ul class="small">
   <li><strong>Shipped as 3 commits.</strong> Now one pulse drives a tagged group.</li>
   <li><span class="badge b-edit">1 · redesign target model</span> <span class="file">types.ts</span>: <code>Track.targets</code> moved from the flat <code>{targetTrackId, targetPort}[]</code> to the planned <code>Routing[]</code> (<code>{ port; scope: track|tag|subtree; amount }</code>, §C.1). Readers updated: <span class="file">resolve.ts</span>, <code>deleteTrack</code> cleanup, the target picker.</li>
-  <li><span class="badge b-edit">2 · resolution + routing</span> <span class="file">types.ts</span> (<code>Track.tags?</code>), <span class="file">ProjectStore.ts</span> (<code>setTrackTags</code>), <span class="file">resolve.ts</span> (build <code>tagIndex</code>; expand each routing's scope to concrete objects, deduped per object+port), <span class="file">matrix.ts</span> (keys on <code>routingsByPort</code>, honors <code>amount</code>). The resolved <code>ModulatorInstance</code> was split into a <em>signal</em> (triggers only) plus <code>ResolvedRouting</code> links — see §C.2 note. <code>subtree</code> scope is a phase-5 stub (resolves to no objects yet).</li>
+  <li><span class="badge b-edit">2 · resolution + routing</span> <span class="file">types.ts</span> (<code>Track.tags?</code>), <span class="file">ProjectStore.ts</span> (<code>setTrackTags</code>), <span class="file">resolve.ts</span> (build <code>tagIndex</code>; expand each routing's scope to concrete objects, deduped per object+port), <span class="file">matrix.ts</span> (keys on <code>routingsByPort</code>, honors <code>amount</code>). The resolved <code>ModulatorInstance</code> was split into a <em>signal</em> (triggers only) plus <code>ResolvedRouting</code> links - see §C.2 note. <code>subtree</code> scope is a phase-5 stub (resolves to no objects yet).</li>
   <li><span class="badge b-edit">3 · tagging UI</span> <span class="file">TrackEditor.tsx</span>: a tag combobox on object tracks (type a new tag or pick an existing project tag); the modulator's target picker lists tags alongside individual tracks.</li>
 </ul>
 
-<h3>Phase 5 — Nested hierarchy <span class="badge b-edit">timeline + resolve</span></h3>
+<h3>Phase 5 - Nested hierarchy <span class="badge b-edit">timeline + resolve</span></h3>
 <ul class="small">
   <li>Net-new (today: top-level only). <span class="badge b-edit">edit</span> the timeline (<span class="file">TimelineArea.tsx</span>, <span class="file">Track.tsx</span>) to render nested rows; <span class="file">resolve.ts</span> to inherit transforms/context down a subtree; <span class="file">ProjectStore.ts</span> for re-parenting. Unlocks <code>subtree</code> routing scope <em>and</em> ability lanes.</li>
 </ul>
 
-<h3>Phase 6 — Ability lanes &nbsp;·&nbsp; Phase 7 — Event modifiers <span class="badge b-new">trackTypes</span> <span class="badge b-edit">midi editors</span></h3>
+<h3>Phase 6 - Ability lanes &nbsp;·&nbsp; Phase 7 - Event modifiers <span class="badge b-new">trackTypes</span> <span class="badge b-edit">midi editors</span></h3>
 <ul class="small">
-  <li><strong>Abilities — shipped as 5 commits, then reworked.</strong> Originally each ability was an entry in the parent's parallel <code>lanes</code> structure (an indented sub-row). <strong>SUPERSEDED:</strong> abilities are now real <code>ability</code> <strong>child tracks</strong> — functionally identical to automation tracks (<code>Track.type='ability'</code> + <code>abilityKey</code>, added opt-in via the track right-click menu, resolved into <code>abilityEvents</code> with per-object mute/solo). This reverses §4.4's "parallel <code>lanes[]</code>, not child tracks" call: making them child tracks means every block (normal / automation / ability) flows through the one gesture system, so block editing (marquee / move / copy / paste / alt-duplicate) is completely unified. <code>AbilityLaneRow</code> + <code>useLaneGestures</code> were deleted; the old <code>lanes</code>/<code>laneKey</code> plumbing is dead-but-dormant.</li>
-  <li><strong>Event modifiers:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> (the <code>combine</code> family — suppress/mute/transpose/…) wired into <span class="file">resolve.ts</span>; <span class="badge b-new">new</span> small editors for mute/suppress regions. mute sets a <code>blackedOut</code> flag read in <span class="file">ObjectRenderer</span>. <em>(Shipped in phase 7 already — modifier tracks fold into the parent's note stream.)</em></li>
+  <li><strong>Abilities - shipped as 5 commits, then reworked.</strong> Originally each ability was an entry in the parent's parallel <code>lanes</code> structure (an indented sub-row). <strong>SUPERSEDED:</strong> abilities are now real <code>ability</code> <strong>child tracks</strong> - functionally identical to automation tracks (<code>Track.type='ability'</code> + <code>abilityKey</code>, added opt-in via the track right-click menu, resolved into <code>abilityEvents</code> with per-object mute/solo). This reverses §4.4's "parallel <code>lanes[]</code>, not child tracks" call: making them child tracks means every block (normal / automation / ability) flows through the one gesture system, so block editing (marquee / move / copy / paste / alt-duplicate) is completely unified. <code>AbilityLaneRow</code> + <code>useLaneGestures</code> were deleted; the old <code>lanes</code>/<code>laneKey</code> plumbing is dead-but-dormant.</li>
+  <li><strong>Event modifiers:</strong> <span class="badge b-new">new</span> <span class="file">core/engine/trackTypes.ts</span> (the <code>combine</code> family - suppress/mute/transpose/…) wired into <span class="file">resolve.ts</span>; <span class="badge b-new">new</span> small editors for mute/suppress regions. mute sets a <code>blackedOut</code> flag read in <span class="file">ObjectRenderer</span>. <em>(Shipped in phase 7 already - modifier tracks fold into the parent's note stream.)</em></li>
 </ul>
 
 <div class="note"><strong>As-built (phase 6, 5 commits):</strong>
 <ol class="small">
-  <li><strong>Skeleton</strong> — <code>AbilityLaneDef { key; label; editor?: EditorKind; color? }</code> + <code>abilities?</code> on <code>ObjectInstrumentDef</code> (<span class="file">instruments/types.ts</span>); <code>Track.lanes?: Record&lt;string, Block[]&gt;</code> (<span class="file">types.ts</span>) — keyed per ability, each a full block+notes stream (not the plan's flat <code>Block[]</code>). <code>editor</code> declared; only <code>pitched</code> wired.</li>
-  <li><strong>Ability events</strong> — <span class="file">resolve.ts</span> folds each lane into <code>ResolvedObject.abilityEvents: Map&lt;key, ResolvedNote[]&gt;</code>, threaded to <code>ObjectState</code> so the instrument's own render pulls it per frame.</li>
-  <li><strong>Track-row UI</strong> — added (opt-in) lanes render as uniform-height indented sub-rows via a new <code>flattenVisualRows</code> model (<code>VisualRow = track | lane</code>) in <span class="file">trackTree.ts</span>; the shown lanes come from <code>abilityLanesOf(track)</code> = declared abilities filtered to those present in <code>track.lanes</code>. The object track just gets taller. <code>computeDropTarget</code>, nest-drag, library-drag, block vertical-move, and Alt-copy-drag were all made visual-row-aware so a taller track can't desync the drag math. New <span class="file">AbilityLaneRow.tsx</span> + self-contained <span class="file">useLaneGestures.ts</span> (lane draw/move/resize).</li>
-  <li><strong>Editor lane-targeting</strong> — <code>editingBlock.laneKey?</code> (<span class="file">UIStore</span>); the store's block actions take an optional <code>laneKey</code> (writes route to <code>blocks</code> or <code>lanes[laneKey]</code>); the MIDI editor (<span class="file">PianoRollPanel</span> / <span class="file">useMidiEditorState</span> / <span class="file">useMidiBlockGestures</span> / <span class="file">MidiEditor</span>) threads it, so a lane block edits exactly like a track's.</li>
-  <li><strong>First real ability</strong> — the Cube's <strong>Shatter</strong> (<span class="file">Cube.tsx</span>): a note on its Shatter lane bursts the cube into eight fragments that fly out and reassemble over the note, velocity setting the blast radius.</li>
+  <li><strong>Skeleton</strong> - <code>AbilityLaneDef { key; label; editor?: EditorKind; color? }</code> + <code>abilities?</code> on <code>ObjectInstrumentDef</code> (<span class="file">instruments/types.ts</span>); <code>Track.lanes?: Record&lt;string, Block[]&gt;</code> (<span class="file">types.ts</span>) - keyed per ability, each a full block+notes stream (not the plan's flat <code>Block[]</code>). <code>editor</code> declared; only <code>pitched</code> wired.</li>
+  <li><strong>Ability events</strong> - <span class="file">resolve.ts</span> folds each lane into <code>ResolvedObject.abilityEvents: Map&lt;key, ResolvedNote[]&gt;</code>, threaded to <code>ObjectState</code> so the instrument's own render pulls it per frame.</li>
+  <li><strong>Track-row UI</strong> - added (opt-in) lanes render as uniform-height indented sub-rows via a new <code>flattenVisualRows</code> model (<code>VisualRow = track | lane</code>) in <span class="file">trackTree.ts</span>; the shown lanes come from <code>abilityLanesOf(track)</code> = declared abilities filtered to those present in <code>track.lanes</code>. The object track just gets taller. <code>computeDropTarget</code>, nest-drag, library-drag, block vertical-move, and Alt-copy-drag were all made visual-row-aware so a taller track can't desync the drag math. New <span class="file">AbilityLaneRow.tsx</span> + self-contained <span class="file">useLaneGestures.ts</span> (lane draw/move/resize).</li>
+  <li><strong>Editor lane-targeting</strong> - <code>editingBlock.laneKey?</code> (<span class="file">UIStore</span>); the store's block actions take an optional <code>laneKey</code> (writes route to <code>blocks</code> or <code>lanes[laneKey]</code>); the MIDI editor (<span class="file">PianoRollPanel</span> / <span class="file">useMidiEditorState</span> / <span class="file">useMidiBlockGestures</span> / <span class="file">MidiEditor</span>) threads it, so a lane block edits exactly like a track's.</li>
+  <li><strong>First real ability</strong> - the Cube's <strong>Shatter</strong> (<span class="file">Cube.tsx</span>): a note on its Shatter lane bursts the cube into eight fragments that fly out and reassemble over the note, velocity setting the blast radius.</li>
 </ol>
-<strong>The behavior is code, not a scalar namespace.</strong> Per §4.4/§4.5: the instrument's own render consumes <code>abilityEvents</code> (the <strong>code escape hatch</strong>) — abilities are bespoke and instrument-intrinsic, not generic or attachable. Circle/Triangle stay passive <code>RenderSpec</code> specs (no abilities). The declarative <code>onAbility</code> grammar remains the long-term north star, to be grown <em>from</em> real abilities like Shatter, not designed up front.</div>
+<strong>The behavior is code, not a scalar namespace.</strong> Per §4.4/§4.5: the instrument's own render consumes <code>abilityEvents</code> (the <strong>code escape hatch</strong>) - abilities are bespoke and instrument-intrinsic, not generic or attachable. Circle/Triangle stay passive <code>RenderSpec</code> specs (no abilities). The declarative <code>onAbility</code> grammar remains the long-term north star, to be grown <em>from</em> real abilities like Shatter, not designed up front.</div>
 
-<h3>Automation — parameter lanes as child tracks <span class="badge b-new">✓ shipped (4 commits)</span></h3>
+<h3>Automation - parameter lanes as child tracks <span class="badge b-new">✓ shipped (4 commits)</span></h3>
 <ul class="small">
-  <li>The third input layer (§"three layers"): <strong>params ← automation</strong>, ports ← modulators, abilities = signature moves. The plan draws automation as "a lane that drives a param value" and leaves the container open; <strong>decided: an automation track is a real CHILD TRACK</strong> (<code>type: 'automation'</code>, no instrument, <code>targetParam</code>, <code>interpolation</code>) parented to the object — mirroring the modifier-track pattern (EDAW: "a child automates its parent").</li>
+  <li>The third input layer (§"three layers"): <strong>params ← automation</strong>, ports ← modulators, abilities = signature moves. The plan draws automation as "a lane that drives a param value" and leaves the container open; <strong>decided: an automation track is a real CHILD TRACK</strong> (<code>type: 'automation'</code>, no instrument, <code>targetParam</code>, <code>interpolation</code>) parented to the object - mirroring the modifier-track pattern (EDAW: "a child automates its parent").</li>
 </ul>
 <div class="note"><strong>As-built (automation, 4 commits):</strong>
 <ol class="small">
-  <li><strong>Scaffolding</strong> — <span class="file">core/engine/automation.ts</span>: <code>extractKeyframes(blocks, bpb, min, max)</code> (each note's <em>pitch → param value</em>, pitch span <code>AUTOMATION_PITCH_MIN..MAX</code> = 36–84 → <code>[param.min, param.max]</code>) + <code>sampleLane(keyframes, beat, mode)</code> (binary-search + interpolate: step / linear / ease-in/out/in-out / exponential, endpoints held). Pure function of the beat → <strong>scrub == playback</strong>.</li>
-  <li><strong>Data model</strong> — <code>ResolvedObject.automations</code>; <span class="file">resolve.ts</span> gathers each object's <code>automation</code> child tracks into keyframe lanes; <code>computeAtBeat</code> samples per frame and <strong>overrides <code>obj.params[targetParam]</code></strong> (exactly how the matrix produces <code>portValues</code>). <code>addAutomationTrack(parentId, paramKey, paramLabel)</code>.</li>
-  <li><strong>Right-click UI</strong> — <span class="file">TrackContextMenu.tsx</span> on a track label: "Add ability track ▸" (parent's abilities) above "Add automation track ▸" (parent's params). This is also where <strong>abilities became opt-in</strong> — <code>addAbilityLane</code> + the centralised <code>abilityLanesOf</code>. An automation track can't be re-parented (locked to its object).</li>
-  <li><strong>Value editor</strong> — an automation track opens the MIDI editor in value mode: <code>generateAutomationRows</code> (rows labelled by value), the param name in the frozen corner, and an interpolation picker (<code>setTrackInterpolation</code>).</li>
+  <li><strong>Scaffolding</strong> - <span class="file">core/engine/automation.ts</span>: <code>extractKeyframes(blocks, bpb, min, max)</code> (each note's <em>pitch → param value</em>, pitch span <code>AUTOMATION_PITCH_MIN..MAX</code> = 36–84 → <code>[param.min, param.max]</code>) + <code>sampleLane(keyframes, beat, mode)</code> (binary-search + interpolate: step / linear / ease-in/out/in-out / exponential, endpoints held). Pure function of the beat → <strong>scrub == playback</strong>.</li>
+  <li><strong>Data model</strong> - <code>ResolvedObject.automations</code>; <span class="file">resolve.ts</span> gathers each object's <code>automation</code> child tracks into keyframe lanes; <code>computeAtBeat</code> samples per frame and <strong>overrides <code>obj.params[targetParam]</code></strong> (exactly how the matrix produces <code>portValues</code>). <code>addAutomationTrack(parentId, paramKey, paramLabel)</code>.</li>
+  <li><strong>Right-click UI</strong> - <span class="file">TrackContextMenu.tsx</span> on a track label: "Add ability track ▸" (parent's abilities) above "Add automation track ▸" (parent's params). This is also where <strong>abilities became opt-in</strong> - <code>addAbilityLane</code> + the centralised <code>abilityLanesOf</code>. An automation track can't be re-parented (locked to its object).</li>
+  <li><strong>Value editor</strong> - an automation track opens the MIDI editor in value mode: <code>generateAutomationRows</code> (rows labelled by value), the param name in the frozen corner, and an interpolation picker (<code>setTrackInterpolation</code>).</li>
 </ol>
-This revives the old dead stub (<code>TrackType 'automation'</code>, <code>targetParam</code>, <code>interpolation</code>, <code>generateAutomationRows</code>) — now live. Long-term the declarative spec grows an automation vocabulary too; for now it's a child-track keyframe lane.</div>
+This revives the old dead stub (<code>TrackType 'automation'</code>, <code>targetParam</code>, <code>interpolation</code>, <code>generateAutomationRows</code>) - now live. Long-term the declarative spec grows an automation vocabulary too; for now it's a child-track keyframe lane.</div>
 
-<h3>Phases 8–10 — Effects, RenderSpec, English <span class="badge b-new">later</span></h3>
+<h3>Phases 8–10 - Effects, RenderSpec, English <span class="badge b-new">later</span></h3>
 <ul class="small">
-  <li><strong>Effects (plugins) — ✓ shipped.</strong> Transform (offset/rotate/scale), Clone (echo/tile/radialSymmetry/rotationalSymmetry/linearDuplicate), and Shader (kaleidoscope/pixelate/chromaticAberration/opacity), ported from Tyler. See the as-built note below.</li>
-  <li><strong>RenderSpec — ✓ shipped:</strong> <span class="file">core/engine/renderSpec.ts</span> (interpreter + expression vocabulary); <span class="file">ObjectRenderer</span> dispatches code-vs-spec (Circle/Triangle are specs).</li>
+  <li><strong>Effects (plugins) - ✓ shipped.</strong> Transform (offset/rotate/scale), Clone (echo/tile/radialSymmetry/rotationalSymmetry/linearDuplicate), and Shader (kaleidoscope/pixelate/chromaticAberration/opacity), ported from Tyler. See the as-built note below.</li>
+  <li><strong>RenderSpec - ✓ shipped:</strong> <span class="file">core/engine/renderSpec.ts</span> (interpreter + expression vocabulary); <span class="file">ObjectRenderer</span> dispatches code-vs-spec (Circle/Triangle are specs).</li>
   <li><strong>English → spec:</strong> an LLM endpoint that emits + validates a <code>RenderSpec</code>. Only after the spec is stable. <span class="badge b-new">not started</span></li>
 </ul>
 
 <div class="note"><strong>As-built (effects).</strong> Contract widened to Tyler's <code>VisualPlugin { category: 'transform'|'clone'|'shader', params, applyTransform?, getClones?, fragmentShader? }</code> (<span class="file">plugins/types.ts</span>); chain per object in <span class="file">ObjectRenderer</span> is <strong>transform ▸ clone ▸ shader</strong>. <code>time</code> = the beat (music-synced), not wall-clock.
 <ul class="small">
-  <li><strong>Clones</strong> — <span class="file">CloneWrapper</span> React-<em>duplicates</em> the object into N groups (not InstancedMesh — matches Tyler; fine for modest N), applying <code>getClones().getTransform(i)</code> + <code>getOpacity(i)</code> per frame. 5 plugins.</li>
-  <li><strong>Shaders</strong> — <strong>Option A, per-object FBO</strong> (the plan's per-object model): <span class="file">ShaderWrapper</span> renders the object (with its world transform) into an offscreen scene + FBO via <code>createPortal</code>, runs each shader as a ping-pong fullscreen pass, and draws the result as a clip-space fullscreen overlay (depth-test off) over the 3D scene. A shaded object becomes a full-frame post-processed layer; un-shaded objects are untouched. 4 plugins.</li>
-  <li><strong>Deferred</strong> (Tyler has, we skipped): the multi-scene <code>SceneCompositor</code> + <strong>masks</strong> (not needed for per-object post-fx), instancing <strong>pools</strong> (<code>lib/three/*</code> — an instrument concern), and automating <em>effect</em> params (automation targets instrument params only so far). Enum/boolean plugin params render as numeric sliders for now.</li>
+  <li><strong>Clones</strong> - <span class="file">CloneWrapper</span> React-<em>duplicates</em> the object into N groups (not InstancedMesh - matches Tyler; fine for modest N), applying <code>getClones().getTransform(i)</code> + <code>getOpacity(i)</code> per frame. 5 plugins.</li>
+  <li><strong>Shaders</strong> - <strong>Option A, per-object FBO</strong> (the plan's per-object model): <span class="file">ShaderWrapper</span> renders the object (with its world transform) into an offscreen scene + FBO via <code>createPortal</code>, runs each shader as a ping-pong fullscreen pass, and draws the result as a clip-space fullscreen overlay (depth-test off) over the 3D scene. A shaded object becomes a full-frame post-processed layer; un-shaded objects are untouched. 4 plugins.</li>
+  <li><strong>Deferred</strong> (Tyler has, we skipped): the multi-scene <code>SceneCompositor</code> + <strong>masks</strong> (not needed for per-object post-fx), instancing <strong>pools</strong> (<code>lib/three/*</code> - an instrument concern), and automating <em>effect</em> params (automation targets instrument params only so far). Enum/boolean plugin params render as numeric sliders for now.</li>
 </ul></div>
 
 <!-- G -->
 <h2 id="inventory">G · Master file inventory</h2>
-<p>Every file this plan touches, and why. This is the mental model in one place — read it as "the engine is a new island; the existing editor barely moves."</p>
+<p>Every file this plan touches, and why. This is the mental model in one place - read it as "the engine is a new island; the existing editor barely moves."</p>
 
 <div class="tree">src/editor/
 ├─ <span class="tg-new">NEW</span> core/engine/               ★ the visual engine (new island)
@@ -584,14 +584,14 @@ This revives the old dead stub (<code>TrackType 'automation'</code>, <code>targe
 <ul>
   <li><span class="badge b-risk">risk</span> <strong>Resolve dependency edges.</strong> Incremental invalidation must follow combine-chain + routing + loop dependencies, or a stale cache renders wrong. Mitigation: build a <code>dependents</code> map at resolve; start by invalidating the edited subtree, tighten with profiling. (§D.1)</li>
   <li><span class="badge b-risk">risk</span> <strong>Engine-as-singleton vs React.</strong> Per-frame state lives outside React on purpose; the <em>only</em> React-visible signal is the object list. Get the external-store subscription right (<code>useSyncExternalStore</code> in <span class="file">VisualScene</span>) or you'll either over-render or miss new objects.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Cube refactor is load-bearing.</strong> It's both the first object def <em>and</em> the proof the engine drives rendering. Keep its mesh JSX; only move the value-production out. If phase 1 doesn't reproduce today's pulse exactly, the engine wiring is wrong — a good canary.</li>
-  <li><span class="badge b-risk">open</span> <strong>Where do routings live — on the modulator track or a separate list?</strong> Plan assumes <code>Track.targets: Routing[]</code> on the modulator (matches "the user picks a modulator + a scope"). Revisit if a routing ever needs to outlive its modulator.</li>
-  <li><span class="badge b-edit">decided</span> <strong>Abilities are a parallel <code>lanes[]</code> structure</strong> — <em>not</em> child tracks in the hierarchy. So phase 6 doesn't depend on phase 5's nesting data model (it renders the lanes array as indented sub-rows). Architecture §4.4/§7 still phrase this as open — sync them if you want one source of truth.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Cube refactor is load-bearing.</strong> It's both the first object def <em>and</em> the proof the engine drives rendering. Keep its mesh JSX; only move the value-production out. If phase 1 doesn't reproduce today's pulse exactly, the engine wiring is wrong - a good canary.</li>
+  <li><span class="badge b-risk">open</span> <strong>Where do routings live - on the modulator track or a separate list?</strong> Plan assumes <code>Track.targets: Routing[]</code> on the modulator (matches "the user picks a modulator + a scope"). Revisit if a routing ever needs to outlive its modulator.</li>
+  <li><span class="badge b-edit">decided</span> <strong>Abilities are a parallel <code>lanes[]</code> structure</strong> - <em>not</em> child tracks in the hierarchy. So phase 6 doesn't depend on phase 5's nesting data model (it renders the lanes array as indented sub-rows). Architecture §4.4/§7 still phrase this as open - sync them if you want one source of truth.</li>
   <li><span class="badge b-risk">open</span> <strong>Resolve debounce vs playback freshness.</strong> 80ms is fine while editing; force a synchronous resolve on <em>play</em> so visuals can't lag audio at the downbeat.</li>
 </ul>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Mirrors <span class="file">copy-paste-implementation-plan.html</span> in shape; derives its architecture from <span class="file">visual-architecture.html</span>. File paths are under <span class="file">src/editor/</span>. Greyscale, print-ready.</p>
+<p class="small muted">Plan only - no code changed. Mirrors <span class="file">copy-paste-implementation-plan.html</span> in shape; derives its architecture from <span class="file">visual-architecture.html</span>. File paths are under <span class="file">src/editor/</span>. Greyscale, print-ready.</p>
 
 </div>
 </body>

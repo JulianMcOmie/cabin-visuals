@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Persistence &amp; Schema Strategy — Cabin Visuals</title>
+<title>Persistence &amp; Schema Strategy - Cabin Visuals</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -80,14 +80,14 @@
 <header class="doc">
   <span class="kicker">Cabin Visuals · Persistence Design</span>
   <h1>Persistence &amp; Schema Strategy</h1>
-  <p class="sub">How to save projects to Supabase without hand-editing the schema every time the data model moves — and where the Terraform provider actually fits.</p>
+  <p class="sub">How to save projects to Supabase without hand-editing the schema every time the data model moves - and where the Terraform provider actually fits.</p>
 </header>
 
 <div class="card">
   <h3 style="margin-top:18px">Contents</h3>
   <nav class="toc">
     <a href="#tldr">★ The one-line answer (start here)</a>
-    <a href="#problem">1 · The real problem — schema drift</a>
+    <a href="#problem">1 · The real problem - schema drift</a>
     <a href="#shape">2 · A project is one big JSON document</a>
     <a href="#options">3 · The four options</a>
     <a href="#opt-jsonb">3.1 · JSONB project blob</a>
@@ -96,15 +96,15 @@
     <a href="#opt-cdk">3.4 · AWS CDK</a>
     <a href="#terraform-cdk">4 · Terraform vs CDK (your question)</a>
     <a href="#matrix">5 · Side-by-side comparison</a>
-    <a href="#rec">6 · Recommendation — the hybrid</a>
+    <a href="#rec">6 · Recommendation - the hybrid</a>
     <a href="#plan">7 · Concrete first steps</a>
     <a href="#risks">8 · Risks &amp; open questions</a>
   </nav>
 </div>
 
-<p class="lead">You want to save projects. You've used <strong>Supabase</strong> and want it again, fast. The scar tissue from last time is real: the <strong>data model changed constantly</strong> and you were in the dashboard hand-editing tables to keep up. You're asking whether there's a better way, and you lean toward the <strong>Supabase Terraform provider</strong> — "that's like CDK, right?". Short version: Terraform <em>is</em> in the same family as CDK, but it solves a different half of your problem than the half that actually hurt.</p>
+<p class="lead">You want to save projects. You've used <strong>Supabase</strong> and want it again, fast. The scar tissue from last time is real: the <strong>data model changed constantly</strong> and you were in the dashboard hand-editing tables to keep up. You're asking whether there's a better way, and you lean toward the <strong>Supabase Terraform provider</strong> - "that's like CDK, right?". Short version: Terraform <em>is</em> in the same family as CDK, but it solves a different half of your problem than the half that actually hurt.</p>
 
-<div class="rec"><strong>The one-line answer:</strong> your project is basically <em>one big JSON document</em> (<span class="file">tracks → blocks → notes</span>, plus instruments/effects/automation/abilities). Store it as a <strong>JSONB blob in Supabase</strong> and almost all of your schema churn disappears — adding a field to <code>Track</code> is a TypeScript edit, not a migration. Keep a tiny relational skeleton (a <code>projects</code> row: id, owner, title, updated_at, <code>data jsonb</code>) with <strong>RLS</strong>, manage that skeleton with <strong>Drizzle migrations</strong> (schema follows your code), and reach for <strong>Terraform</strong> only when you want the Supabase <em>project config</em> itself reproducible. Terraform is great, but it is <em>not</em> primarily a table-migration tool — it won't eliminate the thing that burned you.</p>
+<div class="rec"><strong>The one-line answer:</strong> your project is basically <em>one big JSON document</em> (<span class="file">tracks → blocks → notes</span>, plus instruments/effects/automation/abilities). Store it as a <strong>JSONB blob in Supabase</strong> and almost all of your schema churn disappears - adding a field to <code>Track</code> is a TypeScript edit, not a migration. Keep a tiny relational skeleton (a <code>projects</code> row: id, owner, title, updated_at, <code>data jsonb</code>) with <strong>RLS</strong>, manage that skeleton with <strong>Drizzle migrations</strong> (schema follows your code), and reach for <strong>Terraform</strong> only when you want the Supabase <em>project config</em> itself reproducible. Terraform is great, but it is <em>not</em> primarily a table-migration tool - it won't eliminate the thing that burned you.</p>
 
 <!-- 0 -->
 <h2 id="tldr">★ Internalize this first</h2>
@@ -142,20 +142,20 @@
     <text x="760" y="211" text-anchor="middle" font-size="10.5" fill="#565656">auth, roles, buckets…</text>
     <path d="M660,200 L594,196" fill="none" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#ar1)"/>
   </svg>
-  <figcaption>The blob absorbs model churn; Drizzle keeps the thin skeleton in sync with your TS; Terraform (optional) reproduces the Supabase project's <em>configuration</em> — a different axis than table shape.</figcaption>
+  <figcaption>The blob absorbs model churn; Drizzle keeps the thin skeleton in sync with your TS; Terraform (optional) reproduces the Supabase project's <em>configuration</em> - a different axis than table shape.</figcaption>
 </figure>
 
 <div class="keystone">
   <h3>Three things to hold in your head</h3>
   <ol>
-    <li><strong>Your pain is "schema drift", not "no database".</strong> The fix isn't a fancier deploy tool — it's <em>not having a wide relational schema to drift in the first place</em>. A document blob makes 90% of your model changes require zero schema work.</li>
-    <li><strong>"Schema-as-code" and "infra-as-code" are different axes.</strong> Migrations tools (Drizzle/Prisma/Supabase CLI) keep your <em>tables</em> in sync with your code. Terraform/CDK keep your <em>project config</em> (auth, roles, storage, edge settings) reproducible. Terraform is weak at the first axis — that's the nuance under your "that's like CDK, right?".</li>
+    <li><strong>Your pain is "schema drift", not "no database".</strong> The fix isn't a fancier deploy tool - it's <em>not having a wide relational schema to drift in the first place</em>. A document blob makes 90% of your model changes require zero schema work.</li>
+    <li><strong>"Schema-as-code" and "infra-as-code" are different axes.</strong> Migrations tools (Drizzle/Prisma/Supabase CLI) keep your <em>tables</em> in sync with your code. Terraform/CDK keep your <em>project config</em> (auth, roles, storage, edge settings) reproducible. Terraform is weak at the first axis - that's the nuance under your "that's like CDK, right?".</li>
     <li><strong>You can have both, cheaply.</strong> JSONB blob for the document + Drizzle for the few real columns gets you saving today with near-zero manual schema edits. Add Terraform later only if reproducible project config becomes worth it. Nothing here is one-way.</li>
   </ol>
 </div>
 
 <!-- 1 -->
-<h2 id="problem">1 · The real problem — name it correctly</h2>
+<h2 id="problem">1 · The real problem - name it correctly</h2>
 <p>It's tempting to frame this as "pick a database" or "pick a deploy tool." Neither is the thing that hurt. The thing that hurt was <strong>schema drift</strong>: your app's data model kept changing, and every change meant your Postgres tables were now out of sync with your code, so you opened the Supabase dashboard and hand-edited columns to catch up. That is slow, error-prone, un-versioned, and un-reproducible.</p>
 
 <p>There are two orthogonal problems hiding inside "I don't want to edit the schema by hand," and it's worth separating them because they have <em>different</em> best answers:</p>
@@ -164,11 +164,11 @@
   <thead><tr><th>Problem</th><th>What it means</th><th>Family of solution</th></tr></thead>
   <tbody>
     <tr><td><strong>Schema drift / migrations</strong></td><td>Your <em>tables</em> need to change as your data model changes, without manual dashboard edits.</td><td>Either <strong>avoid a wide schema</strong> (JSONB) or <strong>generate migrations from code</strong> (Drizzle/Prisma/Supabase CLI).</td></tr>
-    <tr><td><strong>Infra / project config drift</strong></td><td>The Supabase <em>project</em> itself — auth providers, roles, storage buckets, RLS policies, edge config — should be reproducible, not clicked together by hand.</td><td><strong>Infra-as-code</strong>: Terraform (or CDK for AWS). This is what the Terraform provider is for.</td></tr>
+    <tr><td><strong>Infra / project config drift</strong></td><td>The Supabase <em>project</em> itself - auth providers, roles, storage buckets, RLS policies, edge config - should be reproducible, not clicked together by hand.</td><td><strong>Infra-as-code</strong>: Terraform (or CDK for AWS). This is what the Terraform provider is for.</td></tr>
   </tbody>
 </table>
 
-<div class="note">Your instinct toward Terraform is a good instinct aimed at the <em>second</em> problem. But the pain you described — editing columns every time the model changes — is the <em>first</em> problem. Terraform's table support exists but is deliberately thin (more in §3.3), so it won't be the thing that saves you here. The good news: the first problem has an even easier fix for a project shaped like yours.</div>
+<div class="note">Your instinct toward Terraform is a good instinct aimed at the <em>second</em> problem. But the pain you described - editing columns every time the model changes - is the <em>first</em> problem. Terraform's table support exists but is deliberately thin (more in §3.3), so it won't be the thing that saves you here. The good news: the first problem has an even easier fix for a project shaped like yours.</div>
 
 <!-- 2 -->
 <h2 id="shape">2 · A visualizer project is one big JSON document</h2>
@@ -189,7 +189,7 @@
   <div class="figtitle">Two ways to store the same project</div>
   <svg viewBox="0 0 880 300" role="img" aria-label="Relational versus document storage">
     <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <text x="30" y="24" font-size="12" font-weight="700" fill="#141414">A · Normalized relational (many tables — drifts constantly)</text>
+    <text x="30" y="24" font-size="12" font-weight="700" fill="#141414">A · Normalized relational (many tables - drifts constantly)</text>
     <rect x="30" y="36" width="110" height="34" rx="5" fill="#ffffff" stroke="#141414"/><text x="85" y="57" text-anchor="middle" font-size="11" fill="#141414">projects</text>
     <rect x="170" y="36" width="110" height="34" rx="5" fill="#ffffff" stroke="#141414"/><text x="225" y="57" text-anchor="middle" font-size="11" fill="#141414">tracks</text>
     <rect x="310" y="36" width="110" height="34" rx="5" fill="#ffffff" stroke="#141414"/><text x="365" y="57" text-anchor="middle" font-size="11" fill="#141414">blocks</text>
@@ -204,7 +204,7 @@
     <rect x="30" y="86" width="820" height="44" rx="6" fill="#ffffff" stroke="#6a6a6a" stroke-width="1.2" stroke-dasharray="5 4"/>
     <text x="440" y="106" text-anchor="middle" font-size="11.5" fill="#565656">Add a field to Track → ALTER TABLE. New concept (lanes, laneMeta, tags) → new table + FKs + a migration.</text>
     <text x="440" y="123" text-anchor="middle" font-size="11.5" fill="#565656">Every model change touches the database. This is the drift that burned you.</text>
-    <text x="30" y="176" font-size="12" font-weight="700" fill="#141414">B · Document blob (one column — absorbs churn)</text>
+    <text x="30" y="176" font-size="12" font-weight="700" fill="#141414">B · Document blob (one column - absorbs churn)</text>
     <rect x="30" y="188" width="250" height="76" rx="6" fill="#fff" stroke="#141414" stroke-width="1.6"/>
     <text x="155" y="210" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">projects</text>
     <text x="46" y="230" font-size="11" fill="#565656">id · owner · title · updated_at</text>
@@ -218,14 +218,14 @@
   <figcaption>Option A gives you queryability you don't need at the cost of a migration on every model change. Option B trades cross-row queryability (which you don't need) for near-zero schema churn (which you badly want).</figcaption>
 </figure>
 
-<div class="rec"><strong>This reframing is most of the answer.</strong> The reason last time hurt is that a wide relational schema forces the database to know the shape of your data — so every time the shape changes, the database has to change too. A JSONB blob lets the database stay ignorant of the shape. For a single-writer, load-whole/save-whole creative document, that's not a hack; it's the correct model.</div>
+<div class="rec"><strong>This reframing is most of the answer.</strong> The reason last time hurt is that a wide relational schema forces the database to know the shape of your data - so every time the shape changes, the database has to change too. A JSONB blob lets the database stay ignorant of the shape. For a single-writer, load-whole/save-whole creative document, that's not a hack; it's the correct model.</div>
 
 <!-- 3 -->
 <h2 id="options">3 · The four options, honestly</h2>
 <p>Four candidates. For each: what it is, a small diagram, and a straight pros/cons pass.</p>
 
 <div class="comp">
-<h3 id="opt-jsonb">3.1 — JSONB document column <span class="badge b-rec">recommended core</span></h3>
+<h3 id="opt-jsonb">3.1 - JSONB document column <span class="badge b-rec">recommended core</span></h3>
 <p>Store the entire serialized project in a single <code>jsonb</code> column. The relational schema is a stub: one <code>projects</code> table with identity/ownership columns and the blob. Adding, removing, or restructuring anything inside the document is a code change, never a schema change.</p>
 
 <pre><code><span class="k">create table</span> projects (
@@ -242,30 +242,30 @@
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Pros</h4>
     <ul class="small">
-      <li><strong>Near-zero schema churn</strong> — the entire class of problem you hit last time evaporates. Model changes are TS-only.</li>
-      <li><strong>Fastest to ship</strong> — one table, one policy, a <code>save()</code>/<code>load()</code> pair. You could be persisting today.</li>
-      <li><strong>Trivial serialization</strong> — your store is already plain objects; <code>JSON.stringify(state)</code> essentially is the payload.</li>
-      <li><strong>Versioning is easy</strong> — add a <code>schemaVersion</code> field inside the JSON and migrate in app code on load. No DB migration to reshape old rows.</li>
-      <li><strong>Still Supabase</strong> — RLS, auth, realtime, storage all work unchanged.</li>
+      <li><strong>Near-zero schema churn</strong> - the entire class of problem you hit last time evaporates. Model changes are TS-only.</li>
+      <li><strong>Fastest to ship</strong> - one table, one policy, a <code>save()</code>/<code>load()</code> pair. You could be persisting today.</li>
+      <li><strong>Trivial serialization</strong> - your store is already plain objects; <code>JSON.stringify(state)</code> essentially is the payload.</li>
+      <li><strong>Versioning is easy</strong> - add a <code>schemaVersion</code> field inside the JSON and migrate in app code on load. No DB migration to reshape old rows.</li>
+      <li><strong>Still Supabase</strong> - RLS, auth, realtime, storage all work unchanged.</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">✕ Cons</h4>
     <ul class="small">
-      <li><strong>No cheap cross-project queries</strong> — "every note above velocity 100" means scanning JSON. You don't need this today, and Postgres can index into JSONB if you ever do.</li>
-      <li><strong>Whole-document writes</strong> — you save the entire project, not a delta. Fine at your sizes; not fine for Google-Docs-style multi-writer editing (not your case).</li>
-      <li><strong>Weaker DB-level validation</strong> — Postgres won't enforce field types inside the blob. Mitigate with a <strong>Zod</strong> parse on load/save (also gives you migration hooks).</li>
-      <li><strong>Big rows</strong> — very large projects become large JSON. Postgres handles multi-MB JSONB fine; revisit only if projects get huge.</li>
+      <li><strong>No cheap cross-project queries</strong> - "every note above velocity 100" means scanning JSON. You don't need this today, and Postgres can index into JSONB if you ever do.</li>
+      <li><strong>Whole-document writes</strong> - you save the entire project, not a delta. Fine at your sizes; not fine for Google-Docs-style multi-writer editing (not your case).</li>
+      <li><strong>Weaker DB-level validation</strong> - Postgres won't enforce field types inside the blob. Mitigate with a <strong>Zod</strong> parse on load/save (also gives you migration hooks).</li>
+      <li><strong>Big rows</strong> - very large projects become large JSON. Postgres handles multi-MB JSONB fine; revisit only if projects get huge.</li>
     </ul>
   </div>
 </div>
 </div>
 
 <div class="comp">
-<h3 id="opt-migrations">3.2 — Supabase + a migrations tool <span class="badge b-borrow">recommended for the skeleton</span></h3>
+<h3 id="opt-migrations">3.2 - Supabase + a migrations tool <span class="badge b-borrow">recommended for the skeleton</span></h3>
 <p>Keep a real (small) relational schema, but never hand-edit it. A migrations tool turns schema changes into <em>versioned, code-authored files</em> you apply with a command. Two flavors:</p>
 <ul class="small">
-  <li><strong>Supabase CLI migrations</strong> — you write SQL migration files; <code>supabase db push</code> applies them; they live in your repo. The schema is versioned, but you still hand-author the SQL.</li>
-  <li><strong>Drizzle (or Prisma)</strong> — you define the schema in <em>TypeScript</em>, and the tool <strong>generates the migration from the diff</strong> between your code and the DB. The schema <em>follows your code</em>. Drizzle is the lighter, closer-to-SQL choice and shares your TS types, so it pairs naturally with a Next.js app.</li>
+  <li><strong>Supabase CLI migrations</strong> - you write SQL migration files; <code>supabase db push</code> applies them; they live in your repo. The schema is versioned, but you still hand-author the SQL.</li>
+  <li><strong>Drizzle (or Prisma)</strong> - you define the schema in <em>TypeScript</em>, and the tool <strong>generates the migration from the diff</strong> between your code and the DB. The schema <em>follows your code</em>. Drizzle is the lighter, closer-to-SQL choice and shares your TS types, so it pairs naturally with a Next.js app.</li>
 </ul>
 
 <figure class="fig">
@@ -285,7 +285,7 @@
     <rect x="528" y="40" width="200" height="60" rx="6" fill="#141414"/>
     <text x="628" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Supabase Postgres</text>
     <text x="628" y="84" text-anchor="middle" font-size="10.5" fill="#ffffff">no dashboard clicking</text>
-    <text x="374" y="128" text-anchor="middle" font-size="10.5" fill="#565656">Every schema change is a versioned file in git — reviewable, reversible, reproducible across environments.</text>
+    <text x="374" y="128" text-anchor="middle" font-size="10.5" fill="#565656">Every schema change is a versioned file in git - reviewable, reversible, reproducible across environments.</text>
   </svg>
   <figcaption>The key difference from last time: you never touch the dashboard. You change code, generate a migration, apply it. With Drizzle the migration is auto-derived from your TS diff.</figcaption>
 </figure>
@@ -293,28 +293,28 @@
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Pros</h4>
     <ul class="small">
-      <li><strong>No hand-editing</strong> — schema changes are code + a command, versioned in git.</li>
-      <li><strong>Real relational power</strong> — proper columns, indexes, FKs, DB-level constraints for the things that <em>are</em> relational (users, project list, sharing).</li>
-      <li><strong>Drizzle shares your TS types</strong> — one source of truth between app and DB for the relational parts.</li>
-      <li><strong>Reproducible</strong> — apply the same migrations to dev/prod/CI.</li>
+      <li><strong>No hand-editing</strong> - schema changes are code + a command, versioned in git.</li>
+      <li><strong>Real relational power</strong> - proper columns, indexes, FKs, DB-level constraints for the things that <em>are</em> relational (users, project list, sharing).</li>
+      <li><strong>Drizzle shares your TS types</strong> - one source of truth between app and DB for the relational parts.</li>
+      <li><strong>Reproducible</strong> - apply the same migrations to dev/prod/CI.</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">✕ Cons</h4>
     <ul class="small">
-      <li><strong>Still a migration per model change</strong> if you model the <em>whole document</em> relationally — you've automated the pain, not removed it.</li>
-      <li><strong>More upfront wiring</strong> than the blob — a schema file, a migration workflow, a query layer.</li>
-      <li><strong>Two type systems to reconcile</strong> if you also keep the app's own types — mitigated by generating one from the other.</li>
+      <li><strong>Still a migration per model change</strong> if you model the <em>whole document</em> relationally - you've automated the pain, not removed it.</li>
+      <li><strong>More upfront wiring</strong> than the blob - a schema file, a migration workflow, a query layer.</li>
+      <li><strong>Two type systems to reconcile</strong> if you also keep the app's own types - mitigated by generating one from the other.</li>
     </ul>
   </div>
 </div>
-<div class="note">The winning move isn't blob <em>or</em> migrations — it's <strong>both, on different data</strong>. Use Drizzle migrations for the thin relational skeleton (which changes rarely), and the JSONB blob for the document (which changes constantly). The migration tool then only ever touches the stable part, so migrations become rare instead of per-edit.</div>
+<div class="note">The winning move isn't blob <em>or</em> migrations - it's <strong>both, on different data</strong>. Use Drizzle migrations for the thin relational skeleton (which changes rarely), and the JSONB blob for the document (which changes constantly). The migration tool then only ever touches the stable part, so migrations become rare instead of per-edit.</div>
 </div>
 
 <div class="comp">
-<h3 id="opt-terraform">3.3 — Supabase Terraform provider <span class="badge b-future">right tool, different job</span></h3>
-<p>The <a href="https://registry.terraform.io/providers/supabase/supabase/latest/docs">Supabase Terraform provider</a> is <strong>declarative infrastructure-as-code</strong> for the Supabase <em>project itself</em>. You describe the desired state of your project in HCL, and <code>terraform apply</code> reconciles the live project to match — creating what's missing, changing what drifted, deleting what you removed.</p>
+<h3 id="opt-terraform">3.3 - Supabase Terraform provider <span class="badge b-future">right tool, different job</span></h3>
+<p>The <a href="https://registry.terraform.io/providers/supabase/supabase/latest/docs">Supabase Terraform provider</a> is <strong>declarative infrastructure-as-code</strong> for the Supabase <em>project itself</em>. You describe the desired state of your project in HCL, and <code>terraform apply</code> reconciles the live project to match - creating what's missing, changing what drifted, deleting what you removed.</p>
 
-<pre><code><span class="c"># HCL — declarative desired state of the PROJECT</span>
+<pre><code><span class="c"># HCL - declarative desired state of the PROJECT</span>
 <span class="k">resource</span> <span class="s">"supabase_project"</span> <span class="s">"cabin"</span> {
   organization_id = <span class="k">var</span>.org_id
   name            = <span class="s">"cabin-visuals"</span>
@@ -327,63 +327,63 @@
   api  = jsonencode({ <span class="c">/* exposed schemas, max rows … */</span> })
 }</code></pre>
 
-<p><strong>What it's genuinely good at:</strong> project creation, auth configuration, API/settings, environment reproducibility — the stuff you'd otherwise click through in the dashboard once and forget how you set up. If you ever want to stand up a staging project identical to prod, or onboard a collaborator's environment, this is exactly right.</p>
+<p><strong>What it's genuinely good at:</strong> project creation, auth configuration, API/settings, environment reproducibility - the stuff you'd otherwise click through in the dashboard once and forget how you set up. If you ever want to stand up a staging project identical to prod, or onboard a collaborator's environment, this is exactly right.</p>
 
-<div class="warn"><strong>The nuance behind "that's like CDK, right?"</strong> Terraform <em>is</em> declarative IaC like CDK (§4). But the provider is <strong>not primarily a table-migration tool</strong>. Managing your <code>tracks</code>/<code>notes</code> table shape — the exact thing that burned you — is not what it's built for; database schema is generally handled through migrations (Supabase CLI / Drizzle) applied over a connection, not through Terraform resources. So adopting Terraform would give you reproducible <em>project config</em> and still leave you needing a migrations story (or the blob) for the <em>schema-drift</em> problem. It solves the second problem in §1, not the first.</div>
+<div class="warn"><strong>The nuance behind "that's like CDK, right?"</strong> Terraform <em>is</em> declarative IaC like CDK (§4). But the provider is <strong>not primarily a table-migration tool</strong>. Managing your <code>tracks</code>/<code>notes</code> table shape - the exact thing that burned you - is not what it's built for; database schema is generally handled through migrations (Supabase CLI / Drizzle) applied over a connection, not through Terraform resources. So adopting Terraform would give you reproducible <em>project config</em> and still leave you needing a migrations story (or the blob) for the <em>schema-drift</em> problem. It solves the second problem in §1, not the first.</div>
 
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Pros</h4>
     <ul class="small">
-      <li><strong>Reproducible project config</strong> — auth, settings, org/project setup as versioned code.</li>
-      <li><strong>Declarative reconcile</strong> — <code>terraform plan</code> shows the diff, <code>apply</code> converges to it. Same mental model you liked in CDK.</li>
-      <li><strong>Multi-environment</strong> — spin up identical staging/prod projects.</li>
-      <li><strong>Auditable</strong> — the whole project's config lives in git.</li>
+      <li><strong>Reproducible project config</strong> - auth, settings, org/project setup as versioned code.</li>
+      <li><strong>Declarative reconcile</strong> - <code>terraform plan</code> shows the diff, <code>apply</code> converges to it. Same mental model you liked in CDK.</li>
+      <li><strong>Multi-environment</strong> - spin up identical staging/prod projects.</li>
+      <li><strong>Auditable</strong> - the whole project's config lives in git.</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">✕ Cons</h4>
     <ul class="small">
-      <li><strong>Doesn't solve your actual pain</strong> — table/column drift is still a migrations job, not a Terraform job.</li>
-      <li><strong>Overhead for a solo hobby project</strong> — state files, provider auth, tokens; real value shows up with multiple environments/people.</li>
+      <li><strong>Doesn't solve your actual pain</strong> - table/column drift is still a migrations job, not a Terraform job.</li>
+      <li><strong>Overhead for a solo hobby project</strong> - state files, provider auth, tokens; real value shows up with multiple environments/people.</li>
       <li><strong>Learning curve + ceremony</strong> for something you'd run rarely.</li>
-      <li><strong>Not where the fast path is</strong> — it's an add-on, not the thing that gets you saving projects sooner.</li>
+      <li><strong>Not where the fast path is</strong> - it's an add-on, not the thing that gets you saving projects sooner.</li>
     </ul>
   </div>
 </div>
 </div>
 
 <div class="comp">
-<h3 id="opt-cdk">3.4 — AWS CDK <span class="badge b-risk">heavier, not Supabase</span></h3>
+<h3 id="opt-cdk">3.4 - AWS CDK <span class="badge b-risk">heavier, not Supabase</span></h3>
 <p>AWS CDK defines cloud infrastructure in real TypeScript, which it <em>synthesizes</em> into CloudFormation templates that AWS provisions. It's powerful and it's the tool you'd reach for if your backend were AWS-native (RDS/Aurora + Lambda + API Gateway + Cognito, etc.).</p>
 
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Pros</h4>
     <ul class="small">
-      <li><strong>Write infra in TypeScript</strong> — loops, conditionals, real abstractions, shared types with your app.</li>
-      <li><strong>Deep AWS coverage</strong> — if you want the full AWS toolbox, nothing beats it.</li>
+      <li><strong>Write infra in TypeScript</strong> - loops, conditionals, real abstractions, shared types with your app.</li>
+      <li><strong>Deep AWS coverage</strong> - if you want the full AWS toolbox, nothing beats it.</li>
       <li><strong>Battle-tested</strong> for serious production infra.</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">✕ Cons</h4>
     <ul class="small">
-      <li><strong>It's not Supabase</strong> — you'd be rebuilding auth, RLS, the DB, and the client SDK you already know and want to reuse. Against your explicit goal.</li>
-      <li><strong>Heaviest option by far</strong> — CloudFormation, IAM, VPCs, bootstrapping. Enormous overhead for saving a JSON document.</li>
-      <li><strong>Slowest to first save</strong> — the opposite of "fast."</li>
-      <li><strong>Still needs a migrations story</strong> for the DB — CDK provisions the database, it doesn't manage table shape either.</li>
+      <li><strong>It's not Supabase</strong> - you'd be rebuilding auth, RLS, the DB, and the client SDK you already know and want to reuse. Against your explicit goal.</li>
+      <li><strong>Heaviest option by far</strong> - CloudFormation, IAM, VPCs, bootstrapping. Enormous overhead for saving a JSON document.</li>
+      <li><strong>Slowest to first save</strong> - the opposite of "fast."</li>
+      <li><strong>Still needs a migrations story</strong> for the DB - CDK provisions the database, it doesn't manage table shape either.</li>
     </ul>
   </div>
 </div>
-<div class="note">CDK is a fine tool aimed at a problem you don't have. You want persistence for a creative app you already picked Supabase for. Unless you're planning to leave Supabase for AWS-native infra, CDK is out of scope — included here only to answer the comparison you raised.</div>
+<div class="note">CDK is a fine tool aimed at a problem you don't have. You want persistence for a creative app you already picked Supabase for. Unless you're planning to leave Supabase for AWS-native infra, CDK is out of scope - included here only to answer the comparison you raised.</div>
 </div>
 
 <!-- 4 -->
-<h2 id="terraform-cdk">4 · Terraform vs CDK — the family resemblance</h2>
-<p>Your intuition — "Terraform is like CDK" — is correct at the level that matters: <strong>both are infrastructure-as-code that reconcile a desired state.</strong> You describe what you want; the tool figures out the create/update/delete steps to get there, and can show you a plan/diff first. The differences are in <em>how you author</em> and <em>what runs</em>:</p>
+<h2 id="terraform-cdk">4 · Terraform vs CDK - the family resemblance</h2>
+<p>Your intuition - "Terraform is like CDK" - is correct at the level that matters: <strong>both are infrastructure-as-code that reconcile a desired state.</strong> You describe what you want; the tool figures out the create/update/delete steps to get there, and can show you a plan/diff first. The differences are in <em>how you author</em> and <em>what runs</em>:</p>
 
 <table>
   <thead><tr><th></th><th>Terraform</th><th>AWS CDK</th></tr></thead>
   <tbody>
-    <tr><td>Model</td><td>Declarative IaC — you state the end result</td><td>Declarative IaC — but authored imperative-ish</td></tr>
-    <tr><td>Authoring language</td><td><strong>HCL</strong> (a purpose-built config language)</td><td><strong>TypeScript</strong> (or Python/Java/Go) — real code with loops &amp; abstractions</td></tr>
+    <tr><td>Model</td><td>Declarative IaC - you state the end result</td><td>Declarative IaC - but authored imperative-ish</td></tr>
+    <tr><td>Authoring language</td><td><strong>HCL</strong> (a purpose-built config language)</td><td><strong>TypeScript</strong> (or Python/Java/Go) - real code with loops &amp; abstractions</td></tr>
     <tr><td>What actually executes</td><td>Terraform core diffs state and calls provider APIs directly</td><td>Code <strong>synthesizes CloudFormation</strong>, which AWS then provisions</td></tr>
     <tr><td>Cloud scope</td><td>Multi-cloud via providers (incl. a <strong>Supabase provider</strong>)</td><td>AWS-only</td></tr>
     <tr><td>State</td><td>Explicit state file (local or remote)</td><td>State lives in CloudFormation stacks</td></tr>
@@ -412,20 +412,20 @@
     <path d="M628,162 L690,162" stroke="#141414" stroke-width="1.4" marker-end="url(#ar4)"/>
     <rect x="692" y="140" width="100" height="44" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.4"/><text x="742" y="167" text-anchor="middle" font-size="11" fill="#141414">AWS</text>
   </svg>
-  <figcaption>Both take a desired state and reconcile it. Terraform speaks HCL to provider APIs (including Supabase's); CDK compiles TypeScript down to CloudFormation, which AWS executes. Same family — your instinct was right.</figcaption>
+  <figcaption>Both take a desired state and reconcile it. Terraform speaks HCL to provider APIs (including Supabase's); CDK compiles TypeScript down to CloudFormation, which AWS executes. Same family - your instinct was right.</figcaption>
 </figure>
 
-<div class="rec"><strong>So: yes, they're cousins.</strong> If you like the declarative-reconcile model, the Supabase Terraform provider gives you exactly that <em>for your Supabase project config</em>. Just don't expect it to manage your table shape — that's the one thing that's still a migrations job. It's a great tool pointed slightly to the side of your pain.</div>
+<div class="rec"><strong>So: yes, they're cousins.</strong> If you like the declarative-reconcile model, the Supabase Terraform provider gives you exactly that <em>for your Supabase project config</em>. Just don't expect it to manage your table shape - that's the one thing that's still a migrations job. It's a great tool pointed slightly to the side of your pain.</div>
 
 <!-- 5 -->
 <h2 id="matrix">5 · Side-by-side</h2>
 <table>
   <thead><tr><th>Dimension</th><th>JSONB blob</th><th>Supabase + migrations</th><th>Terraform provider</th><th>AWS CDK</th></tr></thead>
   <tbody>
-    <tr><td>Solves schema drift?</td><td><strong>Yes — removes it</strong></td><td>Yes — automates it</td><td>No (not its job)</td><td>No (not its job)</td></tr>
+    <tr><td>Solves schema drift?</td><td><strong>Yes - removes it</strong></td><td>Yes - automates it</td><td>No (not its job)</td><td>No (not its job)</td></tr>
     <tr><td>Time to first save</td><td><strong>Hours</strong></td><td>A day-ish</td><td>Add-on, N/A alone</td><td>Days+</td></tr>
     <tr><td>Manual dashboard edits</td><td><strong>Almost none</strong></td><td>None</td><td>None (config)</td><td>None</td></tr>
-    <tr><td>Reproducible project config</td><td>No</td><td>Partly (SQL)</td><td><strong>Yes — its strength</strong></td><td>Yes (AWS)</td></tr>
+    <tr><td>Reproducible project config</td><td>No</td><td>Partly (SQL)</td><td><strong>Yes - its strength</strong></td><td>Yes (AWS)</td></tr>
     <tr><td>Cross-project queries</td><td>Weak (JSON scan)</td><td><strong>Strong</strong></td><td>N/A</td><td>N/A</td></tr>
     <tr><td>Keeps you on Supabase</td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td><strong>Yes</strong></td><td>No</td></tr>
     <tr><td>Overhead for a solo project</td><td><strong>Lowest</strong></td><td>Low–medium</td><td>Medium</td><td>Highest</td></tr>
@@ -434,16 +434,16 @@
 </table>
 
 <!-- 6 -->
-<h2 id="rec">6 · Recommendation — the pragmatic hybrid</h2>
+<h2 id="rec">6 · Recommendation - the pragmatic hybrid</h2>
 <p>For a fast-moving creative project whose data model is essentially one document, the fastest path with near-zero manual schema work is:</p>
 
 <div class="keystone">
   <h3>The stack</h3>
   <ol>
-    <li><strong>Store the project as a JSONB blob in Supabase</strong>, in a thin <code>projects</code> table (<code>id · owner · title · updated_at · data jsonb</code>) with <strong>RLS</strong> scoped to the owner. This absorbs the schema drift that hurt last time — model changes become TypeScript edits, not migrations.</li>
-    <li><strong>Wrap it in a thin typed client</strong> — a small <code>saveProject()</code>/<code>loadProject()</code> pair that <code>JSON.stringify</code>s the store and validates on load with <strong>Zod</strong> against your <span class="file">types.ts</span>. The Zod parse is also where you run <code>schemaVersion</code> upgrades in app code.</li>
-    <li><strong>Use Drizzle migrations for the few real relational columns</strong> — the <code>projects</code> skeleton, and later any genuinely relational tables (users, sharing, a project index). The schema follows your TypeScript; you generate + apply migrations, never touch the dashboard. Because the document lives in the blob, these migrations are <em>rare</em>.</li>
-    <li><strong>Add the Terraform provider later, if and when you want reproducible project config</strong> — auth providers, settings, a staging environment. It's the right home for your "declarative like CDK" instinct, but it's an <em>enhancement</em>, not the critical path, and it won't reduce table-migration work by itself.</li>
+    <li><strong>Store the project as a JSONB blob in Supabase</strong>, in a thin <code>projects</code> table (<code>id · owner · title · updated_at · data jsonb</code>) with <strong>RLS</strong> scoped to the owner. This absorbs the schema drift that hurt last time - model changes become TypeScript edits, not migrations.</li>
+    <li><strong>Wrap it in a thin typed client</strong> - a small <code>saveProject()</code>/<code>loadProject()</code> pair that <code>JSON.stringify</code>s the store and validates on load with <strong>Zod</strong> against your <span class="file">types.ts</span>. The Zod parse is also where you run <code>schemaVersion</code> upgrades in app code.</li>
+    <li><strong>Use Drizzle migrations for the few real relational columns</strong> - the <code>projects</code> skeleton, and later any genuinely relational tables (users, sharing, a project index). The schema follows your TypeScript; you generate + apply migrations, never touch the dashboard. Because the document lives in the blob, these migrations are <em>rare</em>.</li>
+    <li><strong>Add the Terraform provider later, if and when you want reproducible project config</strong> - auth providers, settings, a staging environment. It's the right home for your "declarative like CDK" instinct, but it's an <em>enhancement</em>, not the critical path, and it won't reduce table-migration work by itself.</li>
   </ol>
 </div>
 
@@ -456,7 +456,7 @@
     <text x="210" y="100" text-anchor="middle" font-size="11.5" fill="#565656">tags · routings · plugins · lanes</text>
     <text x="210" y="120" text-anchor="middle" font-size="11.5" fill="#565656">automation · abilities · laneMeta</text>
     <rect x="60" y="138" width="300" height="40" rx="6" fill="#141414"/>
-    <text x="210" y="163" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">data jsonb — zero migrations</text>
+    <text x="210" y="163" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">data jsonb - zero migrations</text>
     <rect x="420" y="30" width="380" height="80" rx="8" fill="#fff" stroke="#141414" stroke-width="1.6"/>
     <text x="610" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">CHANGES RARELY → Drizzle</text>
     <text x="610" y="78" text-anchor="middle" font-size="11.5" fill="#565656">id · owner · title · updated_at</text>
@@ -469,7 +469,7 @@
   <figcaption>Match the tool to the rate of change. The fast-moving document goes in the blob (no schema). The slow-moving relational skeleton goes through Drizzle. The project config, if you want it reproducible, goes through Terraform.</figcaption>
 </figure>
 
-<div class="rec"><strong>Why this and not "just Terraform":</strong> respecting your lean — Terraform is genuinely good and it <em>is</em> in CDK's family, so keep it in your back pocket for reproducible project config. But it doesn't touch the schema-drift pain, so leading with it would leave your actual problem unsolved while adding ceremony. The blob solves the pain outright; Drizzle handles the rare real migrations; Terraform slots in when reproducibility (not persistence) is what you want. That ordering gets you saving projects the soonest with the fewest manual schema edits — which is exactly what you asked for.</div>
+<div class="rec"><strong>Why this and not "just Terraform":</strong> respecting your lean - Terraform is genuinely good and it <em>is</em> in CDK's family, so keep it in your back pocket for reproducible project config. But it doesn't touch the schema-drift pain, so leading with it would leave your actual problem unsolved while adding ceremony. The blob solves the pain outright; Drizzle handles the rare real migrations; Terraform slots in when reproducibility (not persistence) is what you want. That ordering gets you saving projects the soonest with the fewest manual schema edits - which is exactly what you asked for.</div>
 
 <!-- 7 -->
 <h2 id="plan">7 · Concrete first steps</h2>
@@ -487,7 +487,7 @@
   <li><span class="badge b-risk">risk</span><strong>Blob validation drift.</strong> Postgres won't police the JSON's shape, so a bad write could persist a malformed document. Mitigation: a <strong>Zod parse on every save and load</strong>, and a <code>schemaVersion</code> with in-app upgrade functions so old saves keep loading.</li>
   <li><span class="badge b-risk">risk</span><strong>Whole-document writes &amp; concurrency.</strong> Saving the entire project is fine for one editor but clobbers concurrent edits. Fine today (single-writer). If multi-writer ever matters, that's a different architecture (CRDT/delta sync), not a schema tweak.</li>
   <li><span class="badge b-risk">open</span><strong>How much to pull out of the blob.</strong> Title and <code>updated_at</code> clearly belong as real columns (for a project list without parsing every blob). Anything else you want to <em>list or sort by</em> should be promoted to a column. Decide the list-view fields early.</li>
-  <li><span class="badge b-risk">open</span><strong>Autosave cadence &amp; history.</strong> Debounced autosave vs explicit save; whether to keep version snapshots (cheap with a blob — insert a new row or a <code>project_versions</code> table). Easy to add later precisely because it's a document.</li>
+  <li><span class="badge b-risk">open</span><strong>Autosave cadence &amp; history.</strong> Debounced autosave vs explicit save; whether to keep version snapshots (cheap with a blob - insert a new row or a <code>project_versions</code> table). Easy to add later precisely because it's a document.</li>
   <li><span class="badge b-risk">risk</span><strong>Terraform scope creep.</strong> If you do adopt Terraform, resist trying to manage table schema through it. Keep a clean line: Terraform = project config, Drizzle = table schema, blob = document. Blurring that line reintroduces the exact friction you're trying to escape.</li>
   <li><span class="badge b-risk">open</span><strong>Row size ceiling.</strong> Very large projects mean large JSONB rows. Postgres is comfortable into the multi-MB range, but if projects balloon, consider offloading the blob to Supabase Storage and keeping only metadata in the row.</li>
 </ul>

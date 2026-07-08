@@ -43,7 +43,7 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
 /**
  * Drag a library instrument into the track label column to add a track there. Uses
  * the exact same drop logic as the in-timeline nest-drag (computeDropTarget) so you
- * can drop a new instrument as a sibling, nested into a track, or at the top level —
+ * can drop a new instrument as a sibling, nested into a track, or at the top level -
  * the shared drop indicator (UIStore.trackDrop) shows where it'll land. A floating
  * ghost follows the cursor; a pure click does nothing (a movement threshold gates it).
  */

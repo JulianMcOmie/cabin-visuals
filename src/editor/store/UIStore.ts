@@ -11,7 +11,7 @@ interface UIState {
   setSelectedTrackId: (id: string | null) => void;
 
   // Parent tracks collapsed in the timeline (their descendant rows are hidden). Pure
-  // view state — collapsed tracks still resolve and render in the 3D scene.
+  // view state - collapsed tracks still resolve and render in the 3D scene.
   collapsedTrackIds: Set<string>
   setTrackCollapsed: (id: string, collapsed: boolean) => void
 
@@ -49,19 +49,19 @@ interface UIState {
   tracksScrollTop: number
   setTracksScroll: (left: number, top: number) => void
 
-  // Live drop indicator for a track drag — shared by the in-timeline nest-drag and a
+  // Live drop indicator for a track drag - shared by the in-timeline nest-drag and a
   // library instrument being dragged in (which is owned by a sibling component, so the
   // indicator is bridged here for the timeline to render). null = no drag in progress.
   // `activeId` is the row being moved (dimmed); only set for an existing-track drag.
   trackDrop: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null
   setTrackDrop: (v: { activeId?: string; line: { top: number; left: number } | null; intoId: string | null } | null) => void
 
-  // True while an effect is being dragged from the library — the Track Editor uses it
+  // True while an effect is being dragged from the library - the Track Editor uses it
   // to switch to its Effects tab and highlight the drop zone.
   effectDragging: boolean
   setEffectDragging: (v: boolean) => void
 
-  // The open project's row name (set at load) — display-only editor chrome, e.g.
+  // The open project's row name (set at load) - display-only editor chrome, e.g.
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
   setProjectName: (name: string | null) => void

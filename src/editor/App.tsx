@@ -68,7 +68,7 @@ function Scene() {
 // The visual panel: the canvas plus a fullscreen toggle (button or F).
 // Fullscreen targets the panel div, so the beat overlay and this button ride
 // along; R3F resizes to the new box on its own, and the aspect-aware
-// instruments re-compose — the same path the export pin exercises.
+// instruments re-compose - the same path the export pin exercises.
 function VisualPanel() {
   const panelRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -81,7 +81,7 @@ function VisualPanel() {
 
   const toggle = () => {
     if (document.fullscreenElement) void document.exitFullscreen()
-    // Denied requests (kiosk/embedded contexts) fail quietly — the button just does nothing.
+    // Denied requests (kiosk/embedded contexts) fail quietly - the button just does nothing.
     else void panelRef.current?.requestFullscreen().catch(() => {})
   }
 
@@ -127,7 +127,7 @@ function BeatOverlay() {
 }
 
 // The project name in the top bar: double-click to rename (same contract as
-// track rename — Enter/blur commits, Escape cancels). The name is a spine
+// track rename - Enter/blur commits, Escape cancels). The name is a spine
 // column, not part of the autosaved document, so the commit writes it through
 // projectStorage.rename when a project row is bound; in unsaved demo mode the
 // rename is local-only.
@@ -180,13 +180,13 @@ function EditableProjectName() {
   )
 }
 
-// In ?template= demo mode nothing persists — say so, and point at signup.
+// In ?template= demo mode nothing persists - say so, and point at signup.
 function TemplateDemoChip() {
   const search = useSearchParams()
   if (search.get('project') || !search.get('template')) return null
   return (
     <span className="text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
-      Demo project — {' '}
+      Demo project - {' '}
       <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
         sign up to save it
       </Link>
@@ -218,7 +218,7 @@ function Header() {
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
-  // Export: capability-gated (Chrome-first — WebCodecs or nothing).
+  // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
   const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
   useEffect(() => {
@@ -227,7 +227,7 @@ function Header() {
 
   const plan = usePlan()
   const { user, loading: authLoading, isAnonymous } = useAuth()
-  // "Has an account" — anonymous sessions are signed in for persistence only.
+  // "Has an account" - anonymous sessions are signed in for persistence only.
   const permanent = !authLoading && !!user && !isAnonymous
 
   return (
@@ -246,7 +246,7 @@ function Header() {
       {!authLoading && !user && (
         <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
           <CloudOff size={12} />
-          Not saved —{' '}
+          Not saved -{' '}
           <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
             sign up to save
           </Link>
@@ -263,7 +263,7 @@ function Header() {
       )}
       <TemplateDemoChip />
 
-      {/* Center transport — absolutely centered on the bar. */}
+      {/* Center transport - absolutely centered on the bar. */}
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
@@ -298,7 +298,7 @@ function Header() {
           <Link
             href="/pricing"
             onClick={() => track('editor_upgrade_clicked')}
-            title="Cabin Visuals Pro — watermark-free 1080p exports, $9/mo"
+            title="Cabin Visuals Pro - watermark-free 1080p exports, $9/mo"
             className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
           >
             <Sparkles size={11} strokeWidth={2.5} />
@@ -346,7 +346,7 @@ export default function EditorApp() {
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
 
-          {/* Library — resizable, pre-redesign proportions */}
+          {/* Library - resizable, pre-redesign proportions */}
           <Panel defaultSize="15%" minSize="8%" maxSize="30%">
             <LeftSidebar />
           </Panel>

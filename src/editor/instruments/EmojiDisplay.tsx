@@ -16,11 +16,11 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // accumulated layout state across frames. Here everything is refolded from state.notes up
 // to the playhead every frame: the layout is the fold of all trigger hits at or before the
 // current beat, the position easing and depth fade are closed-form exponentials anchored
-// at the driving note's beat, and the trail phase is total held time so far — so a paused
+// at the driving note's beat, and the trail phase is total held time so far - so a paused
 // playhead is a static frame and scrub == playback. Tyler's layout / rotation / trail math
 // is copied verbatim; only the trigger reads are rewired.
 
-// MIDI pitch assignments — trigger rows below the emoji selector.
+// MIDI pitch assignments - trigger rows below the emoji selector.
 const SWITCH_CORNERS_PITCH = 35 // B1
 const SWAP_HALVES_PITCH = 34    // A#1
 const ROTATE_CW_PITCH = 33      // A1
@@ -33,13 +33,13 @@ const TOP_ROW_CCW_PITCH = 27    // D#1
 const BOTTOM_ROW_CW_PITCH = 26  // D1
 const BOTTOM_ROW_CCW_PITCH = 25 // C#1
 
-const EMOJI_PITCH_MIN = 36 // C2 — first emoji selector
+const EMOJI_PITCH_MIN = 36 // C2 - first emoji selector
 const EMOJI_PITCH_MAX = 83 // B5
 
 const NUM_TRAIL = 6    // trail copies per emoji for the 3D effect
 const TRAIL_MAX_Z = 3  // max Z distance towards camera
 const TRAIL_SPEED = 1.5 // how fast trails cycle through Z
-const DEPTH_FADE_RATE = 6 // s⁻¹ — matches the old per-frame `1 - exp(-6·dt)` fade lerp
+const DEPTH_FADE_RATE = 6 // s⁻¹ - matches the old per-frame `1 - exp(-6·dt)` fade lerp
 
 const NUM_EMOJIS = 8
 
@@ -326,7 +326,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
       const mat = new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 1 })
       const mesh = new Mesh(geo, mat)
 
-      // Trail copies for the 3D depth effect — share the parent's texture.
+      // Trail copies for the 3D depth effect - share the parent's texture.
       const trails: TrailEntity[] = []
       for (let t = 0; t < NUM_TRAIL; t++) {
         const trailMat = new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 })
@@ -412,7 +412,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
           tokenPitch = pitch
         }
       } else if (isTriggerPitch(pitch)) {
-        // One hit per (pitch, beat) — the old per-frame onset set collapsed same-beat
+        // One hit per (pitch, beat) - the old per-frame onset set collapsed same-beat
         // duplicates of a pitch into a single trigger.
         if (n.beat !== groupBeat) {
           groupBeat = n.beat

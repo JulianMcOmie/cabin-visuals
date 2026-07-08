@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Undo / Redo — Implementation Plan</title>
+<title>Undo / Redo - Implementation Plan</title>
 <style>
   :root{
     --bg:#0f0f11; --bg2:#141417; --panel:#17171b; --panel2:#1b1b20;
@@ -116,16 +116,16 @@
   <table>
     <thead><tr><th>Dimension</th><th>Choice</th><th>Why</th></tr></thead>
     <tbody>
-      <tr><td>Representation</td><td><strong>Snapshot (memento)</strong></td><td>The store is already immutable — snapshots structurally-share and cost ~the diff. Bulletproof; restore is one assignment.</td></tr>
+      <tr><td>Representation</td><td><strong>Snapshot (memento)</strong></td><td>The store is already immutable - snapshots structurally-share and cost ~the diff. Bulletproof; restore is one assignment.</td></tr>
       <tr><td>Granularity</td><td><strong>The project store, whole</strong></td><td>One history for the whole document, not per-action reverse logic. Actions stay oblivious.</td></tr>
-      <tr><td>What's captured</td><td><strong>Every non-function field</strong></td><td>Generic — instrument settings (in <code>tracks</code>) and future effects come along for free, no history edits.</td></tr>
+      <tr><td>What's captured</td><td><strong>Every non-function field</strong></td><td>Generic - instrument settings (in <code>tracks</code>) and future effects come along for free, no history edits.</td></tr>
       <tr><td>Recording</td><td><strong>Store subscription</strong></td><td>No middleware, no zustand-mutator type gymnastics. Fires on every change; a cheap filter ignores no-ops.</td></tr>
       <tr><td>Coalescing</td><td><strong>~200ms debounce</strong></td><td>A drag's frames are &lt;16ms apart → one entry; deliberate edits are spaced → separate. No gesture-hook changes.</td></tr>
       <tr><td>Surface</td><td><strong>Keyboard only</strong></td><td><span class="kbd">⌘/Ctrl Z</span> · <span class="kbd">⌘/Ctrl ⇧ Z</span> · <span class="kbd">Ctrl Y</span>. No buttons.</td></tr>
     </tbody>
   </table>
 </div>
-<p class="small muted">Considered &amp; rejected for v1: immer forward/inverse <strong>patches</strong> (Tyler's approach). Strictly more machinery — an immer dep, a typed <code>set</code> middleware, and a rewrite of all ~15 actions into draft-mutation style just to get granular patches — for a benefit (memory at huge scale, collab/OT) you don't need yet. And the public API is identical, so it's a <em>low-regret</em> swap later if you ever do.</p>
+<p class="small muted">Considered &amp; rejected for v1: immer forward/inverse <strong>patches</strong> (Tyler's approach). Strictly more machinery - an immer dep, a typed <code>set</code> middleware, and a rewrite of all ~15 actions into draft-mutation style just to get granular patches - for a benefit (memory at huge scale, collab/OT) you don't need yet. And the public API is identical, so it's a <em>low-regret</em> swap later if you ever do.</p>
 
 <!-- SCOPE -->
 <h2><span class="num">02</span> &nbsp;What's undoable</h2>
@@ -135,7 +135,7 @@
   <thead><tr><th>State</th><th>Lives in</th><th>Undoable?</th></tr></thead>
   <tbody>
     <tr><td>Tracks, blocks, notes, hierarchy</td><td><code>ProjectStore.tracks / rootTrackIds</code></td><td><span class="badge b-yes">yes</span></td></tr>
-    <tr><td>Instrument settings</td><td><code>track.params</code> — inside <code>tracks</code></td><td><span class="badge b-yes">yes</span> <span class="muted small">already covered</span></td></tr>
+    <tr><td>Instrument settings</td><td><code>track.params</code> - inside <code>tracks</code></td><td><span class="badge b-yes">yes</span> <span class="muted small">already covered</span></td></tr>
     <tr><td>Effects <span class="muted small">(when added)</span></td><td>put on <code>track</code>, like <code>track.effects[]</code></td><td><span class="badge b-yes">automatic</span></td></tr>
     <tr><td>Selection · zoom · scroll</td><td><code>UIStore</code></td><td><span class="badge b-no">no</span> <span class="muted small">ephemeral</span></td></tr>
     <tr><td>Playhead position</td><td><code>TimeStore.currentBeat</code></td><td><span class="badge b-no">no</span></td></tr>
@@ -158,9 +158,9 @@
 </div>
 <p>Three mechanics carry the whole design:</p>
 <ul>
-  <li><strong>Capture the <em>previous</em> document, not the next.</strong> Undo means "go back," so each entry stores the state as it was <em>before</em> a burst of edits began. The store subscription hands you <code>(state, prev)</code> — <code>prev</code> is exactly that.</li>
+  <li><strong>Capture the <em>previous</em> document, not the next.</strong> Undo means "go back," so each entry stores the state as it was <em>before</em> a burst of edits began. The store subscription hands you <code>(state, prev)</code> - <code>prev</code> is exactly that.</li>
   <li><strong>One burst = one entry.</strong> The first change in a burst stashes its <code>prev</code> as the restore point; subsequent changes within 200ms only reset the timer. When it goes quiet, that single restore point is committed. A 60fps drag collapses to one undo step without any gesture-hook involvement.</li>
-  <li><strong>Guard the restores.</strong> Undo/redo write the store too — an <code>applying</code> flag makes the subscription ignore those writes so they don't record themselves.</li>
+  <li><strong>Guard the restores.</strong> Undo/redo write the store too - an <code>applying</code> flag makes the subscription ignore those writes so they don't record themselves.</li>
 </ul>
 
 <!-- BUILD -->
@@ -168,7 +168,7 @@
 <div class="h2rule"></div>
 
 <ol class="steps">
-<li class="step"><span class="stepnum">1</span><strong>The history engine</strong> — one new file. The store, the subscription, the debounce.</li>
+<li class="step"><span class="stepnum">1</span><strong>The history engine</strong> - one new file. The store, the subscription, the debounce.</li>
 </ol>
 
 <div class="filehead new"><span class="dot"></span>src/editor/store/HistoryStore.ts<span class="tag">new</span></div>
@@ -188,7 +188,7 @@
 }
 <span class="k">const</span> <span class="f">snapshot</span> = () =&gt; <span class="f">pick</span>(useProjectStore.<span class="f">getState</span>() <span class="k">as</span> <span class="t">Record</span>&lt;<span class="k">string</span>, unknown&gt;)
 <span class="k">const</span> <span class="f">changed</span> = (a: <span class="t">Snapshot</span>, b: <span class="t">Snapshot</span>) =&gt; {
-  <span class="k">for</span> (<span class="k">const</span> k <span class="k">in</span> a) <span class="k">if</span> (a[k] !== b[k]) <span class="k">return</span> <span class="k">true</span>   <span class="c">// reference compare — immutable store</span>
+  <span class="k">for</span> (<span class="k">const</span> k <span class="k">in</span> a) <span class="k">if</span> (a[k] !== b[k]) <span class="k">return</span> <span class="k">true</span>   <span class="c">// reference compare - immutable store</span>
   <span class="k">return</span> <span class="k">false</span>
 }
 
@@ -197,7 +197,7 @@
   undo: () =&gt; <span class="k">void</span>; redo: () =&gt; <span class="k">void</span>; clear: () =&gt; <span class="k">void</span>
 }
 
-<span class="c">// Module-level transient state (not reactive — it's plumbing).</span>
+<span class="c">// Module-level transient state (not reactive - it's plumbing).</span>
 <span class="k">let</span> applying = <span class="k">false</span>                  <span class="c">// true while a restore is in flight</span>
 <span class="k">let</span> pendingBase: <span class="t">Snapshot</span> | <span class="k">null</span> = <span class="k">null</span> <span class="c">// pre-burst restore point</span>
 <span class="k">let</span> timer: <span class="t">ReturnType</span>&lt;<span class="k">typeof</span> setTimeout&gt; | <span class="k">null</span> = <span class="k">null</span>
@@ -251,10 +251,10 @@
     clear: () =&gt; <span class="f">set</span>({ past: [], future: [] }),
   }
 })</code></pre>
-<div class="note">The subscription is wired <em>inside</em> the store initializer, so it activates the moment anything imports <code>useHistoryStore</code> — there's no separate "init" call to forget. <code>canUndo</code>/<code>canRedo</code> aren't methods because you don't need them (no buttons); if you ever do, they're <code>useHistoryStore(s =&gt; s.past.length &gt; 0)</code>.</div>
+<div class="note">The subscription is wired <em>inside</em> the store initializer, so it activates the moment anything imports <code>useHistoryStore</code> - there's no separate "init" call to forget. <code>canUndo</code>/<code>canRedo</code> aren't methods because you don't need them (no buttons); if you ever do, they're <code>useHistoryStore(s =&gt; s.past.length &gt; 0)</code>.</div>
 
 <ol class="steps">
-<li class="step"><span class="stepnum">2</span><strong>The shortcuts</strong> — one small hook. Guards text fields; handles both redo conventions.</li>
+<li class="step"><span class="stepnum">2</span><strong>The shortcuts</strong> - one small hook. Guards text fields; handles both redo conventions.</li>
 </ol>
 
 <div class="filehead new"><span class="dot"></span>src/editor/hooks/useUndoRedoKeys.ts<span class="tag">new</span></div>
@@ -278,35 +278,35 @@
 }</code></pre>
 
 <ol class="steps">
-<li class="step"><span class="stepnum">3</span><strong>Mount it</strong> — one line. Anywhere that renders once for the editor's life (next to <code>useTransportKeys</code>).</li>
+<li class="step"><span class="stepnum">3</span><strong>Mount it</strong> - one line. Anywhere that renders once for the editor's life (next to <code>useTransportKeys</code>).</li>
 </ol>
 
 <div class="filehead edit"><span class="dot"></span>src/editor/App.tsx<span class="tag">edit · Header()</span></div>
 <pre><code>  useTransportKeys({ play, pause, reset })
 <span class="n">+ </span><span class="f">useUndoRedoKeys</span>()              <span class="c">// importing the hook activates the history subscription too</span></code></pre>
 
-<div class="good"><strong>That's the whole feature.</strong> Two new files, one import line. No middleware, no immer, no changes to any of the ~15 ProjectStore actions, and no edits to the gesture hooks — the debounce does the drag-grouping that explicit transactions would otherwise require.</div>
+<div class="good"><strong>That's the whole feature.</strong> Two new files, one import line. No middleware, no immer, no changes to any of the ~15 ProjectStore actions, and no edits to the gesture hooks - the debounce does the drag-grouping that explicit transactions would otherwise require.</div>
 
 <!-- EDGES -->
-<h2><span class="num">05</span> &nbsp;Edge cases — already handled</h2>
+<h2><span class="num">05</span> &nbsp;Edge cases - already handled</h2>
 <div class="h2rule"></div>
 <ul>
-  <li><strong>Undo with the MIDI editor open.</strong> Undo restores the store's block; <code>useMidiEditorState</code> already detects a block change that isn't its own save and re-syncs the local notes — the piano roll updates on undo with no extra work.</li>
+  <li><strong>Undo with the MIDI editor open.</strong> Undo restores the store's block; <code>useMidiEditorState</code> already detects a block change that isn't its own save and re-syncs the local notes - the piano roll updates on undo with no extra work.</li>
   <li><strong>Drags.</strong> Timeline block move/resize/draw and the MIDI block-header drag write the store every frame; the 200ms debounce folds each into a single entry. Note edits are already debounced to one store write by <code>useMidiEditorState</code> (500ms), so they're one entry too.</li>
-  <li><strong>Undo mid-burst.</strong> <code>undo()</code> flushes the pending burst first, so an edit you just made (still within its debounce) commits and then immediately undoes — no lost or doubled step.</li>
+  <li><strong>Undo mid-burst.</strong> <code>undo()</code> flushes the pending burst first, so an edit you just made (still within its debounce) commits and then immediately undoes - no lost or doubled step.</li>
   <li><strong>Re-recording on restore.</strong> The <code>applying</code> flag makes the subscription skip undo/redo's own writes.</li>
   <li><strong>Typing.</strong> The shortcut bails inside inputs/textareas, and <code>preventDefault</code> stops the browser's native undo from fighting it.</li>
 </ul>
 
 <!-- OUT OF SCOPE -->
-<h2><span class="num">06</span> &nbsp;Deliberately out of scope — and the upgrade paths</h2>
+<h2><span class="num">06</span> &nbsp;Deliberately out of scope - and the upgrade paths</h2>
 <div class="h2rule"></div>
 <table>
   <thead><tr><th>Not now</th><th>If you want it later</th></tr></thead>
   <tbody>
-    <tr><td><strong>Per-action precision</strong> — fast back-to-back discrete edits (&lt;200ms) can merge into one undo.</td><td>Add explicit <code>begin()/end()</code> transactions around the two continuous drag flows. Slots in <em>behind the same API</em>; no call-site churn elsewhere.</td></tr>
-    <tr><td><strong>BPM / timeline settings undo.</strong></td><td>Relocate those few fields into ProjectStore (they're "project" data) — then they're captured automatically. Or have the snapshot read both stores.</td></tr>
-    <tr><td><strong>Patches</strong> (memory at huge scale, collaborative editing / OT, compact persisted history).</td><td>Swap the entry representation from snapshot to immer patch-pairs. <code>undo/redo/clear</code> and the coalescing seam are unchanged — internal-only.</td></tr>
+    <tr><td><strong>Per-action precision</strong> - fast back-to-back discrete edits (&lt;200ms) can merge into one undo.</td><td>Add explicit <code>begin()/end()</code> transactions around the two continuous drag flows. Slots in <em>behind the same API</em>; no call-site churn elsewhere.</td></tr>
+    <tr><td><strong>BPM / timeline settings undo.</strong></td><td>Relocate those few fields into ProjectStore (they're "project" data) - then they're captured automatically. Or have the snapshot read both stores.</td></tr>
+    <tr><td><strong>Patches</strong> (memory at huge scale, collaborative editing / OT, compact persisted history).</td><td>Swap the entry representation from snapshot to immer patch-pairs. <code>undo/redo/clear</code> and the coalescing seam are unchanged - internal-only.</td></tr>
     <tr><td><strong>Undo labels / a history panel.</strong></td><td>Store a <code>label</code> alongside each entry (derive from which fields changed); the stacks are already in a reactive store.</td></tr>
   </tbody>
 </table>

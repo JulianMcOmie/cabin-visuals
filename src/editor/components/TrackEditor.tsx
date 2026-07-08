@@ -13,7 +13,7 @@ import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeight
 
 type Tab = 'instrument' | 'effects'
 
-/** The track's name in the inspector header — double-click to rename, same contract
+/** The track's name in the inspector header - double-click to rename, same contract
  *  as the timeline label (Enter/blur commits, Esc cancels, empty = cancel). */
 function EditableTrackName({ trackId, name }: { trackId: string; name: string }) {
   const renameTrack = useProjectStore((s) => s.renameTrack)
@@ -38,7 +38,7 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
       />
     )
   }
-  // The pencil only surfaces on hover — present when you look, absent when you don't.
+  // The pencil only surfaces on hover - present when you look, absent when you don't.
   return (
     <div
       title="Double-click to rename"
@@ -57,7 +57,7 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
   )
 }
 
-/** One param row: label | 3px accent slider | mono value — 100px / 1fr / 44px. */
+/** One param row: label | 3px accent slider | mono value - 100px / 1fr / 44px. */
 function ParamSlider({
   label, value, min, max, step, onChange,
 }: {
@@ -214,7 +214,7 @@ function TargetSelect({
   }, [open])
 
   const chosen = options.filter((o) => selected.has(o.key))
-  const summary = chosen.length === 0 ? '— none —' : chosen.map((o) => o.label).join(', ')
+  const summary = chosen.length === 0 ? '- none -' : chosen.map((o) => o.label).join(', ')
 
   return (
     <div ref={ref} className="relative">
@@ -476,10 +476,10 @@ export function TrackEditor() {
         <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">TRACK</span>
         {track
           ? <EditableTrackName trackId={track.id} name={track.name} />
-          : <span className="text-[11px] text-[var(--text-muted)] select-none">—</span>}
+          : <span className="text-[11px] text-[var(--text-muted)] select-none">-</span>}
       </div>
 
-      {/* Tabs — flat segmented row, inset accent underline on the active tab. */}
+      {/* Tabs - flat segmented row, inset accent underline on the active tab. */}
       <div className="flex flex-shrink-0 border-b border-[var(--border)]">
         {TABS.map((t, i) => (
           <button

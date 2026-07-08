@@ -24,7 +24,7 @@ function SingleTransform({ instance, children }: { instance: EffectInstance; chi
 /**
  * Wrap an object in its transform-effect chain. The placement group above this (in
  * ObjectRenderer) carries the object's world transform, so these effects operate in
- * the object's own frame — rotate spins it in place, offset shifts it, etc. First
+ * the object's own frame - rotate spins it in place, offset shifts it, etc. First
  * plugin is innermost, last is outermost (later transforms wrap earlier ones, e.g.
  * offset-then-rotate ⇒ orbital motion).
  */

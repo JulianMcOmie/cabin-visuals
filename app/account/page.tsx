@@ -69,7 +69,7 @@ export default function AccountPage() {
               <div className="mt-1.5 flex items-center justify-between gap-4">
                 <div>
                   <div className="text-[13px] text-[var(--text)]">
-                    {plan.loading ? '…' : plan.isPro ? 'Pro — $9/month' : 'Free'}
+                    {plan.loading ? '…' : plan.isPro ? 'Pro - $9/month' : 'Free'}
                   </div>
                   <div className="mt-0.5 text-[12px] text-[var(--text-muted)]">
                     {plan.loading
@@ -99,7 +99,7 @@ export default function AccountPage() {
               </div>
               {plan.isPro && (
                 <p className="mt-3 text-[11px] text-[var(--text-muted)]">
-                  Update your card or cancel anytime — changes take effect through Stripe&apos;s billing portal.
+                  Update your card or cancel anytime - changes take effect through Stripe&apos;s billing portal.
                 </p>
               )}
             </div>

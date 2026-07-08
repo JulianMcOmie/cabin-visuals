@@ -5,13 +5,13 @@ import { serialize } from './serialize'
 import * as projectStorage from './projectStorage'
 
 // The autosave loop: a debounced store subscription that mirrors the document
-// to Supabase — the same mechanism HistoryStore uses (subscribe + burst
+// to Supabase - the same mechanism HistoryStore uses (subscribe + burst
 // window), aimed at a row instead of an undo stack. Pure observation: nothing
 // in the edit path changes, and a failed save never touches memory.
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-/** The one React-visible surface of autosave — feeds the header status chip. */
+/** The one React-visible surface of autosave - feeds the header status chip. */
 export const useSaveStatus = create<{ status: SaveStatus }>(() => ({ status: 'idle' }))
 
 // ~1s idle: long enough to collapse an edit burst into one write, short enough
@@ -57,7 +57,7 @@ export function startAutosave(projectId: string): () => void {
 
   const markDirty = () => { dirty = true; schedule() }
 
-  // Reference diff — the stores are immutable, so !== is an exact change test.
+  // Reference diff - the stores are immutable, so !== is an exact change test.
   const unsubProject = useProjectStore.subscribe((state, prev) => {
     if (state !== prev) markDirty()
   })

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Effect-Param Automation — Implementation Plan</title>
+<title>Effect-Param Automation - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -37,7 +37,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Effect-Param Automation</span>
-  <h1>Effect-Param Automation — Implementation Plan</h1>
+  <h1>Effect-Param Automation - Implementation Plan</h1>
   <p class="sub">End-to-end through five thin layers: type, menu, resolve, overlay, wrappers. The keystone canary is a radius lane visibly breathing a radial-symmetry ring under play, scrub, AND export.</p>
 </header>
 
@@ -51,31 +51,31 @@
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 1 — Types + store <span class="badge b-edit">types.ts · ProjectStore</span></h3>
+<h3>Phase 1 - Types + store <span class="badge b-edit">types.ts · ProjectStore</span></h3>
 <ul class="small">
-  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>ParamAddress</code> union (exported — the cluster's shared type) and <code>Track.targetEffect?: { instanceId: string; key: string }</code>. Optional → no upgrade step.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">ProjectStore.ts</span>: <code>addEffectAutomationTrack(parentId, instanceId, key, label)</code> — mirror of addAutomationTrack with the one-lane-per-address duplicate check (compare instanceId+key). <code>removeEffect</code> does NOT delete its lanes (they enter not-found and stay re-aimable — same philosophy as recursive-delete keeping data decisions explicit).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>ParamAddress</code> union (exported - the cluster's shared type) and <code>Track.targetEffect?: { instanceId: string; key: string }</code>. Optional → no upgrade step.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">ProjectStore.ts</span>: <code>addEffectAutomationTrack(parentId, instanceId, key, label)</code> - mirror of addAutomationTrack with the one-lane-per-address duplicate check (compare instanceId+key). <code>removeEffect</code> does NOT delete its lanes (they enter not-found and stay re-aimable - same philosophy as recursive-delete keeping data decisions explicit).</li>
 </ul>
 
-<h3>Phase 2 — Menu + lane view <span class="badge b-edit">TrackContextMenu · PianoRollPanel</span></h3>
+<h3>Phase 2 - Menu + lane view <span class="badge b-edit">TrackContextMenu · PianoRollPanel</span></h3>
 <ul class="small">
   <li>Menu: after the params group, one group per effect instance (label = plugin name, numbered when duplicated: "Echo 2"), items from the plugin def's numeric settings, added ones checked/disabled. (On the shared NestedMenu if the picker pair landed; inline otherwise.)</li>
-  <li>PianoRollPanel: the automation-info lookup branches — <code>targetEffect</code> lanes pull label/min/max from the plugin def's setting schema; missing instance → the not-found fallback (interp-discoverability phase 0).</li>
+  <li>PianoRollPanel: the automation-info lookup branches - <code>targetEffect</code> lanes pull label/min/max from the plugin def's setting schema; missing instance → the not-found fallback (interp-discoverability phase 0).</li>
 </ul>
 
-<h3>Phase 3 — Resolve + overlay ★ keystone <span class="badge b-edit">resolve.ts · VisualEngine.ts</span></h3>
+<h3>Phase 3 - Resolve + overlay ★ keystone <span class="badge b-edit">resolve.ts · VisualEngine.ts</span></h3>
 <ul class="small">
   <li>Resolve: effect-targeted lanes compile like param lanes but keyed by address: the object gains <code>effectLanes: Map&lt;instanceId, Map&lt;key, Lane&gt;&gt;</code>.</li>
   <li>computeAtBeat: sample and merge → <code>state.effectSettings: Map&lt;instanceId, Record&lt;key, number&gt;&gt;</code> (base settings spread first, lane values over them). Same debounced-resolve / fast-param-sync split applies: editing a base setting slider stays 60fps via syncParams.</li>
   <li><span class="badge b-edit">edit</span> wrappers (<span class="file">TransformWrapper · CloneWrapper · ShaderWrapper</span> via <span class="file">ObjectRenderer</span>): read <code>state.effectSettings.get(instance.id) ?? instance.settings</code>. One helper, three call sites.</li>
 </ul>
-<div class="note"><strong>The keystone canary:</strong> radial-symmetry radius lane 0→5 over 4 bars — the ring expands under play; park at bar 2 and the frozen radius equals play's radius at bar 2 exactly (canary green); export 4 bars and the file matches the editor frame-for-frame. If scrub ≠ play, the overlay leaked out of the pure path; stop and fix before the UI polish.</div>
+<div class="note"><strong>The keystone canary:</strong> radial-symmetry radius lane 0→5 over 4 bars - the ring expands under play; park at bar 2 and the frozen radius equals play's radius at bar 2 exactly (canary green); export 4 bars and the file matches the editor frame-for-frame. If scrub ≠ play, the overlay leaked out of the pure path; stop and fix before the UI polish.</div>
 
-<h3>Phase 4 — Edge cases + verify</h3>
+<h3>Phase 4 - Edge cases + verify</h3>
 <ul class="small">
   <li>Delete the effect → lane shows not-found, keyframes intact; undo restores the pairing.</li>
-  <li>Two echoes, lanes on each — independent motion (instanceId addressing proven).</li>
-  <li>Base-setting slider drag while its lane plays: base changes, lane still wins during coverage — document this in the automated-badge affordance if the automation-copy-bug work landed its live marker (share the treatment).</li>
+  <li>Two echoes, lanes on each - independent motion (instanceId addressing proven).</li>
+  <li>Base-setting slider drag while its lane plays: base changes, lane still wins during coverage - document this in the automated-badge affordance if the automation-copy-bug work landed its live marker (share the treatment).</li>
 </ul>
 
 <h2>C · File inventory</h2>
@@ -87,22 +87,22 @@
     <tr><td><span class="file">components/timeline/TrackContextMenu.tsx</span> · <span class="file">components/midi/PianoRollPanel.tsx</span></td><td>Per-instance menu groups · lane bounds from setting schema.</td></tr>
     <tr><td><span class="file">core/visual/resolve.ts</span> · <span class="file">VisualEngine.ts</span></td><td>Effect lanes compiled · merged per frame into state.effectSettings.</td></tr>
     <tr><td><span class="file">components/visual/ObjectRenderer.tsx</span> + wrappers</td><td>Read merged settings.</td></tr>
-    <tr><td>Persistence</td><td>Untouched — optional fields ride the generic pick.</td></tr>
+    <tr><td>Persistence</td><td>Untouched - optional fields ride the generic pick.</td></tr>
   </tbody>
 </table>
 
 <h2>D · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Setting schemas must declare min/max/step</strong> for lane bounds — audit the 12 plugin defs; any unbounded numeric setting gets explicit bounds in the same commit.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Wrapper reads are the only place merged-vs-base can be confused</strong> — the one helper rule (never touch instance.settings directly in wrappers again) plus a lint-grep in review.</li>
-  <li><span class="badge b-risk">open</span> Shader uniforms update per frame already? Confirm the shader wrapper re-uploads changed uniforms cheaply (it should — FBO pipeline is per-frame by nature).</li>
-  <li><span class="badge b-risk">note</span> Sequence the symmetric-effects pair immediately after — it's this feature's demo and stress test.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Setting schemas must declare min/max/step</strong> for lane bounds - audit the 12 plugin defs; any unbounded numeric setting gets explicit bounds in the same commit.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Wrapper reads are the only place merged-vs-base can be confused</strong> - the one helper rule (never touch instance.settings directly in wrappers again) plus a lint-grep in review.</li>
+  <li><span class="badge b-risk">open</span> Shader uniforms update per frame already? Confirm the shader wrapper re-uploads changed uniforms cheaply (it should - FBO pipeline is per-frame by nature).</li>
+  <li><span class="badge b-risk">note</span> Sequence the symmetric-effects pair immediately after - it's this feature's demo and stress test.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> five thin layers, each the twin of something that exists — a second target field, a second menu group, a second lane compilation, a second overlay map, and wrappers that prefer the merged value; the ParamAddress you mint in layer one is the cluster's inheritance.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> five thin layers, each the twin of something that exists - a second target field, a second menu group, a second lane compilation, a second overlay map, and wrappers that prefer the merged value; the ParamAddress you mint in layer one is the cluster's inheritance.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">effect-param-automation-architecture.html</span>; unlocks <span class="file">symmetric-effects</span>, feeds <span class="file">envelope-modulator</span> and <span class="file">tag-automation</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">effect-param-automation-architecture.html</span>; unlocks <span class="file">symmetric-effects</span>, feeds <span class="file">envelope-modulator</span> and <span class="file">tag-automation</span>.</p>
 
 </div>
 </body>

@@ -12,18 +12,18 @@ interface TimelineRulerProps {
   timelineWidthPx: number
   /** Trailing gutter (px) so the strip ends where the lanes' vertical scrollbar starts. */
   gutterPx: number
-  /** Inner content element — translated horizontally to mirror the lane scroll. */
+  /** Inner content element - translated horizontally to mirror the lane scroll. */
   contentRef: RefObject<HTMLDivElement | null>
   /** Playhead triangle element (the head), positioned by the RAF loop. */
   playheadHeadRef: RefObject<HTMLDivElement | null>
-  /** Content rendered in the frozen corner (left of the ruler) — e.g. the Tracks header. */
+  /** Content rendered in the frozen corner (left of the ruler) - e.g. the Tracks header. */
   corner?: ReactNode
 }
 
 /**
  * Logic-style ruler: lighter top half with bar numbers, darker bottom half with
  * tick lines and the playhead triangle. The strip is a clipped viewport whose
- * inner content (contentRef) is translated to mirror the lane horizontal scroll —
+ * inner content (contentRef) is translated to mirror the lane horizontal scroll -
  * transform-based so it never clamps short or drifts out of alignment, and the
  * triangle is clipped to the strip (never drawn over the corner). The playhead
  * line itself lives in the lanes (TimelineArea).
@@ -64,7 +64,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
               <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
                 {numbered ? (
                   <>
-                    {/* Top half: bar number — 10px/500 mono, one step brighter
+                    {/* Top half: bar number - 10px/500 mono, one step brighter
                         than faint so it reads at a glance */}
                     <span className="absolute left-1 font-mono text-[10px] font-medium text-[var(--text-3)] leading-none" style={{ top: 3 }}>
                       {bar + 1}
@@ -86,7 +86,7 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
           <div
             ref={playheadHeadRef}
             className="absolute pointer-events-none"
-            // left: 0.5 nudges the apex to sit on the lane playhead line — the line
+            // left: 0.5 nudges the apex to sit on the lane playhead line - the line
             // lives in a separate viewport-space overlay, so the ruler triangle
             // otherwise renders ~0.5px to its left.
             style={{ top: '50%', bottom: 0, left: 0.5, width: 0 }}

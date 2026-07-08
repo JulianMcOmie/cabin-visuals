@@ -1,6 +1,6 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-// Service-role client — bypasses RLS. Server-only (the key never ships to the
+// Service-role client - bypasses RLS. Server-only (the key never ships to the
 // browser); used exclusively by the Stripe routes to write billing state, since
 // `subscriptions` deliberately has no client write policies.
 export function createAdminClient() {

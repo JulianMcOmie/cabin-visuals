@@ -10,7 +10,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // spread and hue slowly oscillate over musical beats; new notes bump the hue (or spawn
 // colour-inversion pulse rings). Drawing math is Tyler's verbatim; only the state reads
 // are rewired: engine getTrackState → getObjectState, and all motion derives from
-// `state.beat` — hue bumps and pulse rings are computed from `state.notes` each frame
+// `state.beat` - hue bumps and pulse rings are computed from `state.notes` each frame
 // (note-onset ages, not a spawned list), so scrub == playback.
 
 interface Point3D {
@@ -286,7 +286,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
 
   // The backing canvases match the visual window's ASPECT (height fixed, width
   // follows), so the tunnel genuinely fills the frame at any window size with no
-  // squash — the drawing is projection-based and spreads into whatever canvas it
+  // squash - the drawing is projection-based and spreads into whatever canvas it
   // gets. Quantized so live resizes only recreate on meaningful aspect changes.
   const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
   const texH = 1024
@@ -331,7 +331,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     const elapsed = state.beat * state.secPerBeat
     const beat = state.beat * CONFIG.oscSpeed
 
-    // Notes whose onset the playhead has passed — the pure replacement for onset
+    // Notes whose onset the playhead has passed - the pure replacement for onset
     // detection: hue bumps and pulse rings derive from these each frame.
     const pastNotes = state.notes.filter((n) => n.beat <= state.beat)
 
@@ -455,7 +455,7 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
 
   // The plane IS the viewport (slight overscan): aspect matches the texture, so
   // the tunnel fills the whole frame undistorted at any window size, and resizes
-  // with it. It sits at the full-frame group's origin — the distance `viewport`
+  // with it. It sits at the full-frame group's origin - the distance `viewport`
   // is measured at.
   return (
     <mesh ref={meshRef}>

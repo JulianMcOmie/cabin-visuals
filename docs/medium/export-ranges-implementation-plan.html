@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Export Ranges — Implementation Plan</title>
+<title>Export Ranges - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,7 +36,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Export Ranges</span>
-  <h1>Export Ranges — Implementation Plan</h1>
+  <h1>Export Ranges - Implementation Plan</h1>
   <p class="sub">Thread <code>startBeat</code> through the walk and the audio render, add a from/to control to the dialog, and verify with the onset-on-the-exact-frame canary shifted by the range start.</p>
 </header>
 
@@ -50,7 +50,7 @@
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 1 — Engine threading <span class="badge b-edit">core/export</span></h3>
+<h3>Phase 1 - Engine threading <span class="badge b-edit">core/export</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>range?: { fromBar: number; toBar: number }</code> on ExportSettings; <code>makeTimebase</code> gains the range (computes startBeat + rangeBeats; whole-project when absent).</li>
   <li><span class="badge b-edit">edit</span> <span class="file">exportEngine.ts</span>: <code>walkFrames</code> computes <code>beat = timebase.startBeat + i·bpm/(60·fps)</code>; <code>runExport</code> passes <code>timebase.startBeat</code> into <code>renderAudioTrack</code>.</li>
@@ -58,14 +58,14 @@
   <li>Verify headless (temp expose, the export test recipe): bars 2–4 of a 4-bar project → file duration exactly 2 bars' seconds; a clip at bar 0 straddling bar 2 enters mid-clip at the correct sample offset (compare against a full export's bar-2 audio).</li>
 </ul>
 
-<h3>Phase 2 — Dialog <span class="badge b-edit">ExportDialog.tsx</span></h3>
+<h3>Phase 2 - Dialog <span class="badge b-edit">ExportDialog.tsx</span></h3>
 <ul class="small">
   <li>Radio: <strong>Whole project</strong> (default) / <strong>Bars</strong> [from]–[to]. Number inputs 1-based for display, converted to 0-based [from,to) internally; clamp live to [1, totalBars] and to ≥ 1 bar length; show the resulting duration ("= 8 bars · 16.0s") so the math is visible.</li>
   <li>Remembered with the other quality settings; "Bars" with a stale out-of-range memory falls back to Whole project silently.</li>
-  <li>Estimated size/time in the progress view already derives from frameCount — no change needed (it shrinks with the range automatically).</li>
+  <li>Estimated size/time in the progress view already derives from frameCount - no change needed (it shrinks with the range automatically).</li>
 </ul>
 
-<h3>Phase 3 — Verify end-to-end</h3>
+<h3>Phase 3 - Verify end-to-end</h3>
 <ul class="small">
   <li>The shifted keystone canary: notes on every bar line, export bars 3–5 → the FIRST frame of the file shows bar 3's onset, and each subsequent bar-line onset lands at exactly (bar−3)·beatsPerBar·60/bpm·fps frames in.</li>
   <li>Audio alignment: tone starting at bar 2, export bars 2–4 → file audio starts at 0:00 sample-exactly.</li>
@@ -80,21 +80,21 @@
     <tr><td><span class="file">core/export/exportEngine.ts</span></td><td>Offset in the walk · fromBeat into audio.</td></tr>
     <tr><td><span class="file">core/export/audioRender.ts</span></td><td>fromBeat parameter (placement already supports it).</td></tr>
     <tr><td><span class="file">components/ExportDialog.tsx</span></td><td>Range radio + inputs + clamps + duration readout.</td></tr>
-    <tr><td><span class="file">core/audio/placement.ts</span> · muxer · encoders</td><td>Untouched — the point.</td></tr>
+    <tr><td><span class="file">core/audio/placement.ts</span> · muxer · encoders</td><td>Untouched - the point.</td></tr>
   </tbody>
 </table>
 
 <h2>D · Risks &amp; notes</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Timestamp bleed:</strong> the one way to botch this is letting startBeat leak into VideoFrame/AudioData timestamps — they are file-local and stay index-based; the phase-3 canary catches it (video and audio would drift apart by exactly the range offset).</li>
-  <li><span class="badge b-risk">note</span> When the transport loop region ships, add the third radio filling from/to from it — two lines, designed for here, built then.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Timestamp bleed:</strong> the one way to botch this is letting startBeat leak into VideoFrame/AudioData timestamps - they are file-local and stay index-based; the phase-3 canary catches it (video and audio would drift apart by exactly the range offset).</li>
+  <li><span class="badge b-risk">note</span> When the transport loop region ships, add the third radio filling from/to from it - two lines, designed for here, built then.</li>
   <li><span class="badge b-risk">note</span> Ruler-drag range selection is the gestural upgrade; the inputs establish the semantics first.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> shift the beat the walk asks about, hand the same shift to blockPlacement, keep every media timestamp starting at zero — the seams were pre-cut, this feature just uses them.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> shift the beat the walk asks about, hand the same shift to blockPlacement, keep every media timestamp starting at zero - the seams were pre-cut, this feature just uses them.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">export-ranges-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">export-ranges-architecture.html</span>.</p>
 
 </div>
 </body>

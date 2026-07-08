@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Implementation Plan — Clipboard & Track Ops</title>
+<title>Implementation Plan - Clipboard & Track Ops</title>
 <style>
   :root {
     --bg: #1a1a1d;
@@ -111,7 +111,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Editor</span>
-  <h1>Clipboard, Duplicate &amp; Delete — Implementation Plan</h1>
+  <h1>Clipboard, Duplicate &amp; Delete - Implementation Plan</h1>
   <p class="sub">Copy/paste at the playhead (notes &amp; blocks), alt-drag track duplication, and keyboard track deletion.</p>
 </header>
 
@@ -132,20 +132,20 @@
 </div>
 
 <div class="card" style="border-color:#3730a3">
-  <h3 style="margin-top:18px; color:var(--indigo)">Revision 2 — decisions locked</h3>
+  <h3 style="margin-top:18px; color:var(--indigo)">Revision 2 - decisions locked</h3>
   <table>
     <tbody>
-      <tr><td><strong>Time units</strong></td><td>Keep <code>note.startBeat</code> (block-local) vs <code>block.startBar</code> split — different resolutions, not unified.</td></tr>
+      <tr><td><strong>Time units</strong></td><td>Keep <code>note.startBeat</code> (block-local) vs <code>block.startBar</code> split - different resolutions, not unified.</td></tr>
       <tr><td><strong>Clipboard</strong></td><td>Its own small zustand store (shared across both editors).</td></tr>
       <tr><td><strong>Clone helpers</strong></td><td>No <code>clone.ts</code> file. <code>cloneBlock</code>/<code>cloneTrack</code> live in <span class="filename">ProjectStore</span>; note clone inlined in <span class="filename">useNoteGestures</span>.</td></tr>
       <tr><td><strong>Keyboard owners</strong></td><td>No new file. Notes → <span class="filename">useNoteGestures</span>; blocks &amp; tracks → <span class="filename">useTrackGestures</span> (both single-mount, mirror each other).</td></tr>
       <tr><td><strong>Delete precedence</strong></td><td>Block(s) selected → delete only those blocks. Track selected, no blocks → delete track + its blocks.</td></tr>
       <tr><td><strong>Note paste</strong></td><td>Always at the playhead, even outside the block; allow negative local position &amp; overflow past block end; <em>no</em> quantize snap on paste.</td></tr>
-      <tr><td><strong>Block paste</strong></td><td>Target = currently selected track (no-op if none). Placed exactly at playhead — <em>no</em> bar snap (fractional <code>startBar</code> allowed).</td></tr>
+      <tr><td><strong>Block paste</strong></td><td>Target = currently selected track (no-op if none). Placed exactly at playhead - <em>no</em> bar snap (fractional <code>startBar</code> allowed).</td></tr>
       <tr><td><strong>Playhead snap</strong></td><td>New separate feature: a snap toggle that only affects <em>playhead scrubbing</em> (snap to bars), mirroring the MIDI editor. Paste just reads wherever the playhead sits.</td></tr>
       <tr><td><strong>Alt-drag track</strong></td><td>Original stays untouched; a clone is produced at the drop index (store write at dragEnd). Use a <code>DragOverlay</code> "+copy" ghost + static original for copy-feel.</td></tr>
       <tr><td><strong>Nested tracks</strong></td><td>Deferred. Root-track duplicate/delete now; recursive subtree clone is a TODO.</td></tr>
-      <tr><td><strong>Undo/redo</strong></td><td>Deferred. Snapshot-based history middleware on the project store covers all actions at once — written later, no per-action retrofit.</td></tr>
+      <tr><td><strong>Undo/redo</strong></td><td>Deferred. Snapshot-based history middleware on the project store covers all actions at once - written later, no per-action retrofit.</td></tr>
     </tbody>
   </table>
 </div>
@@ -163,7 +163,7 @@
   </tbody>
 </table>
 <div class="note">
-  <strong>Reading "ctrl p ctrl v":</strong> interpreted as <strong>copy = <span class="kbd">⌘/Ctrl + C</span></strong> and <strong>paste = <span class="kbd">⌘/Ctrl + V</span></strong> (⌘ on macOS, Ctrl on Windows/Linux via <code>e.metaKey || e.ctrlKey</code>). If you actually want a different chord for copy, say so — only one line changes.
+  <strong>Reading "ctrl p ctrl v":</strong> interpreted as <strong>copy = <span class="kbd">⌘/Ctrl + C</span></strong> and <strong>paste = <span class="kbd">⌘/Ctrl + V</span></strong> (⌘ on macOS, Ctrl on Windows/Linux via <code>e.metaKey || e.ctrlKey</code>). If you actually want a different chord for copy, say so - only one line changes.
 </div>
 <p>The unifying idea is <strong>"paste at the playhead"</strong>: pasted content is repositioned so its earliest element lands at <code>currentBeat</code>, preserving the internal time/pitch offsets between copied items.</p>
 
@@ -177,10 +177,10 @@
 
 <h4>What already exists (reuse)</h4>
 <ul>
-  <li><span class="filename">useNoteGestures.ts</span> — local <code>selectedNoteIds: Set&lt;string&gt;</code>, alt-drag-duplicate of notes, and a window keydown that handles <span class="kbd">Delete</span>/<span class="kbd">Backspace</span>/<span class="kbd">Esc</span> for notes.</li>
-  <li><span class="filename">UIStore.ts</span> — <code>selectedBlockIds: Set&lt;string&gt;</code>, <code>selectedTrackId</code>, and <code>editingBlock</code> (which block is open in the MIDI editor — our <strong>context signal</strong>).</li>
-  <li><span class="filename">ProjectStore.ts</span> — <code>addTrack</code>, <code>addBlock</code>, <code>addNote</code>, <code>updateBlockNotes</code>, <code>deleteBlock</code>, <code>reorderRootTracks</code>.</li>
-  <li><span class="filename">useTransportKeys.ts</span> — the window-keydown pattern (guards <code>INPUT/TEXTAREA/contentEditable</code>) we'll mirror.</li>
+  <li><span class="filename">useNoteGestures.ts</span> - local <code>selectedNoteIds: Set&lt;string&gt;</code>, alt-drag-duplicate of notes, and a window keydown that handles <span class="kbd">Delete</span>/<span class="kbd">Backspace</span>/<span class="kbd">Esc</span> for notes.</li>
+  <li><span class="filename">UIStore.ts</span> - <code>selectedBlockIds: Set&lt;string&gt;</code>, <code>selectedTrackId</code>, and <code>editingBlock</code> (which block is open in the MIDI editor - our <strong>context signal</strong>).</li>
+  <li><span class="filename">ProjectStore.ts</span> - <code>addTrack</code>, <code>addBlock</code>, <code>addNote</code>, <code>updateBlockNotes</code>, <code>deleteBlock</code>, <code>reorderRootTracks</code>.</li>
+  <li><span class="filename">useTransportKeys.ts</span> - the window-keydown pattern (guards <code>INPUT/TEXTAREA/contentEditable</code>) we'll mirror.</li>
   <li>Track reorder via <strong>dnd-kit</strong> sortable (<span class="filename">App.tsx</span> <code>handleTrackDragEnd</code>, <span class="filename">Track.tsx</span> <code>useSortable</code>; the label column carries the drag listeners).</li>
   <li>IDs everywhere via <code>crypto.randomUUID()</code>.</li>
 </ul>
@@ -189,14 +189,14 @@
 <ul>
   <li>No <strong>clipboard</strong> abstraction.</li>
   <li>No <strong>deleteTrack</strong> and no <strong>duplicate</strong> action in <span class="filename">ProjectStore</span>.</li>
-  <li>No <strong>undo/history</strong> — every op here is destructive and irreversible (see §8).</li>
+  <li>No <strong>undo/history</strong> - every op here is destructive and irreversible (see §8).</li>
 </ul>
 
 <!-- 3 -->
 <h2 id="infra">3 · Shared infrastructure</h2>
 
-<h3>3.1 — A clipboard store <span class="badge new">new file</span></h3>
-<p><span class="filename">src/editor/store/ClipboardStore.ts</span> — a tiny zustand store holding a tagged union, so paste knows what it's pasting:</p>
+<h3>3.1 - A clipboard store <span class="badge new">new file</span></h3>
+<p><span class="filename">src/editor/store/ClipboardStore.ts</span> - a tiny zustand store holding a tagged union, so paste knows what it's pasting:</p>
 <pre><code><span class="tok-key">type</span> Clip =
   | { kind: <span class="tok-str">'notes'</span>;  notes: Note[] }
   | { kind: <span class="tok-str">'blocks'</span>; blocks: Block[]; sourceTrackId: string }
@@ -204,25 +204,25 @@
 <span class="tok-key">interface</span> ClipboardState { clip: Clip | null; setClip: (c: Clip | null) =&gt; void }</code></pre>
 <p>Stored snapshots are <strong>normalized</strong> at copy time (earliest element shifted to 0) so paste math is "add the playhead offset" with no per-paste bookkeeping.</p>
 
-<h3>3.2 — Cloning helpers <span class="badge edit">co-located, no new file</span></h3>
+<h3>3.2 - Cloning helpers <span class="badge edit">co-located, no new file</span></h3>
 <p>Deep-clone with fresh IDs, one per level. These live next to their only consumer rather than in a shared file: <code>cloneBlock</code> + <code>cloneTrack</code> as module-private fns in <span class="filename">ProjectStore.ts</span> (used by <code>pasteBlocks</code> / <code>duplicateTrack</code>); the note clone is a one-liner inlined in <span class="filename">useNoteGestures.ts</span>. The chain is track → block → note:</p>
 <pre><code><span class="tok-key">const</span> <span class="tok-fn">cloneNote</span>  = (n: Note)  =&gt; ({ ...n, id: crypto.randomUUID() })
 <span class="tok-key">const</span> <span class="tok-fn">cloneBlock</span> = (b: Block) =&gt; ({ ...b, id: crypto.randomUUID(), notes: b.notes.map(cloneNote) })
 <span class="tok-key">const</span> <span class="tok-fn">cloneTrack</span> = (t: Track) =&gt; ({ ...t, id: crypto.randomUUID(), blocks: t.blocks.map(cloneBlock),
                               childIds: [], name: t.name + <span class="tok-str">' copy'</span> })</code></pre>
-<div class="warn"><strong>Nested tracks:</strong> <code>cloneTrack</code> above drops <code>childIds</code> (clones the track shallowly w.r.t. hierarchy). Recursively cloning a subtree — and remapping <code>parentId</code>/<code>targets</code> to the new IDs — is a follow-up; the common case (a root track with blocks) works as written. Flagged again in §6 &amp; §8.</div>
+<div class="warn"><strong>Nested tracks:</strong> <code>cloneTrack</code> above drops <code>childIds</code> (clones the track shallowly w.r.t. hierarchy). Recursively cloning a subtree - and remapping <code>parentId</code>/<code>targets</code> to the new IDs - is a follow-up; the common case (a root track with blocks) works as written. Flagged again in §6 &amp; §8.</div>
 
-<h3>3.3 — Keyboard layering &amp; context</h3>
-<p>The same chords mean different things depending on whether the MIDI editor is open. Each gesture hook owns its own shortcuts, co-located with the selection state it manages — both are single-mount and already mirror each other, so this is symmetric (no dedicated keyboard file):</p>
+<h3>3.3 - Keyboard layering &amp; context</h3>
+<p>The same chords mean different things depending on whether the MIDI editor is open. Each gesture hook owns its own shortcuts, co-located with the selection state it manages - both are single-mount and already mirror each other, so this is symmetric (no dedicated keyboard file):</p>
 <table>
   <thead><tr><th>Context</th><th>Owner</th><th>Handles</th></tr></thead>
   <tbody>
     <tr><td><code>editingBlock != null</code> (MIDI editor mounted)</td><td><span class="filename">useNoteGestures.ts</span> (extend its existing listener)</td><td>C/V/Delete for <strong>notes</strong></td></tr>
-    <tr><td>Otherwise (timeline)</td><td><span class="filename">useTrackGestures.ts</span> (extend it — mounted once in <span class="filename">TimelineArea</span>)</td><td>C/V for <strong>blocks</strong>; Delete for <strong>blocks or track</strong></td></tr>
+    <tr><td>Otherwise (timeline)</td><td><span class="filename">useTrackGestures.ts</span> (extend it - mounted once in <span class="filename">TimelineArea</span>)</td><td>C/V for <strong>blocks</strong>; Delete for <strong>blocks or track</strong></td></tr>
   </tbody>
 </table>
 <p>The timeline handler must <strong>bail when <code>editingBlock</code> is set</strong> so it never competes with the note handler. Both reuse the <code>INPUT/TEXTAREA/contentEditable</code> guard from <span class="filename">useTransportKeys</span>.</p>
-<div class="note"><strong>Why the split (answering an earlier question):</strong> it's driven by where selection lives — note selection is local to <span class="filename">useNoteGestures</span>; block/track selection is owned by <span class="filename">useTrackGestures</span>. A single top-level handler couldn't reach the note selection without lifting it into a store.</div>
+<div class="note"><strong>Why the split (answering an earlier question):</strong> it's driven by where selection lives - note selection is local to <span class="filename">useNoteGestures</span>; block/track selection is owned by <span class="filename">useTrackGestures</span>. A single top-level handler couldn't reach the note selection without lifting it into a store.</div>
 
 <!-- 4 -->
 <h2 id="notes">4 · Copy/paste MIDI notes at the playhead</h2>
@@ -238,16 +238,16 @@ setClip({ kind: <span class="tok-str">'notes'</span>, notes: sel.map(n =&gt; ({ 
 <p>Notes are block-local; the playhead is global. Convert, place, re-ID, select:</p>
 <ol>
   <li>Resolve the active block from <code>editingBlock</code>; its global start in beats is <code>block.startBar * beatsPerBar</code>.</li>
-  <li><code>playheadLocal = currentBeat − block.startBar * beatsPerBar</code> — used as-is, even if negative or past the block end (no clamp, no "is the playhead inside the block" check).</li>
-  <li>For each clip note: <code>cloneNote</code>, then <code>startBeat = playheadLocal + clipNote.startBeat</code>. <strong>No quantize snap on paste</strong> — land exactly at the playhead.</li>
+  <li><code>playheadLocal = currentBeat − block.startBar * beatsPerBar</code> - used as-is, even if negative or past the block end (no clamp, no "is the playhead inside the block" check).</li>
+  <li>For each clip note: <code>cloneNote</code>, then <code>startBeat = playheadLocal + clipNote.startBeat</code>. <strong>No quantize snap on paste</strong> - land exactly at the playhead.</li>
   <li><code>onNotesChange([...notes, ...pasted])</code> and set <code>selectedNoteIds</code> to the pasted IDs (so an immediate drag/delete targets the paste).</li>
 </ol>
 
 <h4>Edge cases</h4>
 <ul>
-  <li>Playhead before the block → notes get a <strong>negative local <code>startBeat</code></strong>; allowed by decision. Heads-up: the grid may render them off the left edge / clip them — visual only.</li>
+  <li>Playhead before the block → notes get a <strong>negative local <code>startBeat</code></strong>; allowed by decision. Heads-up: the grid may render them off the left edge / clip them - visual only.</li>
   <li>Notes past the block end → <strong>allowed to overflow</strong>, no <code>durationBeats</code> clamp.</li>
-  <li>Repeated <span class="kbd">⌘/Ctrl + V</span> pastes at the same spot each time (playhead-anchored) — acceptable; a "paste then nudge" stack is out of scope.</li>
+  <li>Repeated <span class="kbd">⌘/Ctrl + V</span> pastes at the same spot each time (playhead-anchored) - acceptable; a "paste then nudge" stack is out of scope.</li>
 </ul>
 
 <!-- 5 -->
@@ -263,7 +263,7 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 <h4>Paste</h4>
 <ol>
   <li>Target track = <code>selectedTrackId</code>. If nothing is selected → no-op.</li>
-  <li>Playhead → bar with <strong>no snap</strong>: <code>targetBar = currentBeat / beatsPerBar</code> (fractional <code>startBar</code> is fine — a block can start mid-bar; it renders at <code>startBar × barWidth</code>).</li>
+  <li>Playhead → bar with <strong>no snap</strong>: <code>targetBar = currentBeat / beatsPerBar</code> (fractional <code>startBar</code> is fine - a block can start mid-bar; it renders at <code>startBar × barWidth</code>).</li>
   <li>For each clip block: <code>cloneBlock</code> (fresh block <em>and</em> note IDs), then <code>startBar = targetBar + clipBlock.startBar</code>.</li>
   <li><code>addBlock(targetTrackId, pasted)</code> for each; set <code>selectedBlockIds</code> to the new IDs.</li>
 </ol>
@@ -271,9 +271,9 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 
 <h4>Edge cases</h4>
 <ul>
-  <li>Overlapping blocks on a track — the model allows it today; leave as-is unless you want collision handling.</li>
+  <li>Overlapping blocks on a track - the model allows it today; leave as-is unless you want collision handling.</li>
   <li><code>loop</code> flag and all notes ride along via <code>cloneBlock</code>.</li>
-  <li>Multi-track copy pasting into a single target track collapses everything onto that track (relative <em>bar</em> offsets preserved, track identity lost) — acceptable for v1; true multi-track paste is a later enhancement.</li>
+  <li>Multi-track copy pasting into a single target track collapses everything onto that track (relative <em>bar</em> offsets preserved, track identity lost) - acceptable for v1; true multi-track paste is a later enhancement.</li>
 </ul>
 
 <h3 style="margin-top:34px">5b · Playhead snap toggle <span class="badge new">new</span></h3>
@@ -314,9 +314,9 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 <h4>Decisions &amp; risks</h4>
 <ul>
   <li><span class="badge risk">risk</span> <strong>Modifier capture.</strong> dnd-kit's <code>DragEndEvent</code> doesn't carry live modifiers; <code>activatorEvent.altKey</code> reads the state <em>at drag start</em>. If you want "press Alt mid-drag," track Alt via a window <code>keydown/keyup</code> ref instead.</li>
-  <li><strong>Copy-feel.</strong> The <code>DragOverlay</code> "+copy" ghost + static original is what sells it as a duplicate rather than a move — worth doing, not just a drop-time mutation.</li>
+  <li><strong>Copy-feel.</strong> The <code>DragOverlay</code> "+copy" ghost + static original is what sells it as a duplicate rather than a move - worth doing, not just a drop-time mutation.</li>
   <li><strong>Nested children deferred.</strong> <code>cloneTrack</code> drops <code>childIds</code> for now (root tracks only). Recursion + <code>parentId</code>/<code>targets</code> remap is a marked TODO for when nesting ships.</li>
-  <li><strong>Most-faithful version (later):</strong> a ghost that literally peels off the original and follows the cursor means bypassing dnd-kit's sortable — more work. The overlay approach above gets ~90% of the feel for far less.</li>
+  <li><strong>Most-faithful version (later):</strong> a ghost that literally peels off the original and follows the cursor means bypassing dnd-kit's sortable - more work. The overlay approach above gets ~90% of the feel for far less.</li>
 </ul>
 
 <!-- 7 -->
@@ -328,20 +328,20 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 <ol>
   <li>Remove from <code>tracks</code>.</li>
   <li>Remove from <code>rootTrackIds</code> (if root) <em>or</em> from its parent's <code>childIds</code>.</li>
-  <li>Recursively delete <code>childIds</code> — <em>deferred with nesting</em>; root tracks have none today.</li>
+  <li>Recursively delete <code>childIds</code> - <em>deferred with nesting</em>; root tracks have none today.</li>
   <li>Strip this id from any other track's <code>targets[]</code> (automation/routing references).</li>
   <li>Clear <code>UIStore.selectedTrackId</code> if it was the deleted one; drop its blocks from <code>selectedBlockIds</code>.</li>
 </ol>
 
 <h4>Keyboard wiring (locked precedence)</h4>
 <p>Inside <span class="filename">useTrackGestures</span>, on <span class="kbd">Delete</span>/<span class="kbd">Backspace</span> (not in a text field, <code>editingBlock == null</code>):</p>
-<pre><code><span class="tok-key">if</span> (selectedBlockIds.size) deleteSelectedBlocks()    <span class="tok-com">// blocks win — track they sit on stays</span>
+<pre><code><span class="tok-key">if</span> (selectedBlockIds.size) deleteSelectedBlocks()    <span class="tok-com">// blocks win - track they sit on stays</span>
 <span class="tok-key">else if</span> (selectedTrackId)   deleteTrack(selectedTrackId)  <span class="tok-com">// no blocks selected → delete track + its blocks</span></code></pre>
 <div class="warn"><strong>Backspace + browser back:</strong> call <code>e.preventDefault()</code> so a stray Backspace outside inputs can't navigate away. The MIDI editor's existing note-delete already shows the pattern.</div>
 
 <h4>Edge cases</h4>
 <ul>
-  <li>Deleting a parent — confirm the children policy (cascade delete vs orphan/reparent).</li>
+  <li>Deleting a parent - confirm the children policy (cascade delete vs orphan/reparent).</li>
   <li>No confirmation dialog (matches the app's current directness); given no undo, consider whether a guard is wanted for tracks with content.</li>
   <li>After delete, selection is cleared so a second keypress is a no-op rather than deleting a "neighbor."</li>
 </ul>
@@ -351,24 +351,24 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 <table>
   <thead><tr><th>Concern</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td><span class="badge risk">No undo (deferred)</span></td><td>Paste/duplicate/delete are irreversible until history lands. <strong>Not a per-action retrofit:</strong> a snapshot-based middleware on the project store (record whole-project state before each mutating action) is written once and covers every action — existing and future — automatically, à la the sibling DAW's <code>historyStore</code>/<code>historyMiddleware</code>. The only per-action nuance is choosing undoable "units" (a drag = one entry). Safe to ship these features first and add history later.</td></tr>
+    <tr><td><span class="badge risk">No undo (deferred)</span></td><td>Paste/duplicate/delete are irreversible until history lands. <strong>Not a per-action retrofit:</strong> a snapshot-based middleware on the project store (record whole-project state before each mutating action) is written once and covers every action - existing and future - automatically, à la the sibling DAW's <code>historyStore</code>/<code>historyMiddleware</code>. The only per-action nuance is choosing undoable "units" (a drag = one entry). Safe to ship these features first and add history later.</td></tr>
     <tr><td>Mac vs Windows</td><td><code>e.metaKey || e.ctrlKey</code> for copy/paste; <span class="kbd">Delete</span> and <span class="kbd">Backspace</span> both bound.</td></tr>
     <tr><td>Focus &amp; context</td><td>Single source of truth = <code>editingBlock</code>. Every handler guards text inputs and checks this flag to avoid double-firing.</td></tr>
-    <tr><td>System clipboard</td><td>This is an <em>in-app</em> clipboard (zustand), not the OS clipboard — so it won't collide with the browser and persists only for the session. Fine for v1; OS-clipboard JSON is a later option.</td></tr>
+    <tr><td>System clipboard</td><td>This is an <em>in-app</em> clipboard (zustand), not the OS clipboard - so it won't collide with the browser and persists only for the session. Fine for v1; OS-clipboard JSON is a later option.</td></tr>
     <tr><td>Selection feedback</td><td>Always re-select the pasted/duplicated result so the next action targets it and the user sees what happened.</td></tr>
-    <tr><td>Snapping</td><td>Paste never snaps (lands exactly at the playhead). Snapping is a property of the <em>playhead</em> via the new toggle (§5b) — turn it on to scrub onto bars, then paste there.</td></tr>
+    <tr><td>Snapping</td><td>Paste never snaps (lands exactly at the playhead). Snapping is a property of the <em>playhead</em> via the new toggle (§5b) - turn it on to scrub onto bars, then paste there.</td></tr>
   </tbody>
 </table>
 
 <!-- 9 -->
 <h2 id="order">9 · Suggested build order</h2>
 <ol>
-  <li><strong>Infra</strong> — <code>ClipboardStore</code> (§3.1). Clone helpers land with the actions that use them, not as a separate file.</li>
-  <li><strong>Delete blocks &amp; tracks</strong> (§7) — <code>deleteTrack</code> action + extend <code>useTrackGestures</code>' keydown. Highest value, lowest surface area; establishes the keyboard plumbing.</li>
-  <li><strong>Copy/paste blocks</strong> (§5) — same <code>useTrackGestures</code> handler + clipboard + <code>pasteBlocks</code>.</li>
-  <li><strong>Playhead snap toggle</strong> (§5b) — small, and makes block paste feel right.</li>
-  <li><strong>Copy/paste notes</strong> (§4) — self-contained inside the MIDI editor; reuses existing note selection.</li>
-  <li><strong>Alt-drag duplicate track</strong> (§6) — most interaction risk (dnd-kit); do last (overlay + drop-index, or Alt+click fallback).</li>
+  <li><strong>Infra</strong> - <code>ClipboardStore</code> (§3.1). Clone helpers land with the actions that use them, not as a separate file.</li>
+  <li><strong>Delete blocks &amp; tracks</strong> (§7) - <code>deleteTrack</code> action + extend <code>useTrackGestures</code>' keydown. Highest value, lowest surface area; establishes the keyboard plumbing.</li>
+  <li><strong>Copy/paste blocks</strong> (§5) - same <code>useTrackGestures</code> handler + clipboard + <code>pasteBlocks</code>.</li>
+  <li><strong>Playhead snap toggle</strong> (§5b) - small, and makes block paste feel right.</li>
+  <li><strong>Copy/paste notes</strong> (§4) - self-contained inside the MIDI editor; reuses existing note selection.</li>
+  <li><strong>Alt-drag duplicate track</strong> (§6) - most interaction risk (dnd-kit); do last (overlay + drop-index, or Alt+click fallback).</li>
   <li><em>(Later today)</em> Undo/history middleware covering all of the above at once.</li>
 </ol>
 
@@ -378,11 +378,11 @@ setClip({ kind: <span class="tok-str">'blocks'</span>, sourceTrackId, blocks: pi
 <ul>
   <li><strong>Playhead snap granularity:</strong> snap to <strong>bars</strong> (default) or <strong>beats</strong>?</li>
   <li><strong>Block paste with no track selected:</strong> no-op (current plan), or fall back to the source track?</li>
-  <li><strong>Copy key:</strong> confirm <span class="kbd">⌘/Ctrl + C</span> (the note read "ctrl p" — assuming that was a typo for C).</li>
+  <li><strong>Copy key:</strong> confirm <span class="kbd">⌘/Ctrl + C</span> (the note read "ctrl p" - assuming that was a typo for C).</li>
 </ul>
 
 <hr />
-<p class="small muted">Plan only — no code changed. References point at <span class="filename">src/editor/…</span> in this repo. Generated as a design artifact for review.</p>
+<p class="small muted">Plan only - no code changed. References point at <span class="filename">src/editor/…</span> in this repo. Generated as a design artifact for review.</p>
 
 </div>
 </body>

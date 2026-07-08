@@ -27,7 +27,7 @@ export interface MidiEditorProps {
   pixelsPerBeat?: number
   rowHeight?: number
   rangeLabels?: RangeLabel[]
-  /** Text for the frozen top-left corner (left of the ruler) — e.g. an automation
+  /** Text for the frozen top-left corner (left of the ruler) - e.g. an automation
    *  track's param name. */
   cornerLabel?: string
   /** Beat offset of this block in the project timeline (for playhead positioning) */
@@ -261,7 +261,7 @@ export function MidiEditor({
           Two-tone Logic-style: lighter top half with bar numbers, darker bottom half
           with tick lines and the playhead triangle. The playhead line lives in the grid. */}
       <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
-        {/* Frozen corner — stays put on horizontal scroll, aligned with the sticky labels.
+        {/* Frozen corner - stays put on horizontal scroll, aligned with the sticky labels.
             Distinct box colour (matching the track ruler + the label column below). */}
         <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2, display: 'flex', alignItems: 'center', padding: '0 8px' }}>
           {cornerLabel && (
@@ -277,7 +277,7 @@ export function MidiEditor({
             backgroundColor: '#18181b',
           }}
           onPointerDown={(e) => {
-            // Whole ruler scrubs here — the toolbar above (part of the editor) owns
+            // Whole ruler scrubs here - the toolbar above (part of the editor) owns
             // the panel-resize edge, so the ruler top doesn't double as a resizer.
             startScrub(e)
           }}
@@ -285,7 +285,7 @@ export function MidiEditor({
             e.currentTarget.style.cursor = 'ew-resize'
           }}
         >
-          {/* Subtle divider separating the top (numbers) and bottom (ticks) halves —
+          {/* Subtle divider separating the top (numbers) and bottom (ticks) halves -
               matches the track ruler (zinc-700 @ 40%). */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(63,63,70,0.4)', pointerEvents: 'none' }} />
 
@@ -375,7 +375,7 @@ export function MidiEditor({
         onScroll={onScrollSync}
       >
       <div style={{ width: canvasWidth, height: canvasHeight, position: 'relative', display: 'flex' }}>
-        {/* Labels column — frozen on horizontal scroll (sticky left), like the ruler
+        {/* Labels column - frozen on horizontal scroll (sticky left), like the ruler
             is frozen on vertical scroll. zIndex above notes + playhead so grid content
             slides under it instead of showing through. */}
         <div

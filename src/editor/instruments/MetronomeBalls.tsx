@@ -16,7 +16,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // current beat: angles/rotation/palette come from counting/folding the notes with
 // beat <= state.beat, so any scrub path lands on the identical picture. Tyler's
 // Managed* line/dot pools, displacement shader, ink/spiral/snare-bounce sub-effects
-// are collapsed away — this keeps the signature look with plain three primitives.
+// are collapsed away - this keeps the signature look with plain three primitives.
 
 // --- Palettes: [background, foreground/lines, accent/bg-flower] ---
 interface Palette { bg: number; fg: number; accent: number }
@@ -30,7 +30,7 @@ const PALETTES: Record<string, Palette> = {
   scarlet:  { bg: 0xdc143c, fg: 0x0a0a0a, accent: 0x8b0000 },
 }
 
-// MIDI trigger pitches (subset of Tyler's — the ones that map to what we render)
+// MIDI trigger pitches (subset of Tyler's - the ones that map to what we render)
 const PITCH_FG = 48          // nudge foreground angles + rotate
 const PITCH_BG = 50          // nudge background angles + rotate flower
 const PITCH_INVERT = 56      // swap bg/fg
@@ -193,7 +193,7 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
   const fgLineMatRef = useRef<LineBasicMaterial | null>(null)
   const fgDotMatRef = useRef<PointsMaterial | null>(null)
 
-  // Last-BUILT derived values (caches for the rebuild-on-change optimization —
+  // Last-BUILT derived values (caches for the rebuild-on-change optimization -
   // these are never accumulated, only compared against freshly derived values).
   const builtFg = useRef<{ kick: number; snare: number; balls: number; speed: number; fgScale: number; panelWidth: number } | null>(null)
   const builtBg = useRef<{ kick: number; snare: number; vMin: number } | null>(null)

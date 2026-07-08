@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visual Engine — Architecture Reflection (as built)</title>
+<title>Visual Engine - Architecture Reflection (as built)</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -80,32 +80,32 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Engine Reflection</span>
-  <h1>Visual Engine — Architecture Reflection</h1>
-  <p class="sub">The engine as it was actually built — every phase, every file, drawn out. A teaching pass over code you vibecoded fast, so you can hold the whole thing in your head.</p>
+  <h1>Visual Engine - Architecture Reflection</h1>
+  <p class="sub">The engine as it was actually built - every phase, every file, drawn out. A teaching pass over code you vibecoded fast, so you can hold the whole thing in your head.</p>
 </header>
 
 <div class="card">
   <h3 style="margin-top:18px">Contents</h3>
   <nav class="toc">
     <a href="#big">★ The whole engine in one view</a>
-    <a href="#p1">1 · Phase 1 — Resolve / engine skeleton</a>
-    <a href="#p2">2 · Phase 2 — Object defs, params, ports</a>
-    <a href="#auto">2b · Automation — pitch→value lanes</a>
-    <a href="#p3">3 · Phase 3 — Modulators + the matrix</a>
-    <a href="#p4">4 · Phase 4 — Tags + group routing</a>
-    <a href="#p5">5 · Phase 5 — Hierarchy + world matrix</a>
-    <a href="#p6">6 · Phase 6 — Ability child tracks</a>
-    <a href="#p7">7 · Phase 7 — Event modifiers</a>
-    <a href="#p8">8 · Phase 8 — Effects (transform/clone/shader)</a>
-    <a href="#p9">9 · Phase 9 — RenderSpec interpreter</a>
-    <a href="#p10">10 · Phase 10 — English → spec (frontier)</a>
+    <a href="#p1">1 · Phase 1 - Resolve / engine skeleton</a>
+    <a href="#p2">2 · Phase 2 - Object defs, params, ports</a>
+    <a href="#auto">2b · Automation - pitch→value lanes</a>
+    <a href="#p3">3 · Phase 3 - Modulators + the matrix</a>
+    <a href="#p4">4 · Phase 4 - Tags + group routing</a>
+    <a href="#p5">5 · Phase 5 - Hierarchy + world matrix</a>
+    <a href="#p6">6 · Phase 6 - Ability child tracks</a>
+    <a href="#p7">7 · Phase 7 - Event modifiers</a>
+    <a href="#p8">8 · Phase 8 - Effects (transform/clone/shader)</a>
+    <a href="#p9">9 · Phase 9 - RenderSpec interpreter</a>
+    <a href="#p10">10 · Phase 10 - English → spec (frontier)</a>
     <a href="#frame">11 · The per-frame timeline</a>
     <a href="#port">12 · Instrument porting (as-built)</a>
     <a href="#deltas">13 · Plan → as-built deltas, in one place</a>
   </nav>
 </div>
 
-<p class="lead">This document is a <strong>reflection</strong>, not a plan. The two prior docs (<span class="file">visual-architecture.html</span>, <span class="file">visual-architecture-implementation-plan.html</span>) argued for an architecture and sketched how to build it. You then built it — fast, and with a handful of deliberate mid-course corrections. This doc walks the <em>as-built</em> engine phase by phase, reads the actual source, and draws it so the mental model is unavoidable. Where the code diverged from the plan, a <span class="badge b-new" style="font-size:11.5px">as-built</span> callout says exactly how.</p>
+<p class="lead">This document is a <strong>reflection</strong>, not a plan. The two prior docs (<span class="file">visual-architecture.html</span>, <span class="file">visual-architecture-implementation-plan.html</span>) argued for an architecture and sketched how to build it. You then built it - fast, and with a handful of deliberate mid-course corrections. This doc walks the <em>as-built</em> engine phase by phase, reads the actual source, and draws it so the mental model is unavoidable. Where the code diverged from the plan, a <span class="badge b-new" style="font-size:11.5px">as-built</span> callout says exactly how.</p>
 
 <div class="rec"><strong>The one thing to internalize:</strong> the engine is a pure <em>observer</em> of the project document. The editor writes a store; <code>resolveProject()</code> flattens that store into a <em>resolved graph</em> (derived, never saved); every frame <code>computeAtBeat(beat)</code> runs the matrix, samples automation, composes world transforms, and stashes an <code>ObjectState</code> per object; the R3F renderers <em>pull</em> that state imperatively in <code>useFrame</code> and mutate their meshes. Data flows one way: <span class="file">document → resolve → per-frame compute → render+effects</span>. Nothing downstream ever writes back.</p></div>
 
@@ -120,23 +120,23 @@
     <text x="450" y="38" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">PROJECT DOCUMENT · ProjectStore</text>
     <text x="450" y="56" text-anchor="middle" font-size="10.5" fill="#565656">tracks (hierarchy, types, tags, targets, params, blocks, plugins)</text>
     <path d="M450,68 V96" stroke="#141414" stroke-width="1.5" marker-end="url(#a0)"/>
-    <text x="462" y="87" font-size="10" fill="#565656">① resolve — debounced 80ms, on edit</text>
+    <text x="462" y="87" font-size="10" fill="#565656">① resolve - debounced 80ms, on edit</text>
     <rect x="180" y="100" width="540" height="76" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/>
     <text x="450" y="122" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">RESOLVED GRAPH · resolve.ts → VisualEngine.ts</text>
     <text x="450" y="140" text-anchor="middle" font-size="10.5" fill="#565656">objects[] · modulators[] · routingsByPort · tagIndex</text>
     <text x="450" y="157" text-anchor="middle" font-size="10.5" fill="#565656">(flatten tree · fold modifiers · gather automations + abilityEvents · expand scopes)</text>
     <path d="M450,176 V204" stroke="#141414" stroke-width="1.5" marker-end="url(#a0)"/>
-    <text x="462" y="195" font-size="10" fill="#565656">② compute @beat — every frame (VisualBeatSync.useFrame, first)</text>
+    <text x="462" y="195" font-size="10" fill="#565656">② compute @beat - every frame (VisualBeatSync.useFrame, first)</text>
     <rect x="250" y="208" width="400" height="50" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="450" y="230" text-anchor="middle" font-size="12.5" font-weight="700" fill="#141414">runMatrix + sampleLane + composeLocal</text>
     <text x="450" y="247" text-anchor="middle" font-size="10.5" fill="#565656">ports · automated params · world matrix · activeNotes → ObjectState</text>
     <path d="M450,258 V286" stroke="#141414" stroke-width="1.5" marker-end="url(#a0)"/>
-    <text x="462" y="277" font-size="10" fill="#565656">③ pull — every frame (each renderer's useFrame)</text>
+    <text x="462" y="277" font-size="10" fill="#565656">③ pull - every frame (each renderer's useFrame)</text>
     <rect x="220" y="290" width="460" height="50" rx="6" fill="#141414"/>
     <text x="450" y="312" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff">ObjectRenderer → getObjectState(trackId)</text>
     <text x="450" y="329" text-anchor="middle" font-size="10.5" fill="#ffffff">placement group ← world · component draws mesh at local origin</text>
     <path d="M450,340 V368" stroke="#141414" stroke-width="1.5" marker-end="url(#a0)"/>
-    <text x="462" y="359" font-size="10" fill="#565656">④ effects chain — per object</text>
+    <text x="462" y="359" font-size="10" fill="#565656">④ effects chain - per object</text>
     <rect x="250" y="372" width="400" height="46" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/>
     <text x="450" y="392" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Transform ▸ Clone ▸ Shader (FBO)</text>
     <text x="450" y="409" text-anchor="middle" font-size="10.5" fill="#565656">plugins/* wrappers in components/visual/</text>
@@ -150,7 +150,7 @@
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">Three islands — store, engine, renderer — and the arrows between them</div>
+  <div class="figtitle">Three islands - store, engine, renderer - and the arrows between them</div>
   <svg viewBox="0 0 900 250" role="img" aria-label="Three islands">
     <defs><marker id="a0b" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="70" width="200" height="110" rx="10" fill="#ffffff" stroke="#141414" stroke-width="1.8"/>
@@ -184,7 +184,7 @@
     <text x="450" y="234" text-anchor="middle" font-size="9.5" fill="#7a7a7a">reads store + clock, writes neither</text>
     <text x="780" y="222" text-anchor="middle" font-size="9.5" fill="#7a7a7a">reads engine, not store*</text>
   </svg>
-  <figcaption>The engine is a plain module (mutable <code>graph</code> + <code>states</code> maps in <span class="file">VisualEngine.ts</span>), deliberately not zustand — per-frame <code>ObjectState</code> writes must never trigger React re-renders. The <em>only</em> React-visible signal is the object <strong>list</strong> (via <code>useSyncExternalStore</code>), so the scene tree reconciles on resolve, never per frame. (*<span class="file">ObjectRenderer</span> does read the store for its <code>visualPlugins</code> list — the one exception.)</figcaption>
+  <figcaption>The engine is a plain module (mutable <code>graph</code> + <code>states</code> maps in <span class="file">VisualEngine.ts</span>), deliberately not zustand - per-frame <code>ObjectState</code> writes must never trigger React re-renders. The <em>only</em> React-visible signal is the object <strong>list</strong> (via <code>useSyncExternalStore</code>), so the scene tree reconciles on resolve, never per frame. (*<span class="file">ObjectRenderer</span> does read the store for its <code>visualPlugins</code> list - the one exception.)</figcaption>
 </figure>
 
 <div class="keystone">
@@ -193,27 +193,27 @@
     <li><strong>Two type worlds.</strong> The <em>document</em> types (<span class="file">types.ts</span>: <code>Track</code>, <code>Block</code>, <code>Note</code>, <code>Routing</code>) are what the user edits and what persists. The <em>resolved-graph</em> types (<span class="file">core/engine/types.ts</span>: <code>ResolvedObject</code>, <code>ModulatorInstance</code>, <code>ResolvedRouting</code>, <code>ObjectState</code>) are derived and in-memory only. The dependency points one way: engine imports document types, never the reverse.</li>
     <li><strong>Three input layers meet on an object.</strong> <em>params ← automation</em> (child tracks, pitch→value), <em>ports ← modulators</em> (the matrix), <em>abilities ← their own child tracks</em> (bespoke, consumed by the instrument's own render). All three converge in <code>computeAtBeat</code>.</li>
     <li><strong>A modulator is a signal, routings are the wiring.</strong> The plan's monolithic "ModulatorInstance" was split: a <code>ModulatorInstance</code> is a pure signal (id + kind + triggers), evaluated <em>once</em> per frame; <code>ResolvedRouting</code>s fan that one output to many object ports. Scopes (track/tag/subtree) are pre-expanded to concrete object ids at resolve.</li>
-    <li><strong>Solo is real and object-scoped.</strong> If any object track is soloed, non-soloed objects go dark — but a modulator/modifier/automation child keeps its own mute, so soloing an object never silences its own plumbing. Abilities have their own per-object solo too.</li>
-    <li><strong>Hierarchy is functional.</strong> A parent's world matrix composes into its children's — <code>graph.objects</code> is in parent-before-child DFS order so a parent's world is always ready when a child reads it. Modifier / automation / ability children fold <em>into</em> their parent instead of resolving as their own object.</li>
+    <li><strong>Solo is real and object-scoped.</strong> If any object track is soloed, non-soloed objects go dark - but a modulator/modifier/automation child keeps its own mute, so soloing an object never silences its own plumbing. Abilities have their own per-object solo too.</li>
+    <li><strong>Hierarchy is functional.</strong> A parent's world matrix composes into its children's - <code>graph.objects</code> is in parent-before-child DFS order so a parent's world is always ready when a child reads it. Modifier / automation / ability children fold <em>into</em> their parent instead of resolving as their own object.</li>
     <li><strong>Effects are a separate layer.</strong> Transform / clone / shader plugins wrap the rendered object (not the port matrix). Shaders are per-object FBO (Option A): the object renders offscreen and comes back as a full-frame post-processed overlay.</li>
   </ol>
 </div>
 
 <!-- ============================ PHASE 1 ============================ -->
-<h2 id="p1">1 · Phase 1 — Resolve / engine skeleton</h2>
+<h2 id="p1">1 · Phase 1 - Resolve / engine skeleton</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">core/engine/types.ts</span> <span class="badge b-file">resolve.ts</span> <span class="badge b-file">VisualEngine.ts</span> <span class="badge b-file">VisualBeatSync.tsx</span> <span class="badge b-file">components/visual/VisualScene.tsx</span> <span class="badge b-file">ObjectRenderer.tsx</span> &nbsp; <span class="badge b-edit">edit</span> <span class="badge b-file">App.tsx</span> <span class="badge b-file">instruments/Cube.tsx</span></p>
 
-<p>The spine. The old <span class="file">Cube</span> scanned the whole project itself every frame; phase 1 replaced that with the <strong>resolve → compute → pull</strong> pipeline, and rewired the Cube to read engine state instead. Zero visible behavior change — that was the point (a good canary: if the pulse changed, the wiring was wrong).</p>
+<p>The spine. The old <span class="file">Cube</span> scanned the whole project itself every frame; phase 1 replaced that with the <strong>resolve → compute → pull</strong> pipeline, and rewired the Cube to read engine state instead. Zero visible behavior change - that was the point (a good canary: if the pulse changed, the wiring was wrong).</p>
 
 <figure class="fig">
-  <div class="figtitle">Before / after — the Cube stops scanning; the engine drives</div>
+  <div class="figtitle">Before / after - the Cube stops scanning; the engine drives</div>
   <svg viewBox="0 0 900 210" role="img" aria-label="Before and after phase 1">
     <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
-    <text x="30" y="24" font-size="12" font-weight="700" fill="#141414">BEFORE — self-scanning component</text>
+    <text x="30" y="24" font-size="12" font-weight="700" fill="#141414">BEFORE - self-scanning component</text>
     <rect x="30" y="34" width="150" height="40" rx="6" fill="#ffffff" stroke="#141414"/><text x="105" y="58" text-anchor="middle" font-size="11" fill="#141414">Cube.useFrame</text>
     <rect x="230" y="34" width="150" height="40" rx="6" fill="#ffffff" stroke="#141414"/><text x="305" y="52" text-anchor="middle" font-size="10.5" fill="#141414">scans project</text><text x="305" y="66" text-anchor="middle" font-size="9" fill="#565656">every frame, O(project)</text>
     <path d="M180,54 H228" stroke="#141414" stroke-width="1.3" marker-end="url(#a1)"/>
-    <text x="200" y="112" font-size="12" font-weight="700" fill="#141414">AFTER — pulled from a shared graph</text>
+    <text x="200" y="112" font-size="12" font-weight="700" fill="#141414">AFTER - pulled from a shared graph</text>
     <rect x="30" y="122" width="120" height="40" rx="6" fill="#ffffff" stroke="#141414"/><text x="90" y="140" text-anchor="middle" font-size="10" fill="#141414">ProjectStore</text><text x="90" y="154" text-anchor="middle" font-size="9" fill="#565656">document</text>
     <rect x="200" y="112" width="130" height="60" rx="6" fill="#fff" stroke="#141414" stroke-width="1.6"/><text x="265" y="134" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">resolveProject()</text><text x="265" y="150" text-anchor="middle" font-size="9" fill="#565656">→ ResolvedGraph</text><text x="265" y="163" text-anchor="middle" font-size="9" fill="#565656">(cached)</text>
     <rect x="380" y="112" width="140" height="60" rx="6" fill="#141414"/><text x="450" y="134" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">computeAtBeat()</text><text x="450" y="150" text-anchor="middle" font-size="9" fill="#ffffff">per frame → states</text><text x="450" y="163" text-anchor="middle" font-size="9" fill="#ffffff">Map&lt;id,ObjectState&gt;</text>
@@ -223,14 +223,14 @@
     <path d="M520,142 H568" stroke="#141414" stroke-width="1.3" marker-end="url(#a1)"/>
     <text x="765" y="146" font-size="9" fill="#565656">O(1) lookup</text>
   </svg>
-  <figcaption>Every object now reads a pre-computed <code>ObjectState</code> by id — one shared graph, one compute pass, cheap per-object pulls. No component ever walks the project again.</figcaption>
+  <figcaption>Every object now reads a pre-computed <code>ObjectState</code> by id - one shared graph, one compute pass, cheap per-object pulls. No component ever walks the project again.</figcaption>
 </figure>
 
 <h3>What <code>resolveProject</code> does (skeleton form)</h3>
-<p><span class="file">resolve.ts</span> is a pure function <code>ProjectSnapshot → ResolvedGraph</code>. The snapshot is a structural slice (<code>tracks</code>, <code>rootTrackIds</code>, <code>beatsPerBar</code>) — ProjectStore's state satisfies it structurally, so the engine never imports the store. <code>flattenTree</code> walks the forest depth-first (roots then descendants, with a <code>seen</code> guard against cyclic data), producing track ids in <strong>parent-before-child</strong> order — a property the world-matrix composition later depends on.</p>
+<p><span class="file">resolve.ts</span> is a pure function <code>ProjectSnapshot → ResolvedGraph</code>. The snapshot is a structural slice (<code>tracks</code>, <code>rootTrackIds</code>, <code>beatsPerBar</code>) - ProjectStore's state satisfies it structurally, so the engine never imports the store. <code>flattenTree</code> walks the forest depth-first (roots then descendants, with a <code>seen</code> guard against cyclic data), producing track ids in <strong>parent-before-child</strong> order - a property the world-matrix composition later depends on.</p>
 
 <figure class="fig">
-  <div class="figtitle">flattenTree — DFS forest walk, parent before child</div>
+  <div class="figtitle">flattenTree - DFS forest walk, parent before child</div>
   <svg viewBox="0 0 760 200" role="img" aria-label="Flatten tree DFS">
     <defs><marker id="a1b" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <rect x="40" y="30" width="120" height="30" rx="5" fill="#ffffff" stroke="#141414"/><text x="100" y="50" text-anchor="middle" font-size="11" fill="#141414">A (root)</text>
@@ -249,10 +249,10 @@
   <figcaption>The DFS order is load-bearing later: <code>computeAtBeat</code> composes world matrices in this exact order, so <code>worldMatrices.get(parentId)</code> is always fresh when a child multiplies against it.</figcaption>
 </figure>
 
-<p>For each object track, resolve calls <code>flattenNotes</code> — which flattens <code>track.blocks</code> to <strong>absolute project beats</strong>, carrying each note's containing block bounds (<code>blockStartBeat</code>/<code>blockEndBeat</code>) so downstream code can tell which notes are "live" — and pushes a <code>ResolvedObject</code>. <code>VisualEngine.ts</code> holds the resulting graph, plus a <code>states</code> map (<code>trackId → ObjectState</code>) and a <code>worldMatrices</code> map, all reused across frames.</p>
+<p>For each object track, resolve calls <code>flattenNotes</code> - which flattens <code>track.blocks</code> to <strong>absolute project beats</strong>, carrying each note's containing block bounds (<code>blockStartBeat</code>/<code>blockEndBeat</code>) so downstream code can tell which notes are "live" - and pushes a <code>ResolvedObject</code>. <code>VisualEngine.ts</code> holds the resulting graph, plus a <code>states</code> map (<code>trackId → ObjectState</code>) and a <code>worldMatrices</code> map, all reused across frames.</p>
 
 <figure class="fig">
-  <div class="figtitle">The two React-side touchpoints — VisualBeatSync and VisualScene</div>
+  <div class="figtitle">The two React-side touchpoints - VisualBeatSync and VisualScene</div>
   <svg viewBox="0 0 900 230" role="img" aria-label="React glue">
     <defs><marker id="a1c" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="20" width="860" height="90" rx="8" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="5 4"/>
@@ -263,8 +263,8 @@
     <rect x="20" y="132" width="270" height="80" rx="8" fill="#fff" stroke="#141414" stroke-width="1.4"/>
     <text x="155" y="154" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">on import (module scope)</text>
     <text x="155" y="174" text-anchor="middle" font-size="9.5" fill="#565656">subscribe(ProjectStore):</text>
-    <text x="155" y="190" text-anchor="middle" font-size="9.5" fill="#565656">syncParams(s) — sync</text>
-    <text x="155" y="204" text-anchor="middle" font-size="9.5" fill="#565656">setProject(s) — debounced 80ms</text>
+    <text x="155" y="190" text-anchor="middle" font-size="9.5" fill="#565656">syncParams(s) - sync</text>
+    <text x="155" y="204" text-anchor="middle" font-size="9.5" fill="#565656">setProject(s) - debounced 80ms</text>
     <rect x="320" y="132" width="270" height="80" rx="8" fill="#141414"/>
     <text x="455" y="154" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">VisualEngine (module singleton)</text>
     <text x="455" y="174" text-anchor="middle" font-size="9.5" fill="#ffffff">graph · states · worldMatrices</text>
@@ -280,31 +280,31 @@
     <path d="M155,96 V128" stroke="#141414" stroke-width="1.2" marker-end="url(#a1c)"/>
     <path d="M415,96 C415,110 620,110 700,130" fill="none" stroke="#141414" stroke-width="1.2" marker-end="url(#a1c)"/>
   </svg>
-  <figcaption><span class="file">VisualBeatSync</span> is the only React-side glue: a <code>useFrame</code> that runs first each frame, plus a store subscription that splits work — <code>syncParams</code> synchronously (so slider drags are instant) and the expensive structural <code>setProject</code> debounced 80ms. <span class="file">VisualScene</span> reconciles the scene tree only when the object list changes.</figcaption>
+  <figcaption><span class="file">VisualBeatSync</span> is the only React-side glue: a <code>useFrame</code> that runs first each frame, plus a store subscription that splits work - <code>syncParams</code> synchronously (so slider drags are instant) and the expensive structural <code>setProject</code> debounced 80ms. <span class="file">VisualScene</span> reconciles the scene tree only when the object list changes.</figcaption>
 </figure>
 
 <div class="delta"><span class="badge b-new">as-built</span> A refinement the plan didn't foresee: <code>syncParams(p)</code>. The subscription splits into two paths. A cheap synchronous pass rewrites just <code>obj.params</code> on the already-resolved objects (so dragging a size slider is reactive at 60fps), while the full structural <code>setProject</code> (which re-flattens the tree, rebuilds indices, re-splits objects/modulators) stays debounced. The scene keeps rendering the previous graph until the new one lands. The registry also landed as <span class="file">instruments/index.ts</span> (not <code>registry.ts</code>).</div>
 
 <!-- ============================ PHASE 2 ============================ -->
-<h2 id="p2">2 · Phase 2 — Object defs, params, ports</h2>
+<h2 id="p2">2 · Phase 2 - Object defs, params, ports</h2>
 <p class="files"><span class="badge b-edit">edit</span> <span class="badge b-file">instruments/types.ts</span> <span class="badge b-file">Cube.tsx</span> &nbsp; <span class="badge b-new">new</span> <span class="badge b-file">instruments/index.ts (registry)</span></p>
 
-<p>Phase 2 gave objects a real schema: <code>ObjectInstrumentDef</code> with <strong>params</strong> (public numeric knobs) and <strong>ports</strong> (hidden modulation jacks). Everything is a <code>number</code> — even color is a hue param in 0–360 — which keeps automation and modulation uniform.</p>
+<p>Phase 2 gave objects a real schema: <code>ObjectInstrumentDef</code> with <strong>params</strong> (public numeric knobs) and <strong>ports</strong> (hidden modulation jacks). Everything is a <code>number</code> - even color is a hue param in 0–360 - which keeps automation and modulation uniform.</p>
 
 <figure class="fig">
-  <div class="figtitle">ObjectInstrumentDef — params vs ports vs abilities</div>
+  <div class="figtitle">ObjectInstrumentDef - params vs ports vs abilities</div>
   <svg viewBox="0 0 820 280" role="img" aria-label="Object def anatomy">
     <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="280" y="14" width="300" height="252" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="430" y="38" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">ObjectInstrumentDef · Cube</text>
     <rect x="300" y="52" width="260" height="52" rx="6" fill="#ffffff" stroke="#141414"/>
-    <text x="314" y="72" font-size="12" font-weight="700" fill="#141414">params — ParamDef[]</text>
+    <text x="314" y="72" font-size="12" font-weight="700" fill="#141414">params - ParamDef[]</text>
     <text x="314" y="90" font-size="10" fill="#565656">baseSize · baseHue · baseXPosition</text>
     <rect x="300" y="114" width="260" height="52" rx="6" fill="#ffffff" stroke="#141414" stroke-dasharray="4 3"/>
-    <text x="314" y="134" font-size="12" font-weight="700" fill="#141414">ports — PortDef[]</text>
+    <text x="314" y="134" font-size="12" font-weight="700" fill="#141414">ports - PortDef[]</text>
     <text x="314" y="152" font-size="10" fill="#565656">energy · scale · hue  (combine: add)</text>
     <rect x="300" y="176" width="260" height="42" rx="6" fill="#fff" stroke="#141414"/>
-    <text x="314" y="196" font-size="12" font-weight="700" fill="#141414">abilities — AbilityLaneDef[]</text>
+    <text x="314" y="196" font-size="12" font-weight="700" fill="#141414">abilities - AbilityLaneDef[]</text>
     <text x="314" y="212" font-size="10" fill="#565656">shatter (color #f472b6)</text>
     <rect x="300" y="228" width="260" height="28" rx="6" fill="#141414"/>
     <text x="430" y="247" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">localTransform(ctx) + component</text>
@@ -317,21 +317,21 @@
     <rect x="620" y="90" width="180" height="90" rx="6" fill="#141414"/><text x="710" y="114" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">localTransform</text><text x="710" y="134" text-anchor="middle" font-size="9" fill="#ffffff">reads params + ports</text><text x="710" y="150" text-anchor="middle" font-size="9" fill="#ffffff">+ beat → LocalTransform</text><text x="710" y="167" text-anchor="middle" font-size="9" fill="#ffffff">(position/rotation/scale)</text>
     <path d="M560,150 L618,140" stroke="#141414" stroke-width="1.4" marker-end="url(#a2)"/>
   </svg>
-  <figcaption>Params are user-facing and automation-targetable; ports are internal plumbing (a modulator bakes in its target port — the user never picks one). The Cube's <code>localTransform</code> reads both plus <code>beat</code> and returns a <code>LocalTransform</code> the engine composes.</figcaption>
+  <figcaption>Params are user-facing and automation-targetable; ports are internal plumbing (a modulator bakes in its target port - the user never picks one). The Cube's <code>localTransform</code> reads both plus <code>beat</code> and returns a <code>LocalTransform</code> the engine composes.</figcaption>
 </figure>
 
-<p>Crucially, phase 2 also introduced <code>localTransform</code> as <em>data on the def</em>. Rather than each component computing its own position/rotation/scale, an instrument declares a pure function <code>(ctx) → LocalTransform</code>. The Cube's is: position from <code>baseXPosition</code>, a steady spin from <code>beat</code>, and a breathing scale boosted by the <code>energy</code> port. The engine composes this into a world matrix (phase 5) and the component just draws at local origin — it only owns <em>appearance</em> (color/emissive) and its ability.</p>
+<p>Crucially, phase 2 also introduced <code>localTransform</code> as <em>data on the def</em>. Rather than each component computing its own position/rotation/scale, an instrument declares a pure function <code>(ctx) → LocalTransform</code>. The Cube's is: position from <code>baseXPosition</code>, a steady spin from <code>beat</code>, and a breathing scale boosted by the <code>energy</code> port. The engine composes this into a world matrix (phase 5) and the component just draws at local origin - it only owns <em>appearance</em> (color/emissive) and its ability.</p>
 
-<div class="note"><strong>PortDef carries its own combine rule.</strong> <code>{ key, label, combine: 'add'|'multiply'|'max'|'replace', default, range? }</code>. The combine rule lives on the <em>port</em> (the object author's choice) not the routing — so "energy adds", "a freeze replaces". The Cube's three ports all default to <code>0</code> and combine by <code>add</code>. Ports rest at their default until a modulator drives them.</div>
+<div class="note"><strong>PortDef carries its own combine rule.</strong> <code>{ key, label, combine: 'add'|'multiply'|'max'|'replace', default, range? }</code>. The combine rule lives on the <em>port</em> (the object author's choice) not the routing - so "energy adds", "a freeze replaces". The Cube's three ports all default to <code>0</code> and combine by <code>add</code>. Ports rest at their default until a modulator drives them.</div>
 
 <!-- ============================ AUTOMATION ============================ -->
-<h2 id="auto">2b · Automation — pitch→value parameter lanes</h2>
+<h2 id="auto">2b · Automation - pitch→value parameter lanes</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">core/engine/automation.ts</span> &nbsp; <span class="badge b-edit">edit</span> <span class="badge b-file">resolve.ts</span> <span class="badge b-file">VisualEngine.ts (computeAtBeat)</span> <span class="badge b-file">TrackContextMenu.tsx</span></p>
 
 <p>Automation shipped as its own phase (4 commits). It's the <em>params ← automation</em> input layer. The trick borrowed from Tyler: an automation lane is a MIDI editor where a note's <strong>pitch encodes the value</strong> and its time is the keyframe time; the engine interpolates between keyframes.</p>
 
 <figure class="fig">
-  <div class="figtitle">extractKeyframes — a note's pitch maps to a param value</div>
+  <div class="figtitle">extractKeyframes - a note's pitch maps to a param value</div>
   <svg viewBox="0 0 780 240" role="img" aria-label="Pitch to value">
     <line x1="70" y1="26" x2="70" y2="188" stroke="#141414" stroke-width="1.2"/>
     <line x1="70" y1="188" x2="700" y2="188" stroke="#141414" stroke-width="1.2"/>
@@ -352,7 +352,7 @@
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">sampleLane — binary search + interpolate; endpoints held</div>
+  <div class="figtitle">sampleLane - binary search + interpolate; endpoints held</div>
   <svg viewBox="0 0 820 210" role="img" aria-label="Sample lane">
     <defs><marker id="a2c" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <line x1="40" y1="150" x2="780" y2="150" stroke="#ccc" stroke-width="1"/>
@@ -376,18 +376,18 @@
   <figcaption><code>sampleLane</code> holds endpoints flat, binary-searches the surrounding keyframe pair, and interpolates by the lane's <code>mode</code>. It's a <em>pure function of the beat</em>, so scrubbing produces identical values to playback.</figcaption>
 </figure>
 
-<p>At resolve, <code>resolveAutomations</code> gathers each object track's <code>automation</code> child tracks into <code>ResolvedAutomation[]</code> (each: <code>{param, mode, keyframes}</code>), skipping children with no/unknown target param, and honoring per-object automation solo. In <code>computeAtBeat</code>, if an object has any automations, its params are <strong>copied and overlaid</strong>: <code>params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)</code> — this happens <em>before</em> <code>localTransform</code> reads them, so an automated <code>baseSize</code> flows straight into the world matrix.</p>
+<p>At resolve, <code>resolveAutomations</code> gathers each object track's <code>automation</code> child tracks into <code>ResolvedAutomation[]</code> (each: <code>{param, mode, keyframes}</code>), skipping children with no/unknown target param, and honoring per-object automation solo. In <code>computeAtBeat</code>, if an object has any automations, its params are <strong>copied and overlaid</strong>: <code>params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)</code> - this happens <em>before</em> <code>localTransform</code> reads them, so an automated <code>baseSize</code> flows straight into the world matrix.</p>
 
-<div class="delta"><span class="badge b-new">as-built</span> An automation track is a real <strong>child track</strong> (<code>type:'automation'</code>, no instrument, <code>targetParam</code>, <code>interpolation</code>), added opt-in via the track right-click menu and locked to its object (can't be re-parented). It revived a dormant stub (<code>TrackType 'automation'</code>, <code>generateAutomationRows</code>) rather than inventing a new container — mirroring the modifier-track pattern ("a child automates its parent").</div>
+<div class="delta"><span class="badge b-new">as-built</span> An automation track is a real <strong>child track</strong> (<code>type:'automation'</code>, no instrument, <code>targetParam</code>, <code>interpolation</code>), added opt-in via the track right-click menu and locked to its object (can't be re-parented). It revived a dormant stub (<code>TrackType 'automation'</code>, <code>generateAutomationRows</code>) rather than inventing a new container - mirroring the modifier-track pattern ("a child automates its parent").</div>
 
 <!-- ============================ PHASE 3 ============================ -->
-<h2 id="p3">3 · Phase 3 — Modulators + the matrix ★ keystone</h2>
+<h2 id="p3">3 · Phase 3 - Modulators + the matrix ★ keystone</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">core/engine/matrix.ts</span> <span class="badge b-file">modulators.ts</span> <span class="badge b-file">instruments/modulators/Pulse.ts</span> <span class="badge b-file">modulators/index.ts</span> &nbsp; <span class="badge b-edit">edit</span> <span class="badge b-file">VisualEngine.ts</span> <span class="badge b-file">ProjectStore.ts (setTrackTargets)</span></p>
 
-<p>The keystone. A <strong>modulator</strong> is an instrument that renders nothing — its notes are triggers, and its per-frame output drives a <strong>port</strong> on whatever object(s) it's routed to. A track is a modulator iff its <code>instrumentId</code> is in the modulator registry.</p>
+<p>The keystone. A <strong>modulator</strong> is an instrument that renders nothing - its notes are triggers, and its per-frame output drives a <strong>port</strong> on whatever object(s) it's routed to. A track is a modulator iff its <code>instrumentId</code> is in the modulator registry.</p>
 
 <figure class="fig">
-  <div class="figtitle">The modulation matrix — signal evaluated once, fanned to ports</div>
+  <div class="figtitle">The modulation matrix - signal evaluated once, fanned to ports</div>
   <svg viewBox="0 0 880 300" role="img" aria-label="Matrix">
     <defs><marker id="a3" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="120" width="170" height="60" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.6"/>
@@ -399,7 +399,7 @@
     <path d="M190,150 H233" stroke="#141414" stroke-width="1.5" marker-end="url(#a3)"/>
     <text x="205" y="118" font-size="9" fill="#565656">once/frame</text>
     <rect x="450" y="30" width="410" height="240" rx="8" fill="#fff" stroke="#141414" stroke-width="1.6"/>
-    <text x="655" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">runMatrix — per object, per port</text>
+    <text x="655" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">runMatrix - per object, per port</text>
     <rect x="470" y="66" width="180" height="88" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="560" y="86" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">object A</text>
     <text x="482" y="106" font-size="9.5" fill="#565656">for port in obj.ports:</text>
@@ -422,7 +422,7 @@
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">evaluatePulse — a decaying envelope from the last trigger</div>
+  <div class="figtitle">evaluatePulse - a decaying envelope from the last trigger</div>
   <svg viewBox="0 0 780 220" role="img" aria-label="Pulse decay">
     <line x1="60" y1="30" x2="60" y2="180" stroke="#141414" stroke-width="1.2"/>
     <line x1="60" y1="180" x2="740" y2="180" stroke="#141414" stroke-width="1.2"/>
@@ -447,27 +447,27 @@
   <figcaption><span class="file">Pulse.ts</span>: for the current beat, find the most recent trigger at-or-before it (within its block bounds), take a linear ramp-down over <code>DECAY_BEATS = 0.45</code>, intensity scaled by pitch (<code>(pitch − 24 + 1)/20</code>). This is the Cube's original inline pulse, generalized to drive any scalar port.</figcaption>
 </figure>
 
-<div class="delta"><span class="badge b-new">as-built</span> Two deltas matter here. <strong>(1) The signal/routing split.</strong> The plan's single "ModulatorInstance {triggers, shape, routings}" became a pure signal <code>ModulatorInstance { id, kind, triggers }</code> plus separate <code>ResolvedRouting { modulatorId, targetObjectId, targetPort, amount }</code> links, bucketed in <code>routingsByPort</code>. So one signal is evaluated once and fanned to every object its scopes hit. <strong>(2) The built-in self-pulse.</strong> resolve synthesizes an <em>implicit</em> modulator per object (<code>${trackId}:pulse</code>) from the object's own notes, routed to its own <code>energy</code> port with amount 1 — that's the Cube's original self-pulse preserved. Explicit modulator tracks stack on top. The store action is <code>setTrackTargets</code> (not <code>setRoutings</code>).</div>
+<div class="delta"><span class="badge b-new">as-built</span> Two deltas matter here. <strong>(1) The signal/routing split.</strong> The plan's single "ModulatorInstance {triggers, shape, routings}" became a pure signal <code>ModulatorInstance { id, kind, triggers }</code> plus separate <code>ResolvedRouting { modulatorId, targetObjectId, targetPort, amount }</code> links, bucketed in <code>routingsByPort</code>. So one signal is evaluated once and fanned to every object its scopes hit. <strong>(2) The built-in self-pulse.</strong> resolve synthesizes an <em>implicit</em> modulator per object (<code>${trackId}:pulse</code>) from the object's own notes, routed to its own <code>energy</code> port with amount 1 - that's the Cube's original self-pulse preserved. Explicit modulator tracks stack on top. The store action is <code>setTrackTargets</code> (not <code>setRoutings</code>).</div>
 
 <!-- ============================ PHASE 4 ============================ -->
-<h2 id="p4">4 · Phase 4 — Tags + group routing</h2>
+<h2 id="p4">4 · Phase 4 - Tags + group routing</h2>
 <p class="files"><span class="badge b-edit">edit</span> <span class="badge b-file">types.ts (Routing, Track.tags)</span> <span class="badge b-file">resolve.ts (tagIndex, scope expansion)</span> <span class="badge b-file">matrix.ts</span> <span class="badge b-file">ProjectStore.ts (setTrackTags)</span> <span class="badge b-file">TrackEditor.tsx</span></p>
 
-<p>Phase 4 made routing <em>cross-cutting</em>. A <code>Routing</code> is <code>{ port, scope: track|tag|subtree, amount }</code>. The scope is the only user-set part — one drag onto a tag and the pulse hits every object carrying it.</p>
+<p>Phase 4 made routing <em>cross-cutting</em>. A <code>Routing</code> is <code>{ port, scope: track|tag|subtree, amount }</code>. The scope is the only user-set part - one drag onto a tag and the pulse hits every object carrying it.</p>
 
 <figure class="fig">
-  <div class="figtitle">Two-pass resolve — objects + tagIndex first, then expand scopes</div>
+  <div class="figtitle">Two-pass resolve - objects + tagIndex first, then expand scopes</div>
   <svg viewBox="0 0 880 300" role="img" aria-label="Two pass resolve">
     <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="20" width="840" height="120" rx="8" fill="#ffffff" stroke="#141414" stroke-width="1.4"/>
-    <text x="36" y="40" font-size="11" font-weight="700" fill="#141414">PASS 1 — object tracks (defer modulator tracks)</text>
+    <text x="36" y="40" font-size="11" font-weight="700" fill="#141414">PASS 1 - object tracks (defer modulator tracks)</text>
     <rect x="40" y="52" width="180" height="70" rx="6" fill="#fff" stroke="#141414"/><text x="130" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">push ResolvedObject</text><text x="130" y="92" text-anchor="middle" font-size="9" fill="#565656">notes, ports, automations,</text><text x="130" y="106" text-anchor="middle" font-size="9" fill="#565656">abilityEvents, tags</text>
     <rect x="250" y="52" width="180" height="70" rx="6" fill="#fff" stroke="#141414"/><text x="340" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">build tagIndex</text><text x="340" y="92" text-anchor="middle" font-size="9" fill="#565656">tag → [trackId, …]</text>
-    <rect x="460" y="52" width="180" height="70" rx="6" fill="#ffffff" stroke="#141414"/><text x="550" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">modTracks[]</text><text x="550" y="92" text-anchor="middle" font-size="9" fill="#565656">(deferred — tag index</text><text x="550" y="106" text-anchor="middle" font-size="9" fill="#565656">not ready yet)</text>
+    <rect x="460" y="52" width="180" height="70" rx="6" fill="#ffffff" stroke="#141414"/><text x="550" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">modTracks[]</text><text x="550" y="92" text-anchor="middle" font-size="9" fill="#565656">(deferred - tag index</text><text x="550" y="106" text-anchor="middle" font-size="9" fill="#565656">not ready yet)</text>
     <rect x="660" y="52" width="180" height="70" rx="6" fill="#fff" stroke="#141414"/><text x="750" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">solo check</text><text x="750" y="92" text-anchor="middle" font-size="9" fill="#565656">anyObjectSolo →</text><text x="750" y="106" text-anchor="middle" font-size="9" fill="#565656">objectOff(track)</text>
     <path d="M440,255 H860" stroke="none"/>
     <rect x="20" y="160" width="840" height="120" rx="8" fill="#fff" stroke="#141414" stroke-width="1.6"/>
-    <text x="36" y="180" font-size="11" font-weight="700" fill="#141414">PASS 2 — modulator tracks: expand each routing's scope</text>
+    <text x="36" y="180" font-size="11" font-weight="700" fill="#141414">PASS 2 - modulator tracks: expand each routing's scope</text>
     <rect x="40" y="192" width="200" height="72" rx="6" fill="#ffffff" stroke="#141414"/><text x="140" y="214" text-anchor="middle" font-size="10" fill="#141414">scope.kind = 'track'</text><text x="140" y="232" text-anchor="middle" font-size="9" fill="#565656">→ [scope.id]</text>
     <rect x="260" y="192" width="200" height="72" rx="6" fill="#ffffff" stroke="#141414"/><text x="360" y="214" text-anchor="middle" font-size="10" fill="#141414">scope.kind = 'tag'</text><text x="360" y="232" text-anchor="middle" font-size="9" fill="#565656">→ tagIndex.get(tag)</text>
     <rect x="480" y="192" width="200" height="72" rx="6" fill="#ffffff" stroke="#141414"/><text x="580" y="214" text-anchor="middle" font-size="10" fill="#141414">scope.kind = 'subtree'</text><text x="580" y="232" text-anchor="middle" font-size="9" fill="#565656">→ objectsInSubtree(id)</text>
@@ -477,18 +477,18 @@
     <path d="M680,228 H698" stroke="#141414" stroke-width="1.2" marker-end="url(#a4)"/>
     <path d="M550,122 V158" stroke="#141414" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a4)"/>
   </svg>
-  <figcaption>Objects and the tag index must exist before a tag-scoped routing can name concrete objects — hence two passes. Modulator tracks are collected in pass 1 and expanded in pass 2. Each <code>(object, port)</code> pair is deduped so overlapping scopes don't double-fire.</figcaption>
+  <figcaption>Objects and the tag index must exist before a tag-scoped routing can name concrete objects - hence two passes. Modulator tracks are collected in pass 1 and expanded in pass 2. Each <code>(object, port)</code> pair is deduped so overlapping scopes don't double-fire.</figcaption>
 </figure>
 
-<div class="note"><strong>Solo is real, and object-scoped.</strong> <code>anyObjectSolo</code> checks whether <em>any</em> object track (has an instrument, not a modulator) is soloed; if so, <code>objectOff(track)</code> darkens non-soloed objects. But modulators, modifier children, and automation children keep their own mute — soloing an object never disables the modulator targeting it or its own automation. Ability-lane solo is separate again (per object, inside <code>resolveAbilityEvents</code>).</div>
+<div class="note"><strong>Solo is real, and object-scoped.</strong> <code>anyObjectSolo</code> checks whether <em>any</em> object track (has an instrument, not a modulator) is soloed; if so, <code>objectOff(track)</code> darkens non-soloed objects. But modulators, modifier children, and automation children keep their own mute - soloing an object never disables the modulator targeting it or its own automation. Ability-lane solo is separate again (per object, inside <code>resolveAbilityEvents</code>).</div>
 
-<div class="delta"><span class="badge b-new">as-built</span> <code>subtree</code> scope was a phase-4 stub (resolved to no objects) and became live in phase 5 once the hierarchy existed — <code>objectsInSubtree(rootId)</code> now walks the root and its descendants, keeping only ids that resolved to objects.</div>
+<div class="delta"><span class="badge b-new">as-built</span> <code>subtree</code> scope was a phase-4 stub (resolved to no objects) and became live in phase 5 once the hierarchy existed - <code>objectsInSubtree(rootId)</code> now walks the root and its descendants, keeping only ids that resolved to objects.</div>
 
 <!-- ============================ PHASE 5 ============================ -->
-<h2 id="p5">5 · Phase 5 — Nested hierarchy + world-matrix inheritance</h2>
+<h2 id="p5">5 · Phase 5 - Nested hierarchy + world-matrix inheritance</h2>
 <p class="files"><span class="badge b-edit">edit</span> <span class="badge b-file">resolve.ts (parentId, objectsInSubtree)</span> <span class="badge b-file">VisualEngine.ts (composeLocal, world)</span> &nbsp; <span class="badge b-new">new</span> <span class="badge b-file">core/engine/transforms.ts</span> &nbsp; <span class="badge b-edit">edit</span> <span class="badge b-file">timeline (nested rows)</span></p>
 
-<p>Hierarchy became functional: a child object inherits its parent's transform. Because <code>flattenTree</code> emits parent-before-child, <code>computeAtBeat</code> can compose in one forward pass — a parent's world matrix is always ready when its child reads it.</p>
+<p>Hierarchy became functional: a child object inherits its parent's transform. Because <code>flattenTree</code> emits parent-before-child, <code>computeAtBeat</code> can compose in one forward pass - a parent's world matrix is always ready when its child reads it.</p>
 
 <figure class="fig">
   <div class="figtitle">World-matrix composition down the tree</div>
@@ -523,13 +523,13 @@
 <p>The renderer side: <code>ObjectRenderer</code> wraps its content in a <strong>placement group</strong> whose matrix is set each frame from <code>state.world.decompose(g.position, g.quaternion, g.scale)</code>. So the world transform lives on the group; the instrument component draws its mesh at local origin. The group also carries the mute blackout (<code>g.visible = !state?.blackedOut</code>).</p>
 
 <!-- ============================ PHASE 6 ============================ -->
-<h2 id="p6">6 · Phase 6 — Ability child tracks (reworked from lanes)</h2>
+<h2 id="p6">6 · Phase 6 - Ability child tracks (reworked from lanes)</h2>
 <p class="files"><span class="badge b-edit">edit</span> <span class="badge b-file">instruments/types.ts (AbilityLaneDef)</span> <span class="badge b-file">types.ts (Track.abilityKey)</span> <span class="badge b-file">resolve.ts (resolveAbilityEvents)</span> <span class="badge b-file">Cube.tsx (Shatter)</span> <span class="badge b-file">TrackContextMenu.tsx</span></p>
 
 <p>An ability is a signature move an instrument declares (<code>AbilityLaneDef { key, label, editor?, color? }</code>). The Cube declares one: <strong>Shatter</strong>. Playing notes on its ability track fires it.</p>
 
 <figure class="fig">
-  <div class="figtitle">Ability path — a child track's notes reach the instrument's render</div>
+  <div class="figtitle">Ability path - a child track's notes reach the instrument's render</div>
   <svg viewBox="0 0 880 250" role="img" aria-label="Ability path">
     <defs><marker id="a6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="200" height="60" rx="6" fill="#ffffff" stroke="#141414"/><text x="120" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#141414">ability child track</text><text x="120" y="70" text-anchor="middle" font-size="9" fill="#565656">type:'ability', abilityKey:'shatter'</text><text x="120" y="83" text-anchor="middle" font-size="9" fill="#565656">blocks + notes</text>
@@ -547,13 +547,13 @@
     <text x="30" y="212" font-size="10" fill="#565656" font-family="monospace">core shrinks (1 − 0.85·a); 8 corner fragments fly out by a·spread</text>
     <text x="30" y="230" font-size="10" fill="#565656" font-family="monospace">spread from velocity; reassembles over the note length</text>
   </svg>
-  <figcaption>The ability's notes become <code>abilityEvents</code> on the resolved object, threaded into <code>ObjectState</code>. The <em>instrument's own render</em> consumes them (the code escape hatch) — the burst is bespoke code, not a generic scalar. Peak is at the note onset so scrubbing lands on the peak, not a zero-crossing.</figcaption>
+  <figcaption>The ability's notes become <code>abilityEvents</code> on the resolved object, threaded into <code>ObjectState</code>. The <em>instrument's own render</em> consumes them (the code escape hatch) - the burst is bespoke code, not a generic scalar. Peak is at the note onset so scrubbing lands on the peak, not a zero-crossing.</figcaption>
 </figure>
 
-<div class="delta"><span class="badge b-new">as-built · SUPERSEDED PLAN</span> This is the biggest divergence from the architecture doc. The plan said abilities were a <strong>parallel <code>lanes[]</code></strong> structure on the object track (indented sub-rows drawn by a dedicated <code>AbilityLaneRow</code> widget with bespoke <code>useLaneGestures</code>), explicitly <em>not</em> child tracks. As shipped, abilities are real <strong><code>ability</code> child tracks</strong> — functionally identical to automation tracks (<code>Track.type='ability'</code> + <code>abilityKey</code>, added opt-in via the right-click menu). The win: <em>every</em> block (normal / automation / ability) is <code>track.blocks</code> flowing through one gesture system, so marquee / move / copy / paste / alt-duplicate are completely unified. <code>AbilityLaneRow</code> and <code>useLaneGestures</code> were deleted; the old <code>lanes</code>/<code>laneKey</code> plumbing on <code>Track</code> is dead-but-dormant.</div>
+<div class="delta"><span class="badge b-new">as-built · SUPERSEDED PLAN</span> This is the biggest divergence from the architecture doc. The plan said abilities were a <strong>parallel <code>lanes[]</code></strong> structure on the object track (indented sub-rows drawn by a dedicated <code>AbilityLaneRow</code> widget with bespoke <code>useLaneGestures</code>), explicitly <em>not</em> child tracks. As shipped, abilities are real <strong><code>ability</code> child tracks</strong> - functionally identical to automation tracks (<code>Track.type='ability'</code> + <code>abilityKey</code>, added opt-in via the right-click menu). The win: <em>every</em> block (normal / automation / ability) is <code>track.blocks</code> flowing through one gesture system, so marquee / move / copy / paste / alt-duplicate are completely unified. <code>AbilityLaneRow</code> and <code>useLaneGestures</code> were deleted; the old <code>lanes</code>/<code>laneKey</code> plumbing on <code>Track</code> is dead-but-dormant.</div>
 
 <!-- ============================ PHASE 7 ============================ -->
-<h2 id="p7">7 · Phase 7 — Event modifiers (add / override / suppress / mute)</h2>
+<h2 id="p7">7 · Phase 7 - Event modifiers (add / override / suppress / mute)</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">core/engine/trackTypes.ts</span> &nbsp; <span class="badge b-edit">edit</span> <span class="badge b-file">resolve.ts (applyModifiers)</span> <span class="badge b-file">VisualEngine.ts (blackout)</span></p>
 
 <p>An event modifier is a no-instrument child track that reshapes its parent's note stream at <em>resolve</em> time. <code>trackTypes.ts</code> ports Tyler's <code>combine(parent, self)</code> family. Four types shipped: <strong>add</strong>, <strong>override</strong>, <strong>suppress</strong>, <strong>mute</strong>.</p>
@@ -563,42 +563,42 @@
   <svg viewBox="0 0 880 250" role="img" aria-label="Modifier combines">
     <g font-size="10">
     <!-- add -->
-    <text x="20" y="26" font-size="11" font-weight="700" fill="#141414">add — layer self onto parent (dedup beat+pitch)</text>
+    <text x="20" y="26" font-size="11" font-weight="700" fill="#141414">add - layer self onto parent (dedup beat+pitch)</text>
     <rect x="20" y="34" width="18" height="10" fill="#141414"/><rect x="60" y="34" width="18" height="10" fill="#141414"/><rect x="100" y="34" width="18" height="10" fill="#141414"/>
     <text x="140" y="44" fill="#565656">+ self:</text><rect x="185" y="34" width="18" height="10" fill="#999"/><rect x="225" y="34" width="18" height="10" fill="#999"/>
     <text x="270" y="44" fill="#565656">=</text><rect x="290" y="34" width="18" height="10" fill="#141414"/><rect x="312" y="34" width="18" height="10" fill="#999"/><rect x="334" y="34" width="18" height="10" fill="#141414"/><rect x="356" y="34" width="18" height="10" fill="#999"/><rect x="378" y="34" width="18" height="10" fill="#141414"/>
     <!-- override -->
-    <text x="20" y="78" font-size="11" font-weight="700" fill="#141414">override — replace parent within the bar range self spans</text>
+    <text x="20" y="78" font-size="11" font-weight="700" fill="#141414">override - replace parent within the bar range self spans</text>
     <rect x="20" y="86" width="18" height="10" fill="#141414"/><rect x="52" y="86" width="18" height="10" fill="#141414"/><rect x="84" y="86" width="18" height="10" fill="#141414"/><rect x="116" y="86" width="18" height="10" fill="#141414"/>
     <rect x="52" y="86" width="82" height="10" fill="none" stroke="#6a6a6a" stroke-dasharray="3 2"/>
     <text x="160" y="96" fill="#565656">→</text><rect x="185" y="86" width="18" height="10" fill="#141414"/><rect x="217" y="86" width="18" height="10" fill="#999"/><rect x="249" y="86" width="18" height="10" fill="#999"/>
     <!-- suppress -->
-    <text x="20" y="130" font-size="11" font-weight="700" fill="#141414">suppress — drop parent notes whose start falls in a self region</text>
+    <text x="20" y="130" font-size="11" font-weight="700" fill="#141414">suppress - drop parent notes whose start falls in a self region</text>
     <rect x="20" y="138" width="18" height="10" fill="#141414"/><rect x="60" y="138" width="18" height="10" fill="#141414"/><rect x="100" y="138" width="18" height="10" fill="#141414"/><rect x="140" y="138" width="18" height="10" fill="#141414"/>
     <rect x="54" y="136" width="72" height="14" fill="none" stroke="#6a6a6a" stroke-dasharray="3 2"/>
     <text x="180" y="148" fill="#565656">→</text><rect x="205" y="138" width="18" height="10" fill="#141414"/><rect x="245" y="138" width="18" height="10" fill="#ccc"/><rect x="285" y="138" width="18" height="10" fill="#ccc"/><rect x="325" y="138" width="18" height="10" fill="#141414"/>
     <text x="360" y="148" fill="#565656">(two removed)</text>
     <!-- mute -->
-    <text x="20" y="182" font-size="11" font-weight="700" fill="#141414">mute — notes PASS THROUGH; a blackout region is recorded</text>
+    <text x="20" y="182" font-size="11" font-weight="700" fill="#141414">mute - notes PASS THROUGH; a blackout region is recorded</text>
     <rect x="20" y="190" width="18" height="10" fill="#141414"/><rect x="60" y="190" width="18" height="10" fill="#141414"/><rect x="100" y="190" width="18" height="10" fill="#141414"/>
     <rect x="54" y="188" width="72" height="14" fill="#000" opacity="0.12"/>
     <text x="150" y="200" fill="#565656">→ notes unchanged, blackouts += [start,end)</text>
     <text x="20" y="228" fill="#565656" font-family="monospace" font-size="9.5">applyModifiers folds children in child order; mute's blackout is read per frame in computeAtBeat</text>
     </g>
   </svg>
-  <figcaption><code>applyModifiers</code> walks the object's modifier children (honoring per-object modifier solo), folding each via <code>combineModifier</code>. <strong>mute is special</strong>: it passes notes through unchanged but records blackout spans; <code>computeAtBeat</code> then sets <code>blackedOut</code> when the beat falls inside one. Suppress deletes at resolve; mute hides at render — filter vs visibility-gate.</figcaption>
+  <figcaption><code>applyModifiers</code> walks the object's modifier children (honoring per-object modifier solo), folding each via <code>combineModifier</code>. <strong>mute is special</strong>: it passes notes through unchanged but records blackout spans; <code>computeAtBeat</code> then sets <code>blackedOut</code> when the beat falls inside one. Suppress deletes at resolve; mute hides at render - filter vs visibility-gate.</figcaption>
 </figure>
 
-<div class="note"><strong>Region minimum.</strong> A modifier note's region is <code>[beat, beat + (durationBeats || 0.25))</code> — a minimum quarter-beat so a zero-length "dot" still covers something. <code>mute</code> uses <code>0.25</code> in resolve for its blackout region; the <code>region()</code> helper in <span class="file">trackTypes.ts</span> uses the same default for suppress hit-testing.</div>
+<div class="note"><strong>Region minimum.</strong> A modifier note's region is <code>[beat, beat + (durationBeats || 0.25))</code> - a minimum quarter-beat so a zero-length "dot" still covers something. <code>mute</code> uses <code>0.25</code> in resolve for its blackout region; the <code>region()</code> helper in <span class="file">trackTypes.ts</span> uses the same default for suppress hit-testing.</div>
 
 <!-- ============================ PHASE 8 ============================ -->
-<h2 id="p8">8 · Phase 8 — Effects (transform / clone / shader)</h2>
+<h2 id="p8">8 · Phase 8 - Effects (transform / clone / shader)</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">plugins/types.ts</span> <span class="badge b-file">plugins/index.ts</span> <span class="badge b-file">plugins/{transforms,clones,shaders}/*</span> <span class="badge b-file">components/visual/{Transform,Clone,Shader}Wrapper.tsx</span></p>
 
-<p>Effects are a separate layer from modulators — plugins that post-process an object's <em>rendered output</em>. The contract (<code>VisualPlugin</code>) matches Tyler's: <code>{ category: 'transform'|'clone'|'shader', params, applyTransform?, getClones?, fragmentShader? }</code>. A track's <code>visualPlugins: PluginInstance[]</code> attaches them; <code>time</code> is the beat (music-synced), not wall-clock.</p>
+<p>Effects are a separate layer from modulators - plugins that post-process an object's <em>rendered output</em>. The contract (<code>VisualPlugin</code>) matches Tyler's: <code>{ category: 'transform'|'clone'|'shader', params, applyTransform?, getClones?, fragmentShader? }</code>. A track's <code>visualPlugins: PluginInstance[]</code> attaches them; <code>time</code> is the beat (music-synced), not wall-clock.</p>
 
 <figure class="fig">
-  <div class="figtitle">The per-object chain — transform ▸ clone ▸ shader</div>
+  <div class="figtitle">The per-object chain - transform ▸ clone ▸ shader</div>
   <svg viewBox="0 0 880 200" role="img" aria-label="Effect chain">
     <defs><marker id="a8" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="70" width="130" height="56" rx="6" fill="#ffffff" stroke="#141414" stroke-width="1.5"/><text x="85" y="94" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">placement group</text><text x="85" y="110" text-anchor="middle" font-size="8.5" fill="#565656">world · blackout</text>
@@ -616,11 +616,11 @@
     <text x="525" y="150" text-anchor="middle" font-size="8.5" fill="#565656">innermost</text>
     <text x="440" y="176" text-anchor="middle" font-size="9.5" fill="#565656">In ObjectRenderer's JSX: CloneWrapper wraps TransformWrapper wraps Component. Shaders take a different path (below).</text>
   </svg>
-  <figcaption>In the JSX, <code>CloneWrapper</code> is outermost, then <code>TransformWrapper</code>, then the component — so each clone is a fully-transformed copy. <strong>Shaders are the exception</strong>: when a track has shader plugins, <code>ObjectRenderer</code> hands the whole content to <code>ShaderWrapper</code> instead of an in-scene placement group.</figcaption>
+  <figcaption>In the JSX, <code>CloneWrapper</code> is outermost, then <code>TransformWrapper</code>, then the component - so each clone is a fully-transformed copy. <strong>Shaders are the exception</strong>: when a track has shader plugins, <code>ObjectRenderer</code> hands the whole content to <code>ShaderWrapper</code> instead of an in-scene placement group.</figcaption>
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">CloneWrapper — React-duplicated copies, matrices per frame</div>
+  <div class="figtitle">CloneWrapper - React-duplicated copies, matrices per frame</div>
   <svg viewBox="0 0 820 210" role="img" aria-label="Clone wrapper">
     <defs><marker id="a8b" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#141414"/></marker></defs>
     <rect x="20" y="80" width="150" height="50" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/><text x="95" y="102" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">getClones(settings)</text><text x="95" y="118" text-anchor="middle" font-size="8.5" fill="#565656">→ {count, getTransform,</text>
@@ -642,11 +642,11 @@
     <text x="440" y="122" font-size="9.5" fill="#565656" font-family="monospace">if getOpacity: traverse → setOpacity(mesh.material)</text>
     <text x="440" y="142" font-size="9.5" fill="#565656">e.g. radialSymmetry: folds around a circle, optional spin/faceOut</text>
   </svg>
-  <figcaption>Each clone is a real R3F subtree (matches Tyler — no InstancedMesh; fine for modest N). The plugin's <code>getTransform(i, settings, time)</code> sets each copy's matrix every frame; <code>getOpacity</code> drives trails. Five clone plugins: echo, tile, radialSymmetry, linearDuplicate, rotationalSymmetry.</figcaption>
+  <figcaption>Each clone is a real R3F subtree (matches Tyler - no InstancedMesh; fine for modest N). The plugin's <code>getTransform(i, settings, time)</code> sets each copy's matrix every frame; <code>getOpacity</code> drives trails. Five clone plugins: echo, tile, radialSymmetry, linearDuplicate, rotationalSymmetry.</figcaption>
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">ShaderWrapper — per-object FBO (Option A), ping-pong, overlay</div>
+  <div class="figtitle">ShaderWrapper - per-object FBO (Option A), ping-pong, overlay</div>
   <svg viewBox="0 0 880 300" role="img" aria-label="Shader FBO pipeline">
     <defs><marker id="a8c" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="180" height="70" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/>
@@ -669,25 +669,25 @@
     <path d="M710,65 H738" stroke="#141414" stroke-width="1.4" marker-end="url(#a8c)"/>
     <rect x="20" y="150" width="840" height="130" rx="8" fill="#ffffff" stroke="#6a6a6a" stroke-dasharray="5 4"/>
     <text x="36" y="172" font-size="11" font-weight="700" fill="#141414">Why each piece exists</text>
-    <text x="36" y="196" font-size="10" fill="#565656">• holder.matrixAutoUpdate=false + copy(state.world) — the object keeps its real world transform offscreen.</text>
+    <text x="36" y="196" font-size="10" fill="#565656">• holder.matrixAutoUpdate=false + copy(state.world) - the object keeps its real world transform offscreen.</text>
     <text x="36" y="216" font-size="10" fill="#565656">• Fullscreen-quad vert writes clip space directly (gl_Position = vec4(position,1)), so the 2×2 plane always fills the target.</text>
-    <text x="36" y="236" font-size="10" fill="#565656">• The FBO chain is linear; the overlay is a raw ShaderMaterial that bypasses the canvas sRGB encode — so OUTPUT_FRAG re-encodes (lin2srgb)</text>
+    <text x="36" y="236" font-size="10" fill="#565656">• The FBO chain is linear; the overlay is a raw ShaderMaterial that bypasses the canvas sRGB encode - so OUTPUT_FRAG re-encodes (lin2srgb)</text>
     <text x="52" y="252" font-size="10" fill="#565656">or the object would read darker (looks like reduced opacity).</text>
     <text x="36" y="272" font-size="10" fill="#565656">• A shaded object becomes a full-frame post-processed layer; un-shaded objects render normally, untouched. 4 shaders: kaleidoscope, pixelate, chromaticAberration, opacity.</text>
   </svg>
-  <figcaption>The object is rendered — with its world transform — into a source FBO, each shader runs as a ping-pong fullscreen pass, and the result is drawn as a clip-space overlay (depth-test off) with an sRGB re-encode. Per-object, so shaded and un-shaded objects coexist.</figcaption>
+  <figcaption>The object is rendered - with its world transform - into a source FBO, each shader runs as a ping-pong fullscreen pass, and the result is drawn as a clip-space overlay (depth-test off) with an sRGB re-encode. Per-object, so shaded and un-shaded objects coexist.</figcaption>
 </figure>
 
-<div class="delta"><span class="badge b-new">as-built</span> Deferred from Tyler (named, not built): the multi-scene <code>SceneCompositor</code> + masks (unneeded for per-object post-fx), the instancing pools (<code>lib/three/*</code> — an instrument concern), and automating <em>effect</em> params (automation targets instrument params only so far). Enum/boolean plugin params render as numeric sliders (e.g. <code>includeCenter · 0/1</code>).</div>
+<div class="delta"><span class="badge b-new">as-built</span> Deferred from Tyler (named, not built): the multi-scene <code>SceneCompositor</code> + masks (unneeded for per-object post-fx), the instancing pools (<code>lib/three/*</code> - an instrument concern), and automating <em>effect</em> params (automation targets instrument params only so far). Enum/boolean plugin params render as numeric sliders (e.g. <code>includeCenter · 0/1</code>).</div>
 
 <!-- ============================ PHASE 9 ============================ -->
-<h2 id="p9">9 · Phase 9 — RenderSpec interpreter</h2>
+<h2 id="p9">9 · Phase 9 - RenderSpec interpreter</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">core/engine/renderSpec.ts</span> <span class="badge b-file">instruments/specInstrument.tsx</span> <span class="badge b-file">instruments/shapes.tsx</span></p>
 
 <p>A <code>RenderSpec</code> is a serializable object-instrument description: a geometry primitive plus per-property <strong>expression bindings</strong> over the object's params and ports. So a new shape is <em>data</em>, not a hand-written component (and later, something an LLM can emit). Circle and Triangle are specs.</p>
 
 <figure class="fig">
-  <div class="figtitle">The expression evaluator — parse once, evaluate cheaply per frame</div>
+  <div class="figtitle">The expression evaluator - parse once, evaluate cheaply per frame</div>
   <svg viewBox="0 0 880 250" role="img" aria-label="Expr evaluator">
     <defs><marker id="a9" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="230" height="44" rx="6" fill="#ffffff" stroke="#141414"/><text x="135" y="50" text-anchor="middle" font-size="9.5" fill="#141414" font-family="monospace">"param.baseSize * (1 + port.energy)"</text><text x="135" y="66" text-anchor="middle" font-size="8.5" fill="#565656">an Expr string</text>
@@ -712,15 +712,15 @@
     <text x="476" y="204" font-size="9.5" fill="#565656">defaults overlaid first, so an unset param</text>
     <text x="476" y="220" font-size="9.5" fill="#565656">reads its default, not 0</text>
   </svg>
-  <figcaption>The evaluator is a tiny recursive-descent parser — <strong>never <code>eval</code></strong>. Standard precedence (expr handles ± , term handles ×÷%, factor handles unary minus, primary handles numbers/parens/idents/calls). It compiles each binding once; the returned closure runs cheaply every frame against a fresh <code>Scope</code>.</figcaption>
+  <figcaption>The evaluator is a tiny recursive-descent parser - <strong>never <code>eval</code></strong>. Standard precedence (expr handles ± , term handles ×÷%, factor handles unary minus, primary handles numbers/parens/idents/calls). It compiles each binding once; the returned closure runs cheaply every frame against a fresh <code>Scope</code>.</figcaption>
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">specInstrument — a spec becomes a normal ObjectInstrumentDef</div>
+  <div class="figtitle">specInstrument - a spec becomes a normal ObjectInstrumentDef</div>
   <svg viewBox="0 0 860 200" role="img" aria-label="Spec to def">
     <defs><marker id="a9b" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="60" width="170" height="80" rx="6" fill="#ffffff" stroke="#141414"/><text x="105" y="82" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">RenderSpec</text><text x="105" y="100" text-anchor="middle" font-size="8.5" fill="#565656">primitive + transform</text><text x="105" y="114" text-anchor="middle" font-size="8.5" fill="#565656">+ appearance bindings</text>
-    <rect x="250" y="30" width="200" height="60" rx="6" fill="#fff" stroke="#141414"/><text x="350" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">compile transform</text><text x="350" y="70" text-anchor="middle" font-size="8.5" fill="#565656">→ localTransform(ctx)</text><text x="350" y="83" text-anchor="middle" font-size="8.5" fill="#565656">(engine composes it — same as Cube)</text>
+    <rect x="250" y="30" width="200" height="60" rx="6" fill="#fff" stroke="#141414"/><text x="350" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">compile transform</text><text x="350" y="70" text-anchor="middle" font-size="8.5" fill="#565656">→ localTransform(ctx)</text><text x="350" y="83" text-anchor="middle" font-size="8.5" fill="#565656">(engine composes it - same as Cube)</text>
     <rect x="250" y="110" width="200" height="60" rx="6" fill="#fff" stroke="#141414"/><text x="350" y="132" text-anchor="middle" font-size="10.5" font-weight="700" fill="#141414">compile appearance</text><text x="350" y="150" text-anchor="middle" font-size="8.5" fill="#565656">→ SpecRenderer material</text><text x="350" y="163" text-anchor="middle" font-size="8.5" fill="#565656">hue/emissive/opacity each frame</text>
     <rect x="520" y="60" width="200" height="80" rx="6" fill="#141414"/><text x="620" y="86" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">ObjectInstrumentDef</text><text x="620" y="104" text-anchor="middle" font-size="8.5" fill="#ffffff">params · ports · localTransform</text><text x="620" y="118" text-anchor="middle" font-size="8.5" fill="#ffffff">component = SpecRenderer</text>
     <rect x="760" y="72" width="90" height="56" rx="6" fill="#ffffff" stroke="#141414"/><text x="805" y="96" text-anchor="middle" font-size="9.5" font-weight="700" fill="#141414">Object</text><text x="805" y="112" text-anchor="middle" font-size="8.5" fill="#565656">Renderer</text>
@@ -730,13 +730,13 @@
     <path d="M450,140 L518,110" stroke="#141414" stroke-width="1.3" marker-end="url(#a9b)"/>
     <path d="M720,100 H758" stroke="#141414" stroke-width="1.3" marker-end="url(#a9b)"/>
   </svg>
-  <figcaption>The clever part: <code>specInstrument</code> compiles the transform bindings into the def's <code>localTransform</code> — so the engine composes a spec exactly like the Cube — and the appearance bindings into a bound <code>SpecRenderer</code>. No <code>ObjectRenderer</code> change: a spec is just a def whose component is the interpreter. <span class="file">shapes.tsx</span> shows Circle/Triangle sharing params/ports so they self-pulse identically.</figcaption>
+  <figcaption>The clever part: <code>specInstrument</code> compiles the transform bindings into the def's <code>localTransform</code> - so the engine composes a spec exactly like the Cube - and the appearance bindings into a bound <code>SpecRenderer</code>. No <code>ObjectRenderer</code> change: a spec is just a def whose component is the interpreter. <span class="file">shapes.tsx</span> shows Circle/Triangle sharing params/ports so they self-pulse identically.</figcaption>
 </figure>
 
 <!-- ============================ PHASE 10 ============================ -->
-<h2 id="p10">10 · Phase 10 — English → spec (the frontier)</h2>
+<h2 id="p10">10 · Phase 10 - English → spec (the frontier)</h2>
 <p class="files"><span class="badge b-risk">not started</span></p>
-<p>The last phase — an LLM endpoint that emits and validates a <code>RenderSpec</code> — is deliberately unbuilt. The substrate is now in place: a serializable spec (<span class="file">renderSpec.ts</span>), a safe expression vocabulary that throws on anything outside it, and a spec-to-def bridge (<span class="file">specInstrument.tsx</span>). "Design an instrument in English" becomes "LLM writes a <code>RenderSpec</code>, engine validates it against the grammar, <code>specInstrument</code> mounts it" — no arbitrary code execution.</p>
+<p>The last phase - an LLM endpoint that emits and validates a <code>RenderSpec</code> - is deliberately unbuilt. The substrate is now in place: a serializable spec (<span class="file">renderSpec.ts</span>), a safe expression vocabulary that throws on anything outside it, and a spec-to-def bridge (<span class="file">specInstrument.tsx</span>). "Design an instrument in English" becomes "LLM writes a <code>RenderSpec</code>, engine validates it against the grammar, <code>specInstrument</code> mounts it" - no arbitrary code execution.</p>
 <div class="note"><strong>Why it waits.</strong> The grammar is intentionally minimal (no generators, no <code>onAbility</code> effects yet). Per the plan, the grammar should grow <em>from</em> real specs, not be designed up front. English authoring is only worth wiring once the vocabulary has proven it covers the shapes people actually want.</div>
 
 <!-- ============================ FRAME TIMELINE ============================ -->
@@ -768,13 +768,13 @@
     <circle cx="60" cy="230" r="6" fill="#141414"/>
     <rect x="90" y="210" width="760" height="52" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="106" y="230" font-size="11" font-weight="700" fill="#141414">localTransform({params, ports, beat}) → composeLocal → world</text>
-    <text x="106" y="245" font-size="9" fill="#565656">world = parentWorld × local  (parent's already computed — DFS order)</text>
+    <text x="106" y="245" font-size="9" fill="#565656">world = parentWorld × local  (parent's already computed - DFS order)</text>
     <text x="106" y="257" font-size="9" fill="#565656">blackedOut = muted || beat ∈ any blackout; activeNotes = notes live at beat</text>
     <!-- 5 -->
     <circle cx="60" cy="294" r="6" fill="#141414"/>
     <rect x="90" y="274" width="760" height="42" rx="6" fill="#ffffff" stroke="#141414"/>
     <text x="106" y="294" font-size="11" font-weight="700" fill="#141414">states.set(trackId, ObjectState{ params, portValues, world, blackedOut, abilityEvents, notes, activeNotes })</text>
-    <text x="106" y="309" font-size="9" fill="#565656">computeAtBeat done — every object has fresh state before any renderer runs</text>
+    <text x="106" y="309" font-size="9" fill="#565656">computeAtBeat done - every object has fresh state before any renderer runs</text>
     <!-- 6 -->
     <circle cx="60" cy="354" r="6" fill="#141414"/>
     <rect x="90" y="334" width="760" height="42" rx="6" fill="#141414"/>
@@ -786,11 +786,11 @@
     <text x="106" y="414" font-size="11" font-weight="700" fill="#141414">component draws mesh (Cube/Spec) · effect wrappers apply · ShaderWrapper renders FBO overlay</text>
     <text x="106" y="429" font-size="9" fill="#565656">R3F flushes the scene to the canvas</text>
   </svg>
-  <figcaption>The ordering is the whole trick: because <code>VisualBeatSync</code>'s <code>useFrame</code> runs first, every object's <code>ObjectState</code> is fully computed before any renderer's <code>useFrame</code> pulls it. There's no read-during-write hazard — compute finishes, then everything reads.</figcaption>
+  <figcaption>The ordering is the whole trick: because <code>VisualBeatSync</code>'s <code>useFrame</code> runs first, every object's <code>ObjectState</code> is fully computed before any renderer's <code>useFrame</code> pulls it. There's no read-during-write hazard - compute finishes, then everything reads.</figcaption>
 </figure>
 
 <figure class="fig">
-  <div class="figtitle">Note-onset detection — the analogue of Tyler's activeNotes</div>
+  <div class="figtitle">Note-onset detection - the analogue of Tyler's activeNotes</div>
   <svg viewBox="0 0 820 200" role="img" aria-label="Note onset">
     <line x1="40" y1="120" x2="780" y2="120" stroke="#ccc" stroke-width="1"/>
     <rect x="120" y="106" width="120" height="14" rx="3" fill="#141414"/><text x="180" y="140" text-anchor="middle" font-size="9" fill="#565656">note A [beat, beat+dur)</text>
@@ -803,17 +803,17 @@
     <text x="420" y="90" font-size="9.5" fill="#565656">an onset = a key newly present vs last frame</text>
     <text x="420" y="106" font-size="9.5" fill="#565656">(IcosahedronBurst diffs a Set of `${'{'}beat{'}'}:${'{'}pitch{'}'}`)</text>
   </svg>
-  <figcaption><code>activeNotes</code> is recomputed each frame (a zero-length note stays "on" for a hair — <code>|| 0.05</code> — so single-tick triggers still register). A note-reactive instrument like <span class="file">IcosahedronBurst</span> detects <em>onsets</em> by diffing a Set of active-note keys against the previous frame — spawning a shell only when a note is newly present.</figcaption>
+  <figcaption><code>activeNotes</code> is recomputed each frame (a zero-length note stays "on" for a hair - <code>|| 0.05</code> - so single-tick triggers still register). A note-reactive instrument like <span class="file">IcosahedronBurst</span> detects <em>onsets</em> by diffing a Set of active-note keys against the previous frame - spawning a shell only when a note is newly present.</figcaption>
 </figure>
 
 <!-- ============================ PORTING ============================ -->
 <h2 id="port">12 · Instrument porting (as-built)</h2>
 <p class="files"><span class="badge b-new">new</span> <span class="badge b-file">IcosahedronBurst.tsx</span> <span class="badge b-file">Sun.tsx</span> <span class="badge b-file">HexagonDots.tsx</span> <span class="badge b-file">CylinderFlight.tsx</span> <span class="badge b-file">ParticleRiser.tsx</span></p>
 
-<p>The recent work: porting Tyler's instruments through the <strong>code escape hatch</strong>. Each is an <code>ObjectInstrumentDef</code> whose <code>component</code> is a hand-written R3F visual — exactly the "keep the code hatch compatible with Tyler's VisualComponent" goal. They read per-frame state via <code>getObjectState(trackId)</code> and mutate meshes imperatively, just like the Cube.</p>
+<p>The recent work: porting Tyler's instruments through the <strong>code escape hatch</strong>. Each is an <code>ObjectInstrumentDef</code> whose <code>component</code> is a hand-written R3F visual - exactly the "keep the code hatch compatible with Tyler's VisualComponent" goal. They read per-frame state via <code>getObjectState(trackId)</code> and mutate meshes imperatively, just like the Cube.</p>
 
 <figure class="fig">
-  <div class="figtitle">The registry — one map, adding an instrument is one file + one entry</div>
+  <div class="figtitle">The registry - one map, adding an instrument is one file + one entry</div>
   <svg viewBox="0 0 880 210" role="img" aria-label="Registry">
     <defs><marker id="ap" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="330" y="20" width="220" height="60" rx="8" fill="#141414"/>
@@ -833,7 +833,7 @@
   <figcaption>Both worlds coexist behind one interface: code instruments (Cube, ported ones) and spec instruments (Circle/Triangle) are both <code>ObjectInstrumentDef</code>s in the same registry. A modulator registry (<span class="file">modulators/index.ts</span>) sits alongside; resolve tells them apart by which registry an id lives in.</figcaption>
 </figure>
 
-<p>The ported instruments demonstrate the escape hatch cleanly: <span class="file">IcosahedronBurst</span> keeps its own imperative <code>useFrame</code> (spawning/aging wireframe shells, disposing dead ones), shares its own params/ports, and gets note-onset behavior from the engine's <code>activeNotes</code>. It never scans the project — it reads one <code>ObjectState</code>. That's the compatibility promise made good: the code hatch runs Tyler-style components largely unmodified, fed by the engine instead of by a project scan.</p>
+<p>The ported instruments demonstrate the escape hatch cleanly: <span class="file">IcosahedronBurst</span> keeps its own imperative <code>useFrame</code> (spawning/aging wireframe shells, disposing dead ones), shares its own params/ports, and gets note-onset behavior from the engine's <code>activeNotes</code>. It never scans the project - it reads one <code>ObjectState</code>. That's the compatibility promise made good: the code hatch runs Tyler-style components largely unmodified, fed by the engine instead of by a project scan.</p>
 
 <!-- ============================ DELTAS ============================ -->
 <h2 id="deltas">13 · Plan → as-built deltas, in one place</h2>
@@ -845,7 +845,7 @@
     <tr><td>Ability container</td><td>Parallel <code>lanes[]</code> on the object track (indented sub-rows, not child tracks); <code>AbilityLaneRow</code> + <code>useLaneGestures</code></td><td><strong>Real <code>ability</code> child tracks</strong> (<code>type='ability'</code>+<code>abilityKey</code>), unified with all block editing. Lane widgets deleted; <code>lanes</code>/<code>laneKey</code> dead-but-dormant on <code>Track</code>.</td></tr>
     <tr><td>Modulator shape</td><td>One <code>ModulatorInstance {triggers, shape, routings}</code></td><td><strong>Split</strong>: pure signal <code>ModulatorInstance{id,kind,triggers}</code> + separate <code>ResolvedRouting</code> links, bucketed in <code>routingsByPort</code>.</td></tr>
     <tr><td>Self-pulse</td><td>(implicit)</td><td>resolve synthesizes a built-in <code>${'{'}trackId{'}'}:pulse</code> modulator per object → its own <code>energy</code> port, preserving the Cube's original self-pulse.</td></tr>
-    <tr><td>Automation container</td><td>"a lane that drives a param" — container left open</td><td><strong>Child track</strong> (<code>type='automation'</code>, <code>targetParam</code>, <code>interpolation</code>), locked to its object.</td></tr>
+    <tr><td>Automation container</td><td>"a lane that drives a param" - container left open</td><td><strong>Child track</strong> (<code>type='automation'</code>, <code>targetParam</code>, <code>interpolation</code>), locked to its object.</td></tr>
     <tr><td>Param reactivity</td><td>All resolve is debounced</td><td>Added <code>syncParams</code>: base-param edits apply synchronously (60fps sliders); structural resolve stays debounced 80ms.</td></tr>
     <tr><td>Per-frame field name</td><td><code>finalProps</code></td><td><code>ObjectState</code> with explicit fields (<code>params</code>, <code>portValues</code>, <code>world</code>, <code>blackedOut</code>, <code>abilityEvents</code>, <code>notes</code>, <code>activeNotes</code>). No opaque <code>finalProps</code> bag.</td></tr>
     <tr><td>Shaders</td><td>Option A per-object FBO (chosen)</td><td>Built as specced: offscreen scene + FBO via <code>createPortal</code>, ping-pong passes, clip-space overlay, sRGB re-encode. Compositor + masks deferred.</td></tr>
@@ -855,10 +855,10 @@
   </tbody>
 </table>
 
-<div class="rec"><strong>The through-line.</strong> Every delta pulls in the same direction: <em>unify machinery, don't multiply it</em>. Abilities and automation became child tracks so one gesture system edits every block. A modulator became a signal + routings so one evaluation fans out. A spec became a def so <code>ObjectRenderer</code> never learned about specs. The engine you built is smaller and more uniform than the one the plan drew — and that's why it holds together in your head.</p></div>
+<div class="rec"><strong>The through-line.</strong> Every delta pulls in the same direction: <em>unify machinery, don't multiply it</em>. Abilities and automation became child tracks so one gesture system edits every block. A modulator became a signal + routings so one evaluation fans out. A spec became a def so <code>ObjectRenderer</code> never learned about specs. The engine you built is smaller and more uniform than the one the plan drew - and that's why it holds together in your head.</p></div>
 
 <hr/>
-<p class="small muted">Reflection artifact — reads the as-built engine under <span class="file">src/editor/core/engine/</span>, <span class="file">components/visual/</span>, <span class="file">instruments/</span>, and <span class="file">plugins/</span>. Derived from the source, not the plan; where they differ, the source wins. No code changed. Greyscale, print-ready. Companion to <span class="file">visual-architecture.html</span> (the argument) and <span class="file">visual-architecture-implementation-plan.html</span> (the plan).</p>
+<p class="small muted">Reflection artifact - reads the as-built engine under <span class="file">src/editor/core/engine/</span>, <span class="file">components/visual/</span>, <span class="file">instruments/</span>, and <span class="file">plugins/</span>. Derived from the source, not the plan; where they differ, the source wins. No code changed. Greyscale, print-ready. Companion to <span class="file">visual-architecture.html</span> (the argument) and <span class="file">visual-architecture-implementation-plan.html</span> (the plan).</p>
 
 </div>
 </body>

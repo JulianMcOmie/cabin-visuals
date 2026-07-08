@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Loop Blocks — Architecture</title>
+<title>Loop Blocks - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,20 +36,20 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Loop Blocks</span>
-  <h1>Loop Blocks — Architecture</h1>
-  <p class="sub">Drag a MIDI block's right edge past its pattern and the pattern repeats — Ableton's gesture, landed on the existing (unused) <code>loop</code> flag. Expansion happens once at resolve time; playback, scrubbing, and export never know loops exist.</p>
+  <h1>Loop Blocks - Architecture</h1>
+  <p class="sub">Drag a MIDI block's right edge past its pattern and the pattern repeats - Ableton's gesture, landed on the existing (unused) <code>loop</code> flag. Expansion happens once at resolve time; playback, scrubbing, and export never know loops exist.</p>
 </header>
 
 <h2>1 · The gesture defines the data</h2>
 <figure class="fig">
   <div class="figtitle">Right-edge resize past the pattern = loop; shrink back inside = unloop</div>
   <svg viewBox="0 0 900 350" role="img" aria-label="Loop gesture">
-    <text x="30" y="40" font-size="15.5" font-weight="700" fill="#141414">Before — a 2-bar pattern</text>
+    <text x="30" y="40" font-size="15.5" font-weight="700" fill="#141414">Before - a 2-bar pattern</text>
     <rect x="30" y="52" width="240" height="56" rx="6" fill="#fff" stroke="#141414" stroke-width="2.5"/>
     <rect x="46" y="88" width="30" height="4" rx="2" fill="#141414"/>
     <rect x="110" y="72" width="50" height="4" rx="2" fill="#141414"/>
     <rect x="190" y="80" width="24" height="4" rx="2" fill="#141414"/>
-    <text x="30" y="150" font-size="15.5" font-weight="700" fill="#141414">Drag the right edge to 6 bars — loopBars locks at 2, boundaries appear</text>
+    <text x="30" y="150" font-size="15.5" font-weight="700" fill="#141414">Drag the right edge to 6 bars - loopBars locks at 2, boundaries appear</text>
     <rect x="30" y="162" width="720" height="56" rx="6" fill="#fff" stroke="#141414" stroke-width="2.5"/>
     <line x1="270" y1="162" x2="270" y2="218" stroke="#141414" stroke-width="1.5" stroke-dasharray="4 4"/>
     <line x1="510" y1="162" x2="510" y2="218" stroke="#141414" stroke-width="1.5" stroke-dasharray="4 4"/>
@@ -65,13 +65,13 @@
       <rect x="670" y="190" width="24" height="4" rx="2" fill="#141414"/>
     </g>
     <text x="30" y="262" font-size="15.5" font-weight="700" fill="#141414">The contract</text>
-    <text x="30" y="290" font-size="15" fill="#565656">· the pattern (bars 0–loopBars) stays the ONLY editable notes — repeats are ghosts drawn at 55% opacity</text>
+    <text x="30" y="290" font-size="15" fill="#565656">· the pattern (bars 0–loopBars) stays the ONLY editable notes - repeats are ghosts drawn at 55% opacity</text>
     <text x="30" y="314" font-size="15" fill="#565656">· partial last repeat clips at the block end · shrinking the edge back to ≤ loopBars clears the loop flag</text>
   </svg>
-  <figcaption>loopBars is captured the moment the drag first crosses the pattern's end — it's the block's duration at gesture start. Editing notes in the piano roll edits the pattern; every repeat follows.</figcaption>
+  <figcaption>loopBars is captured the moment the drag first crosses the pattern's end - it's the block's duration at gesture start. Editing notes in the piano roll edits the pattern; every repeat follows.</figcaption>
 </figure>
 
-<h2>2 · Where expansion happens — once, at resolve</h2>
+<h2>2 · Where expansion happens - once, at resolve</h2>
 <figure class="fig">
   <div class="figtitle">Loops are a resolve-time expansion; downstream stays loop-blind</div>
   <svg viewBox="0 0 900 200" role="img" aria-label="Expansion">
@@ -98,16 +98,16 @@
   <tbody>
     <tr><td><code>loopBars</code> joins <code>loop</code> on Block</td><td>The flag alone can't say what repeats. Optional field → old documents read as undefined → no loop → no schema bump, no upgrade step.</td></tr>
     <tr><td>Resize-past-end IS the loop switch</td><td>Julia's spec verbatim; no new buttons. Plain resize inside the pattern stays plain resize.</td></tr>
-    <tr><td>Pattern-only editing, ghost repeats</td><td>One source of truth for notes; the piano roll shows repeats dimmed and read-only past loopBars (editing a ghost jumps you to its pattern note — later nicety, not v1).</td></tr>
+    <tr><td>Pattern-only editing, ghost repeats</td><td>One source of truth for notes; the piano roll shows repeats dimmed and read-only past loopBars (editing a ghost jumps you to its pattern note - later nicety, not v1).</td></tr>
     <tr><td>Partial repeats clip</td><td>A 2-bar pattern in a 5-bar block plays 2+2+1; clipping at the block end is what flattenNotes already does with block windows.</td></tr>
     <tr><td>Non-goals</td><td>Loop offset/phase (start mid-pattern) · per-repeat variation · looping AUDIO blocks (different mechanics entirely) · transport loop region (that's the export-ranges companion, not this).</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the right edge past the pattern locks the pattern length into <code>loopBars</code>, resolve tiles the notes to fill the block, and everything downstream — engine, scrub, export — keeps seeing ordinary notes, which is why the whole feature is one gesture, one preview treatment, and one expansion loop.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the right edge past the pattern locks the pattern length into <code>loopBars</code>, resolve tiles the notes to fill the block, and everything downstream - engine, scrub, export - keeps seeing ordinary notes, which is why the whole feature is one gesture, one preview treatment, and one expansion loop.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">loop-blocks-implementation-plan.html</span>. Today: <code>Block.loop</code> exists unread; <span class="file">core/visual/resolve.ts</span> flattenBlocks plays notes once; right-edge resize lives in <span class="file">useTrackGestures.ts</span>.</p>
+<p class="small muted">Architecture - build in <span class="file">loop-blocks-implementation-plan.html</span>. Today: <code>Block.loop</code> exists unread; <span class="file">core/visual/resolve.ts</span> flattenBlocks plays notes once; right-edge resize lives in <span class="file">useTrackGestures.ts</span>.</p>
 
 </div>
 </body>

@@ -3,12 +3,12 @@ import { Mesh, CanvasTexture, LinearFilter, NearestFilter, MeshBasicMaterial } f
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// RETRO ARCADE — a giant glowing score readout in a 4x5 pixel font, drawn to a
+// RETRO ARCADE - a giant glowing score readout in a 4x5 pixel font, drawn to a
 // canvas texture on a positioned plane (NOT fullFrame). The score is recomputed
 // from scratch every frame from note history: each played note is worth
 // round(pitch * velocity * multiplier) points, and its points TICK IN over
 // `spinDur` seconds in quantized steps (slot-machine spin-up, with seeded digit
-// jitter while spinning) — so the displayed number at any beat is a pure function
+// jitter while spinning) - so the displayed number at any beat is a pure function
 // of the notes whose onsets have passed, and scrub == playback. Accent notes
 // (velocity >= accentThresh) flash a blinking "1UP" over the readout. Ambient:
 // the current score sits there glowing, breathing on the beat.

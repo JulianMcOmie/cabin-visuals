@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Envelope Modulator — Implementation Plan</title>
+<title>Envelope Modulator - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -39,7 +39,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Envelope Modulator</span>
-  <h1>Envelope Modulator — Implementation Plan</h1>
+  <h1>Envelope Modulator - Implementation Plan</h1>
   <p class="sub">Four landings: closed-form ADSR evaluation, universal opacity in the renderer, param-target routing through the merge order, and the routing UI (target picker + blend). Gate: the ParamAddress cluster's first pair must be merged.</p>
 </header>
 
@@ -51,8 +51,8 @@
   </tbody>
 </table>
 
-<h2>B · The evaluator — closed-form, scrub-exact</h2>
-<pre><code>// instruments/modulators/Envelope.ts — value at `beat` from gate notes alone
+<h2>B · The evaluator - closed-form, scrub-exact</h2>
+<pre><code>// instruments/modulators/Envelope.ts - value at `beat` from gate notes alone
 export function evaluateEnvelope(gates: ResolvedNote[], beat: number, p: ADSR): number {
   let v = 0
   for (const g of gates) {                       // overlaps: max wins (documented)
@@ -66,41 +66,41 @@ export function evaluateEnvelope(gates: ResolvedNote[], beat: number, p: ADSR): 
     else if (t < dur + p.release)       e = p.sustain * (1 - (t - dur) / p.release)
     v = Math.max(v, e * velocityScale(g))
   }
-  return v                                        // 0..1 — no state, pure f(beat)
+  return v                                        // 0..1 - no state, pure f(beat)
 }</code></pre>
 <p class="small muted">Segments in beats; zero-length A/D/R guarded with epsilon. The same closed-form-over-notes discipline the pause-invariant push established.</p>
 
 <h2>C · Phase-by-phase</h2>
 
-<h3>Phase 0 — Gate <span class="badge b-risk">dependency</span></h3>
+<h3>Phase 0 - Gate <span class="badge b-risk">dependency</span></h3>
 <ul class="small">
-  <li>effect-param-automation merged (ParamAddress exists, wrappers read merged settings). Tag automation is NOT required — scope reuse is independent.</li>
+  <li>effect-param-automation merged (ParamAddress exists, wrappers read merged settings). Tag automation is NOT required - scope reuse is independent.</li>
 </ul>
 
-<h3>Phase 1 — Universal opacity <span class="badge b-edit">visual engine · ObjectRenderer</span></h3>
+<h3>Phase 1 - Universal opacity <span class="badge b-edit">visual engine · ObjectRenderer</span></h3>
 <ul class="small">
   <li>Object state gains <code>opacity</code> (default 1, sourced like any param so automation lanes can also drive it). ObjectRenderer applies it at the placement group: cache the subtree's materials on mount, per frame set <code>material.opacity = base·value</code> and toggle <code>transparent</code> when &lt; 1; skip work when unchanged.</li>
-  <li>Add "Opacity" to the add-automation menu as a universal entry (works before the envelope exists — an immediately useful side-product).</li>
+  <li>Add "Opacity" to the add-automation menu as a universal entry (works before the envelope exists - an immediately useful side-product).</li>
   <li>Verify: opacity automation lane fades a Cube in/out under play/scrub/export; canary green (it's beat-driven); materials restore at 1.</li>
 </ul>
 
-<h3>Phase 2 — The modulator + routing data <span class="badge b-new">Envelope.ts</span> <span class="badge b-edit">types · resolve · matrix path</span></h3>
+<h3>Phase 2 - The modulator + routing data <span class="badge b-new">Envelope.ts</span> <span class="badge b-edit">types · resolve · matrix path</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">instruments/modulators/Envelope.ts</span>: def (signal 'envelope', ADSR+depth params, library entry) + evaluator above.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: Routing gains optional <code>target?: ParamAddress</code> and <code>blend?: 'multiply' | 'add'</code> — port routings unchanged (additive optional fields, no upgrade).</li>
-  <li><span class="badge b-edit">edit</span> resolve/engine: param-targeted routings compile into per-object modulator bindings; computeAtBeat merges in the documented order — base ← automation ← modulator (multiply/add per routing, clamped to the param's bounds).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: Routing gains optional <code>target?: ParamAddress</code> and <code>blend?: 'multiply' | 'add'</code> - port routings unchanged (additive optional fields, no upgrade).</li>
+  <li><span class="badge b-edit">edit</span> resolve/engine: param-targeted routings compile into per-object modulator bindings; computeAtBeat merges in the documented order - base ← automation ← modulator (multiply/add per routing, clamped to the param's bounds).</li>
 </ul>
 
-<h3>Phase 3 — Routing UI <span class="badge b-edit">TrackEditor</span></h3>
+<h3>Phase 3 - Routing UI <span class="badge b-edit">TrackEditor</span></h3>
 <ul class="small">
-  <li>For envelope tracks, the target picker grows a second dimension: WHAT (Opacity · instrument params · effect settings — a ParamAddress picker grouped like the add-automation menu) × WHERE (the existing track/tag/branch scope) + blend toggle + depth slider (routing.amount).</li>
+  <li>For envelope tracks, the target picker grows a second dimension: WHAT (Opacity · instrument params · effect settings - a ParamAddress picker grouped like the add-automation menu) × WHERE (the existing track/tag/branch scope) + blend toggle + depth slider (routing.amount).</li>
   <li>Pulse's picker unchanged (its port is fixed by the def).</li>
 </ul>
 
-<h3>Phase 4 — Verify (the demo IS the test)</h3>
+<h3>Phase 4 - Verify (the demo IS the test)</h3>
 <ul class="small">
   <li>The headline: Envelope (A 0.1 · D 0.2 · S 0.7 · R 0.5) → Opacity on #drums; notes on the envelope lane make every tagged instrument breathe in sync; park mid-release shows the exact frozen level; export matches.</li>
-  <li>Blend check: multiply on scale vs add on Base Y — both behave, bounds clamp.</li>
+  <li>Blend check: multiply on scale vs add on Base Y - both behave, bounds clamp.</li>
   <li>Overlap check: two overlapping gates → max envelope, releases don't pop.</li>
 </ul>
 
@@ -113,22 +113,22 @@ export function evaluateEnvelope(gates: ResolvedNote[], beat: number, p: ADSR): 
     <tr><td><span class="file">core/visual/resolve.ts · VisualEngine.ts</span></td><td>Param-target bindings · merge order.</td></tr>
     <tr><td><span class="file">components/visual/ObjectRenderer.tsx</span></td><td>Group opacity application (cached materials).</td></tr>
     <tr><td><span class="file">components/TrackEditor.tsx</span></td><td>ParamAddress target picker + blend/depth for envelopes.</td></tr>
-    <tr><td>Persistence</td><td>Untouched — optional fields.</td></tr>
+    <tr><td>Persistence</td><td>Untouched - optional fields.</td></tr>
   </tbody>
 </table>
 
 <h2>E · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Material traversal cost / shared materials</strong>: instruments sharing a material instance would fade together — the cache walk must clone materials on first opacity-touch (three.js material.clone per object subtree, once). This is the plan's fiddliest line; budget for it.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Merge-order confusion</strong> once three writers exist — the order lives in ONE function with the doc comment, and the automated-badge UI should eventually show "driven by: lane + envelope".</li>
-  <li><span class="badge b-risk">open</span> Retrigger semantics beyond overlap-max (hard retrigger from zero?) — ship max, ask Julia after she plays with it.</li>
-  <li><span class="badge b-risk">note</span> LFO is this file with a different evaluator — the def/plumbing built here is deliberately reusable for it.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Material traversal cost / shared materials</strong>: instruments sharing a material instance would fade together - the cache walk must clone materials on first opacity-touch (three.js material.clone per object subtree, once). This is the plan's fiddliest line; budget for it.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Merge-order confusion</strong> once three writers exist - the order lives in ONE function with the doc comment, and the automated-badge UI should eventually show "driven by: lane + envelope".</li>
+  <li><span class="badge b-risk">open</span> Retrigger semantics beyond overlap-max (hard retrigger from zero?) - ship max, ask Julia after she plays with it.</li>
+  <li><span class="badge b-risk">note</span> LFO is this file with a different evaluator - the def/plumbing built here is deliberately reusable for it.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a closed-form ADSR over gate notes, multiplied into any ParamAddress at the documented merge point — plus one renderer-level opacity param so the day-one demo is "MIDI fades anything."</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a closed-form ADSR over gate notes, multiplied into any ParamAddress at the documented merge point - plus one renderer-level opacity param so the day-one demo is "MIDI fades anything."</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">envelope-modulator-architecture.html</span>; cluster-gated on <span class="file">effect-param-automation-*</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">envelope-modulator-architecture.html</span>; cluster-gated on <span class="file">effect-param-automation-*</span>.</p>
 
 </div>
 </body>

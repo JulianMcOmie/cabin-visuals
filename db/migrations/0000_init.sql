@@ -25,7 +25,7 @@ ALTER TABLE "projects" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "data" jsonb DEFAULT '{"schemaVersion":1,"bpm":120,"beatsPerBar":4,"totalBars":32,"tracks":{},"rootTrackIds":[]}'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "schema_version" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 -- Live DB: equivalent FKs already exist under their dashboard-era names
--- (profiles_user_id_fkey / projects_user_id_fkey) — only add if absent.
+-- (profiles_user_id_fkey / projects_user_id_fkey) - only add if absent.
 DO $$ BEGIN
 	IF NOT EXISTS (
 		SELECT 1 FROM pg_constraint

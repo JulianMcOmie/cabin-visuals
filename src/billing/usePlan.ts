@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { getSupabase } from '../persistence/supabase'
 
 // Client-side plan state. `isPro` gates UI niceties only (resolution picker,
-// watermark toggle) — the source of truth is the RLS-guarded subscriptions row,
+// watermark toggle) - the source of truth is the RLS-guarded subscriptions row,
 // and signed-out or row-less users are simply free tier.
 
 export interface PlanState {
-  /** True only during the initial fetch — gate "Upgrade" buttons on it so they don't flash at Pros. */
+  /** True only during the initial fetch - gate "Upgrade" buttons on it so they don't flash at Pros. */
   loading: boolean
   isPro: boolean
 }
@@ -58,7 +58,7 @@ export async function startCheckout(): Promise<void> {
     return
   }
   if (res.status === 403) {
-    // Anonymous session — a subscription needs a real account first.
+    // Anonymous session - a subscription needs a real account first.
     window.location.href = '/signup'
     return
   }

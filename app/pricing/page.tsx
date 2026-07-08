@@ -39,7 +39,7 @@ export default function PricingPage() {
   }
 
   // Browser-back from Stripe restores this page from the back/forward cache
-  // with the pending state frozen in — reset it so the button is usable again.
+  // with the pending state frozen in - reset it so the button is usable again.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) setOpening(false)
@@ -50,7 +50,7 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text)] font-sans">
-      {/* Nav — 64px, hairline border (same as Landing) */}
+      {/* Nav - 64px, hairline border (same as Landing) */}
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5 select-none cursor-pointer">
@@ -122,7 +122,7 @@ export default function PricingPage() {
             </ul>
             {plan.isPro ? (
               <div className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] bg-[var(--bg-elevated)] text-[13px] font-semibold text-[var(--text-3)]">
-                You&apos;re on Pro — thank you!
+                You&apos;re on Pro - thank you!
               </div>
             ) : (
               <button

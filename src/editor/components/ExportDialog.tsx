@@ -16,7 +16,7 @@ const SETTINGS_KEY = 'cabin.exportSettings'
 type Phase =
   | { kind: 'settings' }
   | { kind: 'running'; frame: number; total: number; startedAt: number }
-  // The finished file waits here — nothing downloads until the user asks.
+  // The finished file waits here - nothing downloads until the user asks.
   | { kind: 'done'; fileName: string; blob: Blob }
   | { kind: 'error'; message: string }
 
@@ -29,9 +29,9 @@ function defaultFileName(): string {
 }
 
 function loadSavedSettings(isPro: boolean): ExportSettings {
-  // Quality settings are remembered across sessions; the FILENAME is not — it
+  // Quality settings are remembered across sessions; the FILENAME is not - it
   // defaults to the open project's name every time. The watermark flag is never
-  // trusted from storage — it's derived from the plan, here and again at start.
+  // trusted from storage - it's derived from the plan, here and again at start.
   const base = defaultSettings(defaultFileName())
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -50,7 +50,7 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
  * The export lifecycle in one modal: settings → running (progress + cancel) →
  * done/error. While open, a capture-phase key blocker keeps Space/Enter and the
  * timeline shortcuts from reaching the editor underneath; the overlay is
- * translucent on purpose — the canvas behind it renders the actual frames as
+ * translucent on purpose - the canvas behind it renders the actual frames as
  * they export, which is the best progress bar there is.
  */
 export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: boolean }) {
@@ -58,7 +58,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
   const [phase, setPhase] = useState<Phase>({ kind: 'settings' })
   const [audioOk, setAudioOk] = useState(true)
   // While exporting, a still of the canvas at the user's beat covers the live
-  // canvas (which is busy rendering export frames) — nothing on screen scrubs.
+  // canvas (which is busy rendering export frames) - nothing on screen scrubs.
   const [freeze, setFreeze] = useState<{ src: string; rect: DOMRect } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -88,7 +88,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
     // Belt-and-braces: re-derive the tier gates at start, whatever the UI state says.
     const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
     const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(tiered.width, tiered.fps) }
-    // Persist quality preferences only — the filename belongs to the project,
+    // Persist quality preferences only - the filename belongs to the project,
     // and the watermark flag to the plan.
     const { fileName: _fileName, watermark: _watermark, ...remembered } = effective
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(remembered)) } catch { /* private mode */ }
@@ -162,7 +162,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
               >
                 {RESOLUTIONS.map((r) => (
                   <option key={r.width} value={r.width} disabled={!isPro && r.width > 1280}>
-                    {r.label}{!isPro && r.width > 1280 ? ' — Pro' : ''}
+                    {r.label}{!isPro && r.width > 1280 ? ' - Pro' : ''}
                   </option>
                 ))}
               </select>
@@ -190,7 +190,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
                 className="accent-[#35a7e6] w-3.5 h-3.5 cursor-pointer"
               />
             </label>
-            {!audioOk && <p className="text-[11px] text-[var(--text-muted)] -mt-2">No AAC encoder in this browser — exporting video only.</p>}
+            {!audioOk && <p className="text-[11px] text-[var(--text-muted)] -mt-2">No AAC encoder in this browser - exporting video only.</p>}
 
             <label className="flex items-center justify-between gap-3 text-xs text-[var(--text-3)]">
               File name

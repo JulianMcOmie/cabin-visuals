@@ -40,7 +40,7 @@ export type SubsetWeightSpec =
   | { mode: 'gradient'; slope: number; phase: number }
 
 /**
- * A positioned, trimmed reference to an audio clip — the audio analogue of a MIDI
+ * A positioned, trimmed reference to an audio clip - the audio analogue of a MIDI
  * Block. The clip (bytes + descriptor) is the material; this is the placement.
  * The beat window it occupies is DERIVED at schedule time from startBar + trim +
  * tempo, never stored: audio is fixed seconds, so its width in beats follows the
@@ -58,7 +58,7 @@ export interface AudioBlock {
   trimEnd: number
   /** Per-block volume (linear, 1 = unity). */
   gain?: number
-  /** Edge fades in seconds — reserved for a later phase. */
+  /** Edge fades in seconds - reserved for a later phase. */
   fadeIn?: number
   fadeOut?: number
 }
@@ -68,7 +68,7 @@ export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ea
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
  * tag group, or a subtree of objects the mover applies to. (`port`/`amount` are
- * legacy fields from the retired modulator system — still present in saved
+ * legacy fields from the retired modulator system - still present in saved
  * documents, ignored by the engine.)
  */
 export interface Routing {
@@ -104,7 +104,7 @@ export interface Track {
   blocks: Block[]
   parentId?: string
   childIds: string[]
-  /** Cross-cutting labels — a top-level mover can target a tag group. */
+  /** Cross-cutting labels - a top-level mover can target a tag group. */
   tags?: string[]
   /** Top-level movers only: the objects this mover applies to. */
   targets?: Routing[]

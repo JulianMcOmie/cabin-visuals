@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tag Automation — Architecture</title>
+<title>Tag Automation - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,11 +36,11 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Tag Automation</span>
-  <h1>Tag Automation — Architecture</h1>
-  <p class="sub">"Tagging is so good for this" — one automation lane drives one param key across EVERY instrument carrying a tag. The lane goes normalized (0–1) and each instrument maps it into its own bounds, which is what makes cross-instrument fan-out coherent instead of accidental.</p>
+  <h1>Tag Automation - Architecture</h1>
+  <p class="sub">"Tagging is so good for this" - one automation lane drives one param key across EVERY instrument carrying a tag. The lane goes normalized (0–1) and each instrument maps it into its own bounds, which is what makes cross-instrument fan-out coherent instead of accidental.</p>
 </header>
 
-<h2>1 · The fan-out — one lane, N instruments, per-instrument bounds</h2>
+<h2>1 · The fan-out - one lane, N instruments, per-instrument bounds</h2>
 <figure class="fig">
   <div class="figtitle">A parentless automation track scoped to a tag</div>
   <svg viewBox="0 0 900 330" role="img" aria-label="Tag automation fan-out">
@@ -66,7 +66,7 @@
     <text x="780" y="150" text-anchor="middle" font-size="13.5" fill="#565656">joins the fan-out AUTOMATICALLY</text>
     <path d="M620,132 L672,132" stroke="#141414" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a17)"/>
   </svg>
-  <figcaption>Tags resolve at resolve time (the tagIndex modulator scopes already use), so tagging a new track mid-project instantly enrolls it — the property that makes tags "so good for this."</figcaption>
+  <figcaption>Tags resolve at resolve time (the tagIndex modulator scopes already use), so tagging a new track mid-project instantly enrolls it - the property that makes tags "so good for this."</figcaption>
 </figure>
 
 <h2>2 · Why normalized lanes</h2>
@@ -75,7 +75,7 @@
   <tbody>
     <tr><td>Absolute values (lane in the param's units)</td><td>Whose units? #drums instruments can disagree about bounds for the same key, and unrelated keys can't share a lane at all. Dead end.</td></tr>
     <tr><td><strong>Normalized 0–1, mapped per instrument</strong></td><td><strong>Chosen.</strong> The lane says "how far through YOUR range"; each target maps t into its own min/max. Same proportional principle copy-paste-automation already relies on. Editor shows 0–100%.</td></tr>
-    <tr><td>Per-target scaling knobs on top</td><td>Later, if wanted — a per-routing amount like modulators have. Not v1.</td></tr>
+    <tr><td>Per-target scaling knobs on top</td><td>Later, if wanted - a per-routing amount like modulators have. Not v1.</td></tr>
   </tbody>
 </table>
 
@@ -83,18 +83,18 @@
 <table>
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>A root-level automation track (parentless)</td><td>It belongs to the tag, not to any instrument — nesting it under one member would lie about its scope. It renders as a normal automation row at root, labeled <code>#drums · Base Color</code>.</td></tr>
+    <tr><td>A root-level automation track (parentless)</td><td>It belongs to the tag, not to any instrument - nesting it under one member would lie about its scope. It renders as a normal automation row at root, labeled <code>#drums · Base Color</code>.</td></tr>
     <tr><td>Targets by ParamAddress KEY, tolerant fan-out</td><td>Instruments lacking the key are skipped (the lane's editor lists "drives 2 of 3 tagged"); effect-setting addresses fan out by pluginId+key match. The cluster's addressing, third consumer.</td></tr>
-    <tr><td>Merge position: same slot as per-instrument lanes</td><td>base ← lanes (instrument lane wins over tag lane when both exist — specific beats general, documented) ← modulators. One order, extended once.</td></tr>
-    <tr><td>Created from the Tracks + menu</td><td>"+ ▸ Tag automation ▸ #tag ▸ param key" (keys = union across tagged instruments). The add flow needs a tag to exist first — greyed otherwise.</td></tr>
+    <tr><td>Merge position: same slot as per-instrument lanes</td><td>base ← lanes (instrument lane wins over tag lane when both exist - specific beats general, documented) ← modulators. One order, extended once.</td></tr>
+    <tr><td>Created from the Tracks + menu</td><td>"+ ▸ Tag automation ▸ #tag ▸ param key" (keys = union across tagged instruments). The add flow needs a tag to exist first - greyed otherwise.</td></tr>
     <tr><td>Non-goals</td><td>Tag hierarchies · per-target offsets · tag-scoped EFFECTS (different feature) · retro-compat migration (new optional track fields only).</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a parentless lane that says "#drums · hue: t" in normalized terms, fanned out at resolve through the same tagIndex modulators use, each instrument stretching t into its own bounds — general lanes losing to specific ones at the one documented merge point.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a parentless lane that says "#drums · hue: t" in normalized terms, fanned out at resolve through the same tagIndex modulators use, each instrument stretching t into its own bounds - general lanes losing to specific ones at the one documented merge point.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">tag-automation-implementation-plan.html</span>. Cluster: third consumer of ParamAddress (after effect-param automation, beside the envelope modulator). Existing tag machinery: <code>Track.tags</code> · tagIndex + <code>expandScope</code> in <span class="file">resolve.ts</span>.</p>
+<p class="small muted">Architecture - build in <span class="file">tag-automation-implementation-plan.html</span>. Cluster: third consumer of ParamAddress (after effect-param automation, beside the envelope modulator). Existing tag machinery: <code>Track.tags</code> · tagIndex + <code>expandScope</code> in <span class="file">resolve.ts</span>.</p>
 
 </div>
 </body>

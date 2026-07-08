@@ -27,7 +27,7 @@ export function CabinLogo({ className, strokeWidth = 110 }: { className?: string
         <path d="M4107.7 978 V2016" />
         <path d="M5018 978 V2470" />
         <path d="M4002.8 1041.9 L4562.85 771.5 L5122.9 1041.9" />
-        {/* Smoke — animated on hover (lower puff first: emits bottom→top) */}
+        {/* Smoke - animated on hover (lower puff first: emits bottom→top) */}
         <g className="smoke">
           <g className="puff puff-1">
             <path d="M4002.8 660.6 L4562.85 390.2 L5122.9 660.6" />

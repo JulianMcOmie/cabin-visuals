@@ -4,7 +4,7 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// Ported from Excellent DAW's `cameraControl`. This instrument renders NO mesh — it
+// Ported from Excellent DAW's `cameraControl`. This instrument renders NO mesh - it
 // drives the scene camera (position / rotation / fov) each frame from its params.
 // Tyler's core is a static param→camera write (posX/Y/Z, rotX/Y/Z deg, fov); add
 // automation tracks to animate those params over time, exactly as his description says.
@@ -15,7 +15,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // and a look-mode select round it out.
 //
 // NOTE: our scene has no OrbitControls (Canvas uses a default camera at [0,1.2,5],
-// fov 55), so nothing else writes the camera each frame — this instrument owns it while
+// fov 55), so nothing else writes the camera each frame - this instrument owns it while
 // active. It's opt-in; if a user later adds orbit controls the two would conflict, which
 // is acceptable. Guarded against a non-perspective camera so it never crashes.
 
@@ -74,7 +74,7 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
 
     // Accumulate the decaying impulse purely from the playhead: a note "hits" while
     // its beat-age (in seconds) is inside the punch window, so paused = static frame
-    // and scrub == playback. Notes are sorted by beat — walk backwards from the
+    // and scrub == playback. Notes are sorted by beat - walk backwards from the
     // playhead and stop past the window (or after the most recent MAX_HITS, matching
     // the old cap).
     let punch = 0

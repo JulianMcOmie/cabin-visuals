@@ -5,7 +5,7 @@ import type { ResolvedNote } from './types'
 // pitch). This was the Cube's original inline pulse, then the implicit
 // `energy` port every object carried through the modulation matrix; with
 // modulators and ports gone it is computed directly per frame. A pure
-// function of (notes, beat) — scrub == playback.
+// function of (notes, beat) - scrub == playback.
 const DECAY_BEATS = 0.45
 const LOWEST_MIDI_PITCH = 24
 const PULSE_DAMPENER = 20

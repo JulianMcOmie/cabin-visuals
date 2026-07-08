@@ -27,7 +27,7 @@ export interface ProjectSnapshot {
 }
 
 /** Track ids in depth-first order across the whole forest (roots, then each one's
- *  descendants). The engine treats nested and top-level tracks uniformly — nesting
+ *  descendants). The engine treats nested and top-level tracks uniformly - nesting
  *  only adds transform inheritance (later); every object/modulator still resolves.
  *  A visited set guards against malformed cyclic data. */
 function flattenTree(p: ProjectSnapshot): string[] {
@@ -180,7 +180,7 @@ function resolveMoverChain(track: Track, p: ProjectSnapshot): ResolvedMover[] {
 
 /** Fold a track's event-modifier children into its note stream (in child order) and
  *  collect blackout regions from `mute` children. A modifier is a no-instrument child
- *  whose type is a modifier type — consumed here, never resolved as its own object. */
+ *  whose type is a modifier type - consumed here, never resolved as its own object. */
 function applyModifiers(
   track: Track,
   baseNotes: ResolvedNote[],
@@ -210,7 +210,7 @@ function applyModifiers(
  * Flatten the project into resolved objects (with their mover chains) plus the tag
  * index. Objects resolve first so tag-scoped top-level movers can expand to the
  * objects carrying that tag.
- * Non-incremental skeleton — resolve is trivially cheap at this scale.
+ * Non-incremental skeleton - resolve is trivially cheap at this scale.
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
@@ -228,7 +228,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
 
-    // Object track — fold its event-modifier children into its note stream.
+    // Object track - fold its event-modifier children into its note stream.
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
     if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing

@@ -41,7 +41,7 @@ export default function LandingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-page)] text-[var(--text)] font-sans">
-      {/* Nav — 64px, hairline border */}
+      {/* Nav - 64px, hairline border */}
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5 select-none cursor-pointer">
@@ -122,7 +122,7 @@ export default function LandingPage() {
               </button>
             </div>
             <span className="font-mono text-[12px] text-[var(--text-muted)]">
-              No account needed — the editor opens in your browser
+              No account needed - the editor opens in your browser
             </span>
           </div>
         </section>
@@ -136,7 +136,7 @@ export default function LandingPage() {
           <div className="w-full max-w-[960px]">
             <div className="flex items-center gap-2 px-0.5 pb-2.5">
               <span className="h-2 w-2 rounded-[2px] bg-[var(--accent)]"></span>
-              <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">DEMO — 2:41</span>
+              <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">DEMO - 2:41</span>
             </div>
             <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-canvas-deep)]">
               <iframe

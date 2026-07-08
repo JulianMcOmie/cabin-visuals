@@ -18,7 +18,7 @@ function setOpacity(material: Material | Material[], opacity: number) {
 /**
  * One clone plugin: renders `count` React-duplicated copies of `children`, each in a group
  * whose matrix is set from the plugin's `getTransform` every frame (and material opacity
- * from `getOpacity`, for trails). Copies are real R3F subtrees — matches Excellent DAW —
+ * from `getOpacity`, for trails). Copies are real R3F subtrees - matches Excellent DAW -
  * fine for the modest counts these plugins produce. Disabled → a single pass-through copy.
  */
 function SingleClone({ instance, children }: { instance: EffectInstance; children: ReactNode }) {

@@ -4,10 +4,10 @@ import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/inst
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// RETRO ARCADE — rows of pixel-art space invaders (one InstancedMesh of tiny cubes
+// RETRO ARCADE - rows of pixel-art space invaders (one InstancedMesh of tiny cubes
 // forming 8-bit sprites) march side-to-side in classic stepped shuffle, animation
 // frame alternating each step. Every note fires the cannon: pitch % cols picks the
-// column, the bottom-most surviving invader in that column takes the hit — a laser
+// column, the bottom-most surviving invader in that column takes the hit - a laser
 // column flashes up from the cannon and the invader bursts into grid-snapped pixel
 // shrapnel. The whole formation respawns at the top of each phrase. Fully pure in
 // `state.beat`: kills are re-derived every frame from the notes inside the current
@@ -123,7 +123,7 @@ function PixelInvadersVisual({ trackId }: { trackId: string }) {
     const laserColor = sp.laserColor ?? '#aef852'
 
     // Classic stepped shuffle: ping-pong offset in whole steps, sprite frame
-    // alternating each step. All from floor(beat) arithmetic — pure.
+    // alternating each step. All from floor(beat) arithmetic - pure.
     const stepIndex = Math.floor(beat / stepBeats)
     const period = marchSteps * 2
     const ph = ((stepIndex % period) + period) % period

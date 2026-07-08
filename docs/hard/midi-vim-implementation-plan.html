@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MIDI Vim — Implementation Plan</title>
+<title>MIDI Vim - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -38,7 +38,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · MIDI Vim</span>
-  <h1>MIDI Vim — Implementation Plan</h1>
+  <h1>MIDI Vim - Implementation Plan</h1>
   <p class="sub">Phase 0 is the keymap review; the code is a small state machine that translates keys into the editor's existing mutations. Gated hard on the RowModel.</p>
 </header>
 
@@ -51,7 +51,7 @@
 </table>
 
 <h2>B · The state machine (the only new "engine")</h2>
-<pre><code>// components/midi/vim/vimState.ts — pure reducer, exhaustively testable
+<pre><code>// components/midi/vim/vimState.ts - pure reducer, exhaustively testable
 interface VimState {
   mode: 'off' | 'normal' | 'visual'
   caret: { beat: number; rowIndex: number }     // rowIndex in RowModel space
@@ -61,33 +61,33 @@ interface VimState {
 }
 // step(state, key, ctx: { rowModel, quantize, notes, blockBeats }) → { state, effects[] }
 // effects are DESCRIPTIONS ('insertNote', 'deleteNotes', 'setSelection', 'setFilter', …)
-// executed by a thin adapter over the existing note actions — the reducer never touches stores.</code></pre>
+// executed by a thin adapter over the existing note actions - the reducer never touches stores.</code></pre>
 <p class="small muted">Pure reducer + effect descriptions = unit tests without a DOM, and the adapter is the single file that knows how vim verbs map onto useMidiEditorState/useNoteGestures mutations.</p>
 
 <h2>C · Phase-by-phase</h2>
 
-<h3>Phase 0 — Keymap review <span class="badge b-risk">Julia + Tyler</span> · dependency gate</h3>
+<h3>Phase 0 - Keymap review <span class="badge b-risk">Julia + Tyler</span> · dependency gate</h3>
 <ul class="small">
   <li>Walk the architecture doc's §2 table in the promised "midi vim discussion"; freeze v1 keys. RowModel merged (row-hiding pair) before any code here.</li>
 </ul>
 
-<h3>Phase 1 — Mode + caret + motions <span class="badge b-new">vim/*</span></h3>
+<h3>Phase 1 - Mode + caret + motions <span class="badge b-new">vim/*</span></h3>
 <ul class="small">
   <li>Toggle (toolbar + hotkey) → 'normal'; key capture on the piano-roll container (scoped: only when the editor has focus; inputs excluded; existing shortcuts pass through when OFF, vim swallows when ON).</li>
   <li>Caret rendering (cell outline on the grid) + h/l/j/k/w/b/0/$ with counts; caret auto-scrolls into view. No mutations yet.</li>
-  <li>Verify: motions respect quantize and the ACTIVE row filter (j under scale filter = next scale degree — the substrate payoff, demonstrated day one).</li>
+  <li>Verify: motions respect quantize and the ACTIVE row filter (j under scale filter = next scale degree - the substrate payoff, demonstrated day one).</li>
 </ul>
 
-<h3>Phase 2 — Operators <span class="badge b-edit">adapter over existing actions</span></h3>
+<h3>Phase 2 - Operators <span class="badge b-edit">adapter over existing actions</span></h3>
 <ul class="small">
   <li>i/a insert (quantize-length note at caret, last-used velocity) · x/dw delete · v visual driving the EXISTING selection set · y/p through the EXISTING note clipboard · &lt; &gt; nudge · J/K transpose by visible row.</li>
   <li>Undo: every effect batch = one gesture (the editor's commit-per-gesture pattern) so <code>u</code> behaves like vim users expect.</li>
   <li>Verify: enter a 4-bar drum line entirely by keys in under a minute (the acceptance demo); mouse editing mid-vim-session stays coherent (shared selection/clipboard prove themselves).</li>
 </ul>
 
-<h3>Phase 3 — View commands + status chip</h3>
+<h3>Phase 3 - View commands + status chip</h3>
 <ul class="small">
-  <li>zf filter cycle · zs scale-from-caret · +/− row scale · octave jumps; a small status chip in the toolbar shows <code>NORMAL · 4</code> (mode + pending count) — modes without indicators are user hostility.</li>
+  <li>zf filter cycle · zs scale-from-caret · +/− row scale · octave jumps; a small status chip in the toolbar shows <code>NORMAL · 4</code> (mode + pending count) - modes without indicators are user hostility.</li>
   <li>Verify Julia's original scenario end-to-end: hide rows to two lanes, enter kicks a bar apart with <code>a 16l a 16l…</code>, zero scrolling.</li>
 </ul>
 
@@ -95,26 +95,26 @@ interface VimState {
 <table>
   <thead><tr><th>File</th><th>Change</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">components/midi/vim/vimState.ts</span></td><td><span class="badge b-new">new</span> — pure reducer + keymap constants.</td></tr>
-    <tr><td><span class="file">components/midi/vim/vimAdapter.ts</span></td><td><span class="badge b-new">new</span> — effects → existing note mutations/selection/clipboard/row-model calls.</td></tr>
+    <tr><td><span class="file">components/midi/vim/vimState.ts</span></td><td><span class="badge b-new">new</span> - pure reducer + keymap constants.</td></tr>
+    <tr><td><span class="file">components/midi/vim/vimAdapter.ts</span></td><td><span class="badge b-new">new</span> - effects → existing note mutations/selection/clipboard/row-model calls.</td></tr>
     <tr><td><span class="file">components/midi/MidiEditor.tsx · PianoRollPanel.tsx</span></td><td>Key capture scope · caret + status chip rendering · toggle.</td></tr>
     <tr><td><span class="file">rowModel.ts</span></td><td>Consumed, ideally unchanged (its API was sized for this).</td></tr>
-    <tr><td>Stores · engines · document</td><td>Untouched — vim is an input layer.</td></tr>
+    <tr><td>Stores · engines · document</td><td>Untouched - vim is an input layer.</td></tr>
   </tbody>
 </table>
 
 <h2>E · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Key-capture leaks</strong> — vim-ON must not eat the transport space bar unless focused, and must fully release on toggle-off/editor close; the scoping rules in phase 1 are the contract, tested explicitly.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Grammar creep</strong> — every vim user wants their next favorite binding; the constants file + "drives existing actions only" rule keeps additions cheap and bounded.</li>
-  <li><span class="badge b-risk">open</span> Should <code>i</code> preview-play the note's pitch (audio)? There's no synth — visual flash at the object instead? Decide in the keymap review.</li>
-  <li><span class="badge b-risk">note</span> Macros (q/@) are the highest-value follow-up for pattern entry — the reducer's effect stream is recordable by design; note it, don't build it.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Key-capture leaks</strong> - vim-ON must not eat the transport space bar unless focused, and must fully release on toggle-off/editor close; the scoping rules in phase 1 are the contract, tested explicitly.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Grammar creep</strong> - every vim user wants their next favorite binding; the constants file + "drives existing actions only" rule keeps additions cheap and bounded.</li>
+  <li><span class="badge b-risk">open</span> Should <code>i</code> preview-play the note's pitch (audio)? There's no synth - visual flash at the object instead? Decide in the keymap review.</li>
+  <li><span class="badge b-risk">note</span> Macros (q/@) are the highest-value follow-up for pattern entry - the reducer's effect stream is recordable by design; note it, don't build it.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a pure key→effects reducer whose effects are executed by one adapter over the editor's existing mutations — vim as vocabulary, the piano roll as the only engine, and the RowModel as the space every motion moves through.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a pure key→effects reducer whose effects are executed by one adapter over the editor's existing mutations - vim as vocabulary, the piano roll as the only engine, and the RowModel as the space every motion moves through.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">midi-vim-architecture.html</span>; gated on <span class="file">row-hiding-scaling-*</span> and the phase-0 keymap review.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">midi-vim-architecture.html</span>; gated on <span class="file">row-hiding-scaling-*</span> and the phase-0 keymap review.</p>
 
 </div>
 </body>

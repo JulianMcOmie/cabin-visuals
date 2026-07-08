@@ -16,7 +16,7 @@ const ACTIVE_KEY = 'cabin:tutorial:pulse-cube:active'
 
 /**
  * First-time-user tutorial: walk a brand-new user to their first pulsing
- * cube. Fully interactive — each step is DETECTED from the stores (no "Next"
+ * cube. Fully interactive - each step is DETECTED from the stores (no "Next"
  * button): it advances the moment the user actually adds the Cube, draws a
  * block, opens it, draws a note, and presses play.
  *
@@ -24,14 +24,14 @@ const ACTIVE_KEY = 'cabin:tutorial:pulse-cube:active'
  * element the current gesture targets (the dim is one huge box-shadow on the
  * cutout), with the instruction card sitting NEXT to the cutout. The whole
  * overlay is pointer-events:none (only the card is interactive), so every
- * gesture still lands on the real UI — and while a drag gesture is live
+ * gesture still lands on the real UI - and while a drag gesture is live
  * (body.cursor-locked, set by dragCursor.ts) the overlay hides entirely so
  * the dim never fights a drag in progress.
  *
  * Shows on a person's FIRST editor open (no visited marker in this browser),
  * then never again: completing or skipping sets the done flag, and any other
  * editor use marks the browser as visited so the tutorial's moment has
- * passed. The decision is made ONCE per mount and then sticks — the
+ * passed. The decision is made ONCE per mount and then sticks - the
  * anonymous adoption flow swaps ?project= into the URL mid-tutorial, and
  * that must not re-evaluate (and hide) an engaged tutorial.
  */
@@ -42,7 +42,7 @@ const STEP_TEXTS: ReactNode[] = [
   <><b className="text-[var(--text)]">Double-click</b> the block to open it</>,
   <><b className="text-[var(--text)]">Right-click</b> between the purple lines to draw a few notes</>,
   <>Close the MIDI editor when you&apos;re done</>,
-  <>Press <b className="text-[var(--text)]">play</b> — the cube pulses with every note</>,
+  <>Press <b className="text-[var(--text)]">play</b> - the cube pulses with every note</>,
 ]
 
 const PAD = 6 // spotlight breathing room around the target
@@ -101,7 +101,7 @@ export function TutorialOverlay() {
 
   // Progress, derived live from the document. The notes step wants at least
   // TWO notes (one note isn't a rhythm), and the MIDI editor must be CLOSED
-  // again before the play step — reopening it drops back to the close step.
+  // again before the play step - reopening it drops back to the close step.
   const cube = Object.values(tracks).find((t) => t.instrumentId === 'cube')
   const firstBlock = cube?.blocks[0]
   const hasNotes = !!cube && cube.blocks.reduce((n, b) => n + b.notes.length, 0) >= 2
@@ -124,7 +124,7 @@ export function TutorialOverlay() {
     : '[data-tutorial-play]'
 
   // Completion: they pressed play, and the playhead has traveled PAST their
-  // block — they've seen every note pulse. Auto-pause so the moment lands,
+  // block - they've seen every note pulse. Auto-pause so the moment lands,
   // then show the final prompt.
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const blockEndBeat = firstBlock ? (firstBlock.startBar + firstBlock.durationBars) * beatsPerBar : null
@@ -152,12 +152,12 @@ export function TutorialOverlay() {
       const el = document.querySelector(targetSelector)
       if (el instanceof HTMLElement) {
         const r = el.getBoundingClientRect()
-        // Clamp to the viewport — a timeline lane is wider than the screen.
+        // Clamp to the viewport - a timeline lane is wider than the screen.
         const left = Math.max(r.left, 0)
         const top = Math.max(r.top, 0)
         let right = Math.min(r.right, window.innerWidth)
         const bottom = Math.min(r.bottom, window.innerHeight)
-        // The draw-a-block step spotlights just the lane's first two bars —
+        // The draw-a-block step spotlights just the lane's first two bars -
         // a full-width strip reads as "anywhere", and anywhere is wrong.
         if (targetSelector.startsWith('[data-track-lane')) {
           const twoBars = useUIStore.getState().tracksPixelsPerBeat * useProjectStore.getState().beatsPerBar * 2
@@ -264,12 +264,12 @@ export function TutorialOverlay() {
     )
   }
 
-  // While their creation plays, get out of the way entirely — no dim, no
+  // While their creation plays, get out of the way entirely - no dim, no
   // card. The pass-the-block watcher above ends the tutorial.
   if (step === 5 && isPlaying) return null
 
   if (!rect) {
-    // Target not on screen (yet) — no dim, just the instruction.
+    // Target not on screen (yet) - no dim, just the instruction.
     return card({ bottom: 16, left: '50%', transform: 'translateX(-50%)' }, stepContent)
   }
 

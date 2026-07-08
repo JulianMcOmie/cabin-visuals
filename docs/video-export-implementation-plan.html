@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Video Export — Implementation Plan</title>
+<title>Video Export - Implementation Plan</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -75,7 +75,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Video Export</span>
-  <h1>Video Export — Implementation Plan</h1>
+  <h1>Video Export - Implementation Plan</h1>
   <p class="sub">Turning <span class="file">video-export-architecture.html</span> into specific files, types, and functions: a <span class="file">core/export/</span> island that steps the beat frame-by-frame through the existing visual engine, encodes with WebCodecs, renders audio offline through the shared placement math, and muxes an MP4 in the browser.</p>
 </header>
 
@@ -84,7 +84,7 @@
   <nav class="toc">
     <a href="#components">A · Components that change (start here)</a>
     <a href="#scope">B · Scope &amp; the phase ladder</a>
-    <a href="#model">C · Settings model — no document change</a>
+    <a href="#model">C · Settings model - no document change</a>
     <a href="#engine">D · The export engine (core/export/)</a>
     <a href="#ui">E · The export dialog &amp; the frame driver</a>
     <a href="#phases">F · Phase-by-phase build (with files)</a>
@@ -93,10 +93,10 @@
   </nav>
 </div>
 
-<p class="muted small">This plan introduces <strong>one new directory</strong> — <span class="file">src/editor/core/export/</span> (frame stepper, WebCodecs encode, offline audio render, MP4 mux, capability gate) — plus a small refactor that extracts the beat⟷second placement math out of <span class="file">AudioEngine</span> into a shared helper, an export dialog, and wiring for the header's existing (dead) Export button. <strong>No document version bump</strong> — export writes a file, not the project. Decisions baked in: recompute frame-by-frame, never record · borrow the live canvas (frameloop off, pinned size, DPR 1) · MP4 = H.264 + AAC via <code>mp4-muxer</code> · 1080p/60 default, fixed 16:9 · include-audio toggle (on by default) · whole project length · capability-gated (Chrome-first, confirmed) · encoder backpressure via <code>encodeQueueSize</code>.</p>
+<p class="muted small">This plan introduces <strong>one new directory</strong> - <span class="file">src/editor/core/export/</span> (frame stepper, WebCodecs encode, offline audio render, MP4 mux, capability gate) - plus a small refactor that extracts the beat⟷second placement math out of <span class="file">AudioEngine</span> into a shared helper, an export dialog, and wiring for the header's existing (dead) Export button. <strong>No document version bump</strong> - export writes a file, not the project. Decisions baked in: recompute frame-by-frame, never record · borrow the live canvas (frameloop off, pinned size, DPR 1) · MP4 = H.264 + AAC via <code>mp4-muxer</code> · 1080p/60 default, fixed 16:9 · include-audio toggle (on by default) · whole project length · capability-gated (Chrome-first, confirmed) · encoder backpressure via <code>encodeQueueSize</code>.</p>
 
 <!-- A -->
-<h2 id="components">A · Components that change — and one layer down</h2>
+<h2 id="components">A · Components that change - and one layer down</h2>
 <p>The highest level first, then a peek at the key function inside each. Files in <span class="file">monospace</span>; status badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span>.</p>
 
 <figure class="fig">
@@ -106,23 +106,23 @@
 
     <rect x="10" y="30" width="290" height="130" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="155" y="64" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">EXISTING ENGINES</text>
-    <text x="155" y="92" text-anchor="middle" font-size="15.5" fill="#565656">core/visual — computeAtBeat</text>
-    <text x="155" y="115" text-anchor="middle" font-size="15.5" fill="#565656">core/audio — decode cache</text>
-    <text x="155" y="138" text-anchor="middle" font-size="15.5" fill="#565656">TimeStore — the beat</text>
+    <text x="155" y="92" text-anchor="middle" font-size="15.5" fill="#565656">core/visual - computeAtBeat</text>
+    <text x="155" y="115" text-anchor="middle" font-size="15.5" fill="#565656">core/audio - decode cache</text>
+    <text x="155" y="138" text-anchor="middle" font-size="15.5" fill="#565656">TimeStore - the beat</text>
 
     <rect x="10" y="330" width="290" height="130" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="155" y="364" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">UI</text>
-    <text x="155" y="392" text-anchor="middle" font-size="15.5" fill="#565656">ExportDialog — settings·progress</text>
-    <text x="155" y="415" text-anchor="middle" font-size="15.5" fill="#565656">App.tsx — Export button wired</text>
-    <text x="155" y="438" text-anchor="middle" font-size="15.5" fill="#565656">ExportDriver — inside Canvas</text>
+    <text x="155" y="392" text-anchor="middle" font-size="15.5" fill="#565656">ExportDialog - settings·progress</text>
+    <text x="155" y="415" text-anchor="middle" font-size="15.5" fill="#565656">App.tsx - Export button wired</text>
+    <text x="155" y="438" text-anchor="middle" font-size="15.5" fill="#565656">ExportDriver - inside Canvas</text>
 
     <rect x="330" y="150" width="330" height="200" rx="12" fill="#fff" stroke="#141414" stroke-width="2.5"/>
     <text x="495" y="186" text-anchor="middle" font-size="19" font-weight="700" fill="#141414">core/export/  ★ new</text>
     <rect x="350" y="202" width="290" height="40" rx="5" fill="#141414"/>
-    <text x="495" y="228" text-anchor="middle" font-size="15.5" fill="#fff">exportEngine — the frame loop</text>
-    <text x="495" y="268" text-anchor="middle" font-size="15.5" fill="#565656">videoEncode — WebCodecs H.264</text>
-    <text x="495" y="292" text-anchor="middle" font-size="15.5" fill="#565656">audioRender — offline mix + AAC</text>
-    <text x="495" y="316" text-anchor="middle" font-size="15.5" fill="#565656">mux — mp4-muxer · support — gate</text>
+    <text x="495" y="228" text-anchor="middle" font-size="15.5" fill="#fff">exportEngine - the frame loop</text>
+    <text x="495" y="268" text-anchor="middle" font-size="15.5" fill="#565656">videoEncode - WebCodecs H.264</text>
+    <text x="495" y="292" text-anchor="middle" font-size="15.5" fill="#565656">audioRender - offline mix + AAC</text>
+    <text x="495" y="316" text-anchor="middle" font-size="15.5" fill="#565656">mux - mp4-muxer · support - gate</text>
 
     <rect x="700" y="200" width="190" height="100" rx="10" fill="#141414"/>
     <text x="795" y="240" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">.mp4</text>
@@ -138,20 +138,20 @@
 </figure>
 
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">core/export/exportEngine.ts</span> — the loop</h4>
+  <h4><span class="badge b-new">new</span> <span class="file">core/export/exportEngine.ts</span> - the loop</h4>
   <p class="small">One async function <code>runExport(settings, hooks)</code>: compute <code>N = ceil(totalBeats · 60/bpm · fps)</code>; for each frame set the beat, ask the driver for one render, wrap the canvas in a <code>VideoFrame</code> (timestamp <code>i·1e6/fps</code> µs), feed the encoder, await when <code>encodeQueueSize &gt; 2</code>. Reports <code>onProgress(i, N)</code>; checks an <code>AbortSignal</code> every frame. Runs the audio render in parallel and finalizes the mux.</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">core/export/audioRender.ts</span> — offline mix</h4>
-  <p class="small"><code>renderAudioTrack(blocks, clips, bpm, beatsPerBar, durationSec)</code> → <code>AudioBuffer</code>: an <code>OfflineAudioContext(2, durationSec·48000, 48000)</code>, one <code>AudioBufferSourceNode</code> per block placed with the <strong>shared</strong> <code>blockPlacement()</code> helper (extracted from <code>AudioEngine.armBlock</code> — the from-zero case), master gain 0.85 to match live playback. Then AAC via <code>AudioEncoder</code>.</p>
+  <h4><span class="badge b-new">new</span> <span class="file">core/export/audioRender.ts</span> - offline mix</h4>
+  <p class="small"><code>renderAudioTrack(blocks, clips, bpm, beatsPerBar, durationSec)</code> → <code>AudioBuffer</code>: an <code>OfflineAudioContext(2, durationSec·48000, 48000)</code>, one <code>AudioBufferSourceNode</code> per block placed with the <strong>shared</strong> <code>blockPlacement()</code> helper (extracted from <code>AudioEngine.armBlock</code> - the from-zero case), master gain 0.85 to match live playback. Then AAC via <code>AudioEncoder</code>.</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-edit">edit</span> <span class="file">core/audio/AudioEngine.ts</span> — extract, don't duplicate</h4>
-  <p class="small">The three-case beat⟷second math moves to <span class="file">core/audio/placement.ts</span> as a pure function; <code>armBlock</code> calls it with the live start beat, <span class="file">audioRender</span> calls it with beat 0. One source of truth — live playback and export can't drift apart. Behavior change: none (verified by the phase-3 canary).</p>
+  <h4><span class="badge b-edit">edit</span> <span class="file">core/audio/AudioEngine.ts</span> - extract, don't duplicate</h4>
+  <p class="small">The three-case beat⟷second math moves to <span class="file">core/audio/placement.ts</span> as a pure function; <code>armBlock</code> calls it with the live start beat, <span class="file">audioRender</span> calls it with beat 0. One source of truth - live playback and export can't drift apart. Behavior change: none (verified by the phase-3 canary).</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> — inside the Canvas</h4>
-  <p class="small">Mounted next to <code>VisualBeatSync</code>; exposes <code>{ renderFrame(beat), pin(w,h), unpin() }</code> to the engine via a ref/registry. <code>renderFrame</code> sets <code>TimeStore.currentBeat</code> and calls R3F's <code>advance()</code> once — so <code>VisualBeatSync → computeAtBeat</code> runs exactly as in live scrubbing. <code>pin</code> switches <code>frameloop</code> to <code>never</code>, sets renderer size to export dims, DPR to 1; <code>unpin</code> restores everything.</p>
+  <h4><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> - inside the Canvas</h4>
+  <p class="small">Mounted next to <code>VisualBeatSync</code>; exposes <code>{ renderFrame(beat), pin(w,h), unpin() }</code> to the engine via a ref/registry. <code>renderFrame</code> sets <code>TimeStore.currentBeat</code> and calls R3F's <code>advance()</code> once - so <code>VisualBeatSync → computeAtBeat</code> runs exactly as in live scrubbing. <code>pin</code> switches <code>frameloop</code> to <code>never</code>, sets renderer size to export dims, DPR to 1; <code>unpin</code> restores everything.</p>
 </div>
 
 <!-- B -->
@@ -167,26 +167,26 @@
 </table>
 
 <!-- C -->
-<h2 id="model">C · Settings model — no document change</h2>
+<h2 id="model">C · Settings model - no document change</h2>
 <p>Export is an <strong>action, not state</strong>: nothing about it belongs in the project document, so there is no schema bump (the v2 upgrade chain is untouched). Settings live in component state with a localStorage nicety, and the one shared type lives in the export island:</p>
 <pre><code><span class="k">interface</span> <span class="f">ExportSettings</span> {
   <span class="n">width</span>: <span class="k">number</span>          <span class="c">// 1920 | 1280 (fixed 16:9)</span>
   <span class="n">height</span>: <span class="k">number</span>         <span class="c">// 1080 | 720</span>
   <span class="n">fps</span>: <span class="k">30</span> | <span class="k">60</span>           <span class="c">// default 60 (decided)</span>
-  <span class="n">includeAudio</span>: <span class="k">boolean</span>  <span class="c">// default true — off = video-only MP4</span>
+  <span class="n">includeAudio</span>: <span class="k">boolean</span>  <span class="c">// default true - off = video-only MP4</span>
   <span class="n">videoBitrate</span>: <span class="k">number</span>   <span class="c">// default 12 Mbps @1080p60, 8 @720p</span>
   <span class="n">fileName</span>: <span class="k">string</span>       <span class="c">// default: project name</span>
 }</code></pre>
 <div class="note"><strong>Duration is derived, never entered:</strong> <code>totalBeats = totalBars · beatsPerBar</code>, <code>durationSec = totalBeats · 60/bpm</code>, <code>frameCount = ceil(durationSec · fps)</code>. The project-length control (the BARS scrubber) is the export length control.</div>
 
 <!-- D -->
-<h2 id="engine">D · The export engine — core/export/</h2>
+<h2 id="engine">D · The export engine - core/export/</h2>
 
-<h3>D.1 — the frame loop (the one place export timing lives)</h3>
+<h3>D.1 - the frame loop (the one place export timing lives)</h3>
 <pre><code><span class="k">for</span> (<span class="k">let</span> i = <span class="n">0</span>; i &lt; frameCount; i++) {
   <span class="k">if</span> (signal.aborted) <span class="k">break</span>
-  <span class="k">const</span> beat = i * bpm / (<span class="n">60</span> * fps)          <span class="c">// pure arithmetic — no wall clock</span>
-  driver.renderFrame(beat)                     <span class="c">// setCurrentBeat + advance() — same path as scrubbing</span>
+  <span class="k">const</span> beat = i * bpm / (<span class="n">60</span> * fps)          <span class="c">// pure arithmetic - no wall clock</span>
+  driver.renderFrame(beat)                     <span class="c">// setCurrentBeat + advance() - same path as scrubbing</span>
   <span class="k">const</span> frame = <span class="k">new</span> VideoFrame(canvas, { timestamp: i * <span class="n">1e6</span> / fps })
   encoder.encode(frame, { keyFrame: i % (fps * <span class="n">2</span>) === <span class="n">0</span> })   <span class="c">// keyframe every 2s</span>
   frame.close()
@@ -194,70 +194,70 @@
   <span class="k">if</span> (i % fps === <span class="n">0</span>) onProgress(i, frameCount)
 }</code></pre>
 <ul class="small">
-  <li><strong>VideoFrame from the canvas, same task as the render</strong> — no pixel readback, no <code>preserveDrawingBuffer</code>. The GPU surface is still valid because nothing else rendered in between.</li>
+  <li><strong>VideoFrame from the canvas, same task as the render</strong> - no pixel readback, no <code>preserveDrawingBuffer</code>. The GPU surface is still valid because nothing else rendered in between.</li>
   <li><strong>Backpressure, not buffering:</strong> the loop never holds more than a few frames; a 5-minute 1080p60 export stays flat on memory.</li>
   <li><strong>Config:</strong> <code>avc1.640028</code> (High 4.0) at 1080p, <code>latencyMode: 'quality'</code>, chunks streamed straight into the muxer's <code>addVideoChunk</code>.</li>
 </ul>
 
-<h3>D.2 — audio (<span class="file">audioRender.ts</span>) and the shared placement helper</h3>
+<h3>D.2 - audio (<span class="file">audioRender.ts</span>) and the shared placement helper</h3>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">core/audio/placement.ts</span>: <code>blockPlacement(block, clipDuration, bpm, beatsPerBar, fromBeat)</code> → <code>{ when, offset, duration } | null</code> — the exact three-case math lifted from <code>armBlock</code>. <code>AudioEngine</code> calls it with the live seek beat; export calls it with <code>fromBeat = 0</code>.</li>
-  <li>Decode through the existing <span class="file">core/audio/waveform.ts</span> buffer cache (bytes via <code>audioSource.ts</code>) — export never fetches what playback already decoded.</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/audio/placement.ts</span>: <code>blockPlacement(block, clipDuration, bpm, beatsPerBar, fromBeat)</code> → <code>{ when, offset, duration } | null</code> - the exact three-case math lifted from <code>armBlock</code>. <code>AudioEngine</code> calls it with the live seek beat; export calls it with <code>fromBeat = 0</code>.</li>
+  <li>Decode through the existing <span class="file">core/audio/waveform.ts</span> buffer cache (bytes via <code>audioSource.ts</code>) - export never fetches what playback already decoded.</li>
   <li>Honor mute/solo the same way <code>setBlocks</code> does (<code>audible = !muted &amp;&amp; !(anySolo &amp;&amp; !solo)</code>) and the 0.85 master gain, so the file sounds like the editor.</li>
   <li>Encode: <code>AudioEncoder</code>, <code>mp4a.40.2</code> (AAC-LC) 48 kHz stereo 192 kbps, feeding <code>addAudioChunk</code>. No audio track in the project → video-only MP4, no special casing downstream.</li>
 </ul>
 
-<h3>D.3 — mux + save (<span class="file">mux.ts</span>) and the gate (<span class="file">support.ts</span>)</h3>
+<h3>D.3 - mux + save (<span class="file">mux.ts</span>) and the gate (<span class="file">support.ts</span>)</h3>
 <ul class="small">
   <li><code>mp4-muxer</code> (new dependency, ~zero-dep, tree-shakes small) with <code>ArrayBufferTarget</code>; finalize → <code>Blob</code> → anchor download (<code>showSaveFilePicker</code> when available, silent fallback otherwise).</li>
-  <li><code>isExportSupported()</code>: checks <code>VideoEncoder</code>/<code>AudioEncoder</code> existence and <code>isConfigSupported</code> for the avc + aac configs at startup; the Export button tooltips "requires Chrome" and disables when false. The WebM fallback is a named seam behind this gate — not built now.</li>
+  <li><code>isExportSupported()</code>: checks <code>VideoEncoder</code>/<code>AudioEncoder</code> existence and <code>isConfigSupported</code> for the avc + aac configs at startup; the Export button tooltips "requires Chrome" and disables when false. The WebM fallback is a named seam behind this gate - not built now.</li>
 </ul>
 
 <!-- E -->
 <h2 id="ui">E · The export dialog &amp; the frame driver</h2>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">components/ExportDialog.tsx</span> — opened by the header button: resolution (1080p/720p), fps (60/30, default 60), an <strong>Include audio</strong> toggle (on by default; off skips the audio render entirely and produces a video-only MP4), filename; then a progress view (frame i/N, elapsed, est. remaining, encode-vs-realtime speed) with one Cancel button. Body scroll-locked; transport keys suppressed while open.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> — the Export button gets its first <code>onClick</code> (opens the dialog) and the disabled/tooltip state from <code>isExportSupported()</code>.</li>
-  <li><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> — see A. The subtle part is pin/unpin: save <code>{frameloop, size, dpr}</code>, set <code>frameloop='never'</code> + export size + DPR 1, and restore in a <code>finally</code> so a thrown encode error can never leave the editor frozen at 1920×1080.</li>
-  <li>While exporting, the canvas behind the dialog shows the frames as they render — free progress feedback, since the playhead genuinely moves through the project (<code>setCurrentBeat</code> per frame, exactly like a fast scrub).</li>
+  <li><span class="badge b-new">new</span> <span class="file">components/ExportDialog.tsx</span> - opened by the header button: resolution (1080p/720p), fps (60/30, default 60), an <strong>Include audio</strong> toggle (on by default; off skips the audio render entirely and produces a video-only MP4), filename; then a progress view (frame i/N, elapsed, est. remaining, encode-vs-realtime speed) with one Cancel button. Body scroll-locked; transport keys suppressed while open.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> - the Export button gets its first <code>onClick</code> (opens the dialog) and the disabled/tooltip state from <code>isExportSupported()</code>.</li>
+  <li><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> - see A. The subtle part is pin/unpin: save <code>{frameloop, size, dpr}</code>, set <code>frameloop='never'</code> + export size + DPR 1, and restore in a <code>finally</code> so a thrown encode error can never leave the editor frozen at 1920×1080.</li>
+  <li>While exporting, the canvas behind the dialog shows the frames as they render - free progress feedback, since the playhead genuinely moves through the project (<code>setCurrentBeat</code> per frame, exactly like a fast scrub).</li>
 </ul>
-<div class="warn"><strong>Why borrow the live canvas instead of a hidden one:</strong> the visual engine is a module singleton (<code>computeAtBeat</code>/<code>getObjectState</code>) and <code>VisualBeatSync</code> assumes one scene. A second <code>&lt;Canvas&gt;</code> would double-drive the engine and double GPU memory. Pinning the existing canvas behind an overlay is one seam, zero new engine semantics — and the pause canary keeps watching for free.</div>
+<div class="warn"><strong>Why borrow the live canvas instead of a hidden one:</strong> the visual engine is a module singleton (<code>computeAtBeat</code>/<code>getObjectState</code>) and <code>VisualBeatSync</code> assumes one scene. A second <code>&lt;Canvas&gt;</code> would double-drive the engine and double GPU memory. Pinning the existing canvas behind an overlay is one seam, zero new engine semantics - and the pause canary keeps watching for free.</div>
 
 <!-- F -->
 <h2 id="phases">F · Phase-by-phase build (with files)</h2>
 
-<h3>Phase 0 — Gate + scaffold <span class="badge b-new">core/export</span> <span class="badge b-edit">App.tsx</span></h3>
+<h3>Phase 0 - Gate + scaffold <span class="badge b-new">core/export</span> <span class="badge b-edit">App.tsx</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/export/support.ts</span> (capability probe) + <span class="file">types.ts</span> (<code>ExportSettings</code>); <span class="badge b-new">new</span> <span class="file">ExportDialog.tsx</span> (settings form only, Export button disabled-with-reason on unsupported browsers); <span class="badge b-edit">edit</span> <span class="file">App.tsx</span> (wire the button). Add <code>mp4-muxer</code> to package.json.</li>
   <li>Verify: dialog opens/closes; button disabled in a non-Chrome profile; tsc + lint.</li>
 </ul>
 
-<h3>Phase 1 — Deterministic frame driver <span class="badge b-new">ExportDriver</span></h3>
+<h3>Phase 1 - Deterministic frame driver <span class="badge b-new">ExportDriver</span></h3>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> (renderFrame/pin/unpin); <span class="badge b-new">new</span> <span class="file">core/export/exportEngine.ts</span> first half — the beat stepper walking frames with a no-op sink.</li>
-  <li>Verify — <strong>the determinism canary:</strong> render frames 0/100/200 twice via <code>canvas.toDataURL()</code> hashes — byte-identical across runs; pin to 1920×1080 on a small window and confirm aspect-aware instruments (FractalTunnel et al.) compose for the export aspect, not the window's; unpin restores the editor pixel-perfect.</li>
+  <li><span class="badge b-new">new</span> <span class="file">components/visual/ExportDriver.tsx</span> (renderFrame/pin/unpin); <span class="badge b-new">new</span> <span class="file">core/export/exportEngine.ts</span> first half - the beat stepper walking frames with a no-op sink.</li>
+  <li>Verify - <strong>the determinism canary:</strong> render frames 0/100/200 twice via <code>canvas.toDataURL()</code> hashes - byte-identical across runs; pin to 1920×1080 on a small window and confirm aspect-aware instruments (FractalTunnel et al.) compose for the export aspect, not the window's; unpin restores the editor pixel-perfect.</li>
 </ul>
 
-<h3>Phase 2 — Video encode + mux ★ keystone <span class="badge b-new">videoEncode · mux</span></h3>
+<h3>Phase 2 - Video encode + mux ★ keystone <span class="badge b-new">videoEncode · mux</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/export/videoEncode.ts</span> (encoder config + backpressure) and <span class="file">mux.ts</span>; engine loop feeds real frames; download lands.</li>
   <li>Verify: a 10-second project exports to an .mp4 whose duration is exactly <code>totalBeats·60/bpm</code> (±1 frame), plays in Chrome + QuickTime, no dropped/duplicated frames (count via ffprobe once, manually); memory flat across a 3-minute export; cancel mid-way leaves no dialog, no pinned canvas, no orphaned encoder.</li>
 </ul>
-<div class="note"><strong>The keystone canary:</strong> export a project with a note at beat 0 and a note on every bar line, then step through the file frame-by-frame (comma/period in mpv or QuickTime) — every visual onset must land on the exact expected frame (<code>bar · beatsPerBar · 60/bpm · fps</code>). If onsets drift or double, the beat(i) map or the timestamp math is wrong; fix before audio lands on top.</div>
+<div class="note"><strong>The keystone canary:</strong> export a project with a note at beat 0 and a note on every bar line, then step through the file frame-by-frame (comma/period in mpv or QuickTime) - every visual onset must land on the exact expected frame (<code>bar · beatsPerBar · 60/bpm · fps</code>). If onsets drift or double, the beat(i) map or the timestamp math is wrong; fix before audio lands on top.</div>
 
-<h3>Phase 3 — Audio offline render + AAC <span class="badge b-new">audioRender</span> <span class="badge b-edit">AudioEngine (extract)</span></h3>
+<h3>Phase 3 - Audio offline render + AAC <span class="badge b-new">audioRender</span> <span class="badge b-edit">AudioEngine (extract)</span></h3>
 <ul class="small">
-  <li><span class="badge b-new">new</span> <span class="file">core/audio/placement.ts</span> (extracted three-case math) + <span class="file">core/export/audioRender.ts</span>; <span class="badge b-edit">edit</span> <span class="file">AudioEngine.ts</span> to call the shared helper (behavior-neutral — live playback must sound identical before/after, same canary as the audio plan's phase 2).</li>
-  <li>Verify: export with the audio block at bar 0 — waveform of the file's audio aligns with the source clip sample-exactly at t=0; move the block to bar 8 — audio enters at exactly <code>8·beatsPerBar·60/bpm</code> seconds; trim honored; mute silences it in the file; no audio track → valid video-only mp4; <strong>Include audio off → identical video-only file even when an audio track exists</strong>.</li>
+  <li><span class="badge b-new">new</span> <span class="file">core/audio/placement.ts</span> (extracted three-case math) + <span class="file">core/export/audioRender.ts</span>; <span class="badge b-edit">edit</span> <span class="file">AudioEngine.ts</span> to call the shared helper (behavior-neutral - live playback must sound identical before/after, same canary as the audio plan's phase 2).</li>
+  <li>Verify: export with the audio block at bar 0 - waveform of the file's audio aligns with the source clip sample-exactly at t=0; move the block to bar 8 - audio enters at exactly <code>8·beatsPerBar·60/bpm</code> seconds; trim honored; mute silences it in the file; no audio track → valid video-only mp4; <strong>Include audio off → identical video-only file even when an audio track exists</strong>.</li>
 </ul>
 
-<h3>Phase 4 — Dialog polish <span class="badge b-edit">ExportDialog</span></h3>
+<h3>Phase 4 - Dialog polish <span class="badge b-edit">ExportDialog</span></h3>
 <ul class="small">
   <li>Progress (i/N, speed ×realtime, est. remaining), cancel via <code>AbortSignal</code>, error surface (encoder/mux failures land as a readable message, never a stuck overlay), transport + shortcuts locked during export, settings remembered in localStorage.</li>
   <li>Verify: cancel at 5% / 50% / 95%; force an encoder error (absurd bitrate) and confirm clean recovery; export twice in a row without reload.</li>
 </ul>
 
-<h3>Phase 5 — Later <span class="badge b-risk">deferred</span></h3>
+<h3>Phase 5 - Later <span class="badge b-risk">deferred</span></h3>
 <ul class="small">
   <li>Range/region export (loop region when that exists) · WebM/VP9+Opus fallback behind the same gate · image-sequence export (PNG per frame, for external encoding) · alpha/transparency · custom resolutions/aspects · server render for non-Chrome users.</li>
 </ul>
@@ -275,30 +275,30 @@
 │  │  │  ├─ support.ts        isExportSupported() capability gate
 │  │  │  └─ types.ts          ExportSettings
 │  │  ├─ audio/
-│  │  │  ├─ <span class="tg-new">NEW</span> placement.ts   blockPlacement() — extracted three-case math
+│  │  │  ├─ <span class="tg-new">NEW</span> placement.ts   blockPlacement() - extracted three-case math
 │  │  │  ├─ <span class="tg-edit">EDIT</span> AudioEngine.ts  armBlock delegates to placement.ts (no behavior change)
-│  │  │  └─ <span class="tg-edit">KEEP</span> waveform.ts     decode cache — export reads through it
-│  │  ├─ <span class="tg-edit">KEEP</span> visual/           the engine export drives — untouched
-│  │  └─ <span class="tg-edit">KEEP</span> playback.ts       live transport — export never touches it
+│  │  │  └─ <span class="tg-edit">KEEP</span> waveform.ts     decode cache - export reads through it
+│  │  ├─ <span class="tg-edit">KEEP</span> visual/           the engine export drives - untouched
+│  │  └─ <span class="tg-edit">KEEP</span> playback.ts       live transport - export never touches it
 │  ├─ store/
-│  │  └─ <span class="tg-edit">KEEP</span> TimeStore.ts      export sets currentBeat per frame — the scrub path
+│  │  └─ <span class="tg-edit">KEEP</span> TimeStore.ts      export sets currentBeat per frame - the scrub path
 │  ├─ components/
 │  │  ├─ <span class="tg-new">NEW</span> ExportDialog.tsx  settings → progress → done/cancel/error
 │  │  └─ visual/
-│  │     └─ <span class="tg-new">NEW</span> ExportDriver.tsx  renderFrame(beat) · pin/unpin — inside Canvas
+│  │     └─ <span class="tg-new">NEW</span> ExportDriver.tsx  renderFrame(beat) · pin/unpin - inside Canvas
 │  └─ <span class="tg-edit">EDIT</span> App.tsx              Export button: onClick + capability gating
 └─ package.json                 <span class="tg-edit">EDIT</span> + mp4-muxer</div>
 
 <table>
   <thead><tr><th>Untouched (and why that's the point)</th><th>Reason</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">core/visual/*</span>, every instrument, <span class="file">VisualBeatSync</span></td><td>Export drives the exact rendering path scrubbing drives — <code>setCurrentBeat → computeAtBeat → advance()</code>. If export needed engine changes, the pause invariant would be broken somewhere; that's a bug to fix, not an export feature.</td></tr>
+    <tr><td><span class="file">core/visual/*</span>, every instrument, <span class="file">VisualBeatSync</span></td><td>Export drives the exact rendering path scrubbing drives - <code>setCurrentBeat → computeAtBeat → advance()</code>. If export needed engine changes, the pause invariant would be broken somewhere; that's a bug to fix, not an export feature.</td></tr>
     <tr><td><span class="file">core/playback.ts</span>, Tone transport</td><td>Export never plays. The live transport, lookahead, and <code>when</code> anchor are real-time concerns; export's clock is <code>i · bpm/(60·fps)</code>.</td></tr>
-    <tr><td>Persistence — document, upgrade chain, autosave</td><td>Export is an action, not state. Nothing to persist, no v3.</td></tr>
-    <tr><td><span class="file">AudioEngine</span> scheduling behavior</td><td>The placement-math extraction is motion, not modification — the phase-3 canary (live playback identical before/after) enforces it.</td></tr>
+    <tr><td>Persistence - document, upgrade chain, autosave</td><td>Export is an action, not state. Nothing to persist, no v3.</td></tr>
+    <tr><td><span class="file">AudioEngine</span> scheduling behavior</td><td>The placement-math extraction is motion, not modification - the phase-3 canary (live playback identical before/after) enforces it.</td></tr>
   </tbody>
 </table>
-<div class="rec"><strong>The one-sentence mental model:</strong> you're adding a <span class="file">core/export/</span> island that walks the beat through the untouched visual engine one frame at a time and streams the canvas into WebCodecs, mixes the audio track once through placement math now shared with the live engine, muxes both into an MP4 in memory, and hands you the file — the transport, the document, and every instrument never learn export exists.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> you're adding a <span class="file">core/export/</span> island that walks the beat through the untouched visual engine one frame at a time and streams the canvas into WebCodecs, mixes the audio track once through placement math now shared with the live engine, muxes both into an MP4 in memory, and hands you the file - the transport, the document, and every instrument never learn export exists.</div>
 
 <!-- H -->
 <h2 id="risks">H · Risks &amp; open questions</h2>
@@ -306,16 +306,16 @@
   <li><span class="badge b-risk">risk</span> <strong>WebCodecs availability.</strong> Chrome/Edge: full. Safari/Firefox: partial-to-none for this config. Mitigation: the phase-0 gate (button disabled with a reason) and a named WebM fallback seam. <strong>Decided: Chrome-first is acceptable.</strong></li>
   <li><span class="badge b-risk">risk</span> <strong>AAC encoder missing where H.264 exists.</strong> <code>isConfigSupported</code> both at gate time; if only AAC fails, offer video-only export rather than blocking.</li>
   <li><span class="badge b-risk">risk</span> <strong>VideoFrame-from-canvas timing.</strong> The frame must be constructed in the same task as the render (before anything else touches the GL context). The loop is structured render → capture → encode sequentially, so this holds by construction; a regression shows up as black/stale frames in the phase-1 hash canary.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Per-frame React cost.</strong> <code>setCurrentBeat</code> re-renders beat readouts every frame. Fine at scrub speed today; if it caps export speed, throttle the UI subscription during export (engine correctness is unaffected — it reads the store directly).</li>
-  <li><span class="badge b-risk">risk</span> <strong>Memory on long projects.</strong> Chunks stream into the muxer, but <code>ArrayBufferTarget</code> holds the finished MP4 in RAM (~1 GB/10 min at 12 Mbps — fine). If projects grow, swap to <code>FileSystemWritableFileStreamTarget</code>; the seam is one constructor argument.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Per-frame React cost.</strong> <code>setCurrentBeat</code> re-renders beat readouts every frame. Fine at scrub speed today; if it caps export speed, throttle the UI subscription during export (engine correctness is unaffected - it reads the store directly).</li>
+  <li><span class="badge b-risk">risk</span> <strong>Memory on long projects.</strong> Chunks stream into the muxer, but <code>ArrayBufferTarget</code> holds the finished MP4 in RAM (~1 GB/10 min at 12 Mbps - fine). If projects grow, swap to <code>FileSystemWritableFileStreamTarget</code>; the seam is one constructor argument.</li>
   <li><span class="badge b-risk">risk</span> <strong>Pin/unpin leaving the editor wedged.</strong> Everything restorative lives in one <code>finally</code>; phase 4 tests cancel and forced-error paths explicitly.</li>
   <li><span class="badge b-risk">open</span> <strong>Default fps.</strong> <strong>Decided: 60</strong> (the visuals are motion-heavy); 30 stays in the dialog for smaller/faster exports.</li>
   <li><span class="badge b-risk">open</span> <strong>Export aspect vs window aspect.</strong> Fixed 16:9 is the decision; instruments that read <code>viewport</code> re-compose to it (that's the point of the aspect-aware work). Worth one visual pass over the fullFrame instruments at 16:9 during phase 1.</li>
-  <li><span class="badge b-risk">later</span> <strong>Ranges, stems, WebM, image sequences, alpha, server render</strong> — named in the architecture doc §5; none designed here.</li>
+  <li><span class="badge b-risk">later</span> <strong>Ranges, stems, WebM, image sequences, alpha, server render</strong> - named in the architecture doc §5; none designed here.</li>
 </ul>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Mirrors <span class="file">audio-track-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">video-export-architecture.html</span> (decisions: recompute don't record · borrow the live canvas · MP4 H.264+AAC via mp4-muxer · fixed 1080p 16:9 · whole project · Chrome-first gate). The determinism it leans on is the pause invariant shipped with the instrument-purity push. Greyscale, print-ready.</p>
+<p class="small muted">Plan only - no code changed. Mirrors <span class="file">audio-track-architecture-implementation-plan.html</span> in shape; derives its architecture from <span class="file">video-export-architecture.html</span> (decisions: recompute don't record · borrow the live canvas · MP4 H.264+AAC via mp4-muxer · fixed 1080p 16:9 · whole project · Chrome-first gate). The determinism it leans on is the pause invariant shipped with the instrument-purity push. Greyscale, print-ready.</p>
 
 </div>
 </body>

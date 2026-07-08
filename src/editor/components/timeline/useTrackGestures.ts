@@ -149,7 +149,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       const d = dragRef.current
       if (!d) return
       // Any in-flight drag (marquee, move, resize, draw) ends with a click on
-      // whatever row is under the pointer — that click must not select a track.
+      // whatever row is under the pointer - that click must not select a track.
       suppressTrackSelectBriefly()
 
       if (d.type === 'marquee') {
@@ -197,7 +197,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
 
           // Vertical: move to the row at origin index + rowDelta (clamped), mapped to
-          // its owning track — so nested/child rows and ability-lane rows are crossed
+          // its owning track - so nested/child rows and ability-lane rows are crossed
           // correctly (a lane row resolves to its parent track, never a drop target).
           const targetIndex = Math.max(0, Math.min(d.rowTrackIds.length - 1, o.trackIndex + rowDelta))
           const targetTrackId = d.rowTrackIds[targetIndex]
@@ -444,7 +444,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
       // Split selected MIDI blocks at the playhead. Audio blocks are ignored by the
       // store action; no selection means leave the browser's normal bold shortcut alone.
-      // (Tyler's branch had the same feature on Cmd/Ctrl+E with the pre-split API —
+      // (Tyler's branch had the same feature on Cmd/Ctrl+E with the pre-split API -
       // superseded by this one.)
       if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
         if (selectedBlockIds.size === 0) return
@@ -476,7 +476,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (trackId) {
             e.preventDefault()
             useProjectStore.getState().deleteTrack(trackId)
-            // The whole subtree is gone — drop selected blocks that died with it.
+            // The whole subtree is gone - drop selected blocks that died with it.
             pruneSelectionAfterTrackDelete()
           }
         }

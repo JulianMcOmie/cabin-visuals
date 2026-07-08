@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>First-Note Bug — Architecture</title>
+<title>First-Note Bug - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,64 +36,64 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · First-Note Bug</span>
-  <h1>First-Note Bug — Architecture</h1>
-  <p class="sub">Tyler: "pressing play from the start doesn't play the first note — maybe it starts from the first note already being played, instead of right before it." An investigation design: three hypotheses, one decisive experiment each, and the fix that follows from whichever survives.</p>
+  <h1>First-Note Bug - Architecture</h1>
+  <p class="sub">Tyler: "pressing play from the start doesn't play the first note - maybe it starts from the first note already being played, instead of right before it." An investigation design: three hypotheses, one decisive experiment each, and the fix that follows from whichever survives.</p>
 </header>
 
 <h2>1 · The hypothesis map</h2>
-<p>The report is ambiguous between <em>missing</em> (the note never renders) and <em>pre-fired</em> (the note is already at its peak the instant play starts, so its attack is never seen). The system's shape makes the second far more likely: instrument envelopes are <strong>decay-from-onset</strong> — at exactly <code>beat == note.beat</code> the envelope is at MAXIMUM, and it only falls from there. A playhead parked at beat 0 with a note at beat 0 is parked on the peak.</p>
+<p>The report is ambiguous between <em>missing</em> (the note never renders) and <em>pre-fired</em> (the note is already at its peak the instant play starts, so its attack is never seen). The system's shape makes the second far more likely: instrument envelopes are <strong>decay-from-onset</strong> - at exactly <code>beat == note.beat</code> the envelope is at MAXIMUM, and it only falls from there. A playhead parked at beat 0 with a note at beat 0 is parked on the peak.</p>
 
 <figure class="fig">
-  <div class="figtitle">Three hypotheses — each with a decisive experiment</div>
+  <div class="figtitle">Three hypotheses - each with a decisive experiment</div>
   <svg viewBox="0 0 900 420" role="img" aria-label="Hypotheses">
     <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="24" width="860" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2.5"/>
-    <text x="40" y="56" font-size="18" font-weight="700" fill="#141414">H1 · Peak-at-zero (most likely) — not a bug, a perception gap</text>
+    <text x="40" y="56" font-size="18" font-weight="700" fill="#141414">H1 · Peak-at-zero (most likely) - not a bug, a perception gap</text>
     <text x="40" y="84" font-size="15.5" fill="#565656">env(beat) = decay(beat − onset) is MAX at onset. Parked at 0, the note is already "fired"; play shows only its tail.</text>
-    <text x="40" y="108" font-size="15.5" fill="#565656">Experiment: park at beat 0 vs scrub to beat 0.01 — if the visual is identical-then-decaying, H1.</text>
+    <text x="40" y="108" font-size="15.5" fill="#565656">Experiment: park at beat 0 vs scrub to beat 0.01 - if the visual is identical-then-decaying, H1.</text>
     <rect x="20" y="154" width="860" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="186" font-size="18" font-weight="700" fill="#141414">H2 · First-frame skip — the clock's first RAF tick lands past the onset</text>
+    <text x="40" y="186" font-size="18" font-weight="700" fill="#141414">H2 · First-frame skip - the clock's first RAF tick lands past the onset</text>
     <text x="40" y="214" font-size="15.5" fill="#565656">If play anchors the clock and the first frame evaluates at beat ε &gt; 0, a zero-length attack is never sampled.</text>
-    <text x="40" y="238" font-size="15.5" fill="#565656">Experiment: log the first 10 beats after play() — does the sequence start at 0.000 or at ~0.016·bpm/60?</text>
+    <text x="40" y="238" font-size="15.5" fill="#565656">Experiment: log the first 10 beats after play() - does the sequence start at 0.000 or at ~0.016·bpm/60?</text>
     <rect x="20" y="284" width="860" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="316" font-size="18" font-weight="700" fill="#141414">H3 · Boundary comparator — some instrument uses &gt; where others use ≥</text>
+    <text x="40" y="316" font-size="18" font-weight="700" fill="#141414">H3 · Boundary comparator - some instrument uses &gt; where others use ≥</text>
     <text x="40" y="344" font-size="15.5" fill="#565656">A note with beat==0 fails a `beat &gt; n.beat` test on the exact frame, but passes a `beat &gt;= n.beat` one.</text>
     <text x="40" y="368" font-size="15.5" fill="#565656">Experiment: grep the onset comparators across instruments; the outliers are the suspects.</text>
   </svg>
-  <figcaption>H1 needs no code change to confirm — the pause invariant guarantees park-at-0 shows exactly what play would show at 0. That's the tell: if the parked frame already looks "fired", the note isn't skipped; its attack is instantaneous.</figcaption>
+  <figcaption>H1 needs no code change to confirm - the pause invariant guarantees park-at-0 shows exactly what play would show at 0. That's the tell: if the parked frame already looks "fired", the note isn't skipped; its attack is instantaneous.</figcaption>
 </figure>
 
 <h2>2 · Why H1 is the structural suspect</h2>
 <figure class="fig">
-  <div class="figtitle">A decay envelope has no "before" — onset IS the peak</div>
+  <div class="figtitle">A decay envelope has no "before" - onset IS the peak</div>
   <svg viewBox="0 0 900 240" role="img" aria-label="Envelope">
     <path d="M60,200 L60,40 M60,200 L860,200" stroke="#141414" stroke-width="2"/>
     <text x="40" y="45" font-size="14" fill="#565656">env</text>
     <text x="840" y="222" font-size="14" fill="#565656">beat</text>
     <path d="M60,200 L200,200 L200,60 C 300,80 420,170 560,196 L860,199" stroke="#141414" stroke-width="3" fill="none"/>
     <circle cx="200" cy="60" r="6" fill="#141414"/>
-    <text x="212" y="56" font-size="15.5" fill="#141414" font-weight="700">note.beat — already MAX</text>
+    <text x="212" y="56" font-size="15.5" fill="#141414" font-weight="700">note.beat - already MAX</text>
     <line x1="200" y1="200" x2="200" y2="60" stroke="#141414" stroke-width="1.5" stroke-dasharray="5 4"/>
     <text x="188" y="222" font-size="14.5" fill="#565656">0</text>
     <text x="330" y="130" font-size="15" fill="#565656">play from 0 shows only this tail →</text>
   </svg>
-  <figcaption>The Cube's shatter is documented as deliberate: "the burst is MAX at the note onset … the on-grid beat you land on when scrubbing is the peak — not a zero-crossing." Correct for scrubbing; it also means play-from-0 never shows an attack, which reads as "it skipped my first note."</figcaption>
+  <figcaption>The Cube's shatter is documented as deliberate: "the burst is MAX at the note onset … the on-grid beat you land on when scrubbing is the peak - not a zero-crossing." Correct for scrubbing; it also means play-from-0 never shows an attack, which reads as "it skipped my first note."</figcaption>
 </figure>
 
 <h2>3 · The fix, per outcome</h2>
 <table>
   <thead><tr><th>If it's…</th><th>Then the fix is…</th></tr></thead>
   <tbody>
-    <tr><td>H1 · peak-at-zero</td><td>A design choice, not a patch: either a short attack ramp (2–4 frames beat-derived, stays a pure function of beat) on note envelopes, or a small transport pre-roll option (play starts a quarter-beat early), or simply "put your first note at beat 0.25". Decide with Tyler — the doc's recommendation is the attack ramp, applied in the shared envelope helpers so every instrument gets it at once.</td></tr>
-    <tr><td>H2 · first-frame skip</td><td>The transport emits one frame at exactly the start beat before the RAF clock takes over — a one-line guarantee in <span class="file">core/playback.ts</span>.</td></tr>
+    <tr><td>H1 · peak-at-zero</td><td>A design choice, not a patch: either a short attack ramp (2–4 frames beat-derived, stays a pure function of beat) on note envelopes, or a small transport pre-roll option (play starts a quarter-beat early), or simply "put your first note at beat 0.25". Decide with Tyler - the doc's recommendation is the attack ramp, applied in the shared envelope helpers so every instrument gets it at once.</td></tr>
+    <tr><td>H2 · first-frame skip</td><td>The transport emits one frame at exactly the start beat before the RAF clock takes over - a one-line guarantee in <span class="file">core/playback.ts</span>.</td></tr>
     <tr><td>H3 · comparator drift</td><td>Normalize every onset test to <code>beat &gt;= n.beat</code>; add the convention to the instrument-authoring notes.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the pause invariant makes this cheap to diagnose — park the playhead where play "skips," and whatever the frozen frame shows IS what playback computes there; if the note already looks fired while parked, nothing is skipped and the conversation is about attack ramps, not bugs.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the pause invariant makes this cheap to diagnose - park the playhead where play "skips," and whatever the frozen frame shows IS what playback computes there; if the note already looks fired while parked, nothing is skipped and the conversation is about attack ramps, not bugs.</div>
 
 <hr/>
-<p class="small muted">Investigation architecture — the step-by-step lives in <span class="file">first-note-bug-implementation-plan.html</span>. Companion facts: envelopes are pure decay-from-onset by design (pause-invariant push); the transport anchors <code>(beat, when)</code> at play and the RAF tracker advances from there.</p>
+<p class="small muted">Investigation architecture - the step-by-step lives in <span class="file">first-note-bug-implementation-plan.html</span>. Companion facts: envelopes are pure decay-from-onset by design (pause-invariant push); the transport anchors <code>(beat, when)</code> at play and the RAF tracker advances from there.</p>
 
 </div>
 </body>

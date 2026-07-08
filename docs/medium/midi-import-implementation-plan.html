@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MIDI Import — Implementation Plan</title>
+<title>MIDI Import - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -38,7 +38,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · MIDI Import</span>
-  <h1>MIDI Import — Implementation Plan</h1>
+  <h1>MIDI Import - Implementation Plan</h1>
   <p class="sub">One pure parser module, one store action, two entry points (button + drop), one summary toast. The deps are already installed; the beat domain does the hard part.</p>
 </header>
 
@@ -51,7 +51,7 @@
 </table>
 
 <h2>B · The parser module</h2>
-<pre><code>// core/midiImport.ts — pure: bytes in, document-shaped data out. No store access.
+<pre><code>// core/midiImport.ts - pure: bytes in, document-shaped data out. No store access.
 import { Midi } from '@tonejs/midi'
 
 export interface ImportedTrack { name: string; notes: Note[]; endBeat: number }
@@ -64,7 +64,7 @@ export function parseMidiFile(bytes: ArrayBuffer): ImportedTrack[] {
       notes: t.notes.map((n) => ({
         id: crypto.randomUUID(),
         pitch: n.midi,
-        startBeat: n.ticks / midi.header.ppq,          // ticks/PPQ = beats — no seconds
+        startBeat: n.ticks / midi.header.ppq,          // ticks/PPQ = beats - no seconds
         durationBeats: Math.max(0.05, n.durationTicks / midi.header.ppq),
         velocity: Math.round(n.velocity * 127),
       })),
@@ -76,52 +76,52 @@ export function parseMidiFile(bytes: ArrayBuffer): ImportedTrack[] {
 
 <h2>C · Phase-by-phase</h2>
 
-<h3>Phase 1 — Parser + store action <span class="badge b-new">core/midiImport.ts</span> <span class="badge b-edit">ProjectStore</span></h3>
+<h3>Phase 1 - Parser + store action <span class="badge b-new">core/midiImport.ts</span> <span class="badge b-edit">ProjectStore</span></h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">core/midiImport.ts</span> as above.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">store/ProjectStore.ts</span>: <code>importMidiTracks(imported: ImportedTrack[])</code> — per track: new track (default instrument <code>cube</code>, color from the palette rotation, name from the file), ONE block at bar 0 with <code>durationBars = ceil(maxEndBeat / beatsPerBar)</code>, notes block-relative (they already are — block starts at 0). Bump <code>totalBars</code> if the content overruns. One <code>set()</code> → one undo step for the whole import.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">store/ProjectStore.ts</span>: <code>importMidiTracks(imported: ImportedTrack[])</code> - per track: new track (default instrument <code>cube</code>, color from the palette rotation, name from the file), ONE block at bar 0 with <code>durationBars = ceil(maxEndBeat / beatsPerBar)</code>, notes block-relative (they already are - block starts at 0). Bump <code>totalBars</code> if the content overruns. One <code>set()</code> → one undo step for the whole import.</li>
   <li>Verify with the fixture: node-side unit check of parse output (beat positions exact), then in-app: import → tracks appear, undo removes them all at once.</li>
 </ul>
 
-<h3>Phase 2 — Entry points <span class="badge b-edit">timeline UI</span></h3>
+<h3>Phase 2 - Entry points <span class="badge b-edit">timeline UI</span></h3>
 <ul class="small">
-  <li>Button: an import icon next to the Tracks + button — <code>&lt;input type="file" accept=".mid,.midi"&gt;</code>, read bytes, parse, dispatch.</li>
-  <li>Drop: the timeline area accepts a dragged .mid (dragover/drop with type sniff) — same dispatch. Audio-file drops are NOT claimed (the AudioBar owns those).</li>
+  <li>Button: an import icon next to the Tracks + button - <code>&lt;input type="file" accept=".mid,.midi"&gt;</code>, read bytes, parse, dispatch.</li>
+  <li>Drop: the timeline area accepts a dragged .mid (dragover/drop with type sniff) - same dispatch. Audio-file drops are NOT claimed (the AudioBar owns those).</li>
   <li>Summary toast per import: "3 tracks · 412 notes" plus, per track whose instrument has a narrow map, "N notes outside range" (computed against the instrument's declared pitch mapping where one exists; skip the count where the instrument maps all pitches).</li>
 </ul>
 
-<h3>Phase 3 — Verify end-to-end</h3>
+<h3>Phase 3 - Verify end-to-end</h3>
 <ul class="small">
   <li>A Logic-exported 2-track .mid: both tracks land, first note of each at its exact bar:beat under the ruler, playback triggers visuals on the grid.</li>
   <li>A file longer than 32 bars grows totalBars; undo restores the old length with the tracks.</li>
-  <li>A 200k-note stress file parses off the main thread's critical path (parse is fast; if it ever isn't, the seam is "parse in a worker" — noted, not built).</li>
-  <li>Pitch fidelity: reopen the block in the piano roll — full-spectrum notes visible, block previews show the contour.</li>
+  <li>A 200k-note stress file parses off the main thread's critical path (parse is fast; if it ever isn't, the seam is "parse in a worker" - noted, not built).</li>
+  <li>Pitch fidelity: reopen the block in the piano roll - full-spectrum notes visible, block previews show the contour.</li>
 </ul>
 
 <h2>D · File inventory</h2>
 <table>
   <thead><tr><th>File</th><th>Change</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">core/midiImport.ts</span></td><td><span class="badge b-new">new</span> — pure parse (the only file that imports @tonejs/midi).</td></tr>
+    <tr><td><span class="file">core/midiImport.ts</span></td><td><span class="badge b-new">new</span> - pure parse (the only file that imports @tonejs/midi).</td></tr>
     <tr><td><span class="file">store/ProjectStore.ts</span></td><td>importMidiTracks action (single undoable set).</td></tr>
     <tr><td><span class="file">components/timeline/TimelineArea.tsx</span> (+ header of the tracks column)</td><td>Import button · .mid drop target · toasts.</td></tr>
-    <tr><td><span class="file">test-fixtures/*.mid</span></td><td><span class="badge b-new">new</span> — known-content fixture(s).</td></tr>
-    <tr><td>Engines · persistence · piano roll</td><td>Untouched — imported notes are ordinary notes.</td></tr>
+    <tr><td><span class="file">test-fixtures/*.mid</span></td><td><span class="badge b-new">new</span> - known-content fixture(s).</td></tr>
+    <tr><td>Engines · persistence · piano roll</td><td>Untouched - imported notes are ordinary notes.</td></tr>
   </tbody>
 </table>
 
 <h2>E · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Type-0 files</strong> (everything on one MIDI track, channels instead of tracks): v1 imports it as one dense track — acceptable; channel-splitting is a refinement if it annoys.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Type-0 files</strong> (everything on one MIDI track, channels instead of tracks): v1 imports it as one dense track - acceptable; channel-splitting is a refinement if it annoys.</li>
   <li><span class="badge b-risk">risk</span> <strong>Files with pickup/offset silence</strong>: notes land where the file says (bar 3 stays bar 3). If people want "snap content to bar 1," that's a checkbox later.</li>
-  <li><span class="badge b-risk">open</span> <strong>Default instrument per imported track</strong> — Cube for all, or cycle the library? Cosmetic; decide at build time.</li>
-  <li><span class="badge b-risk">note</span> CC lanes (mod wheel etc.) are parsed by @tonejs/midi and deliberately dropped in v1 — the natural target is the envelope/automation system once richer targets exist; leave a TODO naming it.</li>
+  <li><span class="badge b-risk">open</span> <strong>Default instrument per imported track</strong> - Cube for all, or cycle the library? Cosmetic; decide at build time.</li>
+  <li><span class="badge b-risk">note</span> CC lanes (mod wheel etc.) are parsed by @tonejs/midi and deliberately dropped in v1 - the natural target is the envelope/automation system once richer targets exist; leave a TODO naming it.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a pure ticks-over-PPQ walk mints ordinary tracks/blocks/notes in one undoable store write, reachable from a button and a drop — and every hard-sounding problem (tempo, range, display) was already dissolved by the beat domain and the import-faithfully decision.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a pure ticks-over-PPQ walk mints ordinary tracks/blocks/notes in one undoable store write, reachable from a button and a drop - and every hard-sounding problem (tempo, range, display) was already dissolved by the beat domain and the import-faithfully decision.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">midi-import-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">midi-import-architecture.html</span>.</p>
 
 </div>
 </body>

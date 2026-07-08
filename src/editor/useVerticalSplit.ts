@@ -11,7 +11,7 @@ export const DIVIDER_GRAB_INSET = 5
  *
  * Deliberately NOT react-resizable-panels for THIS divider: the library makes a thin
  * handle grabbable via a document-level "phantom" hit that fires alongside other
- * pointerdown handlers and can't be told to stop propagating — so it double-fires
+ * pointerdown handlers and can't be told to stop propagating - so it double-fires
  * with the ruler scrub sitting directly beneath it. A real grab element (topmost +
  * stopPropagation) is the only way to get a 1px line AND a grab that resizes only.
  * The other splits keep the library since nothing competes with them.

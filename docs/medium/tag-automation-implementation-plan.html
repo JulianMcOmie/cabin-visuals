@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tag Automation — Implementation Plan</title>
+<title>Tag Automation - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,8 +36,8 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Tag Automation</span>
-  <h1>Tag Automation — Implementation Plan</h1>
-  <p class="sub">A parentless automation track with a tag scope and a normalized lane, fanned out at resolve. Third consumer of the ParamAddress cluster — by now the plumbing has grooves.</p>
+  <h1>Tag Automation - Implementation Plan</h1>
+  <p class="sub">A parentless automation track with a tag scope and a normalized lane, fanned out at resolve. Third consumer of the ParamAddress cluster - by now the plumbing has grooves.</p>
 </header>
 
 <h2>A · Scope</h2>
@@ -50,36 +50,36 @@
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 0 — Gate <span class="badge b-risk">dependency</span></h3>
+<h3>Phase 0 - Gate <span class="badge b-risk">dependency</span></h3>
 <ul class="small">
   <li>ParamAddress merged (effect-param-automation pair). Envelope modulator NOT required.</li>
 </ul>
 
-<h3>Phase 1 — Data + creation <span class="badge b-edit">types · ProjectStore</span></h3>
+<h3>Phase 1 - Data + creation <span class="badge b-edit">types · ProjectStore</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: automation tracks gain optional <code>targetTag?: string</code> + <code>targetAddress?: ParamAddress</code> (parentless when targetTag is set). Optional fields → no upgrade.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">ProjectStore.ts</span>: <code>addTagAutomationTrack(tag, address, label)</code> — root track (below the pinned audio track, as ever), name <code>#tag · label</code>; duplicate rule per (tag, address).</li>
-  <li>Creation UI: the Tracks <strong>+</strong> gains a small menu (Track · Tag automation ▸) — NestedMenu again; tag list from the union of all <code>track.tags</code>, then param keys = union of tagged instruments' numeric params (plus universal Opacity when that ships), then effect settings by pluginId present on tagged tracks.</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">ProjectStore.ts</span>: <code>addTagAutomationTrack(tag, address, label)</code> - root track (below the pinned audio track, as ever), name <code>#tag · label</code>; duplicate rule per (tag, address).</li>
+  <li>Creation UI: the Tracks <strong>+</strong> gains a small menu (Track · Tag automation ▸) - NestedMenu again; tag list from the union of all <code>track.tags</code>, then param keys = union of tagged instruments' numeric params (plus universal Opacity when that ships), then effect settings by pluginId present on tagged tracks.</li>
 </ul>
 
-<h3>Phase 2 — Lane editing <span class="badge b-edit">PianoRollPanel</span></h3>
+<h3>Phase 2 - Lane editing <span class="badge b-edit">PianoRollPanel</span></h3>
 <ul class="small">
   <li>Tag lanes are NORMALIZED: automation rows render 0–100% (generateAutomationRows with 0..1 bounds and a % label); the range gutter shows <code>#drums · Base Color · drives 2/3</code>.</li>
-  <li>Everything else (keyframes, interpolation, per-keyframe curves when they land) behaves identically — it's the same lane machinery with different bounds.</li>
+  <li>Everything else (keyframes, interpolation, per-keyframe curves when they land) behaves identically - it's the same lane machinery with different bounds.</li>
 </ul>
 
-<h3>Phase 3 — Resolve fan-out ★ keystone <span class="badge b-edit">resolve.ts · VisualEngine.ts</span></h3>
+<h3>Phase 3 - Resolve fan-out ★ keystone <span class="badge b-edit">resolve.ts · VisualEngine.ts</span></h3>
 <ul class="small">
   <li>Resolve: for each tag lane, expandScope({kind:'tag'}) → object ids; for each target whose instrument/effect HAS the address key, attach the lane as a normalized source; record skipped targets for the UI count.</li>
-  <li>computeAtBeat: sample once per tag lane per frame (not per target), map <code>t</code> into each target's own min/max, write into the same overlay slot per-instrument lanes use — with the rule <strong>instrument-specific lane wins over tag lane</strong> when both cover the same address (resolve orders them; the overlay write for specific happens after general).</li>
+  <li>computeAtBeat: sample once per tag lane per frame (not per target), map <code>t</code> into each target's own min/max, write into the same overlay slot per-instrument lanes use - with the rule <strong>instrument-specific lane wins over tag lane</strong> when both cover the same address (resolve orders them; the overlay write for specific happens after general).</li>
   <li>Verify: three #drums instruments, hue tag-lane 0→1 sweep → all three sweep their own hue ranges in lockstep; give ONE of them its own hue lane → that one follows its own, the others follow the tag; tag a fourth track mid-edit → it joins on the next resolve tick.</li>
 </ul>
 
-<h3>Phase 4 — Verify the tag lifecycle</h3>
+<h3>Phase 4 - Verify the tag lifecycle</h3>
 <ul class="small">
-  <li>Untag a track → it drops out (next resolve). Delete the tag from every track → the lane shows "drives 0/0" (not an error). Rename… tags aren't entities, they're strings on tracks — renaming means retagging; the 0/0 state covers the orphan case.</li>
+  <li>Untag a track → it drops out (next resolve). Delete the tag from every track → the lane shows "drives 0/0" (not an error). Rename… tags aren't entities, they're strings on tracks - renaming means retagging; the 0/0 state covers the orphan case.</li>
   <li>Scrub/park/export identical (the fan-out is resolve-time data; sampling is pure).</li>
-  <li>Persistence round-trip; undo of the creation removes the root track cleanly (recursive-delete rules apply — it has no children).</li>
+  <li>Persistence round-trip; undo of the creation removes the root track cleanly (recursive-delete rules apply - it has no children).</li>
 </ul>
 
 <h2>C · File inventory</h2>
@@ -97,16 +97,16 @@
 
 <h2>D · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Key collisions with different meanings</strong> ("baseHue" on one instrument, semantically different elsewhere) — proportional mapping keeps it sane, the drives-N/M readout keeps it visible; per-target excludes are the future knob if it bites.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Ordering bugs between specific and tag lanes</strong> — one rule, one place, one test (phase 3's second verify case) that must be in the landing checklist.</li>
-  <li><span class="badge b-risk">open</span> Where tag-automation rows SORT at root (top? grouped? below objects?) — cosmetic, decide at build with Julia.</li>
-  <li><span class="badge b-risk">note</span> Modulator tag-scopes and this feature share expandScope — any tag-semantics change (hierarchies, renames-as-entities) lands in one helper for both.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Key collisions with different meanings</strong> ("baseHue" on one instrument, semantically different elsewhere) - proportional mapping keeps it sane, the drives-N/M readout keeps it visible; per-target excludes are the future knob if it bites.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Ordering bugs between specific and tag lanes</strong> - one rule, one place, one test (phase 3's second verify case) that must be in the landing checklist.</li>
+  <li><span class="badge b-risk">open</span> Where tag-automation rows SORT at root (top? grouped? below objects?) - cosmetic, decide at build with Julia.</li>
+  <li><span class="badge b-risk">note</span> Modulator tag-scopes and this feature share expandScope - any tag-semantics change (hierarchies, renames-as-entities) lands in one helper for both.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a root lane that samples once and stretches its 0–1 into every tagged instrument's own bounds via the cluster's addressing — with exactly one precedence rule (specific beats general) standing between this feature and merge-order soup.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a root lane that samples once and stretches its 0–1 into every tagged instrument's own bounds via the cluster's addressing - with exactly one precedence rule (specific beats general) standing between this feature and merge-order soup.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">tag-automation-architecture.html</span>; cluster-gated on <span class="file">effect-param-automation-*</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">tag-automation-architecture.html</span>; cluster-gated on <span class="file">effect-param-automation-*</span>.</p>
 
 </div>
 </body>

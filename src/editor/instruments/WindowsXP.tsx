@@ -11,11 +11,11 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // a screen shake. The window/desktop drawing + spawn/drift/spring math is Tyler's verbatim.
 //
 // Adaptation notes: Tyler loaded the real XP wallpaper bitmaps from archive.org URLs; those
-// external images (and the IndexedDB/palette machinery) are dropped — everything is drawn
+// external images (and the IndexedDB/palette machinery) are dropped - everything is drawn
 // procedurally, so drawBackground always uses the canvas-drawn "Bliss" fallback (sky +
 // clouds + rolling green hills), tinted per wallpaper index. State reads are rewired to the
 // pause invariant: no wall clock, no onset detection, no accumulated drift. Every frame is
-// derived fresh from state.notes + state.beat — drift offset is driftSpeed * beat-seconds,
+// derived fresh from state.notes + state.beat - drift offset is driftSpeed * beat-seconds,
 // windows/sprites/shake are enumerated from notes at/before the playhead with ages in
 // beat-derived seconds, and per-entity "randomness" is seeded from note beat/pitch. A static
 // playhead is a static frame; scrubbing in either direction is exact. seekGeneration is
@@ -107,7 +107,7 @@ const CANVAS_W = 1920
 const CANVAS_H = 1080
 const SPRING_DURATION = 380 // ms
 
-// Procedural wallpaper "tints" — one per wallpaper pitch (C1-B1). Tyler loaded real XP
+// Procedural wallpaper "tints" - one per wallpaper pitch (C1-B1). Tyler loaded real XP
 // bitmaps from archive.org; without those we draw the Bliss fallback and shift its sky/hill
 // palette per index so different wallpaper pitches still visibly change the desktop.
 interface WallpaperTint {
@@ -172,7 +172,7 @@ function springEase(t: number): number {
   return 1
 }
 
-// ── Bliss wallpaper (always procedural — no external bitmaps) ────────────────
+// ── Bliss wallpaper (always procedural - no external bitmaps) ────────────────
 
 function drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number, scrollX: number, wallpaperIndex: number) {
   const taskbarH = 36
@@ -895,7 +895,7 @@ function drawFileIcon(
 }
 
 // ── Derived draw types ─────────────────────────────────────────────────────
-// Rebuilt from the note list every frame — nothing persists across frames.
+// Rebuilt from the note list every frame - nothing persists across frames.
 
 interface DerivedWindow {
   x: number
@@ -985,7 +985,7 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
       }
     }
 
-    // Windows (C2-B3): one window per note onset, derived fresh from the note list —
+    // Windows (C2-B3): one window per note onset, derived fresh from the note list -
     // age in beat-seconds gives the drift-back position and the spring phase; size and
     // pool pick are seeded from the note itself so a rescrub regenerates them exactly.
     const windows: DerivedWindow[] = []
@@ -1015,12 +1015,12 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
       })
     }
 
-    // File icon sprites (C4-B4) — 8 per beat while a note is held. Enumerate the
+    // File icon sprites (C4-B4) - 8 per beat while a note is held. Enumerate the
     // 8th-note subdivisions each note covers (up to the playhead) instead of spawning
     // on live subdivision changes; each subdivision k is one sprite, seeded by k+pitch.
     const spriteSize = 72 * iconScale
     const sprites: DerivedSprite[] = []
-    // Oldest age still on screen — older sprites have drifted past the left edge, so
+    // Oldest age still on screen - older sprites have drifted past the left edge, so
     // skip their subdivisions entirely (unbounded when there is no drift).
     const maxAgeBeats = driftSpeed > 0
       ? (CANVAS_W * spawnX + spriteSize + 80) / driftSpeed / secPerBeat
@@ -1055,7 +1055,7 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
 
     // ── Shake (C5) ──
     // Envelope + jitter are closed-form from the triggering note's age. The jitter
-    // re-rolls at ~60Hz, but from a hash of the quantized age — a paused frame holds
+    // re-rolls at ~60Hz, but from a hash of the quantized age - a paused frame holds
     // still, and a retrigger wins because later notes overwrite (notes are sorted).
     let shakeX = 0
     let shakeY = 0

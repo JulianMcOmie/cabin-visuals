@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Visual Engine Architecture — Cabin Visuals</title>
+<title>Visual Engine Architecture - Cabin Visuals</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#f5f5f5; --panel2:#ebebeb; --border:#cfcfcf; --line:#dddddd;
@@ -76,7 +76,7 @@
 <header class="doc">
   <span class="kicker">Cabin Visuals · Engine Design</span>
   <h1>Visual Engine Architecture</h1>
-  <p class="sub">Synthesizing the year-old design doc, Tyler's working Excellent-DAW engine, and the current vision — into one recommended architecture.</p>
+  <p class="sub">Synthesizing the year-old design doc, Tyler's working Excellent-DAW engine, and the current vision - into one recommended architecture.</p>
 </header>
 
 <div class="card">
@@ -103,10 +103,10 @@
 
 <p class="lead">There are three artifacts in play: the <strong>year-old <span class="file">visualObjectEngineDocs.md</span></strong> (a declarative, code-level instrument-authoring API), <strong>Tyler's Excellent-DAW</strong> (a complete, working, performant engine), and the <strong>current Cabin Visuals</strong> (a single hand-wired <span class="file">Cube</span>). None of them is the answer by itself. This doc reconciles them against your vision and proposes a concrete path.</p>
 
-<div class="rec"><strong>The one-line answer:</strong> borrow Tyler's <em>engine shape</em> (stateless resolve → per-frame compute → pull; hybrid R3F + imperative pools) but reshape the <em>conceptual model</em> around your vision — first-class <strong>object vs modulator</strong> instruments connected through a <strong>port-based modulation matrix</strong>, targeted by <strong>hierarchy + tags</strong>, with instruments authored as <strong>declarative specs</strong> so "design in English" becomes generate-a-spec, not generate-arbitrary-code.</p>
+<div class="rec"><strong>The one-line answer:</strong> borrow Tyler's <em>engine shape</em> (stateless resolve → per-frame compute → pull; hybrid R3F + imperative pools) but reshape the <em>conceptual model</em> around your vision - first-class <strong>object vs modulator</strong> instruments connected through a <strong>port-based modulation matrix</strong>, targeted by <strong>hierarchy + tags</strong>, with instruments authored as <strong>declarative specs</strong> so "design in English" becomes generate-a-spec, not generate-arbitrary-code.</p>
 
 <!-- 0 -->
-<h2 id="internalize">★ The big picture — internalize this first</h2>
+<h2 id="internalize">★ The big picture - internalize this first</h2>
 <p>Before the section-by-section detail, here is the whole engine in one view, and the five mental models everything else hangs off. Hold these and the rest is elaboration.</p>
 
 <figure class="fig">
@@ -122,11 +122,11 @@
     <rect x="330" y="48" width="250" height="174" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="455" y="72" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">OBJECT INSTRUMENT</text>
     <rect x="348" y="86" width="214" height="34" rx="5" fill="#e6e6e6" stroke="#9a9a9a"/>
-    <text x="455" y="107" text-anchor="middle" font-size="12" fill="#141414">params — the knobs</text>
+    <text x="455" y="107" text-anchor="middle" font-size="12" fill="#141414">params - the knobs</text>
     <rect x="348" y="126" width="214" height="34" rx="5" fill="#f6f6f6" stroke="#9a9a9a" stroke-dasharray="4 3"/>
-    <text x="455" y="147" text-anchor="middle" font-size="12" fill="#141414">ports — hidden jacks</text>
+    <text x="455" y="147" text-anchor="middle" font-size="12" fill="#141414">ports - hidden jacks</text>
     <rect x="348" y="166" width="214" height="34" rx="5" fill="#fff" stroke="#9a9a9a"/>
-    <text x="455" y="187" text-anchor="middle" font-size="12" fill="#141414">abilities — own editors</text>
+    <text x="455" y="187" text-anchor="middle" font-size="12" fill="#141414">abilities - own editors</text>
     <path d="M220,90 L344,103" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
     <text x="246" y="84" font-size="10" fill="#565656">drive params</text>
     <path d="M220,182 L344,145" fill="none" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
@@ -142,7 +142,7 @@
     <path d="M755,156 L755,172" stroke="#141414" stroke-width="1.4" marker-end="url(#ar1)"/>
     <rect x="20" y="270" width="840" height="56" rx="6" fill="#f6f6f6" stroke="#6a6a6a" stroke-width="1.3" stroke-dasharray="5 4"/>
     <text x="440" y="293" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">HIERARCHY (nesting)  +  TAGS (cross-cutting)</text>
-    <text x="440" y="313" text-anchor="middle" font-size="11" fill="#565656">organize the tracks, and decide WHICH objects a modulator or effect targets — one object · a tag group · a subtree</text>
+    <text x="440" y="313" text-anchor="middle" font-size="11" fill="#565656">organize the tracks, and decide WHICH objects a modulator or effect targets - one object · a tag group · a subtree</text>
   </svg>
   <figcaption>Objects render; modulators feed their (hidden) ports; automation feeds their params; the result is rendered, then effects post-process it. Hierarchy and tags decide what gets targeted.</figcaption>
 </figure>
@@ -150,7 +150,7 @@
 <div class="keystone">
   <h3>Five things to hold in your head</h3>
   <ol>
-    <li><strong>Two instrument kinds.</strong> <em>Objects</em> render something; <em>modulators</em> (= shapers) render nothing and emit a signal into ports. (Two non-instrument layers sit alongside: <em>effects</em> = output plugins; <em>modifiers</em> = MIDI-transform tracks like mute / suppress / transpose — §4.7.)</li>
+    <li><strong>Two instrument kinds.</strong> <em>Objects</em> render something; <em>modulators</em> (= shapers) render nothing and emit a signal into ports. (Two non-instrument layers sit alongside: <em>effects</em> = output plugins; <em>modifiers</em> = MIDI-transform tracks like mute / suppress / transpose - §4.7.)</li>
     <li><strong>An object has three layers:</strong> <em>params</em> (public knobs, automatable), <em>ports</em> (hidden jacks modulators target), <em>abilities</em> (each its own editor). Ports are never user-visible.</li>
     <li><strong>The modulation matrix is the new core.</strong> Modulators → ports → params, scoped to one object / a tag / a subtree. Automation drives params directly; everything time-varying meets in the render spec.</li>
     <li><strong>One pipeline:</strong> resolve once → (per frame) compute @beat → modulate → render + effects. Borrowed from Tyler; the modulate pass is the only net-new stage.</li>
@@ -163,15 +163,15 @@
 <table>
   <thead><tr><th>Date</th><th>Idea</th><th>Architectural consequence</th></tr></thead>
   <tbody>
-    <tr><td>04/09</td><td>Two instrument kinds: <strong>object/source/shape</strong> (a circle) and <strong>modulator/shaper</strong> (a pulse). Objects have base props (size, palette), <strong>input ports/triggers</strong> (scale, energy, density), and <strong>special abilities</strong> — each ability is its own MIDI lane in the object's track (where a "lane" = a <em>whole MIDI editor</em>, not a row — see §4.4).</td><td>An explicit instrument <em>taxonomy</em> + a <em>named-port</em> contract on objects + a <em>full editor per ability</em>, each shown as a nested sub-track. This is the core organizing principle.</td></tr>
-    <tr><td>04/10</td><td>There will be <em>many</em> modulators (size-pulse, color-pulse, opacity-pulse…) — fine, like Logic has many instruments. For huge projects, a <strong>tagging</strong> system to modulate by category (e.g. tag 18 shapes as "lead vocal", pulse the whole group at once). Felt "similar to Unity."</td><td>Modulators are reusable instruments. Targeting must be <em>cross-cutting</em> (a tag), not just per-object checkboxes.</td></tr>
+    <tr><td>04/09</td><td>Two instrument kinds: <strong>object/source/shape</strong> (a circle) and <strong>modulator/shaper</strong> (a pulse). Objects have base props (size, palette), <strong>input ports/triggers</strong> (scale, energy, density), and <strong>special abilities</strong> - each ability is its own MIDI lane in the object's track (where a "lane" = a <em>whole MIDI editor</em>, not a row - see §4.4).</td><td>An explicit instrument <em>taxonomy</em> + a <em>named-port</em> contract on objects + a <em>full editor per ability</em>, each shown as a nested sub-track. This is the core organizing principle.</td></tr>
+    <tr><td>04/10</td><td>There will be <em>many</em> modulators (size-pulse, color-pulse, opacity-pulse…) - fine, like Logic has many instruments. For huge projects, a <strong>tagging</strong> system to modulate by category (e.g. tag 18 shapes as "lead vocal", pulse the whole group at once). Felt "similar to Unity."</td><td>Modulators are reusable instruments. Targeting must be <em>cross-cutting</em> (a tag), not just per-object checkboxes.</td></tr>
     <tr><td>06/06</td><td>There will be a <strong>nested track hierarchy AND tagging</strong>.</td><td>Two orthogonal, <em>functional</em> systems: the hierarchy propagates transforms/context down a subtree (not just visual grouping); tags do cross-cutting modulation targeting.</td></tr>
-    <tr><td>06/26</td><td>Eventually people should <strong>design visual instruments in English</strong>.</td><td>Instruments must be a <em>serializable, interpretable spec</em> — not arbitrary code — so an LLM can generate &amp; the engine can validate them safely.</td></tr>
+    <tr><td>06/26</td><td>Eventually people should <strong>design visual instruments in English</strong>.</td><td>Instruments must be a <em>serializable, interpretable spec</em> - not arbitrary code - so an LLM can generate &amp; the engine can validate them safely.</td></tr>
   </tbody>
 </table>
-<p class="small muted">The dates are when each idea was written down — not target completion dates.</p>
+<p class="small muted">The dates are when each idea was written down - not target completion dates.</p>
 <div class="note">That last note is the heaviest constraint and it's easy to under-weight. It quietly rules <em>against</em> "every instrument is a bespoke React/three.js component" (Tyler's model) as the <em>primary</em> authoring path, and rules <em>for</em> a declarative spec the engine interprets. More in §4.5.</div>
-<div class="rec"><strong>Functional, not just organizational.</strong> To be unambiguous: the <strong>nested hierarchy</strong>, <strong>parameter automation</strong>, <strong>modulator instruments</strong> (port drivers), and <strong>modifier tracks</strong> (event transforms — §4.7) must <em>all</em> be functional — they change what actually renders, not merely how the tracks list is grouped. Hierarchy inherits transforms/context down a subtree; automation drives parameter values over time; modulators drive ports; modifiers reshape the note stream. Every one of them is load-bearing in the engine below, never decoration.</div>
+<div class="rec"><strong>Functional, not just organizational.</strong> To be unambiguous: the <strong>nested hierarchy</strong>, <strong>parameter automation</strong>, <strong>modulator instruments</strong> (port drivers), and <strong>modifier tracks</strong> (event transforms - §4.7) must <em>all</em> be functional - they change what actually renders, not merely how the tracks list is grouped. Hierarchy inherits transforms/context down a subtree; automation drives parameter values over time; modulators drive ports; modifiers reshape the note stream. Every one of them is load-bearing in the engine below, never decoration.</div>
 
 <figure class="fig">
   <div class="figtitle">Two instrument kinds</div>
@@ -180,71 +180,71 @@
     <rect x="30" y="26" width="320" height="150" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="190" y="52" text-anchor="middle" font-size="14" font-weight="700" fill="#141414">OBJECT / source / shape</text>
     <text x="190" y="74" text-anchor="middle" font-size="12" fill="#565656">renders something (a circle, a cube)</text>
-    <text x="50" y="100" font-size="12" fill="#141414">• params (knobs) — automatable</text>
-    <text x="50" y="122" font-size="12" fill="#141414">• ports (hidden jacks) — modulator targets</text>
-    <text x="50" y="144" font-size="12" fill="#141414">• abilities — each its own editor</text>
+    <text x="50" y="100" font-size="12" fill="#141414">• params (knobs) - automatable</text>
+    <text x="50" y="122" font-size="12" fill="#141414">• ports (hidden jacks) - modulator targets</text>
+    <text x="50" y="144" font-size="12" fill="#141414">• abilities - each its own editor</text>
     <rect x="430" y="26" width="320" height="150" rx="8" fill="#f0f0f0" stroke="#141414" stroke-width="2"/>
     <text x="590" y="52" text-anchor="middle" font-size="14" font-weight="700" fill="#141414">MODULATOR / shaper</text>
-    <text x="590" y="74" text-anchor="middle" font-size="12" fill="#565656">renders NOTHING — emits a signal</text>
+    <text x="590" y="74" text-anchor="middle" font-size="12" fill="#565656">renders NOTHING - emits a signal</text>
     <text x="450" y="100" font-size="12" fill="#141414">• a trigger lane (when it fires)</text>
     <text x="450" y="122" font-size="12" fill="#141414">• shape (decay, curve, amount…)</text>
     <text x="450" y="144" font-size="12" fill="#141414">• targets one or more ports →</text>
     <path d="M430,146 C402,146 380,116 354,116" fill="none" stroke="#141414" stroke-width="1.5" marker-end="url(#ar2)"/>
   </svg>
-  <figcaption>An <strong>effect</strong> is a third, separate thing — a plugin applied to output, not an instrument (§4.6).</figcaption>
+  <figcaption>An <strong>effect</strong> is a third, separate thing - a plugin applied to output, not an instrument (§4.6).</figcaption>
 </figure>
 
 <!-- 2 -->
 <h2 id="refs">2 · The three reference points</h2>
 
-<h3>2.1 — The year-old <span class="file">VisualObjectEngine</span> doc</h3>
+<h3>2.1 - The year-old <span class="file">VisualObjectEngine</span> doc</h3>
 <p>A declarative, chainable API for <em>authoring an instrument's generative behavior in code</em>: <code>engine.defineObject('cube').when(…).forEachInstance(…).withScale(…).applyADSR(…).applyPhysicsEnvelope(…)</code>. A synth, given MIDI + time + its own properties, returns a flat list of <code>VisualObject</code>s per frame.</p>
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Worth keeping</h4>
     <ul class="small">
-      <li><strong>Declarative property mapping</strong> — <code>withScale(ctx =&gt; …)</code> separates "what to draw" from "how it reacts." The right spirit for a spec.</li>
-      <li><strong>Envelopes as first-class</strong> — ADSR + damped-spring physics envelopes baked in. These are exactly "modulator" math.</li>
-      <li><strong>Nesting / generators</strong> — <code>forEachInstance</code> for structured replication (one note → a ring of children).</li>
+      <li><strong>Declarative property mapping</strong> - <code>withScale(ctx =&gt; …)</code> separates "what to draw" from "how it reacts." The right spirit for a spec.</li>
+      <li><strong>Envelopes as first-class</strong> - ADSR + damped-spring physics envelopes baked in. These are exactly "modulator" math.</li>
+      <li><strong>Nesting / generators</strong> - <code>forEachInstance</code> for structured replication (one note → a ring of children).</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">✕ Doesn't fit anymore</h4>
     <ul class="small">
-      <li>It's a <strong>code closure API</strong> (mappers capture <code>this.properties</code>) — not serializable, not LLM-safe.</li>
-      <li><strong>No modulators, ports, or tags</strong> — modulation is hard-wired inside each instrument's mappers, not a routable signal.</li>
-      <li><strong>Synth-centric, one object kind</strong> — no object/modulator split, no cross-instrument modulation.</li>
+      <li>It's a <strong>code closure API</strong> (mappers capture <code>this.properties</code>) - not serializable, not LLM-safe.</li>
+      <li><strong>No modulators, ports, or tags</strong> - modulation is hard-wired inside each instrument's mappers, not a routable signal.</li>
+      <li><strong>Synth-centric, one object kind</strong> - no object/modulator split, no cross-instrument modulation.</li>
     </ul>
   </div>
 </div>
 
-<h3>2.2 — Tyler's Excellent-DAW engine (the working reference)</h3>
+<h3>2.2 - Tyler's Excellent-DAW engine (the working reference)</h3>
 <p>A real, performant engine. Three layers, cleanly separated:</p>
 <ul>
-  <li><strong>Data model</strong> — one unified <code>Instrument</code> (<span class="file">instruments/types.ts:29</span>) with <code>hasAudio</code>/<code>hasVisual</code> flags and an optional <code>VisualComponent</code>. A <code>Track</code> (<span class="file">core/types.ts:129</span>) carries <code>instrumentId</code>, <code>visualPlugins[]</code>, an optional <code>automationConfig</code>, <code>blocks[]</code>, and <code>parentId</code>/<code>childIds</code> for nesting.</li>
-  <li><strong>Resolution + state engine</strong> — <code>resolveProject()</code> flattens the track tree once into <code>ResolvedTrack[]</code> (events + automation lanes + blackout regions); <code>computeStatesAtBeat(beat)</code> binary-searches per frame into a <code>VisualInstrumentState</code> per track (<span class="file">visualTypes.ts:6</span>: <code>activeNotes</code>, <code>params</code>, <code>bloom</code>, <code>colorShift</code>, <code>noteOnCount</code>, palette). Stateless &amp; pull-based — components call <code>getTrackState(trackId)</code>.</li>
-  <li><strong>Renderer</strong> — <code>@react-three/fiber</code> tree (<code>VisualScene → TrackRenderer → instrument</code>) wrapped by a <strong>plugin chain</strong>: <code>TransformWrapper</code> (offset/rotate/scale), <code>CloneWrapper</code> (echo/tile/radial), <code>ShaderChain</code> (FBO post-fx), composited through <code>SceneCompositor</code> + masks. Performance via <strong>managed instancing pools</strong> (<code>ManagedBlobPool</code>/<code>DotSet</code>/<code>LineSet</code>) and imperative three.js (FBOs, <code>group.visible</code>, material swaps). A one-line <code>VisualBeatSync</code> calls <code>computeStatesAtBeat(currentBeat)</code> first each frame.</li>
+  <li><strong>Data model</strong> - one unified <code>Instrument</code> (<span class="file">instruments/types.ts:29</span>) with <code>hasAudio</code>/<code>hasVisual</code> flags and an optional <code>VisualComponent</code>. A <code>Track</code> (<span class="file">core/types.ts:129</span>) carries <code>instrumentId</code>, <code>visualPlugins[]</code>, an optional <code>automationConfig</code>, <code>blocks[]</code>, and <code>parentId</code>/<code>childIds</code> for nesting.</li>
+  <li><strong>Resolution + state engine</strong> - <code>resolveProject()</code> flattens the track tree once into <code>ResolvedTrack[]</code> (events + automation lanes + blackout regions); <code>computeStatesAtBeat(beat)</code> binary-searches per frame into a <code>VisualInstrumentState</code> per track (<span class="file">visualTypes.ts:6</span>: <code>activeNotes</code>, <code>params</code>, <code>bloom</code>, <code>colorShift</code>, <code>noteOnCount</code>, palette). Stateless &amp; pull-based - components call <code>getTrackState(trackId)</code>.</li>
+  <li><strong>Renderer</strong> - <code>@react-three/fiber</code> tree (<code>VisualScene → TrackRenderer → instrument</code>) wrapped by a <strong>plugin chain</strong>: <code>TransformWrapper</code> (offset/rotate/scale), <code>CloneWrapper</code> (echo/tile/radial), <code>ShaderChain</code> (FBO post-fx), composited through <code>SceneCompositor</code> + masks. Performance via <strong>managed instancing pools</strong> (<code>ManagedBlobPool</code>/<code>DotSet</code>/<code>LineSet</code>) and imperative three.js (FBOs, <code>group.visible</code>, material swaps). A one-line <code>VisualBeatSync</code> calls <code>computeStatesAtBeat(currentBeat)</code> first each frame.</li>
 </ul>
 <div class="grid2">
   <div class="card"><h4 style="color:var(--ink)">✓ Steal this</h4>
     <ul class="small">
       <li><strong>resolve-once → compute-per-frame → pull</strong>. Clean, fast, testable. The clock is just <code>currentBeat</code>.</li>
       <li><strong>Plugin chain</strong> (transform/clone/shader) with a uniform contract + a <strong>registry</strong>, and per-param <code>settingsSchema</code> that auto-builds inspector UI <em>and</em> bounds automation.</li>
-      <li><strong>Managed instancing pools</strong> — the answer to "hundreds of objects."</li>
-      <li><strong>Hierarchy + modifier tracks</strong> — child tracks that transform a parent's event stream (transpose / scale / rhythm / suppress / mute…). See §4.7.</li>
+      <li><strong>Managed instancing pools</strong> - the answer to "hundreds of objects."</li>
+      <li><strong>Hierarchy + modifier tracks</strong> - child tracks that transform a parent's event stream (transpose / scale / rhythm / suppress / mute…). See §4.7.</li>
     </ul>
   </div>
   <div class="card"><h4 style="color:var(--ink)">△ Gaps vs your vision</h4>
     <ul class="small">
-      <li><strong>No object/modulator distinction</strong> — instruments are uniform; "modulation" is keyframe <em>automation lanes</em> + event-transform, not reusable modulator instruments.</li>
-      <li><strong>No first-class ports</strong> — any <code>settingsSchema</code> key is automatable, but there's no curated "scale / energy / density" input contract.</li>
-      <li><strong>No tags</strong> — targeting is tree-bound (a child automates its parent). Cross-cutting "pulse these 18" isn't expressible.</li>
-      <li><strong>Instruments are bespoke React components</strong> — infinitely expressive, but not serializable / not LLM-generable.</li>
+      <li><strong>No object/modulator distinction</strong> - instruments are uniform; "modulation" is keyframe <em>automation lanes</em> + event-transform, not reusable modulator instruments.</li>
+      <li><strong>No first-class ports</strong> - any <code>settingsSchema</code> key is automatable, but there's no curated "scale / energy / density" input contract.</li>
+      <li><strong>No tags</strong> - targeting is tree-bound (a child automates its parent). Cross-cutting "pulse these 18" isn't expressible.</li>
+      <li><strong>Instruments are bespoke React components</strong> - infinitely expressive, but not serializable / not LLM-generable.</li>
     </ul>
   </div>
 </div>
 
-<h3>2.3 — Current Cabin Visuals (the starting line)</h3>
+<h3>2.3 - Current Cabin Visuals (the starting line)</h3>
 <p>One <span class="file">Cube</span> (<span class="file">editor/instruments/Cube.tsx</span>): a <code>useFrame</code> loop reads <code>currentBeat</code>, scans the project for cube notes, computes a pulse inline, and mutates the mesh. Params live on <code>track.params</code>; the schema lives beside the component (<code>InstrumentDef</code>). The Tone transport is already the clock and a RAF playhead already exists. Good bones, but everything is hand-wired and single-instrument.</p>
-<div class="note">Net read: Cabin is <em>behind</em> Tyler mechanically but <em>ahead</em> conceptually — your notes already name the model (objects, modulators, ports, tags) that Tyler's engine never formalized. The job is to build that model on top of Tyler's proven mechanics.</div>
+<div class="note">Net read: Cabin is <em>behind</em> Tyler mechanically but <em>ahead</em> conceptually - your notes already name the model (objects, modulators, ports, tags) that Tyler's engine never formalized. The job is to build that model on top of Tyler's proven mechanics.</div>
 
 <!-- 3 -->
 <h2 id="forks">3 · The decisions that actually matter</h2>
@@ -257,39 +257,39 @@
       <td><strong>Modulation model</strong></td>
       <td>Keyframe automation lanes + event-transform tracks <span class="muted">(Tyler)</span></td>
       <td>Explicit <strong>ports</strong> + reusable <strong>modulator instruments</strong> routed to them <span class="muted">(your vision)</span></td>
-      <td><span class="badge b-rec">B, with A as one source type</span> — ports are the contract; an automation lane becomes just one kind of modulator.</td>
+      <td><span class="badge b-rec">B, with A as one source type</span> - ports are the contract; an automation lane becomes just one kind of modulator.</td>
     </tr>
     <tr>
       <td><strong>Instrument authoring</strong></td>
       <td>Bespoke React/three.js component per instrument <span class="muted">(Tyler)</span></td>
       <td>Declarative serializable spec the engine interprets <span class="muted">(old-doc spirit)</span></td>
-      <td><span class="badge b-rec">B-first, A as escape hatch</span> — declarative is the substrate that makes English-authoring real; keep a code hatch for the hard built-ins.</td>
+      <td><span class="badge b-rec">B-first, A as escape hatch</span> - declarative is the substrate that makes English-authoring real; keep a code hatch for the hard built-ins.</td>
     </tr>
     <tr>
       <td><strong>Targeting</strong></td>
       <td>Hierarchy / tree inheritance <span class="muted">(Tyler)</span></td>
       <td>Cross-cutting tags <span class="muted">(your vision)</span></td>
-      <td><span class="badge b-rec">Both, orthogonal</span> — hierarchy = <em>functional</em> inheritance (transforms/context flow down a subtree), not just where things live; tags = what gets modulated together.</td>
+      <td><span class="badge b-rec">Both, orthogonal</span> - hierarchy = <em>functional</em> inheritance (transforms/context flow down a subtree), not just where things live; tags = what gets modulated together.</td>
     </tr>
     <tr>
       <td><strong>Engine shape</strong></td>
       <td>Resolve-once → compute-per-frame → pull <span class="muted">(Tyler)</span></td>
       <td>Per-instrument <code>useFrame</code> scanning the project <span class="muted">(current Cube)</span></td>
-      <td><span class="badge b-rec">A</span> — adopt Tyler's pipeline; add a modulation pass between compute and render.</td>
+      <td><span class="badge b-rec">A</span> - adopt Tyler's pipeline; add a modulation pass between compute and render.</td>
     </tr>
     <tr>
       <td><strong>Rendering</strong></td>
       <td>Hybrid R3F tree + imperative pools <span class="muted">(Tyler)</span></td>
       <td>Pure declarative R3F <span class="muted">(simpler, slower at scale)</span></td>
-      <td><span class="badge b-rec">A</span> — you'll need the pools the moment a tag fans a pulse across 100 objects.</td>
+      <td><span class="badge b-rec">A</span> - you'll need the pools the moment a tag fans a pulse across 100 objects.</td>
     </tr>
   </tbody>
 </table>
 
 <figure class="fig">
-  <div class="figtitle">Hierarchy and tags are orthogonal — both functional</div>
+  <div class="figtitle">Hierarchy and tags are orthogonal - both functional</div>
   <svg viewBox="0 0 780 250" role="img" aria-label="Hierarchy versus tags">
-    <text x="30" y="26" font-size="12" font-weight="700" fill="#141414">Hierarchy — organize + inherit (transforms flow down)</text>
+    <text x="30" y="26" font-size="12" font-weight="700" fill="#141414">Hierarchy - organize + inherit (transforms flow down)</text>
     <rect x="40" y="42" width="150" height="30" rx="5" fill="#e6e6e6" stroke="#141414"/><text x="115" y="62" text-anchor="middle" font-size="11.5" fill="#141414">Scene group</text>
     <rect x="90" y="92" width="150" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="165" y="112" text-anchor="middle" font-size="11.5" fill="#141414">Circle</text>
     <rect x="90" y="134" width="150" height="30" rx="5" fill="#fff" stroke="#141414"/><text x="165" y="154" text-anchor="middle" font-size="11.5" fill="#141414">Cube</text>
@@ -297,7 +297,7 @@
     <path d="M70,72 V107 H88" fill="none" stroke="#141414" stroke-width="1.2"/>
     <path d="M70,107 V149 H88" fill="none" stroke="#141414" stroke-width="1.2"/>
     <path d="M104,164 V191 H122" fill="none" stroke="#141414" stroke-width="1.2"/>
-    <text x="430" y="26" font-size="12" font-weight="700" fill="#141414">Tags — cross-cutting (modulation targeting)</text>
+    <text x="430" y="26" font-size="12" font-weight="700" fill="#141414">Tags - cross-cutting (modulation targeting)</text>
     <rect x="418" y="42" width="316" height="44" rx="8" fill="none" stroke="#6a6a6a" stroke-width="1.4" stroke-dasharray="6 4"/>
     <text x="730" y="38" text-anchor="end" font-size="10.5" fill="#565656">tag “lead vocal”</text>
     <rect x="432" y="50" width="120" height="28" rx="4" fill="#fff" stroke="#141414"/><text x="492" y="68" text-anchor="middle" font-size="11" fill="#141414">Circle</text>
@@ -316,30 +316,30 @@
 <p>A four-layer engine. Layers 1–2 are <em>borrowed shape</em> from Tyler; layer 3 (the modulation matrix) is the <em>new</em> core that encodes your vision; layer 4 is the rendering you mostly borrow.</p>
 
 <figure class="fig">
-  <div class="figtitle">The pipeline — resolve once, then per frame</div>
+  <div class="figtitle">The pipeline - resolve once, then per frame</div>
   <svg viewBox="0 0 760 482" role="img" aria-label="Engine pipeline">
     <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="180" y="18" width="400" height="48" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
     <text x="380" y="40" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">PROJECT</text>
     <text x="380" y="57" text-anchor="middle" font-size="10.5" fill="#565656">tracks: hierarchy + tags · blocks/lanes · instrument refs</text>
     <path d="M380,66 V92" stroke="#141414" stroke-width="1.5" marker-end="url(#ar6)"/>
-    <text x="392" y="84" font-size="10" fill="#565656">① resolve — once, on edit</text>
+    <text x="392" y="84" font-size="10" fill="#565656">① resolve - once, on edit</text>
     <rect x="140" y="96" width="480" height="74" rx="6" fill="#fff" stroke="#141414" stroke-width="1.5"/>
     <text x="380" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">RESOLVED GRAPH</text>
     <text x="380" y="137" text-anchor="middle" font-size="10.5" fill="#565656">object instances · modulator instances · routings · tag index</text>
     <text x="380" y="154" text-anchor="middle" font-size="10.5" fill="#565656">(flatten tree, expand loops, apply modifier event-transforms)</text>
     <path d="M380,170 V196" stroke="#141414" stroke-width="1.5" marker-end="url(#ar6)"/>
-    <text x="392" y="188" font-size="10" fill="#565656">② compute @beat — per frame</text>
+    <text x="392" y="188" font-size="10" fill="#565656">② compute @beat - per frame</text>
     <rect x="180" y="200" width="400" height="48" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
     <text x="380" y="222" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">COMPUTE @beat</text>
     <text x="380" y="239" text-anchor="middle" font-size="10.5" fill="#565656">binary-search active notes; modulator trigger events</text>
     <path d="M380,248 V274" stroke="#141414" stroke-width="1.5" marker-end="url(#ar6)"/>
-    <text x="392" y="266" font-size="10" fill="#565656">③ modulate — per frame (NEW)</text>
+    <text x="392" y="266" font-size="10" fill="#565656">③ modulate - per frame (NEW)</text>
     <rect x="160" y="278" width="440" height="62" rx="6" fill="#141414"/>
     <text x="380" y="302" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">MODULATION MATRIX</text>
     <text x="380" y="322" text-anchor="middle" font-size="10.5" fill="#dcdcdc">modulators → ports → combine → finalProps  (the new core)</text>
     <path d="M380,340 V366" stroke="#141414" stroke-width="1.5" marker-end="url(#ar6)"/>
-    <text x="392" y="358" font-size="10" fill="#565656">④ render — per frame</text>
+    <text x="392" y="358" font-size="10" fill="#565656">④ render - per frame</text>
     <rect x="180" y="370" width="400" height="48" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.5"/>
     <text x="380" y="392" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">RENDER + EFFECTS</text>
     <text x="380" y="409" text-anchor="middle" font-size="10.5" fill="#565656">R3F tree + pools, then plugin chain (effects)</text>
@@ -350,7 +350,7 @@
   <figcaption>Steps ②–④ run every frame off <code>currentBeat</code>; step ① only re-runs when the project changes. The black box (③) is the one piece neither reference has.</figcaption>
 </figure>
 
-<h3 id="model">4.1 — Data model</h3>
+<h3 id="model">4.1 - Data model</h3>
 <p>Two instrument <em>defs</em> (the reusable templates) and the per-track instances that reference them. Defs are where "object vs modulator" becomes real.</p>
 
 <figure class="fig">
@@ -360,13 +360,13 @@
     <rect x="250" y="14" width="300" height="252" rx="8" fill="#fff" stroke="#141414" stroke-width="2"/>
     <text x="400" y="38" text-anchor="middle" font-size="13" font-weight="700" fill="#141414">OBJECT INSTRUMENT</text>
     <rect x="270" y="54" width="260" height="56" rx="6" fill="#e6e6e6" stroke="#141414"/>
-    <text x="284" y="76" font-size="13" font-weight="700" fill="#141414">params — the knobs</text>
+    <text x="284" y="76" font-size="13" font-weight="700" fill="#141414">params - the knobs</text>
     <text x="284" y="96" font-size="11" fill="#565656">size, hue, position… visible + automatable</text>
     <rect x="270" y="120" width="260" height="56" rx="6" fill="#f6f6f6" stroke="#141414" stroke-dasharray="4 3"/>
-    <text x="284" y="142" font-size="13" font-weight="700" fill="#141414">ports — modulation jacks</text>
+    <text x="284" y="142" font-size="13" font-weight="700" fill="#141414">ports - modulation jacks</text>
     <text x="284" y="162" font-size="11" fill="#565656">scale, rotation… HIDDEN, modulators only</text>
     <rect x="270" y="186" width="260" height="60" rx="6" fill="#fff" stroke="#141414"/>
-    <text x="284" y="208" font-size="13" font-weight="700" fill="#141414">abilities — own editors</text>
+    <text x="284" y="208" font-size="13" font-weight="700" fill="#141414">abilities - own editors</text>
     <text x="284" y="228" font-size="11" fill="#565656">each a full MIDI editor / nested sub-track</text>
     <rect x="20" y="60" width="170" height="44" rx="6" fill="#f0f0f0" stroke="#141414"/>
     <text x="105" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#141414">Automation lane</text>
@@ -393,15 +393,15 @@
 <span class="k">interface</span> <span class="f">ObjectInstrumentDef</span> {
   id: <span class="k">string</span>; name: <span class="k">string</span>; kind: <span class="s">'object'</span>;
   tags?: <span class="k">string</span>[];                 <span class="c">// default tags applied on insert</span>
-  params: ParamDef[];             <span class="c">// the knobs: size, hue, position… — as many as possible, ALL automation-targetable</span>
+  params: ParamDef[];             <span class="c">// the knobs: size, hue, position… - as many as possible, ALL automation-targetable</span>
   ports: PortDef[];               <span class="c">// shared modulation vocabulary modulators target; each maps onto params</span>
-  abilities: AbilityLaneDef[];    <span class="c">// each = its own nested MIDI editor (a "lane" = a full editor, not a row — §4.4)</span>
+  abilities: AbilityLaneDef[];    <span class="c">// each = its own nested MIDI editor (a "lane" = a full editor, not a row - §4.4)</span>
   render: RenderSpec              <span class="c">// declarative (see §4.5) …</span>
         | { component: <span class="f">React.ComponentType</span>&lt;{ trackId: <span class="k">string</span> }&gt; }; <span class="c">// … or code hatch</span>
 }
 
-<span class="k">interface</span> <span class="f">PortDef</span> {                <span class="c">// a modulation jack, NOT a knob — bound to params in the render spec</span>
-  key: <span class="k">string</span>;                    <span class="c">// 'scale' — from a small, shared vocabulary across instruments</span>
+<span class="k">interface</span> <span class="f">PortDef</span> {                <span class="c">// a modulation jack, NOT a knob - bound to params in the render spec</span>
+  key: <span class="k">string</span>;                    <span class="c">// 'scale' - from a small, shared vocabulary across instruments</span>
   label: <span class="k">string</span>;
   type: <span class="s">'scalar'</span> | <span class="s">'color'</span> | <span class="s">'vec'</span>;
   range?: [<span class="k">number</span>, <span class="k">number</span>];
@@ -421,12 +421,12 @@
 <span class="c">// ── Per-track instance (what lives in the project) ──</span>
 
 <span class="k">interface</span> <span class="f">Track</span> {                  <span class="c">// extends today's Track</span>
-  id; name; parentId?; childIds;  <span class="c">// nested hierarchy — TO BUILD (today: top-level tracks only)</span>
+  id; name; parentId?; childIds;  <span class="c">// nested hierarchy - TO BUILD (today: top-level tracks only)</span>
   tags: <span class="k">string</span>[];                <span class="c">// cross-cutting groups</span>
   instrumentId: <span class="k">string</span>;         <span class="c">// → ObjectInstrumentDef | ModulatorInstrumentDef</span>
   params?: <span class="f">Record</span>&lt;<span class="k">string</span>,<span class="k">number</span>&gt;;   <span class="c">// per-track param values (override def defaults; automation drives these)</span>
-  lanes: Block[];                 <span class="c">// abilities — a PARALLEL array (not child tracks); each is its own editor (§4.4)</span>
-  targets?: Routing[];            <span class="c">// modulator-only: ports this drives — may be MANY (one modulator → several ports)</span>
+  lanes: Block[];                 <span class="c">// abilities - a PARALLEL array (not child tracks); each is its own editor (§4.4)</span>
+  targets?: Routing[];            <span class="c">// modulator-only: ports this drives - may be MANY (one modulator → several ports)</span>
 }
 
 <span class="k">interface</span> <span class="f">Routing</span> {                <span class="c">// "this modulator → that port, over that scope"</span>
@@ -434,14 +434,14 @@
   scope: { kind: <span class="s">'track'</span>; id } | { kind: <span class="s">'tag'</span>; tag } | { kind: <span class="s">'subtree'</span>; id };
   amount: <span class="k">number</span>;                <span class="c">// routing depth</span>
 }</code></pre>
-<div class="note"><strong>Parameters vs ports — and why both.</strong> Two layers, like a synth's knobs vs its CV jacks. <strong>Parameters</strong> are the concrete knobs (size, hue, position…): as many as possible, user-editable, and all <em>automation-targetable</em> (Tyler/EDAW-style — an automation lane drives any param's value over time). <strong>Ports</strong> are a small, <em>shared</em> modulation vocabulary (scale, rotation, hue, opacity, energy, density…) that modulator instruments target. The payoff is reuse: a "Rotate" modulator drives the <code>rotation</code> port of <em>any</em> object, without knowing that object names its param <code>spin</code> or <code>angle</code>. Each instrument maps its ports onto its params in the render spec (<code>param.size * (1 + port.scale)</code>).
-<br><br>The "won't I see a <code>scale</code> port <em>and</em> a <code>size</code> param?" worry dissolves: <strong>ports are never user-visible at all</strong>. Params are the knobs in the inspector; ports are internal plumbing — a modulator has its target port(s) baked into its definition (a Size Pulse targets <code>scale</code>), so the user only ever picks a <em>modulator</em> and a <em>target scope</em>, never a port. Automation drives param bases directly; modulators drive ports under the hood; a param can take both (base curve + modulation, like an envelope plus an LFO). The alternative — "every param is modulatable, no separate ports" — is simpler but discards the shared vocabulary, so modulators stop being generic. Keep the middleman; just keep the port set small and standard.</div>
+<div class="note"><strong>Parameters vs ports - and why both.</strong> Two layers, like a synth's knobs vs its CV jacks. <strong>Parameters</strong> are the concrete knobs (size, hue, position…): as many as possible, user-editable, and all <em>automation-targetable</em> (Tyler/EDAW-style - an automation lane drives any param's value over time). <strong>Ports</strong> are a small, <em>shared</em> modulation vocabulary (scale, rotation, hue, opacity, energy, density…) that modulator instruments target. The payoff is reuse: a "Rotate" modulator drives the <code>rotation</code> port of <em>any</em> object, without knowing that object names its param <code>spin</code> or <code>angle</code>. Each instrument maps its ports onto its params in the render spec (<code>param.size * (1 + port.scale)</code>).
+<br><br>The "won't I see a <code>scale</code> port <em>and</em> a <code>size</code> param?" worry dissolves: <strong>ports are never user-visible at all</strong>. Params are the knobs in the inspector; ports are internal plumbing - a modulator has its target port(s) baked into its definition (a Size Pulse targets <code>scale</code>), so the user only ever picks a <em>modulator</em> and a <em>target scope</em>, never a port. Automation drives param bases directly; modulators drive ports under the hood; a param can take both (base curve + modulation, like an envelope plus an LFO). The alternative - "every param is modulatable, no separate ports" - is simpler but discards the shared vocabulary, so modulators stop being generic. Keep the middleman; just keep the port set small and standard.</div>
 
-<h3 id="matrix">4.2 — The modulation matrix</h3>
+<h3 id="matrix">4.2 - The modulation matrix</h3>
 <p>This is the part neither Tyler nor the old doc has, and it's the heart of your design. A <strong>routing</strong> is "modulator&nbsp;⟶&nbsp;port, scoped to a track / a tag / a subtree." The scope is what makes "pulse the lead-vocal group" a one-click operation instead of 18 checkboxes.</p>
 
 <figure class="fig">
-  <div class="figtitle">The modulation matrix — one pulse, a whole tag</div>
+  <div class="figtitle">The modulation matrix - one pulse, a whole tag</div>
   <svg viewBox="0 0 820 282" role="img" aria-label="Modulation routing by tag">
     <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="104" width="180" height="64" rx="6" fill="#f0f0f0" stroke="#141414" stroke-width="1.6"/>
@@ -479,11 +479,11 @@
 }</code></pre>
 <ul>
   <li><strong>Resolution scope</strong> is precomputed: build a <code>tag → [objectId]</code> index and a <code>port → [routing]</code> index once at resolve-time, so the per-frame loop is cheap even with many routings.</li>
-  <li><strong>Combine semantics live on the port</strong> (not the routing) so the object author controls how stacking behaves (energy adds; opacity multiplies; a "freeze" replaces). One modulator can drive several ports at once — that's just several routings.</li>
-  <li><strong>Two paths into a property:</strong> a parameter's base value (which <em>automation lanes</em> drive directly, any param) and the ports (which <em>modulators</em> drive). They meet in the render spec — <code>param.size * (1 + port.scale)</code> — so a knob can be automated and modulated at the same time.</li>
+  <li><strong>Combine semantics live on the port</strong> (not the routing) so the object author controls how stacking behaves (energy adds; opacity multiplies; a "freeze" replaces). One modulator can drive several ports at once - that's just several routings.</li>
+  <li><strong>Two paths into a property:</strong> a parameter's base value (which <em>automation lanes</em> drive directly, any param) and the ports (which <em>modulators</em> drive). They meet in the render spec - <code>param.size * (1 + port.scale)</code> - so a knob can be automated and modulated at the same time.</li>
 </ul>
-<div class="rec"><strong>Recommendation:</strong> route every <em>modulator</em> through ports — pulses, LFOs, envelopes, audio-reactive signals — so "many modulators" stays one matrix with many sources rather than many special cases. Keep <em>automation</em> as its own direct-to-parameter path so every param is automatable, not just the port-backed ones; the render spec is where the two combine.</div>
-<div class="note"><strong>How automation works — borrow Tyler's trick.</strong> An automation lane isn't a separate curve-drawing tool; it's a <em>MIDI editor where a note's pitch encodes the parameter value</em> (high note = high value) and its time is the keyframe time. You "play" the automation as notes and the engine <em>interpolates between them</em> per a chosen mode (step / linear / eases / exponential / smooth-step) — so the MIDI editor doubles as the automation editor, and freehand curve-drawing can come later as an optional second input. Each automation lane is a child track targeting one param (an instrument param <em>or</em> an effect/plugin param), exactly like Tyler's <code>automationConfig</code> + pitch→value remap.</div>
+<div class="rec"><strong>Recommendation:</strong> route every <em>modulator</em> through ports - pulses, LFOs, envelopes, audio-reactive signals - so "many modulators" stays one matrix with many sources rather than many special cases. Keep <em>automation</em> as its own direct-to-parameter path so every param is automatable, not just the port-backed ones; the render spec is where the two combine.</div>
+<div class="note"><strong>How automation works - borrow Tyler's trick.</strong> An automation lane isn't a separate curve-drawing tool; it's a <em>MIDI editor where a note's pitch encodes the parameter value</em> (high note = high value) and its time is the keyframe time. You "play" the automation as notes and the engine <em>interpolates between them</em> per a chosen mode (step / linear / eases / exponential / smooth-step) - so the MIDI editor doubles as the automation editor, and freehand curve-drawing can come later as an optional second input. Each automation lane is a child track targeting one param (an instrument param <em>or</em> an effect/plugin param), exactly like Tyler's <code>automationConfig</code> + pitch→value remap.</div>
 
 <figure class="fig">
   <div class="figtitle">Automation = notes in a MIDI editor, interpolated</div>
@@ -505,56 +505,56 @@
   <figcaption>Each note's pitch is its value, its time is the keyframe; the engine interpolates between them (step / linear / eases). The MIDI editor <em>is</em> the automation editor.</figcaption>
 </figure>
 
-<h3 id="pipeline">4.3 — Resolve → compute → modulate → render</h3>
+<h3 id="pipeline">4.3 - Resolve → compute → modulate → render</h3>
 <ol>
-  <li><strong>Resolve (once, on project edit)</strong> — adopt Tyler's <code>resolveProject</code> almost verbatim: flatten the tree, expand looping blocks, apply modifier children to event streams (mute / suppress / transpose…, §4.7), build per-instance event lists. <em>Add:</em> split instances into objects vs modulators, build the routing &amp; tag indices.</li>
-  <li><strong>Compute @beat (per frame)</strong> — Tyler's <code>computeStatesAtBeat</code>: binary-search active notes / note-on counts per track. For modulators, this yields the trigger events feeding their envelopes.</li>
-  <li><strong>Modulate (per frame, new)</strong> — evaluate each modulator's <code>output(beat)</code>, then run the matrix (§4.2) to fill every object's <code>portValues</code> and <code>finalProps</code>.</li>
-  <li><strong>Render (per frame)</strong> — R3F reads <code>finalProps</code> and draws. <strong>Effects</strong> (plugins — transform/clone/shader/mask, Tyler's chain) then wrap the rendered output. A <code>VisualBeatSync</code>-style component runs steps 2–3 first each frame, exactly like Tyler.</li>
+  <li><strong>Resolve (once, on project edit)</strong> - adopt Tyler's <code>resolveProject</code> almost verbatim: flatten the tree, expand looping blocks, apply modifier children to event streams (mute / suppress / transpose…, §4.7), build per-instance event lists. <em>Add:</em> split instances into objects vs modulators, build the routing &amp; tag indices.</li>
+  <li><strong>Compute @beat (per frame)</strong> - Tyler's <code>computeStatesAtBeat</code>: binary-search active notes / note-on counts per track. For modulators, this yields the trigger events feeding their envelopes.</li>
+  <li><strong>Modulate (per frame, new)</strong> - evaluate each modulator's <code>output(beat)</code>, then run the matrix (§4.2) to fill every object's <code>portValues</code> and <code>finalProps</code>.</li>
+  <li><strong>Render (per frame)</strong> - R3F reads <code>finalProps</code> and draws. <strong>Effects</strong> (plugins - transform/clone/shader/mask, Tyler's chain) then wrap the rendered output. A <code>VisualBeatSync</code>-style component runs steps 2–3 first each frame, exactly like Tyler.</li>
 </ol>
 <div class="note">Integration with Cabin today is small: you already have <code>currentBeat</code> from the Tone transport and a RAF. A <code>&lt;VisualBeatSync/&gt;</code> reading <code>useTimeStore.getState().currentBeat</code> drives steps 2–3; the current <code>Cube</code> becomes the first <code>ObjectInstrumentDef</code> and its inline pulse becomes a built-in <code>Pulse</code> modulator.</div>
 
-<div class="rec"><strong>Editing stays instant — resolve is incremental and deferred.</strong> Two rules keep big projects responsive (EDAW lagged on every note edit because it re-ran a full resolve synchronously). <strong>(1) Deferred:</strong> resolve is an asynchronous observer of the project, never a synchronous step inside an edit handler — subscribe to store changes and schedule it, debounced, so a burst of edits triggers one resolve; the scene keeps rendering the previous resolved graph until the new one lands. <strong>(2) Incremental:</strong> never re-resolve the whole project — a note edit only changes the edited track's output (plus anything downstream of it in the modifier chain / routings), so cache each track's resolved output and recompute only the dirty set. Because the store is immutable, finding the dirty set is a cheap reference diff — <code>tracks[id] !== prev.tracks[id]</code> picks out exactly the edited track — so one note re-resolves one subtree instead of everything. That's the difference between <em>O(change)</em> and <em>O(project)</em> per edit: it keeps a 500-track project as snappy as a 5-track one.</div>
+<div class="rec"><strong>Editing stays instant - resolve is incremental and deferred.</strong> Two rules keep big projects responsive (EDAW lagged on every note edit because it re-ran a full resolve synchronously). <strong>(1) Deferred:</strong> resolve is an asynchronous observer of the project, never a synchronous step inside an edit handler - subscribe to store changes and schedule it, debounced, so a burst of edits triggers one resolve; the scene keeps rendering the previous resolved graph until the new one lands. <strong>(2) Incremental:</strong> never re-resolve the whole project - a note edit only changes the edited track's output (plus anything downstream of it in the modifier chain / routings), so cache each track's resolved output and recompute only the dirty set. Because the store is immutable, finding the dirty set is a cheap reference diff - <code>tracks[id] !== prev.tracks[id]</code> picks out exactly the edited track - so one note re-resolves one subtree instead of everything. That's the difference between <em>O(change)</em> and <em>O(project)</em> per edit: it keeps a 500-track project as snappy as a 5-track one.</div>
 
-<h3 id="abilities">4.4 — Abilities as lanes (one full editor each)</h3>
-<p>Your 04/09 note: an object's <em>special abilities</em> each get their own <strong>MIDI lane</strong> — and here a "lane" means <strong>a whole MIDI editor, not a row</strong>. An object instrument has several independent <em>ways to play it</em> (a circle's "spawn burst", "ripple", "flash"…), and each is its own full piano-roll, surfaced as its own track-like row <strong>nested one level under the instrument's track</strong> in the tracks section. Triggering notes inside an ability's editor fires that ability over time.</p>
+<h3 id="abilities">4.4 - Abilities as lanes (one full editor each)</h3>
+<p>Your 04/09 note: an object's <em>special abilities</em> each get their own <strong>MIDI lane</strong> - and here a "lane" means <strong>a whole MIDI editor, not a row</strong>. An object instrument has several independent <em>ways to play it</em> (a circle's "spawn burst", "ripple", "flash"…), and each is its own full piano-roll, surfaced as its own track-like row <strong>nested one level under the instrument's track</strong> in the tracks section. Triggering notes inside an ability's editor fires that ability over time.</p>
 <figure class="fig">
   <div class="figtitle">Each ability is its own editor, nested under the instrument</div>
   <svg viewBox="0 0 760 222" role="img" aria-label="Abilities as nested sub-tracks">
     <rect x="20" y="22" width="720" height="38" rx="5" fill="#e6e6e6" stroke="#141414" stroke-width="1.4"/>
-    <text x="36" y="46" font-size="13" font-weight="700" fill="#141414">Circle  —  object instrument track</text>
+    <text x="36" y="46" font-size="13" font-weight="700" fill="#141414">Circle  -  object instrument track</text>
     <rect x="60" y="72" width="680" height="40" rx="5" fill="#fff" stroke="#141414"/>
     <text x="76" y="89" font-size="11.5" font-weight="700" fill="#141414">↳ spawn burst</text>
     <text x="76" y="105" font-size="9.5" fill="#565656">its own MIDI editor</text>
     <rect x="250" y="80" width="40" height="24" rx="3" fill="#141414"/><rect x="330" y="80" width="24" height="24" rx="3" fill="#141414"/><rect x="470" y="80" width="60" height="24" rx="3" fill="#141414"/>
     <rect x="60" y="120" width="680" height="40" rx="5" fill="#fff" stroke="#141414"/>
     <text x="76" y="137" font-size="11.5" font-weight="700" fill="#141414">↳ ripple</text>
-    <text x="76" y="153" font-size="9.5" fill="#565656">drum-rows / pitched / trigger — its own choice</text>
+    <text x="76" y="153" font-size="9.5" fill="#565656">drum-rows / pitched / trigger - its own choice</text>
     <rect x="300" y="128" width="24" height="24" rx="3" fill="#141414"/><rect x="540" y="128" width="24" height="24" rx="3" fill="#141414"/>
     <rect x="60" y="168" width="680" height="40" rx="5" fill="#fff" stroke="#141414"/>
     <text x="76" y="185" font-size="11.5" font-weight="700" fill="#141414">↳ flash</text>
     <rect x="220" y="176" width="20" height="24" rx="3" fill="#141414"/><rect x="600" y="176" width="20" height="24" rx="3" fill="#141414"/>
   </svg>
-  <figcaption>A “lane” is a whole editor, not a row: abilities appear as indented sub-rows, each with its own notes — a parallel <code>lanes[]</code> on the instrument, not child tracks in the hierarchy.</figcaption>
+  <figcaption>A “lane” is a whole editor, not a row: abilities appear as indented sub-rows, each with its own notes - a parallel <code>lanes[]</code> on the instrument, not child tracks in the hierarchy.</figcaption>
 </figure>
 
-<div class="note"><strong>Lanes and editor-kind are orthogonal — keep both.</strong> The clarification is only about <em>lanes</em>: each special ability gets its own editor (its own nested sub-track), rather than being a row in a shared grid. It is <em>not</em> a rejection of Tyler's drum-style rows — those stay, as an editor <em>kind</em> (<code>editorType</code>/<code>rangeLabels</code>) you choose per lane. A drum-like instrument can absolutely use multi-row pads inside one of its editors. Err unrestrictive: an ability is its own editor; <em>what kind</em> of editor (pitched, drum-rows, trigger…) is a separate, free choice.</div>
+<div class="note"><strong>Lanes and editor-kind are orthogonal - keep both.</strong> The clarification is only about <em>lanes</em>: each special ability gets its own editor (its own nested sub-track), rather than being a row in a shared grid. It is <em>not</em> a rejection of Tyler's drum-style rows - those stay, as an editor <em>kind</em> (<code>editorType</code>/<code>rangeLabels</code>) you choose per lane. A drum-like instrument can absolutely use multi-row pads inside one of its editors. Err unrestrictive: an ability is its own editor; <em>what kind</em> of editor (pitched, drum-rows, trigger…) is a separate, free choice.</div>
 <pre><code><span class="k">interface</span> <span class="f">AbilityLaneDef</span> {        <span class="c">// a "lane" = a full sub-editor, not a row</span>
   key: <span class="k">string</span>;        <span class="c">// 'spawnBurst'</span>
   label: <span class="k">string</span>;      <span class="c">// shown as the nested sub-track's name</span>
   editor?: EditorKind;  <span class="c">// each lane can choose its own editor (pitched / drum / trigger…)</span>
-  <span class="c">// what a trigger does — declarative effect, or handled by the render spec</span>
+  <span class="c">// what a trigger does - declarative effect, or handled by the render spec</span>
 }</code></pre>
 <ul>
-  <li>Each entry in the object def's <code>abilities[]</code> becomes <strong>an indented sub-row</strong> under the instrument track, with <strong>its own MIDI editor</strong> and its own block/stream — not a relabelled row in a shared grid.</li>
-  <li>A modulator's <code>trigger</code> is the degenerate case — a single ability lane ("when do I fire"), i.e. one such editor.</li>
-  <li><strong>A parallel structure, not child tracks (decided) — ⚠ SUPERSEDED.</strong> This was the original call (lanes as a <code>lanes[]</code> array on the instrument track, drawn by a dedicated indented-row widget). <strong>As shipped, abilities are real <code>ability</code> child tracks instead</strong> — functionally identical to automation tracks. The win: every block (normal / automation / ability) is <code>track.blocks</code> handled by one gesture system, so block editing is completely unified (marquee / move / copy / paste across all track types). The indented-row widget (<code>AbilityLaneRow</code>) and its bespoke gestures were removed.</li>
+  <li>Each entry in the object def's <code>abilities[]</code> becomes <strong>an indented sub-row</strong> under the instrument track, with <strong>its own MIDI editor</strong> and its own block/stream - not a relabelled row in a shared grid.</li>
+  <li>A modulator's <code>trigger</code> is the degenerate case - a single ability lane ("when do I fire"), i.e. one such editor.</li>
+  <li><strong>A parallel structure, not child tracks (decided) - ⚠ SUPERSEDED.</strong> This was the original call (lanes as a <code>lanes[]</code> array on the instrument track, drawn by a dedicated indented-row widget). <strong>As shipped, abilities are real <code>ability</code> child tracks instead</strong> - functionally identical to automation tracks. The win: every block (normal / automation / ability) is <code>track.blocks</code> handled by one gesture system, so block editing is completely unified (marquee / move / copy / paste across all track types). The indented-row widget (<code>AbilityLaneRow</code>) and its bespoke gestures were removed.</li>
 </ul>
 
-<h3 id="spec">4.5 — Declarative specs &amp; "design in English"</h3>
-<p>This is the bet behind the "design instruments in English" goal. If an object instrument is a <strong>serializable spec</strong> the engine interprets, then "design an instrument in English" is "LLM emits a spec," which is <em>safe</em> (no arbitrary code execution), <em>validatable</em> (schema-checked), and <em>uniform</em> (every instrument plugs into params/ports/abilities the same way). If instruments are bespoke React components (Tyler), the LLM has to write and you have to run untrusted three.js — a much worse place to be.</p>
+<h3 id="spec">4.5 - Declarative specs &amp; "design in English"</h3>
+<p>This is the bet behind the "design instruments in English" goal. If an object instrument is a <strong>serializable spec</strong> the engine interprets, then "design an instrument in English" is "LLM emits a spec," which is <em>safe</em> (no arbitrary code execution), <em>validatable</em> (schema-checked), and <em>uniform</em> (every instrument plugs into params/ports/abilities the same way). If instruments are bespoke React components (Tyler), the LLM has to write and you have to run untrusted three.js - a much worse place to be.</p>
 <pre><code><span class="c">// A RenderSpec: primitives + how props/ports map onto them.</span>
-<span class="c">// The old VisualObjectEngine's .withScale(ctx=>…) idea — but as DATA, not closures.</span>
+<span class="c">// The old VisualObjectEngine's .withScale(ctx=>…) idea - but as DATA, not closures.</span>
 <span class="k">interface</span> <span class="f">RenderSpec</span> {
   primitive: <span class="s">'circle'</span> | <span class="s">'box'</span> | <span class="s">'line'</span> | <span class="s">'points'</span> | <span class="s">'plane'</span> | …;
   bindings: {                       <span class="c">// property ← expression over params + port values</span>
@@ -566,20 +566,20 @@
   onAbility?: { spawnBurst: <span class="s">"emit 12 points, radial, life 0.5s"</span> };
 }</code></pre>
 <ul>
-  <li>The engine ships a small, safe <strong>expression vocabulary</strong> (arithmetic, <code>hsl()</code>, <code>map()</code>, easing, <code>sin/noise</code>) — the modern, serializable version of the old doc's <code>MappingUtils</code>.</li>
-  <li>Built-in / performance-critical instruments keep the <strong>code escape hatch</strong> (<code>{ component }</code>) — they're hand-tuned and don't need to be LLM-authored.</li>
+  <li>The engine ships a small, safe <strong>expression vocabulary</strong> (arithmetic, <code>hsl()</code>, <code>map()</code>, easing, <code>sin/noise</code>) - the modern, serializable version of the old doc's <code>MappingUtils</code>.</li>
+  <li>Built-in / performance-critical instruments keep the <strong>code escape hatch</strong> (<code>{ component }</code>) - they're hand-tuned and don't need to be LLM-authored.</li>
   <li>The grammar can grow: start with primitive + scalar/color bindings (covers most of your modulators), add generators (the old doc's <code>forEachInstance</code> → a <code>repeat</code> node) and ability effects over time.</li>
 </ul>
-<div class="warn"><strong>The honest tradeoff:</strong> a declarative spec is less expressive than arbitrary code, and you'll periodically hit "the grammar can't say this." Mitigate with (a) the code escape hatch for built-ins, and (b) treating the grammar as a living vocabulary you extend as real instruments demand it. Don't try to design the whole grammar up front — grow it from concrete instruments.</div>
+<div class="warn"><strong>The honest tradeoff:</strong> a declarative spec is less expressive than arbitrary code, and you'll periodically hit "the grammar can't say this." Mitigate with (a) the code escape hatch for built-ins, and (b) treating the grammar as a living vocabulary you extend as real instruments demand it. Don't try to design the whole grammar up front - grow it from concrete instruments.</div>
 
-<div class="rec"><strong>Explicit goal — port over as many of Tyler's instruments as possible.</strong> This is a separate aim from building the engine, but the architecture must not preclude it (and the hybrid model is exactly what enables it). Each of Tyler's instruments is already a React/three.js <code>VisualComponent</code>, so it drops straight into the <strong>code escape hatch</strong> (<code>{ component }</code>) and — because we're borrowing his renderer + plugin chain wholesale (§4.6) — runs largely unmodified. They come in as code-hatch instruments first and can be re-expressed as declarative specs later where it's worth it. Concrete implication: keep the <code>VisualComponent</code> contract and the per-frame state it reads <em>compatible with Tyler's</em> as you build, so importing is a copy-in rather than a rewrite.</div>
+<div class="rec"><strong>Explicit goal - port over as many of Tyler's instruments as possible.</strong> This is a separate aim from building the engine, but the architecture must not preclude it (and the hybrid model is exactly what enables it). Each of Tyler's instruments is already a React/three.js <code>VisualComponent</code>, so it drops straight into the <strong>code escape hatch</strong> (<code>{ component }</code>) and - because we're borrowing his renderer + plugin chain wholesale (§4.6) - runs largely unmodified. They come in as code-hatch instruments first and can be re-expressed as declarative specs later where it's worth it. Concrete implication: keep the <code>VisualComponent</code> contract and the per-frame state it reads <em>compatible with Tyler's</em> as you build, so importing is a copy-in rather than a rewrite.</div>
 
-<h3 id="render">4.6 — Rendering layer</h3>
+<h3 id="render">4.6 - Rendering layer</h3>
 <p>Borrow Tyler's renderer wholesale in shape:</p>
 <ul>
-  <li><strong>R3F tree</strong>: <code>VisualScene → ObjectRenderer(perObject)</code>; each object wrapped by its <strong>effects chain</strong> (plugins) — <code>TransformWrapper</code> (offset/rotate/scale) ▸ <code>CloneWrapper</code> (echo/tile/radial) ▸ <code>ShaderChain</code> (FBO post-fx) ▸ scene compositor + masks. Tyler's plugin contract (<code>applyTransform</code>/<code>getClones</code>/<code>fragmentShader</code> + <code>settingsSchema</code>) is good as-is — this is your <strong>effects/plugin</strong> layer, a separate concept from modulator/shaper <em>instruments</em> (see the note below).</li>
-  <li><strong>Instancing pools</strong>: <code>ManagedBlobPool</code>/<code>DotSet</code>/<code>LineSet</code> for the "many objects / a tag of 100" case — one draw call, zero per-frame allocation.</li>
-  <li><strong>Pull-based</strong>: renderers read resolved <code>finalProps</code>; no React re-render storm — imperative <code>useFrame</code> updates like today's <code>Cube</code>, but fed by the engine instead of scanning the project itself.</li>
+  <li><strong>R3F tree</strong>: <code>VisualScene → ObjectRenderer(perObject)</code>; each object wrapped by its <strong>effects chain</strong> (plugins) - <code>TransformWrapper</code> (offset/rotate/scale) ▸ <code>CloneWrapper</code> (echo/tile/radial) ▸ <code>ShaderChain</code> (FBO post-fx) ▸ scene compositor + masks. Tyler's plugin contract (<code>applyTransform</code>/<code>getClones</code>/<code>fragmentShader</code> + <code>settingsSchema</code>) is good as-is - this is your <strong>effects/plugin</strong> layer, a separate concept from modulator/shaper <em>instruments</em> (see the note below).</li>
+  <li><strong>Instancing pools</strong>: <code>ManagedBlobPool</code>/<code>DotSet</code>/<code>LineSet</code> for the "many objects / a tag of 100" case - one draw call, zero per-frame allocation.</li>
+  <li><strong>Pull-based</strong>: renderers read resolved <code>finalProps</code>; no React re-render storm - imperative <code>useFrame</code> updates like today's <code>Cube</code>, but fed by the engine instead of scanning the project itself.</li>
 </ul>
 <figure class="fig">
   <div class="figtitle">Effects (plugins) wrap the rendered object</div>
@@ -594,22 +594,22 @@
     <path d="M296,73 L332,73" stroke="#141414" stroke-width="1.4" marker-end="url(#ar9)"/>
     <path d="M456,73 L492,73" stroke="#141414" stroke-width="1.4" marker-end="url(#ar9)"/>
     <path d="M616,73 L652,73" stroke="#141414" stroke-width="1.4" marker-end="url(#ar9)"/>
-    <text x="410" y="128" text-anchor="middle" font-size="10.5" fill="#565656">a plugin chain — NOT instruments; borrowed from Tyler as-is</text>
+    <text x="410" y="128" text-anchor="middle" font-size="10.5" fill="#565656">a plugin chain - NOT instruments; borrowed from Tyler as-is</text>
   </svg>
   <figcaption>Effects are a separate layer from modulator/shaper instruments: they post-process the picture rather than driving a port.</figcaption>
 </figure>
 
-<div class="note"><strong>Terminology — three different words, three different things.</strong> A <em>modulator</em> (a.k.a. <em>shaper</em>) is the port-driving instrument kind — drives a value per frame through the matrix (§4.2). A <em>modifier</em> is a <strong>MIDI-transform track</strong> — mute / suppress / transpose / gate… that reshapes the note stream at resolve time (§4.7). An <em>effect</em> is a <strong>plugin</strong> — transform/clone/shader/mask applied to rendered output. So: a "rotate" <strong>modulator</strong> drives a <code>rotation</code> port (changes a value); a "suppress" <strong>modifier</strong> removes notes; a kaleidoscope <strong>effect</strong> post-processes the picture. Three layers; don't conflate them.</div>
+<div class="note"><strong>Terminology - three different words, three different things.</strong> A <em>modulator</em> (a.k.a. <em>shaper</em>) is the port-driving instrument kind - drives a value per frame through the matrix (§4.2). A <em>modifier</em> is a <strong>MIDI-transform track</strong> - mute / suppress / transpose / gate… that reshapes the note stream at resolve time (§4.7). An <em>effect</em> is a <strong>plugin</strong> - transform/clone/shader/mask applied to rendered output. So: a "rotate" <strong>modulator</strong> drives a <code>rotation</code> port (changes a value); a "suppress" <strong>modifier</strong> removes notes; a kaleidoscope <strong>effect</strong> post-processes the picture. Three layers; don't conflate them.</div>
 
-<h3 id="modifiers">4.7 — Event modifiers (mute, suppress, transpose…)</h3>
-<p>A third way to "affect" something — distinct from <strong>modulators</strong> (which drive ports) and <strong>effects</strong> (which post-process output). An <strong>event modifier</strong> is a <em>child track whose MIDI regions transform its parent's note stream</em>. This is Tyler's <code>'modifier'</code> track category, and it's worth importing wholesale — it's a deep, musical toolbox: <code>suppress</code>, <code>transpose</code>, <code>shift</code>, <code>gate</code>, <code>rhythm</code>, <code>swing</code>, <code>scale</code> (velocity), <code>add</code>, <code>override</code>, <code>harmonyMap</code>… plus <code>mute</code>.</p>
-<div class="note"><strong>mute ≠ suppress — the one subtlety.</strong> <em>suppress</em> is an <strong>event filter</strong> (resolve time): notes whose start falls in a marked region are removed, so they never fire. <em>mute</em> is a <strong>render-time blackout</strong>: it does <em>not</em> remove events — it flags a region where the instrument is fully hidden (a <code>blackedOut</code> flag in the per-track state), even though its notes "play." Filter vs visibility-gate — both drawn as MIDI regions in a child editor.</div>
+<h3 id="modifiers">4.7 - Event modifiers (mute, suppress, transpose…)</h3>
+<p>A third way to "affect" something - distinct from <strong>modulators</strong> (which drive ports) and <strong>effects</strong> (which post-process output). An <strong>event modifier</strong> is a <em>child track whose MIDI regions transform its parent's note stream</em>. This is Tyler's <code>'modifier'</code> track category, and it's worth importing wholesale - it's a deep, musical toolbox: <code>suppress</code>, <code>transpose</code>, <code>shift</code>, <code>gate</code>, <code>rhythm</code>, <code>swing</code>, <code>scale</code> (velocity), <code>add</code>, <code>override</code>, <code>harmonyMap</code>… plus <code>mute</code>.</p>
+<div class="note"><strong>mute ≠ suppress - the one subtlety.</strong> <em>suppress</em> is an <strong>event filter</strong> (resolve time): notes whose start falls in a marked region are removed, so they never fire. <em>mute</em> is a <strong>render-time blackout</strong>: it does <em>not</em> remove events - it flags a region where the instrument is fully hidden (a <code>blackedOut</code> flag in the per-track state), even though its notes "play." Filter vs visibility-gate - both drawn as MIDI regions in a child editor.</div>
 
 <figure class="fig">
   <div class="figtitle">Event modifiers: suppress removes notes, mute hides the instrument</div>
   <svg viewBox="0 0 760 232" role="img" aria-label="Event modifiers">
     <rect x="20" y="22" width="720" height="38" rx="5" fill="#e6e6e6" stroke="#141414" stroke-width="1.4"/>
-    <text x="34" y="38" font-size="11.5" font-weight="700" fill="#141414">Object — note stream</text>
+    <text x="34" y="38" font-size="11.5" font-weight="700" fill="#141414">Object - note stream</text>
     <g fill="#141414">
       <rect x="150" y="42" width="34" height="12" rx="2"/><rect x="210" y="42" width="34" height="12" rx="2"/>
       <rect x="270" y="42" width="34" height="12" rx="2"/><rect x="330" y="42" width="34" height="12" rx="2"/>
@@ -635,12 +635,12 @@
     <text x="300" y="208" text-anchor="middle" font-size="9" fill="#565656">(removed)</text>
     <text x="547" y="178" text-anchor="middle" font-size="9" fill="#565656">(blacked out)</text>
   </svg>
-  <figcaption>Both are child tracks drawn as MIDI regions. Suppress deletes notes; mute keeps them but hides the instrument — distinct mechanisms at distinct pipeline stages.</figcaption>
+  <figcaption>Both are child tracks drawn as MIDI regions. Suppress deletes notes; mute keeps them but hides the instrument - distinct mechanisms at distinct pipeline stages.</figcaption>
 </figure>
 
 <ul>
-  <li><strong>Where they sit in the pipeline:</strong> the event-transform modifiers (suppress / transpose / gate / rhythm / swing…) run in <em>resolve</em> (§4.3, "apply modifier children to event streams") — they reshape the note stream <em>before</em> anything is interpreted. <code>mute</code>'s blackout is read in the <em>compute / render</em> pass. Neither touches the port matrix — they're an orthogonal layer.</li>
-  <li><strong>They ride on the nested hierarchy:</strong> a modifier is a child of the track it modifies — another reason the hierarchy is functional, not decorative (the same machinery as inherited transforms down a subtree).</li>
+  <li><strong>Where they sit in the pipeline:</strong> the event-transform modifiers (suppress / transpose / gate / rhythm / swing…) run in <em>resolve</em> (§4.3, "apply modifier children to event streams") - they reshape the note stream <em>before</em> anything is interpreted. <code>mute</code>'s blackout is read in the <em>compute / render</em> pass. Neither touches the port matrix - they're an orthogonal layer.</li>
+  <li><strong>They ride on the nested hierarchy:</strong> a modifier is a child of the track it modifies - another reason the hierarchy is functional, not decorative (the same machinery as inherited transforms down a subtree).</li>
   <li><strong>Cleanest possible import from Tyler:</strong> these are pure event-stream functions (<code>combine(parent, self) → events</code>) with no rendering, so they lift over almost verbatim.</li>
 </ul>
 
@@ -649,16 +649,16 @@
 <table>
   <thead><tr><th>Concept</th><th>Old doc</th><th>Tyler / Excellent-DAW</th><th>Recommended Cabin engine</th></tr></thead>
   <tbody>
-    <tr><td>Object instrument</td><td><code>defineObject()</code> chain (code)</td><td>Instrument w/ <code>VisualComponent</code> (code)</td><td><code>ObjectInstrumentDef</code> — declarative <code>RenderSpec</code> + code hatch</td></tr>
+    <tr><td>Object instrument</td><td><code>defineObject()</code> chain (code)</td><td>Instrument w/ <code>VisualComponent</code> (code)</td><td><code>ObjectInstrumentDef</code> - declarative <code>RenderSpec</code> + code hatch</td></tr>
     <tr><td>Modulator / shaper <span class="muted small">(port drivers)</span></td><td>ADSR/physics envelopes <em>inside</em> a synth</td><td>automation lanes + event-modifier tracks (no port concept)</td><td>First-class <code>ModulatorInstrumentDef</code> → ports (can target many)</td></tr>
-    <tr><td>Parameters</td><td>instrument props (closured)</td><td><code>settingsSchema</code> keys, all automatable</td><td>per-instrument <code>params</code> — all automation-targetable (EDAW-style)</td></tr>
-    <tr><td>Automation</td><td>n/a</td><td>automation track: MIDI pitch→value, interpolated</td><td>same — a MIDI lane whose note pitch = param value, engine-interpolated (step/linear/eases); any instrument or effect param</td></tr>
+    <tr><td>Parameters</td><td>instrument props (closured)</td><td><code>settingsSchema</code> keys, all automatable</td><td>per-instrument <code>params</code> - all automation-targetable (EDAW-style)</td></tr>
+    <tr><td>Automation</td><td>n/a</td><td>automation track: MIDI pitch→value, interpolated</td><td>same - a MIDI lane whose note pitch = param value, engine-interpolated (step/linear/eases); any instrument or effect param</td></tr>
     <tr><td>Modulator targets (ports)</td><td>mapper closures</td><td>any <code>settingsSchema</code> key</td><td>curated <strong>ports</strong> (scale/energy/density…), shared vocab mapping onto params</td></tr>
     <tr><td>Routing</td><td>n/a (hard-wired)</td><td>child automates parent (tree-bound)</td><td><strong>Routing</strong> over track / <strong>tag</strong> / subtree scope</td></tr>
     <tr><td>Grouping</td><td>nesting via generators</td><td>nested tracks + modifiers</td><td>hierarchy (organize) <strong>+ tags</strong> (modulate)</td></tr>
     <tr><td>Abilities</td><td>multiple <code>defineObject</code> chains</td><td><code>editorType</code> / drum pads / <code>rangeLabels</code> (rows in one editor)</td><td><code>AbilityLaneDef[]</code> → one <strong>full editor per ability</strong>; a parallel <code>lanes[]</code> (indented sub-rows, not child tracks)</td></tr>
-    <tr><td>Effects (plugins)</td><td>n/a</td><td>plugin chain: transform/clone/shader/mask</td><td>same — borrow as the effects/plugin layer (distinct from modulator/shaper <em>instruments</em>)</td></tr>
-    <tr><td>Event modifiers</td><td>n/a</td><td><code>'modifier'</code> tracks: mute, suppress, transpose, gate, rhythm, swing…</td><td>same — borrow wholesale; child tracks that reshape the note stream at resolve, or blackout at render (§4.7)</td></tr>
+    <tr><td>Effects (plugins)</td><td>n/a</td><td>plugin chain: transform/clone/shader/mask</td><td>same - borrow as the effects/plugin layer (distinct from modulator/shaper <em>instruments</em>)</td></tr>
+    <tr><td>Event modifiers</td><td>n/a</td><td><code>'modifier'</code> tracks: mute, suppress, transpose, gate, rhythm, swing…</td><td>same - borrow wholesale; child tracks that reshape the note stream at resolve, or blackout at render (§4.7)</td></tr>
     <tr><td>Engine loop</td><td><code>getObjectsAtTime()</code> per frame</td><td>resolve → <code>computeStatesAtBeat</code> → pull</td><td>same + a modulation pass</td></tr>
     <tr><td>Scale / perf</td><td>n/a</td><td>InstancedMesh managed pools</td><td>same pools</td></tr>
     <tr><td>English authoring</td><td>(declarative-ish, but closures)</td><td>n/a (bespoke components)</td><td><strong>LLM → RenderSpec</strong>, validated</td></tr>
@@ -670,14 +670,14 @@
 <p>Each phase is shippable and leaves a working app. Borrow where marked.</p>
 <ol>
   <li><span class="badge b-borrow">borrow</span><strong>Engine skeleton.</strong> Port Tyler's <code>resolveProject</code> + <code>computeStatesAtBeat</code> + a <code>&lt;VisualBeatSync/&gt;</code> driven by Cabin's <code>currentBeat</code>. Re-express the current <code>Cube</code> as an <code>ObjectInstrumentDef</code> reading engine state instead of scanning the project. <em>No behavior change, new spine.</em></li>
-  <li><span class="badge b-build">build</span><strong>Object defs + params + ports (static).</strong> Define <code>ObjectInstrumentDef</code> / <code>ParamDef</code> / <code>PortDef</code>. Give Cube its params (size, hue, …) — all <em>automation-targetable</em>, EDAW-style — and ports (<code>scale</code>, <code>energy</code>, <code>hue</code>) that map onto them. A registry + library panel (Tyler's pattern). Ports resting at defaults — nothing drives them yet.</li>
+  <li><span class="badge b-build">build</span><strong>Object defs + params + ports (static).</strong> Define <code>ObjectInstrumentDef</code> / <code>ParamDef</code> / <code>PortDef</code>. Give Cube its params (size, hue, …) - all <em>automation-targetable</em>, EDAW-style - and ports (<code>scale</code>, <code>energy</code>, <code>hue</code>) that map onto them. A registry + library panel (Tyler's pattern). Ports resting at defaults - nothing drives them yet.</li>
   <li><span class="badge b-build">build</span><strong>Modulators + the matrix (direct routing).</strong> <code>ModulatorInstrumentDef</code>, a built-in <code>Pulse</code> (the Cube's inline math, generalized), and the per-frame matrix for <em>single-track</em> routings. First real "drag a Size-Pulse onto a shape" (it drives the <code>scale</code> port internally). This is the keystone phase.</li>
   <li><span class="badge b-build">build</span><strong>Tags + group routing.</strong> Add <code>track.tags</code>, the <code>tag → [object]</code> index, and tag-scoped routings. Now one pulse drives a whole tagged group (your 04/10 "lead vocal").</li>
-  <li><span class="badge b-build">build</span><strong>Nested hierarchy + inheritance.</strong> Build nested tracks in the timeline (today it's <em>top-level only</em> — net-new), then wire inherited transforms/context down a subtree, plus <code>subtree</code> routing scope.</li>
-  <li><span class="badge b-build">build</span><strong>Ability lanes.</strong> <code>AbilityLaneDef[]</code> → a parallel <code>lanes[]</code> on the track, each rendered as an <strong>indented sub-row with a full MIDI editor</strong> (a dedicated widget — <em>not</em> the child-track hierarchy, so largely independent of phase 5). Triggers fire abilities.</li>
+  <li><span class="badge b-build">build</span><strong>Nested hierarchy + inheritance.</strong> Build nested tracks in the timeline (today it's <em>top-level only</em> - net-new), then wire inherited transforms/context down a subtree, plus <code>subtree</code> routing scope.</li>
+  <li><span class="badge b-build">build</span><strong>Ability lanes.</strong> <code>AbilityLaneDef[]</code> → a parallel <code>lanes[]</code> on the track, each rendered as an <strong>indented sub-row with a full MIDI editor</strong> (a dedicated widget - <em>not</em> the child-track hierarchy, so largely independent of phase 5). Triggers fire abilities.</li>
   <li><span class="badge b-borrow">borrow</span><strong>Effects (plugins) + pools.</strong> Bring in Tyler's transform/clone/shader/mask plugins (the effects layer) and the managed instancing pools once you have multiple objects / tagged groups needing scale.</li>
   <li><span class="badge b-build">build</span><strong>Declarative <code>RenderSpec</code> + interpreter.</strong> Replace one or two built-in objects with spec-driven ones; ship the safe expression vocabulary. Most new instruments become specs; built-ins keep the code hatch.</li>
-  <li><span class="badge b-future">later</span><strong>English → spec.</strong> Once <code>RenderSpec</code> is stable and a handful of instruments are specs, add LLM generation that emits + validates a spec. (Only viable <em>because</em> of the phase-8 substrate — don't attempt before it.)</li>
+  <li><span class="badge b-future">later</span><strong>English → spec.</strong> Once <code>RenderSpec</code> is stable and a handful of instruments are specs, add LLM generation that emits + validates a spec. (Only viable <em>because</em> of the phase-8 substrate - don't attempt before it.)</li>
 </ol>
 <div class="rec"><strong>Critical path:</strong> phases 1 → 3 prove the whole thesis (engine + ports + modulators + matrix). If those feel right, everything after is additive. Don't build tags/hierarchy/specs before the matrix earns its keep on one pulse driving one shape.</div>
 
@@ -686,12 +686,12 @@
 <ul>
   <li><span class="badge b-risk">risk</span><strong>Spec expressiveness vs code.</strong> The declarative grammar will hit walls. Mitigation: code escape hatch for built-ins; grow the grammar from real instruments, not speculation. Decide early which side new instruments default to.</li>
   <li><span class="badge b-risk">risk</span><strong>Matrix cost at scale.</strong> objects × ports × routings per frame. Precompute tag/port indices at resolve-time; cap or batch; lean on instancing so 100 modulated objects is still few draw calls. Profile at phase 4.</li>
-  <li><span class="badge b-risk">risk</span><strong>Resolve cost at scale.</strong> A full <code>resolveProject()</code> on every edit is O(whole project) and lags big projects (EDAW's exact failure mode). Fix: make resolve <strong>deferred</strong> (a debounced observer, off the edit's synchronous tick) and <strong>incremental</strong> (cache per-track outputs; dirty-diff by reference equality — <code>tracks[id] !== prev.tracks[id]</code> — and re-resolve only the changed track + its dependents). Turns per-edit cost from O(project) into O(change). See §4.3.</li>
-  <li><span class="badge b-risk">risk</span><strong>Build-vs-borrow boundary.</strong> Tyler's renderer + pools + plugin chain + resolution are worth lifting; his <em>conceptual</em> model (no ports/modulators/tags) is not. Be deliberate: borrow mechanics, not metaphors — and budget for adapting his code to your data model.</li>
-  <li><span class="badge b-risk">open</span><strong>Port combine semantics.</strong> Is "energy" additive and "opacity" multiplicative by default? Who sets it — the port (recommended) or the routing? Get this right early; it shapes how stacking <em>feels</em>.</li>
-  <li><span class="badge b-rec">decided</span><strong>Abilities are a parallel <code>lanes[]</code> structure.</strong> Their own array on the instrument track — <em>not</em> child tracks in the hierarchy — rendered as indented sub-rows (the look, not the hierarchy data model), so this is independent of the nesting work. Each lane is its own editor/stream (not labelled rows in one grid). Remaining: how looping/reference blocks read inside a lane.</li>
-  <li><span class="badge b-risk">open</span><strong>Modulator output typing &amp; reaching effects.</strong> Scalars and colors are clear; vectors (position offsets) need a type. Decide whether <em>effects</em> (plugins) also expose ports — if a plugin's params are port-backed, a modulator can drive them too, and the one matrix covers both instruments and effects.</li>
-  <li><span class="badge b-risk">open</span><strong>Can effects (plugins) be tag-scoped?</strong> e.g. "apply this kaleidoscope effect to the lead-vocal tag." Likely yes — let effect application reuse the same tag/subtree scoping as modulator routing.</li>
+  <li><span class="badge b-risk">risk</span><strong>Resolve cost at scale.</strong> A full <code>resolveProject()</code> on every edit is O(whole project) and lags big projects (EDAW's exact failure mode). Fix: make resolve <strong>deferred</strong> (a debounced observer, off the edit's synchronous tick) and <strong>incremental</strong> (cache per-track outputs; dirty-diff by reference equality - <code>tracks[id] !== prev.tracks[id]</code> - and re-resolve only the changed track + its dependents). Turns per-edit cost from O(project) into O(change). See §4.3.</li>
+  <li><span class="badge b-risk">risk</span><strong>Build-vs-borrow boundary.</strong> Tyler's renderer + pools + plugin chain + resolution are worth lifting; his <em>conceptual</em> model (no ports/modulators/tags) is not. Be deliberate: borrow mechanics, not metaphors - and budget for adapting his code to your data model.</li>
+  <li><span class="badge b-risk">open</span><strong>Port combine semantics.</strong> Is "energy" additive and "opacity" multiplicative by default? Who sets it - the port (recommended) or the routing? Get this right early; it shapes how stacking <em>feels</em>.</li>
+  <li><span class="badge b-rec">decided</span><strong>Abilities are a parallel <code>lanes[]</code> structure.</strong> Their own array on the instrument track - <em>not</em> child tracks in the hierarchy - rendered as indented sub-rows (the look, not the hierarchy data model), so this is independent of the nesting work. Each lane is its own editor/stream (not labelled rows in one grid). Remaining: how looping/reference blocks read inside a lane.</li>
+  <li><span class="badge b-risk">open</span><strong>Modulator output typing &amp; reaching effects.</strong> Scalars and colors are clear; vectors (position offsets) need a type. Decide whether <em>effects</em> (plugins) also expose ports - if a plugin's params are port-backed, a modulator can drive them too, and the one matrix covers both instruments and effects.</li>
+  <li><span class="badge b-risk">open</span><strong>Can effects (plugins) be tag-scoped?</strong> e.g. "apply this kaleidoscope effect to the lead-vocal tag." Likely yes - let effect application reuse the same tag/subtree scoping as modulator routing.</li>
 </ul>
 
 <!-- 8 -->
@@ -699,11 +699,11 @@
 <div class="rec">
   <p style="margin-top:6px"><strong>Build Tyler's engine, think in your model.</strong></p>
   <ul>
-    <li>Adopt the <strong>resolve → compute → pull</strong> pipeline, the <strong>R3F + imperative pools</strong> renderer, and the <strong>plugin chain</strong> (transform/clone/shader/mask — the effects layer, distinct from modulator/shaper instruments) — these are proven and you shouldn't reinvent them.</li>
-    <li>Make <strong>object vs modulator</strong> instruments first-class, connected by a <strong>port-based modulation matrix</strong> — this is the new core and the thing that makes the product feel like <em>your</em> vision instead of a generic visualizer.</li>
-    <li>Use <strong>hierarchy for organization</strong> and <strong>tags for cross-cutting modulation targeting</strong> — orthogonal, each with one clear job.</li>
-    <li>Author instruments as <strong>declarative specs with a code escape hatch</strong>, so "design in English" is generate-and-validate-a-spec — the only version of that goal that's safe and uniform.</li>
-    <li>Keep the code hatch compatible with Tyler's <code>VisualComponent</code> contract so his existing instruments can be <strong>imported wholesale</strong> — an explicit goal, and free once you've borrowed his renderer.</li>
+    <li>Adopt the <strong>resolve → compute → pull</strong> pipeline, the <strong>R3F + imperative pools</strong> renderer, and the <strong>plugin chain</strong> (transform/clone/shader/mask - the effects layer, distinct from modulator/shaper instruments) - these are proven and you shouldn't reinvent them.</li>
+    <li>Make <strong>object vs modulator</strong> instruments first-class, connected by a <strong>port-based modulation matrix</strong> - this is the new core and the thing that makes the product feel like <em>your</em> vision instead of a generic visualizer.</li>
+    <li>Use <strong>hierarchy for organization</strong> and <strong>tags for cross-cutting modulation targeting</strong> - orthogonal, each with one clear job.</li>
+    <li>Author instruments as <strong>declarative specs with a code escape hatch</strong>, so "design in English" is generate-and-validate-a-spec - the only version of that goal that's safe and uniform.</li>
+    <li>Keep the code hatch compatible with Tyler's <code>VisualComponent</code> contract so his existing instruments can be <strong>imported wholesale</strong> - an explicit goal, and free once you've borrowed his renderer.</li>
     <li>Prove it on the smallest loop first: <strong>engine skeleton → ports → one Pulse modulator → matrix</strong> (phases 1–3). Everything else is additive once that feels good.</li>
   </ul>
 </div>

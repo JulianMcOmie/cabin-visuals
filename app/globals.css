@@ -7,7 +7,7 @@
   --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* Horizontal overscroll must never trigger the browser's back/forward swipe —
+/* Horizontal overscroll must never trigger the browser's back/forward swipe -
    scrolling left past the timeline's start was navigating away from the app. */
 html,
 body {
@@ -41,7 +41,7 @@ body {
   --text-muted: #5d5e66;
   --text-faint: #7a7b84;
 
-  /* Accent — THE blue */
+  /* Accent - THE blue */
   --accent: #35a7e6;
   --accent-hover: #6fc0ee;
   --on-accent: #0a0a0c; /* dark text on accent buttons */
@@ -344,11 +344,11 @@ body.cursor-locked * {
   cursor: var(--drag-cursor) !important;
 }
 
-/* ...and swallow every other pointer interaction while a drag is actually MOVING —
-   hover states, cursor changes, hover-triggered animations, clicks — so a drag can
+/* ...and swallow every other pointer interaction while a drag is actually MOVING -
+   hover states, cursor changes, hover-triggered animations, clicks - so a drag can
    never collaterally trigger unrelated UI (the play button, the logo, a slider).
    Gated on `drag-moving` (added on the first real movement, see dragCursor.ts) rather
-   than `cursor-locked`, so a plain press — a click / double-click — is left untouched.
+   than `cursor-locked`, so a plain press - a click / double-click - is left untouched.
    Drags themselves run on window-level listeners, so they keep working. */
 body.drag-moving * {
   pointer-events: none !important;

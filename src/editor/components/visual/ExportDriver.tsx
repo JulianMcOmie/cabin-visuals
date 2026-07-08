@@ -11,7 +11,7 @@ import { registerFrameDriver } from '../../core/export/frameDriver'
  *
  *  - renderFrame(beat) drives VisualBeatSync → computeAtBeat through the beat
  *    OVERRIDE (not the TimeStore), then advances R3F exactly one frame. Same
- *    pure engine path scrubbing takes — but the transport, playhead, and beat
+ *    pure engine path scrubbing takes - but the transport, playhead, and beat
  *    readouts never move, so the user sees nothing scrub during an export.
  *  - pin() stops the free-running loop (frameloop 'never'), pins the drawing
  *    buffer to the export resolution at DPR 1 (instruments that read `viewport`
@@ -45,7 +45,7 @@ export function ExportDriver() {
         el.style.height = `${saved.height}px`
       },
       unpin() {
-        // Clear the override even when never pinned — the pre-export snapshot
+        // Clear the override even when never pinned - the pre-export snapshot
         // render sets it, and a failure before pin() must not leave it stuck.
         setBeatOverride(null)
         if (!saved) return

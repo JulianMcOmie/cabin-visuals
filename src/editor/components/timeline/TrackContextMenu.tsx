@@ -9,7 +9,7 @@ import { moverInputParamDefs, moverRegistry, getMover } from '../../core/visual/
  * A submenu panel that keeps itself on-screen: it renders top-aligned to its
  * parent row, measures before paint, and shifts up by however much it would
  * overflow the viewport's bottom. A submenu can be much taller than the main
- * menu (one row per instrument param), so it needs its own clamping — the main
+ * menu (one row per instrument param), so it needs its own clamping - the main
  * menu fitting is no guarantee the submenu does.
  */
 function SubMenu({ children }: { children: ReactNode }) {
@@ -42,7 +42,7 @@ interface TrackContextMenuProps {
 /**
  * Right-click menu on a track's label. Two submenus, both scoped to the track's
  * instrument: "Add ability track" (reveals one of the instrument's declared ability
- * lanes — opt-in) above "Add automation track" (adds an automation child track driving
+ * lanes - opt-in) above "Add automation track" (adds an automation child track driving
  * one of the instrument's params). Items already present are checked + disabled.
  */
 export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuProps) {
@@ -57,7 +57,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   // Near the viewport's bottom/right edge the menu flips/clamps instead of
   // running off-screen. Measured before paint so it never flashes misplaced.
-  // (Submenus clamp themselves — see SubMenu.)
+  // (Submenus clamp themselves - see SubMenu.)
   const [placement, setPlacement] = useState<{ left: number; top: number }>({ left: x, top: y })
   useLayoutEffect(() => {
     const el = ref.current

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>First-Note Bug — Implementation Plan</title>
+<title>First-Note Bug - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -39,7 +39,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · First-Note Bug</span>
-  <h1>First-Note Bug — Implementation Plan</h1>
+  <h1>First-Note Bug - Implementation Plan</h1>
   <p class="sub">Turning <span class="file">first-note-bug-architecture.html</span> into an afternoon: reproduce, discriminate between the three hypotheses with the cheapest decisive checks, then land the one fix that outcome demands.</p>
 </header>
 
@@ -53,31 +53,31 @@
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 0 — Reproduce <span class="badge b-risk">requires Tyler's project or params</span></h3>
+<h3>Phase 0 - Reproduce <span class="badge b-risk">requires Tyler's project or params</span></h3>
 <ul class="small">
-  <li>Get the exact setup: which instrument, note at which beat, bpm. Failing that: Cube + one note at beat 0, 120bpm — the minimal candidate.</li>
+  <li>Get the exact setup: which instrument, note at which beat, bpm. Failing that: Cube + one note at beat 0, 120bpm - the minimal candidate.</li>
   <li>Record what "doesn't play" means on screen: never appears vs appears-mid-decay vs appears without attack.</li>
 </ul>
 
-<h3>Phase 1 — Discriminate (no code changes, ~15 minutes)</h3>
+<h3>Phase 1 - Discriminate (no code changes, ~15 minutes)</h3>
 <ul class="small">
-  <li><strong>H1 check:</strong> park the playhead at beat 0 (SkipBack). If the note's visual is already at full intensity while paused, nothing is being skipped — the envelope peaks at onset by design. (The pause invariant guarantees this parked frame ≡ playback's frame at 0.)</li>
-  <li><strong>H2 check:</strong> temporary log in <span class="file">core/playback.ts</span>'s RAF tick — the first 10 beats after play(). Starts at 0.000 → H2 dead. Starts at ~one-frame-worth → H2 confirmed.</li>
-  <li><strong>H3 check:</strong> <code>grep -n "beat &gt;" src/editor/instruments/</code> vs <code>"beat &gt;="</code> — comparator outliers on onset tests.</li>
+  <li><strong>H1 check:</strong> park the playhead at beat 0 (SkipBack). If the note's visual is already at full intensity while paused, nothing is being skipped - the envelope peaks at onset by design. (The pause invariant guarantees this parked frame ≡ playback's frame at 0.)</li>
+  <li><strong>H2 check:</strong> temporary log in <span class="file">core/playback.ts</span>'s RAF tick - the first 10 beats after play(). Starts at 0.000 → H2 dead. Starts at ~one-frame-worth → H2 confirmed.</li>
+  <li><strong>H3 check:</strong> <code>grep -n "beat &gt;" src/editor/instruments/</code> vs <code>"beat &gt;="</code> - comparator outliers on onset tests.</li>
 </ul>
 
-<h3>Phase 2 — The fix (one of three)</h3>
+<h3>Phase 2 - The fix (one of three)</h3>
 <ul class="small">
-  <li><span class="badge b-edit">H1</span> Add a short beat-derived attack to the shared envelope shape: <code>env = attack(t) · decay(t)</code> with <code>attack(t) = min(1, t / ATTACK_BEATS)</code>, <code>ATTACK_BEATS ≈ 0.05</code>. Applied where envelopes are computed (per-instrument helpers; start with the instruments Tyler names). Still a pure function of beat — the canary stays green. <strong>Decision with Julia/Tyler first:</strong> ramp vs pre-roll vs "author notes off zero".</li>
+  <li><span class="badge b-edit">H1</span> Add a short beat-derived attack to the shared envelope shape: <code>env = attack(t) · decay(t)</code> with <code>attack(t) = min(1, t / ATTACK_BEATS)</code>, <code>ATTACK_BEATS ≈ 0.05</code>. Applied where envelopes are computed (per-instrument helpers; start with the instruments Tyler names). Still a pure function of beat - the canary stays green. <strong>Decision with Julia/Tyler first:</strong> ramp vs pre-roll vs "author notes off zero".</li>
   <li><span class="badge b-edit">H2</span> In <span class="file">core/playback.ts</span>: on play, synchronously publish the start beat once (<code>onBeatChange(startBeat)</code>) before the first RAF tick, so frame one is exactly the pressed-play beat.</li>
   <li><span class="badge b-edit">H3</span> Normalize onset comparators to <code>&gt;=</code> in the offending instruments; one sweep, one convention comment in <span class="file">instruments/types.ts</span>.</li>
 </ul>
 
-<h3>Phase 3 — Verify</h3>
+<h3>Phase 3 - Verify</h3>
 <ul class="small">
   <li>Play from 0 with a note at 0: the note's attack is visible (H1) / the first frame equals beat 0 in the log (H2) / the outlier instruments now fire at 0 (H3).</li>
-  <li>Scrub-land on beat 0 still shows the documented peak (H1's ramp must not break the scrub-lands-on-peak behavior for beats &gt; 0 — the ramp only softens the first ~0.05 beat).</li>
-  <li>Export a 2-bar project with a beat-0 note — the first frames of the file show the same thing the editor shows (export shares the path, so this is free regression coverage).</li>
+  <li>Scrub-land on beat 0 still shows the documented peak (H1's ramp must not break the scrub-lands-on-peak behavior for beats &gt; 0 - the ramp only softens the first ~0.05 beat).</li>
+  <li>Export a 2-bar project with a beat-0 note - the first frames of the file show the same thing the editor shows (export shares the path, so this is free regression coverage).</li>
 </ul>
 
 <h2>C · File inventory</h2>
@@ -92,15 +92,15 @@
 
 <h2>D · Risks &amp; notes</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Fixing the wrong reading.</strong> Don't code before Phase 1 discriminates — an attack ramp "fix" for what's actually a first-frame skip would mask the real defect.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Fixing the wrong reading.</strong> Don't code before Phase 1 discriminates - an attack ramp "fix" for what's actually a first-frame skip would mask the real defect.</li>
   <li><span class="badge b-risk">risk</span> <strong>H1's ramp changes every instrument's feel slightly.</strong> Keep ATTACK_BEATS tiny and get a thumbs-up on one instrument before sweeping.</li>
-  <li><span class="badge b-risk">note</span> The audio track is not implicated: blocks at bar 0 arm with <code>delaySec = 0</code> against the shared <code>when</code> anchor — if audio ALSO seems to clip at play, that's a separate report.</li>
+  <li><span class="badge b-risk">note</span> The audio track is not implicated: blocks at bar 0 arm with <code>delaySec = 0</code> against the shared <code>when</code> anchor - if audio ALSO seems to clip at play, that's a separate report.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> park the playhead where play misbehaves and read the frozen frame — fifteen minutes of discrimination picks between a two-line transport guarantee, a comparator sweep, and a design conversation about attack ramps.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> park the playhead where play misbehaves and read the frozen frame - fifteen minutes of discrimination picks between a two-line transport guarantee, a comparator sweep, and a design conversation about attack ramps.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Mirrors the house implementation-plan shape at investigation scale; derives its hypotheses from <span class="file">first-note-bug-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Mirrors the house implementation-plan shape at investigation scale; derives its hypotheses from <span class="file">first-note-bug-architecture.html</span>.</p>
 
 </div>
 </body>

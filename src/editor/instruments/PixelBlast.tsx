@@ -3,14 +3,14 @@ import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 't
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// RETRO ARCADE — chunky 8-bit detonations. Every note is an explosion of square
+// RETRO ARCADE - chunky 8-bit detonations. Every note is an explosion of square
 // particles that fly out along 16 quantized directions and SNAP to a pixel grid
 // (positions rounded to pixelSize), shrinking in three discrete chunk-steps and
-// blinking out at the end — pure sprite-sheet energy. Pitch → position: pitch
+// blinking out at the end - pure sprite-sheet energy. Pitch → position: pitch
 // class picks the X column (12 lanes across spreadX), octave picks the Y band.
 // Velocity → size and particle count. The palette cycles per pitch class through
 // six baked retro palettes. Everything is derived per frame from note age
-// (state.beat - note.beat), seeded per particle — scrub == playback.
+// (state.beat - note.beat), seeded per particle - scrub == playback.
 
 const boxGeo = new BoxGeometry(1, 1, 1)
 
@@ -93,7 +93,7 @@ function PixelBlastVisual({ trackId }: { trackId: string }) {
       const pal = PALETTES[pc % PALETTES.length]
       const t = ageSec / life
 
-      // Core flash — one fat white square for the first instant.
+      // Core flash - one fat white square for the first instant.
       if (ageSec < 0.09 && flashScale > 0) {
         const pooled = acquire(group)
         const fs = (0.5 + velN) * flashScale * px * 6

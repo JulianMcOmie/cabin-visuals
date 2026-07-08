@@ -1,4 +1,4 @@
-// The frame loop — the one place export timing lives. Walks the beat from 0 to
+// The frame loop - the one place export timing lives. Walks the beat from 0 to
 // the end of the project at exactly one frame per step: beat(i) = i·bpm/(60·fps),
 // pure arithmetic, no wall clock. Each step renders through the FrameDriver
 // (the same path scrubbing takes) and hands the frame to a sink; the sink is
@@ -21,7 +21,7 @@ export interface WalkHooks {
 /**
  * Walk every frame of the project through the driver and the sink.
  * Returns true if it completed, false if aborted. The driver must already be
- * pinned by the caller — pin/unpin bracket the whole export (including audio),
+ * pinned by the caller - pin/unpin bracket the whole export (including audio),
  * not each walk.
  */
 export async function walkFrames(
@@ -53,7 +53,7 @@ export interface ProjectTime {
   bpm: number
   beatsPerBar: number
   totalBars: number
-  /** The project's audio tracks — rendered offline when settings.includeAudio. */
+  /** The project's audio tracks - rendered offline when settings.includeAudio. */
   audioTracks?: Track[]
 }
 
@@ -66,7 +66,7 @@ export interface ExportResult {
 /**
  * The whole export: pin the canvas, walk every frame through the encoder with
  * backpressure, flush, finalize the MP4. The pin/unpin bracket lives in a
- * finally — an error or cancel can never leave the editor wedged at export size.
+ * finally - an error or cancel can never leave the editor wedged at export size.
  * Video-only for now; the audio track joins the writer in the next phase.
  */
 export async function runExport(
@@ -116,7 +116,7 @@ export async function runExport(
     video.dispose()
     throw err
   } finally {
-    // Also clears the beat override — the next live frame recomputes the scene
+    // Also clears the beat override - the next live frame recomputes the scene
     // at the untouched store beat, exactly where the user left it.
     driver.unpin()
   }

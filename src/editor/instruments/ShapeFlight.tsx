@@ -8,7 +8,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // during held notes, dissolving on arrival. Each note emits a train of copies (spawnRate
 // copies per beat over its duration); depth = how long ago the copy played, so it's fully
 // scrub-accurate. n.pitch picks the shape (edge count). Thick lines are drawn with a batched
-// screen-space line shader — all copies in one BufferGeometry. Palette / automation lanes
+// screen-space line shader - all copies in one BufferGeometry. Palette / automation lanes
 // from Tyler's source are dropped. The geometry / flight / burst math is Tyler's verbatim.
 
 // --- Geometry helpers (Tyler verbatim) ---

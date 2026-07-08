@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Audio Track Architecture — Cabin Visuals</title>
+<title>Audio Track Architecture - Cabin Visuals</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -69,7 +69,7 @@
 <header class="doc">
   <span class="kicker">Cabin Visuals · Transport &amp; Audio Design</span>
   <h1>Audio Track Architecture</h1>
-  <p class="sub">Turning the single global backing clip into a first-class audio track — a block you can drag, offset, and trim — scheduled by a dedicated <strong>audio engine</strong> alongside the transport and visual engines, with the beat clock as the sole timebase.</p>
+  <p class="sub">Turning the single global backing clip into a first-class audio track - a block you can drag, offset, and trim - scheduled by a dedicated <strong>audio engine</strong> alongside the transport and visual engines, with the beat clock as the sole timebase.</p>
 </header>
 
 <div class="card">
@@ -78,29 +78,29 @@
     <a href="#internalize">★ The big picture (start here)</a>
     <a href="#today">1 · How audio works today</a>
     <a href="#goal">2 · The goal &amp; the one hard problem</a>
-    <a href="#model">3 · Data model — clips, tracks, blocks</a>
+    <a href="#model">3 · Data model - clips, tracks, blocks</a>
     <a href="#placement">4 · Placement on the timeline</a>
     <a href="#engines">5 · Three engines, one clock (+ the renames)</a>
     <a href="#scheduling">6 · Scheduling audio at a timeline offset</a>
-    <a href="#seek">7 · Seeking, scrubbing &amp; tempo — the decided semantics</a>
+    <a href="#seek">7 · Seeking, scrubbing &amp; tempo - the decided semantics</a>
     <a href="#waveform">8 · Waveform rendering pipeline</a>
     <a href="#single">9 · One audio track (for now), trimming</a>
     <a href="#edaw">10 · Lessons taken from Excellent DAW</a>
-    <a href="#persistence">11 · Persistence — the document goes to v2</a>
+    <a href="#persistence">11 · Persistence - the document goes to v2</a>
     <a href="#tradeoffs">12 · Decisions &amp; open questions</a>
   </nav>
 </div>
 
-<p class="lead">Right now audio is a single global clip pinned to the transport: one <code>AudioClip</code> in <span class="file">AudioStore</span>, one <code>Tone.Player</code> inside the playback engine, hard-wired so file 0:00 == timeline beat 0. This doc reshapes it into <strong>audio blocks on an audio track</strong> — a clip reference plus a <code>startBar</code>/trim — scheduled by a new, dedicated <strong>audio engine</strong> that mirrors how the visual engine already sits beside the transport. The beat clock stays exactly where it is.</p>
+<p class="lead">Right now audio is a single global clip pinned to the transport: one <code>AudioClip</code> in <span class="file">AudioStore</span>, one <code>Tone.Player</code> inside the playback engine, hard-wired so file 0:00 == timeline beat 0. This doc reshapes it into <strong>audio blocks on an audio track</strong> - a clip reference plus a <code>startBar</code>/trim - scheduled by a new, dedicated <strong>audio engine</strong> that mirrors how the visual engine already sits beside the transport. The beat clock stays exactly where it is.</p>
 
-<div class="rec"><strong>The one-line answer:</strong> add an <code>'audio'</code> track type carrying audio blocks (each = a <code>clipRef</code> + <code>startBar</code> + in-clip <code>trimStart</code>/<code>trimEnd</code>), stand up <span class="file">core/audio/</span> — an audio engine owning a per-block <code>Tone.Player</code> pool, the byte-resolution seam, the decode/peak cache, and the one beat⟷second helper — and have the transport engine hand it <code>(beat, when)</code> at every transport event. Audio is <strong>never resampled</strong>: a clip is fixed seconds, its width in bars follows the tempo, and the beat clock (<code>currentBeat</code> in <span class="file">TimeStore</span>) never changes. The UI ships with <strong>one audio track</strong>, auto-created from the AudioBar; the engine is built for N from day one.</div>
+<div class="rec"><strong>The one-line answer:</strong> add an <code>'audio'</code> track type carrying audio blocks (each = a <code>clipRef</code> + <code>startBar</code> + in-clip <code>trimStart</code>/<code>trimEnd</code>), stand up <span class="file">core/audio/</span> - an audio engine owning a per-block <code>Tone.Player</code> pool, the byte-resolution seam, the decode/peak cache, and the one beat⟷second helper - and have the transport engine hand it <code>(beat, when)</code> at every transport event. Audio is <strong>never resampled</strong>: a clip is fixed seconds, its width in bars follows the tempo, and the beat clock (<code>currentBeat</code> in <span class="file">TimeStore</span>) never changes. The UI ships with <strong>one audio track</strong>, auto-created from the AudioBar; the engine is built for N from day one.</div>
 
 <!-- 0 -->
-<h2 id="internalize">★ The big picture — internalize this first</h2>
+<h2 id="internalize">★ The big picture - internalize this first</h2>
 <p>Before the section-by-section detail, the whole change in one view, and the five mental models everything else hangs off.</p>
 
 <figure class="fig">
-  <div class="figtitle">Three engines, one clock — where the new piece sits</div>
+  <div class="figtitle">Three engines, one clock - where the new piece sits</div>
   <svg viewBox="0 0 900 460" role="img" aria-label="Three engines overview">
     <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="240" y="16" width="420" height="128" rx="10" fill="#141414"/>
@@ -116,7 +116,7 @@
     <text x="228" y="428" text-anchor="middle" font-size="16" fill="#565656">reads tracks/notes, renders R3F</text>
     <rect x="462" y="290" width="420" height="152" rx="10" fill="#ffffff" stroke="#141414" stroke-width="2.5"/>
     <text x="672" y="326" text-anchor="middle" font-size="21" font-weight="700" fill="#141414">AUDIO ENGINE ★ new</text>
-    <text x="672" y="352" text-anchor="middle" font-size="16" fill="#565656">core/audio/ — this doc</text>
+    <text x="672" y="352" text-anchor="middle" font-size="16" fill="#565656">core/audio/ - this doc</text>
     <text x="672" y="380" text-anchor="middle" font-size="17" fill="#141414">armAll(beat, when) at transport events</text>
     <text x="672" y="405" text-anchor="middle" font-size="16" fill="#565656">discrete · Tone's clock carries players</text>
     <text x="672" y="428" text-anchor="middle" font-size="16" fill="#565656">player pool · bytes · decode · beat⟷sec</text>
@@ -132,51 +132,51 @@
 <div class="keystone">
   <h3>Five things to hold in your head</h3>
   <ol>
-    <li><strong>The clip is the bytes; the block is the placement.</strong> An <code>AudioClip</code> (already exists — <code>ref · fileName · duration</code>) is the material. An audio block is a reference to a clip plus where it sits (<code>startBar</code>) and how much of it plays (<code>trimStart</code>/<code>trimEnd</code>).</li>
-    <li><strong>The beat clock is the sole timebase — audio is scheduled relative to it.</strong> "File 0:00 == beat 0" becomes "block plays when <code>currentBeat</code> enters its window, at an in-clip offset computed from beat − blockStartBeat." Moving the block changes the window → reschedules the audio. The clock code doesn't move.</li>
-    <li><strong>Audio is never resampled.</strong> A clip is fixed seconds no matter the bpm. Change the tempo and the block just occupies more or fewer beats — its on-screen width recomputes, its sound doesn't. (Decided — §7.)</li>
-    <li><strong>The audio engine is a sibling of the visual engine, not a clone of it.</strong> Same position in the architecture (a project-reading engine beside the transport), different rhythm: visuals recompute per frame; audio arms players at transport events and lets Tone's clock carry them. Don't force per-frame symmetry — audio must be scheduled <em>ahead</em> on the audio clock.</li>
-    <li><strong>One <code>Tone.Player</code> per audio block, armed on a beat window.</strong> On play/seek/bpm-change the engine computes, per block, whether it's live at the current beat and where inside the clip to start — the same <code>start(when, offset)</code> the code already uses, generalized from one player to N. The UI constrains to one audio track for now; the engine never assumes it.</li>
+    <li><strong>The clip is the bytes; the block is the placement.</strong> An <code>AudioClip</code> (already exists - <code>ref · fileName · duration</code>) is the material. An audio block is a reference to a clip plus where it sits (<code>startBar</code>) and how much of it plays (<code>trimStart</code>/<code>trimEnd</code>).</li>
+    <li><strong>The beat clock is the sole timebase - audio is scheduled relative to it.</strong> "File 0:00 == beat 0" becomes "block plays when <code>currentBeat</code> enters its window, at an in-clip offset computed from beat − blockStartBeat." Moving the block changes the window → reschedules the audio. The clock code doesn't move.</li>
+    <li><strong>Audio is never resampled.</strong> A clip is fixed seconds no matter the bpm. Change the tempo and the block just occupies more or fewer beats - its on-screen width recomputes, its sound doesn't. (Decided - §7.)</li>
+    <li><strong>The audio engine is a sibling of the visual engine, not a clone of it.</strong> Same position in the architecture (a project-reading engine beside the transport), different rhythm: visuals recompute per frame; audio arms players at transport events and lets Tone's clock carry them. Don't force per-frame symmetry - audio must be scheduled <em>ahead</em> on the audio clock.</li>
+    <li><strong>One <code>Tone.Player</code> per audio block, armed on a beat window.</strong> On play/seek/bpm-change the engine computes, per block, whether it's live at the current beat and where inside the clip to start - the same <code>start(when, offset)</code> the code already uses, generalized from one player to N. The UI constrains to one audio track for now; the engine never assumes it.</li>
   </ol>
 </div>
 
 <!-- 1 -->
 <h2 id="today">1 · How audio works today</h2>
-<p>Audio is deliberately minimal and global. Since the persistence work shipped, the bytes already live in Supabase Storage — that seam is done and untouched by this work.</p>
+<p>Audio is deliberately minimal and global. Since the persistence work shipped, the bytes already live in Supabase Storage - that seam is done and untouched by this work.</p>
 <table>
   <thead><tr><th>File</th><th>What it holds today</th><th>Consequence</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">store/AudioStore.ts</span></td><td>A single clip: <code>AudioClip | null</code> (<code>ref · fileName · duration</code>) + <code>setClip</code>.</td><td>One clip for the whole project, no position. Becomes the <code>audioClips</code> catalog (internal — not a user-facing library).</td></tr>
-    <tr><td><span class="file">core/playback.ts</span></td><td>A <code>PlaybackEngine</code> singleton owning the transport, the RAF beat clock, <em>and</em> one <code>Tone.Player</code>. <code>play(startBeat)</code> arms transport + player at a shared audio-clock <code>when</code>; the player starts at <code>startBeat * 60/bpm</code> — file 0:00 pinned to beat 0.</td><td>Moving audio is impossible by construction. Also the engine wears two hats (clock + audio) — this doc separates them. The file keeps its name.</td></tr>
+    <tr><td><span class="file">store/AudioStore.ts</span></td><td>A single clip: <code>AudioClip | null</code> (<code>ref · fileName · duration</code>) + <code>setClip</code>.</td><td>One clip for the whole project, no position. Becomes the <code>audioClips</code> catalog (internal - not a user-facing library).</td></tr>
+    <tr><td><span class="file">core/playback.ts</span></td><td>A <code>PlaybackEngine</code> singleton owning the transport, the RAF beat clock, <em>and</em> one <code>Tone.Player</code>. <code>play(startBeat)</code> arms transport + player at a shared audio-clock <code>when</code>; the player starts at <code>startBeat * 60/bpm</code> - file 0:00 pinned to beat 0.</td><td>Moving audio is impossible by construction. Also the engine wears two hats (clock + audio) - this doc separates them. The file keeps its name.</td></tr>
     <tr><td><span class="file">hooks/usePlayback.ts</span></td><td>Wires engine callbacks; on <code>play()</code> awaits <code>engine.loadAudio(clip.ref)</code> then <code>engine.play(start)</code>.</td><td>Generalizes to "load every block's clip".</td></tr>
-    <tr><td><span class="file">store/TimeStore.ts</span></td><td><code>currentBeat</code> + <code>isPlaying</code>.</td><td><strong>The clock. Untouched — it is the invariant.</strong></td></tr>
+    <tr><td><span class="file">store/TimeStore.ts</span></td><td><code>currentBeat</code> + <code>isPlaying</code>.</td><td><strong>The clock. Untouched - it is the invariant.</strong></td></tr>
     <tr><td><span class="file">core/audioSource.ts</span></td><td>The ref → bytes seam. Backed by the <code>project-audio</code> Supabase bucket via <span class="file">persistence/audioStorage.ts</span>; uploads on add, signed URLs on resolve, session object-URL cache.</td><td>Already the right seam and already shipped. It <strong>moves into <span class="file">core/audio/</span></strong> so everything audio-runtime lives in one place (§3.3).</td></tr>
     <tr><td><span class="file">components/AudioBar.tsx</span></td><td>Load a file (→ <code>saveAudio</code> → ref, decode for duration), show name, clear.</td><td>Becomes the one entry point: loading a file auto-creates the audio track (§9) and then disables itself while one exists.</td></tr>
   </tbody>
 </table>
-<div class="note"><strong>Also relevant context:</strong> the pause invariant (instruments are pure functions of <code>state.beat</code>; enforced by lint + a dev canary). The audio engine is naturally compatible — it does no per-frame work, and scrub-while-paused stays silent (§7) — but any audio-driven <em>visuals</em> later must go through the visual engine's ports, not bypass the invariant.</div>
+<div class="note"><strong>Also relevant context:</strong> the pause invariant (instruments are pure functions of <code>state.beat</code>; enforced by lint + a dev canary). The audio engine is naturally compatible - it does no per-frame work, and scrub-while-paused stays silent (§7) - but any audio-driven <em>visuals</em> later must go through the visual engine's ports, not bypass the invariant.</div>
 
 <!-- 2 -->
 <h2 id="goal">2 · The goal &amp; the one hard problem</h2>
-<p>The user wants audio to behave like a block: drag it along the timeline, offset its start, trim its ends — exactly like the MIDI blocks that already exist. Everything reduces to one hard problem:</p>
-<div class="warn"><strong>The hard problem in one sentence:</strong> audio is scheduled in <em>seconds</em> on an audio clock, but the timeline is measured in <em>beats</em> — so placing a clip at bar 12 means "when <code>currentBeat</code> reaches bar 12's beat, start this player at <code>trimStart</code> seconds into the clip; while it plays, its in-clip second = trimStart + (beat − blockStartBeat) × 60/bpm." Get that beat⟷second conversion right, per block, at play/seek/tempo-change — in <strong>one shared helper</strong> — and the feature is done. Everything else is scaffolding around that conversion.</div>
+<p>The user wants audio to behave like a block: drag it along the timeline, offset its start, trim its ends - exactly like the MIDI blocks that already exist. Everything reduces to one hard problem:</p>
+<div class="warn"><strong>The hard problem in one sentence:</strong> audio is scheduled in <em>seconds</em> on an audio clock, but the timeline is measured in <em>beats</em> - so placing a clip at bar 12 means "when <code>currentBeat</code> reaches bar 12's beat, start this player at <code>trimStart</code> seconds into the clip; while it plays, its in-clip second = trimStart + (beat − blockStartBeat) × 60/bpm." Get that beat⟷second conversion right, per block, at play/seek/tempo-change - in <strong>one shared helper</strong> - and the feature is done. Everything else is scaffolding around that conversion.</div>
 
 <!-- 3 -->
-<h2 id="model">3 · Data model — clips, tracks, blocks</h2>
-<p>Two kinds of state: the <strong>material</strong> (clips — bytes in the bucket, descriptors in <span class="file">AudioStore</span>) and the <strong>placement</strong> (audio blocks — position + trim, in the project document, undoable). The beat window each block occupies is <em>derived</em>, never stored — recomputed from <code>startBar</code> + trim + tempo, exactly like the visual engine's resolved graph.</p>
+<h2 id="model">3 · Data model - clips, tracks, blocks</h2>
+<p>Two kinds of state: the <strong>material</strong> (clips - bytes in the bucket, descriptors in <span class="file">AudioStore</span>) and the <strong>placement</strong> (audio blocks - position + trim, in the project document, undoable). The beat window each block occupies is <em>derived</em>, never stored - recomputed from <code>startBar</code> + trim + tempo, exactly like the visual engine's resolved graph.</p>
 
-<h3>3.1 — Container: a new track type (decided)</h3>
+<h3>3.1 - Container: a new track type (decided)</h3>
 <table>
   <thead><tr><th>Option</th><th>Shape</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td><strong>A · Audio track type</strong></td><td>Add <code>'audio'</code> to <code>TrackType</code>; the track carries <code>audioBlocks: AudioBlock[]</code>. Mirrors the MIDI-track model.</td><td><span class="badge b-dec">decided</span> A track already owns a lane, color, name, mute/solo, and a timeline row — everything an audio lane needs, with the least new surface.</td></tr>
-    <tr><td>B · Audio block on any track</td><td>A <code>Block</code> variant living beside MIDI blocks.</td><td>Rejected as primary: muddies resolve and piano-roll gesture math. (Whether <code>audioBlocks</code> stays a parallel array or later merges into the block gesture plumbing is a revisit-after-trim question — see plan §C.)</td></tr>
+    <tr><td><strong>A · Audio track type</strong></td><td>Add <code>'audio'</code> to <code>TrackType</code>; the track carries <code>audioBlocks: AudioBlock[]</code>. Mirrors the MIDI-track model.</td><td><span class="badge b-dec">decided</span> A track already owns a lane, color, name, mute/solo, and a timeline row - everything an audio lane needs, with the least new surface.</td></tr>
+    <tr><td>B · Audio block on any track</td><td>A <code>Block</code> variant living beside MIDI blocks.</td><td>Rejected as primary: muddies resolve and piano-roll gesture math. (Whether <code>audioBlocks</code> stays a parallel array or later merges into the block gesture plumbing is a revisit-after-trim question - see plan §C.)</td></tr>
   </tbody>
 </table>
 
-<h3>3.2 — The types</h3>
-<pre><code><span class="c">// store/AudioStore.ts — the clip stays as-is; the store becomes the audioClips catalog</span>
-<span class="k">interface</span> <span class="f">AudioClip</span> {              <span class="c">// unchanged — already serializable</span>
+<h3>3.2 - The types</h3>
+<pre><code><span class="c">// store/AudioStore.ts - the clip stays as-is; the store becomes the audioClips catalog</span>
+<span class="k">interface</span> <span class="f">AudioClip</span> {              <span class="c">// unchanged - already serializable</span>
   ref: <span class="k">string</span>;                    <span class="c">// opaque handle → bucket bytes (core/audio/audioSource)</span>
   fileName: <span class="k">string</span>;
   duration: <span class="k">number</span>;               <span class="c">// seconds (full file)</span>
@@ -186,7 +186,7 @@
   addClip; removeClip;
 }
 
-<span class="c">// editor/types.ts — the placement lives in the project document (undoable)</span>
+<span class="c">// editor/types.ts - the placement lives in the project document (undoable)</span>
 <span class="k">interface</span> <span class="f">AudioBlock</span> {
   id: <span class="k">string</span>;
   clipRef: <span class="k">string</span>;                <span class="c">// → AudioClip.ref (the material)</span>
@@ -194,7 +194,7 @@
   trimStart: <span class="k">number</span>;              <span class="c">// seconds into the clip where playback begins (default 0)</span>
   trimEnd: <span class="k">number</span>;                <span class="c">// seconds where it ends (default = clip.duration)</span>
   gain?: <span class="k">number</span>;                  <span class="c">// per-block volume</span>
-  fadeIn?: <span class="k">number</span>; fadeOut?: <span class="k">number</span>; <span class="c">// seconds — later phase</span>
+  fadeIn?: <span class="k">number</span>; fadeOut?: <span class="k">number</span>; <span class="c">// seconds - later phase</span>
 }
 <span class="k">type</span> TrackType = <span class="s">'base'</span> | <span class="s">'add'</span> | … | <span class="s">'audio'</span>;  <span class="c">// + one member</span>
 <span class="k">interface</span> <span class="f">Track</span> {                  <span class="c">// existing shell, one optional field</span>
@@ -203,124 +203,124 @@
 }</code></pre>
 <p><strong>Why <code>startBar</code>, not <code>startBeat</code>?</strong> To match the MIDI <code>Block</code> exactly (<code>startBar</code>/<code>durationBars</code>, drawn at <code>startBar * barWidthPx</code>). The beat position and beat-duration are derived at schedule time. Storing bars keeps the block's on-screen behavior consistent with everything else on the ruler.</p>
 
-<h3>3.3 — The four storage layers (the mental model)</h3>
+<h3>3.3 - The four storage layers (the mental model)</h3>
 <table>
   <thead><tr><th>Layer</th><th>File</th><th>Owns</th><th>Knows about</th></tr></thead>
   <tbody>
     <tr><td><strong>Bytes in the cloud</strong></td><td><span class="file">persistence/audioStorage.ts</span></td><td>upload / signed URL / delete on the <code>project-audio</code> bucket</td><td>Supabase, RLS paths</td></tr>
-    <tr><td><strong>Bytes for the editor</strong></td><td><span class="file">core/audio/audioSource.ts</span> (moved from <span class="file">core/</span>)</td><td>ref → playable URL, session object-URL cache</td><td>nothing cloud — just refs</td></tr>
-    <tr><td><strong>Metadata catalog</strong></td><td><span class="file">store/AudioStore.ts</span></td><td><code>audioClips</code> (ref → fileName/duration) — what exists</td><td>serialized into the document</td></tr>
-    <tr><td><strong>Placement</strong></td><td><span class="file">ProjectStore</span> → <code>track.audioBlocks</code></td><td>where clips sit (startBar/trim) — undoable edits</td><td>—</td></tr>
+    <tr><td><strong>Bytes for the editor</strong></td><td><span class="file">core/audio/audioSource.ts</span> (moved from <span class="file">core/</span>)</td><td>ref → playable URL, session object-URL cache</td><td>nothing cloud - just refs</td></tr>
+    <tr><td><strong>Metadata catalog</strong></td><td><span class="file">store/AudioStore.ts</span></td><td><code>audioClips</code> (ref → fileName/duration) - what exists</td><td>serialized into the document</td></tr>
+    <tr><td><strong>Placement</strong></td><td><span class="file">ProjectStore</span> → <code>track.audioBlocks</code></td><td>where clips sit (startBar/trim) - undoable edits</td><td>-</td></tr>
   </tbody>
 </table>
 <div class="note"><strong>Why not merge the two "bytes" layers?</strong> <span class="file">audioStorage</span> is the <em>cloud driver</em> (lives in <span class="file">persistence/</span> beside <span class="file">projectStorage</span>); <span class="file">audioSource</span> is the <em>editor-facing seam</em> that let the app swap in-memory → bucket without touching editor code. Collapse them and the editor imports Supabase concerns directly. With <span class="file">audioSource</span> moving under <span class="file">core/audio/</span>, the rule is simply: <strong>everything audio-runtime is in <span class="file">core/audio/</span>; everything audio-cloud is in <span class="file">persistence/</span>.</strong></div>
-<div class="note"><strong>Contrast with Excellent DAW (deliberate):</strong> E-DAW stores decoded <code>audioData</code> on the block itself and gives blocks an author-set <code>durationBars</code> with loop-wrapping inside. Cabin's model — block = ref + position + trim, width <em>derived</em> — keeps bytes out of the document (they live in the bucket; the doc carries refs) and keeps "how long is this clip" a fact about the audio, not an author decision. See §10.</div>
+<div class="note"><strong>Contrast with Excellent DAW (deliberate):</strong> E-DAW stores decoded <code>audioData</code> on the block itself and gives blocks an author-set <code>durationBars</code> with loop-wrapping inside. Cabin's model - block = ref + position + trim, width <em>derived</em> - keeps bytes out of the document (they live in the bucket; the doc carries refs) and keeps "how long is this clip" a fact about the audio, not an author decision. See §10.</div>
 
 <!-- 4 -->
 <h2 id="placement">4 · Placement on the timeline</h2>
 <ul>
   <li><strong>Drawn and dragged like a MIDI block.</strong> Position at <code>left = startBar * barWidthPx</code>; dragging writes one number, <code>startBar</code>; the engine reacts by rescheduling that block. Bar/beat snapping comes free from the ruler.</li>
-  <li><strong>Width follows content — and tempo, reactively.</strong> An audio block's width is <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> bars, recomputed live: change the bpm and every audio block visibly widens or narrows on the spot. You never type a bar count — you drag trim edges (§9).</li>
+  <li><strong>Width follows content - and tempo, reactively.</strong> An audio block's width is <code>(trimEnd − trimStart) × bpm/60 ÷ beatsPerBar</code> bars, recomputed live: change the bpm and every audio block visibly widens or narrows on the spot. You never type a bar count - you drag trim edges (§9).</li>
   <li><strong>Free-positioning</strong> (no snap, with a modifier) is a natural later add, since real audio rarely starts on an exact beat.</li>
 </ul>
 
 <!-- 5 -->
-<h2 id="engines">5 · Three engines, one clock — and the renames that make it read true</h2>
-<p><strong>Decided: a dedicated audio engine</strong>, so the codebase has three engines with one clock — the same separation the visual engine already proves out. Two renames land with this work so the folder names tell the story:</p>
+<h2 id="engines">5 · Three engines, one clock - and the renames that make it read true</h2>
+<p><strong>Decided: a dedicated audio engine</strong>, so the codebase has three engines with one clock - the same separation the visual engine already proves out. Two renames land with this work so the folder names tell the story:</p>
 <ul>
-  <li><span class="badge b-dec">decided</span> <span class="file">core/engine/</span> → <span class="file">core/visual/</span> — symmetric with <span class="file">core/audio/</span>. Two files inside had non-visual consumers and get <strong>promoted to <span class="file">core/trackTypes.ts</span></strong>: the modifier semantics (<code>isModifierType</code>, used by UI utils) and the automation pitch-encoding constants (<code>AUTOMATION_PITCH_MIN/MAX</code>, used by the piano roll). They're track semantics shared by UI and engines, not rendering. <code>sampleLane</code> (interpolation) stays visual. <span class="file">playback.ts</span> keeps its name.</li>
-  <li><span class="badge b-dec">decided</span> <span class="file">plugins/</span> → <span class="file">effects/</span> — full depth: the folder, <code>PluginInstance</code> → <code>EffectInstance</code>, <code>getPlugin</code> → <code>getEffect</code>, and the persisted field <code>track.visualPlugins</code> → <code>track.effects</code>. The field rename changes the document shape, so it ships inside the same v1→v2 upgrade step as the audio changes (§11) — the cheapest moment it will ever be.</li>
+  <li><span class="badge b-dec">decided</span> <span class="file">core/engine/</span> → <span class="file">core/visual/</span> - symmetric with <span class="file">core/audio/</span>. Two files inside had non-visual consumers and get <strong>promoted to <span class="file">core/trackTypes.ts</span></strong>: the modifier semantics (<code>isModifierType</code>, used by UI utils) and the automation pitch-encoding constants (<code>AUTOMATION_PITCH_MIN/MAX</code>, used by the piano roll). They're track semantics shared by UI and engines, not rendering. <code>sampleLane</code> (interpolation) stays visual. <span class="file">playback.ts</span> keeps its name.</li>
+  <li><span class="badge b-dec">decided</span> <span class="file">plugins/</span> → <span class="file">effects/</span> - full depth: the folder, <code>PluginInstance</code> → <code>EffectInstance</code>, <code>getPlugin</code> → <code>getEffect</code>, and the persisted field <code>track.visualPlugins</code> → <code>track.effects</code>. The field rename changes the document shape, so it ships inside the same v1→v2 upgrade step as the audio changes (§11) - the cheapest moment it will ever be.</li>
 </ul>
 <table>
   <thead><tr><th>Engine</th><th>Owns</th><th>Consumes the beat…</th></tr></thead>
   <tbody>
-    <tr><td><span class="file">core/playback.ts</span> — transport</td><td>Tone transport, RAF beat clock, play/pause/seek/setBpm. <strong>Sheds its <code>Tone.Player</code>.</strong> Sole producer of the beat and of the shared audio-clock <code>when</code> anchor.</td><td>—</td></tr>
-    <tr><td><span class="file">core/audio/</span> — audio ★ new</td><td>Player pool (keyed by block id), the byte seam (<span class="file">audioSource</span>), decode/buffer cache (shared with waveforms), the <code>armBlock</code> beat⟷second helper, master gain.</td><td>Discretely: <code>armAll(beat, when)</code> at transport events; Tone's clock carries the players in between. No per-frame work.</td></tr>
-    <tr><td><span class="file">core/visual/</span> — visual (renamed)</td><td>Resolve → compute → render. Contents untouched by this work.</td><td>Continuously: <code>computeAtBeat(beat)</code> every frame, a pure function.</td></tr>
+    <tr><td><span class="file">core/playback.ts</span> - transport</td><td>Tone transport, RAF beat clock, play/pause/seek/setBpm. <strong>Sheds its <code>Tone.Player</code>.</strong> Sole producer of the beat and of the shared audio-clock <code>when</code> anchor.</td><td>-</td></tr>
+    <tr><td><span class="file">core/audio/</span> - audio ★ new</td><td>Player pool (keyed by block id), the byte seam (<span class="file">audioSource</span>), decode/buffer cache (shared with waveforms), the <code>armBlock</code> beat⟷second helper, master gain.</td><td>Discretely: <code>armAll(beat, when)</code> at transport events; Tone's clock carries the players in between. No per-frame work.</td></tr>
+    <tr><td><span class="file">core/visual/</span> - visual (renamed)</td><td>Resolve → compute → render. Contents untouched by this work.</td><td>Continuously: <code>computeAtBeat(beat)</code> every frame, a pure function.</td></tr>
   </tbody>
 </table>
-<div class="warn"><strong>The guardrail — don't chase full symmetry.</strong> The audio engine has <em>no clock of its own</em> and an <em>event-shaped</em> API (<code>setBlocks</code> · <code>loadClips</code> · <code>armAll(beat, when)</code> · <code>stopAll</code>), not a <code>computeAtBeat</code>-shaped one. It never touches the transport; the <code>when</code> anchor is computed in exactly one place (the transport engine) and passed in — that single anchor is what keeps N players and the transport sample-aligned. If the audio engine ever grows its own <code>Tone.now()</code> calls for scheduling, the alignment story is broken.</div>
-<p><strong>Does audio need to "resolve"?</strong> No heavy resolve like the visual graph. At transport events the audio engine gathers the audio blocks from the project store and computes each block's beat window — a cheap O(blocks) pass. In steady state there is <em>no per-frame audio work at all</em>; the RAF only advances <code>currentBeat</code>.</p>
+<div class="warn"><strong>The guardrail - don't chase full symmetry.</strong> The audio engine has <em>no clock of its own</em> and an <em>event-shaped</em> API (<code>setBlocks</code> · <code>loadClips</code> · <code>armAll(beat, when)</code> · <code>stopAll</code>), not a <code>computeAtBeat</code>-shaped one. It never touches the transport; the <code>when</code> anchor is computed in exactly one place (the transport engine) and passed in - that single anchor is what keeps N players and the transport sample-aligned. If the audio engine ever grows its own <code>Tone.now()</code> calls for scheduling, the alignment story is broken.</div>
+<p><strong>Does audio need to "resolve"?</strong> No heavy resolve like the visual graph. At transport events the audio engine gathers the audio blocks from the project store and computes each block's beat window - a cheap O(blocks) pass. In steady state there is <em>no per-frame audio work at all</em>; the RAF only advances <code>currentBeat</code>.</p>
 
 <!-- 6 -->
 <h2 id="scheduling">6 · Scheduling audio at a timeline offset</h2>
-<p>The mechanical core: generalize today's single-player <code>start(when, startBeat*60/bpm)</code> into one player per block, each started at its in-clip offset. The existing hard part — the shared <code>when = Tone.now() + LOOKAHEAD</code> alignment — carries over; it just moves behind the audio engine's door and loops over blocks.</p>
-<div class="note"><strong>What is <code>when</code>?</strong> Not a keyword — the Web Audio API's own parameter name (<code>AudioBufferSourceNode.start(when, offset, duration)</code> in the W3C spec): the absolute time on the audio clock, in seconds since the AudioContext started, at which the scheduled action fires. Kept as-is (decided) for grep-ability against the spec and MDN.</div>
+<p>The mechanical core: generalize today's single-player <code>start(when, startBeat*60/bpm)</code> into one player per block, each started at its in-clip offset. The existing hard part - the shared <code>when = Tone.now() + LOOKAHEAD</code> alignment - carries over; it just moves behind the audio engine's door and loops over blocks.</p>
+<div class="note"><strong>What is <code>when</code>?</strong> Not a keyword - the Web Audio API's own parameter name (<code>AudioBufferSourceNode.start(when, offset, duration)</code> in the W3C spec): the absolute time on the audio clock, in seconds since the AudioContext started, at which the scheduled action fires. Kept as-is (decided) for grep-ability against the spec and MDN.</div>
 
 <figure class="fig">
-  <div class="figtitle">armBlock — three cases per block at any transport event</div>
+  <div class="figtitle">armBlock - three cases per block at any transport event</div>
   <svg viewBox="0 0 900 330" role="img" aria-label="Three arm cases">
     <line x1="30" y1="80" x2="875" y2="80" stroke="#cfcfcf" stroke-width="2"/>
     <line x1="450" y1="44" x2="450" y2="310" stroke="#141414" stroke-width="2.5"/>
     <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#141414">playhead (atBeat)</text>
     <rect x="35" y="112" width="290" height="48" rx="6" fill="#ffffff" stroke="#141414" stroke-width="2" stroke-dasharray="6 5"/>
-    <text x="180" y="143" text-anchor="middle" font-size="17.5" fill="#141414">PAST — window ended</text>
+    <text x="180" y="143" text-anchor="middle" font-size="17.5" fill="#141414">PAST - window ended</text>
     <text x="180" y="186" text-anchor="middle" font-size="16" fill="#565656">leave idle (player.stop)</text>
     <rect x="278" y="210" width="344" height="48" rx="6" fill="#141414"/>
-    <text x="450" y="241" text-anchor="middle" font-size="17.5" fill="#fff">MID-CLIP — join with offset</text>
+    <text x="450" y="241" text-anchor="middle" font-size="17.5" fill="#fff">MID-CLIP - join with offset</text>
     <text x="450" y="288" text-anchor="middle" font-size="16" fill="#565656">start(when, trimStart + (atBeat−startBeat)·60/bpm)</text>
     <rect x="575" y="112" width="300" height="48" rx="6" fill="#ffffff" stroke="#141414" stroke-width="2"/>
-    <text x="725" y="143" text-anchor="middle" font-size="17.5" fill="#141414">FUTURE — schedule ahead</text>
+    <text x="725" y="143" text-anchor="middle" font-size="17.5" fill="#141414">FUTURE - schedule ahead</text>
     <text x="725" y="186" text-anchor="middle" font-size="16" fill="#565656">start(when + delaySec, trimStart)</text>
   </svg>
-  <figcaption>At <code>play()</code>/<code>seek()</code>/bpm-change, every block independently lands in one of three cases. Tone's own scheduler holds the "future" case — no per-frame polling to start a block, ever.</figcaption>
+  <figcaption>At <code>play()</code>/<code>seek()</code>/bpm-change, every block independently lands in one of three cases. Tone's own scheduler holds the "future" case - no per-frame polling to start a block, ever.</figcaption>
 </figure>
 
-<pre><code><span class="c">// core/audio/AudioEngine.ts — the one place beat⟷second math lives</span>
+<pre><code><span class="c">// core/audio/AudioEngine.ts - the one place beat⟷second math lives</span>
 <span class="f">armBlock</span>(b: AudioBlock, atBeat: <span class="k">number</span>, when: <span class="k">number</span>, bpm: <span class="k">number</span>, beatsPerBar: <span class="k">number</span>) {
   <span class="k">const</span> startBeat = b.startBar * beatsPerBar;
   <span class="k">const</span> endBeat   = startBeat + (b.trimEnd - b.trimStart) * bpm / 60;
   <span class="k">const</span> player = <span class="k">this</span>.players.get(b.id);
   <span class="k">if</span> (!player) <span class="k">return</span>;
   player.stop(when);
-  <span class="k">if</span> (atBeat >= endBeat) <span class="k">return</span>;                       <span class="c">// past — idle</span>
-  <span class="k">if</span> (atBeat <= startBeat)                              <span class="c">// future — schedule ahead</span>
+  <span class="k">if</span> (atBeat >= endBeat) <span class="k">return</span>;                       <span class="c">// past - idle</span>
+  <span class="k">if</span> (atBeat <= startBeat)                              <span class="c">// future - schedule ahead</span>
     player.start(when + (startBeat - atBeat) * 60 / bpm, b.trimStart);
-  <span class="k">else</span>                                                  <span class="c">// mid-clip — join with an offset</span>
+  <span class="k">else</span>                                                  <span class="c">// mid-clip - join with an offset</span>
     player.start(when, b.trimStart + (atBeat - startBeat) * 60 / bpm);
 }</code></pre>
 <ul>
-  <li><strong>Mute/solo at arm time (decided — taken from E-DAW, §10).</strong> Before arming, skip blocks on muted (or soloed-out) audio tracks — the same semantics the visual engine applies to hide objects. Toggling mute/solo while playing triggers a re-arm pass. Retrofitting this later is annoying; it ships with the engine.</li>
-  <li><strong>Player pool lifecycle.</strong> <code>loadClips()</code> reconciles a <code>Map&lt;blockId, Tone.Player&gt;</code> against the current block set — dispose orphans, create newcomers — with one decoded <code>ToneAudioBuffer</code> shared per ref (two blocks of one clip can overlap, so players are keyed by <em>block</em>, buffers by <em>ref</em>).</li>
+  <li><strong>Mute/solo at arm time (decided - taken from E-DAW, §10).</strong> Before arming, skip blocks on muted (or soloed-out) audio tracks - the same semantics the visual engine applies to hide objects. Toggling mute/solo while playing triggers a re-arm pass. Retrofitting this later is annoying; it ships with the engine.</li>
+  <li><strong>Player pool lifecycle.</strong> <code>loadClips()</code> reconciles a <code>Map&lt;blockId, Tone.Player&gt;</code> against the current block set - dispose orphans, create newcomers - with one decoded <code>ToneAudioBuffer</code> shared per ref (two blocks of one clip can overlap, so players are keyed by <em>block</em>, buffers by <em>ref</em>).</li>
   <li><strong>Headroom (taken from E-DAW).</strong> Overlapping players sum at the destination and can clip; give the engine a master gain (or a modest per-player default) rather than routing raw to destination.</li>
   <li><strong>Lookahead: 50ms (decided).</strong> Today's 20ms is tight for arming N players in a loop; E-DAW runs 50ms happily. Cheap insurance against downbeat jitter.</li>
 </ul>
 
 <!-- 7 -->
-<h2 id="seek">7 · Seeking, scrubbing &amp; tempo — the decided semantics</h2>
+<h2 id="seek">7 · Seeking, scrubbing &amp; tempo - the decided semantics</h2>
 <ul>
-  <li><span class="badge b-dec">decided</span> <strong>Seek while playing = re-arm every block.</strong> A seek is "re-run the §6 windowing at the new beat" — each block independently stops, restarts mid-clip, or is scheduled ahead. <code>play</code> and <code>seek</code> share <code>armBlock</code> so they cannot diverge.</li>
-  <li><span class="badge b-dec">decided</span> <strong>Scrub while paused is silent.</strong> Matches today's behavior and composes with the pause invariant (paused = static <em>and</em> silent). Grain-scrub — a throttled short-lived player at the scrub position — is a real feature with real cost; explicitly deferred, not designed here.</li>
-  <li><span class="badge b-dec">decided</span> <strong>Tempo never changes the sound — audio is never resampled.</strong> A clip is fixed seconds; a bpm change re-derives every block's beat window and on-screen width ("more or fewer beats"), never its playback rate. Three implications:
+  <li><span class="badge b-dec">decided</span> <strong>Seek while playing = re-arm every block.</strong> A seek is "re-run the §6 windowing at the new beat" - each block independently stops, restarts mid-clip, or is scheduled ahead. <code>play</code> and <code>seek</code> share <code>armBlock</code> so they cannot diverge.</li>
+  <li><span class="badge b-dec">decided</span> <strong>Scrub while paused is silent.</strong> Matches today's behavior and composes with the pause invariant (paused = static <em>and</em> silent). Grain-scrub - a throttled short-lived player at the scrub position - is a real feature with real cost; explicitly deferred, not designed here.</li>
+  <li><span class="badge b-dec">decided</span> <strong>Tempo never changes the sound - audio is never resampled.</strong> A clip is fixed seconds; a bpm change re-derives every block's beat window and on-screen width ("more or fewer beats"), never its playback rate. Three implications:
     <ol>
-      <li>Block width reads bpm reactively — change tempo, blocks visibly resize at once.</li>
+      <li>Block width reads bpm reactively - change tempo, blocks visibly resize at once.</li>
       <li><code>setBpm</code> in the transport engine (today: just sets <code>transport.bpm</code>) must also trigger an audio re-arm pass while playing, since every window just moved.</li>
-      <li><strong>Known, accepted consequence:</strong> changing bpm <em>while playing over a block</em> makes the audio audibly jump position — the same beat now maps to a different in-clip second, and the beat clock wins. Changing bpm while paused (the normal case) is artifact-free.</li>
+      <li><strong>Known, accepted consequence:</strong> changing bpm <em>while playing over a block</em> makes the audio audibly jump position - the same beat now maps to a different in-clip second, and the beat clock wins. Changing bpm while paused (the normal case) is artifact-free.</li>
     </ol>
   </li>
-  <li><strong>End-of-project</strong> — the RAF tracker already stops the transport at <code>maxBeat</code>; "stop the player" generalizes to <code>audioEngine.stopAll()</code>.</li>
+  <li><strong>End-of-project</strong> - the RAF tracker already stops the transport at <code>maxBeat</code>; "stop the player" generalizes to <code>audioEngine.stopAll()</code>.</li>
 </ul>
 
 <!-- 8 -->
 <h2 id="waveform">8 · Waveform rendering pipeline</h2>
 <p>A waveform inside the block turns the abstract clip into something you can align by eye. Decode once → peak arrays → canvas draw sized to the block → redraw on resize/zoom/trim.</p>
 <ul>
-  <li><strong>Decode once, in the audio engine's cache.</strong> The same decoded buffer feeds the <code>Tone.Player</code> pool and the peak extraction — one decode per ref, ever. Pre-decode when a block is <em>inserted</em> (not at <code>play()</code>), so the downbeat is never gated on decoding.</li>
-  <li><strong>Adaptive peak resolution (taken from E-DAW).</strong> Extract a base min/max peak array (~1000 buckets) per ref; when a block is drawn wider than the base resolution serves (zoomed in), re-extract at <code>max(1000, widthPx / 2)</code> buckets. Zoom/resize is a redraw; deep zoom is one cheap re-extraction — never a re-decode.</li>
+  <li><strong>Decode once, in the audio engine's cache.</strong> The same decoded buffer feeds the <code>Tone.Player</code> pool and the peak extraction - one decode per ref, ever. Pre-decode when a block is <em>inserted</em> (not at <code>play()</code>), so the downbeat is never gated on decoding.</li>
+  <li><strong>Adaptive peak resolution (taken from E-DAW).</strong> Extract a base min/max peak array (~1000 buckets) per ref; when a block is drawn wider than the base resolution serves (zoomed in), re-extract at <code>max(1000, widthPx / 2)</code> buckets. Zoom/resize is a redraw; deep zoom is one cheap re-extraction - never a re-decode.</li>
   <li><strong>Draw on a <code>&lt;canvas&gt;</code> inside the block</strong>, compositing under the block's chrome. Trimming renders only the <code>[trimStart, trimEnd]</code> slice of the same peak data.</li>
-  <li><strong>Where the code goes:</strong> <span class="file">core/audio/waveform.ts</span> (decode-cache + peaks, shared with the player pool) feeding <span class="file">timeline/AudioBlock.tsx</span> — the audio analogue of the MIDI <span class="file">Block.tsx</span> (same naming convention; the component aliases the <code>AudioBlock</code> type import, exactly as <span class="file">Block.tsx</span> aliases <code>Block</code>).</li>
+  <li><strong>Where the code goes:</strong> <span class="file">core/audio/waveform.ts</span> (decode-cache + peaks, shared with the player pool) feeding <span class="file">timeline/AudioBlock.tsx</span> - the audio analogue of the MIDI <span class="file">Block.tsx</span> (same naming convention; the component aliases the <code>AudioBlock</code> type import, exactly as <span class="file">Block.tsx</span> aliases <code>Block</code>).</li>
 </ul>
 
 <!-- 9 -->
 <h2 id="single">9 · One audio track (for now), trimming</h2>
 <ul>
-  <li><span class="badge b-dec">decided</span> <strong>No clip library UI.</strong> Loading a file in the <span class="file">AudioBar</span> registers the clip in the <code>audioClips</code> catalog and <strong>auto-creates one audio track at the top of the track rows</strong> (index 0 of the root tracks — <code>addTrack</code> already takes an index) with a single block at bar 0.</li>
-  <li><span class="badge b-dec">decided</span> <strong>One audio track for now.</strong> While an audio track exists, the AudioBar is hidden or greyed out — one backing track, DAW-style. Deleting the audio track re-enables it.</li>
+  <li><span class="badge b-dec">decided</span> <strong>No clip library UI.</strong> Loading a file in the <span class="file">AudioBar</span> registers the clip in the <code>audioClips</code> catalog and <strong>auto-creates one audio track at the top of the track rows</strong> (index 0 of the root tracks - <code>addTrack</code> already takes an index) with a single block at bar 0.</li>
+  <li><span class="badge b-dec">decided</span> <strong>One audio track for now.</strong> While an audio track exists, the AudioBar is hidden or greyed out - one backing track, DAW-style. Deleting the audio track re-enables it.</li>
   <li><strong>The engine never assumes one.</strong> The scheduling loop iterates all blocks on all audio tracks; overlap = two players mixed at the destination (hence the master-gain headroom). Lifting the single-track UI constraint later is a UI change only.</li>
-  <li><strong>Trim end</strong> — drag the right edge → decrease <code>trimEnd</code>. Shorter block, start unchanged.</li>
-  <li><strong>Trim start</strong> — drag the left edge → increase <code>trimStart</code> <em>and</em> <code>startBar</code> by the same beat amount, so the surviving audio stays aligned to its original beats (classic DAW left-trim).</li>
-  <li><strong>Scheduling honors trim automatically</strong> — <code>armBlock</code> already uses <code>trimStart</code> as the base offset and <code>trimEnd</code> to clamp the window. Trim feeds numbers into existing code.</li>
-  <li><strong>Split (later)</strong> — cutting at the playhead = two blocks sharing the ref with complementary trim/startBar. Free once trim exists.</li>
+  <li><strong>Trim end</strong> - drag the right edge → decrease <code>trimEnd</code>. Shorter block, start unchanged.</li>
+  <li><strong>Trim start</strong> - drag the left edge → increase <code>trimStart</code> <em>and</em> <code>startBar</code> by the same beat amount, so the surviving audio stays aligned to its original beats (classic DAW left-trim).</li>
+  <li><strong>Scheduling honors trim automatically</strong> - <code>armBlock</code> already uses <code>trimStart</code> as the base offset and <code>trimEnd</code> to clamp the window. Trim feeds numbers into existing code.</li>
+  <li><strong>Split (later)</strong> - cutting at the playhead = two blocks sharing the ref with complementary trim/startBar. Free once trim exists.</li>
 </ul>
 
 <!-- 10 -->
@@ -329,10 +329,10 @@
 <table>
   <thead><tr><th>Mechanism</th><th>What E-DAW does</th><th>Verdict for Cabin</th></tr></thead>
   <tbody>
-    <tr><td>Mute/solo at arm time</td><td>Checks track mute + sibling-solo before scheduling <em>and</em> on every seek-restart.</td><td><strong>Take.</strong> Ships with the audio engine (§6) — cheap now, painful to retrofit.</td></tr>
+    <tr><td>Mute/solo at arm time</td><td>Checks track mute + sibling-solo before scheduling <em>and</em> on every seek-restart.</td><td><strong>Take.</strong> Ships with the audio engine (§6) - cheap now, painful to retrofit.</td></tr>
     <tr><td>50ms lookahead</td><td><code>AUDIO_LOOKAHEAD_SECONDS = 0.05</code> configured at context init.</td><td><strong>Take.</strong> Cabin's 20ms is tight for arming N players.</td></tr>
     <tr><td>Adaptive waveform peaks</td><td>Base 1000-bucket peaks; re-extracts at <code>max(1000, widthPx/2)</code> when drawn wider.</td><td><strong>Take.</strong> Same cache, one extra parameter (§8).</td></tr>
-    <tr><td>Player headroom</td><td>Clip players default to −6dB so overlaps don't clip.</td><td><strong>Take the idea</strong> — a master gain node in the audio engine.</td></tr>
+    <tr><td>Player headroom</td><td>Clip players default to −6dB so overlaps don't clip.</td><td><strong>Take the idea</strong> - a master gain node in the audio engine.</td></tr>
     <tr><td>Loop-boundary retrigger</td><td>When a loop region starts mid-audio-block, a special retrigger Part restarts the player each loop pass.</td><td><strong>File away.</strong> Cabin has no loop regions yet; when it does, this is the known trap + fix.</td></tr>
     <tr><td>Decoded audio on the block; author-set <code>durationBars</code> + loop-wrap</td><td>Blocks carry <code>audioData</code> and a fixed bar width; audio loops/clips inside it.</td><td><strong>Don't take.</strong> Bytes belong in the bucket, not the document; width belongs to the clip + tempo, not the author (§3, §7).</td></tr>
     <tr><td>Playback-speed scaling</td><td><code>bpm × speed</code> and <code>player.playbackRate = speed</code> (pitch shifts).</td><td><strong>Don't take.</strong> Violates "audio never sounds different"; out of scope.</td></tr>
@@ -340,14 +340,14 @@
 </table>
 
 <!-- 11 -->
-<h2 id="persistence">11 · Persistence — the document goes to v2</h2>
-<p>Audio tracks are the persistence layer's first real schema evolution — and the upgrade chain built for exactly this moment does the work. One step, three changes, because they ship together:</p>
+<h2 id="persistence">11 · Persistence - the document goes to v2</h2>
+<p>Audio tracks are the persistence layer's first real schema evolution - and the upgrade chain built for exactly this moment does the work. One step, three changes, because they ship together:</p>
 <ul>
-  <li><strong><code>audioClip</code> → <code>audioClips</code>:</strong> the single descriptor becomes the catalog (keyed by ref). <code>audioBlocks</code> on tracks ride into the blob for free — <span class="file">persistence/serialize.ts</span> picks every non-function field of <span class="file">ProjectStore</span> generically, and blocks live on <code>Track</code>.</li>
-  <li><strong>The synthesized bar-0 block:</strong> if a v1 doc had a clip, the upgrade creates an audio track (top of the root tracks) with one block at bar 0, trim = full clip — reproducing the old "global clip pinned to beat 0" behavior exactly. Old saves keep sounding identical.</li>
+  <li><strong><code>audioClip</code> → <code>audioClips</code>:</strong> the single descriptor becomes the catalog (keyed by ref). <code>audioBlocks</code> on tracks ride into the blob for free - <span class="file">persistence/serialize.ts</span> picks every non-function field of <span class="file">ProjectStore</span> generically, and blocks live on <code>Track</code>.</li>
+  <li><strong>The synthesized bar-0 block:</strong> if a v1 doc had a clip, the upgrade creates an audio track (top of the root tracks) with one block at bar 0, trim = full clip - reproducing the old "global clip pinned to beat 0" behavior exactly. Old saves keep sounding identical.</li>
   <li><strong><code>track.visualPlugins</code> → <code>track.effects</code>:</strong> the effects rename (§5) rides in the same step, mapping the old field name on every track.</li>
 </ul>
-<div class="note"><strong>Append-only, clarified:</strong> the chain rule is "never edit a <em>shipped</em> step" — adding new steps is exactly how the chain is meant to grow, and one step carries every shape change that ships together in that version. Nothing has shipped yet (<code>CURRENT_VERSION = 1</code>, empty chain), so this v1→v2 step is new, not an edit. After it ships, it is frozen forever; the next change becomes v2→v3.</div>
+<div class="note"><strong>Append-only, clarified:</strong> the chain rule is "never edit a <em>shipped</em> step" - adding new steps is exactly how the chain is meant to grow, and one step carries every shape change that ships together in that version. Nothing has shipped yet (<code>CURRENT_VERSION = 1</code>, empty chain), so this v1→v2 step is new, not an edit. After it ships, it is frozen forever; the next change becomes v2→v3.</div>
 <ul>
   <li><strong>Bytes are already handled:</strong> <code>saveAudio</code> uploads to the <code>project-audio</code> bucket on add; clip refs are bucket paths; nothing new to build there.</li>
   <li><strong>Undo:</strong> placement (blocks, startBar, trim) lives in <span class="file">ProjectStore</span> → undoable automatically via the generic snapshot boundary. The <code>audioClips</code> catalog lives in <span class="file">AudioStore</span> → <em>not</em> undoable (loading a file isn't an edit), but it <em>is</em> persisted (serialize reads it explicitly, as it does the single clip today).</li>
@@ -362,19 +362,19 @@
   <li><span class="badge b-dec">decided</span> <strong>Silent scrub while paused.</strong> Grain-scrub deferred. (§7)</li>
   <li><span class="badge b-dec">decided</span> <strong>Mute/solo honored at arm time</strong>, from day one. (§6)</li>
   <li><span class="badge b-dec">decided</span> <strong>One audio track for now</strong>, auto-created from the AudioBar (then disabled); no clip library UI. Engine built for N. (§9)</li>
-  <li><span class="badge b-dec">decided</span> <strong>Keep <code>when</code></strong> — it's the Web Audio spec's own parameter name. (§6)</li>
+  <li><span class="badge b-dec">decided</span> <strong>Keep <code>when</code></strong> - it's the Web Audio spec's own parameter name. (§6)</li>
   <li><span class="badge b-dec">decided</span> <strong>Document v2</strong>: <code>audioClips</code>, the synthesized bar-0 block, and <code>visualPlugins</code>→<code>effects</code>, in one step. (§11)</li>
-  <li><span class="badge b-dec">decided</span> <strong>Live-edit subscription lives in <span class="file">usePlayback</span></strong> — the audio engine stays store-free.</li>
+  <li><span class="badge b-dec">decided</span> <strong>Live-edit subscription lives in <span class="file">usePlayback</span></strong> - the audio engine stays store-free.</li>
   <li><span class="badge b-risk">risk</span> <strong>Player pool leaks.</strong> Reconcile the keyed map against the block set on every <code>loadClips</code>; never leak a player on block delete.</li>
   <li><span class="badge b-risk">risk</span> <strong>Downbeat decode latency.</strong> Pre-decode on block insert via the shared cache, not at <code>play()</code>.</li>
-  <li><span class="badge b-risk">open</span> <strong>Parallel <code>audioBlocks</code> vs the shared block gesture plumbing.</strong> Start parallel (isolation); revisit after trim lands — the abilities story suggests unified plumbing may win long-term.</li>
+  <li><span class="badge b-risk">open</span> <strong>Parallel <code>audioBlocks</code> vs the shared block gesture plumbing.</strong> Start parallel (isolation); revisit after trim lands - the abilities story suggests unified plumbing may win long-term.</li>
   <li><span class="badge b-risk">later</span> <strong>Audio-reactive visuals.</strong> Positioned audio is the substrate: a clip at a known beat window could feed analyzed amplitude/FFT into a visual-engine modulator port. Out of scope; must eventually respect the pause invariant (analysis as a pure function of beat), which is a design problem of its own.</li>
 </ul>
 
-<div class="rec"><strong>Recommendation in one breath:</strong> add an <code>'audio'</code> track type carrying audio blocks (clipRef + startBar + trim); stand up <span class="file">core/audio/</span> — player pool, byte seam, decode/peak cache, and the one <code>armBlock</code> beat⟷second helper — fed <code>(beat, when)</code> by the transport engine at play/seek/bpm events; never resample audio (width follows tempo); keep scrub-while-paused silent; ship one auto-created audio track from the AudioBar (engine built for N); land the <span class="file">core/visual</span> and <span class="file">effects</span> renames alongside; and ship the document's v1→v2 step (audioClips + bar-0 block + effects field) so yesterday's projects open sounding identical. Prove it on the smallest loop first: <em>one audio block you can drag → it plays at its position.</em></div>
+<div class="rec"><strong>Recommendation in one breath:</strong> add an <code>'audio'</code> track type carrying audio blocks (clipRef + startBar + trim); stand up <span class="file">core/audio/</span> - player pool, byte seam, decode/peak cache, and the one <code>armBlock</code> beat⟷second helper - fed <code>(beat, when)</code> by the transport engine at play/seek/bpm events; never resample audio (width follows tempo); keep scrub-while-paused silent; ship one auto-created audio track from the AudioBar (engine built for N); land the <span class="file">core/visual</span> and <span class="file">effects</span> renames alongside; and ship the document's v1→v2 step (audioClips + bar-0 block + effects field) so yesterday's projects open sounding identical. Prove it on the smallest loop first: <em>one audio block you can drag → it plays at its position.</em></div>
 
 <hr/>
-<p class="small muted">Design artifact for decision-making — no code changed. References: <span class="file">src/editor/store/AudioStore.ts</span>, <span class="file">src/editor/core/playback.ts</span>, <span class="file">src/editor/core/audioSource.ts</span> (→ <span class="file">core/audio/</span>), <span class="file">src/persistence/{serialize,upgrade,audioStorage}.ts</span>, <span class="file">src/editor/hooks/usePlayback.ts</span>, <span class="file">src/editor/store/TimeStore.ts</span>, <span class="file">src/editor/types.ts</span>; comparative source: <span class="file">Excellent-Daw/src/core/{playback,audio}.ts</span>. Companion: <span class="file">audio-track-architecture-implementation-plan.html</span>. Greyscale, print-ready.</p>
+<p class="small muted">Design artifact for decision-making - no code changed. References: <span class="file">src/editor/store/AudioStore.ts</span>, <span class="file">src/editor/core/playback.ts</span>, <span class="file">src/editor/core/audioSource.ts</span> (→ <span class="file">core/audio/</span>), <span class="file">src/persistence/{serialize,upgrade,audioStorage}.ts</span>, <span class="file">src/editor/hooks/usePlayback.ts</span>, <span class="file">src/editor/store/TimeStore.ts</span>, <span class="file">src/editor/types.ts</span>; comparative source: <span class="file">Excellent-Daw/src/core/{playback,audio}.ts</span>. Companion: <span class="file">audio-track-architecture-implementation-plan.html</span>. Greyscale, print-ready.</p>
 
 </div>
 </body>

@@ -4,7 +4,7 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A long-building upward particle riser with an accelerating
-// pressure-wave front — each note triggers a riser (velocity + note length shape it).
+// pressure-wave front - each note triggers a riser (velocity + note length shape it).
 // Tyler's palette color-mode is dropped (no palettes here); colorMode 0 = pitch colours,
 // 1 = mono black. Particle simulation math is Tyler's verbatim; only the time source is
 // rewired: risers derive purely from `state.notes` + the playhead each frame (onset ages,
@@ -139,13 +139,13 @@ function ParticleRiserVisual({ trackId }: { trackId: string }) {
     const peakFlash = p.peakFlash ?? 0.55
     const mono = (p.colorMode ?? 0) >= 0.5
 
-    // Beat-time in seconds — the noise/shimmer oscillation frequencies were tuned in seconds.
+    // Beat-time in seconds - the noise/shimmer oscillation frequencies were tuned in seconds.
     const t = state.beat * state.secPerBeat
     const makeDuration = (durSec: number) => Math.max(0.25, duration + Math.max(0, durSec) * noteDurationScale)
 
     // Derive the alive risers purely from the note list: a riser exists while its onset
     // age is within [0, duration + release]. `id` is the note's onset index among
-    // eligible notes (the pure replacement for the old spawn counter — it only offsets
+    // eligible notes (the pure replacement for the old spawn counter - it only offsets
     // each riser's hue and spiral). Newest MAX_ACTIVE_RISERS win, as before.
     const alive: RiserHit[] = []
     let nextId = 0

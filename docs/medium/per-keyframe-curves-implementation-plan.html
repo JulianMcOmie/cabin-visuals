@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Per-Keyframe Curves — Implementation Plan</title>
+<title>Per-Keyframe Curves - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,7 +36,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Per-Keyframe Curves</span>
-  <h1>Per-Keyframe Curves — Implementation Plan</h1>
+  <h1>Per-Keyframe Curves - Implementation Plan</h1>
   <p class="sub">Engine first (two lines + tests-by-hand), UI second (segment hit-test + curve menu + override glyphs). The lane's Curve control survives as the default.</p>
 </header>
 
@@ -44,21 +44,21 @@
 <table>
   <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
   <tbody>
-    <tr><td><code>Note.curve?</code> · per-segment sampleLane · segment right-click menu · override glyph rendering · "Use lane default" reset</td><td>Drag-to-bend (continuous curvature — named tier 2) · bezier handles · lane-curve UI changes beyond relabeling to "default"</td></tr>
+    <tr><td><code>Note.curve?</code> · per-segment sampleLane · segment right-click menu · override glyph rendering · "Use lane default" reset</td><td>Drag-to-bend (continuous curvature - named tier 2) · bezier handles · lane-curve UI changes beyond relabeling to "default"</td></tr>
   </tbody>
 </table>
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 1 — Data + engine <span class="badge b-edit">types.ts · automation.ts · resolve</span></h3>
+<h3>Phase 1 - Data + engine <span class="badge b-edit">types.ts · automation.ts · resolve</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>Note.curve?: InterpolationMode</code>. Optional → no upgrade; cloneNote spreads → copy/paste inherits.</li>
-  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/automation.ts</span>: <code>sampleLane</code> resolves the mode per segment — <code>left.curve ?? laneMode</code>; step's special-casing unchanged.</li>
-  <li>Resolve passes keyframes through with curve intact (they already ride as notes — confirm the lane compilation copies the field).</li>
+  <li><span class="badge b-edit">edit</span> <span class="file">core/visual/automation.ts</span>: <code>sampleLane</code> resolves the mode per segment - <code>left.curve ?? laneMode</code>; step's special-casing unchanged.</li>
+  <li>Resolve passes keyframes through with curve intact (they already ride as notes - confirm the lane compilation copies the field).</li>
   <li>Verify by hand-writing curves into two keyframes via a temp store call: one lane, three segments, three visibly different shapes on a position param; scrub ≡ play; canary green; save/reload round-trips the field.</li>
 </ul>
 
-<h3>Phase 2 — Segment UI <span class="badge b-edit">midi editor</span></h3>
+<h3>Phase 2 - Segment UI <span class="badge b-edit">midi editor</span></h3>
 <ul class="small">
   <li><strong>Hit-test:</strong> in automation lanes, a right-click that lands between two keyframes (x between their beats, anywhere in the lane's value area) selects that segment; on a keyframe = the segment it owns (to its right).</li>
   <li><strong>Menu:</strong> NestedMenu with the 7 modes + <em>Use lane default</em> (clears <code>curve</code>); the active mode checked. Multi-selected keyframes: apply to all their owned segments.</li>
@@ -66,9 +66,9 @@
   <li>Deletion semantics for free: removing a keyframe removes its owned curve with it; the merged segment uses the surviving left keyframe's curve.</li>
 </ul>
 
-<h3>Phase 3 — Verify</h3>
+<h3>Phase 3 - Verify</h3>
 <ul class="small">
-  <li>Author the classic shape: slow-in rise (ease-in), hard cut (step), springy fall (exponential) on one lane — reads correctly in motion and parked.</li>
+  <li>Author the classic shape: slow-in rise (ease-in), hard cut (step), springy fall (exponential) on one lane - reads correctly in motion and parked.</li>
   <li>Change the lane default → only non-overridden segments change.</li>
   <li>Copy the lane to another instrument (copy-paste-automation pair) → curves travel.</li>
   <li>Export: the eased motion in the file matches the editor (free, but look once).</li>
@@ -89,15 +89,15 @@
 
 <h2>D · Risks &amp; notes</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Right-click collision:</strong> right-click in automation lanes currently DRAWS a keyframe — the segment menu must only claim clicks that land clearly between keyframes vertically near the curve path, or move segment-menu to a modifier (Alt+right-click) if disambiguation feels bad. Prototype the feel first; this is the one UX risk.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Glyph clutter</strong> on dense lanes — cap glyph rendering below a keyframe-density threshold (they're overrides; dense lanes are usually uniform anyway).</li>
-  <li><span class="badge b-risk">note</span> Tier 2 (drag-to-bend) would replace the mode enum with a curvature scalar — if Julia asks for it, that's the moment to design a real curve model rather than extending this one.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Right-click collision:</strong> right-click in automation lanes currently DRAWS a keyframe - the segment menu must only claim clicks that land clearly between keyframes vertically near the curve path, or move segment-menu to a modifier (Alt+right-click) if disambiguation feels bad. Prototype the feel first; this is the one UX risk.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Glyph clutter</strong> on dense lanes - cap glyph rendering below a keyframe-density threshold (they're overrides; dense lanes are usually uniform anyway).</li>
+  <li><span class="badge b-risk">note</span> Tier 2 (drag-to-bend) would replace the mode enum with a curvature scalar - if Julia asks for it, that's the moment to design a real curve model rather than extending this one.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the engine change is "ask the left keyframe first"; everything else is teaching the lane to right-click a SEGMENT — and the draw-vs-menu click arbitration is the only part worth prototyping before committing.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the engine change is "ask the left keyframe first"; everything else is teaching the lane to right-click a SEGMENT - and the draw-vs-menu click arbitration is the only part worth prototyping before committing.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">per-keyframe-curves-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">per-keyframe-curves-architecture.html</span>.</p>
 
 </div>
 </body>

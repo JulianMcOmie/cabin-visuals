@@ -3,16 +3,16 @@ import { InstancedMesh, InstancedBufferAttribute, Object3D, Color } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// Ported from Excellent DAW's CircleGrid (the "circles" shape — a 3D grid of glowing
+// Ported from Excellent DAW's CircleGrid (the "circles" shape - a 3D grid of glowing
 // dots, NOT full-frame). Layout + toggle-mode math is Tyler's verbatim; only state
 // reads are rewired. Tyler's `noteOnCount` (which drives the toggle modes) isn't in
 // ObjectState, so we derive it purely as the count of notes whose onset is at or
 // before the playhead (scrub == playback). The platonic-solids sub-mode + shape
-// switch are dropped — this instrument is a grid of circles only.
+// switch are dropped - this instrument is a grid of circles only.
 
 const MAX_INSTANCES = 1024 // 32 rows * 32 cols
 
-// --- Layout generators (verbatim from Tyler) — return normalized positions [-1, 1] ---
+// --- Layout generators (verbatim from Tyler) - return normalized positions [-1, 1] ---
 type LayoutFn = (index: number, total: number, rows: number, cols: number) => { x: number; y: number }
 
 const layouts: LayoutFn[] = [
@@ -111,7 +111,7 @@ const layouts: LayoutFn[] = [
   },
 ]
 
-// --- Toggle modes (verbatim from Tyler) — which dots are visible given noteOnCount ---
+// --- Toggle modes (verbatim from Tyler) - which dots are visible given noteOnCount ---
 type ToggleFn = (index: number, total: number, noteOnCount: number) => boolean
 
 const toggleModes: ToggleFn[] = [

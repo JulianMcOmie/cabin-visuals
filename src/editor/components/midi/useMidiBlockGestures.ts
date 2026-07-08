@@ -25,7 +25,7 @@ interface DragState {
 
 /**
  * Drag the MIDI block's ruler "clip header" to move it, or its left/right edges to
- * resize — the single-block, horizontal-only analogue of useTrackGestures. Writes
+ * resize - the single-block, horizontal-only analogue of useTrackGestures. Writes
  * continuously to ProjectStore (the block prop flows back from the store, so the
  * header and grid outline follow the drag live). Snaps to whole bars.
  *

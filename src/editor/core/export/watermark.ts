@@ -27,7 +27,7 @@ export function createWatermarkCompositor(width: number, height: number): Waterm
       ctx.font = `600 ${fontPx}px system-ui, -apple-system, sans-serif`
       ctx.textAlign = 'right'
       ctx.textBaseline = 'bottom'
-      // Dark offset pass under a light pass — legible on any visual.
+      // Dark offset pass under a light pass - legible on any visual.
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
       ctx.fillText(MARK, width - pad + Math.max(1, fontPx * 0.06), height - pad + Math.max(1, fontPx * 0.06))
       ctx.fillStyle = 'rgba(255, 255, 255, 0.82)'

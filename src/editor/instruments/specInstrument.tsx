@@ -38,7 +38,7 @@ function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { track
     if (!meshRef.current) return
     const mat = meshRef.current.material as MeshStandardMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an
-    // unset param reads its default (not 0) — a fresh track has no params yet.
+    // unset param reads its default (not 0) - a fresh track has no params yet.
     const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: { energy: state.energy }, beat: state.beat }
     if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
@@ -56,7 +56,7 @@ function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { track
  * Turn a RenderSpec into a normal ObjectInstrumentDef: the transform bindings compile
  * into the def's `localTransform` (so the engine composes it down the hierarchy exactly
  * like the Cube's), and the appearance bindings drive a bound SpecRenderer. Expressions
- * are compiled once here, evaluated per frame. No ObjectRenderer change — a spec is just
+ * are compiled once here, evaluated per frame. No ObjectRenderer change - a spec is just
  * a def whose component happens to be the interpreter.
  */
 export function specInstrument(opts: {

@@ -8,7 +8,7 @@ export default function ErrorPage() {
     <AuthShell>
       <AuthTitle
         title="Something went wrong"
-        sub="Sorry — we couldn't complete that. Please try again."
+        sub="Sorry - we couldn't complete that. Please try again."
       />
       <p className="text-center text-[13px] text-[var(--text-3)]">
         <Link href="/login" className={authLinkClass}>Back to sign in</Link>

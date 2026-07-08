@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Automation Copy Bug — Implementation Plan</title>
+<title>Automation Copy Bug - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,7 +36,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Automation Copy Bug</span>
-  <h1>Automation Copy Bug — Implementation Plan</h1>
+  <h1>Automation Copy Bug - Implementation Plan</h1>
   <p class="sub">Reproduce with and without effects, read the parked frame, then land the matching fix: live-value feedback in the TrackEditor (likely), or wrapper-order repair (possible), or a duplication hunt (unlikely but cheap to rule out).</p>
 </header>
 
@@ -50,27 +50,27 @@
 
 <h2>B · Phase-by-phase</h2>
 
-<h3>Phase 0 — Reproduce twice <span class="badge b-risk">wants Tyler's project</span></h3>
+<h3>Phase 0 - Reproduce twice <span class="badge b-risk">wants Tyler's project</span></h3>
 <ul class="small">
   <li>Bare repro: Cube + automation lane on <code>Base X Position</code>, keyframes 0→max over 4 bars, NO effects. Park mid-lane.</li>
   <li>Effect repro: same, plus one clone effect (echo or tile) on the track.</li>
-  <li>If Tyler's project is available, load it and find the track he meant — his wording decides which reading to chase first.</li>
+  <li>If Tyler's project is available, load it and find the track he meant - his wording decides which reading to chase first.</li>
 </ul>
 
-<h3>Phase 1 — Read the frame</h3>
+<h3>Phase 1 - Read the frame</h3>
 <ul class="small">
   <li>Count cubes in the bare repro. One (moved, slider stale) → Reading A. Two → duplication; capture the scene graph (<code>window.__three</code> dev tools or the pause canary's object list) before touching anything.</li>
   <li>In the effect repro, compare where the source and clones sit against expectation (clones should derive from the automated source transform).</li>
 </ul>
 
-<h3>Phase 2 — Fix per outcome</h3>
+<h3>Phase 2 - Fix per outcome</h3>
 <ul class="small">
-  <li><span class="badge b-edit">Reading A</span> <span class="file">components/TrackEditor.tsx</span>: params that have an automation child get (1) an <strong>automated badge</strong> (click focuses the lane), and (2) a <strong>live-value marker</strong> — a thin tick on the slider track at the engine's current merged value, read per frame from the engine's object state (subscribe on a rAF-decoupled interval or reuse the beat-readout pattern; never write it into the store). Slider drag still edits the base value.</li>
-  <li><span class="badge b-edit">Reading B</span> <span class="file">components/visual/*Wrapper.tsx</span>: ensure the composition order is source-transform (with overlay) FIRST, clone expansion SECOND — clones read the already-automated transform. Fix is local to the wrapper chain in <span class="file">ObjectRenderer.tsx</span>.</li>
-  <li><span class="badge b-edit">Duplication</span> Trace the object's mount: resolve emits one entry per track — if the graph is clean, the leak is a renderer key/HMR artifact; hard-reload first (known dev-mode artifact) before declaring a bug.</li>
+  <li><span class="badge b-edit">Reading A</span> <span class="file">components/TrackEditor.tsx</span>: params that have an automation child get (1) an <strong>automated badge</strong> (click focuses the lane), and (2) a <strong>live-value marker</strong> - a thin tick on the slider track at the engine's current merged value, read per frame from the engine's object state (subscribe on a rAF-decoupled interval or reuse the beat-readout pattern; never write it into the store). Slider drag still edits the base value.</li>
+  <li><span class="badge b-edit">Reading B</span> <span class="file">components/visual/*Wrapper.tsx</span>: ensure the composition order is source-transform (with overlay) FIRST, clone expansion SECOND - clones read the already-automated transform. Fix is local to the wrapper chain in <span class="file">ObjectRenderer.tsx</span>.</li>
+  <li><span class="badge b-edit">Duplication</span> Trace the object's mount: resolve emits one entry per track - if the graph is clean, the leak is a renderer key/HMR artifact; hard-reload first (known dev-mode artifact) before declaring a bug.</li>
 </ul>
 
-<h3>Phase 3 — Verify</h3>
+<h3>Phase 3 - Verify</h3>
 <ul class="small">
   <li>Bare repro: visual follows the lane; the slider shows base + live marker + badge; editing the slider mid-automation still works and undo affects only the base value.</li>
   <li>Effect repro: source and clones move as one family under automation.</li>
@@ -83,7 +83,7 @@
   <tbody>
     <tr><td><span class="file">components/TrackEditor.tsx</span></td><td>Reading A: automated badge + live-value tick on ParamSlider (a prop, not a fork).</td></tr>
     <tr><td><span class="file">components/visual/ObjectRenderer.tsx · *Wrapper.tsx</span></td><td>Reading B only: wrapper composition order.</td></tr>
-    <tr><td><span class="file">core/visual/*</span>, stores, document</td><td>Untouched — the overlay design is load-bearing and stays.</td></tr>
+    <tr><td><span class="file">core/visual/*</span>, stores, document</td><td>Untouched - the overlay design is load-bearing and stays.</td></tr>
   </tbody>
 </table>
 
@@ -91,13 +91,13 @@
 <ul>
   <li><span class="badge b-risk">risk</span> <strong>Live marker causing re-render churn.</strong> Read the engine value on a throttled interval into local component state; never store-per-frame.</li>
   <li><span class="badge b-risk">risk</span> <strong>Declaring Reading A without Tyler's setup.</strong> His "copy of the object" phrasing fits clones too well to skip the effect repro.</li>
-  <li><span class="badge b-risk">note</span> The dev-mode HMR remount artifact can genuinely show ghost objects — always hard-reload before trusting a duplication sighting.</li>
+  <li><span class="badge b-risk">note</span> The dev-mode HMR remount artifact can genuinely show ghost objects - always hard-reload before trusting a duplication sighting.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the document's param and the engine's merged param are different numbers on purpose — the likely work is teaching the TrackEditor to show both, and the only real-bug branch is clone wrappers composing around the overlay in the wrong order.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the document's param and the engine's merged param are different numbers on purpose - the likely work is teaching the TrackEditor to show both, and the only real-bug branch is clone wrappers composing around the overlay in the wrong order.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives its readings from <span class="file">automation-copy-bug-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives its readings from <span class="file">automation-copy-bug-architecture.html</span>.</p>
 
 </div>
 </body>

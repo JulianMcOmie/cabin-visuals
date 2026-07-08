@@ -1,9 +1,9 @@
 // The export island's one shared type. Export is an ACTION, not state: nothing
-// here touches the project document (no schema bump) — settings live with the
+// here touches the project document (no schema bump) - settings live with the
 // dialog and die with it (a localStorage nicety aside).
 
 export interface ExportSettings {
-  /** Output size, fixed 16:9 — independent of the editing window. */
+  /** Output size, fixed 16:9 - independent of the editing window. */
   width: number
   height: number
   fps: 30 | 60
@@ -14,7 +14,7 @@ export interface ExportSettings {
   /** Without extension; the muxer writes `${fileName}.mp4`. */
   fileName: string
   /** Free tier: burn the "Made with Cabin Visuals" mark into every frame.
-   *  Derived from the user's plan at export time — never persisted. */
+   *  Derived from the user's plan at export time - never persisted. */
   watermark: boolean
 }
 
@@ -54,7 +54,7 @@ export function clampToFreeTier(s: ExportSettings): ExportSettings {
 }
 
 /** Everything the frame loop needs to know about time, derived once up front.
- *  beat(i) = i · bpm / (60 · fps) — pure arithmetic, no wall clock anywhere. */
+ *  beat(i) = i · bpm / (60 · fps) - pure arithmetic, no wall clock anywhere. */
 export interface ExportTimebase {
   bpm: number
   totalBeats: number

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Automatable Mute — Architecture</title>
+<title>Automatable Mute - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,27 +36,27 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Automatable Mute</span>
-  <h1>Automatable Mute — Architecture</h1>
-  <p class="sub">Tyler: "to get rid of an instrument I have to move it offscreen." The question isn't whether mute exists — three mute-shaped things already do — it's which of them removes the OBJECT over time, and whether the answer is documentation or a small feature.</p>
+  <h1>Automatable Mute - Architecture</h1>
+  <p class="sub">Tyler: "to get rid of an instrument I have to move it offscreen." The question isn't whether mute exists - three mute-shaped things already do - it's which of them removes the OBJECT over time, and whether the answer is documentation or a small feature.</p>
 </header>
 
-<h2>1 · The three mutes that exist — and what each actually silences</h2>
+<h2>1 · The three mutes that exist - and what each actually silences</h2>
 <figure class="fig">
   <div class="figtitle">Mute mechanisms vs "make the object disappear at bar 8"</div>
   <svg viewBox="0 0 900 330" role="img" aria-label="Mute mechanisms">
     <rect x="20" y="24" width="860" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="54" font-size="17.5" font-weight="700" fill="#141414">Track M button — hides the OBJECT, but statically</text>
+    <text x="40" y="54" font-size="17.5" font-weight="700" fill="#141414">Track M button - hides the OBJECT, but statically</text>
     <text x="40" y="80" font-size="15" fill="#565656">resolve marks the object off; the renderer blacks it out. Whole-timeline: it cannot come back at bar 12.</text>
     <rect x="20" y="126" width="860" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="156" font-size="17.5" font-weight="700" fill="#141414">Mute MODIFIER (control lane) — silences EVENTS over regions</text>
-    <text x="40" y="182" font-size="15" fill="#565656">its blocks mute the parent's note stream while active. Note-driven flashes stop — but a persistent object (a Cube</text>
+    <text x="40" y="156" font-size="17.5" font-weight="700" fill="#141414">Mute MODIFIER (control lane) - silences EVENTS over regions</text>
+    <text x="40" y="182" font-size="15" fill="#565656">its blocks mute the parent's note stream while active. Note-driven flashes stop - but a persistent object (a Cube</text>
     <text x="40" y="203" font-size="15" fill="#565656">that renders regardless of notes) stays fully visible. ← the crux to verify</text>
     <rect x="20" y="228" width="860" height="86" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="258" font-size="17.5" font-weight="700" fill="#141414">Tyler's workaround — automate position offscreen</text>
+    <text x="40" y="258" font-size="17.5" font-weight="700" fill="#141414">Tyler's workaround - automate position offscreen</text>
     <text x="40" y="284" font-size="15" fill="#565656">works, ugly, and (now that y/z are automatable) at least three axes of ugly. The report is really a feature request:</text>
     <text x="40" y="305" font-size="15" fill="#565656">time-varying OBJECT visibility.</text>
   </svg>
-  <figcaption>The likely truth: the Mute modifier mutes the note stream, not the object's existence. For trigger-style instruments that's effectively "gone"; for persistent-body instruments it isn't — and those are exactly the ones Tyler shoves offscreen.</figcaption>
+  <figcaption>The likely truth: the Mute modifier mutes the note stream, not the object's existence. For trigger-style instruments that's effectively "gone"; for persistent-body instruments it isn't - and those are exactly the ones Tyler shoves offscreen.</figcaption>
 </figure>
 
 <h2>2 · The verdict tree</h2>
@@ -64,8 +64,8 @@
   <thead><tr><th>Verification outcome</th><th>Response</th></tr></thead>
   <tbody>
     <tr><td>Mute modifier makes Tyler's actual instruments disappear (they're note-driven)</td><td>Documentation gap, zero code: name the pattern in the README's editor tour and tell Tyler. Done.</td></tr>
-    <tr><td>It silences notes but the object body persists (expected for Cube-likes)</td><td>Small feature: teach the Mute modifier's active region to also hide the parent OBJECT — one flag in resolve's object output (<code>hiddenByLane</code>), honored where the M-mute blackout is already applied in the renderer. Semantics: M button = static, Mute lane = timed, both land on the same renderer switch.</td></tr>
-    <tr><td>Tyler wants a fade, not a cut</td><td>That's the <strong>envelope modulator → opacity</strong> item (medium tier) — don't build a second fade mechanism here; hard-cut visibility now, fades arrive with the envelope work.</td></tr>
+    <tr><td>It silences notes but the object body persists (expected for Cube-likes)</td><td>Small feature: teach the Mute modifier's active region to also hide the parent OBJECT - one flag in resolve's object output (<code>hiddenByLane</code>), honored where the M-mute blackout is already applied in the renderer. Semantics: M button = static, Mute lane = timed, both land on the same renderer switch.</td></tr>
+    <tr><td>Tyler wants a fade, not a cut</td><td>That's the <strong>envelope modulator → opacity</strong> item (medium tier) - don't build a second fade mechanism here; hard-cut visibility now, fades arrive with the envelope work.</td></tr>
   </tbody>
 </table>
 
@@ -74,15 +74,15 @@
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
     <tr><td>Reuse the Mute modifier lane, don't invent a "visibility lane"</td><td>The lane, its blocks, its timeline row, and its persistence all exist; extending its meaning from "mute events" to "mute events + hide body" matches what every DAW user expects Mute to do.</td></tr>
-    <tr><td>Hide via the existing blackout switch</td><td>The renderer already knows how to hide an object for M-mute; the lane just becomes a second, beat-dependent input to the same switch — pure function of beat, canary-safe.</td></tr>
+    <tr><td>Hide via the existing blackout switch</td><td>The renderer already knows how to hide an object for M-mute; the lane just becomes a second, beat-dependent input to the same switch - pure function of beat, canary-safe.</td></tr>
     <tr><td>No opacity ramps here</td><td>Fades belong to the envelope modulator (one fade system, not two).</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> mute exists three ways but only statically for the object's body — verify that gap on a persistent instrument, and if it's real, let the Mute lane throw the same hide-switch the M button throws, just as a function of the beat.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> mute exists three ways but only statically for the object's body - verify that gap on a persistent instrument, and if it's real, let the Mute lane throw the same hide-switch the M button throws, just as a function of the beat.</div>
 
 <hr/>
-<p class="small muted">Investigation architecture — steps in <span class="file">automatable-mute-implementation-plan.html</span>. Related: envelope-modulator item (fades), nested mute/solo semantics (parent/child M behavior — separate design with Tyler).</p>
+<p class="small muted">Investigation architecture - steps in <span class="file">automatable-mute-implementation-plan.html</span>. Related: envelope-modulator item (fades), nested mute/solo semantics (parent/child M behavior - separate design with Tyler).</p>
 
 </div>
 </body>

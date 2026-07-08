@@ -10,15 +10,15 @@ import { getTemplate } from '../../templates'
 
 /**
  * Binds this editor instance to its project row: reads ?project=<id> from the
- * route, loads + hydrates the document, then arms autosave — in that order, so
+ * route, loads + hydrates the document, then arms autosave - in that order, so
  * the hydrate itself can't fire a redundant save. Without an id the editor
  * runs in-memory only (nothing persists), same as before persistence existed.
  *
- * The id comes from useSearchParams — reactive, and correct during render —
+ * The id comes from useSearchParams - reactive, and correct during render -
  * NOT a one-shot window.location read. That read latched the first project for
  * the component's lifetime: query-only navigations don't remount the page, and
  * even across a remount window.location can still show the previous URL at
- * first render. Either way the editor stayed bound to the first project — the
+ * first render. Either way the editor stayed bound to the first project - the
  * "every project opens the same data" bug.
  */
 export function useProjectPersistence() {
@@ -27,7 +27,7 @@ export function useProjectPersistence() {
   const templateId = search.get('template')
 
   // Template demo mode: ?template=<id> (and no project) hydrates a canned
-  // document straight into the stores — no DB row, no autosave, works signed
+  // document straight into the stores - no DB row, no autosave, works signed
   // out. The whole point is that a stranger can play with a full project one
   // click after landing; signing up and saving comes later.
   useEffect(() => {
@@ -49,8 +49,8 @@ export function useProjectPersistence() {
     let cancelled = false
 
     // Blank slate first: the stores are module singletons that survive client
-    // navigation, so without this a rebind briefly shows — and on a failed
-    // load, indefinitely shows — the previous project's data.
+    // navigation, so without this a rebind briefly shows - and on a failed
+    // load, indefinitely shows - the previous project's data.
     hydrate(emptyDocument())
     useHistoryStore.getState().reset()
 
@@ -60,7 +60,7 @@ export function useProjectPersistence() {
         if (cancelled) return
         useUIStore.getState().setProjectName(name)
         hydrate(document)
-        // The hydrate setState must not be undoable — Ctrl+Z right after open
+        // The hydrate setState must not be undoable - Ctrl+Z right after open
         // would otherwise restore an empty project.
         useHistoryStore.getState().reset()
         stop = startAutosave(projectId)

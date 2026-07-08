@@ -5,7 +5,7 @@ import type { ProjectDocument } from '../types'
 
 /**
  * The project browser's list state, backed by projectStorage. Pass
- * `enabled=false` until auth resolves — RLS returns an empty list for an
+ * `enabled=false` until auth resolves - RLS returns an empty list for an
  * anonymous session, so fetching before then would just flash wrong data.
  */
 export function useProjectList(enabled: boolean) {

@@ -5,7 +5,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's DotField. A 3D field of dots arranged by golden-angle
 // (sunflower) distribution, displaced by a rotating roster of wave/displacement effects,
-// disruptor blades, and water ripples. NOT full-frame — the field sits in the scene at a
+// disruptor blades, and water ripples. NOT full-frame - the field sits in the scene at a
 // fixed world radius so the engine's placement/transform chain applies.
 //
 // Adaptation: Tyler keyed each effect to a specific MIDI pitch via `pitchNoteOnCounts`.
@@ -13,7 +13,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 //   - held notes in the low range (0-11 of the field) drive the bass shake, verbatim;
 //   - each note's ordinal position in the stream advances the displacement effect
 //     roster and, at intervals, marks disruptor-blade / center-ripple / scale-kick
-//     spawns — a lively note-reactive field rather than a control-surface. All of it
+//     spawns - a lively note-reactive field rather than a control-surface. All of it
 //     is derived per frame from `state.beat` + `state.notes` (pause invariant: no
 //     wall clock, no spawn lists), with each event aged by beat-distance from its
 //     note. Displacement/shake/ripple/blade math is Tyler's verbatim. Tyler's
@@ -56,19 +56,19 @@ type DisplaceFn = (
 ) => [number, number]
 
 const displaceFns: DisplaceFn[] = [
-  // 0: Ripple — concentric waves radiating out
+  // 0: Ripple - concentric waves radiating out
   (_bx, _by, d, a, t, R) => {
     const normD = d / R
     const wave = Math.sin(normD * 20 - t * 3) * R * 0.025 * normD
     return [Math.cos(a) * wave, Math.sin(a) * wave]
   },
-  // 1: Sine Wave — directional undulation
+  // 1: Sine Wave - directional undulation
   (bx, by, _d, _a, t, R) => {
     const dx = Math.sin(by / R * 8 + t) * R * 0.02
     const dy = Math.cos(bx / R * 8 + t) * R * 0.02
     return [dx, dy]
   },
-  // 2: Spiral — twist particles around center
+  // 2: Spiral - twist particles around center
   (_bx, _by, d, a, t, R) => {
     const normD = d / R
     const twist = normD * 2 + t * 0.8
@@ -78,12 +78,12 @@ const displaceFns: DisplaceFn[] = [
       Math.sin(a + twist) * offset - Math.sin(a) * offset,
     ]
   },
-  // 3: Breathe — uniform expand/contract
+  // 3: Breathe - uniform expand/contract
   (bx, by, _d, _a, t, _R) => {
     const scale = Math.sin(t * 1.5) * 0.15
     return [bx * scale, by * scale]
   },
-  // 4: Vortex — tangential force + radial pull
+  // 4: Vortex - tangential force + radial pull
   (_bx, _by, d, a, t, R) => {
     const normD = d / R
     const tangential = R * 0.09 / (normD + 0.1)
@@ -94,13 +94,13 @@ const displaceFns: DisplaceFn[] = [
       Math.sin(perpA) * tangential * normD + Math.sin(a) * radial,
     ]
   },
-  // 5: Rose Curve — petal-shaped distortion
+  // 5: Rose Curve - petal-shaped distortion
   (_bx, _by, d, a, t, R) => {
     const normD = d / R
     const rose = Math.sin(5 * (a + t)) * R * 0.03 * normD
     return [Math.cos(a) * rose, Math.sin(a) * rose]
   },
-  // 6: Shockwave — single ring travels outward
+  // 6: Shockwave - single ring travels outward
   (_bx, _by, d, a, t, R) => {
     const waveFront = ((t * 0.5) % 1) * R
     const distToWave = Math.abs(d - waveFront)
@@ -109,7 +109,7 @@ const displaceFns: DisplaceFn[] = [
     const strength = (1 - distToWave / width) * R * 0.04
     return [Math.cos(a) * strength, Math.sin(a) * strength]
   },
-  // 7: Galaxy — 3-arm spiral density modulation
+  // 7: Galaxy - 3-arm spiral density modulation
   (_bx, _by, d, a, t, R) => {
     const normD = d / R
     const density = Math.sin(3 * (a - normD * 3 + t * 0.5))
@@ -121,13 +121,13 @@ const displaceFns: DisplaceFn[] = [
       Math.sin(a) * radial + Math.sin(perpA) * tangential,
     ]
   },
-  // 8: Heartbeat — pulsing beat
+  // 8: Heartbeat - pulsing beat
   (_bx, _by, d, a, t, _R) => {
     const beat = Math.pow(Math.sin(t * 3), 2) * Math.exp(-((t * 3) % Math.PI))
     const push = beat * d * 0.08
     return [Math.cos(a) * push, Math.sin(a) * push]
   },
-  // 9: Organic Flow — pseudo-noise field
+  // 9: Organic Flow - pseudo-noise field
   (bx, by, _d, _a, t, R) => {
     const nx = bx / R, ny = by / R
     const dx = Math.sin(nx * 5 + t) * Math.sin(ny * 7 + t * 0.7) * R * 0.02
@@ -356,7 +356,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
     // onset counter: every note advances the roster and kicks the field scale,
     // every 2nd emits a center ripple, every 4th spawns a set of disruptor blades
     // (its algo cycling per spawn). Ages come from beat-distance to the note, so
-    // a scrub to any beat reconstructs the exact same events — no spawn lists.
+    // a scrub to any beat reconstructs the exact same events - no spawn lists.
     const blades: Blade[] = []
     const cRipples: CenterRipple[] = []
     let kickScale = 0
@@ -451,7 +451,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
       let dx = bx * kickScale,
         dy = by * kickScale
 
-      // Sum active displacement effects — a rolling window of the roster.
+      // Sum active displacement effects - a rolling window of the roster.
       for (let e = 0; e < activeEffects; e++) {
         const idx = (effectStart + e) % EFFECT_COUNT
         const [ex, ey] = displaceFns[idx](bx, by, d, a, t, R)
@@ -531,7 +531,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
         dy += bdy * perpFalloff
       }
 
-      // Bass shake — fast micro zig-zag from held notes
+      // Bass shake - fast micro zig-zag from held notes
       for (let bn = 0; bn < bassNotes.length; bn++) {
         const { pitchIdx, velScale } = bassNotes[bn]
         const normPitch = pitchIdx / 11 // 0→1 across the octave
@@ -558,7 +558,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
         dy += Math.sin(dir) * shaped * amp * velScale * intensityP
       }
 
-      // Center ripples — expanding ring from origin, displaces + colors
+      // Center ripples - expanding ring from origin, displaces + colors
       let rippleInfluence = 0
       for (let cr = 0; cr < cRipples.length; cr++) {
         const crip = cRipples[cr]
@@ -587,10 +587,10 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
       pos[i * 3 + 1] = by + dy
       pos[i * 3 + 2] = 0
 
-      // Size — kick swell + ripple band
+      // Size - kick swell + ripple band
       sz[i] = pixelSize * (1 + kickScale * 0.8 + rippleInfluence * 0.8)
 
-      // Color — compute base color from scheme, then blend toward ripple highlight
+      // Color - compute base color from scheme, then blend toward ripple highlight
       let baseR: number, baseG: number, baseB: number
       const normD = d / R
       const dispFrac = Math.min(1, totalDisp / (R * 0.1))

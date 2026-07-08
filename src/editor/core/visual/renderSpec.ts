@@ -1,8 +1,8 @@
-// RenderSpec: a serializable object-instrument description — a geometry primitive plus
+// RenderSpec: a serializable object-instrument description - a geometry primitive plus
 // per-property expression bindings over the object's params and ports. The engine
 // interprets it, so a new shape is DATA, not a hand-written R3F component (and later,
 // something an LLM can emit for "design in English"). Expressions are a small, SAFE
-// vocabulary — parsed to closures, never eval'd: numbers, `param.*` / `port.*` / `beat`
+// vocabulary - parsed to closures, never eval'd: numbers, `param.*` / `port.*` / `beat`
 // refs, + - * / %, unary minus, parens, and a fixed set of math functions.
 
 export type Primitive = 'box' | 'sphere' | 'plane' | 'tetrahedron' | 'cone' | 'circle'
@@ -12,7 +12,7 @@ export type Expr = string
 
 export interface RenderSpec {
   primitive: Primitive
-  /** Transform bindings — each defaults to identity (position 0, rotation 0, scale 1). */
+  /** Transform bindings - each defaults to identity (position 0, rotation 0, scale 1). */
   transform?: {
     position?: [Expr, Expr, Expr]
     rotation?: [Expr, Expr, Expr]
@@ -36,7 +36,7 @@ export interface Scope {
 /** A compiled expression: parse once, evaluate cheaply every frame. */
 export type Compiled = (s: Scope) => number
 
-// The whole (safe) function vocabulary. Grow it as real specs demand — deliberately
+// The whole (safe) function vocabulary. Grow it as real specs demand - deliberately
 // small to start (see the plan: don't design the grammar up front).
 const FUNCS: Record<string, (...a: number[]) => number> = {
   sin: Math.sin, cos: Math.cos, abs: Math.abs, sign: Math.sign,

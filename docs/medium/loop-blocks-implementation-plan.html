@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Loop Blocks — Implementation Plan</title>
+<title>Loop Blocks - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -39,7 +39,7 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Loop Blocks</span>
-  <h1>Loop Blocks — Implementation Plan</h1>
+  <h1>Loop Blocks - Implementation Plan</h1>
   <p class="sub">Three landings: the expansion in resolve (engine truth), the resize gesture that writes <code>loop/loopBars</code>, and the ghost-repeat treatment in the two previews. Each phase is independently verifiable.</p>
 </header>
 
@@ -52,7 +52,7 @@
 </table>
 
 <h2>B · The expansion (the engine truth)</h2>
-<pre><code>// core/visual/resolve.ts — inside flattenBlocks, per block
+<pre><code>// core/visual/resolve.ts - inside flattenBlocks, per block
 const beatsPerLoop = (block.loop && block.loopBars ? block.loopBars : block.durationBars) * beatsPerBar
 const blockBeats = block.durationBars * beatsPerBar
 const repeats = block.loop && block.loopBars ? Math.ceil(blockBeats / beatsPerLoop) : 1
@@ -65,25 +65,25 @@ for (let k = 0; k < repeats; k++) {
            durationBeats: Math.min(n.durationBeats, blockBeats - start) })
   }
 }</code></pre>
-<p class="small muted">Pure data→data at resolve; per-frame cost unchanged. Notes authored past loopBars (possible via older edits) are ignored while looping — the pattern window is bars 0..loopBars.</p>
+<p class="small muted">Pure data→data at resolve; per-frame cost unchanged. Notes authored past loopBars (possible via older edits) are ignored while looping - the pattern window is bars 0..loopBars.</p>
 
 <h2>C · Phase-by-phase</h2>
 
-<h3>Phase 1 — Data + expansion ★ keystone <span class="badge b-edit">types · resolve</span></h3>
+<h3>Phase 1 - Data + expansion ★ keystone <span class="badge b-edit">types · resolve</span></h3>
 <ul class="small">
   <li><span class="badge b-edit">edit</span> <span class="file">types.ts</span>: <code>loopBars?: number</code> beside the existing <code>loop</code>. Optional → no document upgrade.</li>
   <li><span class="badge b-edit">edit</span> <span class="file">core/visual/resolve.ts</span> as above.</li>
   <li>Verify BEFORE any UI (set flags via a temp store call): 2-bar pattern, 5-bar block, loopBars 2 → notes at bars 0–2, 2–4, 4–5(clipped); scrub into repeat 3 ≡ play into repeat 3; canary green.</li>
 </ul>
 
-<h3>Phase 2 — The gesture <span class="badge b-edit">useTrackGestures</span></h3>
+<h3>Phase 2 - The gesture <span class="badge b-edit">useTrackGestures</span></h3>
 <ul class="small">
   <li>In <code>resizing-right</code>: capture <code>patternBars = block.loop ? block.loopBars : durationBars</code> at drag start. During drag: <code>newDuration &gt; patternBars</code> → write <code>{ durationBars, loop: true, loopBars: patternBars }</code>; <code>newDuration &lt;= patternBars</code> → write <code>{ durationBars, loop: false, loopBars: undefined }</code>.</li>
   <li>Quarter-beat snapping applies unchanged; min duration unchanged; resizing-LEFT on a looping block keeps loopBars and shifts the pattern window with the counter-shifted notes (existing left-resize note math already does the counter-shift).</li>
   <li>Verify: drag out → loop engages exactly past the pattern edge; drag back in → block returns to a plain block byte-identically (flags cleared).</li>
 </ul>
 
-<h3>Phase 3 — Previews <span class="badge b-edit">Block.tsx · piano roll</span></h3>
+<h3>Phase 3 - Previews <span class="badge b-edit">Block.tsx · piano roll</span></h3>
 <ul class="small">
   <li><span class="file">Block.tsx</span>: NotePreview tiles the pattern dashes at 55% opacity for repeats; a 1px dashed vertical line at each loop boundary.</li>
   <li>Piano roll: repeats render as dimmed, non-interactive notes past the pattern window; the block-window shading marks the pattern region distinctly. Gestures refuse targets past loopBars (rowModel/gesture guard).</li>
@@ -98,22 +98,22 @@ for (let k = 0; k < repeats; k++) {
     <tr><td><span class="file">core/visual/resolve.ts</span></td><td>Tiling in flattenBlocks.</td></tr>
     <tr><td><span class="file">components/timeline/useTrackGestures.ts</span></td><td>resizing-right sets/clears loop.</td></tr>
     <tr><td><span class="file">components/timeline/Block.tsx</span> · <span class="file">components/midi/*</span></td><td>Ghost repeats + boundary marks.</td></tr>
-    <tr><td>Persistence · engines beyond resolve · export</td><td>Untouched — expansion output is ordinary notes.</td></tr>
+    <tr><td>Persistence · engines beyond resolve · export</td><td>Untouched - expansion output is ordinary notes.</td></tr>
   </tbody>
 </table>
 
 <h2>E · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Left-resize × loop interaction</strong> is the fiddly corner (pattern window vs counter-shifted notes) — write the phase-2 verify cases for it explicitly before coding it.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Alt-drag duplicate of a looping block</strong> must clone flags (cloneBlock spreads — already does).</li>
+  <li><span class="badge b-risk">risk</span> <strong>Left-resize × loop interaction</strong> is the fiddly corner (pattern window vs counter-shifted notes) - write the phase-2 verify cases for it explicitly before coding it.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Alt-drag duplicate of a looping block</strong> must clone flags (cloneBlock spreads - already does).</li>
   <li><span class="badge b-risk">open</span> Should double-clicking a ghost open the editor scrolled to the PATTERN? (nice; decide at build).</li>
-  <li><span class="badge b-risk">note</span> The export-ranges pair mentions "export the loop" — that refers to a future transport loop REGION, not these block loops; no coupling.</li>
+  <li><span class="badge b-risk">note</span> The export-ranges pair mentions "export the loop" - that refers to a future transport loop REGION, not these block loops; no coupling.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> resolve tiles the pattern, the right edge writes two fields, the previews dim the repeats — land them in that order and each phase proves itself before the next exists.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> resolve tiles the pattern, the right edge writes two fields, the previews dim the repeats - land them in that order and each phase proves itself before the next exists.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">loop-blocks-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">loop-blocks-architecture.html</span>.</p>
 
 </div>
 </body>

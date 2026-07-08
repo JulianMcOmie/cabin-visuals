@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Envelope Modulator — Architecture</title>
+<title>Envelope Modulator - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,13 +36,13 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Envelope Modulator</span>
-  <h1>Envelope Modulator — Architecture</h1>
-  <p class="sub">Two asks converge: "midi applies an ADSR to opacity easily" (Julia) and "a generic ability for any property" (Tyler — who correctly noticed modulators only hit ports). The answer: an Envelope modulator whose notes are gates and whose target is a <strong>ParamAddress</strong> — any numeric param, opacity first among equals.</p>
+  <h1>Envelope Modulator - Architecture</h1>
+  <p class="sub">Two asks converge: "midi applies an ADSR to opacity easily" (Julia) and "a generic ability for any property" (Tyler - who correctly noticed modulators only hit ports). The answer: an Envelope modulator whose notes are gates and whose target is a <strong>ParamAddress</strong> - any numeric param, opacity first among equals.</p>
 </header>
 
 <h2>1 · The gap it fills</h2>
 <figure class="fig">
-  <div class="figtitle">Three value-over-time mechanisms — and the quadrant that's empty</div>
+  <div class="figtitle">Three value-over-time mechanisms - and the quadrant that's empty</div>
   <svg viewBox="0 0 900 320" role="img" aria-label="Mechanism quadrants">
     <line x1="450" y1="30" x2="450" y2="290" stroke="#cfcfcf" stroke-width="1.5"/>
     <line x1="60" y1="160" x2="860" y2="160" stroke="#cfcfcf" stroke-width="1.5"/>
@@ -52,25 +52,25 @@
     <text x="70" y="126" font-size="14.5" fill="#565656">→ instrument params (effects soon)</text>
     <text x="480" y="100" font-size="16.5" font-weight="700" fill="#141414">Pulse modulator</text>
     <text x="480" y="126" font-size="14.5" fill="#565656">→ PORTS only (fixed per instrument)</text>
-    <text x="70" y="230" font-size="16.5" font-weight="700" fill="#141414">— (hand-drawn ports)</text>
+    <text x="70" y="230" font-size="16.5" font-weight="700" fill="#141414">- (hand-drawn ports)</text>
     <text x="70" y="256" font-size="14.5" fill="#565656">rarely wanted; skip</text>
     <rect x="470" y="190" width="380" height="90" rx="10" fill="#141414"/>
     <text x="660" y="226" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">ENVELOPE MODULATOR ← this</text>
     <text x="660" y="254" text-anchor="middle" font-size="14.5" fill="#fff">note-triggered ADSR → ANY numeric param</text>
     <text x="450" y="314" text-anchor="middle" font-size="14" fill="#565656">rows: what drives the value · columns: where it can land</text>
   </svg>
-  <figcaption>Hand-drawing an opacity fade for every note is automation's job done badly; the envelope does it once — play a note on the Envelope's lane and the target param breathes through A-D-S-R, sustain held for the note's length.</figcaption>
+  <figcaption>Hand-drawing an opacity fade for every note is automation's job done badly; the envelope does it once - play a note on the Envelope's lane and the target param breathes through A-D-S-R, sustain held for the note's length.</figcaption>
 </figure>
 
 <h2>2 · The shape of the thing</h2>
 <table>
   <thead><tr><th>Piece</th><th>Design</th></tr></thead>
   <tbody>
-    <tr><td>The track</td><td>A modulator track like Pulse: its blocks/notes are the GATES. Note on = attack starts; note length = sustain hold; note off = release. Velocity scales peak. Pure function of beat: at any beat, the envelope value is computable from the gate notes alone (closed-form per segment — no integrator state, scrub-exact).</td></tr>
-    <tr><td>Params</td><td>attack · decay · sustain (level 0–1) · release — all in BEATS (tempo-musical, deterministic), plus depth (−1..1).</td></tr>
-    <tr><td>Target</td><td>A <code>ParamAddress</code> (the effect-param-automation cluster type) + the existing scope (track/tag/subtree) + blend: <strong>multiply</strong> (default — opacity, scale) or <strong>add</strong> (offsets). Ports remain valid targets too — Envelope with a port target is just a fancier Pulse.</td></tr>
+    <tr><td>The track</td><td>A modulator track like Pulse: its blocks/notes are the GATES. Note on = attack starts; note length = sustain hold; note off = release. Velocity scales peak. Pure function of beat: at any beat, the envelope value is computable from the gate notes alone (closed-form per segment - no integrator state, scrub-exact).</td></tr>
+    <tr><td>Params</td><td>attack · decay · sustain (level 0–1) · release - all in BEATS (tempo-musical, deterministic), plus depth (−1..1).</td></tr>
+    <tr><td>Target</td><td>A <code>ParamAddress</code> (the effect-param-automation cluster type) + the existing scope (track/tag/subtree) + blend: <strong>multiply</strong> (default - opacity, scale) or <strong>add</strong> (offsets). Ports remain valid targets too - Envelope with a port target is just a fancier Pulse.</td></tr>
     <tr><td>Merge order</td><td>base param ← automation lane ← modulator blend. Automation states intent over time; the envelope articulates on top of it. One documented order, applied in computeAtBeat.</td></tr>
-    <tr><td>Opacity itself</td><td>A UNIVERSAL param, not per-instrument: <code>opacity</code> joins the object state and ObjectRenderer applies it at the placement group (traversing cached materials, transparent switch at &lt;1). Every instrument becomes fade-able without touching any instrument file — the feature's whole point.</td></tr>
+    <tr><td>Opacity itself</td><td>A UNIVERSAL param, not per-instrument: <code>opacity</code> joins the object state and ObjectRenderer applies it at the placement group (traversing cached materials, transparent switch at &lt;1). Every instrument becomes fade-able without touching any instrument file - the feature's whole point.</td></tr>
   </tbody>
 </table>
 
@@ -78,18 +78,18 @@
 <table>
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>Depends on the ParamAddress cluster</td><td>Targeting "any param" IS the richer-target design; building a private targeting scheme here would fork it — the exact mess the cluster exists to prevent.</td></tr>
+    <tr><td>Depends on the ParamAddress cluster</td><td>Targeting "any param" IS the richer-target design; building a private targeting scheme here would fork it - the exact mess the cluster exists to prevent.</td></tr>
     <tr><td>Beats, not seconds, for ADSR</td><td>Determinism (pause invariant) and musicality (a 1-beat release stays musical when bpm changes); it's also what the engine can evaluate closed-form at any beat.</td></tr>
     <tr><td>Renderer-level opacity</td><td>Per-instrument opacity params would mean 28 edits and inconsistent semantics; one group-level application is uniform, cheap (cached material list per object), and canary-safe (function of beat).</td></tr>
-    <tr><td>Multiply as default blend</td><td>Envelope 0 = param 0 (invisible/collapsed), envelope 1 = untouched — the intuitive articulation semantics for opacity/scale/radius.</td></tr>
-    <tr><td>Non-goals</td><td>Curved ADSR segments (linear first; curves inherit per-keyframe work later) · LFO modulator (obvious sibling — name it, don't build) · audio-reactive sources · retrigger polyphony rules beyond "latest gate wins, releases overlap-max".</td></tr>
+    <tr><td>Multiply as default blend</td><td>Envelope 0 = param 0 (invisible/collapsed), envelope 1 = untouched - the intuitive articulation semantics for opacity/scale/radius.</td></tr>
+    <tr><td>Non-goals</td><td>Curved ADSR segments (linear first; curves inherit per-keyframe work later) · LFO modulator (obvious sibling - name it, don't build) · audio-reactive sources · retrigger polyphony rules beyond "latest gate wins, releases overlap-max".</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a Pulse that grew a real ADSR and learned the cluster's param addressing — its notes gate a closed-form envelope that multiplies into any param, with a renderer-level opacity param created so "fade anything with MIDI" is the out-of-box demo.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a Pulse that grew a real ADSR and learned the cluster's param addressing - its notes gate a closed-form envelope that multiplies into any param, with a renderer-level opacity param created so "fade anything with MIDI" is the out-of-box demo.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">envelope-modulator-implementation-plan.html</span>. Cluster: after <span class="file">effect-param-automation-*</span>. Today's modulator plumbing: <span class="file">instruments/modulators/Pulse.ts</span> · routings in <span class="file">resolve.ts</span> · matrix combine in <span class="file">matrix.ts</span>.</p>
+<p class="small muted">Architecture - build in <span class="file">envelope-modulator-implementation-plan.html</span>. Cluster: after <span class="file">effect-param-automation-*</span>. Today's modulator plumbing: <span class="file">instruments/modulators/Pulse.ts</span> · routings in <span class="file">resolve.ts</span> · matrix combine in <span class="file">matrix.ts</span>.</p>
 
 </div>
 </body>

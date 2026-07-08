@@ -70,7 +70,7 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
       // parallel to it, at the same distance r3f's `viewport` sizing assumes
       // (camera → origin), so a viewport-sized plane fills the frame exactly.
       // Without this the plane stands at the world origin and the (pitched)
-      // camera views it at an angle — 2D instruments read as a tilted backdrop.
+      // camera views it at an angle - 2D instruments read as a tilted backdrop.
       const dist = camera.position.length()
       camera.getWorldDirection(_camForward)
       g.position.copy(camera.position).addScaledVector(_camForward, dist)
@@ -101,7 +101,7 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   )
 
   // Shader path: the object is rendered offscreen (with its world transform) and drawn
-  // back as a post-processed full-frame overlay — so no in-scene placement group here.
+  // back as a post-processed full-frame overlay - so no in-scene placement group here.
   if (shaderInstances.length > 0) {
     return <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{content}</ShaderWrapper>
   }

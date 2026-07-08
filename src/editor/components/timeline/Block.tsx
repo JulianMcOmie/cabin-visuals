@@ -38,7 +38,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
-        // Measure relative to the block (currentTarget), not offsetX — offsetX is
+        // Measure relative to the block (currentTarget), not offsetX - offsetX is
         // relative to whatever child is under the pointer (e.g. a note sliver).
         const rect = e.currentTarget.getBoundingClientRect()
         const w = rect.width
@@ -56,7 +56,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   )
 }
 
-/** Miniature of the block's notes: x/width from time, y from pitch — normalized to
+/** Miniature of the block's notes: x/width from time, y from pitch - normalized to
  *  the block's own pitch range (at least an octave, so near-monotone lines stay
  *  calm), dashes long notes read as dashes and hits as ticks. */
 function NotePreview({ notes, totalBeats, color }: { notes: BlockType['notes']; totalBeats: number; color: string }) {

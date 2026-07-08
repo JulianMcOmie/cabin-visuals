@@ -3,14 +3,14 @@ import { Mesh, MeshStandardMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
-// The cube's definition lives next to its visual — schema and component can't drift.
+// The cube's definition lives next to its visual - schema and component can't drift.
 export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
   name: 'Cube',
   kind: 'object',
   params: [
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
-    // Color as a hue slider (0–360) — keeps every param numeric.
+    // Color as a hue slider (0–360) - keeps every param numeric.
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
     { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 },
     { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 0 },
@@ -20,7 +20,7 @@ export const cubeInstrument: ObjectInstrumentDef = {
   ],
   // The Cube's signature ability: play a note on its Shatter lane and the cube bursts
   // into fragments that fly out and reassemble over the note's length (its velocity
-  // sets the blast radius). Bespoke, intrinsic — it IS how a cube performs.
+  // sets the blast radius). Bespoke, intrinsic - it IS how a cube performs.
   abilities: [
     { key: 'shatter', label: 'Shatter', color: '#f472b6' },
   ],
@@ -66,11 +66,11 @@ export function Cube({ trackId }: { trackId: string }) {
     mat.color.setHSL(baseHue / 360, 0.65, 0.6)
     mat.emissiveIntensity = 0.2 + energy * 1.2
 
-    // Shatter: sample this track's Shatter lane at the current beat — a pure function
+    // Shatter: sample this track's Shatter lane at the current beat - a pure function
     // of the beat, so scrubbing mirrors playback exactly. The burst is MAX at the note
     // onset and decays back over the note (the cube flies apart, then reassembles), so
     // the on-grid beat you actually land on when scrubbing (the playhead snaps to 1/4
-    // beat) is the peak — not a zero-crossing. Overlapping notes take the strongest.
+    // beat) is the peak - not a zero-crossing. Overlapping notes take the strongest.
     const beat = state.beat
     const events = state.abilityEvents.get('shatter') ?? []
     let a = 0

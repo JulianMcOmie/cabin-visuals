@@ -1,7 +1,7 @@
 import type { Track } from '../../types'
 import type { VisualRow } from './trackTree'
 
-/** One indent level (px) — also the label's left-padding step (see Track). */
+/** One indent level (px) - also the label's left-padding step (see Track). */
 export const INDENT_PX = 16
 /** The label's base left padding (matches `pl-3` ≈ 12px), where depth 0 sits. */
 export const LABEL_BASE_PX = 12
@@ -21,7 +21,7 @@ export interface DropTarget {
 /**
  * Resolve a pointer Y over the flattened track list to a drop target. The row's
  * top/bottom quarter is a sibling drop (insertion line at that level); its middle is
- * a nest (the row highlights). Below the last row drops at the top level, last —
+ * a nest (the row highlights). Below the last row drops at the top level, last -
  * regardless of how deep the last visible row is nested. `excludeSubtree` is the set
  * of ids the drag can't land in (a track's own subtree); omit for a brand-new track.
  */

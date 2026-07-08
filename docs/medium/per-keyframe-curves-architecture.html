@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Per-Keyframe Curves — Architecture</title>
+<title>Per-Keyframe Curves - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,11 +36,11 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Per-Keyframe Curves</span>
-  <h1>Per-Keyframe Curves — Architecture</h1>
-  <p class="sub">Each automation segment carries its own curve, DAW-node style. The engine change is two lines (the segment asks its left keyframe before falling back to the lane); the feature is really a piano-roll UI problem — which is why it's medium, not easy.</p>
+  <h1>Per-Keyframe Curves - Architecture</h1>
+  <p class="sub">Each automation segment carries its own curve, DAW-node style. The engine change is two lines (the segment asks its left keyframe before falling back to the lane); the feature is really a piano-roll UI problem - which is why it's medium, not easy.</p>
 </header>
 
-<h2>1 · Where the curve lives — the left keyframe owns its segment</h2>
+<h2>1 · Where the curve lives - the left keyframe owns its segment</h2>
 <figure class="fig">
   <div class="figtitle">Segment curve = leftKeyframe.curve ?? lane.interpolation</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Segment ownership">
@@ -67,18 +67,18 @@
 <table>
   <thead><tr><th>Layer</th><th>Role after this feature</th></tr></thead>
   <tbody>
-    <tr><td>Lane <code>interpolation</code> (exists)</td><td>Becomes the DEFAULT — every segment without its own curve uses it. The Curve control keeps working and now reads "default curve".</td></tr>
-    <tr><td>Keyframe <code>curve?</code> (new, optional)</td><td>Overrides the default for its one segment. Absent everywhere = exactly today's behavior — old documents are automatically valid (no upgrade).</td></tr>
+    <tr><td>Lane <code>interpolation</code> (exists)</td><td>Becomes the DEFAULT - every segment without its own curve uses it. The Curve control keeps working and now reads "default curve".</td></tr>
+    <tr><td>Keyframe <code>curve?</code> (new, optional)</td><td>Overrides the default for its one segment. Absent everywhere = exactly today's behavior - old documents are automatically valid (no upgrade).</td></tr>
     <tr><td><code>sampleLane</code></td><td>Picks the mode per segment instead of once per call: <code>mode = left.curve ?? laneMode</code>. The ease() table is untouched.</td></tr>
   </tbody>
 </table>
 
-<h2>3 · The UI — two tiers, ship the first</h2>
+<h2>3 · The UI - two tiers, ship the first</h2>
 <table>
   <thead><tr><th>Tier</th><th>Interaction</th><th>Verdict</th></tr></thead>
   <tbody>
     <tr><td>1 · Right-click the segment</td><td>Right-click between two keyframes (or on the left keyframe) in an automation lane → curve menu (the 7 modes + "Use lane default"). Selected segments show a small glyph at the midpoint when overridden.</td><td><strong>Ship this.</strong> Menu machinery exists (NestedMenu); hit-testing a segment is y-band-between-keyframes math the editor already does for notes.</td></tr>
-    <tr><td>2 · Drag the midpoint to bend</td><td>Ableton's gesture — drag a segment's middle up/down to morph between ease shapes.</td><td><strong>Defer.</strong> It implies a continuous curvature parameter, not 7 discrete modes — a different data model. Name it, don't build it.</td></tr>
+    <tr><td>2 · Drag the midpoint to bend</td><td>Ableton's gesture - drag a segment's middle up/down to morph between ease shapes.</td><td><strong>Defer.</strong> It implies a continuous curvature parameter, not 7 discrete modes - a different data model. Name it, don't build it.</td></tr>
   </tbody>
 </table>
 
@@ -93,10 +93,10 @@
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> an optional <code>curve</code> on the left keyframe overrides the lane's default for one segment — two lines in sampleLane, one context menu in the lane, and old projects don't even know the field exists.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> an optional <code>curve</code> on the left keyframe overrides the lane's default for one segment - two lines in sampleLane, one context menu in the lane, and old projects don't even know the field exists.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">per-keyframe-curves-implementation-plan.html</span>. Today: <span class="file">core/visual/automation.ts</span> (sampleLane + ease) · lane mode via <code>setTrackInterpolation</code> · keyframes are Notes in automation-lane blocks.</p>
+<p class="small muted">Architecture - build in <span class="file">per-keyframe-curves-implementation-plan.html</span>. Today: <span class="file">core/visual/automation.ts</span> (sampleLane + ease) · lane mode via <code>setTrackInterpolation</code> · keyframes are Notes in automation-lane blocks.</p>
 
 </div>
 </body>

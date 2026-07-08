@@ -1,9 +1,9 @@
-// The audio half of export: the whole track rendered in ONE offline pass —
+// The audio half of export: the whole track rendered in ONE offline pass -
 // no frame stepping, no realtime. Every audible block schedules its clip slice
 // into an OfflineAudioContext through the same blockPlacement() the live
-// AudioEngine arms with (from beat 0 — the trivial case), under the same 0.85
+// AudioEngine arms with (from beat 0 - the trivial case), under the same 0.85
 // master gain, so the file sounds exactly like the editor. The rendered buffer
-// is AAC-encoded into the muxer; A/V sync is arithmetic, not synchronization —
+// is AAC-encoded into the muxer; A/V sync is arithmetic, not synchronization -
 // both timelines derive from the same bpm.
 
 import type { Track } from '../../types'
@@ -30,13 +30,13 @@ export async function renderAudioTrack(
     .flatMap((t) => t.audioBlocks ?? [])
   if (blocks.length === 0 || durationSec <= 0) return null
 
-  // Decode first (cached — playback has usually already paid this).
+  // Decode first (cached - playback has usually already paid this).
   const buffers = await Promise.all(blocks.map((b) => getBuffer(b.clipRef)))
 
   const sampleRate = 48_000
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(durationSec * sampleRate)), sampleRate)
   const master = ctx.createGain()
-  master.gain.value = 0.85 // the live engine's headroom — same loudness as the editor
+  master.gain.value = 0.85 // the live engine's headroom - same loudness as the editor
   master.connect(ctx.destination)
 
   blocks.forEach((block, i) => {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Symmetric Effects — Architecture</title>
+<title>Symmetric Effects - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,22 +36,22 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Symmetric Effects</span>
-  <h1>Symmetric Effects — Architecture</h1>
-  <p class="sub">Clone effects whose params are DESIGNED to be automated — "a radial copy intended for you to automate radius on." Not a new mechanism: a design standard for effect params (motion params, continuous, zero-safe) applied to one new effect and two upgraded ones.</p>
+  <h1>Symmetric Effects - Architecture</h1>
+  <p class="sub">Clone effects whose params are DESIGNED to be automated - "a radial copy intended for you to automate radius on." Not a new mechanism: a design standard for effect params (motion params, continuous, zero-safe) applied to one new effect and two upgraded ones.</p>
 </header>
 
 <h2>1 · What makes a param automation-worthy</h2>
 <figure class="fig">
-  <div class="figtitle">The motion-param standard — what a lane sweep must look like</div>
+  <div class="figtitle">The motion-param standard - what a lane sweep must look like</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Motion param standard">
     <rect x="20" y="24" width="860" height="80" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="54" font-size="17" font-weight="700" fill="#141414">Continuous — every value between A and B is a sensible frame</text>
+    <text x="40" y="54" font-size="17" font-weight="700" fill="#141414">Continuous - every value between A and B is a sensible frame</text>
     <text x="40" y="80" font-size="15" fill="#565656">radius 0→5 sweeps smoothly; count 3→7 jumps in steps. Both are automatable, only one reads as MOTION. Counts stay params; geometry becomes lanes.</text>
     <rect x="20" y="118" width="860" height="80" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="148" font-size="17" font-weight="700" fill="#141414">Zero-safe — the param's zero is "effect visually absent," not "degenerate mess"</text>
+    <text x="40" y="148" font-size="17" font-weight="700" fill="#141414">Zero-safe - the param's zero is "effect visually absent," not "degenerate mess"</text>
     <text x="40" y="174" font-size="15" fill="#565656">radius 0 = clones stacked on the source (reads as one object) → a lane can breathe the effect in and out of existence.</text>
     <rect x="20" y="212" width="860" height="72" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="40" y="242" font-size="17" font-weight="700" fill="#141414">Phase-complete — a full-range sweep returns to a visually identical state where possible</text>
+    <text x="40" y="242" font-size="17" font-weight="700" fill="#141414">Phase-complete - a full-range sweep returns to a visually identical state where possible</text>
     <text x="40" y="266" font-size="15" fill="#565656">angle 0→360 loops seamlessly → looping automation lanes create perpetual motion with two keyframes.</text>
   </svg>
   <figcaption>These three properties are the whole "designed to be automated" idea. They cost nothing at effect-authoring time and everything to retrofit.</figcaption>
@@ -61,7 +61,7 @@
 <table>
   <thead><tr><th>Effect</th><th>Params (motion params bold)</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td><strong>Radial Copy</strong> — the headline</td><td>count (2–16, step 1) · <strong>radius</strong> (0–8) · <strong>angle</strong> (0–360, phase-complete) · <strong>scaleFalloff</strong> (0–1: outer clones shrink)</td><td><span class="muted">new clone plugin</span> — kept separate from radialSymmetry (which mirrors AROUND the source; this one orbits COPIES at a radius — different geometry, both earn their place)</td></tr>
+    <tr><td><strong>Radial Copy</strong> - the headline</td><td>count (2–16, step 1) · <strong>radius</strong> (0–8) · <strong>angle</strong> (0–360, phase-complete) · <strong>scaleFalloff</strong> (0–1: outer clones shrink)</td><td><span class="muted">new clone plugin</span> - kept separate from radialSymmetry (which mirrors AROUND the source; this one orbits COPIES at a radius - different geometry, both earn their place)</td></tr>
     <tr><td>Linear Duplicate</td><td>count · <strong>spacing</strong> (0-safe) · <strong>drift</strong> (0–360-style offset along the line)</td><td>upgrade: audit spacing bounds for 0-safety, add drift</td></tr>
     <tr><td>Rotational Symmetry</td><td>count · <strong>angle offset</strong> (0–360, phase-complete)</td><td>upgrade: expose the angle as a param if it isn't one</td></tr>
   </tbody>
@@ -73,16 +73,16 @@
   <tbody>
     <tr><td>Sequenced AFTER effect-param automation</td><td>Without lanes on effect settings these are just params with good taste; with lanes they're the demo. Hard dependency, deliberate.</td></tr>
     <tr><td>New plugin, not a radialSymmetry rewrite</td><td>Existing projects keep their look; Radial Copy ships with the standard baked in instead of bending an old effect's semantics.</td></tr>
-    <tr><td>The standard goes in the effect-authoring notes</td><td>Continuous · zero-safe · phase-complete becomes three lines in <span class="file">effects/types.ts</span>'s doc comment — every future effect reads it.</td></tr>
-    <tr><td>Clone specs stay pure data</td><td>These are CloneSpec-producing plugins like their siblings — per-frame values arrive via the merged-settings overlay; no new render machinery.</td></tr>
+    <tr><td>The standard goes in the effect-authoring notes</td><td>Continuous · zero-safe · phase-complete becomes three lines in <span class="file">effects/types.ts</span>'s doc comment - every future effect reads it.</td></tr>
+    <tr><td>Clone specs stay pure data</td><td>These are CloneSpec-producing plugins like their siblings - per-frame values arrive via the merged-settings overlay; no new render machinery.</td></tr>
     <tr><td>Non-goals</td><td>Shader-side symmetric effects (kaleidoscope already exists) · per-clone note-reactivity (that's modulator territory) · 3D lattice cloning.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> once effect settings take lanes, "designed for automation" is just three adjectives — continuous, zero-safe, phase-complete — applied to one new orbiting-copies effect and enforced backward on the two clones that almost qualify.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> once effect settings take lanes, "designed for automation" is just three adjectives - continuous, zero-safe, phase-complete - applied to one new orbiting-copies effect and enforced backward on the two clones that almost qualify.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">symmetric-effects-implementation-plan.html</span>. Depends on: <span class="file">effect-param-automation-*</span>. Registry today: offset/rotate/scale · echo/tile/radialSymmetry/linearDuplicate/rotationalSymmetry · kaleidoscope/pixelate/chromaticAberration/opacity.</p>
+<p class="small muted">Architecture - build in <span class="file">symmetric-effects-implementation-plan.html</span>. Depends on: <span class="file">effect-param-automation-*</span>. Registry today: offset/rotate/scale · echo/tile/radialSymmetry/linearDuplicate/rotationalSymmetry · kaleidoscope/pixelate/chromaticAberration/opacity.</p>
 
 </div>
 </body>

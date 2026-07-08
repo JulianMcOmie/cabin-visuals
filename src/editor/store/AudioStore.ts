@@ -3,7 +3,7 @@ import { create } from 'zustand'
 /**
  * Lightweight, serializable descriptor for a loaded audio clip. The actual bytes
  * live behind core/audio (the project-audio bucket + a session cache), referenced
- * by `ref` — so this store stays JSON-friendly.
+ * by `ref` - so this store stays JSON-friendly.
  */
 export interface AudioClip {
   ref: string
@@ -14,7 +14,7 @@ export interface AudioClip {
 /**
  * The audioClips catalog: every clip the project owns, keyed by ref. An internal
  * registry (persisted into the document; the AudioBar writes it), NOT a
- * user-facing library — placement lives on audio tracks in ProjectStore.
+ * user-facing library - placement lives on audio tracks in ProjectStore.
  * Deliberately not undoable: loading a file isn't an edit.
  */
 interface AudioState {

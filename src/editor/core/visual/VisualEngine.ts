@@ -11,7 +11,7 @@ import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedObject, StateVe
 // useFrame. The only React-visible signal is the object LIST (see below).
 
 let graph: ResolvedGraph = { objects: [], tagIndex: new Map() }
-// Project bpm, mirrored on every setProject/syncParams — computeAtBeat derives
+// Project bpm, mirrored on every setProject/syncParams - computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
 let bpm = 120
 const states = new Map<string, ObjectState>()
@@ -21,7 +21,7 @@ const worldMatrices = new Map<string, Matrix4>()
 const _local = new Matrix4()
 
 // External-store signal for the object list, so VisualScene reconciles the scene
-// tree when objects appear/disappear (on resolve) — never per frame.
+// tree when objects appear/disappear (on resolve) - never per frame.
 let objectList: { trackId: string; instrumentId: string }[] = []
 const listeners = new Set<() => void>()
 
@@ -46,7 +46,7 @@ export function setProject(p: ProjectSnapshot) {
  * synchronously on every edit (not debounced) so slider drags are reactive at
  * 60fps, while the expensive structural resolve stays debounced. Reads params from
  * the same source as resolve (`track.params`), so the engine remains the sole owner
- * of params — `computeAtBeat`/renderers are unchanged. Tracks not yet (or no longer)
+ * of params - `computeAtBeat`/renderers are unchanged. Tracks not yet (or no longer)
  * in the graph are skipped; the debounced setProject reconciles structure shortly.
  */
 export function syncParams(p: ProjectSnapshot) {
@@ -296,7 +296,7 @@ export function computeAtBeat(beat: number) {
 
     // Muted (or soloed-out) objects are hidden, and a `mute` modifier blacks out its span.
     const blackedOut = obj.muted || obj.blackouts.some((r) => beat >= r.start && beat < r.end)
-    // Notes live at this beat — pitch-reactive instruments read them (a zero-length note
+    // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
     states.set(obj.trackId, {

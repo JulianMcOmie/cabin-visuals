@@ -20,7 +20,7 @@ let cachedPriceId: string | null = null
 /**
  * The Pro price to sell at checkout. Self-provisioning: if STRIPE_PRICE_ID is
  * set it wins; otherwise look up (or create, first run) a $9/mo "Cabin Visuals
- * Pro" price by lookup key — so a fresh Stripe account needs only API keys.
+ * Pro" price by lookup key - so a fresh Stripe account needs only API keys.
  */
 export async function getProPriceId(): Promise<string> {
   if (process.env.STRIPE_PRICE_ID) return process.env.STRIPE_PRICE_ID

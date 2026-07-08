@@ -2,11 +2,11 @@ import type { Track } from '../../types'
 
 export interface FlatTrack {
   id: string
-  /** Nesting depth — 0 for a root track, +1 per level. */
+  /** Nesting depth - 0 for a root track, +1 per level. */
   depth: number
 }
 
-/** Tracks in depth-first order (each root, then its descendants), tagged with depth —
+/** Tracks in depth-first order (each root, then its descendants), tagged with depth -
  *  the visual row order for the timeline. A collapsed node is still listed, but its
  *  descendants are skipped (hidden). A visited set guards malformed data. */
 export function flattenTracks(
@@ -34,7 +34,7 @@ export function flattenTracks(
  *  `kind` tag stays so future non-track rows slot back in without churn. */
 export type VisualRow = { kind: 'track'; id: string; depth: number }
 
-/** `flattenTracks` in VisualRow clothing — the timeline's visual row order. */
+/** `flattenTracks` in VisualRow clothing - the timeline's visual row order. */
 export function flattenVisualRows(
   tracks: Record<string, Track>,
   rootTrackIds: string[],
@@ -43,7 +43,7 @@ export function flattenVisualRows(
   return flattenTracks(tracks, rootTrackIds, collapsed).map(({ id, depth }) => ({ kind: 'track' as const, id, depth }))
 }
 
-/** A track plus all its descendants — you can't drop a track into its own subtree. */
+/** A track plus all its descendants - you can't drop a track into its own subtree. */
 export function subtreeIds(tracks: Record<string, Track>, id: string): Set<string> {
   const out = new Set<string>()
   const visit = (cur: string) => {

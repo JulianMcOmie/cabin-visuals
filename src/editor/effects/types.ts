@@ -10,7 +10,7 @@ export type EffectCategory = 'transform' | 'clone' | 'shader'
 export interface CloneSpec {
   count: number
   getTransform: (index: number, settings: Record<string, number>, time: number) => Matrix4
-  /** 0..1 per copy — drives trail/edge fade (echo, linear duplicate). Omit for opaque. */
+  /** 0..1 per copy - drives trail/edge fade (echo, linear duplicate). Omit for opaque. */
   getOpacity?: (index: number, settings: Record<string, number>, time: number) => number
 }
 

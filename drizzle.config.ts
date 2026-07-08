@@ -8,12 +8,12 @@ export default defineConfig({
   schema: './db/schema.ts',
   out: './db/migrations',
   dbCredentials: {
-    // Session-mode pooler (port 5432) — required for migrations.
+    // Session-mode pooler (port 5432) - required for migrations.
     url: process.env.DATABASE_URL!,
   },
   // Only projects + profiles are managed. The six legacy relational tables
   // (midi_blocks, midi_notes, project_settings, tracks, track_effects,
-  // track_synths) are deliberately unmanaged fossils — filtering them out keeps
+  // track_synths) are deliberately unmanaged fossils - filtering them out keeps
   // drizzle-kit from generating DROPs for them.
   tablesFilter: ['projects', 'profiles'],
   entities: {

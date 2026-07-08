@@ -25,7 +25,7 @@ export default function ProjectsPage() {
   const plan = usePlan()
   const [profile, setProfile] = useState<ProfileData | null>(null)
 
-  // Free tier: one project. Client-side gate (like the export watermark) — the
+  // Free tier: one project. Client-side gate (like the export watermark) - the
   // point is a clear upgrade moment, not tamper-proofing.
   const atFreeLimit = !plan.loading && !plan.isPro && projects.length >= FREE_PROJECT_LIMIT
   const promptUpgrade = () => {
@@ -108,7 +108,7 @@ export default function ProjectsPage() {
     }
     if (atFreeLimit) { promptUpgrade(); return }
     try {
-      // Fresh deep copy per project — template documents are shared module state.
+      // Fresh deep copy per project - template documents are shared module state.
       const project = await createProject(template.name, structuredClone(template.document))
       router.push(`/editor?project=${project.id}`)
     } catch {

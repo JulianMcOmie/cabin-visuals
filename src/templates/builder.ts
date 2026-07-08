@@ -4,7 +4,7 @@ import type { ProjectDocument } from '../persistence/types'
 // Authoring helpers for template documents. Templates are plain v2 project
 // documents built at module load; ids only need to be unique within one
 // document (rows are independent JSONB), so a readable counter beats UUIDs.
-// NOTE: Block.loop is inert in the resolver — patterns are generated in full
+// NOTE: Block.loop is inert in the resolver - patterns are generated in full
 // across the block's whole length, never left to a loop flag.
 
 let seq = 0
@@ -27,7 +27,7 @@ export function pulse(
   return out
 }
 
-/** Cycle through `pitches` on a fixed grid — the classic arpeggio. */
+/** Cycle through `pitches` on a fixed grid - the classic arpeggio. */
 export function arp(
   pitches: number[],
   step: number,

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Instrument Plugin UI — Implementation Plan</title>
+<title>Instrument Plugin UI - Implementation Plan</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -38,8 +38,8 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Instrument Plugin UI</span>
-  <h1>Instrument Plugin UI — Implementation Plan</h1>
-  <p class="sub">Four phases matching the architecture's layers — slider upgrades, the registry seam with a Cube pilot, the widget kit with a second pilot, then scene gizmos. Every phase is a stable stopping point; commit to the next only after using the last.</p>
+  <h1>Instrument Plugin UI - Implementation Plan</h1>
+  <p class="sub">Four phases matching the architecture's layers - slider upgrades, the registry seam with a Cube pilot, the widget kit with a second pilot, then scene gizmos. Every phase is a stable stopping point; commit to the next only after using the last.</p>
 </header>
 
 <h2>A · Scope</h2>
@@ -64,31 +64,31 @@ export interface InstrumentEditorProps {
 
 <h2>C · Phase-by-phase</h2>
 
-<h3>Phase 1 — Slider upgrades <span class="badge b-edit">ParamSlider</span> (independent quick win)</h3>
+<h3>Phase 1 - Slider upgrades <span class="badge b-edit">ParamSlider</span> (independent quick win)</h3>
 <ul class="small">
   <li>Double-click → type-in (number input, Enter/Esc); Shift-drag → 10× finer; Alt-click → reset to def default; wheel over slider → step nudge. All through the existing onChange.</li>
   <li>Verify on three params with very different ranges (hue 0–360, size 0.2–4, position −10–10); undo granularity stays one-burst-per-gesture.</li>
 </ul>
 
-<h3>Phase 2 — Seam + Cube pilot <span class="badge b-edit">types · TrackEditor</span> <span class="badge b-new">CubeEditor</span></h3>
+<h3>Phase 2 - Seam + Cube pilot <span class="badge b-edit">types · TrackEditor</span> <span class="badge b-new">CubeEditor</span></h3>
 <ul class="small">
   <li>Land the seam exactly as §B; generic path untouched when the field is absent (zero-risk to 27 instruments).</li>
   <li><span class="badge b-new">new</span> <span class="file">instruments/editors/CubeEditor.tsx</span>: XY pad (baseX × baseY, z dial beside), size dial, hue ring, spin dial; automated params render the live-dot treatment.</li>
   <li>Verify: one-drag positioning; automation on baseX moves the pad dot while the base stays editable; raw-params disclosure shows everything; the OTHER instruments' panels byte-identical.</li>
 </ul>
 
-<h3>Phase 3 — Widget kit + second pilot <span class="badge b-new">components/instrument-widgets/*</span></h3>
+<h3>Phase 3 - Widget kit + second pilot <span class="badge b-new">components/instrument-widgets/*</span></h3>
 <ul class="small">
   <li>Extract from the Cube editor: <code>XYPad · Dial · HueRing · WidgetRow</code> with one shared look (size/spacing tokens, the live-dot affordance built in).</li>
-  <li>Second pilot: FractalTunnel editor (symmetry as a radial segment picker, branches/generations dials, spiral dial) — proves the kit against a non-spatial instrument.</li>
+  <li>Second pilot: FractalTunnel editor (symmetry as a radial segment picker, branches/generations dials, spiral dial) - proves the kit against a non-spatial instrument.</li>
   <li>Verify: both editors compose from the kit only; a third instrument could be built by pattern-matching (that's the review question).</li>
 </ul>
 
-<h3>Phase 4 — Scene gizmos <span class="badge b-new">GizmoLayer</span> (the direct-manipulation layer)</h3>
+<h3>Phase 4 - Scene gizmos <span class="badge b-new">GizmoLayer</span> (the direct-manipulation layer)</h3>
 <ul class="small">
   <li><span class="badge b-new">new</span> <span class="file">components/visual/GizmoLayer.tsx</span> in the canaryIgnore overlay group: when the selected track's def declares spatial params (a small <code>gizmos?: [{kind:'position', keys:{x,y,z}}]</code> hint on the def), render a drag handle at the object's position; drag raycasts against a camera-facing plane → <code>setParam</code> per frame (undo burst-collapses, as slider drags do).</li>
   <li>Selection-scoped: gizmos only for the selected track; Esc/deselect hides them.</li>
-  <li>Verify: dragging the cube in the viewport writes baseX/Y (and Z with a modifier); canary silent while parked with gizmos visible; export unaffected (overlay group never captured — it renders only when NOT pinned... confirm the export pin hides gizmos: pin() should also hide the overlay group — one line, listed here so it isn't forgotten).</li>
+  <li>Verify: dragging the cube in the viewport writes baseX/Y (and Z with a modifier); canary silent while parked with gizmos visible; export unaffected (overlay group never captured - it renders only when NOT pinned... confirm the export pin hides gizmos: pin() should also hide the overlay group - one line, listed here so it isn't forgotten).</li>
 </ul>
 
 <h2>D · File inventory</h2>
@@ -100,22 +100,22 @@ export interface InstrumentEditorProps {
     <tr><td><span class="file">instruments/editors/CubeEditor.tsx · FractalTunnelEditor.tsx</span></td><td><span class="badge b-new">new</span> pilots.</td></tr>
     <tr><td><span class="file">components/instrument-widgets/*</span></td><td><span class="badge b-new">new</span> kit (XYPad/Dial/HueRing/WidgetRow).</td></tr>
     <tr><td><span class="file">components/visual/GizmoLayer.tsx</span> · ExportDriver pin</td><td>Phase 4 + overlay-hidden-during-export line.</td></tr>
-    <tr><td>Stores · engines · document</td><td>Untouched — the whole feature writes through setTrackParam.</td></tr>
+    <tr><td>Stores · engines · document</td><td>Untouched - the whole feature writes through setTrackParam.</td></tr>
   </tbody>
 </table>
 
 <h2>E · Risks &amp; open questions</h2>
 <ul>
-  <li><span class="badge b-risk">risk</span> <strong>Editor sprawl</strong> — 28 bespoke editors is a maintenance cliff. The kit + "compositions only" review rule is the fence; instruments without obvious spatial/visual metaphors simply keep sliders.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Gizmo drags fighting camera controls</strong> if/when orbit controls exist — gizmo pointer-down must capture before any camera handler; design the z-order now (overlay on top), revisit when a camera rig lands.</li>
-  <li><span class="badge b-risk">open</span> Whether the editor panel needs MORE SPACE for custom editors (the TrackEditor column is ~narrow) — the Cube pilot answers it; a pop-out is the fallback, not the premise.</li>
-  <li><span class="badge b-risk">note</span> Phases 1 and 2 are genuinely independent — phase 1 could ship in the next easy batch while this doc's remainder waits.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Editor sprawl</strong> - 28 bespoke editors is a maintenance cliff. The kit + "compositions only" review rule is the fence; instruments without obvious spatial/visual metaphors simply keep sliders.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Gizmo drags fighting camera controls</strong> if/when orbit controls exist - gizmo pointer-down must capture before any camera handler; design the z-order now (overlay on top), revisit when a camera rig lands.</li>
+  <li><span class="badge b-risk">open</span> Whether the editor panel needs MORE SPACE for custom editors (the TrackEditor column is ~narrow) - the Cube pilot answers it; a pop-out is the fallback, not the premise.</li>
+  <li><span class="badge b-risk">note</span> Phases 1 and 2 are genuinely independent - phase 1 could ship in the next easy batch while this doc's remainder waits.</li>
 </ul>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> one optional def field and a strict "write only through setParam" contract buy instrument-native editors without forking the document's truth — pilot on Cube, extract the kit, and let gizmos be the overlay group's second tenant.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> one optional def field and a strict "write only through setParam" contract buy instrument-native editors without forking the document's truth - pilot on Cube, extract the kit, and let gizmos be the overlay group's second tenant.</div>
 
 <hr/>
-<p class="small muted">Plan only — no code changed. Derives from <span class="file">instrument-plugin-ui-architecture.html</span>.</p>
+<p class="small muted">Plan only - no code changed. Derives from <span class="file">instrument-plugin-ui-architecture.html</span>.</p>
 
 </div>
 </body>

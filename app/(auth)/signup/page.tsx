@@ -40,7 +40,7 @@ function SignupPageContent() {
     console.log("Google Sign-In CredentialResponse (Signup Page):", response);
     if (response.credential) {
       try {
-        // Google sign-in replaces any anonymous session — stash its work so
+        // Google sign-in replaces any anonymous session - stash its work so
         // the projects page can carry it into the resulting account.
         await stashAnonWork();
         await handleSignInWithGoogle(response.credential);
@@ -68,7 +68,7 @@ function SignupPageContent() {
 
   // Stash any anonymous work on arrival: covers the Google path and the
   // "email already exists → log in" handoff. (Email/password conversion never
-  // needs it — same uuid — and takeCarryover self-cleans in that case.)
+  // needs it - same uuid - and takeCarryover self-cleans in that case.)
   useEffect(() => {
     void stashAnonWork();
   }, []);
@@ -126,7 +126,7 @@ function SignupPageContent() {
       <div className="flex flex-col items-center">
          <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signup" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
          {/* GSI draws its own (dark, filled_black) button via the imperative
-             renderButton call — no g_id_signin class (that triggers GSI's
+             renderButton call - no g_id_signin class (that triggers GSI's
              declarative auto-render with WHITE defaults, overriding our theme)
              and no styled wrapper (a mismatched container strip looks wrong
              behind whatever width GSI decides to render). */}

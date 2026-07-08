@@ -69,7 +69,7 @@ export function PianoRollPanel() {
 
   if (!editingBlock || !track || !block) return null
 
-  // For a modifier its blocks hold regions/patterns, not pitched notes — colour the
+  // For a modifier its blocks hold regions/patterns, not pitched notes - colour the
   // editor by the modifier so it reads consistently with its timeline row.
   const modColor = modifierColor(track)
 
@@ -118,7 +118,7 @@ interface PianoRollContentProps {
   trackColor: string
   /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
   noteColor?: string
-  /** Set for value-keyframe tracks — rows are value-labelled and an interp picker shows. */
+  /** Set for value-keyframe tracks - rows are value-labelled and an interp picker shows. */
   automation?: AutomationInfo
   block: Block
   onClose: () => void

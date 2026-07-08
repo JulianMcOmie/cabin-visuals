@@ -1,13 +1,13 @@
 import type { Object3D, Mesh, ShaderMaterial } from 'three'
 
 // Dev-only tripwire for the pause invariant: when the transport is paused and
-// the playhead hasn't moved, the rendered scene must not change AT ALL — every
+// the playhead hasn't moved, the rendered scene must not change AT ALL - every
 // instrument is a pure function of the beat. The lint bans make violations hard
 // to write; this catches whatever creative path slips through (a smuggled clock,
 // an accumulating ref) by hashing the scene while paused and naming the objects
 // that moved.
 //
-// Sampled every 15th static frame, dev builds only — zero cost in production.
+// Sampled every 15th static frame, dev builds only - zero cost in production.
 
 const SAMPLE_EVERY = 15
 
@@ -19,7 +19,7 @@ export class PauseCanary {
   private warned = false
 
   /** Call once per frame (after computeAtBeat). Resets whenever time moves OR
-   *  the project is edited (`editStamp` = the immutable project state ref) —
+   *  the project is edited (`editStamp` = the immutable project state ref) -
    *  an edit while paused legitimately changes the scene; only change with NO
    *  cause (time static, document untouched) is a violation. */
   check(scene: Object3D, beat: number, isPlaying: boolean, editStamp: unknown) {
@@ -46,7 +46,7 @@ export class PauseCanary {
       }
       if (movers.length) {
         console.warn(
-          '[pause-canary] Scene changed while paused at a static playhead — these are not pure functions of the beat:\n  ' +
+          '[pause-canary] Scene changed while paused at a static playhead - these are not pure functions of the beat:\n  ' +
             movers.slice(0, 12).join('\n  ') +
             '\nHunt for wall-clock time, per-frame randomness, or an accumulating ref.',
         )

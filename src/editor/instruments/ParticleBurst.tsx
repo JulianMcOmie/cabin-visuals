@@ -10,7 +10,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // Ported from Excellent DAW's ParticleBurst. Each note is an InstancedMesh burst of
 // particles that expands outward (7 selectable burst geometries + 5 ease curves) and fades.
 // Bursts are derived fresh each frame from the note stream (age = beats since onset, in
-// seconds at the current tempo), so they're fully scrub-accurate — no spawn-time state.
+// seconds at the current tempo), so they're fully scrub-accurate - no spawn-time state.
 // Pitch (36–71) picks one of Tyler's hardcoded colour presets; velocity scales brightness.
 // Tyler's palette colour-mode is dropped (no palettes here). Burst math + golden-ratio
 // sphere distribution + easing are Tyler's verbatim; only state reads + params are rewired.

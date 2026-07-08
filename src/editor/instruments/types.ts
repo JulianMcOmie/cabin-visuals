@@ -6,8 +6,8 @@
 import type { FC } from 'react'
 import type { StateVector } from '../core/visual/types'
 
-// A param is either numeric-valued (number / select / boolean — stored in track.params)
-// or string-valued (color / string — stored in track.stringParams). The union keeps the
+// A param is either numeric-valued (number / select / boolean - stored in track.params)
+// or string-valued (color / string - stored in track.stringParams). The union keeps the
 // numeric engine paths (localTransform / spec / automation) untouched.
 interface ParamBase {
   key: string
@@ -49,17 +49,17 @@ export function isNumberParam(p: ParamDef): p is NumberParamDef {
   return p.type === undefined || p.type === 'number'
 }
 
-/** How an ability lane presents pitch in its MIDI editor — a free, per-lane choice
+/** How an ability lane presents pitch in its MIDI editor - a free, per-lane choice
  *  (a pitched piano-roll, drum-style rows, or a single trigger row). Only `pitched`
  *  is wired initially; the field lets an instrument declare intent for later. */
 export type EditorKind = 'pitched' | 'drum' | 'trigger'
 
 /**
- * A signature ability of an object instrument — its own MIDI lane. Bespoke and
+ * A signature ability of an object instrument - its own MIDI lane. Bespoke and
  * intrinsic: declared *by the instrument*, edited in a nested sub-row, and expressed
  * by the instrument's own render (the code escape hatch for now; a declarative
  * `onAbility` grammar grows from these later). A "lane" here is a whole MIDI editor,
- * not a labelled row. Not generic and not attachable — an ability belongs to one
+ * not a labelled row. Not generic and not attachable - an ability belongs to one
  * instrument and no other.
  */
 export interface AbilityLaneDef {
@@ -102,13 +102,13 @@ export interface ElementLayoutCtx extends TransformCtx {
   channels: Record<string, number>
 }
 
-/** An object / source / shape instrument — renders something. */
+/** An object / source / shape instrument - renders something. */
 export interface ObjectInstrumentDef {
   id: string
   name: string
   kind: 'object'
   params: ParamDef[]
-  /** This instrument's signature abilities — each becomes a nested MIDI-lane sub-row
+  /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
   /** Semantic labels for special MIDI pitches in this object's main piano roll. */

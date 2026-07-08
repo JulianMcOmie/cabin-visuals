@@ -10,8 +10,8 @@ const BPM_PER_PX = 0.5
 const DOUBLE_CLICK_MS = 350
 
 /**
- * Tempo readout that doubles as a vertical drag scrubber — drag up to raise the
- * BPM, down to lower it — and a double-click-to-type field. Writes the project
+ * Tempo readout that doubles as a vertical drag scrubber - drag up to raise the
+ * BPM, down to lower it - and a double-click-to-type field. Writes the project
  * store; the live transport follows via the bpm subscription in usePlayback.
  */
 export function BpmControl() {
@@ -64,7 +64,7 @@ export function BpmControl() {
   }
 
   // Readout and input share identical box metrics (padding, border, ch-based
-  // width for the current digit count), so toggling edit mode never reflows —
+  // width for the current digit count), so toggling edit mode never reflows -
   // and a 2-digit value doesn't reserve 3 digits of dead space.
   const box = 'inline-block box-content align-baseline font-mono text-[11px] tabular-nums px-1 rounded border'
   const chWidth = (len: number) => ({ width: `${Math.max(2, len)}ch` })
@@ -89,10 +89,10 @@ export function BpmControl() {
           className={`${box} bg-[var(--bg-elevated)] text-[var(--text)] border-[var(--border-strong)] outline-none focus:border-[var(--accent)]`}
         />
       ) : (
-        // Only the number is the drag / double-click target — not the label.
+        // Only the number is the drag / double-click target - not the label.
         <span
           onPointerDown={onPointerDown}
-          title="Drag up / down to change tempo — double-click to type"
+          title="Drag up / down to change tempo - double-click to type"
           style={chWidth(String(bpm).length)}
           className={`${box} border-transparent text-[var(--text)] cursor-ns-resize hover:text-white transition-colors`}
         >

@@ -4,14 +4,14 @@ import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
 import { useInstrumentFrame, seededRand, beatInBlock } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// RETRO ARCADE — a full-frame CRT screen: phosphor glow, horizontal scanlines, a
+// RETRO ARCADE - a full-frame CRT screen: phosphor glow, horizontal scanlines, a
 // slow rolling brightness band, radial vignette and a curved-bezel barrel hint,
 // all drawn on a 2D canvas mapped to a viewport plane (FractalTunnel's pattern).
 // Ambient: the tube hums along with zero notes. Each note flashes the whole
 // screen in its pitch-class color (hue = (pitch % 12) / 12), fading over
 // `flashDur`, intensity scaled by velocity. Notes at pitch >= 72 additionally
 // fire a channel-change static blip: a burst of seeded white noise cells whose
-// pattern re-rolls at 30 "frames" per second of beat-time — deterministic, so a
+// pattern re-rolls at 30 "frames" per second of beat-time - deterministic, so a
 // paused playhead shows one frozen noise frame and scrub == playback.
 
 const PARAMS: ParamDef[] = [
@@ -31,7 +31,7 @@ const PARAMS: ParamDef[] = [
   { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, default: 0.55 },
   { key: 'curvature', label: 'Barrel Curvature', min: 0, max: 1, step: 0.05, default: 0.6 },
 ]
-/** Rounded-rect path (manual — ctx.roundRect isn't in every lib.dom). */
+/** Rounded-rect path (manual - ctx.roundRect isn't in every lib.dom). */
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const rr = Math.min(r, w / 2, h / 2)
   ctx.moveTo(x + rr, y)
@@ -114,7 +114,7 @@ function CrtScanlinesVisual({ trackId }: { trackId: string }) {
     ctx.fillStyle = sp.bgColor ?? '#04070a'
     ctx.fillRect(0, 0, w, h)
 
-    // 2. Phosphor glow — a soft center bloom that breathes on the beat.
+    // 2. Phosphor glow - a soft center bloom that breathes on the beat.
     const breathe = 0.85 + 0.15 * Math.sin(state.beat * Math.PI)
     ctx.globalCompositeOperation = 'lighter'
     const glow = ctx.createRadialGradient(cx, cy, h * 0.05, cx, cy, h * 0.75)
@@ -161,7 +161,7 @@ function CrtScanlinesVisual({ trackId }: { trackId: string }) {
       }
     }
 
-    // 5. Occasional rolling band — a bright bar drifting down the tube.
+    // 5. Occasional rolling band - a bright bar drifting down the tube.
     const tc = ((elapsed % bandPeriod) + bandPeriod) % bandPeriod
     if (tc < bandTravel && bandStrength > 0) {
       const bandH = h * 0.16
@@ -189,7 +189,7 @@ function CrtScanlinesVisual({ trackId }: { trackId: string }) {
       ctx.fillRect(0, 0, w, h)
     }
 
-    // 8. Barrel hint — a black curved bezel eating the corners (evenodd frame).
+    // 8. Barrel hint - a black curved bezel eating the corners (evenodd frame).
     if (curvature > 0) {
       ctx.beginPath()
       ctx.rect(0, 0, w, h)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Effects Picker Menu — Architecture</title>
+<title>Effects Picker Menu - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,13 +36,13 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Effects Picker Menu</span>
-  <h1>Effects Picker Menu — Architecture</h1>
+  <h1>Effects Picker Menu - Architecture</h1>
   <p class="sub">Logic's plugin-slot gesture for the effects tab: an "+ Add effect" slot opens a nested category menu (Transform ▸ / Clone ▸ / Shader ▸) fed by the same registry the drag-in library uses. Drag-in stays; this is the second door to the same room.</p>
 </header>
 
 <h2>1 · The pieces already on the table</h2>
 <figure class="fig">
-  <div class="figtitle">Registry → menu — everything but the button exists</div>
+  <div class="figtitle">Registry → menu - everything but the button exists</div>
   <svg viewBox="0 0 900 320" role="img" aria-label="Picker composition">
     <defs><marker id="a10" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="270" height="120" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
@@ -66,7 +66,7 @@
     <text x="450" y="248" text-anchor="middle" font-size="15" fill="#565656">+ Add effect → [ Transform ▸ offset · rotate · scale ]  [ Clone ▸ echo · tile · radial symmetry · linear duplicate ·</text>
     <text x="450" y="270" text-anchor="middle" font-size="15" fill="#565656">rotational symmetry ]  [ Shader ▸ kaleidoscope · pixelate · chromatic aberration · opacity ]</text>
   </svg>
-  <figcaption>The menu is generated from the registry, never hand-listed — a new plugin file + registry entry appears in both the library AND this menu with zero extra wiring, which is the registry's whole promise.</figcaption>
+  <figcaption>The menu is generated from the registry, never hand-listed - a new plugin file + registry entry appears in both the library AND this menu with zero extra wiring, which is the registry's whole promise.</figcaption>
 </figure>
 
 <h2>2 · Decisions &amp; non-goals</h2>
@@ -75,16 +75,16 @@
   <tbody>
     <tr><td>The slot lives at the END of the instance list</td><td>Logic's mental model: existing effects stack top-to-bottom, the empty slot below invites the next one. Clicking an existing instance keeps opening its settings, unchanged.</td></tr>
     <tr><td>Generated from the registry, grouped by <code>category</code></td><td>One source of truth. Category display names/order defined once (Transform · Clone · Shader).</td></tr>
-    <tr><td>Duplicates allowed</td><td><code>addEffect</code> already permits two of the same plugin (two offsets compose); the menu doesn't grey out added items — unlike the automation menu, where one-lane-per-param is the rule.</td></tr>
+    <tr><td>Duplicates allowed</td><td><code>addEffect</code> already permits two of the same plugin (two offsets compose); the menu doesn't grey out added items - unlike the automation menu, where one-lane-per-param is the rule.</td></tr>
     <tr><td>Same menu on right-click of the effects list</td><td>Free once the component exists; both roads call the same <code>addEffect(trackId, pluginId)</code>.</td></tr>
     <tr><td>Non-goals</td><td>Search/filter in the menu (12 items don't need it) · replacing drag-in · effect reordering (separate concern; note if asked) · favorites.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the registry already knows the catalog and the timeline already grew a viewport-safe nested menu — this feature is one "+ Add effect" slot that marries them and calls the store action drag-in has always called.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the registry already knows the catalog and the timeline already grew a viewport-safe nested menu - this feature is one "+ Add effect" slot that marries them and calls the store action drag-in has always called.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">effects-picker-menu-implementation-plan.html</span>. Pieces: <span class="file">effects/index.ts</span> (registry) · <span class="file">TrackEditor.tsx</span> effects tab · SubMenu in <span class="file">TrackContextMenu.tsx</span> · <code>ProjectStore.addEffect</code>.</p>
+<p class="small muted">Architecture - build in <span class="file">effects-picker-menu-implementation-plan.html</span>. Pieces: <span class="file">effects/index.ts</span> (registry) · <span class="file">TrackEditor.tsx</span> effects tab · SubMenu in <span class="file">TrackContextMenu.tsx</span> · <code>ProjectStore.addEffect</code>.</p>
 
 </div>
 </body>

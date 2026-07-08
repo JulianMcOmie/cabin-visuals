@@ -3,7 +3,7 @@ import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
 import { upgradeDocument } from './upgrade'
 
-// The one door for project CRUD — the only file that names the `projects`
+// The one door for project CRUD - the only file that names the `projects`
 // table for the document. Every function runs under RLS as the signed-in user,
 // so a row can only ever be the caller's own.
 
@@ -13,7 +13,7 @@ export interface ProjectSummary {
   updatedAt: string
 }
 
-/** Spine columns only — never pulls a blob. Newest-edited first. */
+/** Spine columns only - never pulls a blob. Newest-edited first. */
 export async function list(): Promise<ProjectSummary[]> {
   const { data, error } = await getSupabase()
     .from('projects')
@@ -46,12 +46,12 @@ export async function save(id: string, doc: ProjectDocument): Promise<void> {
     .eq('id', id)
     .select('id')
   if (error) throw error
-  // RLS filters a non-owned/missing row to zero rows with no error — surface
+  // RLS filters a non-owned/missing row to zero rows with no error - surface
   // that as a failure instead of silently dropping the save.
   if (!data.length) throw new Error(`Project ${id} not found (or not yours)`)
 }
 
-/** Create a project — empty by default, or seeded from a document (templates). */
+/** Create a project - empty by default, or seeded from a document (templates). */
 export async function create(name: string, document?: ProjectDocument): Promise<ProjectSummary> {
   const supabase = getSupabase()
   const { data: auth, error: authError } = await supabase.auth.getUser()
@@ -73,7 +73,7 @@ export async function create(name: string, document?: ProjectDocument): Promise<
 }
 
 /** Rename a project. The name is a spine column, not part of the document, so
- *  autosave never touches it — this is the one write path for it. */
+ *  autosave never touches it - this is the one write path for it. */
 export async function rename(id: string, name: string): Promise<void> {
   const { data, error } = await getSupabase()
     .from('projects')

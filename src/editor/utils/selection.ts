@@ -5,7 +5,7 @@ import { useProjectStore } from '../store/ProjectStore'
 // place instead of scattered set() calls:
 //  · selecting a track keeps ITS selected blocks and deselects everyone else's;
 //  · re-selecting the selected track never toggles it off;
-//  · deselecting a track (empty space / Esc) deselects its blocks with it —
+//  · deselecting a track (empty space / Esc) deselects its blocks with it -
 //    blocks on OTHER tracks are left alone (no standing invariant is enforced:
 //    a track and foreign blocks may be selected at the same time);
 //  · a newly added track/instrument becomes the selection (blocks clear);

@@ -66,7 +66,7 @@ function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
 
     const currentBeat = state.beat
     const secPerBeat = state.secPerBeat
-    // Seconds a shell takes to expand from startSize to maxSize — its lifetime.
+    // Seconds a shell takes to expand from startSize to maxSize - its lifetime.
     const lifetime = (maxSize - startSize) / expansionSpeed
     const fadeThreshold = maxSize * fadeStart
 

@@ -1,8 +1,8 @@
 // Shared building blocks for the auth pages ("Console" redesign).
-// Reference: design_handoff_console_redesign/redesign/Login.dc.html — a centered
+// Reference: design_handoff_console_redesign/redesign/Login.dc.html - a centered
 // column on --bg-page: 56px logo linking home, a 400px flat card (--bg-panel,
 // 1px --border, 28px padding, 8px radius), and optional mono microcopy below.
-// Pure presentation — no auth logic lives here.
+// Pure presentation - no auth logic lives here.
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -48,7 +48,7 @@ export function AuthTitle({ title, sub }: { title: string; sub?: ReactNode }) {
   );
 }
 
-/** Flat 1px-bordered message panel — green/red TEXT on --bg-panel, no tinted bg. */
+/** Flat 1px-bordered message panel - green/red TEXT on --bg-panel, no tinted bg. */
 export function AuthBanner({ kind, children }: { kind: 'success' | 'error'; children: ReactNode }) {
   return (
     <div

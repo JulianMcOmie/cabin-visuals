@@ -3,7 +3,7 @@ import * as projectStorage from './projectStorage'
 import type { ProjectDocument } from './types'
 
 // Sign-in-to-save, phase 4 (docs/sign-in-to-save-architecture.html §5b): when
-// an anonymous user logs into an EXISTING account, their session is replaced —
+// an anonymous user logs into an EXISTING account, their session is replaced -
 // there's no linking. So the auth pages stash the anonymous project before
 // authentication, and the projects page redeems the stash into the real
 // account afterward. Conversion-at-signup never needs this (same uuid), and
@@ -30,7 +30,7 @@ export async function stashAnonWork(): Promise<void> {
     const stash: Carryover = { anonUserId: data.user.id, name, document }
     sessionStorage.setItem(KEY, JSON.stringify(stash))
   } catch {
-    /* stashing is a courtesy — never block auth on it */
+    /* stashing is a courtesy - never block auth on it */
   }
 }
 
@@ -42,7 +42,7 @@ export function takeCarryover(currentUserId: string): { name: string; document: 
     if (!raw) return null
     const stash = JSON.parse(raw) as Carryover
     sessionStorage.removeItem(KEY)
-    if (stash.anonUserId === currentUserId) return null // converted in place — nothing to carry
+    if (stash.anonUserId === currentUserId) return null // converted in place - nothing to carry
     return { name: stash.name, document: stash.document }
   } catch {
     return null

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Drag Highlights — Architecture</title>
+<title>Drag Highlights - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,13 +36,13 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Drag Highlights</span>
-  <h1>Drag Highlights — Architecture</h1>
-  <p class="sub">Two affordances sharing one theme — show where an action will land: (a) louder drop-target feedback when dragging instruments from the library, (b) highlight objects in the 3D view while hovering modulator-target options. (b) crosses into the renderer and collides with the pause canary — that collision is the only interesting design here.</p>
+  <h1>Drag Highlights - Architecture</h1>
+  <p class="sub">Two affordances sharing one theme - show where an action will land: (a) louder drop-target feedback when dragging instruments from the library, (b) highlight objects in the 3D view while hovering modulator-target options. (b) crosses into the renderer and collides with the pause canary - that collision is the only interesting design here.</p>
 </header>
 
-<h2>1 · (a) Library drag — amplify the channel that exists</h2>
+<h2>1 · (a) Library drag - amplify the channel that exists</h2>
 <figure class="fig">
-  <div class="figtitle">The drop indicator already flows through UIStore.trackDrop — it's just quiet</div>
+  <div class="figtitle">The drop indicator already flows through UIStore.trackDrop - it's just quiet</div>
   <svg viewBox="0 0 900 240" role="img" aria-label="Library drag channel">
     <defs><marker id="a14" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="40" width="240" height="90" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
@@ -59,18 +59,18 @@
     <path d="M560,85 L612,85" stroke="#141414" stroke-width="2" marker-end="url(#a14)"/>
     <rect x="20" y="164" width="860" height="60" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
     <text x="450" y="190" text-anchor="middle" font-size="15.5" font-weight="700" fill="#141414">Fix = presentation only: thicker insert bar + label-column wash + a "drop to add track" hint row when the list is short</text>
-    <text x="450" y="212" text-anchor="middle" font-size="14.5" fill="#565656">no new state, no new events — restyle what trackDrop already knows</text>
+    <text x="450" y="212" text-anchor="middle" font-size="14.5" fill="#565656">no new state, no new events - restyle what trackDrop already knows</text>
   </svg>
   <figcaption>The nest-into highlight (indigo ring on the label) exists and reads well; the between-rows insert line is the weak signal. Louder line + a tinted wash across the label column while any library drag is live.</figcaption>
 </figure>
 
-<h2>2 · (b) Modulator-target hover — a highlight channel into the renderer</h2>
-<p>Hovering "#drums" or "Cube 2 (branch)" in the target picker should light the corresponding objects in the 3D view. The data is easy — the picker already computes each option's scope; expanding scope→trackIds is <code>objectsForScope</code>'s exact logic. The design question is how a UI-hover may touch the scene <em>without lying to the pause canary</em>, which hashes the scene while paused and screams when anything changes without a beat or document edit.</p>
+<h2>2 · (b) Modulator-target hover - a highlight channel into the renderer</h2>
+<p>Hovering "#drums" or "Cube 2 (branch)" in the target picker should light the corresponding objects in the 3D view. The data is easy - the picker already computes each option's scope; expanding scope→trackIds is <code>objectsForScope</code>'s exact logic. The design question is how a UI-hover may touch the scene <em>without lying to the pause canary</em>, which hashes the scene while paused and screams when anything changes without a beat or document edit.</p>
 <table>
   <thead><tr><th>Option</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td>1 · Overlay objects — render separate outline meshes in a group the canary skips</td><td><strong>Chosen.</strong> A <code>HighlightOverlay</code> component reads <code>UIStore.hoveredTargetTrackIds</code>, draws wireframe/outline boxes at the targets' world transforms, inside a group flagged <code>userData.canaryIgnore</code>. Object materials are never touched — no restore bugs, no canary lie.</td></tr>
-    <tr><td>2 · Emissive boost on the real materials + canary reset on hover change</td><td>Rejected: mutating instrument materials from outside useInstrumentFrame breaks the "instruments own their appearance" rule, needs exact restore, and teaches the canary to accept UI-driven scene changes — a precedent that erodes the invariant.</td></tr>
+    <tr><td>1 · Overlay objects - render separate outline meshes in a group the canary skips</td><td><strong>Chosen.</strong> A <code>HighlightOverlay</code> component reads <code>UIStore.hoveredTargetTrackIds</code>, draws wireframe/outline boxes at the targets' world transforms, inside a group flagged <code>userData.canaryIgnore</code>. Object materials are never touched - no restore bugs, no canary lie.</td></tr>
+    <tr><td>2 · Emissive boost on the real materials + canary reset on hover change</td><td>Rejected: mutating instrument materials from outside useInstrumentFrame breaks the "instruments own their appearance" rule, needs exact restore, and teaches the canary to accept UI-driven scene changes - a precedent that erodes the invariant.</td></tr>
   </tbody>
 </table>
 
@@ -78,18 +78,18 @@
 <table>
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>Overlay, never material mutation</td><td>The pause invariant's enforcement (canary) stays airtight; the overlay group is declared UI chrome via <code>canaryIgnore</code> — one explicit, greppable escape hatch instead of ad-hoc exceptions.</td></tr>
+    <tr><td>Overlay, never material mutation</td><td>The pause invariant's enforcement (canary) stays airtight; the overlay group is declared UI chrome via <code>canaryIgnore</code> - one explicit, greppable escape hatch instead of ad-hoc exceptions.</td></tr>
     <tr><td>Hover state in UIStore, ephemeral</td><td><code>hoveredTargetTrackIds: string[]</code> + setter; set on option pointerenter, cleared on leave/close. Never persisted, never undoable.</td></tr>
     <tr><td>Scope expansion reuses resolve's brain</td><td>Promote <code>objectsForScope</code>'s logic to a shared helper so the picker's hover and resolve's routing can't disagree about what "#drums" means.</td></tr>
-    <tr><td>Both features are view-only</td><td>No document change, no engine change, no schema — the canary-ignore flag in the renderer's hash walk is the single engine-adjacent line.</td></tr>
-    <tr><td>Non-goals</td><td>Hover-highlight from the TIMELINE (selecting tracks already communicates) · glow/post-processing outlines (wireframe box first — cheap and legible) · highlighting modifiers/automation (they have no scene objects).</td></tr>
+    <tr><td>Both features are view-only</td><td>No document change, no engine change, no schema - the canary-ignore flag in the renderer's hash walk is the single engine-adjacent line.</td></tr>
+    <tr><td>Non-goals</td><td>Hover-highlight from the TIMELINE (selecting tracks already communicates) · glow/post-processing outlines (wireframe box first - cheap and legible) · highlighting modifiers/automation (they have no scene objects).</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> (a) is restyling a signal that already flows; (b) is a hover-driven overlay of outline boxes in a canary-ignored group — the scene's real objects are never touched, so the invariant machinery never has to learn about UI moods.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> (a) is restyling a signal that already flows; (b) is a hover-driven overlay of outline boxes in a canary-ignored group - the scene's real objects are never touched, so the invariant machinery never has to learn about UI moods.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">drag-highlights-implementation-plan.html</span>. Pieces: <span class="file">useLibraryDrag.ts</span> · <span class="file">trackDrop.ts</span> · <code>UIStore.trackDrop</code> · target picker in <span class="file">TrackEditor.tsx</span> · <code>objectsForScope</code> in <span class="file">resolve.ts</span> · <span class="file">pauseCanary.ts</span>.</p>
+<p class="small muted">Architecture - build in <span class="file">drag-highlights-implementation-plan.html</span>. Pieces: <span class="file">useLibraryDrag.ts</span> · <span class="file">trackDrop.ts</span> · <code>UIStore.trackDrop</code> · target picker in <span class="file">TrackEditor.tsx</span> · <code>objectsForScope</code> in <span class="file">resolve.ts</span> · <span class="file">pauseCanary.ts</span>.</p>
 
 </div>
 </body>

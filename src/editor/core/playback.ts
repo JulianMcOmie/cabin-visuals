@@ -18,7 +18,7 @@ interface EngineCallbacks {
 const AUDIO_LOOKAHEAD = 0.05
 
 /**
- * The TRANSPORT engine: the Tone transport and the RAF beat clock — the sole
+ * The TRANSPORT engine: the Tone transport and the RAF beat clock - the sole
  * producer of the beat and of the shared `when` anchor. Audio playback lives in
  * the audio engine (core/audio/), which this hands (beat, when) at every
  * transport event; visuals live in core/visual/, reading the beat per frame.
@@ -42,7 +42,7 @@ class PlaybackEngine {
     transport.stop()
     transport.bpm.value = bpm
 
-    // Position is the single source of truth — set it, don't add it back later.
+    // Position is the single source of truth - set it, don't add it back later.
     transport.position = beatToPosition(startBeat, beatsPerBar)
 
     // Arm transport + every audio block at the same audio-clock time.
@@ -64,7 +64,7 @@ class PlaybackEngine {
 
   /** Live tempo change: future advancement changes, the position doesn't. Every
    *  audio block's beat window just moved (fixed seconds, new beat mapping), so
-   *  re-arm while playing. Audio never time-stretches — it re-anchors. */
+   *  re-arm while playing. Audio never time-stretches - it re-anchors. */
   setBpm(bpm: number) {
     Tone.getTransport().bpm.value = bpm
     if (this.playing && this.callbacks) {

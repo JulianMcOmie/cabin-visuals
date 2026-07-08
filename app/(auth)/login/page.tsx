@@ -41,7 +41,7 @@ function LoginPageContent() {
       setIsLoading(true);
       setError(null);
       try {
-        // Logging in replaces any anonymous session — stash its work first so
+        // Logging in replaces any anonymous session - stash its work first so
         // the projects page can carry it into this account.
         await stashAnonWork();
         await handleSignInWithGoogle(response.credential);
@@ -62,7 +62,7 @@ function LoginPageContent() {
     }
   }
 
-  // Stash any anonymous work as soon as the login page opens — the password
+  // Stash any anonymous work as soon as the login page opens - the password
   // form posts to a server action, so this is the reliable pre-auth moment.
   useEffect(() => {
     void stashAnonWork();
@@ -133,7 +133,7 @@ function LoginPageContent() {
       <div className="flex flex-col items-center">
          <div id="g_id_onload" data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID} data-context="signin" data-ux_mode="popup" data-callback="handleGoogleSignInCallback" data-nonce="" data-itp_support="true" data-use_fedcm_for_prompt="false" style={{ display: 'none' }}></div>
          {/* GSI draws its own (dark, filled_black) button via the imperative
-             renderButton call — no g_id_signin class (that triggers GSI's
+             renderButton call - no g_id_signin class (that triggers GSI's
              declarative auto-render with WHITE defaults, overriding our theme)
              and no styled wrapper (a mismatched container strip looks wrong
              behind whatever width GSI decides to render). */}

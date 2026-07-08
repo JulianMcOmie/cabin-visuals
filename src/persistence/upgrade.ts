@@ -9,14 +9,14 @@ export const CURRENT_VERSION = 3
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
 // vN → vN+1, keyed by N. Append-only: a shipped step is never edited, so any
-// old blob can walk the chain to the current shape. Each step is pure — it
+// old blob can walk the chain to the current shape. Each step is pure - it
 // returns a new object and never mutates its input.
 const UPGRADES: Record<number, UpgradeStep> = {}
 
 // ── v1 → v2 ──────────────────────────────────────────────────────────────────
 // Three shape changes that shipped together with the audio-track feature:
 //  1. audioClip (single global descriptor) → audioClips (catalog keyed by ref)
-//  2. a v1 clip was hard-pinned to beat 0 — reproduce that exactly by
+//  2. a v1 clip was hard-pinned to beat 0 - reproduce that exactly by
 //     synthesizing an audio track (top of the root tracks) holding one block
 //     at bar 0 trimmed to the full clip, so old saves keep sounding identical
 //  3. track.visualPlugins → track.effects (the plugins/ → effects/ rename)

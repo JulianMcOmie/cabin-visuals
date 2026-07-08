@@ -1,16 +1,16 @@
 // The capability gate. Export is Chrome-first by decision: WebCodecs hardware
-// encoders or nothing (no MediaRecorder fallback — it records realtime and
+// encoders or nothing (no MediaRecorder fallback - it records realtime and
 // drops frames, which defeats the whole recompute-per-frame design). The
 // Export button reads this once and disables with a reason elsewhere.
 
 export interface ExportSupport {
   ok: boolean
-  /** Video works but no AAC encoder — offer video-only export instead of blocking. */
+  /** Video works but no AAC encoder - offer video-only export instead of blocking. */
   audioOk: boolean
   reason?: string
 }
 
-// H.264 High 4.2 — comfortably covers 1080p60.
+// H.264 High 4.2 - comfortably covers 1080p60.
 const VIDEO_CONFIG: VideoEncoderConfig = {
   codec: 'avc1.64002a',
   width: 1920,

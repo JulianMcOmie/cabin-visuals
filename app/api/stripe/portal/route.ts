@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { getStripe } from '@/utils/stripe'
 
-// POST { returnTo? } → { url } — Stripe's hosted billing portal, where a Pro
+// POST { returnTo? } → { url } - Stripe's hosted billing portal, where a Pro
 // user updates their card or cancels. Kept honest and self-serve from day one.
 
 export async function POST(request: NextRequest) {

@@ -556,7 +556,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => {
       const target = s.tracks[trackId]
       if (!target) return s
-      // Deleting a track takes its whole subtree with it — automation and ability
+      // Deleting a track takes its whole subtree with it - automation and ability
       // lanes are meaningless without their parent, and nested children go too.
       const doomed = new Set<string>()
       const queue = [trackId]
@@ -887,7 +887,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => {
       const parent = s.tracks[parentId]
       if (!parent) return s
-      // One automation lane per param — don't stack duplicates.
+      // One automation lane per param - don't stack duplicates.
       const exists = parent.childIds.some((cid) => {
         const c = s.tracks[cid]
         return c?.type === 'automation' && c.targetParam === paramKey
@@ -921,7 +921,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set((s) => {
       const parent = s.tracks[parentId]
       if (!parent) return s
-      // One ability track per ability — don't stack duplicates.
+      // One ability track per ability - don't stack duplicates.
       const exists = parent.childIds.some((cid) => {
         const c = s.tracks[cid]
         return c?.type === 'ability' && c.abilityKey === abilityKey
@@ -992,7 +992,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
           trimEnd: clip.duration,
         }],
       }
-      // Top of the track rows — the backing track leads the arrangement.
+      // Top of the track rows - the backing track leads the arrangement.
       return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [id, ...s.rootTrackIds] }
     })
     return id

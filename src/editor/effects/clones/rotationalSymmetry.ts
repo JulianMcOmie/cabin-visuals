@@ -12,7 +12,7 @@ function rand(n: number): number {
   return x - Math.floor(x)
 }
 
-/** Copies arranged in 3D — a sphere (Fibonacci), a ring, a helix, or a random cloud. */
+/** Copies arranged in 3D - a sphere (Fibonacci), a ring, a helix, or a random cloud. */
 export const rotationalSymmetryPlugin: VisualEffect = {
   id: 'rotationalSymmetry',
   name: 'Rotational Symmetry',
@@ -61,7 +61,7 @@ export const rotationalSymmetryPlugin: VisualEffect = {
             Math.sin(phi) * Math.sin(theta) * radius,
           )
         } else {
-          // sphere — Fibonacci distribution
+          // sphere - Fibonacci distribution
           const phi = Math.acos(1 - (2 * (idx + 0.5)) / copies)
           const theta = GOLDEN * idx + spinAngle
           pos.set(

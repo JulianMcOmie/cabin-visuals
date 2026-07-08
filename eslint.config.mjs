@@ -37,7 +37,7 @@ const dawOverrides = {
 };
 
 // The pause invariant, enforced: instrument visuals must be pure functions of
-// state.beat (+ params/notes) — see src/editor/core/visual/instrumentFrame.ts.
+// state.beat (+ params/notes) - see src/editor/core/visual/instrumentFrame.ts.
 // Banning every other time/randomness source makes the invariant unwritable
 // rather than merely discouraged. Frame access goes through useInstrumentFrame
 // (which deliberately exposes no clock/delta); randomness through seededRand.
@@ -52,7 +52,7 @@ const instrumentInvariant = {
             name: "@react-three/fiber",
             importNames: ["useFrame"],
             message:
-              "Instruments use useInstrumentFrame(trackId, cb) from core/visual/instrumentFrame — it exposes state.beat/state.secPerBeat and nothing wall-clock.",
+              "Instruments use useInstrumentFrame(trackId, cb) from core/visual/instrumentFrame - it exposes state.beat/state.secPerBeat and nothing wall-clock.",
           },
         ],
       },

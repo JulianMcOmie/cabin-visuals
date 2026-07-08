@@ -12,7 +12,7 @@ const DOUBLE_CLICK_MS = 350
 /**
  * Project-length readout that doubles as a vertical drag scrubber and a
  * double-click-to-type field, the same interaction as BpmControl. Writes
- * totalBars to the project store — the ruler, timeline width, and transport
+ * totalBars to the project store - the ruler, timeline width, and transport
  * end all follow from there.
  */
 export function ProjectLengthControl() {
@@ -65,7 +65,7 @@ export function ProjectLengthControl() {
   }
 
   // Readout and input share identical box metrics (padding, border, ch-based
-  // width for the current digit count), so toggling edit mode never reflows —
+  // width for the current digit count), so toggling edit mode never reflows -
   // and a 2-digit value doesn't reserve 3 digits of dead space.
   const box = 'inline-block box-content align-baseline font-mono text-[11px] tabular-nums px-1 rounded border'
   const chWidth = (len: number) => ({ width: `${Math.max(2, len)}ch` })
@@ -90,10 +90,10 @@ export function ProjectLengthControl() {
           className={`${box} bg-[var(--bg-elevated)] text-[var(--text)] border-[var(--border-strong)] outline-none focus:border-[var(--accent)]`}
         />
       ) : (
-        // Only the number is the drag / double-click target — not the label.
+        // Only the number is the drag / double-click target - not the label.
         <span
           onPointerDown={onPointerDown}
-          title="Drag up / down to change project length — double-click to type"
+          title="Drag up / down to change project length - double-click to type"
           style={chWidth(String(totalBars).length)}
           className={`${box} border-transparent text-[var(--text)] cursor-ns-resize hover:text-white transition-colors`}
         >

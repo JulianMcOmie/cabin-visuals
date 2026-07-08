@@ -4,11 +4,11 @@ import { useInstrumentFrame, beatInBlock } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// RETRO ARCADE — pong. A cube ball rallies between two paddles, crossing the
+// RETRO ARCADE - pong. A cube ball rallies between two paddles, crossing the
 // court once per beat (ambient: it rallies forever with zero notes). The ball's
 // position is a closed-form function of `state.beat`: phase advances 0.5 cycles
 // per beat, and every played note SMASHES the rally by injecting `smash` whole
-// extra crossings via a saturating exponential (1 - e^(-age/tau)) — speed spikes
+// extra crossings via a saturating exponential (1 - e^(-age/tau)) - speed spikes
 // then realigns to the beat grid, purely and scrub-safely. The most recent note's
 // pitch shapes the bounce: hops per crossing = 1 + (pitch % 3), arc height maps
 // pitch 36..84 onto baseBounce..baseBounce+bounceRange. Velocity feeds a decaying
@@ -36,7 +36,7 @@ const PARAMS: ParamDef[] = [
   { key: 'paddleColor', label: 'Paddle Color', type: 'color', default: '#22d3ee' },
   { key: 'courtColor', label: 'Court Color', type: 'color', default: '#4b5563' },
 ]
-/** Closed-form ball state at an arbitrary beat (pure — used for ball AND trail ghosts). */
+/** Closed-form ball state at an arbitrary beat (pure - used for ball AND trail ghosts). */
 function ballAt(
   b: number, notes: ResolvedNote[],
   smash: number, tau: number,
@@ -132,7 +132,7 @@ function PaddleBounceVisual({ trackId }: { trackId: string }) {
     const bs = ballAt(beat, state.notes, smash, tau, paddleX - ballSize * 0.6, yBase, baseAmp, ampRange)
     ball.position.set(bs.x, bs.y, 0)
     ball.scale.setScalar(ballSize)
-    // Steppy 8-bit spin — quantized to eighths of a beat.
+    // Steppy 8-bit spin - quantized to eighths of a beat.
     ball.rotation.z = Math.floor(beat * 8) * (Math.PI / 8)
     ;(ball.material as MeshBasicMaterial).color.set(sp.ballColor ?? '#ffffff')
 

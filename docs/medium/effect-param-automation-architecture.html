@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Effect-Param Automation — Architecture</title>
+<title>Effect-Param Automation - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -38,36 +38,36 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Effect-Param Automation</span>
-  <h1>Effect-Param Automation — Architecture</h1>
-  <p class="sub">Automation lanes learn a second kind of target: an effect instance's setting. The real deliverable is the <strong>param address</strong> — one addressing type that this feature, the envelope modulator, and tag automation all share. Design it once here; the other two become consumers.</p>
+  <h1>Effect-Param Automation - Architecture</h1>
+  <p class="sub">Automation lanes learn a second kind of target: an effect instance's setting. The real deliverable is the <strong>param address</strong> - one addressing type that this feature, the envelope modulator, and tag automation all share. Design it once here; the other two become consumers.</p>
 </header>
 
-<h2>1 · The param address — the cluster's shared decision</h2>
+<h2>1 · The param address - the cluster's shared decision</h2>
 <pre><code>// The one new concept. Everything that "aims a value at a knob" uses it.
 type ParamAddress =
   | { kind: 'param';  key: string }                          // instrument param (today's targetParam)
   | { kind: 'effect'; instanceId: string; key: string }      // an EffectInstance's setting   ← this doc
 // (the envelope modulator aims a ParamAddress; tag automation fans a ParamAddress
-//  across tagged tracks — same address, different scopes)</code></pre>
+//  across tagged tracks - same address, different scopes)</code></pre>
 
 <figure class="fig">
-  <div class="figtitle">Two overlays, same pattern — params had one; effect settings get the twin</div>
+  <div class="figtitle">Two overlays, same pattern - params had one; effect settings get the twin</div>
   <svg viewBox="0 0 900 310" role="img" aria-label="Overlay twins">
     <defs><marker id="a11" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="410" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
-    <text x="225" y="60" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">TODAY — instrument params</text>
+    <text x="225" y="60" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">TODAY - instrument params</text>
     <text x="225" y="88" text-anchor="middle" font-size="14.5" fill="#565656">lane(beat) → overlay → merged params →</text>
     <text x="225" y="110" text-anchor="middle" font-size="14.5" fill="#565656">instrument component reads state.params</text>
     <rect x="470" y="30" width="410" height="110" rx="10" fill="#141414"/>
-    <text x="675" y="60" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">NEW — effect settings</text>
+    <text x="675" y="60" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">NEW - effect settings</text>
     <text x="675" y="88" text-anchor="middle" font-size="14.5" fill="#fff">lane(beat) → overlay → merged settings →</text>
     <text x="675" y="110" text-anchor="middle" font-size="14.5" fill="#fff">wrapper reads state.effectSettings[instanceId]</text>
     <rect x="20" y="180" width="860" height="110" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
     <text x="450" y="212" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">The invariant both overlays honor: the document is never written by playback</text>
     <text x="450" y="238" text-anchor="middle" font-size="15" fill="#565656">base settings stay in track.effects[i].settings (the sliders, undo, autosave); the merged value exists only inside</text>
-    <text x="450" y="260" text-anchor="middle" font-size="15" fill="#565656">per-frame object state — a pure function of the beat, so scrubbing and export stay exact for free.</text>
+    <text x="450" y="260" text-anchor="middle" font-size="15" fill="#565656">per-frame object state - a pure function of the beat, so scrubbing and export stay exact for free.</text>
   </svg>
-  <figcaption>Wrappers (Transform/Clone/Shader) switch from reading the document's settings to reading the frame's merged settings — the single behavioral change outside the automation plumbing.</figcaption>
+  <figcaption>Wrappers (Transform/Clone/Shader) switch from reading the document's settings to reading the frame's merged settings - the single behavioral change outside the automation plumbing.</figcaption>
 </figure>
 
 <h2>2 · What the user sees</h2>
@@ -75,9 +75,9 @@ type ParamAddress =
   <thead><tr><th>Surface</th><th>Behavior</th></tr></thead>
   <tbody>
     <tr><td>Add-automation menu (track label right-click)</td><td>Grows one group per effect instance: "Radial Symmetry ▸ radius · count", after the instrument params. One-lane-per-address rule carries over.</td></tr>
-    <tr><td>The lane</td><td>Identical editing to param lanes — value rows scaled to the setting's min/max, same interpolation modes, same pitch-encoded keyframes.</td></tr>
-    <tr><td>Effect deleted</td><td>Its lanes enter the param-not-found state (keyframes preserved, re-aimable) — same treatment as a renamed instrument param.</td></tr>
-    <tr><td>Symmetric effects</td><td>The payoff item: radial copy's radius under a lane is the demo this feature exists for — that pair sequences immediately after this one.</td></tr>
+    <tr><td>The lane</td><td>Identical editing to param lanes - value rows scaled to the setting's min/max, same interpolation modes, same pitch-encoded keyframes.</td></tr>
+    <tr><td>Effect deleted</td><td>Its lanes enter the param-not-found state (keyframes preserved, re-aimable) - same treatment as a renamed instrument param.</td></tr>
+    <tr><td>Symmetric effects</td><td>The payoff item: radial copy's radius under a lane is the demo this feature exists for - that pair sequences immediately after this one.</td></tr>
   </tbody>
 </table>
 
@@ -87,16 +87,16 @@ type ParamAddress =
   <tbody>
     <tr><td><code>targetEffect</code> beside <code>targetParam</code>, not replacing it</td><td>Additive optional fields → no document upgrade; old lanes untouched. (A later migration to a single ParamAddress field can ride the NEXT schema bump, whenever one happens for other reasons.)</td></tr>
     <tr><td>Address by <code>instanceId</code>, never by plugin id or list index</td><td>Two echoes on one track must automate independently; reordering effects must not re-aim lanes.</td></tr>
-    <tr><td>Overlay merges in computeAtBeat, wrappers read merged</td><td>The params overlay's exact twin — one mental model, one code shape, canary-safe.</td></tr>
+    <tr><td>Overlay merges in computeAtBeat, wrappers read merged</td><td>The params overlay's exact twin - one mental model, one code shape, canary-safe.</td></tr>
     <tr><td>Numeric settings only</td><td>Same rule as params (keyframes interpolate numbers). Enabled/bypass automation is NOT this feature.</td></tr>
     <tr><td>Non-goals</td><td>Modulator→effect routing (comes free later via ParamAddress if wanted) · per-keyframe curves (orthogonal) · automating <code>enabled</code>.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> mint the ParamAddress type, give effect settings the same per-frame overlay instrument params already have, point the wrappers at the merged values — and two future features (envelope modulator, tag automation) inherit their targeting for free.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> mint the ParamAddress type, give effect settings the same per-frame overlay instrument params already have, point the wrappers at the merged values - and two future features (envelope modulator, tag automation) inherit their targeting for free.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">effect-param-automation-implementation-plan.html</span>. Cluster companions: <span class="file">envelope-modulator-*.html</span>, <span class="file">tag-automation-*.html</span> — this pair lands first.</p>
+<p class="small muted">Architecture - build in <span class="file">effect-param-automation-implementation-plan.html</span>. Cluster companions: <span class="file">envelope-modulator-*.html</span>, <span class="file">tag-automation-*.html</span> - this pair lands first.</p>
 
 </div>
 </body>

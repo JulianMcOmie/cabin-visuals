@@ -7,7 +7,7 @@
 //  - body.cursor-locked  → forces --drag-cursor everywhere (from the moment of press).
 //  - body.drag-moving    → also swallows pointer events on everything else, so a drag
 //    can't collaterally hover/click/animate other UI. This is applied only once the
-//    pointer has actually MOVED past a small threshold — several gestures lock on
+//    pointer has actually MOVED past a small threshold - several gestures lock on
 //    pointerdown before a drag is confirmed, and suppressing pointer events during a
 //    plain press would break the native click / double-click (the pointerup would
 //    land on the element behind). No movement = a click, and it's left untouched.

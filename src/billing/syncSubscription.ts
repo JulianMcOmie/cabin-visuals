@@ -6,7 +6,7 @@ import { createAdminClient } from '../utils/supabase/admin'
 // confirm redirect, so a paid user goes Pro even if webhooks aren't set up yet.
 
 /** current_period_end lives on the subscription in older Stripe API versions
- *  and on its items in newer ones — read whichever is present. */
+ *  and on its items in newer ones - read whichever is present. */
 function periodEnd(sub: Stripe.Subscription): string | null {
   const legacy = (sub as unknown as { current_period_end?: number }).current_period_end
   const fromItem = sub.items?.data?.[0]?.current_period_end

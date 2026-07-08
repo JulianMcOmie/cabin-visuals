@@ -8,12 +8,12 @@ import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// Ported from Excellent DAW. A neon 3D Hopf fibration — nested interlocking tori of
+// Ported from Excellent DAW. A neon 3D Hopf fibration - nested interlocking tori of
 // fiber curves, driven by 12 octave-looped MIDI transformations. The Hopf map / quaternion /
 // stereographic-projection math and fiber-curve geometry are Tyler's verbatim; only the
 // state reads are rewired (the note history is folded into the fibration state each frame,
-// so everything is a pure function of the playhead — pause is static, scrub == playback).
-// Tyler's palette is dropped. Not full-frame — it renders fiber curves in 3D space.
+// so everything is a pure function of the playhead - pause is static, scrub == playback).
+// Tyler's palette is dropped. Not full-frame - it renders fiber curves in 3D space.
 
 // ────────────────────────────────────────────
 // Hopf Fibration Mathematics (verbatim)
@@ -37,7 +37,7 @@ function hopfFiberPoint(theta: number, phi: number, t: number): [number, number,
 
 /**
  * Stereographic projection S³ → R³, projecting from the pole (0,0,0,1).
- * When x₄ → 1, the projection explodes outward — this is the "pole burst"
+ * When x₄ → 1, the projection explodes outward - this is the "pole burst"
  * effect. We soft-clamp to maxDist to keep it visually bounded while
  * preserving the dramatic stretching.
  */
@@ -127,14 +127,14 @@ function disposeNeonFiber(parent: THREE.Group, fiber: NeonFiber) {
 }
 
 // ────────────────────────────────────────────
-// Fibration state (recomputed per frame — pure in the playhead)
+// Fibration state (recomputed per frame - pure in the playhead)
 // ────────────────────────────────────────────
 
 interface HopfState {
-  // Continuous — rotation-direction integral, in signed beat-time seconds
+  // Continuous - rotation-direction integral, in signed beat-time seconds
   rotTime: number
 
-  // Discrete — changed instantly by MIDI note-ons
+  // Discrete - changed instantly by MIDI note-ons
   thetaBase: number    // Base latitude on S² (which torus family)
   polePulse: number    // Pole burst intensity (decays)
   brightPulse: number  // Flash intensity (decays)
@@ -159,7 +159,7 @@ interface HopfState {
 /**
  * Fold the note history up to `beat` into the fibration state. A pure function of
  * the playhead: discrete transforms replay from all note-ons at or before `beat`,
- * and the pulse envelopes decay by note age instead of per-frame deltas — so a
+ * and the pulse envelopes decay by note age instead of per-frame deltas - so a
  * static playhead is a static frame, and scrubbing reproduces playback exactly.
  * `notes` must be sorted by beat.
  */
@@ -187,7 +187,7 @@ function computeHopfState(notes: ResolvedNote[], beat: number, secPerBeat: numbe
     const n = ((note.pitch % 12) + 12) % 12
     const v = note.velocity <= 1 ? note.velocity : note.velocity / 127
     const ageSec = (beat - note.beat) * secPerBeat
-    // Flash decay 0.05^age drops below the 0.005 cutoff within 2s — skip older notes.
+    // Flash decay 0.05^age drops below the 0.005 cutoff within 2s - skip older notes.
     const flashDecay = ageSec < 2 ? Math.pow(0.05, ageSec) : 0
 
     // Integrate signed rotation time up to this note (B notes reverse direction)
@@ -195,59 +195,59 @@ function computeHopfState(notes: ResolvedNote[], beat: number, secPerBeat: numbe
     lastBeat = note.beat
 
     switch (n) {
-      case 0: // C — Shift fiber family θ
+      case 0: // C - Shift fiber family θ
         hs.thetaBase += (Math.PI / 6) * (0.5 + v * 0.5)
         if (hs.thetaBase > Math.PI * 2) hs.thetaBase -= Math.PI * 2
         hs.brightPulse = Math.max(hs.brightPulse, v * 0.5 * flashDecay)
         break
 
-      case 1: // C# — Pole burst
+      case 1: // C# - Pole burst
         hs.polePulse = (0.4 + v * 0.6) * Math.pow(0.01, ageSec)
         hs.brightPulse = Math.max(hs.brightPulse, v * flashDecay)
         break
 
-      case 2: // D — Add torus layer
+      case 2: // D - Add torus layer
         hs.layerCount = Math.min(hs.layerCount + 1, 6)
         hs.brightPulse = Math.max(hs.brightPulse, 0.3 * flashDecay)
         break
 
-      case 3: // D# — Remove torus layer
+      case 3: // D# - Remove torus layer
         hs.layerCount = Math.max(1, hs.layerCount - 1)
         break
 
-      case 4: // E — Invert projection (inside-out)
+      case 4: // E - Invert projection (inside-out)
         hs.projSign *= -1
         hs.brightPulse = Math.max(hs.brightPulse, v * 0.7 * flashDecay)
         break
 
-      case 5: // F — θ rotation 60°
+      case 5: // F - θ rotation 60°
         hs.thetaShift += (Math.PI / 3) * (0.5 + v * 0.5)
         hs.brightPulse = Math.max(hs.brightPulse, v * 0.4 * flashDecay)
         break
 
-      case 6: // F# — φ rotation 90°
+      case 6: // F# - φ rotation 90°
         hs.phiShift += (Math.PI / 2) * (0.5 + v * 0.5)
         break
 
-      case 7: // G — Dehn twist (phase offset)
+      case 7: // G - Dehn twist (phase offset)
         hs.twist += (Math.PI / 4) * (0.5 + v * 0.5)
         break
 
-      case 8: // G# — Mirror flip
+      case 8: // G# - Mirror flip
         hs.axisFlip *= -1
         hs.brightPulse = Math.max(hs.brightPulse, v * 0.5 * flashDecay)
         break
 
-      case 9: // A — Scale burst
+      case 9: // A - Scale burst
         hs.scalePulse = 1 + (0.5 + v * 1.0) * Math.exp(-5 * ageSec)
         hs.brightPulse = Math.max(hs.brightPulse, v * 0.8 * flashDecay)
         break
 
-      case 10: // A# — Hue rotation
+      case 10: // A# - Hue rotation
         hs.hueOffset = (hs.hueOffset + 1 / 6 + v / 6) % 1
         break
 
-      case 11: // B — Reverse rotation
+      case 11: // B - Reverse rotation
         hs.rotDir *= -1
         break
     }
@@ -317,7 +317,7 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
     const flowSpd = par.flowSpeed ?? 0.15
     const tSpread = par.thetaSpread ?? 0.9
 
-    // Beat-time in seconds — the drift/flow/rotation frequencies were tuned in seconds.
+    // Beat-time in seconds - the drift/flow/rotation frequencies were tuned in seconds.
     const t = state.beat * state.secPerBeat
 
     // ── Fold note history into fibration state (pure in the playhead) ──

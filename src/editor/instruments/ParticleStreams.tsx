@@ -6,7 +6,7 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Note-triggered particle strings that rush outward and toward the
 // camera in fast fading streams. Each note drives a burst of streams, derived per frame from
-// the note list (pure function of the beat — scrub == playback). Tyler's palette color-mode
+// the note list (pure function of the beat - scrub == playback). Tyler's palette color-mode
 // is dropped (no palettes here); colorMode 0 = mono black, 1 = pitch colours.
 // Particle simulation math + GLSL Points shader are Tyler's verbatim.
 
@@ -196,12 +196,12 @@ function ParticleStreamsVisual({ trackId }: { trackId: string }) {
       backgroundRef.current.visible = (p.whiteBackground ?? 1) >= 0.5
     }
 
-    // Beat-time seconds — the flicker/spiral/breath clock. Matches wall time during
+    // Beat-time seconds - the flicker/spiral/breath clock. Matches wall time during
     // playback at default bpm, and freezes with the playhead when paused.
     const tSec = state.beat * state.secPerBeat
 
     // Alive bursts are derived from the note list every frame (never spawned into a
-    // ref), so any scrub — forward or backward — reconstructs exactly the bursts
+    // ref), so any scrub - forward or backward - reconstructs exactly the bursts
     // playback shows at that beat. A burst is alive while its note-on age (in
     // seconds, via secPerBeat) is inside the envelope's total lifetime.
     const totalLifetime = attackDuration + travelDuration + fadeDuration + trailDuration

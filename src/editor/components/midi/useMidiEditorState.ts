@@ -18,7 +18,7 @@ interface UseMidiEditorStateOptions {
  *
  * The piano roll edits a local copy of the block's notes at interaction speed,
  * so a drag never writes the store on every frame. The store is written via
- * `commit` exactly once per note gesture — on pointer-up, and after discrete
+ * `commit` exactly once per note gesture - on pointer-up, and after discrete
  * edits like delete/paste. One store write per gesture means one undo step per
  * gesture, so fast note editing stays individually undoable (nothing is batched
  * together the way a debounced timer-save would merge rapid edits).
@@ -49,7 +49,7 @@ export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiE
     prevBlockIdRef.current = block.id
 
     if (localEditRef.current && !blockChanged) {
-      // This change came from our own commit writing back to the store — skip
+      // This change came from our own commit writing back to the store - skip
       localEditRef.current = false
       return
     }

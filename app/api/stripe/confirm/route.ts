@@ -6,7 +6,7 @@ import { syncSubscriptionRow } from '@/billing/syncSubscription'
 // session with Stripe directly and mirror the subscription into the DB, then
 // bounce back to where the user upgraded from. This is the webhook-independent
 // path: dev without `stripe listen` still flips users to Pro instantly.
-// Writing from the session's own metadata is safe — session ids are
+// Writing from the session's own metadata is safe - session ids are
 // unguessable and come from Stripe's redirect, and the only effect is marking
 // that session's already-paid user as subscribed.
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         await syncSubscriptionRow(sub, session.metadata?.user_id ?? undefined)
       }
     } catch (err) {
-      // Don't strand the user on an API route — the webhook will still sync.
+      // Don't strand the user on an API route - the webhook will still sync.
       console.error('Checkout confirm failed (webhook will catch up):', err)
     }
   }

@@ -3,7 +3,7 @@ import type { TemplateDef } from './library'
 
 // Volume 2: the Retro Arcade theme template (sole survivor of the big agent
 // batch). Its pattern is written against the instruments' exact pitch
-// vocabularies (see docs/instrument-note-semantics.md) — pitch numbers here
+// vocabularies (see docs/instrument-note-semantics.md) - pitch numbers here
 // are commands, not arbitrary notes.
 
 const BARS = 16

@@ -2,7 +2,7 @@
 -- {userId}/{projectId}/{clipId}. Buckets and storage.objects policies aren't
 -- expressible in db/schema.ts (Drizzle has no Storage concept), so this is a
 -- hand-written migration in the same chain. RLS keys on the first path folder
--- equalling auth.uid() — the standard Supabase Storage ownership pattern.
+-- equalling auth.uid() - the standard Supabase Storage ownership pattern.
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('project-audio', 'project-audio', false)
 ON CONFLICT (id) DO NOTHING;

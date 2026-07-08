@@ -1,4 +1,4 @@
-// Resolved-graph types — derived by the engine, never persisted. The document
+// Resolved-graph types - derived by the engine, never persisted. The document
 // types (Track/Block/Note) live in src/editor/types.ts; the dependency points one
 // way (engine → document), which keeps the editor independent of the engine.
 
@@ -36,7 +36,7 @@ export interface ResolvedNote {
   blockEndBeat: number
   pitch: number
   velocity: number
-  /** Note length in beats — a modifier note's [beat, beat+durationBeats) is its region. */
+  /** Note length in beats - a modifier note's [beat, beat+durationBeats) is its region. */
   durationBeats: number
 }
 
@@ -64,7 +64,7 @@ export interface ResolvedObject {
   elementOpacities: number[]
   /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
   notes: ResolvedNote[]
-  /** Blackout spans from `mute` child modifiers — the object is hidden inside them. */
+  /** Blackout spans from `mute` child modifiers - the object is hidden inside them. */
   blackouts: BlackoutRegion[]
   /** This object's ability-lane notes, keyed by the instrument's ability key. The
    *  instrument's own render consumes these (the code escape hatch). Empty if the
@@ -82,7 +82,7 @@ export interface ResolvedObject {
   scratchAdd: StateVector
   scratchInputs: Record<string, number>
   scratchChannels: Record<string, number>
-  /** Cross-cutting group labels — top-level movers target tags (see Routing). */
+  /** Cross-cutting group labels - top-level movers target tags (see Routing). */
   tags: string[]
 }
 
@@ -112,7 +112,7 @@ export interface ResolvedGraph {
 
 /** Per-frame state the renderer pulls for one object. */
 export interface ObjectState {
-  /** The playhead this frame (fractional beats) — THE time source for instruments.
+  /** The playhead this frame (fractional beats) - THE time source for instruments.
    *  The pause invariant: every visual is a pure function of this (+ params/notes),
    *  so a static playhead is a static frame and scrub == playback. */
   beat: number
@@ -120,11 +120,11 @@ export interface ObjectState {
   secPerBeat: number
   params: Record<string, number>
   /** Decaying pulse from the object's own most recent note (the old implicit
-   *  `energy` port) — the universal "a note just hit" signal instruments read. */
+   *  `energy` port) - the universal "a note just hit" signal instruments read. */
   energy: number
   /** True this frame if a mute modifier's region covers the current beat (hide it). */
   blackedOut: boolean
-  /** World transform (local composed with all ancestors). Reused across frames —
+  /** World transform (local composed with all ancestors). Reused across frames -
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
   elementCount: number
@@ -141,6 +141,6 @@ export interface ObjectState {
    *  so a pitch-reactive instrument can read it. Static per resolve. */
   notes: ResolvedNote[]
   /** The notes live at the current beat (`beat ∈ [note.beat, note.beat+duration)`),
-   *  recomputed each frame — the analogue of Tyler's `activeNotes`. */
+   *  recomputed each frame - the analogue of Tyler's `activeNotes`. */
   activeNotes: ResolvedNote[]
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Render Performance — Implementation Plan</title>
+<title>Render Performance - Implementation Plan</title>
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
@@ -64,8 +64,8 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Render Performance</span>
-  <h1>Render Performance — Implementation Plan</h1>
-  <p class="sub">Turning <span class="file">render-lag-architecture.html</span> into specific files and functions: a render governor that idles the loop when the beat is static, an adaptive quality scalar that scales the frame to the machine, and — behind them — a shader-port of the worst Canvas-2D instruments. Each phase ships alone and helps on its own; nothing changes the instrument authoring contract.</p>
+  <h1>Render Performance - Implementation Plan</h1>
+  <p class="sub">Turning <span class="file">render-lag-architecture.html</span> into specific files and functions: a render governor that idles the loop when the beat is static, an adaptive quality scalar that scales the frame to the machine, and - behind them - a shader-port of the worst Canvas-2D instruments. Each phase ships alone and helps on its own; nothing changes the instrument authoring contract.</p>
 </header>
 
 <div class="card">
@@ -81,30 +81,30 @@
   </nav>
 </div>
 
-<p class="muted small">This plan adds <strong>one small module</strong> — <span class="file">core/visual/renderGovernor</span> (frameloop control + the quality scalar) — plus a shared <code>markTextureIfChanged</code> helper, a DPR cap on the <span class="file">&lt;Canvas&gt;</span>, and a per-instrument <code>quality</code> read in the full-frame/particle instruments. <strong>No document change, no store-shape change, no instrument-contract change</strong> — instruments remain pure functions of the beat; the heaviest ones additionally read a global quality scalar to size their canvas/particle budget. The export path is untouched (it pins its own frameloop/DPR). Decisions baked in from the architecture doc: render-on-demand while paused (safe under the pause invariant) · DPR clamp ~1.5 · gate <code>needsUpdate</code> on change · adaptive quality on R3F's <code>performance</code> API · aspect-cap the fixed-1080p canvases · shader-port the top four Canvas-2D instruments, deferred structural worker option.</p>
+<p class="muted small">This plan adds <strong>one small module</strong> - <span class="file">core/visual/renderGovernor</span> (frameloop control + the quality scalar) - plus a shared <code>markTextureIfChanged</code> helper, a DPR cap on the <span class="file">&lt;Canvas&gt;</span>, and a per-instrument <code>quality</code> read in the full-frame/particle instruments. <strong>No document change, no store-shape change, no instrument-contract change</strong> - instruments remain pure functions of the beat; the heaviest ones additionally read a global quality scalar to size their canvas/particle budget. The export path is untouched (it pins its own frameloop/DPR). Decisions baked in from the architecture doc: render-on-demand while paused (safe under the pause invariant) · DPR clamp ~1.5 · gate <code>needsUpdate</code> on change · adaptive quality on R3F's <code>performance</code> API · aspect-cap the fixed-1080p canvases · shader-port the top four Canvas-2D instruments, deferred structural worker option.</p>
 
 <!-- A -->
-<h2 id="components">A · Components that change — and one layer down</h2>
+<h2 id="components">A · Components that change - and one layer down</h2>
 <p>Highest level first, then the key function inside each. Files in <span class="file">monospace</span>; badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span>.</p>
 
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">core/visual/renderGovernor.ts</span> — the brain</h4>
-  <p class="small">A tiny module (no React) holding two pieces of global state: the current <code>frameloop</code> intent and a <code>quality</code> scalar (1.0…0.5). Exposes <code>getQuality()</code> for instruments and <code>requestRender()</code> for the demand path. Subscribes to nothing itself — it's driven by the component below.</p>
+  <h4><span class="badge b-new">new</span> <span class="file">core/visual/renderGovernor.ts</span> - the brain</h4>
+  <p class="small">A tiny module (no React) holding two pieces of global state: the current <code>frameloop</code> intent and a <code>quality</code> scalar (1.0…0.5). Exposes <code>getQuality()</code> for instruments and <code>requestRender()</code> for the demand path. Subscribes to nothing itself - it's driven by the component below.</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">components/visual/RenderGovernor.tsx</span> — inside the Canvas</h4>
+  <h4><span class="badge b-new">new</span> <span class="file">components/visual/RenderGovernor.tsx</span> - inside the Canvas</h4>
   <p class="small">Mounted in <span class="file">&lt;Canvas&gt;</span> next to <code>VisualBeatSync</code>. Reads R3F's <code>invalidate</code>/<code>setFrameloop</code>/<code>setDpr</code>. Watches <code>TimeStore.isPlaying</code> (→ <code>always</code> while playing, <code>demand</code> while paused) and subscribes to the change events (scrub, edit, resize) to fire one <code>invalidate()</code>. When playing, runs the quality feedback loop (measure → adjust scalar → <code>setDpr</code>).</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> — the Canvas props + mount</h4>
+  <h4><span class="badge b-edit">edit</span> <span class="file">App.tsx</span> - the Canvas props + mount</h4>
   <p class="small">Add <code>dpr={[1, 1.5]}</code> and <code>frameloop="demand"</code> to <span class="file">&lt;Canvas&gt;</span> (the governor flips it to <code>always</code> on play). Mount <code>&lt;RenderGovernor /&gt;</code>. One-line each.</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-new">new</span> <span class="file">core/visual/textureUpdate.ts</span> — the upload gate</h4>
-  <p class="small"><code>markTextureIfChanged(texture, signature)</code> — sets <code>needsUpdate</code> only when the frame's content signature (beat + relevant params) differs from last call. The Canvas-2D instruments call this instead of <code>texture.needsUpdate = true</code>.</p>
+  <h4><span class="badge b-new">new</span> <span class="file">core/visual/textureUpdate.ts</span> - the upload gate</h4>
+  <p class="small"><code>markTextureIfChanged(texture, signature)</code> - sets <code>needsUpdate</code> only when the frame's content signature (beat + relevant params) differs from last call. The Canvas-2D instruments call this instead of <code>texture.needsUpdate = true</code>.</p>
 </div>
 <div class="comp">
-  <h4><span class="badge b-edit">edit</span> the full-frame &amp; particle instruments — read <code>quality</code></h4>
+  <h4><span class="badge b-edit">edit</span> the full-frame &amp; particle instruments - read <code>quality</code></h4>
   <p class="small">Each heavy instrument multiplies its canvas resolution (or particle count) by <code>getQuality()</code>, and routes its texture-dirty flag through the gate. Mechanical, per-file. The fixed-1080p ones (<span class="file">DiamondLattice</span>, <span class="file">WindowsXP</span>) also switch to aspect-scaled sizing.</p>
 </div>
 
@@ -115,17 +115,17 @@
   <tr><th>Phase</th><th>Delivers</th><th>Size</th></tr>
   <tr><td>1 · Render-on-demand while paused</td><td>Editing is instant on any machine, regardless of mounted instruments. Idle GPU load → zero.</td><td>Small</td></tr>
   <tr><td>2 · DPR clamp + upload gate</td><td>Fewer framebuffer pixels; a paused editor uploads zero textures.</td><td>Small</td></tr>
-  <tr><td>3 · Adaptive quality scalar</td><td>Playback self-downscales to fit the machine's frame budget — the direct Windows/Mac fix.</td><td>Medium</td></tr>
+  <tr><td>3 · Adaptive quality scalar</td><td>Playback self-downscales to fit the machine's frame budget - the direct Windows/Mac fix.</td><td>Medium</td></tr>
   <tr><td>4 · Aspect-cap the 1080p canvases</td><td>DiamondLattice/WindowsXP stop drawing 1080p for a small viewport (¼ the cost).</td><td>Small</td></tr>
-  <tr><td>5 · Shader-port the top Canvas-2D instruments</td><td>Deletes the per-frame CPU draw + upload for the four worst offenders — the durable Windows win.</td><td>Large, staged</td></tr>
-  <tr><td>(later) OffscreenCanvas worker</td><td>Decouples render cost from UI responsiveness entirely.</td><td>Large — deferred</td></tr>
+  <tr><td>5 · Shader-port the top Canvas-2D instruments</td><td>Deletes the per-frame CPU draw + upload for the four worst offenders - the durable Windows win.</td><td>Large, staged</td></tr>
+  <tr><td>(later) OffscreenCanvas worker</td><td>Decouples render cost from UI responsiveness entirely.</td><td>Large - deferred</td></tr>
 </table>
 <div class="note"><strong>Measure before phase 5.</strong> A Chrome DevTools Performance capture on the Windows machine (while a laggy instrument plays) should show <code>texImage2D</code>/GPU-commit dominating the frame. Phases 1–4 are worth doing whatever the trace says; phase 5 is a real rewrite and wants that confirmation first.</div>
 
 <!-- C -->
-<h2 id="governor">C · The render governor — frameloop control</h2>
+<h2 id="governor">C · The render governor - frameloop control</h2>
 <p>The governor's demand path is the whole phase-1 payoff. The shape:</p>
-<pre><code><span class="c">// RenderGovernor.tsx — mounted inside &lt;Canvas&gt;</span>
+<pre><code><span class="c">// RenderGovernor.tsx - mounted inside &lt;Canvas&gt;</span>
 <span class="k">const</span> invalidate = useThree((s) =&gt; s.invalidate)
 <span class="k">const</span> setFrameloop = useThree((s) =&gt; s.setFrameloop)
 
@@ -147,7 +147,7 @@ useEffect(() =&gt; {
   ]
   <span class="k">return</span> () =&gt; unsubs.forEach((u) =&gt; u())
 }, [])</code></pre>
-<div class="warn"><strong>The one correctness question:</strong> can a frame be dropped that should have painted? Only if something moves the picture without one of these events firing. The pause invariant forbids beat-independent motion (the dev canary trips on it), and every scene input — beat, params, viewport — has a subscription above. A resize triggered by <code>ResizeObserver</code> rather than the panel-fraction store is the one to watch; R3F already invalidates on its own canvas resize, so this is covered, but it's the first thing to check if a stale frame ever appears.</div>
+<div class="warn"><strong>The one correctness question:</strong> can a frame be dropped that should have painted? Only if something moves the picture without one of these events firing. The pause invariant forbids beat-independent motion (the dev canary trips on it), and every scene input - beat, params, viewport - has a subscription above. A resize triggered by <code>ResizeObserver</code> rather than the panel-fraction store is the one to watch; R3F already invalidates on its own canvas resize, so this is covered, but it's the first thing to check if a stale frame ever appears.</div>
 
 <!-- D -->
 <h2 id="quality">D · The quality scalar &amp; the knobs</h2>
@@ -161,44 +161,44 @@ useEffect(() =&gt; {
 }</code></pre>
 <p>The scalar feeds three knobs, each already a single number in the code:</p>
 <ul>
-  <li><strong>Canvas DPR</strong> — <code>setDpr(baseDpr * quality)</code> from the governor (cheapest, whole-scene).</li>
-  <li><strong>Full-frame canvas resolution</strong> — the <code>texH</code>/<code>texW</code> formula (and the fixed <code>1920×1080</code> ones) multiply by <code>quality</code>; halving <code>texH</code> quarters both the 2D draw and the upload.</li>
-  <li><strong>Particle counts</strong> — <code>particleCount * quality</code> in the points instruments (ParticleStreams' 92k, ParticleRiser's 9k, BeatParticleKit's 24.9k).</li>
+  <li><strong>Canvas DPR</strong> - <code>setDpr(baseDpr * quality)</code> from the governor (cheapest, whole-scene).</li>
+  <li><strong>Full-frame canvas resolution</strong> - the <code>texH</code>/<code>texW</code> formula (and the fixed <code>1920×1080</code> ones) multiply by <code>quality</code>; halving <code>texH</code> quarters both the 2D draw and the upload.</li>
+  <li><strong>Particle counts</strong> - <code>particleCount * quality</code> in the points instruments (ParticleStreams' 92k, ParticleRiser's 9k, BeatParticleKit's 24.9k).</li>
 </ul>
-<div class="note"><strong>Why a scalar and not per-instrument tuning:</strong> one global number keeps the governor simple and the behavior legible ("the machine is at 75%"), and it composes — three heavy instruments share one budget instead of each guessing. Instruments opt in by reading <code>getQuality()</code>; those that don't are simply unaffected.</div>
+<div class="note"><strong>Why a scalar and not per-instrument tuning:</strong> one global number keeps the governor simple and the behavior legible ("the machine is at 75%"), and it composes - three heavy instruments share one budget instead of each guessing. Instruments opt in by reading <code>getQuality()</code>; those that don't are simply unaffected.</div>
 
 <!-- E -->
 <h2 id="phases">E · Phase-by-phase build (with files)</h2>
 
-<h3>Phase 1 — Render-on-demand while paused <span class="badge b-new">renderGovernor · RenderGovernor</span> <span class="badge b-edit">App.tsx</span></h3>
+<h3>Phase 1 - Render-on-demand while paused <span class="badge b-new">renderGovernor · RenderGovernor</span> <span class="badge b-edit">App.tsx</span></h3>
 <ul>
   <li><span class="badge b-new">new</span> <span class="file">core/visual/renderGovernor.ts</span> (state + <code>requestRender</code>) and <span class="file">components/visual/RenderGovernor.tsx</span> (the frameloop/invalidate wiring in §C).</li>
   <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span>: <code>frameloop="demand"</code> on the Canvas; mount <code>&lt;RenderGovernor /&gt;</code>.</li>
 </ul>
-<div class="note"><strong>Phase-1 canary:</strong> pause the transport on a project with a heavy instrument (FractalTunnel). The GPU/CPU should go quiet (Task Manager / Activity Monitor), and dragging a timeline block or a slider should feel instant. Then scrub — the visual must track the playhead frame-for-frame (no stale frame). Then play — smooth resumes. If a scrub leaves a stale frame, a subscription in §C is missing.</div>
+<div class="note"><strong>Phase-1 canary:</strong> pause the transport on a project with a heavy instrument (FractalTunnel). The GPU/CPU should go quiet (Task Manager / Activity Monitor), and dragging a timeline block or a slider should feel instant. Then scrub - the visual must track the playhead frame-for-frame (no stale frame). Then play - smooth resumes. If a scrub leaves a stale frame, a subscription in §C is missing.</div>
 
-<h3>Phase 2 — DPR clamp + upload gate <span class="badge b-new">textureUpdate</span> <span class="badge b-edit">App.tsx · Canvas-2D instruments</span></h3>
+<h3>Phase 2 - DPR clamp + upload gate <span class="badge b-new">textureUpdate</span> <span class="badge b-edit">App.tsx · Canvas-2D instruments</span></h3>
 <ul>
   <li><span class="badge b-edit">edit</span> <span class="file">App.tsx</span>: <code>dpr={[1, 1.5]}</code>.</li>
   <li><span class="badge b-new">new</span> <span class="file">core/visual/textureUpdate.ts</span>: <code>markTextureIfChanged(texture, signature)</code>.</li>
   <li><span class="badge b-edit">edit</span> the Canvas-2D instruments (FractalTunnel, CrtScanlines, DiamondLattice, WindowsXP, SilkSymmetry, …): replace <code>texture.needsUpdate = true</code> with the gated call. Signature = the beat plus the params that affect the draw.</li>
 </ul>
 
-<h3>Phase 3 — Adaptive quality scalar ★ keystone <span class="badge b-new">quality loop</span> <span class="badge b-edit">heavy instruments</span></h3>
+<h3>Phase 3 - Adaptive quality scalar ★ keystone <span class="badge b-new">quality loop</span> <span class="badge b-edit">heavy instruments</span></h3>
 <ul>
   <li><span class="badge b-edit">edit</span> <span class="file">renderGovernor.ts</span> + <span class="file">RenderGovernor.tsx</span>: the measure→scalar→<code>setDpr</code> loop (§D).</li>
   <li><span class="badge b-edit">edit</span> the full-frame &amp; particle instruments: multiply canvas resolution / particle count by <code>getQuality()</code>.</li>
 </ul>
-<div class="note"><strong>The keystone canary:</strong> on the Windows machine, play a project heavy enough to drop frames. The visual should visibly soften (lower resolution) and the frame rate should recover toward 60; stop playback and it should sharpen back. On the Mac, the same project should stay at quality 1.0 (never regress). If the Mac regresses or the Windows machine never recovers, the thresholds in <code>reportFrameMs</code> need tuning — do this before phase 5.</div>
+<div class="note"><strong>The keystone canary:</strong> on the Windows machine, play a project heavy enough to drop frames. The visual should visibly soften (lower resolution) and the frame rate should recover toward 60; stop playback and it should sharpen back. On the Mac, the same project should stay at quality 1.0 (never regress). If the Mac regresses or the Windows machine never recovers, the thresholds in <code>reportFrameMs</code> need tuning - do this before phase 5.</div>
 
-<h3>Phase 4 — Aspect-cap the fixed-1080p canvases <span class="badge b-edit">DiamondLattice · WindowsXP</span></h3>
+<h3>Phase 4 - Aspect-cap the fixed-1080p canvases <span class="badge b-edit">DiamondLattice · WindowsXP</span></h3>
 <ul>
   <li><span class="badge b-edit">edit</span> <span class="file">DiamondLattice.tsx</span>, <span class="file">WindowsXP.tsx</span>: replace the hard <code>1920×1080</code> with the aspect-quantized <code>texH/texW</code> formula FractalTunnel already uses (then it also gets the phase-3 quality multiplier for free).</li>
 </ul>
 
-<h3>Phase 5 — Shader-port the worst Canvas-2D instruments <span class="badge b-risk">large · staged</span></h3>
+<h3>Phase 5 - Shader-port the worst Canvas-2D instruments <span class="badge b-risk">large · staged</span></h3>
 <ul>
-  <li>One instrument at a time, biggest-first: <span class="file">FractalTunnel</span> → <span class="file">DiamondLattice</span> → <span class="file">CrtScanlines</span> → <span class="file">SilkSymmetry</span>. Each becomes a fullscreen-plane fragment shader reading <code>beat</code> (and its params) as uniforms — no 2D canvas, no upload. Reuse the effects pipeline's GLSL plumbing (<span class="file">ShaderWrapper</span>).</li>
+  <li>One instrument at a time, biggest-first: <span class="file">FractalTunnel</span> → <span class="file">DiamondLattice</span> → <span class="file">CrtScanlines</span> → <span class="file">SilkSymmetry</span>. Each becomes a fullscreen-plane fragment shader reading <code>beat</code> (and its params) as uniforms - no 2D canvas, no upload. Reuse the effects pipeline's GLSL plumbing (<span class="file">ShaderWrapper</span>).</li>
   <li>Keep the Canvas-2D version until the shader version passes the pause canary and a visual A/B at several beats; instruments are independent, so a partial port is fine.</li>
 </ul>
 
@@ -220,15 +220,15 @@ useEffect(() =&gt; {
 <ul>
   <li><span class="badge b-risk">risk</span> <strong>A dropped frame while paused.</strong> Demand-mode is only correct if every picture-changing input invalidates. Mitigation: the subscriptions in §C cover beat/params/viewport; the pause canary already guarantees no beat-independent motion. First suspect if a stale frame appears: a resize path that bypasses both R3F's own canvas-resize invalidation and the panel-fraction store.</li>
   <li><span class="badge b-risk">risk</span> <strong>Quality-scalar oscillation.</strong> A too-tight threshold band makes the resolution pump up and down visibly. Mitigation: coarse steps (0.25) + hysteresis (regress at &gt;22&nbsp;ms, recover only under 13&nbsp;ms) + a debounce so it adjusts a few times a second, not per frame.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Interaction with export.</strong> Export pins its own <code>frameloop='never'</code> + DPR 1 + fixed size and restores them in a <code>finally</code>. The governor must not fight this — it should no-op while the export driver holds the pin. Mitigation: the governor checks the same "pinned" flag before touching frameloop/dpr.</li>
-  <li><span class="badge b-risk">risk</span> <strong>Instruments that animate on a held note "while paused."</strong> None should — everything is a pure function of the beat, and a held note's visual is a function of <code>beat − note.beat</code>, frozen when the beat is. If the canary ever trips under demand-mode, that instrument has a latent pause-invariant bug independent of this work.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Interaction with export.</strong> Export pins its own <code>frameloop='never'</code> + DPR 1 + fixed size and restores them in a <code>finally</code>. The governor must not fight this - it should no-op while the export driver holds the pin. Mitigation: the governor checks the same "pinned" flag before touching frameloop/dpr.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Instruments that animate on a held note "while paused."</strong> None should - everything is a pure function of the beat, and a held note's visual is a function of <code>beat − note.beat</code>, frozen when the beat is. If the canary ever trips under demand-mode, that instrument has a latent pause-invariant bug independent of this work.</li>
   <li><span class="badge b-risk">open</span> <strong>DPR clamp value.</strong> <strong>Proposed 1.5</strong> (or 1 detected on Windows). Worth an eyeball on a retina Mac that the softer canvas is acceptable; export is unaffected (pins DPR 1 itself).</li>
-  <li><span class="badge b-risk">open</span> <strong>Per-instrument quality opt-out.</strong> Some instruments may look bad at reduced particle counts; a per-instrument <code>minQuality</code> floor is a cheap escape hatch if needed — not designed here.</li>
-  <li><span class="badge b-risk">later</span> <strong>OffscreenCanvas worker.</strong> The full decoupling — named in the architecture doc §4B; built only if heavy-playback responsiveness is still unacceptable after phases 1–5. Not designed here; the render governor is the seam it would eventually move into a worker.</li>
+  <li><span class="badge b-risk">open</span> <strong>Per-instrument quality opt-out.</strong> Some instruments may look bad at reduced particle counts; a per-instrument <code>minQuality</code> floor is a cheap escape hatch if needed - not designed here.</li>
+  <li><span class="badge b-risk">later</span> <strong>OffscreenCanvas worker.</strong> The full decoupling - named in the architecture doc §4B; built only if heavy-playback responsiveness is still unacceptable after phases 1–5. Not designed here; the render governor is the seam it would eventually move into a worker.</li>
 </ul>
 
 <hr/>
-<div class="rec"><strong>The one-sentence mental model:</strong> add a render governor beside the visual engine that flips the loop to demand-mode when the beat is static (editing goes instant, free), runs a measure→scale→<code>setDpr</code> feedback loop when it isn't (playback self-corrects to the machine), and hand the heaviest instruments a <code>quality</code> scalar and an upload gate — then, only if a Windows profile still shows <code>texImage2D</code> dominating, port the four worst Canvas-2D instruments to shaders so the upload stops happening at all.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> add a render governor beside the visual engine that flips the loop to demand-mode when the beat is static (editing goes instant, free), runs a measure→scale→<code>setDpr</code> feedback loop when it isn't (playback self-corrects to the machine), and hand the heaviest instruments a <code>quality</code> scalar and an upload gate - then, only if a Windows profile still shows <code>texImage2D</code> dominating, port the four worst Canvas-2D instruments to shaders so the upload stops happening at all.</div>
 
 <p class="small muted">Written 2026-07-07. Companion: <span class="file">render-lag-architecture.html</span> (design) and <span class="file">render-lag-deep-dive-and-recommendation.html</span> (findings + why Windows). Nothing here changes the project document, the store shapes, or the instrument-authoring contract; the export pipeline is untouched.</p>
 

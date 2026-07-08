@@ -3,7 +3,7 @@ import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFil
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// Ported from Excellent DAW. 3D folder icons fly backward into z-depth — each note in the
+// Ported from Excellent DAW. 3D folder icons fly backward into z-depth - each note in the
 // C4 octave is a folder that pops in, drifts, tumbles, and fades out at max depth. Every
 // folder's pose is closed-form from its age (beats since onset → seconds), so a static
 // playhead is a static frame and scrubbing in either direction is exact. Meshes are

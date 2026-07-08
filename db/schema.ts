@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import { integer, jsonb, pgPolicy, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { authUid, authUsers, authenticatedRole } from 'drizzle-orm/supabase'
 
-// A valid empty project at schemaVersion 1 — what a row holds before its first save.
+// A valid empty project at schemaVersion 1 - what a row holds before its first save.
 // Must stay hydratable by the editor (a default in the DB, not just in app code).
 const EMPTY_PROJECT_DOCUMENT = sql`'{"schemaVersion":1,"bpm":120,"beatsPerBar":4,"totalBars":32,"tracks":{},"rootTrackIds":[]}'::jsonb`
 
@@ -47,7 +47,7 @@ export const projects = pgTable(
 )
 
 // One row per user who has ever touched billing. Written ONLY by the service
-// role (Stripe webhook / checkout confirm routes) — no client write policies
+// role (Stripe webhook / checkout confirm routes) - no client write policies
 // exist on purpose; the browser can read its own row and nothing else.
 export const subscriptions = pgTable(
   'subscriptions',

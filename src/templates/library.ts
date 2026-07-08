@@ -3,7 +3,7 @@ import type { ProjectDocument } from '../persistence/types'
 
 // The template library. Each template is a complete v2 project document tuned
 // around each instrument's actual pitch vocabulary (Stars 48=warp/57=pulse,
-// WindowsXP 36-59=window-spawn melody, DotField 36-47=bass shake, etc.) — not
+// WindowsXP 36-59=window-spawn melody, DotField 36-47=bass shake, etc.) - not
 // arbitrary notes. All patterns are written out in full (Block.loop is inert).
 // One full-frame instrument per template at most; positioned objects layer on top.
 
@@ -26,7 +26,7 @@ const BEATS = BARS * 4
 const retroDesktop: TemplateDef = {
   id: 'retro-desktop',
   name: 'Retro Desktop',
-  description: 'XP nostalgia — windows pop to the melody, folders fly, the screen shakes.',
+  description: 'XP nostalgia - windows pop to the melody, folders fly, the screen shakes.',
   bpm: 120,
   gradient: ['#0058ee', '#3a9d3f'],
   document: doc({
@@ -65,7 +65,7 @@ const retroDesktop: TemplateDef = {
 const hyperspeed: TemplateDef = {
   id: 'hyperspeed',
   name: 'Hyperspeed',
-  description: 'DnB energy — a particle field shakes on the bass while shapes strafe past.',
+  description: 'DnB energy - a particle field shakes on the bass while shapes strafe past.',
   bpm: 172,
   gradient: ['#06b6d4', '#f43f5e'],
   document: doc({
@@ -110,7 +110,7 @@ const hyperspeed: TemplateDef = {
 const minimalPulse: TemplateDef = {
   id: 'minimal-pulse',
   name: 'Minimal Pulse',
-  description: 'Stripped techno — metronome geometry and one cube that shatters on cue.',
+  description: 'Stripped techno - metronome geometry and one cube that shatters on cue.',
   bpm: 126,
   gradient: ['#334155', '#94a3b8'],
   document: doc({

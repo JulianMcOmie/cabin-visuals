@@ -13,7 +13,7 @@ import type { Track as TrackType } from '../../types'
 
 // Logic-style M/S painting: pointer-down on a button starts a stroke, and every
 // button of the SAME kind the pointer crosses while held gets the first
-// toggle's resulting state (painted, not flipped — sweeps stay predictable).
+// toggle's resulting state (painted, not flipped - sweeps stay predictable).
 // Module-level on purpose: one stroke spans many Track instances.
 let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
 
@@ -29,9 +29,9 @@ interface TrackProps {
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
-  /** Last track in the list — suppresses the label-section divider, like the grid. */
+  /** Last track in the list - suppresses the label-section divider, like the grid. */
   isLast?: boolean
-  /** Nesting depth (0 = root) — indents the label by INDENT_PX per level. */
+  /** Nesting depth (0 = root) - indents the label by INDENT_PX per level. */
   depth?: number
   /** During an Alt copy-drag / library drag: vertical shift (px) to open the gap. */
   liftOffset?: number
@@ -43,7 +43,7 @@ interface TrackProps {
   onCopyDragStart?: (e: ReactPointerEvent, trackId: string) => void
   /** Begin a drag-to-nest from this track's label. */
   onNestDragStart?: (e: ReactPointerEvent, trackId: string) => void
-  /** Right-click on the label — opens the add-ability / add-automation menu. */
+  /** Right-click on the label - opens the add-ability / add-automation menu. */
   onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
@@ -98,7 +98,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     >
       <div
         onClick={() => {
-          // Track selection is the LABEL's job — the lane (timeline grid) never
+          // Track selection is the LABEL's job - the lane (timeline grid) never
           // selects or deselects a track. A drag that started here (nest/copy)
           // must not hijack the selection when its trailing click lands.
           if (shouldSuppressTrackSelect()) return
@@ -110,7 +110,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           if (e.button !== 0) return
           // The M/S buttons are not drag handles; neither is the rename input.
           if ((e.target as HTMLElement).closest('button, input')) return
-          // The audio track is pinned at the top — not draggable, not duplicable.
+          // The audio track is pinned at the top - not draggable, not duplicable.
           if (track.type === 'audio') return
           // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the
           // plain path, so a click without movement still selects the row.
@@ -130,7 +130,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
         }`}
       >
-        {/* 3px colour spine — the row's track colour, full label height. */}
+        {/* 3px colour spine - the row's track colour, full label height. */}
         <span
           className="w-[3px] flex-shrink-0 self-stretch my-1.5 rounded-[2px]"
           style={{ backgroundColor: blockColor }}

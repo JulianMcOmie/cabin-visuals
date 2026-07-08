@@ -1,7 +1,7 @@
 import { getSupabase } from './supabase'
 
 // Upload/download for the project-audio Storage bucket. Paths are
-// `{userId}/{projectId}/{clipId}` — the bucket's RLS policies key on the first
+// `{userId}/{projectId}/{clipId}` - the bucket's RLS policies key on the first
 // folder equalling auth.uid(), so a user can only ever touch their own bytes.
 // The path doubles as the `ref` in the document's audioClip descriptor.
 

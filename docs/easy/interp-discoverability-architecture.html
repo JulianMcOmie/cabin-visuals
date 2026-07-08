@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Interp Discoverability — Architecture</title>
+<title>Interp Discoverability - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,13 +36,13 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Interp Discoverability</span>
-  <h1>Interp Discoverability — Architecture</h1>
-  <p class="sub">Per-lane animation curves exist and work — Julia looked for them and concluded they didn't. The feature is fine; the surface is the bug. Three candidate treatments, one hiding-defect fix, and a decision Julia has deliberately left open (★).</p>
+  <h1>Interp Discoverability - Architecture</h1>
+  <p class="sub">Per-lane animation curves exist and work - Julia looked for them and concluded they didn't. The feature is fine; the surface is the bug. Three candidate treatments, one hiding-defect fix, and a decision Julia has deliberately left open (★).</p>
 </header>
 
 <h2>1 · Why a working feature reads as missing</h2>
 <figure class="fig">
-  <div class="figtitle">Where the control lives today — two conditions deep</div>
+  <div class="figtitle">Where the control lives today - two conditions deep</div>
   <svg viewBox="0 0 900 260" role="img" aria-label="Current state">
     <defs><marker id="a4" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="40" width="250" height="80" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
@@ -52,7 +52,7 @@
     <text x="455" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">param lookup succeeds</text>
     <text x="455" y="96" text-anchor="middle" font-size="14.5" fill="#565656">else the control silently vanishes</text>
     <rect x="640" y="40" width="240" height="80" rx="10" fill="#141414"/>
-    <text x="760" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">"Interp" — a tiny select</text>
+    <text x="760" y="72" text-anchor="middle" font-size="16.5" font-weight="700" fill="#fff">"Interp" - a tiny select</text>
     <text x="760" y="96" text-anchor="middle" font-size="14.5" fill="#fff">mid-toolbar, unlabeled intent</text>
     <path d="M270,80 L322,80" stroke="#141414" stroke-width="2" marker-end="url(#a4)"/>
     <path d="M580,80 L632,80" stroke="#141414" stroke-width="2" marker-end="url(#a4)"/>
@@ -68,8 +68,8 @@
   <thead><tr><th>Option</th><th>Shape</th><th>Trade</th></tr></thead>
   <tbody>
     <tr><td>1 · Promote in place</td><td>Rename to <strong>"Curve"</strong>, give it a label + width, separate it from the grid/zoom cluster with its own toolbar group when an automation lane is open.</td><td>Cheapest; still only visible once you're inside the piano roll.</td></tr>
-    <tr><td>2 · Timeline right-click</td><td>Add <strong>"Curve ▸ step/linear/…"</strong> to the automation lane's context menu (the existing TrackContextMenu opens on the parent — this needs a small menu on the automation row itself).</td><td>Discoverable without opening the editor; a second surface to keep in sync (it's one store field, so sync is free).</td></tr>
-    <tr><td>3 · Lane-label chip</td><td>The automation row's label shows the current mode as a tiny chip ("lin", "exp"); clicking cycles or opens a mini-menu.</td><td>Always visible — strongest discoverability; adds chrome to every automation row.</td></tr>
+    <tr><td>2 · Timeline right-click</td><td>Add <strong>"Curve ▸ step/linear/…"</strong> to the automation lane's context menu (the existing TrackContextMenu opens on the parent - this needs a small menu on the automation row itself).</td><td>Discoverable without opening the editor; a second surface to keep in sync (it's one store field, so sync is free).</td></tr>
+    <tr><td>3 · Lane-label chip</td><td>The automation row's label shows the current mode as a tiny chip ("lin", "exp"); clicking cycles or opens a mini-menu.</td><td>Always visible - strongest discoverability; adds chrome to every automation row.</td></tr>
   </tbody>
 </table>
 <p class="small muted">These compose: 1 is worth doing under any outcome; 2 and 3 are additive. The recommendation below assumes 1+2.</p>
@@ -78,16 +78,16 @@
 <table>
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>Fix the silent-hide unconditionally</td><td>When the parent-param lookup fails (param renamed/instrument swapped), show the control anyway with generic bounds — a lane whose curve you can't see or change is strictly worse than one with unlabeled units.</td></tr>
-    <tr><td>Recommend 1 + 2, hold for ★</td><td>Promote-in-place is free; the right-click entry is the DAW-native discovery path ("right-click shows me what this row can do"). Option 3 waits until automation rows grow other chrome (per-keyframe curves will want row UI too — design them together then).</td></tr>
+    <tr><td>Fix the silent-hide unconditionally</td><td>When the parent-param lookup fails (param renamed/instrument swapped), show the control anyway with generic bounds - a lane whose curve you can't see or change is strictly worse than one with unlabeled units.</td></tr>
+    <tr><td>Recommend 1 + 2, hold for ★</td><td>Promote-in-place is free; the right-click entry is the DAW-native discovery path ("right-click shows me what this row can do"). Option 3 waits until automation rows grow other chrome (per-keyframe curves will want row UI too - design them together then).</td></tr>
     <tr><td>Per-lane only</td><td>Per-keyframe curves are their own medium item; this task must not grow into it.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> the curves shipped, the signpost didn't — fix the vanishing-control defect for certain, then pick how loud the signpost should be (toolbar promotion, right-click entry, or a label chip), which is exactly the ★.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> the curves shipped, the signpost didn't - fix the vanishing-control defect for certain, then pick how loud the signpost should be (toolbar promotion, right-click entry, or a label chip), which is exactly the ★.</div>
 
 <hr/>
-<p class="small muted">Architecture — the build lives in <span class="file">interp-discoverability-implementation-plan.html</span>. Current control: <span class="file">components/midi/PianoRollPanel.tsx</span> (Interp select) · <span class="file">store/ProjectStore.setTrackInterpolation</span> · easing in <span class="file">core/visual/automation.ts</span>.</p>
+<p class="small muted">Architecture - the build lives in <span class="file">interp-discoverability-implementation-plan.html</span>. Current control: <span class="file">components/midi/PianoRollPanel.tsx</span> (Interp select) · <span class="file">store/ProjectStore.setTrackInterpolation</span> · easing in <span class="file">core/visual/automation.ts</span>.</p>
 
 </div>
 </body>

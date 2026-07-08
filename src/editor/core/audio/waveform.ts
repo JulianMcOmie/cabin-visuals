@@ -2,7 +2,7 @@ import * as Tone from 'tone'
 import { getPlayableUrl } from './audioSource'
 
 // Decode-once buffer cache, keyed by clip ref. The SAME decoded AudioBuffer
-// feeds the AudioEngine's players and (phase 3) the waveform peak extraction —
+// feeds the AudioEngine's players and (phase 3) the waveform peak extraction -
 // one decode per ref, ever. Failures aren't cached, so a flaky network fetch
 // can retry.
 
@@ -29,7 +29,7 @@ export function getBuffer(ref: string): Promise<AudioBuffer> {
 // Size-independent min/max envelope over the WHOLE clip, [min,max] interleaved
 // per bucket, channels mixed. Base resolution serves most widths; when a block
 // is drawn wider (deep zoom) the caller asks for more buckets and we re-extract
-// from the cached buffer — a cheap array pass, never a re-decode.
+// from the cached buffer - a cheap array pass, never a re-decode.
 
 export const BASE_PEAK_BUCKETS = 1000
 

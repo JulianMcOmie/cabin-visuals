@@ -3,12 +3,12 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { getStripe, getProPriceId } from '@/utils/stripe'
 
-// POST { returnTo? } → { url } — a Stripe Checkout session for the Pro
+// POST { returnTo? } → { url } - a Stripe Checkout session for the Pro
 // subscription. Requires a signed-in user (401 otherwise; the client redirects
 // to /login). Success bounces through /api/stripe/confirm so the subscription
 // row is written even before webhooks are configured.
 
-/** Only same-site paths — a raw returnTo in a redirect is an open-redirect hole. */
+/** Only same-site paths - a raw returnTo in a redirect is an open-redirect hole. */
 function safeReturnTo(raw: unknown): string {
   return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/projects'
 }
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to upgrade' }, { status: 401 })
-  // A subscription must never attach to a discardable identity — convert first.
+  // A subscription must never attach to a discardable identity - convert first.
   if (user.is_anonymous) {
     return NextResponse.json({ error: 'Create an account to upgrade' }, { status: 403 })
   }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     returnTo = safeReturnTo(body?.returnTo)
-  } catch { /* no body — default returnTo */ }
+  } catch { /* no body - default returnTo */ }
 
   try {
     const stripe = getStripe()

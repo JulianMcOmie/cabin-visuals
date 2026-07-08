@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MIDI Import — Architecture</title>
+<title>MIDI Import - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,11 +36,11 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · MIDI Import</span>
-  <h1>MIDI Import — Architecture</h1>
-  <p class="sub">A .mid file becomes tracks of blocks of notes — entirely in the beat domain, so the file's tempo map is irrelevant by construction. Import keeps full pitch fidelity; narrow-range instruments and the piano roll's future row tools handle display, never the data.</p>
+  <h1>MIDI Import - Architecture</h1>
+  <p class="sub">A .mid file becomes tracks of blocks of notes - entirely in the beat domain, so the file's tempo map is irrelevant by construction. Import keeps full pitch fidelity; narrow-range instruments and the piano roll's future row tools handle display, never the data.</p>
 </header>
 
-<h2>1 · The pipeline — ticks to beats, never seconds</h2>
+<h2>1 · The pipeline - ticks to beats, never seconds</h2>
 <figure class="fig">
   <div class="figtitle">.mid → beats → one new track per MIDI track</div>
   <svg viewBox="0 0 900 300" role="img" aria-label="Import pipeline">
@@ -65,20 +65,20 @@
     <rect x="20" y="176" width="860" height="100" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
     <text x="450" y="208" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">Why the beat domain makes tempo a non-problem</text>
     <text x="450" y="234" text-anchor="middle" font-size="15" fill="#565656">The project stores notes in beats; the file stores ticks with PPQ. ticks/PPQ = beats, done. The file's tempo events and</text>
-    <text x="450" y="256" text-anchor="middle" font-size="15" fill="#565656">the project's bpm never meet — an imported groove plays at whatever bpm the project runs, like every DAW.</text>
+    <text x="450" y="256" text-anchor="middle" font-size="15" fill="#565656">the project's bpm never meet - an imported groove plays at whatever bpm the project runs, like every DAW.</text>
   </svg>
-  <figcaption>No seconds anywhere in the path. The one file-side wrinkle worth honoring: time-signature differences change where BAR lines fall — notes land at the right beats regardless; only block durations round up to whole project bars.</figcaption>
+  <figcaption>No seconds anywhere in the path. The one file-side wrinkle worth honoring: time-signature differences change where BAR lines fall - notes land at the right beats regardless; only block durations round up to whole project bars.</figcaption>
 </figure>
 
 <h2>2 · The pitch-range question, answered as decided</h2>
-<p>Julia's original question: instruments with narrow editors (7 rows) vs files spanning the pitch spectrum. The decision recorded in the backlog stands: <strong>import faithfully — the data keeps full pitch; the view reconciles.</strong></p>
+<p>Julia's original question: instruments with narrow editors (7 rows) vs files spanning the pitch spectrum. The decision recorded in the backlog stands: <strong>import faithfully - the data keeps full pitch; the view reconciles.</strong></p>
 <table>
   <thead><tr><th>Layer</th><th>Behavior with out-of-range pitches</th></tr></thead>
   <tbody>
     <tr><td>Document</td><td>Every note imports verbatim. Re-aiming the track at a wider instrument later loses nothing.</td></tr>
-    <tr><td>Instrument</td><td>Already ignores pitches it doesn't map — importing a full-range file into a 7-lane instrument simply plays the 7 lanes it understands.</td></tr>
+    <tr><td>Instrument</td><td>Already ignores pitches it doesn't map - importing a full-range file into a 7-lane instrument simply plays the 7 lanes it understands.</td></tr>
     <tr><td>Piano roll</td><td>Shows everything today; the row-hiding/scaling item (its own doc pair) adds "show only mapped rows" so narrow instruments read cleanly.</td></tr>
-    <tr><td>Import summary</td><td>The one nicety: after import, a toast counts what landed — "142 notes · 38 outside Cube's range" — so silence isn't mysterious.</td></tr>
+    <tr><td>Import summary</td><td>The one nicety: after import, a toast counts what landed - "142 notes · 38 outside Cube's range" - so silence isn't mysterious.</td></tr>
   </tbody>
 </table>
 
@@ -90,14 +90,14 @@
     <tr><td>One block per track, spanning first→last note</td><td>Blocks are the editing unit; a single block rounded up to whole bars is the least-surprise landing shape. Split-at-silence is a refinement, not v1.</td></tr>
     <tr><td>Velocity imports 0–127 as-is</td><td>Instruments already tolerate both 0–1 and 0–127 scales.</td></tr>
     <tr><td>Grow the project if the file overruns</td><td>If the last note ends past totalBars, bump totalBars (it's one store field, undoable) rather than truncating someone's song.</td></tr>
-    <tr><td>Non-goals</td><td>Tempo/time-sig import · CC/pitch-bend → automation (tempting, but it needs the richer automation targets first — noted as follow-up) · MIDI export.</td></tr>
+    <tr><td>Non-goals</td><td>Tempo/time-sig import · CC/pitch-bend → automation (tempting, but it needs the richer automation targets first - noted as follow-up) · MIDI export.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> ticks over PPQ are already beats, and beats are already the document's native time — so import is a parser walk that mints tracks/blocks/notes verbatim, tells you what a narrow instrument will ignore, and leaves display problems to the view layer where they belong.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> ticks over PPQ are already beats, and beats are already the document's native time - so import is a parser walk that mints tracks/blocks/notes verbatim, tells you what a narrow instrument will ignore, and leaves display problems to the view layer where they belong.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">midi-import-implementation-plan.html</span>. Deps already installed: <code>@tonejs/midi</code>, <code>midi-file</code>. Related pairs: row hiding/scaling (display reconciliation), envelope modulator (future CC mapping target).</p>
+<p class="small muted">Architecture - build in <span class="file">midi-import-implementation-plan.html</span>. Deps already installed: <code>@tonejs/midi</code>, <code>midi-file</code>. Related pairs: row hiding/scaling (display reconciliation), envelope modulator (future CC mapping target).</p>
 
 </div>
 </body>

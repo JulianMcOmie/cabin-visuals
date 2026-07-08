@@ -18,7 +18,7 @@ interface CopyDragState {
   solo: boolean
   /** Screen-x of the frozen label column, for positioning the floating ghost. */
   labelLeft: number
-  /** Track row height (px) captured at drag start — for the gap + ghost sizing. */
+  /** Track row height (px) captured at drag start - for the gap + ghost sizing. */
   rowHeight: number
 }
 
@@ -82,7 +82,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const onMove = (ev: PointerEvent) => {
       const s = sessionRef.current
       if (!s) return
-      // The drag ends with a click on the source label — it must not steal the
+      // The drag ends with a click on the source label - it must not steal the
       // selection from the new copy (selectNewTrack at drop).
       suppressTrackSelectBriefly()
       moveGhost(ev.clientY)
@@ -103,7 +103,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         for (let j = 0; j < k; j++) {
           if ((s.itemTops[j] + bottomOf(j)) / 2 < gcRow) idx = j + 1
         }
-        // The audio track is pinned at root index 0 — nothing lands above it.
+        // The audio track is pinned at root index 0 - nothing lands above it.
         const { tracks, rootTrackIds } = useProjectStore.getState()
         if (s.parentId == null && idx === 0 && tracks[rootTrackIds[0]]?.type === 'audio') idx = 1
         insertIndex = idx

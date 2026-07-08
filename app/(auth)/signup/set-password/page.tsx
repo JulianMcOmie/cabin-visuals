@@ -72,13 +72,13 @@ function SetPasswordFormInternal() {
     if (error) {
       setConverting(false);
       if (/already/i.test(error.message)) {
-        setErrorMessage('An account with this email already exists. Log in instead — your current work will follow you.');
+        setErrorMessage('An account with this email already exists. Log in instead - your current work will follow you.');
       } else {
         setErrorMessage(error.message);
       }
       return;
     }
-    // Same uuid — their projects are already theirs. Profiles row is new though.
+    // Same uuid - their projects are already theirs. Profiles row is new though.
     await supabase.from('profiles').upsert(
       { user_id: anonUid, first_name: firstName, last_name: lastName, email },
       { onConflict: 'user_id', ignoreDuplicates: true },

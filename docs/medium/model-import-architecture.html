@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3D Model Import — Architecture</title>
+<title>3D Model Import - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,8 +36,8 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · 3D Model Import</span>
-  <h1>3D Model Import — Architecture</h1>
-  <p class="sub">"Borderline, but it's made out of Tame Impala's face" — a Model instrument that renders a user-uploaded glTF and behaves like every other instrument (params, ports, modulators, effects, export). The bytes problem is already solved once: copy the audio pattern verbatim, aimed at a models bucket.</p>
+  <h1>3D Model Import - Architecture</h1>
+  <p class="sub">"Borderline, but it's made out of Tame Impala's face" - a Model instrument that renders a user-uploaded glTF and behaves like every other instrument (params, ports, modulators, effects, export). The bytes problem is already solved once: copy the audio pattern verbatim, aimed at a models bucket.</p>
 </header>
 
 <h2>1 · Two pipelines, one proven shape</h2>
@@ -72,20 +72,20 @@
     <text x="810" y="242" text-anchor="middle" font-size="13.5" fill="#fff">instrument</text>
     <path d="M220,82 L252,82 M460,82 L492,82 M700,82 L732,82" stroke="#141414" stroke-width="2" marker-end="url(#a18)"/>
     <path d="M220,222 L252,222 M460,222 L492,222 M700,222 L732,222" stroke="#141414" stroke-width="2" marker-end="url(#a18)"/>
-    <text x="450" y="300" text-anchor="middle" font-size="14.5" fill="#565656">same seams, same names, same session-cache semantics — a reviewer of the audio code can review this blind</text>
+    <text x="450" y="300" text-anchor="middle" font-size="14.5" fill="#565656">same seams, same names, same session-cache semantics - a reviewer of the audio code can review this blind</text>
   </svg>
-  <figcaption>The document stores a <code>modelAssets</code> catalog (ref → fileName, mirroring <code>audioClips</code>) and the Model instrument's track stores which ref it wears — a string param, which <code>setTrackStringParam</code> already supports.</figcaption>
+  <figcaption>The document stores a <code>modelAssets</code> catalog (ref → fileName, mirroring <code>audioClips</code>) and the Model instrument's track stores which ref it wears - a string param, which <code>setTrackStringParam</code> already supports.</figcaption>
 </figure>
 
 <h2>2 · The Model instrument</h2>
 <table>
   <thead><tr><th>Aspect</th><th>Design</th></tr></thead>
   <tbody>
-    <tr><td>Params</td><td>modelRef (string, set via upload/picker UI — not a slider) · the standard family: baseSize, baseX/Y/Z, baseHue as a TINT (lerp material color toward hue, amount param) · spinSpeed (opt-in, 0 default — the Cube convention).</td></tr>
-    <tr><td>Ports / notes</td><td>energy/scale/hue ports like the basic shapes; note hits pulse scale via the shared breathe/energy pattern — a meme face that thumps on the kick with zero extra work.</td></tr>
-    <tr><td>Normalization</td><td>On parse: center to bounding-box center, uniform-scale to a 1.6-unit box (the Cube's footprint) — so baseSize means the same thing for a 2cm and a 200m model.</td></tr>
+    <tr><td>Params</td><td>modelRef (string, set via upload/picker UI - not a slider) · the standard family: baseSize, baseX/Y/Z, baseHue as a TINT (lerp material color toward hue, amount param) · spinSpeed (opt-in, 0 default - the Cube convention).</td></tr>
+    <tr><td>Ports / notes</td><td>energy/scale/hue ports like the basic shapes; note hits pulse scale via the shared breathe/energy pattern - a meme face that thumps on the kick with zero extra work.</td></tr>
+    <tr><td>Normalization</td><td>On parse: center to bounding-box center, uniform-scale to a 1.6-unit box (the Cube's footprint) - so baseSize means the same thing for a 2cm and a 200m model.</td></tr>
     <tr><td>Abilities/effects</td><td>None bespoke; clone/transform/shader effects apply as to any object (radial-copied meme faces are exactly the point).</td></tr>
-    <tr><td>Fallback</td><td>Missing/unloaded ref renders a placeholder wireframe box — never a crash, never an empty scene mystery.</td></tr>
+    <tr><td>Fallback</td><td>Missing/unloaded ref renders a placeholder wireframe box - never a crash, never an empty scene mystery.</td></tr>
   </tbody>
 </table>
 
@@ -96,15 +96,15 @@
     <tr><td>glTF/GLB only, 25&nbsp;MB cap</td><td>The one format with a first-class three.js loader and embedded textures (GLB). OBJ/FBX conversions happen outside the app. The cap keeps buckets and load times sane; raise later if it pinches.</td></tr>
     <tr><td><code>modelAssets</code> catalog beside <code>audioClips</code></td><td>Optional document field (absent = empty) → no version bump; serialize/hydrate mirror the audioClips special-case.</td></tr>
     <tr><td>Bytes pattern copied, not abstracted</td><td>Two similar 50-line modules beat one premature generic asset layer; if a THIRD asset type appears, extract then.</td></tr>
-    <tr><td>Static geometry v1</td><td>glTF animations are wall-clock temptations — the pause invariant forbids playing them as-is. If wanted later: sample animation clips BY BEAT (clip.time = f(beat)), a deliberate follow-up.</td></tr>
+    <tr><td>Static geometry v1</td><td>glTF animations are wall-clock temptations - the pause invariant forbids playing them as-is. If wanted later: sample animation clips BY BEAT (clip.time = f(beat)), a deliberate follow-up.</td></tr>
     <tr><td>Non-goals</td><td>Model marketplace/library UI beyond a per-project list · draco/meshopt compression · skeletal animation · per-mesh material editing.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> a fourth basic shape whose geometry comes from a bucket — the audio-bytes seams copied name-for-name, the mesh normalized into the Cube's footprint, and every existing system (ports, effects, export) treats it as furniture it already knows.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> a fourth basic shape whose geometry comes from a bucket - the audio-bytes seams copied name-for-name, the mesh normalized into the Cube's footprint, and every existing system (ports, effects, export) treats it as furniture it already knows.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">model-import-implementation-plan.html</span>. The pattern source: <span class="file">core/audio/audioSource.ts</span> · <span class="file">persistence/audioStorage.ts</span> · <code>AudioStore.audioClips</code>.</p>
+<p class="small muted">Architecture - build in <span class="file">model-import-implementation-plan.html</span>. The pattern source: <span class="file">core/audio/audioSource.ts</span> · <span class="file">persistence/audioStorage.ts</span> · <code>AudioStore.audioClips</code>.</p>
 
 </div>
 </body>

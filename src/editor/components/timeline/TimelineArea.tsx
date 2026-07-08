@@ -124,7 +124,7 @@ export function TimelineArea() {
   usePlayhead((beat) => {
     // Snap to a pixel *center* (whole px + 0.5) so the 1px-wide lane line renders
     // crisp on a single column while the triangle apex sits exactly on that
-    // column's center — otherwise the crisp line lands ~0.5px off the apex.
+    // column's center - otherwise the crisp line lands ~0.5px off the apex.
     const beatX = Math.round(beat * pixelsPerBeat) + 0.5
     const sc = scrollRef.current
     // Clip the playhead overlay to the scroll container's client area (excludes the
@@ -161,7 +161,7 @@ export function TimelineArea() {
   }
 
   // Drag the label column's right edge to resize it (spans the ruler corner, every
-  // track label, and the empty space below — one handle along the whole edge).
+  // track label, and the empty space below - one handle along the whole edge).
   function startLabelResize(e: ReactPointerEvent) {
     e.preventDefault()
     e.stopPropagation()
@@ -207,7 +207,7 @@ export function TimelineArea() {
 
       {/* Lanes: a relative wrapper holds the scroll container plus a viewport-space
           playhead overlay clipped to the lane region (so the playhead is never drawn
-          over the frozen label column, its dividers, or the empty space — it slides
+          over the frozen label column, its dividers, or the empty space - it slides
           under the label edge when scrolled). overflow-hidden clips the playhead
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
@@ -265,7 +265,7 @@ export function TimelineArea() {
               </div>
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the
-                label section — it deselects but is otherwise inert (no marquee); only
+                label section - it deselects but is otherwise inert (no marquee); only
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
@@ -321,7 +321,7 @@ export function TimelineArea() {
         </div>
       </div>
 
-      {/* Floating ghost of the row being Alt-copy-dragged — mirrors the label box so
+      {/* Floating ghost of the row being Alt-copy-dragged - mirrors the label box so
           it reads like the lifted row of a normal drag (top set imperatively). */}
       {copyDrag && (
         <div
@@ -339,7 +339,7 @@ export function TimelineArea() {
         </div>
       )}
 
-      {/* Resize handle along the label column's right edge — spans the full height
+      {/* Resize handle along the label column's right edge - spans the full height
           (ruler corner, every track label, the empty space below). Invisible; the
           cursor is the only affordance. */}
       <div

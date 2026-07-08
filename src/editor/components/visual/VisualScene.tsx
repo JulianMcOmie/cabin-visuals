@@ -4,7 +4,7 @@ import { ObjectRenderer } from './ObjectRenderer'
 
 /**
  * One <ObjectRenderer> per resolved object. Re-renders only when the object list
- * changes (on resolve), never per frame — per-frame values are pulled imperatively
+ * changes (on resolve), never per frame - per-frame values are pulled imperatively
  * inside each renderer. getObjectList returns a stable reference between resolves,
  * so useSyncExternalStore doesn't loop.
  */

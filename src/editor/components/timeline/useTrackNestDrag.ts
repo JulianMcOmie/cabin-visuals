@@ -31,7 +31,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (!sc) return
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
-    // Automation + ability tracks live only on their parent object — they can't be
+    // Automation + ability tracks live only on their parent object - they can't be
     // re-parented or moved to the root. (A plain pointer-down still selects the row.)
     if (tracks[trackId].type === 'automation' || tracks[trackId].type === 'ability') return
     const rowHeight = useUIStore.getState().tracksRowHeight
@@ -70,7 +70,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       if (!started) {
         if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return
         started = true
-        // The drag ends with a click on the label — it must not re-select.
+        // The drag ends with a click on the label - it must not re-select.
         suppressTrackSelectBriefly()
         // Suppress text selection (and lock the cursor) for the duration of the drag;
         // the plain pointer-down path doesn't preventDefault so a click can still select.

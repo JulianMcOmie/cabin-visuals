@@ -5,8 +5,8 @@ type Snapshot = Record<string, unknown>
 const LIMIT = 100          // cap the stack; oldest entries fall off
 // Burst window, just above one render frame. A continuous drag (block move,
 // param slider, …) writes the store every ~16ms, so its frames fall inside one
-// window and collapse to a single entry. Deliberate edits — including note
-// gestures, which now commit once per gesture — are spaced well beyond this, so
+// window and collapse to a single entry. Deliberate edits - including note
+// gestures, which now commit once per gesture - are spaced well beyond this, so
 // each stays its own undo step even when made quickly.
 const DEBOUNCE_MS = 80
 
@@ -19,7 +19,7 @@ const pick = (s: Record<string, unknown>): Snapshot => {
 }
 const snapshot = () => pick(useProjectStore.getState() as unknown as Record<string, unknown>)
 const changed = (a: Snapshot, b: Snapshot) => {
-  for (const k in a) if (a[k] !== b[k]) return true // reference compare — immutable store
+  for (const k in a) if (a[k] !== b[k]) return true // reference compare - immutable store
   return false
 }
 
@@ -34,7 +34,7 @@ interface HistoryState {
   reset: () => void
 }
 
-// Module-level transient state (not reactive — it's plumbing).
+// Module-level transient state (not reactive - it's plumbing).
 let applying = false                   // true while a restore is in flight
 let pendingBase: Snapshot | null = null // pre-burst restore point
 let timer: ReturnType<typeof setTimeout> | null = null

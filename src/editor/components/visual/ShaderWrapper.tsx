@@ -15,7 +15,7 @@ import type { EffectInstance } from '../../types'
 const QUAD_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }'
 const PASSTHROUGH_FRAG = 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }'
 // The FBO chain works in linear space; the main scene's render to the canvas applies
-// the sRGB output encoding, but this overlay (a raw ShaderMaterial) bypasses it — so it
+// the sRGB output encoding, but this overlay (a raw ShaderMaterial) bypasses it - so it
 // must encode itself, or the object reads darker (looks like reduced opacity).
 const OUTPUT_FRAG = `
   uniform sampler2D tDiffuse;
@@ -30,8 +30,8 @@ const OUTPUT_FRAG = `
 `
 
 /**
- * Per-object screen-space shader chain (plan §4.6, Option A — ported from Excellent DAW).
- * The object is rendered — with its world transform — into an offscreen scene/FBO, each
+ * Per-object screen-space shader chain (plan §4.6, Option A - ported from Excellent DAW).
+ * The object is rendered - with its world transform - into an offscreen scene/FBO, each
  * shader plugin runs as a fullscreen post pass (ping-pong FBOs), and the result is drawn
  * as a clip-space fullscreen overlay (depth-test off) over the 3D scene. So a shaded object
  * becomes a full-frame post-processed layer; un-shaded objects render normally, unaffected.

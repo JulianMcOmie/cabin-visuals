@@ -5,7 +5,7 @@ import { CURRENT_VERSION } from './upgrade'
 
 /**
  * ProjectStore state → document. Picks fields generically (every non-function
- * field), the same boundary HistoryStore snapshots — so a field added to the
+ * field), the same boundary HistoryStore snapshots - so a field added to the
  * store is persisted by default, with no extra wiring. The audioClips catalog
  * rides along from AudioStore (metadata only; bytes are the bucket's job).
  */

@@ -11,7 +11,7 @@ import { selectNewTrack } from '../utils/selection'
 /**
  * The one entry point for project audio: loading a file registers the clip in
  * the audioClips catalog and auto-creates the audio track (top of the track
- * rows) with a block at bar 0. One audio track for now — while one exists the
+ * rows) with a block at bar 0. One audio track for now - while one exists the
  * bar is inert; deleting the track re-enables it.
  */
 export function AudioBar() {
@@ -53,7 +53,7 @@ export function AudioBar() {
       <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] leading-none">AUDIO</span>
 
       {hasAudioTrack ? (
-        <span className="flex items-baseline gap-1.5 opacity-70" title="One audio track for now — delete the audio track to load a different file">
+        <span className="flex items-baseline gap-1.5 opacity-70" title="One audio track for now - delete the audio track to load a different file">
           <FileAudio size={11} className="text-[var(--text-muted)] translate-y-[2px]" />
           <span className="text-[11px] text-[var(--text-3)] leading-none">{audioTrackName ?? 'Audio track'}</span>
         </span>

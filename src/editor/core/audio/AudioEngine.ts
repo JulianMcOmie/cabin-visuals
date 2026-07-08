@@ -6,18 +6,18 @@ import { blockPlacement } from './placement'
 // The audio engine: everything that makes sound, behind one door. A module
 // singleton beside the transport (core/playback.ts) and the visual engine
 // (core/visual/), consuming the beat DISCRETELY: players are armed at transport
-// events (play / seek / bpm change) and Tone's own clock carries them between —
+// events (play / seek / bpm change) and Tone's own clock carries them between -
 // no per-frame work.
 //
-// The one guardrail: this engine has NO clock of its own. `when` — the Web
+// The one guardrail: this engine has NO clock of its own. `when` - the Web
 // Audio spec's name for an absolute audio-clock timestamp (seconds since the
-// AudioContext started) — is always computed by the transport and passed in.
+// AudioContext started) - is always computed by the transport and passed in.
 // One shared anchor is what keeps N players and the transport sample-aligned;
 // this file never calls Tone.now() to schedule.
 
 interface Entry {
   player: Tone.Player
-  /** The clip the player's buffer was built from — rebuilt if the block is retargeted. */
+  /** The clip the player's buffer was built from - rebuilt if the block is retargeted. */
   ref: string
   loaded: boolean
 }
@@ -43,7 +43,7 @@ class AudioEngine {
   /**
    * Hand the engine the current audio tracks. Reconciles the per-block player
    * pool (dispose orphans, create newcomers) and folds mute/solo into each
-   * block's audibility — the same semantics the visual engine applies to hide
+   * block's audibility - the same semantics the visual engine applies to hide
    * objects. Buffers load lazily (loadClips) but are kicked off here too, so a
    * block insert pre-decodes before play() ever needs it.
    */
@@ -91,7 +91,7 @@ class AudioEngine {
 
   /**
    * Arm one player at a transport event. The three-case beat⟷second math lives
-   * in placement.ts (shared with the offline export render — they cannot
+   * in placement.ts (shared with the offline export render - they cannot
    * diverge); play, seek, and the bpm re-arm all come through here.
    */
   private armBlock(sb: ScheduledBlock, atBeat: number, when: number, bpm: number, beatsPerBar: number) {
@@ -103,7 +103,7 @@ class AudioEngine {
     if (!sb.audible) return
 
     const p = blockPlacement(sb.block, atBeat, bpm, beatsPerBar)
-    if (!p) return // past — leave idle
+    if (!p) return // past - leave idle
     player.start(when + p.delaySec, p.offset, p.duration)
   }
 

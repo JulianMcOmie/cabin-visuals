@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-// Console style: 32px ghost button — 1px border, flat surface on hover.
+// Console style: 32px ghost button - 1px border, flat surface on hover.
 const LogInButton: React.FC = () => {
   return (
     <Link

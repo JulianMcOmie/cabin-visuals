@@ -21,7 +21,7 @@ const PITCH_HEIGHT_MAX = 72 // C5
 const PITCH_HEIGHT_CENTER = 66 // F#4 = no offset
 const MAX_DELAY_TAPS = 8
 
-// System font stacks — no Google Fonts. Index maps to a stack via SelectParam options.
+// System font stacks - no Google Fonts. Index maps to a stack via SelectParam options.
 const FONT_STACKS = [
   '"Arial Black", Impact, sans-serif',
   'Georgia, "Times New Roman", serif',
@@ -257,7 +257,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   // Cache keys for the main texture so we only re-render the canvas when needed.
   const lastRenderKeyRef = useRef('')
 
-  // Delay echoes — one pre-created mesh per tap slot.
+  // Delay echoes - one pre-created mesh per tap slot.
   const echoMeshesRef = useRef<Mesh[]>([])
   const echoTexturesRef = useRef<CanvasTexture[]>([])
   const echoLastWordsRef = useRef<string[]>([])
@@ -404,7 +404,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       return false
     }
 
-    // Count of word onsets at or before beat b — the word index at that beat.
+    // Count of word onsets at or before beat b - the word index at that beat.
     const wordCountAt = (b: number) => {
       let c = 0
       for (const n of nextWordNotes) { if (n.beat <= b) c++; else break }

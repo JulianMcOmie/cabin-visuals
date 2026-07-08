@@ -180,7 +180,7 @@ const OBJECT_INSTRUMENTS = withKind('object', [
   )},
 ])
 
-// Event modifiers — dropped into an object, they transform its note stream at resolve
+// Event modifiers - dropped into an object, they transform its note stream at resolve
 // (their `id` is the track type). No instrument; edited as MIDI regions.
 const MODIFIER_INSTRUMENTS = withKind('modifier', [
   { id: 'suppress', name: 'Suppress', icon: <Ban size={12} className="text-zinc-400" /> },
@@ -219,7 +219,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   return (
     <div>
       <div className="flex items-center justify-between px-3 pt-3 pb-1 select-none">
-        {/* Caps section row — clicking the label still collapses/expands the list. */}
+        {/* Caps section row - clicking the label still collapses/expands the list. */}
         <button
           onClick={() => setOpen(!open)}
           className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--text-2)] transition-colors cursor-pointer"

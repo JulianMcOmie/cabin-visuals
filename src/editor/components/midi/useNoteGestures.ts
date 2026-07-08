@@ -631,7 +631,7 @@ export function useNoteGestures({
 
   // Click on background deselects (if not dragging)
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
-    // Skip deselect if a drag (marquee, move, etc.) just finished — the click is a side-effect of the drag
+    // Skip deselect if a drag (marquee, move, etc.) just finished - the click is a side-effect of the drag
     if (didDragRef.current) {
       didDragRef.current = false
       return

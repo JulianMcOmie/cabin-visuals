@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Row Hiding / Scaling — Architecture</title>
+<title>Row Hiding / Scaling - Architecture</title>
 <style>
   :root{--border:#cfcfcf;--line:#ddd;--ink:#141414;--text:#222;--muted:#565656;--radius:8px}
   *{box-sizing:border-box}
@@ -36,13 +36,13 @@
 
 <header class="doc">
   <span class="kicker">Cabin Visuals · Row Hiding / Scaling</span>
-  <h1>Row Hiding / Scaling — Architecture</h1>
-  <p class="sub">The piano roll gets a ROW MODEL: one derived list of visible rows, filtered (used / instrument-mapped / in-scale) and scaled, that every part of the editor — grid, gutter, hit-testing, note drawing — reads instead of "all 128 pitches." It's the display answer to MIDI import, the fix for "adding midi at long fixed distances," and the foundation midi-vim binds hotkeys to.</p>
+  <h1>Row Hiding / Scaling - Architecture</h1>
+  <p class="sub">The piano roll gets a ROW MODEL: one derived list of visible rows, filtered (used / instrument-mapped / in-scale) and scaled, that every part of the editor - grid, gutter, hit-testing, note drawing - reads instead of "all 128 pitches." It's the display answer to MIDI import, the fix for "adding midi at long fixed distances," and the foundation midi-vim binds hotkeys to.</p>
 </header>
 
 <h2>1 · One derived list, everything reads it</h2>
 <figure class="fig">
-  <div class="figtitle">The row model — filter + scale in, visible rows out</div>
+  <div class="figtitle">The row model - filter + scale in, visible rows out</div>
   <svg viewBox="0 0 900 330" role="img" aria-label="Row model">
     <defs><marker id="a8" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#141414"/></marker></defs>
     <rect x="20" y="30" width="270" height="130" rx="10" fill="#fff" stroke="#141414" stroke-width="2"/>
@@ -62,10 +62,10 @@
     <path d="M580,95 L632,95" stroke="#141414" stroke-width="2" marker-end="url(#a8)"/>
     <rect x="20" y="200" width="860" height="100" rx="10" fill="#fff" stroke="#141414" stroke-width="2" stroke-dasharray="7 5"/>
     <text x="450" y="232" text-anchor="middle" font-size="16.5" font-weight="700" fill="#141414">The load-bearing change: y⟷pitch stops being arithmetic and becomes a lookup</text>
-    <text x="450" y="258" text-anchor="middle" font-size="15" fill="#565656">today yToRowIndex divides by rowHeight against a dense list; with hidden rows the mapping is rowModel[i].pitch —</text>
+    <text x="450" y="258" text-anchor="middle" font-size="15" fill="#565656">today yToRowIndex divides by rowHeight against a dense list; with hidden rows the mapping is rowModel[i].pitch -</text>
     <text x="450" y="280" text-anchor="middle" font-size="15" fill="#565656">every gesture (draw, move, resize, marquee) must go through the same two functions or hidden rows corrupt edits.</text>
   </svg>
-  <figcaption>Notes on hidden pitches don't vanish — they still play (data is untouched); the editor simply doesn't offer their rows. A count chip ("3 notes on hidden rows") keeps them from being mysterious.</figcaption>
+  <figcaption>Notes on hidden pitches don't vanish - they still play (data is untouched); the editor simply doesn't offer their rows. A count chip ("3 notes on hidden rows") keeps them from being mysterious.</figcaption>
 </figure>
 
 <h2>2 · The filters</h2>
@@ -73,9 +73,9 @@
   <thead><tr><th>Filter</th><th>Visible rows</th><th>The use case it serves</th></tr></thead>
   <tbody>
     <tr><td>All (default)</td><td>The full range, exactly today's editor.</td><td>Status quo; always one keypress away back.</td></tr>
-    <tr><td>Used</td><td>Pitches present in the block (± an octave margin option).</td><td>Editing an imported full-spectrum file without scrolling through silence — the MIDI-import companion.</td></tr>
+    <tr><td>Used</td><td>Pitches present in the block (± an octave margin option).</td><td>Editing an imported full-spectrum file without scrolling through silence - the MIDI-import companion.</td></tr>
     <tr><td>Mapped</td><td>Pitches the track's instrument actually responds to.</td><td>The 7-lane instrument problem: the editor shows 7 fat rows, "add midi at fixed distances even when those distances are long" solved by omission.</td></tr>
-    <tr><td>Scale</td><td>Pitches in scale(root, kind) — major/minor/pentatonic to start.</td><td>Julia's "only show notes in a certain scale"; wrong notes become impossible to draw rather than possible to spot.</td></tr>
+    <tr><td>Scale</td><td>Pitches in scale(root, kind) - major/minor/pentatonic to start.</td><td>Julia's "only show notes in a certain scale"; wrong notes become impossible to draw rather than possible to spot.</td></tr>
   </tbody>
 </table>
 
@@ -83,18 +83,18 @@
 <table>
   <thead><tr><th>Decision</th><th>Why</th></tr></thead>
   <tbody>
-    <tr><td>View state, not document</td><td>Filters/scale never change notes — they live beside midiRowScale in UIStore (persisted per user via localStorage later if wanted; never in the project document, no schema bump).</td></tr>
+    <tr><td>View state, not document</td><td>Filters/scale never change notes - they live beside midiRowScale in UIStore (persisted per user via localStorage later if wanted; never in the project document, no schema bump).</td></tr>
     <tr><td>Data is never filtered</td><td>Hidden-row notes keep playing and keep exporting; the editor shows a count chip and "reveal" jumps the filter to Used.</td></tr>
-    <tr><td>Row scale already exists</td><td><code>midiRowScale</code> (0.5–2×) shipped with the editor — this item only adds the filter half and widens the scale range if 7-row editing wants chunkier rows (cap ~3×).</td></tr>
-    <tr><td>Designed as midi-vim's substrate</td><td>Vim motions ("next visible row", "toggle filter") bind to the row model's API, not to pixels — the two docs cross-reference; build this first.</td></tr>
+    <tr><td>Row scale already exists</td><td><code>midiRowScale</code> (0.5–2×) shipped with the editor - this item only adds the filter half and widens the scale range if 7-row editing wants chunkier rows (cap ~3×).</td></tr>
+    <tr><td>Designed as midi-vim's substrate</td><td>Vim motions ("next visible row", "toggle filter") bind to the row model's API, not to pixels - the two docs cross-reference; build this first.</td></tr>
     <tr><td>Non-goals</td><td>Fold-with-ghost-rows UI (Ableton-style collapsed markers) · per-project persisted filters · custom scales beyond a starter set.</td></tr>
   </tbody>
 </table>
 
-<div class="rec"><strong>The one-sentence mental model:</strong> make "which rows exist" a single derived list with a filter knob (all/used/mapped/scale) and route every y⟷pitch conversion through it — the data never changes, the view finally can, and midi-vim gets the coordinate system it needs.</div>
+<div class="rec"><strong>The one-sentence mental model:</strong> make "which rows exist" a single derived list with a filter knob (all/used/mapped/scale) and route every y⟷pitch conversion through it - the data never changes, the view finally can, and midi-vim gets the coordinate system it needs.</div>
 
 <hr/>
-<p class="small muted">Architecture — build in <span class="file">row-hiding-scaling-implementation-plan.html</span>. Today's pieces: <span class="file">components/midi/</span> rows generation · <code>midiRowScale</code> in UIStore · <code>yToRowIndex/pitchToRowIndex</code> in <span class="file">useNoteGestures.ts</span>.</p>
+<p class="small muted">Architecture - build in <span class="file">row-hiding-scaling-implementation-plan.html</span>. Today's pieces: <span class="file">components/midi/</span> rows generation · <code>midiRowScale</code> in UIStore · <code>yToRowIndex/pitchToRowIndex</code> in <span class="file">useNoteGestures.ts</span>.</p>
 
 </div>
 </body>

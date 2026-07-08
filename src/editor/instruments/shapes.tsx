@@ -3,7 +3,7 @@ import type { ParamDef } from './types'
 import type { Primitive } from '../core/visual/renderSpec'
 
 // Basic shapes share the Cube's params/ports so they self-pulse and respond to the same
-// modulators — the only difference between them is the geometry primitive. Their whole
+// modulators - the only difference between them is the geometry primitive. Their whole
 // behaviour lives in the RenderSpec (as data), not a hand-written component.
 const SHAPE_PARAMS: ParamDef[] = [
   { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
