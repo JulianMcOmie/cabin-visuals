@@ -69,6 +69,12 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
     </svg>
   )},
+  { id: 'video', name: 'Video', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
+      <path d="M5 4.8 L7.6 6 L5 7.2 Z" fill="#f472b6" />
+    </svg>
+  )},
   { id: 'stars', name: 'Stars', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <g fill="#fbbf24">

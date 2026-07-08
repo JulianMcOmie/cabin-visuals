@@ -128,4 +128,7 @@ export interface Track {
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */
   audioBlocks?: AudioBlock[]
+  /** Video-instrument-only: the ordered clip refs of its pad bank. Order is the
+   *  MIDI mapping - index 0 answers baseNote. Bytes live behind core/video. */
+  videoRefs?: string[]
 }

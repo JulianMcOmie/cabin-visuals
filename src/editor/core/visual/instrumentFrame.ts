@@ -56,6 +56,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(state.notes)
     put(state.stringParams)
     put(state.abilityEvents)
+    put(state.videoRefs)
     // Mover-system outputs (Swarm et al. read these). The arrays are
     // per-resolve identities whose CONTENTS are pure functions of the fields
     // already compared here (beat, params, ports, notes), so ref-compare is

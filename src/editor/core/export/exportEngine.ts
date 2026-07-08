@@ -19,6 +19,22 @@ export interface WalkHooks {
 }
 
 /**
+ * Frame preparers: async work that must COMPLETE before a frame is rendered.
+ * The Video instrument registers one that seeks its <video> element to the
+ * exact beat-derived time and resolves on `seeked` - that is what makes
+ * exported video frame-exact where live playback merely drift-corrects.
+ * Zero registered preparers costs the loop nothing. Returns an unregister fn.
+ */
+export type FramePreparer = (beat: number) => Promise<void> | void
+
+const framePreparers = new Set<FramePreparer>()
+
+export function registerFramePreparer(fn: FramePreparer): () => void {
+  framePreparers.add(fn)
+  return () => framePreparers.delete(fn)
+}
+
+/**
  * Walk every frame of the project through the driver and the sink.
  * Returns true if it completed, false if aborted. The driver must already be
  * pinned by the caller - pin/unpin bracket the whole export (including audio),
@@ -36,6 +52,11 @@ export async function walkFrames(
   for (let i = 0; i < timebase.frameCount; i++) {
     if (hooks.signal?.aborted) return false
     const beat = (i * timebase.bpm) / (60 * fps)
+    // Let async per-frame inputs (video seeks) settle before the render
+    // samples them. No preparers → no await at all.
+    if (framePreparers.size > 0) {
+      await Promise.all([...framePreparers].map((fn) => fn(beat)))
+    }
     driver.renderFrame(beat, (i * 1000) / fps)
     await sink(i, beat, driver)
     if (i % fps === 0) {

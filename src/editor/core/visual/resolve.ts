@@ -254,6 +254,9 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
       moverChain,
+      // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
+      // (which lands via resolve) is always visible to it.
+      videoRefs: track.videoRefs ? [...track.videoRefs] : undefined,
       scratchBase: identitySV(),
       scratchA: identitySV(),
       scratchB: identitySV(),

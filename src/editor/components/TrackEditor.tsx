@@ -7,6 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { getEffect, type VisualEffect } from '../effects'
+import { VideoClipBank } from './VideoClipBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec } from '../types'
@@ -704,6 +705,7 @@ export function TrackEditor() {
                   const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
                   return (
                     <>
+                      {track.instrumentId === 'video' && <VideoClipBank track={track} />}
                       {!def || def.params.length === 0 ? (
                         <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                       ) : (

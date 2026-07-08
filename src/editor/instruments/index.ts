@@ -29,6 +29,7 @@ import { pixelInvadersInstrument } from './PixelInvaders'
 import { scoreTickerInstrument } from './ScoreTicker'
 import { swarmInstrument } from './Swarm'
 import { pointLightInstrument } from './PointLightObject'
+import { videoInstrument } from './Video'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -62,6 +63,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [scoreTickerInstrument.id]: scoreTickerInstrument,
   [swarmInstrument.id]: swarmInstrument,
   [pointLightInstrument.id]: pointLightInstrument,
+  [videoInstrument.id]: videoInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

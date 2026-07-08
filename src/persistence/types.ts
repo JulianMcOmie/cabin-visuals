@@ -1,5 +1,6 @@
 import type { Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
+import type { VideoClip } from '../editor/store/VideoStore'
 
 /**
  * The serialized project - the shape of the `projects.data` blob. A thin
@@ -14,6 +15,9 @@ import type { AudioClip } from '../editor/store/AudioStore'
  *
  * v2: `audioClips` (the catalog, keyed by ref) replaced v1's single `audioClip`;
  * audio placement lives inside `tracks` as `audioBlocks`.
+ * v3: track type 'dimension' became 'mover' (see upgrade.ts). `videoClips`
+ * (the Video instrument's catalog; placement is `track.videoRefs`) is additive
+ * within v3 - absent in older saves, defaulted on hydrate.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -23,17 +27,19 @@ export interface ProjectDocument {
   tracks: Record<string, Track>
   rootTrackIds: string[]
   audioClips: Record<string, AudioClip>
+  videoClips?: Record<string, VideoClip>
 }
 
-/** A fresh, valid document - matches ProjectStore's + AudioStore's initial state. */
+/** A fresh, valid document - matches the stores' initial state. */
 export function emptyDocument(): ProjectDocument {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,
     tracks: {},
     rootTrackIds: [],
     audioClips: {},
+    videoClips: {},
   }
 }

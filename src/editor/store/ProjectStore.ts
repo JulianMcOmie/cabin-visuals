@@ -250,6 +250,8 @@ interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
+  /** Replace a Video track's ordered clip refs (its pad bank). */
+  setTrackVideoRefs: (trackId: string, videoRefs: string[]) => void
   /** Create the audio track (top of the root tracks) holding one block at bar 0
    *  spanning the whole clip. The AudioBar's load path; one audio track for now.
    *  Returns the new track's id (for selection). */
@@ -969,6 +971,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
+    }),
+
+  setTrackVideoRefs: (trackId, videoRefs) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, videoRefs } } }
     }),
 
   addAudioTrack: (clip) => {

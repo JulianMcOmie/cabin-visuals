@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Video Instrument — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#ffffff; --border:#cfcfcf; --line:#dddddd;
+    --ink:#141414; --text:#222222; --muted:#565656; --dim:#7a7a7a;
+    --code:#ffffff; --radius:8px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font:19px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 30px 120px}
+  header.doc{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:34px}
+  h1{font-size:38px;margin:0 0 10px;letter-spacing:-.02em;color:var(--ink)}
+  .sub{color:var(--muted);font-size:20px;margin:0}
+  .kicker{display:inline-block;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:14px}
+  h2{font-size:27px;margin:50px 0 14px;letter-spacing:-.01em;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--ink)}
+  h3{font-size:21px;margin:28px 0 8px;color:var(--ink)}
+  h4{font-size:14px;margin:18px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  p{margin:10px 0}
+  a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  strong{color:var(--ink)}
+  code{font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--code);padding:2px 6px;border-radius:5px;border:1px solid var(--border);color:#111}
+  pre{background:var(--code);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;font-size:16px;line-height:1.6}
+  pre code{background:none;border:none;padding:0;color:#1a1a1a}
+  ul,ol{margin:10px 0;padding-left:22px}li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:700;font-size:14.5px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:4px 22px 18px;margin:18px 0}
+  .badge{display:inline-block;font-size:13.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--ink);margin-right:5px;white-space:nowrap;color:#111;background:#fff;letter-spacing:.02em}
+  .b-new{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .b-edit{background:#ffffff;color:#111;border-color:#9a9a9a}
+  .b-risk{background:#fff;color:#111;border-style:dashed;border-color:#666}
+  .note{border-left:4px solid #c2c2c2;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .warn{border-left:4px dashed #6a6a6a;background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#2a2a2a}
+  .rec{border-left:4px solid var(--ink);background:#ffffff;padding:10px 16px;border-radius:0 8px 8px 0;margin:14px 0;color:#1c1c1c}
+  .toc{columns:2;gap:28px;margin:8px 0 0}
+  .toc a{display:block;padding:3px 0;color:var(--muted);font-size:17px;text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .muted{color:var(--muted)}.small{font-size:16px}
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+  .file{color:#111;font-family:"SF Mono",Menlo,monospace;font-size:.9em;font-weight:600}
+  .comp{border:1px solid var(--border);border-radius:var(--radius);padding:2px 18px 14px;margin:14px 0;background:#ffffff}
+  .comp h4{color:var(--ink);font-size:17px;text-transform:none;letter-spacing:0;margin:14px 0 4px}
+  @media(max-width:760px){.toc{columns:1}}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff}.wrap{max-width:none;padding:0 6px}a{color:#000}
+    pre,table,.card,.note,.warn,.rec,.comp{break-inside:avoid;page-break-inside:avoid}
+    h1,h2,h3{break-after:avoid;page-break-after:avoid}
+    pre{white-space:pre-wrap;overflow-x:visible;word-break:break-word}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <span class="kicker">Cabin Visuals · Video Instrument</span>
+  <h1>Video Instrument — Implementation Plan</h1>
+  <p class="sub">Turning <span class="file">video-instrument-architecture.html</span> into files and functions: the storage mirror, the document plumbing, the instrument itself, the clip-bank inspector, and the export seam. Each phase ships alone; the time-model helper is pure and tested headlessly.</p>
+</header>
+
+<div class="card">
+  <h3 style="margin-top:18px">Contents</h3>
+  <nav class="toc">
+    <a href="#components">A · Components that change (start here)</a>
+    <a href="#ladder">B · The phase ladder</a>
+    <a href="#timemodel">C · The time model (pure, tested)</a>
+    <a href="#phases">D · Phase-by-phase build (with files)</a>
+    <a href="#inventory">E · Master file inventory</a>
+    <a href="#risks">F · Risks &amp; open questions</a>
+    <a href="#deploy">G · Deploy-day notes for Julia</a>
+  </nav>
+</div>
+
+<!-- A -->
+<h2 id="components">A · Components that change — and one layer down</h2>
+<p>Badges: <span class="badge b-new">new</span> <span class="badge b-edit">edit</span>.</p>
+
+<div class="comp">
+  <h4><span class="badge b-new">new</span> <span class="file">persistence/videoStorage.ts</span> + <span class="file">core/video/videoSource.ts</span> — bytes</h4>
+  <p class="small">Byte-for-byte mirrors of <span class="file">audioStorage.ts</span> / <span class="file">audioSource.ts</span>: upload to the private <code>project-videos</code> bucket at <code>{userId}/{projectId}/{clipId}</code>, signed URLs to read, session-only object-URL fallback when the project has no row yet, and an in-memory ref → URL cache.</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-new">new</span> <span class="file">store/VideoStore.ts</span> — the catalog</h4>
+  <p class="small"><code>videoClips: Record&lt;ref, { fileName, duration, width, height }&gt;</code>, persisted by <span class="file">serialize.ts</span> exactly like <code>audioClips</code>. Not undoable (loading a file isn't an edit).</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-edit">edit</span> <span class="file">types.ts</span> / <span class="file">resolve.ts</span> / <span class="file">instrumentFrame.ts</span> — plumbing</h4>
+  <p class="small"><code>track.videoRefs?: string[]</code> (ordered pad bank) flows resolve → <code>ResolvedObject.videoRefs</code> → <code>ObjectState.videoRefs</code>. The frame-gate signature gains one ref-compare entry (the array is a fresh identity per resolve, contents immutable — same argument as elementMatrices).</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-new">new</span> <span class="file">core/video/videoTime.ts</span> — the pure time model</h4>
+  <p class="small"><code>activeVideoAt(notes, beat, baseNote, clipCount) → { clipIndex, noteBeat } | null</code> and <code>clipTimeAt(beat, noteBeat, secPerBeat, duration, loop)</code>. No DOM, no three.js — this is the testable heart.</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-new">new</span> <span class="file">instruments/Video.tsx</span> — the instrument</h4>
+  <p class="small">Def (params: baseNote, size, x/y/z, loop; midiRowLabels for the pad rows) + component: warm elements, one <code>VideoTexture</code> plane, per-frame reconcile (play + drift-correct vs pause + seek), <code>invalidate()</code> on <code>seeked</code>/<code>loadedmetadata</code>, block-gate hiding. Registers an export frame preparer on mount.</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-edit">edit</span> <span class="file">components/TrackEditor.tsx</span> — the clip bank UI</h4>
+  <p class="small">A CLIPS section shown only for <code>instrumentId === 'video'</code>: upload button (accept mp4/webm, ≤100&nbsp;MB, ≤8 clips), ordered list with pad label (C3, C#3…), move up/down, remove. Writes <code>setTrackVideoRefs</code> (undoable — arranging the bank IS an edit) and the VideoStore catalog.</p>
+</div>
+<div class="comp">
+  <h4><span class="badge b-edit">edit</span> <span class="file">core/export/exportEngine.ts</span> — frame preparers</h4>
+  <p class="small"><code>registerFramePreparer(fn)</code> module registry; <code>walkFrames</code> awaits all preparers with the frame's beat before <code>renderFrame</code>. Zero registered preparers = zero cost.</p>
+</div>
+
+<!-- B -->
+<h2 id="ladder">B · The phase ladder</h2>
+<table>
+  <tr><th>Phase</th><th>Ships</th><th>Proves</th></tr>
+  <tr><td>1 · Storage + catalog</td><td>Upload/read/delete + VideoStore, serialized</td><td>Bytes round-trip; document stays additive</td></tr>
+  <tr><td>2 · Plumbing</td><td>videoRefs through resolve/state/gate + store action</td><td>tsc + existing tests stay green</td></tr>
+  <tr><td>3 · Time model</td><td>videoTime.ts + headless tests</td><td>Latch/restart/loop semantics, scrub == playback</td></tr>
+  <tr><td>4 · Instrument</td><td>Video.tsx + registry + sidebar</td><td>Clips cut on notes in the editor</td></tr>
+  <tr><td>5 · Clip bank UI</td><td>TrackEditor CLIPS section</td><td>Upload → appears on the plane</td></tr>
+  <tr><td>6 · Export seam</td><td>Frame preparers + Video's preparer</td><td>Exported frames are seek-exact</td></tr>
+</table>
+
+<!-- C -->
+<h2 id="timemodel">C · The time model — pure, tested</h2>
+<pre><code>// The latest note-on at or before `beat` that falls inside block coverage.
+// Latch: it stays active until a LATER note-on replaces it. null = hidden.
+activeVideoAt(notes, beat, baseNote, clipCount):
+  candidate = argmax over notes n of n.beat, where
+    n.beat <= beat and beat is inside n's block span
+  if none → null
+  return { clipIndex: mod(candidate.pitch − baseNote, clipCount), noteBeat: candidate.beat }
+
+clipTimeAt(beat, noteBeat, secPerBeat, duration, loop):
+  t = (beat − noteBeat) × secPerBeat
+  return loop ? t mod duration : min(t, duration − ε)</code></pre>
+<div class="note"><strong>Block coverage nuance:</strong> the latch must not leak across block gaps — a note in bar 1 does not keep a clip alive in a block that starts at bar 9. The candidate's own <code>blockEndBeat</code> bounds its reign: past it, and with no later candidate, the instrument hides. This is the exact behavior the block-gated-visibility rule demands, and it's the reason the helper takes resolved notes (which carry block bounds) rather than raw ones.</div>
+
+<!-- D -->
+<h2 id="phases">D · Phase-by-phase build</h2>
+<h3>Phase 1 — storage + catalog</h3>
+<ul>
+  <li><span class="badge b-new">new</span> <span class="file">src/persistence/videoStorage.ts</span> — uploadVideo / getVideoUrl / deleteVideo against <code>project-videos</code>.</li>
+  <li><span class="badge b-new">new</span> <span class="file">src/editor/core/video/videoSource.ts</span> — saveVideo (bucket or session fallback) + getPlayableVideoUrl with ref → URL cache.</li>
+  <li><span class="badge b-new">new</span> <span class="file">src/editor/store/VideoStore.ts</span>; <span class="badge b-edit">edit</span> <span class="file">serialize.ts</span> (carry <code>videoClips</code> both ways).</li>
+</ul>
+<h3>Phase 2 — plumbing</h3>
+<ul>
+  <li><span class="badge b-edit">edit</span> <span class="file">editor/types.ts</span> (<code>videoRefs?</code>), <span class="file">ProjectStore.ts</span> (<code>setTrackVideoRefs</code>), <span class="file">core/visual/types.ts</span> + <span class="file">resolve.ts</span> (flow it), <span class="file">instrumentFrame.ts</span> (gate signature entry).</li>
+</ul>
+<h3>Phase 3 — time model</h3>
+<ul>
+  <li><span class="badge b-new">new</span> <span class="file">core/video/videoTime.ts</span> + <span class="file">core/video/videoTime.test.ts</span> (node --test, same harness as the engine tests): latch, restart-same-pitch, mod wrapping, loop on/off, block-gap hiding.</li>
+</ul>
+<h3>Phase 4 — the instrument</h3>
+<ul>
+  <li><span class="badge b-new">new</span> <span class="file">instruments/Video.tsx</span>; <span class="badge b-edit">edit</span> <span class="file">instruments/index.ts</span> + <span class="file">LeftSidebar.tsx</span> (OBJECT section entry, film-frame icon).</li>
+  <li>Element lifecycle: create/destroy on videoRefs identity change; warm all; only active plays. Texture swaps by pointing the plane's material map at the active element's texture (one VideoTexture per element — cheap, avoids rebind stalls).</li>
+</ul>
+<h3>Phase 5 — clip bank UI</h3>
+<ul>
+  <li><span class="badge b-edit">edit</span> <span class="file">TrackEditor.tsx</span>: CLIPS section (upload / list with pad labels / reorder / remove). Duration/aspect probed via a throwaway element's <code>loadedmetadata</code> before the catalog entry is written.</li>
+</ul>
+<h3>Phase 6 — export seam</h3>
+<ul>
+  <li><span class="badge b-edit">edit</span> <span class="file">exportEngine.ts</span>: preparer registry + one await in <code>walkFrames</code>; <span class="badge b-edit">edit</span> <span class="file">Video.tsx</span>: register/unregister a preparer that seeks the active element to the exact clipTime and resolves on <code>seeked</code> (resolves immediately when already within half a frame).</li>
+</ul>
+
+<!-- E -->
+<h2 id="inventory">E · Master file inventory</h2>
+<table>
+  <tr><th>File</th><th>Status</th><th>Purpose</th></tr>
+  <tr><td class="file">src/persistence/videoStorage.ts</td><td>new</td><td>Bucket upload/signed-url/delete</td></tr>
+  <tr><td class="file">src/editor/core/video/videoSource.ts</td><td>new</td><td>saveVideo + URL cache + session fallback</td></tr>
+  <tr><td class="file">src/editor/core/video/videoTime.ts</td><td>new</td><td>Pure time model</td></tr>
+  <tr><td class="file">src/editor/core/video/videoTime.test.ts</td><td>new</td><td>Headless tests for the model</td></tr>
+  <tr><td class="file">src/editor/store/VideoStore.ts</td><td>new</td><td>videoClips catalog</td></tr>
+  <tr><td class="file">src/editor/instruments/Video.tsx</td><td>new</td><td>Def + component + export preparer</td></tr>
+  <tr><td class="file">src/persistence/serialize.ts</td><td>edit</td><td>Carry videoClips</td></tr>
+  <tr><td class="file">src/editor/types.ts · store/ProjectStore.ts</td><td>edit</td><td>videoRefs + setTrackVideoRefs</td></tr>
+  <tr><td class="file">core/visual/types.ts · resolve.ts · instrumentFrame.ts</td><td>edit</td><td>Flow videoRefs to state + gate</td></tr>
+  <tr><td class="file">src/editor/instruments/index.ts · components/LeftSidebar.tsx</td><td>edit</td><td>Register + library entry</td></tr>
+  <tr><td class="file">src/editor/components/TrackEditor.tsx</td><td>edit</td><td>CLIPS bank section</td></tr>
+  <tr><td class="file">src/editor/core/export/exportEngine.ts</td><td>edit</td><td>Frame preparers</td></tr>
+</table>
+
+<!-- F -->
+<h2 id="risks">F · Risks &amp; open questions</h2>
+<ul>
+  <li><span class="badge b-risk">risk</span> <strong>Seek latency on live cuts</strong> — a note-on mid-playback seeks a warm element; keyframe-sparse encodes can take &gt;100&nbsp;ms. Mitigation: warm elements + accepting one late cut live (export is exact regardless). If it bothers in practice: WebCodecs decoder path later.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Memory</strong> — 8 warm decoded videos is real GPU/RAM pressure; caps enforced at upload. Watch for Chrome tab-kill on big projects.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Signed URL expiry</strong> (1&nbsp;h) — an element erroring mid-session re-resolves its URL once before surfacing an error.</li>
+  <li><span class="badge b-risk">risk</span> <strong>Autoplay policy</strong> — elements are muted, so Chrome permits programmatic play; Safari stays out of scope (export already is Chrome-first).</li>
+  <li><strong>Open</strong> — should velocity map to anything (opacity? rate)? Deferred until a user asks.</li>
+</ul>
+
+<!-- G -->
+<h2 id="deploy">G · Deploy-day notes for Julia</h2>
+<ul>
+  <li>Create the <code>project-videos</code> bucket in Supabase (private), and copy the four <code>project-audio</code> RLS policies with the bucket name swapped.</li>
+  <li>No env changes; no schema migration (document changes are additive).</li>
+  <li>Export of projects containing video will be noticeably slower per frame — expected, frame-exactness costs a seek.</li>
+</ul>
+
+</div>
+</body>
+</html>

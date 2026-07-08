@@ -73,6 +73,8 @@ export interface ResolvedObject {
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
+  /** Video-instrument-only: ordered clip refs (fresh array per resolve). */
+  videoRefs?: string[]
   /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
   moverChain: ResolvedMover[]
   scratchBase: StateVector
@@ -122,6 +124,8 @@ export interface ObjectState {
   /** Decaying pulse from the object's own most recent note (the old implicit
    *  `energy` port) - the universal "a note just hit" signal instruments read. */
   energy: number
+  /** Video-instrument-only: ordered clip refs (per-resolve identity). */
+  videoRefs?: string[]
   /** True this frame if a mute modifier's region covers the current beat (hide it). */
   blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames -

@@ -22,6 +22,13 @@
       "when": 1783358920962,
       "tag": "0002_tan_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783520039801,
+      "tag": "0003_project_videos_bucket",
+      "breakpoints": true
     }
   ]
 }
