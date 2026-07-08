@@ -44,7 +44,7 @@
     "midi-file": "^1.2.4",
     "mp4-muxer": "^5.2.2",
     "nanoid": "^5.1.6",
-    "next": "15.2.8",
+    "next": "^15.5.20",
     "postprocessing": "^6.38.2",
     "react": "^19.0.0",
     "react-complex-tree": "^2.6.1",
