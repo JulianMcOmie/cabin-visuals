@@ -189,25 +189,6 @@ const MODIFIER_INSTRUMENTS = withKind('modifier', [
   { id: 'override', name: 'Override', icon: <Replace size={12} className="text-zinc-400" /> },
 ])
 
-const MODULATOR_INSTRUMENTS = withKind('modulator', [
-  { id: 'pulse', name: 'Pulse', icon: (
-    <svg width="14" height="10" viewBox="0 0 14 10">
-      <polyline points="0,5 3,5 4,1 5,9 6,5 10,5" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )},
-  { id: 'flip', name: 'Flip', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M2 6 L6 2 L10 6" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M2 6 L6 10 L10 6" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )},
-  { id: 'colorShift', name: 'Color Shift', icon: (
-    <div className="flex gap-0.5">
-      <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-    </div>
-  )},
-])
-
 const MOVER_INSTRUMENTS = withKind('mover', Object.values(moverRegistry).map((d) => ({
   id: d.id,
   name: d.label,
@@ -339,8 +320,9 @@ export function LeftSidebar() {
         {tab === 'instruments' && (
           <>
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene — a shape whose notes drive its pulse. Drag one onto the tracks to add it." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modulator" description="A Modulator instrument drives an object's internal ports (energy, scale, hue) from its own notes. Route it to one or more objects to animate them." items={MODULATOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Mover" description="A Mover is a child transform row. Its inputs can be edited, automated, or driven by modulators." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            {/* Modulators are retired from the library (movers replace them);
+                the code stays until existing projects are migrated off ports. */}
+            <Section title="Mover" description="A Mover moves, spins, scales, or fades any object — add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play — suppress, mute, add, or override. Has no visual of its own." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
