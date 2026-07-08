@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
+import { OBJECT_TRACK_COLOR } from '../../utils/modifierColors'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
@@ -149,7 +150,7 @@ export function TimelineArea() {
       name: 'Cube',
       type: 'base' as const,
       instrumentId: 'cube',
-      color: '#35a7e6',
+      color: OBJECT_TRACK_COLOR,
       muted: false,
       solo: false,
       blocks: [],

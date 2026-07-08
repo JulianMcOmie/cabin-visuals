@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
+import { MOVER_TRACK_COLOR } from '../utils/modifierColors'
 import { firstDimensionMidiInput, getDimension, isDimensionMidiInput } from '../core/visual/dimensions/registry'
 import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec } from '../types'
 
@@ -785,6 +786,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
             opMode: track.opMode ?? 'transform',
             params: {},
             stringParams: {},
+            color: MOVER_TRACK_COLOR,
             name,
           },
         },
@@ -810,7 +812,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         midiTargetInput: firstDimensionMidiInput(def),
         weight: { mode: 'all' },
         opMode: 'transform',
-        color: parent.color,
+        color: MOVER_TRACK_COLOR,
         muted: false,
         solo: false,
         blocks: [],

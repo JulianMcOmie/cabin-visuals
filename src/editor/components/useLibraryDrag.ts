@@ -6,6 +6,7 @@ import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
+import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/modifierColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
 
@@ -30,7 +31,7 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
     midiTargetInput: isDimension && def ? firstDimensionMidiInput(def) : undefined,
     weight: isDimension ? { mode: 'all' } : undefined,
     opMode: isDimension ? 'transform' : undefined,
-    color: '#6366f1',
+    color: item.kind === 'object' ? OBJECT_TRACK_COLOR : MOVER_TRACK_COLOR,
     muted: false,
     solo: false,
     blocks: [],
