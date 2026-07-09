@@ -425,5 +425,15 @@ export const shapeFlightInstrument: ObjectInstrumentDef = {
   name: 'Shape Flight',
   kind: 'object',
   params: PARAMS,
+  midiRows: [
+    { pitch: 64, label: 'Stream shape · 19 points (intricate)' },
+    { pitch: 62, label: 'Stream shape · 17 points' },
+    { pitch: 60, label: 'Stream shape · 15 points' },
+    { pitch: 59, label: 'Stream shape · 14 points' },
+    { pitch: 57, label: 'Stream shape · 12 points' },
+    { pitch: 55, label: 'Stream shape · 10 points' },
+    { pitch: 52, label: 'Stream shape · 7 points' },
+    { pitch: 48, label: 'Stream shape · 3 points (simplest)' },
+  ],
   component: ShapeFlightVisual,
 }

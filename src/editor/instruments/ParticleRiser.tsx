@@ -236,5 +236,17 @@ export const particleRiserInstrument: ObjectInstrumentDef = {
   name: 'Particle Riser',
   kind: 'object',
   params: PARAMS,
+  // Any pitch (24-96) triggers a riser; the pitch class picks the riser's hue
+  // ((pitch % 12) / 12), velocity sets intensity and note length stretches the climb.
+  // One octave of quantized hue rows (higher pitch on top). Mono color mode ignores hue.
+  midiRows: [
+    { pitch: 71, label: 'Riser · magenta', color: '#e81780' },
+    { pitch: 69, label: 'Riser · violet', color: '#8017e8' },
+    { pitch: 67, label: 'Riser · blue', color: '#1780e8' },
+    { pitch: 65, label: 'Riser · teal', color: '#17e880' },
+    { pitch: 64, label: 'Riser · green', color: '#17e817' },
+    { pitch: 62, label: 'Riser · yellow', color: '#e8e817' },
+    { pitch: 60, label: 'Riser · red', color: '#e81717', emphasized: true },
+  ],
   component: ParticleRiserVisual,
 }

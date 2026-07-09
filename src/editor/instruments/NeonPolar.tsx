@@ -349,5 +349,16 @@ export const neonPolarInstrument: ObjectInstrumentDef = {
   name: 'Neon Polar',
   kind: 'object',
   params: PARAMS,
+  // Held notes in 48-59 jitter the curves and shift their frequency: higher
+  // rows shake harder/sharper and multiply the curve frequency (more petals),
+  // lower rows soften and slow it. Quantized to 6 labelled steps.
+  midiRows: [
+    { pitch: 59, label: 'Jitter · frantic, curves sped up (hold)', emphasized: true },
+    { pitch: 57, label: 'Jitter · intense (hold)' },
+    { pitch: 55, label: 'Jitter · strong (hold)' },
+    { pitch: 53, label: 'Jitter · medium (hold)' },
+    { pitch: 50, label: 'Jitter · gentle (hold)' },
+    { pitch: 48, label: 'Jitter · subtle, curves slowed (hold)' },
+  ],
   component: NeonPolarVisual,
 }

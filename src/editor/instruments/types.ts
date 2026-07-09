@@ -71,12 +71,19 @@ export interface AbilityLaneDef {
   color?: string
 }
 
-/** Optional semantic row labels for an instrument's main MIDI editor. */
-export interface MidiRowLabelDef {
+/**
+ * One row of an instrument's MIDI vocabulary. Instruments declare a SHORT,
+ * fully-labelled row list (`midiRows`) instead of the full piano: every row
+ * says what the note DOES ("Warp forward", "Pulse · hard", "Next word"), and
+ * the editor shows only these rows, in the declared order (first = top).
+ * Continuous responses (intensity, position) quantize to 5-10 rows; discrete
+ * triggers get exactly one row per function.
+ */
+export interface MidiRowDef {
+  pitch: number
   label: string
   color?: string
   emphasized?: boolean
-  backgroundColor?: string
 }
 
 /** An object's transform relative to its parent (identity-ish defaults). Position in
@@ -111,8 +118,9 @@ export interface ObjectInstrumentDef {
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
-  /** Semantic labels for special MIDI pitches in this object's main piano roll. */
-  midiRowLabels?: Record<number, MidiRowLabelDef>
+  /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
+   *  order (first entry renders at the top). Omit for the full piano roll. */
+  midiRows?: MidiRowDef[]
   /** This object's transform relative to its parent, per frame. The engine composes
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */

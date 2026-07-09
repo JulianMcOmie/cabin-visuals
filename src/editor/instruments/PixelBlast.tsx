@@ -140,5 +140,18 @@ export const pixelBlastInstrument: ObjectInstrumentDef = {
   name: 'Pixel Blast',
   kind: 'object',
   params: PARAMS,
+  // Pitch class = X column (0 far left … 11 far right), octave = Y band
+  // (higher octave explodes higher). Velocity = blast size + particle count.
+  midiRows: [
+    { pitch: 95, label: 'Explode · top right' },
+    { pitch: 89, label: 'Explode · top center' },
+    { pitch: 84, label: 'Explode · top left' },
+    { pitch: 71, label: 'Explode · mid right' },
+    { pitch: 66, label: 'Explode · center screen', emphasized: true },
+    { pitch: 60, label: 'Explode · mid left' },
+    { pitch: 47, label: 'Explode · bottom right' },
+    { pitch: 41, label: 'Explode · bottom center' },
+    { pitch: 36, label: 'Explode · bottom left' },
+  ],
   component: PixelBlastVisual,
 }

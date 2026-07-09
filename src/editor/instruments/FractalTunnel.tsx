@@ -470,6 +470,11 @@ export const fractalTunnelInstrument: ObjectInstrumentDef = {
   name: 'Fractal Tunnel',
   kind: 'object',
   params: PARAMS,
+  // Every note does the same thing regardless of pitch: it steps the flower's
+  // hue by 30° (or, with Color Pulse on, fires an inverted-color ring instead).
+  midiRows: [
+    { pitch: 60, label: 'Color jolt · hue step / pulse ring', emphasized: true },
+  ],
   component: FractalTunnelVisual,
   fullFrame: true,
 }

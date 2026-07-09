@@ -1,5 +1,5 @@
 import { specInstrument } from './specInstrument'
-import type { ParamDef } from './types'
+import type { MidiRowDef, ParamDef } from './types'
 import type { Primitive } from '../core/visual/renderSpec'
 
 // Basic shapes share the Cube's params/ports so they self-pulse and respond to the same
@@ -13,11 +13,23 @@ const SHAPE_PARAMS: ParamDef[] = [
   { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 0 },
 ]
 
+// Notes drive the shared pulse envelope (scale swell + emissive glow);
+// higher pitch = stronger pulse — the same vocabulary as the Cube.
+const SHAPE_MIDI_ROWS: MidiRowDef[] = [
+  { pitch: 76, label: 'Pulse · max', emphasized: true },
+  { pitch: 68, label: 'Pulse · strong' },
+  { pitch: 60, label: 'Pulse · medium' },
+  { pitch: 52, label: 'Pulse · soft' },
+  { pitch: 44, label: 'Pulse · gentle' },
+  { pitch: 36, label: 'Pulse · faint' },
+]
+
 function basicShape(id: string, name: string, primitive: Primitive) {
   return specInstrument({
     id,
     name,
     params: SHAPE_PARAMS,
+    midiRows: SHAPE_MIDI_ROWS,
     spec: {
       primitive,
       transform: {

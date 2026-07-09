@@ -2,7 +2,7 @@ import { useRef, type ReactElement } from 'react'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/visual/renderSpec'
-import type { ObjectInstrumentDef, ParamDef, LocalTransform, TransformCtx } from './types'
+import type { ObjectInstrumentDef, ParamDef, MidiRowDef, LocalTransform, TransformCtx } from './types'
 
 const ZERO: Compiled = () => 0
 const ONE: Compiled = () => 1
@@ -63,6 +63,7 @@ export function specInstrument(opts: {
   id: string
   name: string
   params: ParamDef[]
+  midiRows?: MidiRowDef[]
   spec: RenderSpec
 }): ObjectInstrumentDef {
   const { spec } = opts
@@ -98,5 +99,5 @@ export function specInstrument(opts: {
     <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} paramDefaults={paramDefaults} />
   )
 
-  return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, localTransform, component: Component }
+  return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, midiRows: opts.midiRows, localTransform, component: Component }
 }

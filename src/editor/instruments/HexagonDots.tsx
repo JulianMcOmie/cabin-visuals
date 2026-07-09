@@ -104,5 +104,10 @@ export const hexagonDotsInstrument: ObjectInstrumentDef = {
   name: 'Hexagon Dots',
   kind: 'object',
   params: PARAMS,
+  // Every note spawns one ring regardless of pitch (color cycles per note; velocity sets
+  // dot size), so the vocabulary is a single trigger row.
+  midiRows: [
+    { pitch: 60, label: 'Spawn hexagon ring', emphasized: true },
+  ],
   component: HexagonDotsVisual,
 }

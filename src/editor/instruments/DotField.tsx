@@ -663,6 +663,19 @@ export const dotFieldInstrument: ObjectInstrumentDef = {
   name: 'Dot Field',
   kind: 'object',
   params: PARAMS,
+  // Held notes in 36-47 shake the field - higher rows shake harder and sharper
+  // (quantized to 6 labelled steps). EVERY note also kicks the field scale,
+  // and every 2nd/4th note fires a ripple / disruptor blades; the top row
+  // triggers those without adding any shake.
+  midiRows: [
+    { pitch: 60, label: 'Field kick · ripple, no shake' },
+    { pitch: 47, label: 'Bass shake · hardest, sharp (hold)', emphasized: true },
+    { pitch: 45, label: 'Bass shake · aggressive (hold)' },
+    { pitch: 43, label: 'Bass shake · driving (hold)' },
+    { pitch: 41, label: 'Bass shake · punchy (hold)' },
+    { pitch: 38, label: 'Bass shake · deep (hold)' },
+    { pitch: 36, label: 'Bass shake · deepest, smooth (hold)' },
+  ],
   component: DotFieldVisual,
   fullFrame: true,
 }

@@ -286,5 +286,8 @@ export const circleGridInstrument: ObjectInstrumentDef = {
   name: 'Circle Grid',
   kind: 'object',
   params: PARAMS,
+  midiRows: [
+    { pitch: 60, label: 'Step dot pattern forward', emphasized: true },
+  ],
   component: CircleGridVisual,
 }

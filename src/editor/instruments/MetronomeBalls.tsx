@@ -410,6 +410,17 @@ export const metronomeBallsInstrument: ObjectInstrumentDef = {
   name: 'Metronome Balls',
   kind: 'object',
   params: PARAMS,
+  midiRows: [
+    { pitch: PITCH_FG, label: 'Evolve pattern · foreground', emphasized: true },
+    { pitch: PITCH_BG, label: 'Evolve + rotate · background flower' },
+    { pitch: PITCH_INVERT, label: 'Invert · swap ink and paper' },
+    { pitch: PITCH_PAL_SEPIA, label: 'Palette · Sepia (toggle)', color: '#8b5e34' },
+    { pitch: PITCH_PAL_MIDNIGHT, label: 'Palette · Midnight (toggle)', color: '#d4a847' },
+    { pitch: PITCH_PAL_BOTANICAL, label: 'Palette · Botanical (toggle)', color: '#2d4a3e' },
+    { pitch: PITCH_PAL_PLUM, label: 'Palette · Plum (toggle)', color: '#c25a7c' },
+    { pitch: PITCH_PAL_CRIMSON, label: 'Palette · Crimson (toggle)', color: '#dc143c' },
+    { pitch: PITCH_PAL_SCARLET, label: 'Palette · Scarlet (toggle)', color: '#8b0000' },
+  ],
   component: MetronomeBallsVisual,
   fullFrame: true,
 }

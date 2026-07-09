@@ -585,14 +585,15 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   name: 'Text Display',
   kind: 'object',
   params: PARAMS,
-  midiRowLabels: {
-    [PITCH_NEXT_WORD]: {
-      label: 'Next Word',
-      color: '#facc15',
-      emphasized: true,
-      backgroundColor: 'rgba(250, 204, 21, 0.12)',
-    },
-  },
+  midiRows: [
+    { pitch: PITCH_NEXT_WORD, label: 'Next word', color: '#facc15', emphasized: true },
+    { pitch: PITCH_BASS_POP, label: 'Bass pop (punch + shake)' },
+    { pitch: 72, label: 'Word height · top' },
+    { pitch: 69, label: 'Word height · high' },
+    { pitch: 66, label: 'Word height · center' },
+    { pitch: 63, label: 'Word height · low' },
+    { pitch: 60, label: 'Word height · bottom' },
+  ],
   component: TextDisplayVisual,
   fullFrame: true,
 }

@@ -494,5 +494,20 @@ export const particleBurstInstrument: ObjectInstrumentDef = {
   name: 'Particle Burst',
   kind: 'object',
   params: PARAMS,
+  // Pitch (36-71) selects one of the 36 color presets (pitch - 36 = preset index);
+  // velocity scales brightness. Ten representative presets spanning the range
+  // (higher pitch on top); in-between pitches pick the presets between them.
+  midiRows: [
+    { pitch: 71, label: 'Burst · Blood Moon', color: '#992626' },
+    { pitch: 67, label: 'Burst · Diamond', color: '#a9b6bd' },
+    { pitch: 64, label: 'Burst · Vaporwave', color: '#e600b8' },
+    { pitch: 59, label: 'Burst · Prism (rainbow)', color: '#e61717' },
+    { pitch: 54, label: 'Burst · Aurora Borealis', color: '#0a9bb8' },
+    { pitch: 50, label: 'Burst · Pure White', color: '#bfbfbf' },
+    { pitch: 48, label: 'Burst · Emerald', color: '#0bd06a' },
+    { pitch: 45, label: 'Burst · Electric Blue', color: '#0066ff' },
+    { pitch: 40, label: 'Burst · Rose', color: '#f20d59' },
+    { pitch: 36, label: 'Burst · Ember', color: '#e62b00', emphasized: true },
+  ],
   component: ParticleBurstVisual,
 }

@@ -18,6 +18,15 @@ export const cubeInstrument: ObjectInstrumentDef = {
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
+  // Notes drive the pulse envelope (scale swell + emissive glow); higher pitch = stronger pulse.
+  midiRows: [
+    { pitch: 76, label: 'Pulse · max', emphasized: true },
+    { pitch: 68, label: 'Pulse · strong' },
+    { pitch: 60, label: 'Pulse · medium' },
+    { pitch: 52, label: 'Pulse · soft' },
+    { pitch: 44, label: 'Pulse · gentle' },
+    { pitch: 36, label: 'Pulse · faint' },
+  ],
   // The Cube's signature ability: play a note on its Shatter lane and the cube bursts
   // into fragments that fly out and reassemble over the note's length (its velocity
   // sets the blast radius). Bespoke, intrinsic - it IS how a cube performs.

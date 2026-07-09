@@ -222,5 +222,17 @@ export const paddleBounceInstrument: ObjectInstrumentDef = {
   name: 'Paddle Bounce',
   kind: 'object',
   params: PARAMS,
+  // Every note smashes the rally (speed burst). Pitch 36..84 maps to arc height;
+  // pitch % 3 sets hops per crossing (0→1 clean hop, 1→2, 2→3). Velocity = trail.
+  midiRows: [
+    { pitch: 84, label: 'Smash · highest arc, clean hop', emphasized: true },
+    { pitch: 80, label: 'Smash · high arc, triple hop' },
+    { pitch: 76, label: 'Smash · high arc, double hop' },
+    { pitch: 62, label: 'Smash · mid arc, triple hop' },
+    { pitch: 60, label: 'Smash · mid arc, clean hop' },
+    { pitch: 58, label: 'Smash · mid arc, double hop' },
+    { pitch: 38, label: 'Smash · low arc, triple hop' },
+    { pitch: 36, label: 'Smash · low arc, clean hop' },
+  ],
   component: PaddleBounceVisual,
 }

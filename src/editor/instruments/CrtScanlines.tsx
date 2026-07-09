@@ -219,6 +219,20 @@ export const crtScanlinesInstrument: ObjectInstrumentDef = {
   name: 'CRT Scanlines',
   kind: 'object',
   params: PARAMS,
+  // Flash color comes from the pitch class (hue = pitch % 12 · 30°); notes at
+  // or above the Static Blip Pitch (default 72) also fire a channel-change
+  // static burst. One row per color family, plus flash+static rows on top.
+  midiRows: [
+    { pitch: 72, label: 'Flash red + static blip', color: '#f01c1c', emphasized: true },
+    { pitch: 76, label: 'Flash green + static blip', color: '#1cf01c' },
+    { pitch: 80, label: 'Flash blue + static blip', color: '#1c1cf0' },
+    { pitch: 60, label: 'Flash · red', color: '#f01c1c' },
+    { pitch: 62, label: 'Flash · yellow', color: '#f0f01c' },
+    { pitch: 64, label: 'Flash · green', color: '#1cf01c' },
+    { pitch: 66, label: 'Flash · cyan', color: '#1cf0f0' },
+    { pitch: 68, label: 'Flash · blue', color: '#1c1cf0' },
+    { pitch: 70, label: 'Flash · magenta', color: '#f01cf0' },
+  ],
   component: CrtScanlinesVisual,
   fullFrame: true,
 }

@@ -42,6 +42,40 @@ export function generateRows(
 }
 
 /**
+ * Rows for an instrument that declares its MIDI vocabulary (def.midiRows):
+ * exactly those rows, in the declared order (first = top). Pitches already
+ * used by notes that fell out of the vocabulary get dimmed extra rows so no
+ * note can silently vanish from the editor.
+ */
+export function generateInstrumentRows(
+  defRows: { pitch: number; label: string; color?: string; emphasized?: boolean }[],
+  notePitches: number[],
+): MidiRow[] {
+  const rows: MidiRow[] = []
+  const known = new Set<number>()
+  defRows.forEach((r, i) => {
+    known.add(r.pitch)
+    const hue = (i / Math.max(1, defRows.length)) * 300
+    rows.push({
+      pitch: r.pitch,
+      label: r.label,
+      color: r.color ?? `hsl(${hue}, 65%, 55%)`,
+      emphasized: r.emphasized,
+    })
+  })
+  const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
+    const octave = Math.floor(pitch / 12) - 1
+    rows.push({
+      pitch,
+      label: `${NOTE_NAMES[pitch % 12]}${octave} · unmapped`,
+      color: 'hsl(0, 0%, 45%)',
+    })
+  }
+  return rows
+}
+
+/**
  * Rows for a Video track's pad bank: exactly one row per clip, growing as
  * clips are added — never the full piano roll. The most recently added clip
  * sits at the TOP (rows stack upward, matching pitches ascending upward).

@@ -204,5 +204,14 @@ export const folderFlightInstrument: ObjectInstrumentDef = {
   name: 'Folder Flight',
   kind: 'object',
   params: PARAMS,
+  midiRows: [
+    { pitch: 71, label: 'Launch folder · top' },
+    { pitch: 69, label: 'Launch folder · high' },
+    { pitch: 67, label: 'Launch folder · above middle' },
+    { pitch: 65, label: 'Launch folder · middle' },
+    { pitch: 64, label: 'Launch folder · below middle' },
+    { pitch: 62, label: 'Launch folder · low' },
+    { pitch: 60, label: 'Launch folder · bottom' },
+  ],
   component: FolderFlightVisual,
 }

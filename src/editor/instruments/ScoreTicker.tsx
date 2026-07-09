@@ -191,5 +191,15 @@ export const scoreTickerInstrument: ObjectInstrumentDef = {
   name: 'Score Ticker',
   kind: 'object',
   params: PARAMS,
+  // Each note adds round(pitch × velocity × multiplier) points, ticking in
+  // slot-machine style. Hard hits (velocity ≥ 1UP threshold) also flash 1UP.
+  midiRows: [
+    { pitch: 96, label: 'Score +96 · jackpot', emphasized: true },
+    { pitch: 84, label: 'Score +84 · big' },
+    { pitch: 72, label: 'Score +72' },
+    { pitch: 60, label: 'Score +60' },
+    { pitch: 48, label: 'Score +48' },
+    { pitch: 36, label: 'Score +36 · small' },
+  ],
   component: ScoreTickerVisual,
 }

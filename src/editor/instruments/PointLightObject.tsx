@@ -17,6 +17,15 @@ export const pointLightInstrument: ObjectInstrumentDef = {
     { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 2 },
     { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 3 },
   ],
+  // Notes drive the pulse envelope (light flares brighter, bulb swells); higher pitch = stronger pulse.
+  midiRows: [
+    { pitch: 76, label: 'Pulse · max', emphasized: true },
+    { pitch: 68, label: 'Pulse · strong' },
+    { pitch: 60, label: 'Pulse · medium' },
+    { pitch: 52, label: 'Pulse · soft' },
+    { pitch: 44, label: 'Pulse · gentle' },
+    { pitch: 36, label: 'Pulse · faint' },
+  ],
   localTransform: ({ params }) => {
     const baseXPosition = params.baseXPosition ?? paramDefault(pointLightInstrument, 'baseXPosition')
     const baseYPosition = params.baseYPosition ?? paramDefault(pointLightInstrument, 'baseYPosition')

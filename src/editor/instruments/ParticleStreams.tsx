@@ -353,5 +353,17 @@ export const particleStreamsInstrument: ObjectInstrumentDef = {
   name: 'Particle Streams',
   kind: 'object',
   params: PARAMS,
+  // Any pitch (24-96) fires a stream burst; velocity sets its intensity. In pitch-color
+  // mode the pitch class picks the stream hue ((pitch % 12) / 12); the default mono mode
+  // draws every burst black. One octave of quantized hue rows (higher pitch on top).
+  midiRows: [
+    { pitch: 71, label: 'Streams · magenta', color: '#ac1561' },
+    { pitch: 69, label: 'Streams · violet', color: '#6115ac' },
+    { pitch: 67, label: 'Streams · blue', color: '#1561ac' },
+    { pitch: 65, label: 'Streams · teal', color: '#15ac61' },
+    { pitch: 64, label: 'Streams · green', color: '#15ac15' },
+    { pitch: 62, label: 'Streams · yellow', color: '#acac15' },
+    { pitch: 60, label: 'Streams · red', color: '#ac1515', emphasized: true },
+  ],
   component: ParticleStreamsVisual,
 }

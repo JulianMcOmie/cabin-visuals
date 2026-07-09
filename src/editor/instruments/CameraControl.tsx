@@ -133,5 +133,14 @@ export const cameraControlInstrument: ObjectInstrumentDef = {
   name: 'Camera',
   kind: 'object',
   params: PARAMS,
+  midiRows: [
+    { pitch: 76, label: 'Camera punch · max', emphasized: true },
+    { pitch: 68, label: 'Camera punch · strong' },
+    { pitch: 60, label: 'Camera punch · medium' },
+    { pitch: 52, label: 'Camera punch · soft' },
+    { pitch: 44, label: 'Camera punch · gentle' },
+    { pitch: 38, label: 'Camera punch · snare accent' },
+    { pitch: 36, label: 'Camera punch · kick accent' },
+  ],
   component: CameraControlVisual,
 }

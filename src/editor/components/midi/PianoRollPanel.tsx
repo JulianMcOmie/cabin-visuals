@@ -7,7 +7,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { generateRows, generateAutomationRows, generateVideoClipRows } from './generateRows'
+import { generateRows, generateAutomationRows, generateVideoClipRows, generateInstrumentRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { useVideoStore } from '../../store/VideoStore'
 import { getInstrument } from '../../instruments'
@@ -148,13 +148,15 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
 
-  // Value lanes show value rows (pitch → param/input value) with the target name in
-  // the range gutter; a Video track shows ONLY its clip rows (one per uploaded
-  // clip); modifiers get flat-coloured rows; everything else is the note rainbow.
+  // Value lanes show value rows (pitch → param/input value) with the target name
+  // in the range gutter; a Video track shows ONLY its clip rows (one per uploaded
+  // clip); instruments that declare a MIDI vocabulary (def.midiRows) show only
+  // those labelled rows; modifiers get flat-coloured rows; anything left shows
+  // the full note rainbow.
   const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
-  const rowLabels = !automation && track?.type === 'base'
-    ? getInstrument(track.instrumentId)?.midiRowLabels
+  const defRows = !automation && track?.type === 'base'
+    ? getInstrument(track.instrumentId)?.midiRows
     : undefined
   const auto = automation
     ? generateAutomationRows({ min: AUTOMATION_PITCH_MIN, max: AUTOMATION_PITCH_MAX }, automation.paramMin, automation.paramMax, automation.paramLabel)
@@ -167,9 +169,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           VIDEO_BASE_PITCH,
           notes.map((n) => n.pitch),
         )
-      : noteColor
-        ? generateRows(undefined, rowLabels).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
-        : generateRows(undefined, rowLabels)
+      : defRows
+        ? generateInstrumentRows(defRows, notes.map((n) => n.pitch))
+        : noteColor
+          ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
+          : generateRows(undefined)
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as

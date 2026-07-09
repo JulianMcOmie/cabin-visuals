@@ -145,6 +145,16 @@ export const swarmInstrument: ObjectInstrumentDef = {
     { key: 'size', label: 'Size', min: 0.03, max: 0.8, step: 0.01, default: 0.18 },
     { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 190 },
   ],
+  // Pure-energy instrument: notes only feed the decaying energy pulse
+  // (higher pitch = stronger pulse), which drives the helmets' emissive glow.
+  midiRows: [
+    { pitch: 76, label: 'Pulse · max', emphasized: true },
+    { pitch: 68, label: 'Pulse · strong' },
+    { pitch: 60, label: 'Pulse · medium' },
+    { pitch: 52, label: 'Pulse · soft' },
+    { pitch: 44, label: 'Pulse · gentle' },
+    { pitch: 36, label: 'Pulse · faint' },
+  ],
   elementCount: (params) => Math.max(1, Math.min(MAX_SWARM_COUNT, Math.round(params.count ?? 24))),
   layoutState: ({ params, i, N, channels }, out) => {
     resetSV(out)
