@@ -536,9 +536,6 @@ export function VideoClipBank({ track }: { track: Track }) {
     cleanOrphan(removed.ref)
   }
 
-  // Distinct sources already on this track - "add another moment" candidates.
-  const trackSources = [...new Set(pads.map((p) => p.ref))]
-
   return (
     <div className="mb-5">
       <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">CLIPS</p>
@@ -550,16 +547,23 @@ export function VideoClipBank({ track }: { track: Track }) {
       {pads.map((pad, i) => {
         const source = videoClips[pad.ref]
         return (
-          <div key={`${pad.ref}-${pad.inPoint}-${i}`} className="mb-1 flex items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5">
+          // The row itself reopens the picker on this clip's source - that's
+          // how you add more moments from a video (no separate button).
+          <div
+            key={`${pad.ref}-${pad.inPoint}-${i}`}
+            onClick={() => openExisting(pad.ref)}
+            title={`Open ${source?.fileName ?? 'this video'} to add or edit clips`}
+            className="mb-1 flex cursor-pointer items-center gap-2 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5 transition-colors hover:border-[var(--border-strong)]"
+          >
             <span className="w-5 flex-shrink-0 font-mono text-[10px] text-[var(--accent)]">{i + 1}</span>
             <Film size={11} className="flex-shrink-0 text-[var(--text-muted)]" />
             <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text-2)]" title={source?.fileName ?? pad.ref}>
               {source?.fileName ?? 'missing clip'}
             </span>
             <span className="flex-shrink-0 font-mono text-[10px] text-[var(--text-muted)]">@ {pad.inPoint.toFixed(1)}s</span>
-            <button onClick={() => move(i, -1)} disabled={i === 0} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip up"><ArrowUp size={11} /></button>
-            <button onClick={() => move(i, 1)} disabled={i === pads.length - 1} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip down"><ArrowDown size={11} /></button>
-            <button onClick={() => remove(i)} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--warn)] cursor-pointer" aria-label="Remove clip"><X size={11} /></button>
+            <button onClick={(e) => { e.stopPropagation(); move(i, -1) }} disabled={i === 0} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip up"><ArrowUp size={11} /></button>
+            <button onClick={(e) => { e.stopPropagation(); move(i, 1) }} disabled={i === pads.length - 1} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip down"><ArrowDown size={11} /></button>
+            <button onClick={(e) => { e.stopPropagation(); remove(i) }} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--warn)] cursor-pointer" aria-label="Remove clip"><X size={11} /></button>
           </div>
         )
       })}
@@ -572,20 +576,6 @@ export function VideoClipBank({ track }: { track: Track }) {
         <Plus size={11} />
         {pads.length >= MAX_PADS ? `${MAX_PADS}-clip limit` : 'Upload video'}
       </button>
-      {trackSources.length > 0 && pads.length < MAX_PADS && picker === null && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {trackSources.map((ref) => (
-            <button
-              key={ref}
-              onClick={() => openExisting(ref)}
-              className="h-6 cursor-pointer rounded border border-[var(--border)] px-2 font-mono text-[10px] text-[var(--text-3)] hover:text-[var(--text)]"
-              title={`Add another moment from ${videoClips[ref]?.fileName ?? ref}`}
-            >
-              + from {(videoClips[ref]?.fileName ?? 'clip').slice(0, 14)}
-            </button>
-          ))}
-        </div>
-      )}
       {error && <p className="mt-1.5 text-[11px] text-[var(--warn)]">{error}</p>}
       <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={onFile} />
 

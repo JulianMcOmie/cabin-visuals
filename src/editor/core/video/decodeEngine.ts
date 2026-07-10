@@ -58,9 +58,6 @@ class LiveBuffer {
   private iter: AsyncGenerator<VideoSample, void, unknown>
   private exhausted = false
   private pulling = false
-  /** Highest timestamp pulled so far - lets the engine tell "ahead of me" from
-   *  "behind me" for reseat decisions. */
-  reach = -1
 
   constructor(sink: VideoSampleSink, startAt: number) {
     this.iter = sink.samples(startAt)
@@ -79,7 +76,6 @@ class LiveBuffer {
           const { value, done } = await this.iter.next()
           if (done || !value) { this.exhausted = true; break }
           this.samples.push(value)
-          this.reach = value.timestamp
         }
       } catch {
         this.exhausted = true
@@ -137,7 +133,12 @@ export class VideoDecodeEngine {
   // Single live playhead: one clip plays at a time (activeVideoAt latches one).
   private liveKey: string | null = null
   private live: LiveBuffer | null = null
-  private liveStart = -1
+  /** The previous draw()'s sourceTime for the live clip. Jump detection
+   *  compares against THIS - playback advances in ~16ms steps, scrubs jump.
+   *  Never compare against decoder progress: right after a (re)trigger the
+   *  decoder is still catching up from the prior keyframe, and treating that
+   *  lag as a jump reseats it in a loop that freezes playback. */
+  private lastReqTime = -1
   private lastDrawnKey: string | null = null
   private lastDrawnTime = -1
   // Set by drawExact (export): draw() trusts an exact frame for the same
@@ -236,7 +237,6 @@ export class VideoDecodeEngine {
     this.live?.dispose()
     this.live = rt.sink ? new LiveBuffer(rt.sink, fromTime) : null
     this.liveKey = rt.key
-    this.liveStart = fromTime
   }
 
   /**
@@ -261,15 +261,19 @@ export class VideoDecodeEngine {
 
     const withinHead = sourceTime <= rt.inPoint + HEAD_SPAN_S
 
-    // A clip change, or a jump outside what the live buffer can serve, is a
-    // (re)trigger: seed the live decoder to overlap the head-cache tail.
-    const isDiscontinuity =
-      key !== this.liveKey ||
-      sourceTime < this.liveStart - 0.01 ||
-      (this.live !== null && sourceTime > this.live.reach + 1.0 && !withinHead)
-    if (isDiscontinuity) {
-      this.reseat(rt, Math.max(rt.inPoint + HEAD_SPAN_S - LIVE_START_LEAD_S, sourceTime))
+    // Discontinuities are jumps in the REQUEST stream: a clip change, a
+    // backward jump (retrigger / loop wrap / scrub back), or a forward jump
+    // (scrub ahead). Smooth playback - however far behind the decoder happens
+    // to be - is never one. Landings inside the head window seed the live
+    // decoder at the head's tail (cache covers the start); landings past it
+    // seed exactly at the request.
+    const clipChanged = key !== this.liveKey
+    const jumpedBack = !clipChanged && sourceTime < this.lastReqTime - 0.25
+    const jumpedForward = !clipChanged && sourceTime > this.lastReqTime + 1.0
+    if (clipChanged || jumpedBack || jumpedForward) {
+      this.reseat(rt, Math.max(rt.inPoint + HEAD_SPAN_S - LIVE_START_LEAD_S, withinHead ? 0 : sourceTime))
     }
+    this.lastReqTime = sourceTime
 
     this.live?.topUp(LIVE_BUFFER_CAP)
 
