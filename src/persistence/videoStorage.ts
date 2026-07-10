@@ -8,24 +8,28 @@ import { getSupabase } from './supabase'
 
 const BUCKET = 'project-videos'
 
-/** Upload a clip's bytes; returns the bucket path to store as the clip ref.
- *  Uploads via XHR rather than supabase-js because fetch (which supabase-js
- *  wraps) exposes no upload progress; this POSTs to the same Storage endpoint
- *  with the same auth, plus an onprogress feed for the UI. */
-export async function uploadVideo(
-  projectId: string,
-  file: File,
-  onProgress?: (fraction: number) => void,
-): Promise<string> {
-  const supabase = getSupabase()
-  const { data: auth, error: authError } = await supabase.auth.getUser()
+/** Mint the bucket path a new source WILL live at. Split from the upload so a
+ *  ref exists before any bytes move - clips arm instantly against the ref
+ *  while the upload runs behind them as pure durability. */
+export async function mintVideoPath(projectId: string): Promise<string> {
+  const { data: auth, error: authError } = await getSupabase().auth.getUser()
   if (authError) throw authError
   if (!auth.user) throw new Error('Not signed in')
-  const { data: sessionData } = await supabase.auth.getSession()
+  return `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
+}
+
+/** Upload a source's bytes to an already-minted path. XHR rather than
+ *  supabase-js because fetch (which supabase-js wraps) exposes no upload
+ *  progress; this POSTs to the same Storage endpoint with the same auth. */
+export async function uploadVideoTo(
+  path: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  const { data: sessionData } = await getSupabase().auth.getSession()
   const token = sessionData.session?.access_token
   if (!token) throw new Error('Not signed in')
 
-  const path = `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`
 
   await new Promise<void>((resolve, reject) => {
@@ -49,7 +53,6 @@ export async function uploadVideo(
     xhr.onerror = () => reject(new Error('Upload failed - network error'))
     xhr.send(file)
   })
-  return path
 }
 
 /** A URL a <video> element can load (signed; the bucket is private). */

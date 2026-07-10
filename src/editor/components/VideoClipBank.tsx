@@ -6,7 +6,7 @@ import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput 
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { useUIStore } from '../store/UIStore'
-import { saveVideo, removeVideo, getVideoSource } from '../core/video/videoSource'
+import { beginSaveVideo, retryVideoUpload, removeVideo, getVideoSource } from '../core/video/videoSource'
 import { usePlan } from '../../billing/usePlan'
 import type { Track, VideoPad } from '../types'
 
@@ -48,10 +48,13 @@ function probeVideo(file: File): Promise<{ duration: number; width: number; heig
 interface PickerState {
   /** Fresh upload: preview reads these local bytes immediately. */
   file: File | null
-  /** Set once the source is persisted - arming needs it. */
+  /** Minted BEFORE the upload starts - clips arm against it instantly; the
+   *  upload behind it is durability, not a gate. */
   ref: string | null
   fileName: string
-  uploading: boolean
+  /** Background persistence state. Clips work locally in every state; 'failed'
+   *  means they won't survive a reload until a retry succeeds. */
+  save: 'saving' | 'saved' | 'failed'
   progress: number
   error: string | null
 }
@@ -73,6 +76,7 @@ function MomentPickerModal({
   armedClips,
   onArm,
   onRemove,
+  onRetry,
   onClose,
   atPadLimit,
 }: {
@@ -81,6 +85,7 @@ function MomentPickerModal({
   armedClips: ArmedClip[]
   onArm: (inPoint: number) => void
   onRemove: (bankIndex: number) => void
+  onRetry: () => void
   onClose: () => void
   atPadLimit: boolean
 }) {
@@ -245,7 +250,7 @@ function MomentPickerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, playing, t, duration, onClose])
 
-  const canArm = ready && picker.ref !== null && !picker.error && !atPadLimit
+  const canArm = ready && picker.ref !== null && !atPadLimit
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
@@ -293,7 +298,6 @@ function MomentPickerModal({
           <button
             onClick={() => onArm(t)}
             disabled={!canArm}
-            title={picker.uploading ? 'Uploading - clips unlock when it finishes' : undefined}
             className="flex h-7 cursor-pointer items-center gap-1.5 rounded bg-[var(--accent)] px-3 text-[11px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
           >
             <Plus size={11} />
@@ -333,12 +337,22 @@ function MomentPickerModal({
           </div>
         )}
 
-        {picker.error ? (
-          <p className="mt-2 text-[11px] text-[var(--warn)]">{picker.error}</p>
-        ) : picker.uploading ? (
+        {picker.save === 'failed' ? (
+          <div className="mt-2 flex items-center gap-2">
+            <p className="flex-1 text-[11px] text-[var(--warn)]">
+              {picker.error ?? 'Upload failed'} - clips still work this session, but won&apos;t survive a reload until it saves.
+            </p>
+            <button
+              onClick={onRetry}
+              className="h-6 flex-shrink-0 cursor-pointer rounded border border-[var(--warn)] px-2 text-[11px] text-[var(--warn)] hover:bg-[var(--warn)] hover:text-[var(--bg-panel)]"
+            >
+              Retry upload
+            </button>
+          </div>
+        ) : picker.save === 'saving' ? (
           <div className="mt-3">
             <p className="mb-1 font-mono text-[10px] text-[var(--text-muted)]">
-              UPLOADING {Math.round(picker.progress * 100)}% · scrub and find your moments now - clips unlock when it finishes
+              SAVING {Math.round(picker.progress * 100)}% · clips arm instantly - the upload just makes them survive reloads
             </p>
             <div className="h-1 w-full overflow-hidden rounded bg-[var(--bg-elevated)]">
               <div className="h-full rounded bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${picker.progress * 100}%` }} />
@@ -361,6 +375,9 @@ export function VideoClipBank({ track }: { track: Track }) {
   // Identifies the picker session an in-flight upload belongs to, so a
   // completion after the modal closed can orphan-clean instead of resurrecting.
   const pickerSeqRef = useRef(0)
+  // The in-flight background upload, so close-mid-upload defers orphan cleanup
+  // to completion (deleting a path that's still POSTing would race).
+  const uploadTaskRef = useRef<{ ref: string; settled: boolean; cleanupWhenSettled: boolean } | null>(null)
   const setTrackVideoPads = useProjectStore((s) => s.setTrackVideoPads)
   const videoClips = useVideoStore((s) => s.videoClips)
   const { isPro } = usePlan()
@@ -393,28 +410,70 @@ export function VideoClipBank({ track }: { track: Track }) {
           : `This video is ${mb} MB - free sources are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${PRO_MAX_MB} MB, or compress it first.`,
       )
     }
-    // Modal opens NOW on the local bytes; the upload runs behind it.
+    // Modal opens NOW on the local bytes; ref mints in a beat (arm unlocks),
+    // and the upload runs behind everything as pure durability.
     const seq = ++pickerSeqRef.current
-    setPicker({ file, ref: null, fileName: file.name, uploading: true, progress: 0, error: null })
+    setPicker({ file, ref: null, fileName: file.name, save: 'saving', progress: 0, error: null })
     void (async () => {
       try {
         const meta = await probeVideo(file)
-        const ref = await saveVideo(file, (progress) =>
+        const { ref, completion } = await beginSaveVideo(file, (progress) =>
           setPicker((p) => (p && pickerSeqRef.current === seq ? { ...p, progress } : p)),
         )
         useVideoStore.getState().addClip({ ref, fileName: file.name, ...meta })
+        const task = { ref, settled: false, cleanupWhenSettled: false }
+        uploadTaskRef.current = task
         if (pickerSeqRef.current === seq) {
-          setPicker((p) => (p ? { ...p, ref, uploading: false, progress: 1 } : p))
+          setPicker((p) => (p ? { ...p, ref } : p)) // ARM UNLOCKED - still saving
         } else {
-          cleanOrphan(ref) // modal closed mid-upload and nothing will arm it
+          task.cleanupWhenSettled = true // modal already closed
+        }
+        try {
+          await completion
+          if (pickerSeqRef.current === seq) setPicker((p) => (p ? { ...p, save: 'saved', progress: 1 } : p))
+        } catch (err) {
+          const message =
+            (err as { message?: string } | null)?.message ?? (err instanceof Error ? err.message : 'Upload failed')
+          console.error('Video upload failed:', message, err)
+          if (pickerSeqRef.current === seq) {
+            setPicker((p) => (p ? { ...p, save: 'failed', error: message } : p))
+          } else if (sourceStillUsed(ref)) {
+            // Clips exist against bytes that never landed and the modal is
+            // gone - surface it in the bank so it isn't silent data loss.
+            setError(`Upload of ${file.name} failed - its clips won't survive a reload. Reopen it via "+ from" to retry.`)
+          }
+        } finally {
+          task.settled = true
+          if (task.cleanupWhenSettled) cleanOrphan(ref)
+          if (uploadTaskRef.current === task) uploadTaskRef.current = null
         }
       } catch (err) {
+        // Probe/mint failure: nothing persisted, nothing armed.
         const message =
-          (err as { message?: string } | null)?.message ?? (err instanceof Error ? err.message : 'Upload failed')
-        console.error('Video upload failed:', message, err)
-        if (pickerSeqRef.current === seq) setPicker((p) => (p ? { ...p, uploading: false, error: message } : p))
+          (err as { message?: string } | null)?.message ?? (err instanceof Error ? err.message : 'Could not save video')
+        console.error('Video save failed to start:', message, err)
+        if (pickerSeqRef.current === seq) setPicker((p) => (p ? { ...p, save: 'failed', error: message } : p))
       }
     })()
+  }
+
+  const retryUpload = () => {
+    const p = picker
+    if (!p?.ref || p.save !== 'failed') return
+    const seq = pickerSeqRef.current
+    const ref = p.ref
+    setPicker((cur) => (cur ? { ...cur, save: 'saving', progress: 0, error: null } : cur))
+    void retryVideoUpload(ref, (progress) =>
+      setPicker((cur) => (cur && pickerSeqRef.current === seq ? { ...cur, progress } : cur)),
+    ).then(
+      () => {
+        if (pickerSeqRef.current === seq) setPicker((cur) => (cur ? { ...cur, save: 'saved', progress: 1 } : cur))
+      },
+      (err) => {
+        const message = err instanceof Error ? err.message : 'Upload failed'
+        if (pickerSeqRef.current === seq) setPicker((cur) => (cur ? { ...cur, save: 'failed', error: message } : cur))
+      },
+    )
   }
 
   const openExisting = (ref: string) => {
@@ -425,7 +484,7 @@ export function VideoClipBank({ track }: { track: Track }) {
       file: null,
       ref,
       fileName: videoClips[ref]?.fileName ?? 'clip',
-      uploading: false,
+      save: 'saved',
       progress: 1,
       error: null,
     })
@@ -450,9 +509,17 @@ export function VideoClipBank({ track }: { track: Track }) {
 
   const closePicker = () => {
     const p = picker
-    pickerSeqRef.current++ // in-flight upload completion now orphan-cleans
+    pickerSeqRef.current++ // detach the modal from any in-flight upload
     setPicker(null)
-    if (p?.ref) cleanOrphan(p.ref)
+    if (!p?.ref) return
+    const task = uploadTaskRef.current
+    if (task && task.ref === p.ref && !task.settled) {
+      // Upload still in flight: deleting the path now would race the POST.
+      // Completion handles cleanup (and only if nothing armed against it).
+      task.cleanupWhenSettled = true
+      return
+    }
+    cleanOrphan(p.ref)
   }
 
   const move = (i: number, dir: -1 | 1) => {
@@ -531,6 +598,7 @@ export function VideoClipBank({ track }: { track: Track }) {
             .map(({ pad, bankIndex }) => ({ bankIndex, inPoint: pad.inPoint }))}
           onArm={armPad}
           onRemove={removeFromModal}
+          onRetry={retryUpload}
           onClose={closePicker}
           atPadLimit={pads.length >= MAX_PADS}
         />

@@ -1,5 +1,5 @@
 import { BlobSource, UrlSource, type Source } from 'mediabunny'
-import { uploadVideo, getVideoUrl, deleteVideo } from '../../../persistence/videoStorage'
+import { mintVideoPath, uploadVideoTo, getVideoUrl, deleteVideo } from '../../../persistence/videoStorage'
 
 // Ref-based access to video bytes, mirroring core/audio/audioSource.ts: with a
 // project row the bytes live in the project-videos bucket and the ref is the
@@ -13,19 +13,38 @@ import { uploadVideo, getVideoUrl, deleteVideo } from '../../../persistence/vide
 
 const memFiles = new Map<string, File>() // ref -> File (this session's uploads)
 
-/** Persist a video file's bytes and return an opaque handle to store. */
-export async function saveVideo(file: File, onProgress?: (fraction: number) => void): Promise<string> {
+export interface VideoSave {
+  /** Usable IMMEDIATELY: local bytes are registered under it before any
+   *  network happens, so clips can arm and play while the upload runs. */
+  ref: string
+  /** Resolves when the bytes are durable in storage (instantly for session-only
+   *  refs). Rejection = the upload failed; the ref still plays this session
+   *  from local bytes but will not survive a reload - surface a retry. */
+  completion: Promise<void>
+}
+
+/** Begin persisting a video file: the ref is minted and locally-backed up
+ *  front; the upload is background durability, not a gate on anything. */
+export async function beginSaveVideo(file: File, onProgress?: (fraction: number) => void): Promise<VideoSave> {
   const projectId = new URLSearchParams(window.location.search).get('project')
   // No project row to hang the bytes on - session-only, same as audio pre-save.
   if (!projectId) {
     const ref = crypto.randomUUID()
     memFiles.set(ref, file)
     onProgress?.(1)
-    return ref
+    return { ref, completion: Promise.resolve() }
   }
-  const ref = await uploadVideo(projectId, file, onProgress)
-  memFiles.set(ref, file) // decode immediately, no re-download
-  return ref
+  const ref = await mintVideoPath(projectId)
+  memFiles.set(ref, file) // decode immediately - playback never waits on the net
+  return { ref, completion: uploadVideoTo(ref, file, onProgress) }
+}
+
+/** Retry a failed background upload for a ref whose bytes are still local. */
+export function retryVideoUpload(ref: string, onProgress?: (fraction: number) => void): Promise<void> {
+  const file = memFiles.get(ref)
+  if (!file) return Promise.reject(new Error('Original file no longer in this session'))
+  if (!ref.includes('/')) return Promise.resolve() // session-only ref: nothing to upload
+  return uploadVideoTo(ref, file, onProgress)
 }
 
 /** A mediabunny Source for a ref: the session File if we have it, else the
