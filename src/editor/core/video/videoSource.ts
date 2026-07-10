@@ -8,15 +8,16 @@ import { uploadVideo, getVideoUrl, deleteVideo } from '../../../persistence/vide
 const mem = new Map<string, string>() // ref -> object URL (this session's cache)
 
 /** Persist a video file's bytes and return an opaque handle to store. */
-export async function saveVideo(file: File): Promise<string> {
+export async function saveVideo(file: File, onProgress?: (fraction: number) => void): Promise<string> {
   const projectId = new URLSearchParams(window.location.search).get('project')
   // No project row to hang the bytes on - session-only, same as audio pre-save.
   if (!projectId) {
     const ref = crypto.randomUUID()
     mem.set(ref, URL.createObjectURL(file))
+    onProgress?.(1)
     return ref
   }
-  const ref = await uploadVideo(projectId, file)
+  const ref = await uploadVideo(projectId, file, onProgress)
   mem.set(ref, URL.createObjectURL(file)) // play immediately, no re-download
   return ref
 }

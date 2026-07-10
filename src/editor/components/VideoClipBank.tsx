@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Film, Plus, X } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { saveVideo, removeVideo } from '../core/video/videoSource'
+import { usePlan } from '../../billing/usePlan'
 import type { Track } from '../types'
 
 // The Video instrument's pad bank editor: upload clips, order them, remove
@@ -12,7 +13,12 @@ import type { Track } from '../types'
 // underlying pitch mapping is internal (see VIDEO_BASE_PITCH).
 
 const MAX_CLIPS = 8
-const MAX_BYTES = 100 * 1024 * 1024
+// Per-clip caps by plan. PRO_MAX_MB must equal the bucket's file_size_limit
+// (migration 0004): the picker rejects oversized files instantly; the bucket
+// backstops. If one changes, change both. (Like all plan gating, the free cap
+// is client-side only - the bucket enforces the Pro cap for everyone.)
+const FREE_MAX_MB = 50
+const PRO_MAX_MB = 250
 
 /** Probe duration + dimensions from the file before it enters the catalog. */
 function probeVideo(file: File): Promise<{ duration: number; width: number; height: number }> {
@@ -36,9 +42,14 @@ function probeVideo(file: File): Promise<{ duration: number; width: number; heig
 export function VideoClipBank({ track }: { track: Track }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  // 0-1 while an upload is in flight; null when idle (or during the instant
+  // session-only save). Drives the button label and the bar below it.
+  const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const setTrackVideoRefs = useProjectStore((s) => s.setTrackVideoRefs)
   const videoClips = useVideoStore((s) => s.videoClips)
+  const { isPro } = usePlan()
+  const maxMb = isPro ? PRO_MAX_MB : FREE_MAX_MB
 
   const refs = track.videoRefs ?? []
 
@@ -48,11 +59,19 @@ export function VideoClipBank({ track }: { track: Track }) {
     if (!file) return
     setError(null)
     if (refs.length >= MAX_CLIPS) return setError(`Up to ${MAX_CLIPS} clips per track`)
-    if (file.size > MAX_BYTES) return setError('Clips are capped at 100 MB')
+    if (file.size > maxMb * 1024 * 1024) {
+      const mb = Math.round(file.size / (1024 * 1024))
+      return setError(
+        isPro
+          ? `This video is ${mb} MB - clips are capped at ${PRO_MAX_MB} MB. Trim or compress it first.`
+          : `This video is ${mb} MB - free clips are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${PRO_MAX_MB} MB, or trim it first.`,
+      )
+    }
     setBusy(true)
+    setProgress(0)
     try {
       const meta = await probeVideo(file)
-      const ref = await saveVideo(file)
+      const ref = await saveVideo(file, setProgress)
       useVideoStore.getState().addClip({ ref, fileName: file.name, ...meta })
       setTrackVideoRefs(track.id, [...refs, ref])
     } catch (err) {
@@ -64,6 +83,7 @@ export function VideoClipBank({ track }: { track: Track }) {
       setError(message)
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
 
@@ -118,8 +138,18 @@ export function VideoClipBank({ track }: { track: Track }) {
         className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
       >
         <Plus size={11} />
-        {busy ? 'Uploading…' : refs.length >= MAX_CLIPS ? `${MAX_CLIPS}-clip limit` : 'Add video clip'}
+        {busy
+          ? progress !== null ? `Uploading… ${Math.round(progress * 100)}%` : 'Uploading…'
+          : refs.length >= MAX_CLIPS ? `${MAX_CLIPS}-clip limit` : 'Add video clip'}
       </button>
+      {busy && progress !== null && (
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded bg-[var(--bg-elevated)]">
+          <div
+            className="h-full rounded bg-[var(--accent)] transition-[width] duration-150"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+      )}
       {error && <p className="mt-1.5 text-[11px] text-[var(--warn)]">{error}</p>}
       <input ref={inputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(e) => void onFile(e)} />
     </div>

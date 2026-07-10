@@ -8,17 +8,47 @@ import { getSupabase } from './supabase'
 
 const BUCKET = 'project-videos'
 
-/** Upload a clip's bytes; returns the bucket path to store as the clip ref. */
-export async function uploadVideo(projectId: string, file: File): Promise<string> {
+/** Upload a clip's bytes; returns the bucket path to store as the clip ref.
+ *  Uploads via XHR rather than supabase-js because fetch (which supabase-js
+ *  wraps) exposes no upload progress; this POSTs to the same Storage endpoint
+ *  with the same auth, plus an onprogress feed for the UI. */
+export async function uploadVideo(
+  projectId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
   const supabase = getSupabase()
   const { data: auth, error: authError } = await supabase.auth.getUser()
   if (authError) throw authError
   if (!auth.user) throw new Error('Not signed in')
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Not signed in')
+
   const path = `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || 'application/octet-stream',
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('apikey', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve()
+      // Storage errors arrive as JSON: {statusCode, error, message}.
+      let message = `Upload failed (${xhr.status})`
+      try {
+        message = (JSON.parse(xhr.responseText) as { message?: string }).message ?? message
+      } catch { /* non-JSON body - keep the status fallback */ }
+      reject(new Error(message))
+    }
+    xhr.onerror = () => reject(new Error('Upload failed - network error'))
+    xhr.send(file)
   })
-  if (error) throw error
   return path
 }
 
