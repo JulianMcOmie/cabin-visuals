@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Engine Research — Build vs Adopt (July 2026)</title>
+<style>
+  :root {
+    --bg: #0e0e11; --panel: #17171c; --border: #2a2a32; --text: #e8e8ec;
+    --text-2: #b8b8c2; --muted: #7c7c88; --accent: #f5a623; --good: #6a9955;
+    --warn: #d16969; --code-bg: #1e1e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 24px; background: var(--bg); color: var(--text);
+    font: 15px/1.65 "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 15px; margin: 24px 0 8px; color: var(--accent); }
+  p, li { color: var(--text-2); }
+  strong { color: var(--text); }
+  .sub { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 12px; margin-bottom: 32px; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 8px;
+    padding: 20px 24px; margin: 24px 0;
+  }
+  .verdict p { margin: 8px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 13.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); color: var(--text); font-weight: 600; }
+  td { color: var(--text-2); }
+  .yes { color: var(--good); font-weight: 600; }
+  .no { color: var(--warn); font-weight: 600; }
+  .meh { color: var(--accent); font-weight: 600; }
+  code { background: var(--code-bg); border-radius: 4px; padding: 1px 6px; font: 12.5px "IBM Plex Mono", monospace; color: var(--text); }
+  .box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 16px 0; }
+  .caveat { border-left: 3px solid var(--warn); padding-left: 16px; }
+  .finding { margin-bottom: 20px; }
+  .finding .meta { font: 11px "IBM Plex Mono", monospace; color: var(--muted); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ol li, ul li { margin-bottom: 6px; }
+  .sources li { font-size: 13px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video Engine: Build vs Adopt</h1>
+  <p class="sub">Deep research · 2026-07-10 · 24 sources fetched · 25 claims adversarially verified (3-vote, all 25 confirmed 3-0, 0 refuted) · for the TikTok beat-cut pivot, MVP = auto-cut clips to the beat</p>
+
+  <div class="verdict">
+    <h3 style="margin-top:0">The verdict</h3>
+    <p><strong>Build the preview engine — but on <a href="https://mediabunny.dev/">mediabunny</a>, not raw mp4box.js.</strong>
+    Mediabunny is MPL-2.0 (explicitly free for closed-source commercial use), zero-dependency TypeScript, and ships exactly the primitives we lack: demux, WebCodecs-wrapped decode, microsecond-precise seeking, and <code>VideoSampleSink.getSample(t)</code> — "give me the frame at timestamp t," which is the exact primitive a beat-clock renderer needs. It is maintained by <strong>the same author as the mp4-muxer already in our export pipeline</strong> (Vanilagy), released v1.50.8 the day before this research ran, 160 releases, 6.7k stars.</p>
+    <p>What no library ships — and therefore what we build — is the thin layer on top: the <strong>decoded-frame ring buffer around the playhead, keyframe-aware prefetch, and beat-clock integration</strong>. Chrome's official WebCodecs guidance and the W3C samples document this architecture almost verbatim, including a complete synchronized audio+video player sample.</p>
+    <p>Fallback if the build stalls: <strong>WebAV</strong> (MIT) is the only full SDK with no license trap. Best working reference to study: <strong>OpenVideo Editor</strong> (ex-designcombo) — which, tellingly, <em>abandoned Remotion</em> and rebuilt on PixiJS v8 + WebCodecs + mediabunny.</p>
+  </div>
+
+  <h2>Candidate comparison</h2>
+  <table>
+    <tr><th>Candidate</th><th>What it is</th><th>License</th><th>Maintenance</th><th>Fit / risk</th></tr>
+    <tr>
+      <td><strong>mediabunny</strong></td>
+      <td>Demux/decode/mux primitives, WebCodecs-wrapped, TS, zero deps</td>
+      <td class="yes">MPL-2.0 — free incl. closed-source commercial</td>
+      <td class="yes">Excellent (release the day before research; 160 releases; same author as our mp4-muxer)</td>
+      <td class="yes">ADOPT as foundation. Not an editor — the preview layer is still ours to build.</td>
+    </tr>
+    <tr>
+      <td><strong>WebAV</strong> (bilibili eng.)</td>
+      <td>Full A/V edit SDK on WebCodecs: av-cliper / av-canvas / av-recorder</td>
+      <td class="yes">MIT (core)</td>
+      <td class="meh">Active (av-cliper 1.2.8, Jan 2026) but single-maintainer</td>
+      <td class="meh">FALLBACK. No license trap, purpose-built — but Chinese-first docs, bus-factor of one, advanced features moving to paid "WebAV Pro".</td>
+    </tr>
+    <tr>
+      <td><strong>OpenVideo Editor</strong> (ex-designcombo react-video-editor)</td>
+      <td>Full editor app: PixiJS v8 + WebCodecs via @openvideo/engine-pixi (depends on mediabunny), client-side MP4 export</td>
+      <td class="no">Dual: free ≤3 employees; source-available beyond; engine monorepo is <em>private</em> (npm tarballs only)</td>
+      <td class="yes">Active (pushed 2026-06-30; engine 1.3.2 published 2026-07-01; 1.7k stars)</td>
+      <td class="meh">REFERENCE, not dependency. The best end-to-end working example of our exact target architecture.</td>
+    </tr>
+    <tr>
+      <td><strong>Remotion</strong></td>
+      <td>React video framework (render React to video)</td>
+      <td class="meh">Source-available custom dual license; free for individuals/≤3 employees (commercial OK); $100/mo at 4+ people; 5.0 will count contractors</td>
+      <td class="yes">Very active</td>
+      <td class="no">SKIP. Architecture mismatch — its preview is not a WebCodecs decode engine, and the flagship OSS editor built on it just migrated off it.</td>
+    </tr>
+    <tr>
+      <td><strong>diffusion-studio/core</strong></td>
+      <td>WebCodecs compositing engine w/ realtime playback + render modes (closest architectural match on paper)</td>
+      <td class="no">MPL badge is misleading: output watermarked unless paid key; v2+ source invite-only/non-commercial</td>
+      <td class="no">Stale (last push 2025-11; last release Oct 2024; 179 commits)</td>
+      <td class="no">DISQUALIFIED. Watermark licensing + staleness = trap for a $9/mo product.</td>
+    </tr>
+    <tr>
+      <td>Etro, omniclip, Twick, IMG.LY CE.SDK, CapCut/Clipchamp writeups</td>
+      <td colspan="3">No claims about these survived verification</td>
+      <td class="meh">Evidence gap, not a verdict — none surfaced strong primary sources in this pass.</td>
+    </tr>
+  </table>
+
+  <h2>The three verified engineering facts that shape the build</h2>
+
+  <div class="finding">
+    <h3>1 · Our planned pipeline is the officially documented reference architecture <span class="meta">[3-0 verified]</span></h3>
+    <p>Demux → <code>VideoDecoder</code> → pending-frame queue → blit per tick to canvas, hosted in a web worker: this is verbatim the Chrome team's best-practices doc and the W3C WebCodecs samples, which include a complete <em>synchronized audio+video player</em> (shared media clock, AudioRenderer + VideoRenderer in a worker) — a direct template for the A/V sync problem.
+    <strong>Honest qualifier:</strong> the W3C decode sample paints ASAP only; it contains <em>no seek/scrub/ring-buffer logic</em>. The frame-stable scrub layer is the real build, and no cited reference ships it.</p>
+  </div>
+
+  <div class="finding">
+    <h3>2 · GOP/keyframe structure is the root constraint <span class="meta">[3-0 verified]</span></h3>
+    <p>Every seek must restart the decoder at a keyframe and decode forward through the GOP — the spec mandates it (<code>DataError</code> otherwise). This is the same physics that killed our <code>&lt;video&gt;</code>-seeking approach; a decode engine doesn't remove the cost, it lets us <em>schedule around it</em>.
+    <strong>Design consequence for beat-cut:</strong> plan cut points around keyframes, or (the robust answer) <strong>transcode uploads to short-GOP H.264 once, at import</strong> — a one-time cost that bounds worst-case cut/loop latency forever after. We already own encode infrastructure to do this.</p>
+  </div>
+
+  <div class="finding">
+    <h3>3 · Memory is the binding constraint on the frame buffer <span class="meta">[3-0 verified]</span></h3>
+    <p>A decoded full-HD frame is ~4 MB (4K: ~16 MB) — 100 MB of buffer holds only ~25 full-HD frames, i.e. <em>less than one second</em>. Unclosed frames exhaust the decoder's frame pool and stall decoding entirely (Chrome + mediabunny both mandate aggressive <code>frame.close()</code>). So: a ring buffer of <em>seconds, not minutes</em>, around the playhead, recycled eagerly. (One source figure — "32 MB for full-HD HDR" — failed arithmetic checking; it's 4K-scale. Irrelevant for our SDR H.264 MVP, flagged for honesty.)</p>
+  </div>
+
+  <h2>What this means: the build plan shape</h2>
+  <div class="box">
+    <ol>
+      <li><strong>Import:</strong> upload source (existing path) + one-time transcode to short-GOP H.264 via our existing WebCodecs encode pipeline → every later seek/cut/loop is cheap and bounded.</li>
+      <li><strong>Preview engine (the new build):</strong> worker-hosted <code>mediabunny</code> decode per source; ring buffer of decoded frames around the playhead (seconds-deep, keyframe-aware prefetch aimed at the <em>next cut point</em>, which we know in advance — cuts are on the beat grid); per-tick blit to the existing three.js scene as a texture. The pause invariant maps cleanly: <code>frameAt(beat)</code> ≈ <code>VideoSampleSink.getSample(t)</code>.</li>
+      <li><strong>Clock:</strong> follow the W3C A/V player pattern — during playback the <em>audio clock drives</em>, beat position derives from it (this is a real open design question against our beat-clock engine; see below).</li>
+      <li><strong>Export:</strong> existing WebCodecs encode pipeline, now fed by the same decode engine — preview and export share one frame source, so what you see is what exports.</li>
+      <li><strong>Auto-cut MVP:</strong> with cuts as beat-grid data and the engine prefetching toward known cut points, "auto-cut clips to the beat" is a data-generation feature (pick cut pattern → emit cut list), not an engine feature. The engine makes it possible; the feature itself is small.</li>
+    </ol>
+  </div>
+
+  <h2>Honest caveats (what the research could NOT establish)</h2>
+  <div class="box caveat">
+    <ul>
+      <li><strong>No verified person-week estimate exists for the ring-buffer/prefetch/A-V-sync layer.</strong> "Tractable in 10 weeks" is an inference from primitive coverage, not a reported datapoint. This is the single biggest schedule risk — mitigate by building a 1-week spike first: one clip, beat-grid cuts, measured cut latency. If the spike is good, the bet is safe; if not, fall back to WebAV.</li>
+      <li><strong>No independent benchmarks</strong> of mediabunny's mid-GOP seek latency on typical phone-camera H.264 (long GOP, variable framerate) — this is exactly what the spike measures, and what the import-transcode step neutralizes.</li>
+      <li><strong>Absent candidates are evidence gaps, not verdicts</strong> (Etro, omniclip, Twick, IMG.LY, CapCut/Clipchamp internals).</li>
+      <li><strong>Time-sensitive:</strong> Remotion 5.0 license change pending; WebAV's Pro-tier feature split evolving; diffusion-studio could revive. Facts above were verified against primary sources on 2026-07-10.</li>
+    </ul>
+  </div>
+
+  <h2>Open questions to resolve during the spike</h2>
+  <ol>
+    <li>Measured cut/loop latency at beat boundaries with and without the short-GOP import transcode.</li>
+    <li>Clock ownership during playback: Web Audio time drives beat position (W3C pattern) vs the existing beat clock driving — pick one master, derive the other.</li>
+    <li>Ring buffer depth and eviction policy under the ~4 MB/frame budget for 2–3 simultaneous warm sources.</li>
+  </ol>
+
+  <h2>Sources (primary, all claims 3-0 verified against these)</h2>
+  <ul class="sources">
+    <li><a href="https://mediabunny.dev/">mediabunny.dev</a> + <a href="https://github.com/Vanilagy/mediabunny">github.com/Vanilagy/mediabunny</a> (docs, license, releases)</li>
+    <li><a href="https://developer.chrome.com/docs/web-platform/best-practices/webcodecs">Chrome team — WebCodecs best practices</a> (pendingFrames pattern, worker guidance, close() mandate)</li>
+    <li><a href="https://w3c.github.io/webcodecs/samples/">W3C WebCodecs official samples</a> (mp4box demux → decode → paint; synchronized A/V player)</li>
+    <li><a href="https://www.w3.org/TR/webcodecs/">W3C WebCodecs spec</a> (key/delta chunks, keyframe-after-flush requirement)</li>
+    <li><a href="https://www.w3.org/2021/03/media-production-workshop/talks/paul-adenot-webcodecs-performance.html">Paul Adenot (Mozilla) — WebCodecs performance, W3C workshop</a> (frame memory sizes)</li>
+    <li><a href="https://github.com/WebAV-Tech/WebAV">WebAV</a> (README, MIT LICENSE, package roles, Pro-tier signals)</li>
+    <li><a href="https://github.com/designcombo/react-video-editor">OpenVideo Editor (ex-designcombo)</a> + <a href="https://www.npmjs.com/package/@openvideo/engine-pixi">@openvideo/engine-pixi</a> (Remotion→WebCodecs migration, verified at package.json/code level)</li>
+    <li><a href="https://www.remotion.dev/docs/license">Remotion license docs</a> + <a href="https://github.com/remotion-dev/remotion/blob/main/LICENSE.md">LICENSE.md</a> (verified verbatim)</li>
+    <li><a href="https://github.com/diffusionstudio/core">diffusion-studio/core</a> (README watermark terms, GitHub API staleness data)</li>
+    <li><a href="https://mediabunny.dev/guide/packets-and-samples">mediabunny — packets &amp; samples guide</a>, <a href="https://mediabunny.dev/guide/media-sinks">media sinks guide</a> (VideoSampleSink semantics, close() requirement, seek behavior)</li>
+  </ul>
+
+  <p class="sub" style="margin-top:40px">Method: 5 parallel search angles → 24 sources fetched → 116 falsifiable claims extracted → top 25 verified by 3 independent adversarial verifiers each (a claim dies on 2/3 refutations) → 25/25 confirmed unanimously, 0 refuted. Verifiers fetched primary sources directly (license files, GitHub API, npm registry, package.json of shipped tarballs) rather than trusting search snippets.</p>
+</main>
+</body>
+</html>
