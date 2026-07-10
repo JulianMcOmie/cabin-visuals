@@ -4,7 +4,6 @@ export interface MidiRow {
   color: string
   noteLabel?: string
   emphasized?: boolean
-  backgroundColor?: string
 }
 
 export interface RangeLabel {

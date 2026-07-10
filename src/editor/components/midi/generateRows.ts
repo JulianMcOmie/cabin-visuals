@@ -6,7 +6,6 @@ export interface MidiRowLabelOverride {
   label: string
   color?: string
   emphasized?: boolean
-  backgroundColor?: string
 }
 
 /**
@@ -34,7 +33,6 @@ export function generateRows(
       noteLabel: label ? noteLabel : undefined,
       color: label?.color ?? `hsl(${hue}, 70%, 55%)`,
       emphasized: label?.emphasized,
-      backgroundColor: label?.backgroundColor,
     })
   }
 

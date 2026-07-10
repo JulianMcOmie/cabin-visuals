@@ -405,8 +405,6 @@ export function MidiEditor({
                 gap: 4,
                 paddingLeft: row.noteLabel ? 6 : 0,
                 paddingRight: 8,
-                backgroundColor: row.emphasized ? row.backgroundColor : undefined,
-                borderLeft: row.emphasized ? `3px solid ${row.color}` : undefined,
                 borderBottom: '1px solid rgba(255,255,255,0.05)',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
@@ -415,8 +413,7 @@ export function MidiEditor({
               <span
                 style={{
                   fontSize: row.noteLabel ? 11 : 13,
-                  fontWeight: row.emphasized ? 700 : 400,
-                  color: row.emphasized ? row.color : '#666666',
+                  color: '#666666',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -509,23 +506,6 @@ export function MidiEditor({
               bottom: 0,
             }}
           />
-          {rows.map((row, i) => row.emphasized ? (
-            <div
-              key={`emphasized-row-${row.pitch}`}
-              style={{
-                position: 'absolute',
-                top: i * rowHeight,
-                left: 0,
-                right: 0,
-                height: rowHeight,
-                backgroundColor: row.backgroundColor ?? 'rgba(250, 204, 21, 0.1)',
-                borderTop: `1px solid ${row.color}`,
-                borderBottom: `1px solid ${row.color}`,
-                opacity: 0.75,
-                pointerEvents: 'none',
-              }}
-            />
-          ) : null)}
           {/* Sides */}
           <div
             data-midi-block-region=""
