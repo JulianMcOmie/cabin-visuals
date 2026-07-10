@@ -660,13 +660,21 @@ export function VideoClipBank({ track }: { track: Track }) {
   return (
     <div
       className={`relative mb-5 rounded ${dropHover ? 'bg-[var(--accent)]/10' : ''}`}
+      onDragEnter={(e) => {
+        if (!Array.from(e.dataTransfer.types).includes('Files')) return
+        e.preventDefault()
+        hoverDepthRef.current++
+        setDropHover(true)
+      }}
       onDragOver={(e) => {
         if (!Array.from(e.dataTransfer.types).includes('Files')) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
-        setDropHover(true)
       }}
-      onDragLeave={() => setDropHover(false)}
+      onDragLeave={() => {
+        hoverDepthRef.current = Math.max(0, hoverDepthRef.current - 1)
+        if (hoverDepthRef.current === 0) setDropHover(false)
+      }}
       onDrop={onDrop}
     >
       {fileDragActive && !pickerCore && (
