@@ -1,6 +1,7 @@
 import { useRef, type ReactElement } from 'react'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/visual/renderSpec'
 import type { ObjectInstrumentDef, ParamDef, MidiRowDef, LocalTransform, TransformCtx } from './types'
 
@@ -42,7 +43,7 @@ function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { track
     const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: { energy: state.energy }, beat: state.beat }
     if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
-    if (appearance.opacity) { mat.transparent = true; mat.opacity = appearance.opacity(scope) }
+    if (appearance.opacity) { mat.transparent = true; setAnimatedOpacity(mat, appearance.opacity(scope)) }
   })
   return (
     <mesh ref={meshRef}>

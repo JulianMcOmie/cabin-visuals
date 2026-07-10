@@ -5,6 +5,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -403,13 +404,13 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
         _tmpColor.setHSL(hue, 1.0, Math.min(bright, 0.95))
         fiber.core.material.color.copy(_tmpColor)
         fiber.core.material.linewidth = coreW
-        fiber.core.material.opacity = 0.8 + hs.brightPulse * 0.2
+        setAnimatedOpacity(fiber.core.material, 0.8 + hs.brightPulse * 0.2)
 
         // Glow: wider, dimmer halo (additive blending makes overlaps glow)
         _tmpColor.setHSL(hue, 0.6, Math.min(bright * 0.65, 0.7))
         fiber.glow.material.color.copy(_tmpColor)
         fiber.glow.material.linewidth = glowW + hs.polePulse * 6
-        fiber.glow.material.opacity = 0.15 + hs.polePulse * 0.25 + hs.brightPulse * 0.1
+        setAnimatedOpacity(fiber.glow.material, 0.15 + hs.polePulse * 0.25 + hs.brightPulse * 0.1)
       }
     }
 

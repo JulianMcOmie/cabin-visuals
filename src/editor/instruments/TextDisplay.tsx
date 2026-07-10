@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -386,7 +387,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
     if (nextWordNotes.length === 0) {
       meshRef.current.visible = false
-      ;(meshRef.current.material as MeshBasicMaterial).opacity = 0
+      setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) {
         spr.active = false
@@ -489,9 +490,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
         spr.mesh.scale.setScalar(baseScale)
         const fadeStart = flightMaxDepth * 0.7
-        spr.mat.opacity = depth > fadeStart
+        setAnimatedOpacity(spr.mat, depth > fadeStart
           ? textOpacity * Math.max(0, 1 - (depth - fadeStart) / (flightMaxDepth - fadeStart))
-          : textOpacity
+          : textOpacity)
       }
     }
 
@@ -520,7 +521,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const shakeX = Math.sin(bassPopAge * shakeFreq * Math.PI * 2) * shakeAmount * viewport.width
     const shakeY = Math.cos(bassPopAge * shakeFreq * Math.PI * 2 * 0.7) * shakeAmount * viewport.height
 
-    ;(meshRef.current.material as MeshBasicMaterial).opacity = textOpacity * releaseOpacity
+    setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, textOpacity * releaseOpacity)
     const scale = baseScale * onsetScale * bassPopScale
     meshRef.current.scale.set(scale, scale, 1)
     meshRef.current.position.x = shakeX
@@ -563,7 +564,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       mesh.position.x = pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0
       mesh.position.y = yOffsetAt(echoNote.beat) * viewport.height * heightAmount
       mesh.position.z = -0.01 * tapNum
-      ;(mesh.material as MeshBasicMaterial).opacity = Math.max(0.01, 1 - delayOpacityFalloff * tapNum) * textOpacity
+      setAnimatedOpacity(mesh.material as MeshBasicMaterial, Math.max(0.01, 1 - delayOpacityFalloff * tapNum) * textOpacity)
       mesh.visible = true
     }
   })

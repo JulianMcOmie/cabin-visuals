@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, type Material } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -496,7 +497,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
       const x = prev ? cur.x[i] + (prev.x[i] - cur.x[i]) * blend : cur.x[i]
       const y = prev ? cur.y[i] + (prev.y[i] - cur.y[i]) * blend : cur.y[i]
 
-      entity.material.opacity = baseOpacity
+      setAnimatedOpacity(entity.material, baseOpacity)
       entity.mesh.visible = true
       entity.mesh.scale.set(scale, scale, 1)
       entity.mesh.position.set(x, y, -0.001 * i)
@@ -513,7 +514,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
         const trailScale = scale * (1 + copyPhase * 0.8)
         const trailOpacity = baseOpacity * (1 - copyPhase) * depthFade * 0.6
 
-        trail.material.opacity = trailOpacity
+        setAnimatedOpacity(trail.material, trailOpacity)
         trail.mesh.visible = trailOpacity > 0.005
         trail.mesh.scale.set(trailScale, trailScale, 1)
         trail.mesh.position.set(x, y, z)

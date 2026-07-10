@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Mesh, MeshBasicMaterial, PointLight as ThreePointLight } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export const pointLightInstrument: ObjectInstrumentDef = {
@@ -63,7 +64,7 @@ export function PointLightObject({ trackId }: { trackId: string }) {
       bulb.scale.setScalar(Math.max(0.0001, bulbSize * (1 + energy * 0.35)))
       const mat = bulb.material as MeshBasicMaterial
       mat.color.set(color)
-      mat.opacity = Math.min(1, 0.45 + energy * 0.25)
+      setAnimatedOpacity(mat, Math.min(1, 0.45 + energy * 0.25))
     }
   })
 

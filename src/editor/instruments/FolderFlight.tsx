@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo } from 'react'
 import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, DoubleSide } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. 3D folder icons fly backward into z-depth - each note in the
@@ -187,9 +188,9 @@ function FolderFlightVisual({ trackId }: { trackId: string }) {
 
       // Fade out near max depth
       if (depth > fadeStart) {
-        pooled.mat.opacity = opacity * Math.max(0, 1 - (depth - fadeStart) / (maxDepth - fadeStart))
+        setAnimatedOpacity(pooled.mat, opacity * Math.max(0, 1 - (depth - fadeStart) / (maxDepth - fadeStart)))
       } else {
-        pooled.mat.opacity = opacity
+        setAnimatedOpacity(pooled.mat, opacity)
       }
 
       rendered++

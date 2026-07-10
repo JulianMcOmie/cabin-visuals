@@ -6,6 +6,7 @@ import {
   BufferGeometry, BufferAttribute, Color,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Generative metronome-ball line drawings: three
@@ -337,7 +338,7 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
     // Paper backdrop sized to viewport.
     if (paperRef.current) paperRef.current.scale.set(vw * 1.2, vh * 1.2, 1)
 
-    if (fgLineMatRef.current) fgLineMatRef.current.opacity = lineOpacity
+    if (fgLineMatRef.current) setAnimatedOpacity(fgLineMatRef.current, lineOpacity)
     if (fgDotMatRef.current) fgDotMatRef.current.size = dotSize * 2.5
     if (bgDotMatRef.current) bgDotMatRef.current.size = dotSize * 2
 

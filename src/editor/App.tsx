@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
@@ -36,10 +36,29 @@ import * as projectStorage from '../persistence/projectStorage'
 import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
 
+// Dev-only: expose the stores for console/E2E debugging. Never ships.
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  ;(window as unknown as Record<string, unknown>).__cabinStores = {
+    project: useProjectStore,
+    ui: useUIStore,
+    time: useTimeStore,
+  }
+}
+
 function formatBeat(beat: number, beatsPerBar: number): string {
   const bar = Math.floor(beat / beatsPerBar) + 1
   const beatInBar = Math.floor(beat % beatsPerBar) + 1
   return `${bar.toString().padStart(3, '0')}:${beatInBar}`
+}
+
+// Dev-only companion to __cabinStores: exposes the r3f state (scene, camera,
+// renderer) so console/E2E checks can inspect the scene graph. Never ships.
+function DevThreeHook() {
+  const three = useThree()
+  if (process.env.NODE_ENV === 'development') {
+    ;(window as unknown as Record<string, unknown>).__three = three
+  }
+  return null
 }
 
 function Scene() {
@@ -57,6 +76,7 @@ function Scene() {
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
+      {process.env.NODE_ENV === 'development' && <DevThreeHook />}
       {/* Suspense: Swarm's GLB model loads through useLoader. */}
       <Suspense fallback={null}>
         <VisualScene />

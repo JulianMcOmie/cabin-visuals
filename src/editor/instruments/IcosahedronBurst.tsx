@@ -4,6 +4,7 @@ import {
   type BufferGeometry,
 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Nested icosahedron wireframes spawn on each note and expand
@@ -85,7 +86,7 @@ function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
       // Hue steps per note in play order (index in the sorted note list stands in
       // for the old spawn counter, so it's stable under scrubbing).
       pooled.material.color.copy(_c.setHSL((baseHue + ni * hueStep) % 1, saturation, lightness))
-      pooled.material.opacity = size > fadeThreshold ? 1 - (size - fadeThreshold) / (maxSize - fadeThreshold) : 1
+      setAnimatedOpacity(pooled.material, size > fadeThreshold ? 1 - (size - fadeThreshold) / (maxSize - fadeThreshold) : 1)
     }
   })
 

@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Group, Mesh, SphereGeometry, MeshBasicMaterial, Color, Vector3 } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. Each note spawns a ring of six glowing dots out at a distant
@@ -91,7 +92,7 @@ function HexagonDotsVisual({ trackId }: { trackId: string }) {
         d.mat.color.copy(_c.setHSL(hue, 0.9, 0.6).offsetHSL(
           seededRand(noteSeed + i * 3 + 100) * 0.05 - 0.025, 0, seededRand(noteSeed + i * 3 + 200) * 0.1 - 0.05,
         ))
-        d.mat.opacity = opacity
+        setAnimatedOpacity(d.mat, opacity)
       }
     }
   })

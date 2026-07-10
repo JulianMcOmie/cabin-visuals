@@ -5,6 +5,7 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW's NeonPolar. A 3D neon polar harmonograph: 6 oscillator
@@ -336,7 +337,7 @@ function NeonPolarVisual({ trackId }: { trackId: string }) {
       const layerL = clamp(baseL + osc.lightnessOffset + energy * 0.15, 0.1, 0.95)
       layerColor.current.setHSL(baseH, baseS, layerL)
       curve.material.color.copy(layerColor.current)
-      curve.material.opacity = clamp(opacity + energy * 0.2, 0, 1)
+      setAnimatedOpacity(curve.material, clamp(opacity + energy * 0.2, 0, 1))
       curve.material.linewidth = lineWidth
     }
   })

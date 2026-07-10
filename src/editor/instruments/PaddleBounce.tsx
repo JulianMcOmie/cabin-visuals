@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
 import { useInstrumentFrame, beatInBlock } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -185,7 +186,7 @@ function PaddleBounceVisual({ trackId }: { trackId: string }) {
       pooled.mesh.scale.setScalar(ballSize * (0.35 + 0.55 * fade))
       pooled.mesh.rotation.z = Math.floor((beat - k * trailDt) * 8) * (Math.PI / 8)
       pooled.mat.color.set(sp.ballColor ?? '#ffffff')
-      pooled.mat.opacity = 0.55 * fade
+      setAnimatedOpacity(pooled.mat, 0.55 * fade)
     }
   })
 

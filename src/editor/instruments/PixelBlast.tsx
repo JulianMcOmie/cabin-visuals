@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { Group, Mesh, BoxGeometry, MeshBasicMaterial, AdditiveBlending } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // RETRO ARCADE - chunky 8-bit detonations. Every note is an explosion of square
@@ -101,7 +102,7 @@ function PixelBlastVisual({ trackId }: { trackId: string }) {
         pooled.mesh.scale.set(fs, fs, px)
         pooled.mesh.rotation.set(0, 0, 0)
         pooled.mat.color.set('#ffffff')
-        pooled.mat.opacity = 1 - ageSec / 0.09
+        setAnimatedOpacity(pooled.mat, 1 - ageSec / 0.09)
       }
 
       const count = Math.round(countP * (0.5 + velN))
@@ -127,7 +128,7 @@ function PixelBlastVisual({ trackId }: { trackId: string }) {
         pooled.mesh.scale.set(size, size, size)
         pooled.mesh.rotation.set(0, 0, 0)
         pooled.mat.color.set(pal[Math.floor(seededRand(s + 6) * pal.length)])
-        pooled.mat.opacity = 1
+        setAnimatedOpacity(pooled.mat, 1)
       }
     }
   })
