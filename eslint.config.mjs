@@ -89,6 +89,11 @@ const instrumentInvariant = {
         selector: "NewExpression[callee.name='Date'][arguments.length=0]",
         message: "Wall-clock time breaks the pause invariant. Derive time from state.beat.",
       },
+      {
+        selector: "AssignmentExpression[left.type='MemberExpression'][left.property.name='opacity']",
+        message:
+          "Direct .opacity writes are overwritten every frame by the opacity-mover pass (ObjectRenderer), which can freeze the material at a stale value. Use setAnimatedOpacity(material, value) from core/visual/animatedOpacity.",
+      },
     ],
   },
 };
