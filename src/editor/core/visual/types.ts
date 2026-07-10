@@ -4,7 +4,7 @@
 
 import type { Matrix4 } from 'three'
 import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instruments/types'
-import type { InterpolationMode, MidiMode, SubsetWeightSpec } from '../../types'
+import type { InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../../types'
 import type { AutomationKeyframe } from './automation'
 import type { MoverDef } from './movers/types'
 
@@ -73,8 +73,8 @@ export interface ResolvedObject {
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
-  /** Video-instrument-only: ordered clip refs (fresh array per resolve). */
-  videoRefs?: string[]
+  /** Video-instrument-only: ordered pads (fresh array per resolve). */
+  videoPads?: VideoPad[]
   /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
   moverChain: ResolvedMover[]
   scratchBase: StateVector
@@ -124,8 +124,8 @@ export interface ObjectState {
   /** Decaying pulse from the object's own most recent note (the old implicit
    *  `energy` port) - the universal "a note just hit" signal instruments read. */
   energy: number
-  /** Video-instrument-only: ordered clip refs (per-resolve identity). */
-  videoRefs?: string[]
+  /** Video-instrument-only: ordered pads (per-resolve identity). */
+  videoPads?: VideoPad[]
   /** True this frame if a mute modifier's region covers the current beat (hide it). */
   blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames -

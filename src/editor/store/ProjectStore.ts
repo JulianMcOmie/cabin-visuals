@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
-import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec } from '../types'
+import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -250,8 +250,8 @@ interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
-  /** Replace a Video track's ordered clip refs (its pad bank). */
-  setTrackVideoRefs: (trackId: string, videoRefs: string[]) => void
+  /** Replace a Video track's ordered pads (its bank of source moments). */
+  setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Create the audio track (top of the root tracks) holding one block at bar 0
    *  spanning the whole clip. The AudioBar's load path; one audio track for now.
    *  Returns the new track's id (for selection). */
@@ -973,11 +973,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
     }),
 
-  setTrackVideoRefs: (trackId, videoRefs) =>
+  setTrackVideoPads: (trackId, videoPads) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, videoRefs } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, videoPads } } }
     }),
 
   addAudioTrack: (clip) => {

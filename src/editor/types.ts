@@ -128,7 +128,20 @@ export interface Track {
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */
   audioBlocks?: AudioBlock[]
-  /** Video-instrument-only: the ordered clip refs of its pad bank. Order is the
-   *  MIDI mapping - index 0 answers baseNote. Bytes live behind core/video. */
-  videoRefs?: string[]
+  /** Video-instrument-only: the ordered pads of its bank. Order is the MIDI
+   *  mapping - index 0 answers baseNote. Bytes live behind core/video. */
+  videoPads?: VideoPad[]
+}
+
+/**
+ * One pad in a Video track's bank: a moment chosen from an uploaded source. A
+ * note hit plays the source from `inPoint` (the decode engine keeps that
+ * moment's frames permanently warm, so triggers land next display tick).
+ * Non-destructive - many pads can share one uploaded source.
+ */
+export interface VideoPad {
+  /** Source video ref (VideoStore catalog / core/video bytes). */
+  ref: string
+  /** Seconds into the source where this pad's clip begins. */
+  inPoint: number
 }

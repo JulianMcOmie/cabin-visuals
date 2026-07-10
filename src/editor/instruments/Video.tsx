@@ -5,8 +5,8 @@ import { Mesh, MeshBasicMaterial, SRGBColorSpace, LinearFilter, CanvasTexture } 
 import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { getObjectState } from '../core/visual/VisualEngine'
-import { activeVideoAt, clipTimeAt, VIDEO_BASE_PITCH } from '../core/video/videoTime'
-import { VideoDecodeEngine } from '../core/video/decodeEngine'
+import { activeVideoAt, padSourceTime, VIDEO_BASE_PITCH } from '../core/video/videoTime'
+import { VideoDecodeEngine, clipKey } from '../core/video/decodeEngine'
 import { registerFramePreparer } from '../core/export/exportEngine'
 import { useVideoStore } from '../store/VideoStore'
 import { useProjectStore } from '../store/ProjectStore'
@@ -32,11 +32,11 @@ function VideoComponent({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const invalidate = useThree((s) => s.invalidate)
   const viewport = useThree((s) => s.viewport)
-  const videoRefs = useProjectStore((s) => s.tracks[trackId]?.videoRefs)
+  const videoPads = useProjectStore((s) => s.tracks[trackId]?.videoPads)
 
   // Last (clip, source-time) asked for, so an async decode arrival while paused
   // can redraw it without the skip-gated frame callback re-running.
-  const lastReq = useRef<{ ref: string | null; sourceTime: number }>({ ref: null, sourceTime: 0 })
+  const lastReq = useRef<{ key: string | null; sourceTime: number }>({ key: null, sourceTime: 0 })
   const readyCb = useRef<() => void>(() => {})
 
   const { engine, texture, material } = useMemo(() => {
@@ -55,19 +55,21 @@ function VideoComponent({ trackId }: { trackId: string }) {
   // reaches the texture (playback's own loop handles the live case).
   readyCb.current = () => {
     if (useTimeStore.getState().isPlaying) return
-    const { ref, sourceTime } = lastReq.current
-    const res = engine.draw(ref, sourceTime)
+    const { key, sourceTime } = lastReq.current
+    const res = engine.draw(key, sourceTime)
     if (meshRef.current) meshRef.current.visible = res.visible
     if (res.updated) texture.needsUpdate = true
     invalidate()
   }
 
-  // Reconcile which clips are open. Each ref is a whole-source clip (in-point 0
-  // for now; the pad model sets real in-points here with no engine change).
+  // Reconcile which pads are armed: each is (source, in-point), and its head
+  // frames stay permanently decoded so a note hit lands next display tick.
   useEffect(() => {
-    engine.syncClips((videoRefs ?? []).map((ref) => ({ ref, inPoint: 0 })))
+    engine.syncClips(
+      (videoPads ?? []).map((p) => ({ key: clipKey(p.ref, p.inPoint), ref: p.ref, inPoint: p.inPoint })),
+    )
     invalidate()
-  }, [engine, videoRefs, invalidate])
+  }, [engine, videoPads, invalidate])
 
   useEffect(() => {
     return () => {
@@ -81,15 +83,15 @@ function VideoComponent({ trackId }: { trackId: string }) {
   useEffect(() => {
     return registerFramePreparer(async (beat) => {
       const st = getObjectState(trackId)
-      const refs = st?.videoRefs
-      if (!st || !refs || refs.length === 0) return
+      const pads = st?.videoPads
+      if (!st || !pads || pads.length === 0) return
       const loop = (st.params.loop ?? paramDefault(videoInstrument, 'loop')) > 0
-      const active = activeVideoAt(st.notes, beat, VIDEO_BASE_PITCH, refs.length)
+      const active = activeVideoAt(st.notes, beat, VIDEO_BASE_PITCH, pads.length)
       if (!active) return
-      const ref = refs[active.clipIndex]
-      const duration = useVideoStore.getState().videoClips[ref]?.duration ?? 1e9
-      const sourceTime = clipTimeAt(beat, active.noteBeat, st.secPerBeat, duration, loop)
-      const aspect = await engine.drawExact(ref, sourceTime)
+      const pad = pads[active.clipIndex]
+      const duration = useVideoStore.getState().videoClips[pad.ref]?.duration ?? 1e9
+      const sourceTime = padSourceTime(pad, beat, active.noteBeat, st.secPerBeat, loop, duration)
+      const aspect = await engine.drawExact(clipKey(pad.ref, pad.inPoint), sourceTime)
       if (aspect !== null) texture.needsUpdate = true
     })
   }, [engine, texture, trackId])
@@ -97,19 +99,25 @@ function VideoComponent({ trackId }: { trackId: string }) {
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     if (!mesh) return
-    const refs = state.videoRefs ?? []
+    const pads = state.videoPads ?? []
     const loop = (state.params.loop ?? paramDefault(videoInstrument, 'loop')) > 0
-    const active = state.blackedOut ? null : activeVideoAt(state.notes, state.beat, VIDEO_BASE_PITCH, refs.length)
-    const ref = active ? refs[active.clipIndex] : null
+    const active = state.blackedOut ? null : activeVideoAt(state.notes, state.beat, VIDEO_BASE_PITCH, pads.length)
+    const pad = active ? pads[active.clipIndex] : null
 
-    let sourceTime = 0
-    if (ref && active) {
-      const duration = useVideoStore.getState().videoClips[ref]?.duration ?? 1e9
-      sourceTime = clipTimeAt(state.beat, active.noteBeat, state.secPerBeat, duration, loop)
-    }
-    lastReq.current = { ref, sourceTime }
+    const key = pad ? clipKey(pad.ref, pad.inPoint) : null
+    const sourceTime = pad && active
+      ? padSourceTime(
+          pad,
+          state.beat,
+          active.noteBeat,
+          state.secPerBeat,
+          loop,
+          useVideoStore.getState().videoClips[pad.ref]?.duration ?? 1e9,
+        )
+      : 0
+    lastReq.current = { key, sourceTime }
 
-    const res = engine.draw(ref, sourceTime)
+    const res = engine.draw(key, sourceTime)
     if (res.updated) texture.needsUpdate = true
     mesh.visible = res.visible
     if (!res.visible) return

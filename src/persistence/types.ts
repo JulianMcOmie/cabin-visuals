@@ -16,8 +16,11 @@ import type { VideoClip } from '../editor/store/VideoStore'
  * v2: `audioClips` (the catalog, keyed by ref) replaced v1's single `audioClip`;
  * audio placement lives inside `tracks` as `audioBlocks`.
  * v3: track type 'dimension' became 'mover' (see upgrade.ts). `videoClips`
- * (the Video instrument's catalog; placement is `track.videoRefs`) is additive
- * within v3 - absent in older saves, defaulted on hydrate.
+ * (the Video instrument's SOURCE catalog) is additive within v3 - absent in
+ * older saves, defaulted on hydrate.
+ * v4: video pads - each track's `videoRefs: string[]` became
+ * `videoPads: VideoPad[]` ((source, in-point) pairs; see upgrade.ts). The
+ * `videoClips` source catalog is unchanged.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -33,7 +36,7 @@ export interface ProjectDocument {
 /** A fresh, valid document - matches the stores' initial state. */
 export function emptyDocument(): ProjectDocument {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,

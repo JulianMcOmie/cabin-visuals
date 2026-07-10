@@ -1,10 +1,10 @@
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import type { Track, AudioBlock, EffectInstance } from '../editor/types'
+import type { Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 3
+export const CURRENT_VERSION = 4
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -78,6 +78,27 @@ UPGRADES[2] = (doc) => {
       tracks[id] = { ...track, type: 'mover', moverId: dimensionId } as Track
     } else {
       tracks[id] = t as Track
+    }
+  }
+  return { ...rest, tracks }
+}
+
+// ── v3 → v4 ──────────────────────────────────────────────────────────────────
+// The Video instrument's pad model: each track's `videoRefs: string[]` (whole
+// uploaded files as clips) became `videoPads: VideoPad[]` — (source ref,
+// in-point) pairs. Old clips were whole-source, so each ref maps to a pad at
+// in-point 0 and keeps playing identically. The videoClips source catalog is
+// unchanged.
+UPGRADES[3] = (doc) => {
+  const rest = doc as { tracks?: Record<string, Track & { videoRefs?: string[] }> } & Record<string, unknown>
+  const tracks: Record<string, Track> = {}
+  for (const [id, t] of Object.entries(rest.tracks ?? {})) {
+    const { videoRefs, ...track } = t
+    if (videoRefs && videoRefs.length > 0) {
+      const videoPads: VideoPad[] = videoRefs.map((ref) => ({ ref, inPoint: 0 }))
+      tracks[id] = { ...track, videoPads } as Track
+    } else {
+      tracks[id] = track as Track
     }
   }
   return { ...rest, tracks }

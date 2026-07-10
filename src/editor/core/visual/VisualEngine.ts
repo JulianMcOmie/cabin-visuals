@@ -304,7 +304,7 @@ export function computeAtBeat(beat: number) {
       secPerBeat,
       params,
       energy,
-      videoRefs: obj.videoRefs,
+      videoPads: obj.videoPads,
       world,
       elementCount: obj.elementCount,
       elementMatrices: obj.elementMatrices,

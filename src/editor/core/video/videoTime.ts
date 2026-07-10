@@ -11,7 +11,7 @@ import type { ResolvedNote } from '../visual/types'
 export const VIDEO_BASE_PITCH = 48
 
 export interface ActiveVideo {
-  /** Index into the track's ordered videoRefs (its pad bank). */
+  /** Index into the track's ordered videoPads (its pad bank). */
   clipIndex: number
   /** The note-on that selected the clip - its beat is the clip's time origin. */
   noteBeat: number
@@ -57,4 +57,21 @@ export function clipTimeAt(
   if (duration <= 0) return 0
   if (loop) return t % duration
   return Math.min(t, Math.max(0, duration - 1 / 60))
+}
+
+/**
+ * Absolute SOURCE time for a pad at `beat`: the pad's in-point advanced from
+ * its note-on, with loop/hold happening in the window between the in-point and
+ * the source's end. Pure - this is the whole non-destructive trim model.
+ */
+export function padSourceTime(
+  pad: { ref: string; inPoint: number },
+  beat: number,
+  noteBeat: number,
+  secPerBeat: number,
+  loop: boolean,
+  sourceDuration: number,
+): number {
+  const windowLen = Math.max(0, sourceDuration - pad.inPoint)
+  return pad.inPoint + clipTimeAt(beat, noteBeat, secPerBeat, windowLen, loop)
 }

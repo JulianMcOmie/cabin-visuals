@@ -165,7 +165,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     ? auto.rows
     : videoTrack
       ? generateVideoClipRows(
-          (videoTrack.videoRefs ?? []).map((ref, i) => videoClips[ref]?.fileName ?? `Clip ${i + 1}`),
+          (videoTrack.videoPads ?? []).map((pad, i) => {
+            const name = videoClips[pad.ref]?.fileName ?? `Clip ${i + 1}`
+            return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
+          }),
           VIDEO_BASE_PITCH,
           notes.map((n) => n.pitch),
         )

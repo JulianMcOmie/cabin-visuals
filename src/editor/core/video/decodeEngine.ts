@@ -23,15 +23,22 @@ const LIVE_START_LEAD_S = 0.12 // live decode overlaps the head-cache tail
 const LIVE_BUFFER_CAP = 16
 const MAX_DIM = 1920 // cap decode/cache resolution (memory bound)
 
-/** One clip the engine can draw: a source + an in-point (seconds into it). For
- *  now every clip is whole-source (inPoint 0); the pad model sets real
- *  in-points without any engine change. */
+/** One clip the engine can draw: a source + an in-point (seconds into it).
+ *  `key` identifies the clip (several pads may share a source with different
+ *  in-points, so the source ref alone is not an identity). */
 export interface EngineClip {
+  key: string
   ref: string
   inPoint: number
 }
 
+/** Canonical clip key for a (source, in-point) pair. */
+export function clipKey(ref: string, inPoint: number): string {
+  return `${ref}@${inPoint.toFixed(3)}`
+}
+
 interface ClipRuntime {
+  key: string
   ref: string
   inPoint: number
   track: InputVideoTrack | null
@@ -128,14 +135,14 @@ export class VideoDecodeEngine {
   private ctx: CanvasRenderingContext2D
 
   // Single live playhead: one clip plays at a time (activeVideoAt latches one).
-  private liveRef: string | null = null
+  private liveKey: string | null = null
   private live: LiveBuffer | null = null
   private liveStart = -1
-  private lastDrawnRef: string | null = null
+  private lastDrawnKey: string | null = null
   private lastDrawnTime = -1
   // Set by drawExact (export): draw() trusts an exact frame for the same
   // request instead of overwriting it with a best-effort one.
-  private exactRef: string | null = null
+  private exactKey: string | null = null
   private exactTime = -1
 
   /** Fired when an async decode makes a new frame available while paused, so
@@ -156,23 +163,19 @@ export class VideoDecodeEngine {
   /** Reconcile the open clips with `want`. New clips open + build a head cache
    *  (async); dropped clips are torn down. Cheap to call every render. */
   syncClips(want: EngineClip[]): void {
-    const wanted = new Set(want.map((c) => c.ref))
-    for (const [ref, rt] of this.clips) {
-      if (wanted.has(ref)) continue
+    const wanted = new Set(want.map((c) => c.key))
+    for (const [key, rt] of this.clips) {
+      if (wanted.has(key)) continue
       this.disposeClip(rt)
-      this.clips.delete(ref)
+      this.clips.delete(key)
     }
     for (const clip of want) {
-      const existing = this.clips.get(clip.ref)
-      if (existing) {
-        existing.inPoint = clip.inPoint
-        continue
-      }
+      if (this.clips.has(clip.key)) continue
       const rt: ClipRuntime = {
-        ref: clip.ref, inPoint: clip.inPoint, track: null, sink: null, input: null,
+        key: clip.key, ref: clip.ref, inPoint: clip.inPoint, track: null, sink: null, input: null,
         w: 16, h: 16, head: { bitmaps: [], timestamps: [] }, ready: false, failed: false,
       }
-      this.clips.set(clip.ref, rt)
+      this.clips.set(clip.key, rt)
       void this.arm(rt)
     }
   }
@@ -212,10 +215,10 @@ export class VideoDecodeEngine {
   private disposeClip(rt: ClipRuntime): void {
     for (const b of rt.head.bitmaps) b.close()
     rt.head = { bitmaps: [], timestamps: [] }
-    if (this.liveRef === rt.ref) {
+    if (this.liveKey === rt.key) {
       this.live?.dispose()
       this.live = null
-      this.liveRef = null
+      this.liveKey = null
     }
     void rt.input?.dispose()
   }
@@ -232,36 +235,36 @@ export class VideoDecodeEngine {
   private reseat(rt: ClipRuntime, fromTime: number): void {
     this.live?.dispose()
     this.live = rt.sink ? new LiveBuffer(rt.sink, fromTime) : null
-    this.liveRef = rt.ref
+    this.liveKey = rt.key
     this.liveStart = fromTime
   }
 
   /**
-   * Draw the frame for clip `ref` at absolute source time `sourceTime`. Sync,
+   * Draw the frame for clip `key` at absolute source time `sourceTime`. Sync,
    * best-effort from head cache / live buffer - the live path for playback and
    * light scrub. Returns whether anything is showing and if it changed.
    */
-  draw(ref: string | null, sourceTime: number): DrawResult {
-    if (!ref) return HIDDEN
-    const rt = this.clips.get(ref)
+  draw(key: string | null, sourceTime: number): DrawResult {
+    if (!key) return HIDDEN
+    const rt = this.clips.get(key)
     if (!rt || rt.failed) return HIDDEN
     if (!rt.ready) return { visible: false, updated: false, aspect: rt.w / rt.h }
 
     this.ensureCanvasSize(rt)
     const aspect = rt.w / rt.h
 
-    // Export drew this exact (ref, time) already - don't overwrite it.
-    if (ref === this.exactRef && Math.abs(sourceTime - this.exactTime) < 1e-4) {
+    // Export drew this exact (clip, time) already - don't overwrite it.
+    if (key === this.exactKey && Math.abs(sourceTime - this.exactTime) < 1e-4) {
       return { visible: true, updated: false, aspect }
     }
-    this.exactRef = null
+    this.exactKey = null
 
     const withinHead = sourceTime <= rt.inPoint + HEAD_SPAN_S
 
     // A clip change, or a jump outside what the live buffer can serve, is a
     // (re)trigger: seed the live decoder to overlap the head-cache tail.
     const isDiscontinuity =
-      ref !== this.liveRef ||
+      key !== this.liveKey ||
       sourceTime < this.liveStart - 0.01 ||
       (this.live !== null && sourceTime > this.live.reach + 1.0 && !withinHead)
     if (isDiscontinuity) {
@@ -278,10 +281,10 @@ export class VideoDecodeEngine {
         else break
       }
       if (idx >= 0) {
-        const changed = ref !== this.lastDrawnRef || rt.head.timestamps[idx] !== this.lastDrawnTime
+        const changed = key !== this.lastDrawnKey || rt.head.timestamps[idx] !== this.lastDrawnTime
         if (changed) {
           this.ctx.drawImage(rt.head.bitmaps[idx], 0, 0, rt.w, rt.h)
-          this.lastDrawnRef = ref
+          this.lastDrawnKey = key
           this.lastDrawnTime = rt.head.timestamps[idx]
         }
         return { visible: true, updated: changed, aspect }
@@ -293,10 +296,10 @@ export class VideoDecodeEngine {
     if (!sample) {
       // Nothing new ready yet; the last drawn frame (if this same clip) stays
       // on canvas - no black flash. Hidden only if we've drawn nothing for it.
-      return { visible: this.lastDrawnRef === ref, updated: false, aspect }
+      return { visible: this.lastDrawnKey === key, updated: false, aspect }
     }
     this.ctx.drawImage(sample.toCanvasImageSource() as CanvasImageSource, 0, 0, rt.w, rt.h)
-    this.lastDrawnRef = ref
+    this.lastDrawnKey = key
     this.lastDrawnTime = sample.timestamp
     sample.close()
     return { visible: true, updated: true, aspect }
@@ -307,9 +310,9 @@ export class VideoDecodeEngine {
    * Slower than draw() but deterministic - each exported beat gets its true
    * frame. Returns the clip aspect, or null if nothing could be drawn.
    */
-  async drawExact(ref: string | null, sourceTime: number): Promise<number | null> {
-    if (!ref) return null
-    const rt = this.clips.get(ref)
+  async drawExact(key: string | null, sourceTime: number): Promise<number | null> {
+    if (!key) return null
+    const rt = this.clips.get(key)
     if (!rt || rt.failed || !rt.sink) {
       // Give a just-added clip a moment to arm.
       if (rt && !rt.ready && !rt.failed) await new Promise((r) => setTimeout(r, 50))
@@ -320,9 +323,9 @@ export class VideoDecodeEngine {
     if (!sample) return rt!.w / rt!.h
     this.ctx.drawImage(sample.toCanvasImageSource() as CanvasImageSource, 0, 0, rt!.w, rt!.h)
     sample.close()
-    this.exactRef = ref
+    this.exactKey = key
     this.exactTime = sourceTime
-    this.lastDrawnRef = ref
+    this.lastDrawnKey = key
     this.lastDrawnTime = sourceTime
     return rt!.w / rt!.h
   }
@@ -331,6 +334,6 @@ export class VideoDecodeEngine {
     for (const rt of this.clips.values()) this.disposeClip(rt)
     this.clips.clear()
     this.live = null
-    this.liveRef = null
+    this.liveKey = null
   }
 }

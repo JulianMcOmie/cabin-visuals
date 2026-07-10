@@ -16,7 +16,8 @@ export interface VideoClip {
 /**
  * The videoClips catalog: every clip the project owns, keyed by ref - the
  * same shape and role as AudioStore's audioClips. Placement (which track uses
- * which clips, in what order) lives on tracks in ProjectStore (videoRefs).
+ * which moments of which sources, in what order) lives on tracks in
+ * ProjectStore (videoPads).
  * Deliberately not undoable: loading a file isn't an edit.
  */
 interface VideoState {
