@@ -54,7 +54,12 @@ interface PickerState {
   uploading: boolean
   progress: number
   error: string | null
-  armed: number
+}
+
+/** A pad from the picker's source, as shown (and deletable) in the modal. */
+interface ArmedClip {
+  bankIndex: number
+  inPoint: number
 }
 
 /**
@@ -65,12 +70,17 @@ interface PickerState {
  */
 function MomentPickerModal({
   picker,
+  armedClips,
   onArm,
+  onRemove,
   onClose,
   atPadLimit,
 }: {
   picker: PickerState
+  /** This source's pads on the track - listed in the modal, deletable. */
+  armedClips: ArmedClip[]
   onArm: (inPoint: number) => void
+  onRemove: (bankIndex: number) => void
   onClose: () => void
   atPadLimit: boolean
 }) {
@@ -293,9 +303,35 @@ function MomentPickerModal({
             onClick={onClose}
             className="h-7 cursor-pointer rounded border border-[var(--border)] px-3 text-[11px] text-[var(--text-2)] hover:text-[var(--text)]"
           >
-            {picker.armed > 0 ? 'Done' : 'Cancel'}
+            {armedClips.length > 0 ? 'Done' : 'Cancel'}
           </button>
         </div>
+
+        {armedClips.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {armedClips.map((clip) => (
+              <span
+                key={clip.bankIndex}
+                className="flex items-center gap-1.5 rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1 font-mono text-[10px] text-[var(--text-2)]"
+              >
+                <button
+                  onClick={() => seek(clip.inPoint)}
+                  className="cursor-pointer hover:text-[var(--text)]"
+                  title="Jump to this moment"
+                >
+                  {clip.inPoint.toFixed(1)}s
+                </button>
+                <button
+                  onClick={() => onRemove(clip.bankIndex)}
+                  className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--warn)]"
+                  aria-label={`Remove clip at ${clip.inPoint.toFixed(1)}s`}
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {picker.error ? (
           <p className="mt-2 text-[11px] text-[var(--warn)]">{picker.error}</p>
@@ -308,9 +344,9 @@ function MomentPickerModal({
               <div className="h-full rounded bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${picker.progress * 100}%` }} />
             </div>
           </div>
-        ) : picker.armed > 0 ? (
+        ) : armedClips.length > 0 ? (
           <p className="mt-2 text-[11px] text-[var(--text-3)]">
-            {picker.armed} clip{picker.armed > 1 ? 's' : ''} added - scrub to another moment and add more, or Done.
+            {armedClips.length} clip{armedClips.length > 1 ? 's' : ''} on this video - scrub to another moment and add more, or Done.
           </p>
         ) : null}
       </div>
@@ -359,7 +395,7 @@ export function VideoClipBank({ track }: { track: Track }) {
     }
     // Modal opens NOW on the local bytes; the upload runs behind it.
     const seq = ++pickerSeqRef.current
-    setPicker({ file, ref: null, fileName: file.name, uploading: true, progress: 0, error: null, armed: 0 })
+    setPicker({ file, ref: null, fileName: file.name, uploading: true, progress: 0, error: null })
     void (async () => {
       try {
         const meta = await probeVideo(file)
@@ -392,7 +428,6 @@ export function VideoClipBank({ track }: { track: Track }) {
       uploading: false,
       progress: 1,
       error: null,
-      armed: 0,
     })
   }
 
@@ -403,7 +438,14 @@ export function VideoClipBank({ track }: { track: Track }) {
     if (current.length >= MAX_PADS) return
     const pad: VideoPad = { ref, inPoint: Math.round(inPoint * 1000) / 1000 }
     setTrackVideoPads(track.id, [...current, pad])
-    setPicker((p) => (p ? { ...p, armed: p.armed + 1 } : p))
+  }
+
+  /** Remove from inside the modal: NO orphan-clean - the picker still holds
+   *  the source (deleting the last clip then arming again must keep working).
+   *  closePicker's cleanup settles the source's fate when the modal ends. */
+  const removeFromModal = (bankIndex: number) => {
+    const current = useProjectStore.getState().tracks[track.id]?.videoPads ?? []
+    setTrackVideoPads(track.id, current.filter((_, k) => k !== bankIndex))
   }
 
   const closePicker = () => {
@@ -483,7 +525,12 @@ export function VideoClipBank({ track }: { track: Track }) {
       {picker && (
         <MomentPickerModal
           picker={picker}
+          armedClips={pads
+            .map((pad, bankIndex) => ({ pad, bankIndex }))
+            .filter(({ pad }) => picker.ref !== null && pad.ref === picker.ref)
+            .map(({ pad, bankIndex }) => ({ bankIndex, inPoint: pad.inPoint }))}
           onArm={armPad}
+          onRemove={removeFromModal}
           onClose={closePicker}
           atPadLimit={pads.length >= MAX_PADS}
         />
