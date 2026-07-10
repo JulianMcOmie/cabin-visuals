@@ -65,6 +65,12 @@ interface UIState {
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
   setProjectName: (name: string | null) => void
+
+  // True while a modal dialog (export, clip picker) is up. Editor surfaces with
+  // document/window-level pointer handling that an overlay div can't block -
+  // e.g. react-resizable-panels' hit-testing - must check this and stand down.
+  modalOpen: boolean
+  setModalOpen: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -124,4 +130,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),
+
+  modalOpen: false,
+  setModalOpen: (v) => set({ modalOpen: v }),
 }));

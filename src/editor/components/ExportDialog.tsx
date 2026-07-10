@@ -82,6 +82,13 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
     return () => window.removeEventListener('keydown', block, { capture: true })
   }, [phase.kind, onClose])
 
+  // Stand down editor surfaces with document-level pointer handling (panel
+  // resize hit-testing) while the dialog is up - the overlay can't block them.
+  useEffect(() => {
+    useUIStore.getState().setModalOpen(true)
+    return () => useUIStore.getState().setModalOpen(false)
+  }, [])
+
   const start = async () => {
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
@@ -126,7 +133,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
       {freeze && (
         <img
           src={freeze.src}

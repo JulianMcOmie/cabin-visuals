@@ -359,12 +359,15 @@ export default function EditorApp() {
   useProjectPersistence()
   useAnonymousAdoption()
   const { topFrac, containerRef, startResize } = useVerticalSplit()
+  // The library's resize hit-testing is document-level, so a modal's overlay
+  // div can't block it - disable the groups outright while a dialog is up.
+  const modalOpen = useUIStore((s) => s.modalOpen)
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       <Header />
       <div className="flex-1 min-h-0">
-        <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+        <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
 
           {/* Library - resizable, pre-redesign proportions */}
           <Panel defaultSize="15%" minSize="8%" maxSize="30%">
@@ -380,7 +383,7 @@ export default function EditorApp() {
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
                 <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <PanelGroup orientation="horizontal" style={{ height: '100%' }}>
+                  <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
 
                     <Panel defaultSize="55%" minSize="15%" maxSize="60%">
                       <TrackEditor />
@@ -401,7 +404,7 @@ export default function EditorApp() {
                 <div className="relative h-px bg-transparent shrink-0">
                   <div
                     onPointerDown={startResize}
-                    className="absolute inset-x-0 z-50 cursor-ns-resize"
+                    className={`absolute inset-x-0 z-50 cursor-ns-resize ${modalOpen ? 'pointer-events-none' : ''}`}
                     style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
                   />
                 </div>
