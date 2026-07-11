@@ -10,6 +10,7 @@ import { useMidiBlockGestures } from './useMidiBlockGestures'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
+import { startEdgeResize } from '../../utils/edgeResize'
 import type { MidiRow, RangeLabel } from './types'
 
 export interface MidiEditorProps {
@@ -37,7 +38,7 @@ export interface MidiEditorProps {
   initialTotalBeats: number
 }
 
-export const LABEL_WIDTH = 88
+// The label gutter width lives in UIStore (midiLabelWidth) - drag its right edge to resize.
 const RULER_HEIGHT = 40
 const CANVAS_RIGHT_PADDING = 20
 
@@ -64,6 +65,9 @@ export function MidiEditor({
   const playheadRef = useRef<HTMLDivElement>(null)
   const rulerPlayheadRef = useRef<HTMLDivElement>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
+  // The label gutter's width - drag its right edge to resize (same gesture as
+  // the tracks label column).
+  const labelWidth = useUIStore((s) => s.midiLabelWidth)
 
   // Mirror the grid's horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
@@ -158,7 +162,7 @@ export function MidiEditor({
   }, [])
 
   // Canvas dimensions (the timeline spans initialTotalBeats, not just the block)
-  const canvasWidth = initialTotalBeats * pixelsPerBeat + LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + CANVAS_RIGHT_PADDING
+  const canvasWidth = initialTotalBeats * pixelsPerBeat + labelWidth + PLAYHEAD_TRIANGLE_HALF + CANVAS_RIGHT_PADDING
   const canvasHeight = rows.length * rowHeight
 
   // Grid line CSS background
@@ -254,7 +258,18 @@ export function MidiEditor({
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e21]">
+    <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21]">
+      {/* Resize handle along the label gutter's right edge - spans the full height
+          (ruler corner + every row label). Invisible; the cursor is the affordance -
+          mirrors the tracks label column exactly. */}
+      <div
+        onPointerDown={(e) => {
+          const { midiLabelWidth, setMidiLabelWidth } = useUIStore.getState()
+          startEdgeResize(e, midiLabelWidth, setMidiLabelWidth)
+        }}
+        className="absolute top-0 bottom-0 z-40 cursor-ew-resize"
+        style={{ left: labelWidth - 3, width: 6 }}
+      />
       {/* Ruler in its own row (outside the grid scroll container) so the grid owns
           the only scrollbars: the vertical one then ends below the ruler. Horizontal
           scroll is synced via onScrollSync; the ruler's own bar is hidden.
@@ -263,7 +278,7 @@ export function MidiEditor({
       <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
         {/* Frozen corner - stays put on horizontal scroll, aligned with the sticky labels.
             Distinct box colour (matching the track ruler + the label column below). */}
-        <div style={{ width: LABEL_WIDTH, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2, display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+        <div style={{ width: labelWidth, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2, display: 'flex', alignItems: 'center', padding: '0 8px' }}>
           {cornerLabel && (
             <span style={{ fontSize: 10.5, fontWeight: 600, color: '#a1a1aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cornerLabel}</span>
           )}
@@ -289,7 +304,7 @@ export function MidiEditor({
               matches the track ruler (zinc-700 @ 40%). */}
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(63,63,70,0.4)', pointerEvents: 'none' }} />
 
-          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - LABEL_WIDTH, willChange: 'transform' }}>
+          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - labelWidth, willChange: 'transform' }}>
 
           {/* Faint, short beat ticks (every beat that isn't a bar line) */}
           {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)
@@ -380,7 +395,7 @@ export function MidiEditor({
             slides under it instead of showing through. */}
         <div
           style={{
-            width: LABEL_WIDTH,
+            width: labelWidth,
             height: canvasHeight,
             flexShrink: 0,
             backgroundColor: '#202024',
@@ -444,7 +459,7 @@ export function MidiEditor({
                 position: 'absolute',
                 top: rl.top,
                 left: 0,
-                width: LABEL_WIDTH,
+                width: labelWidth,
                 height: rl.height,
                 pointerEvents: 'none',
                 borderTop: '1px solid rgba(255,255,255,0.12)',

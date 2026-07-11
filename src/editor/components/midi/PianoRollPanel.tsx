@@ -5,7 +5,7 @@ import { X, Magnet } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
-import { MidiEditor, LABEL_WIDTH } from './MidiEditor'
+import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { generateRows, generateAutomationRows, generateVideoClipRows, generateInstrumentRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
@@ -200,7 +200,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     scrollContainer.scrollTop = Math.max(0, targetIdx * rowHeight - scrollContainer.clientHeight / 2)
 
     // Horizontal: place the block start a one-bar lead-in from the left edge.
-    const blockStartPx = LABEL_WIDTH + PLAYHEAD_TRIANGLE_HALF + block.startBar * beatsPerBar * midiPixelsPerBeat
+    const blockStartPx =
+      useUIStore.getState().midiLabelWidth + PLAYHEAD_TRIANGLE_HALF + block.startBar * beatsPerBar * midiPixelsPerBeat
     const leadInPx = beatsPerBar * midiPixelsPerBeat
     scrollContainer.scrollLeft = Math.max(0, blockStartPx - leadInPx)
 

@@ -39,6 +39,10 @@ interface UIState {
   tracksLabelWidth: number
   setTracksLabelWidth: (px: number) => void
 
+  // Width of the MIDI editor's label gutter (same gesture as the track labels).
+  midiLabelWidth: number
+  setMidiLabelWidth: (px: number) => void
+
   // Fraction (0–1) of the right section's height given to the upper (editor + canvas)
   // region; the rest goes to the tracks/piano-roll below. Drag the divider to set it.
   topPanelFraction: number
@@ -112,6 +116,10 @@ export const useUIStore = create<UIState>((set) => ({
   tracksLabelWidth: TRACK_LABEL_WIDTH,
   setTracksLabelWidth: (px) =>
     set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
+
+  midiLabelWidth: 88,
+  setMidiLabelWidth: (px) =>
+    set({ midiLabelWidth: Math.max(56, Math.min(360, px)) }),
 
   topPanelFraction: 0.45,
   // Clamp ≈ the panels' old min sizes (top ≥ 30%, bottom ≥ 15%).

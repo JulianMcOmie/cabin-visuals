@@ -15,7 +15,7 @@ import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
-import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
 export function TimelineArea() {
@@ -163,16 +163,8 @@ export function TimelineArea() {
   // Drag the label column's right edge to resize it (spans the ruler corner, every
   // track label, and the empty space below - one handle along the whole edge).
   function startLabelResize(e: ReactPointerEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    const startW = useUIStore.getState().tracksLabelWidth
-    lockCursor('ew-resize')
-    const controller = new AbortController()
-    window.addEventListener('pointermove', (ev) => {
-      useUIStore.getState().setTracksLabelWidth(startW + (ev.clientX - startX))
-    }, { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+    const { tracksLabelWidth, setTracksLabelWidth } = useUIStore.getState()
+    startEdgeResize(e, tracksLabelWidth, setTracksLabelWidth)
   }
 
   return (
