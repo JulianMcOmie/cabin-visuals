@@ -10,6 +10,7 @@ import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
+import { useLoopDrag } from '../../hooks/useLoopDrag'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
@@ -95,6 +96,17 @@ export function TimelineArea() {
       const rect = laneRef.current.getBoundingClientRect()
       const raw = (clientX - rect.left) / pixelsPerBeat
       const beat = Math.round(raw / PLAYHEAD_SNAP_BEATS) * PLAYHEAD_SNAP_BEATS // snap to 1/4 beat
+      return Math.max(0, Math.min(maxBeat, beat))
+    },
+  })
+
+  // Loop-region drag on the ruler's top half - same clientX -> beat math as the
+  // scrub, but snapped to whole beats (loop boundaries are bar-ish, not fine).
+  const { startLoopDrag } = useLoopDrag({
+    computeBeat: (clientX) => {
+      if (!laneRef.current) return null
+      const rect = laneRef.current.getBoundingClientRect()
+      const beat = Math.round((clientX - rect.left) / pixelsPerBeat)
       return Math.max(0, Math.min(maxBeat, beat))
     },
   })
@@ -310,6 +322,7 @@ export function TimelineArea() {
       <div className="flex-shrink-0">
         <TimelineRuler
           onScrubStart={startScrub}
+          onLoopDragStart={startLoopDrag}
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
           gutterPx={0}

@@ -1,11 +1,14 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
   onScrubStart: (e: ReactPointerEvent) => void
+  /** Begin a loop-region drag (provided by TimelineArea via useLoopDrag). */
+  onLoopDragStart: (e: ReactPointerEvent) => void
   /** Width of one bar in pixels (beatsPerBar * pixelsPerBeat). */
   barWidthPx: number
   /** Full timeline width in pixels (totalBars * barWidthPx). */
@@ -28,10 +31,11 @@ interface TimelineRulerProps {
  * triangle is clipped to the strip (never drawn over the corner). The playhead
  * line itself lives in the lanes (TimelineArea).
  */
-export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
+export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
+  const loopRegion = useTimeStore((s) => s.loopRegion)
   // Every bar gets a tick line; only every `interval`th bar is numbered.
   const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
   const bars = Array.from({ length: totalBars }, (_, i) => i)
@@ -46,12 +50,34 @@ export function TimelineRuler({ onScrubStart, barWidthPx, timelineWidthPx, gutte
       </div>
       <div
         className="relative flex-1 overflow-hidden cursor-ew-resize"
-        onPointerDown={onScrubStart}
+        onPointerDown={(e) => {
+          // Top half = the loop lane (drag defines a region, click clears it);
+          // bottom half = the scrub, unchanged.
+          const rect = e.currentTarget.getBoundingClientRect()
+          if (e.clientY < rect.top + rect.height / 2) onLoopDragStart(e)
+          else onScrubStart(e)
+        }}
       >
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>
 
           {/* mid divider between top and bottom half of the ruler */}
           <div className="absolute left-0 right-0 h-px bg-[var(--border-strong)] opacity-40 pointer-events-none" style={{ top: '50%' }} />
+
+          {/* Loop region band - top half only (the loop lane), content space so
+              it scrolls with the ruler. Region set = looping on. */}
+          {loopRegion && (
+            <div
+              className="absolute top-0 pointer-events-none"
+              style={{
+                left: loopRegion.startBeat * pixelsPerBeat,
+                width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
+                height: '50%',
+                backgroundColor: 'rgba(53, 167, 230, 0.25)',
+                borderLeft: '1px solid var(--accent)',
+                borderRight: '1px solid var(--accent)',
+              }}
+            />
+          )}
 
           {/* Faint, short beat ticks */}
           {beats.map((beat) => (

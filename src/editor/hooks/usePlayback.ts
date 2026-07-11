@@ -23,6 +23,7 @@ export function usePlayback() {
         const { totalBars, beatsPerBar } = useProjectStore.getState()
         return totalBars * beatsPerBar
       },
+      getLoopRegion: () => useTimeStore.getState().loopRegion,
       onEnd: () => setIsPlaying(false),
     });
 

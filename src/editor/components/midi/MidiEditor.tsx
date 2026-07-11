@@ -10,6 +10,8 @@ import { useMidiBlockGestures } from './useMidiBlockGestures'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
+import { useLoopDrag } from '../../hooks/useLoopDrag'
+import { useTimeStore } from '../../store/TimeStore'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
 import { startEdgeResize } from '../../utils/edgeResize'
 import type { MidiRow, RangeLabel } from './types'
@@ -92,6 +94,19 @@ export function MidiEditor({
     },
     onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'ew-resize' },
     onEnd: () => { if (containerRef.current) containerRef.current.style.cursor = 'default' },
+  })
+
+  // Loop-region drag on the ruler's top half - same grid beat math as the
+  // scrub, but snapped to whole beats. The region is absolute project beats
+  // (this ruler spans the whole project, with the block at blockStartBeat).
+  const loopRegion = useTimeStore((s) => s.loopRegion)
+  const { startLoopDrag } = useLoopDrag({
+    computeBeat: (clientX) => {
+      if (!gridRef.current) return null
+      const rect = gridRef.current.getBoundingClientRect()
+      const beat = Math.round(xToBeat(clientX - rect.left, pixelsPerBeat))
+      return Math.max(0, Math.min(initialTotalBeats, beat))
+    },
   })
 
   const {
@@ -310,8 +325,11 @@ export function MidiEditor({
             backgroundColor: '#18181b',
           }}
           onPointerDown={(e) => {
-            // Whole ruler scrubs here - the toolbar above (part of the editor) owns
+            // Top half = the loop lane (drag defines a region, click clears it);
+            // bottom half scrubs - the toolbar above (part of the editor) owns
             // the panel-resize edge, so the ruler top doesn't double as a resizer.
+            const rect = e.currentTarget.getBoundingClientRect()
+            if (e.clientY < rect.top + rect.height / 2) { startLoopDrag(e); return }
             startScrub(e)
           }}
           onPointerMove={(e) => {
@@ -323,6 +341,25 @@ export function MidiEditor({
           <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(63,63,70,0.4)', pointerEvents: 'none' }} />
 
           <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - labelWidth, willChange: 'transform' }}>
+
+          {/* Loop region band - top half only (the loop lane), content space so
+              it scrolls with the ruler. Same accent as the tracks ruler band. */}
+          {loopRegion && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                height: '50%',
+                left: beatToX(loopRegion.startBeat, pixelsPerBeat),
+                width: beatToX(loopRegion.endBeat - loopRegion.startBeat, pixelsPerBeat),
+                backgroundColor: 'rgba(53, 167, 230, 0.25)',
+                borderLeft: '1px solid rgba(53, 167, 230, 0.9)',
+                borderRight: '1px solid rgba(53, 167, 230, 0.9)',
+                pointerEvents: 'none',
+                zIndex: 5,
+              }}
+            />
+          )}
 
           {/* Faint, short beat ticks (every beat that isn't a bar line) */}
           {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)

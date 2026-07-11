@@ -1,5 +1,6 @@
 import * as Tone from 'tone'
 import { getAudioEngine } from './audio/AudioEngine'
+import { shouldLoopWrap, type LoopRegion } from './loopRegion'
 
 type BeatChangeCallback = (beat: number) => void
 
@@ -8,6 +9,7 @@ interface EngineCallbacks {
   getBpm: () => number
   getBeatsPerBar: () => number
   getMaxBeat: () => number
+  getLoopRegion: () => LoopRegion | null
   onEnd: () => void
 }
 
@@ -100,9 +102,23 @@ class PlaybackEngine {
   private startBeatTracking() {
     const tick = () => {
       if (!this.callbacks) return
-      const { onBeatChange, getBeatsPerBar, getMaxBeat, onEnd } = this.callbacks
+      const { onBeatChange, getBeatsPerBar, getMaxBeat, getLoopRegion, onEnd } = this.callbacks
       const beat = positionToBeat(Tone.getTransport().position, getBeatsPerBar())
       const maxBeat = getMaxBeat()
+
+      // Loop-region wrap, checked before the end-of-timeline stop so a region
+      // ending at maxBeat loops instead of stopping. This lives only in the
+      // live RAF tick - export drives beats through the beat override and
+      // never runs this loop, so exports walk straight through the region.
+      const region = getLoopRegion()
+      if (region && shouldLoopWrap(beat, region)) {
+        this.seek(region.startBeat)
+        onBeatChange(region.startBeat)
+        // Same zombie guard as below: an onBeatChange subscriber may pause().
+        if (!this.playing) return
+        this.rafId = requestAnimationFrame(tick)
+        return
+      }
 
       if (beat >= maxBeat) {
         Tone.getTransport().stop()
