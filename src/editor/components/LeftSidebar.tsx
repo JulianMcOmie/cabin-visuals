@@ -363,7 +363,9 @@ export function LeftSidebar() {
       {ghostName && (
         <div
           ref={ghostRef}
-          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
+          // z above the tutorial dim (z-[100]) - mid-drag the tutorial keeps its
+          // spotlight up, and the carried item must stay bright on top of it.
+          className="fixed z-[120] pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
           style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
         >
           {droppable && <Plus size={13} className="text-[var(--accent)]" strokeWidth={2.5} />}

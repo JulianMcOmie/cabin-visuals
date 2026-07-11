@@ -4,6 +4,7 @@ import * as projectStorage from '../../persistence/projectStorage'
 import { hydrate } from '../../persistence/serialize'
 import { emptyDocument } from '../../persistence/types'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
+import { justAdopted } from '../../persistence/adoptionHandoff'
 import { useHistoryStore } from '../store/HistoryStore'
 import { useUIStore } from '../store/UIStore'
 import { getTemplate } from '../../templates'
@@ -45,6 +46,22 @@ export function useProjectPersistence() {
 
   useEffect(() => {
     if (!projectId) return
+
+    // Anonymous adoption just seeded this row FROM the in-memory document -
+    // memory is the source of truth, so keep it and only arm autosave. The
+    // normal blank-slate → reload path would wipe and re-fill the stores with
+    // the same data, visibly flapping everything derived from them (the
+    // first-run tutorial snaps back a step, the timeline empties for a beat).
+    const handoff = justAdopted(projectId)
+    if (handoff) {
+      useUIStore.getState().setProjectName(handoff.name)
+      const stopAutosave = startAutosave(projectId)
+      return () => {
+        stopAutosave()
+        useUIStore.getState().setProjectName(null)
+      }
+    }
+
     let stop: (() => void) | undefined
     let cancelled = false
 

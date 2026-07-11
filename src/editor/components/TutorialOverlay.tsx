@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import { useUIStore } from '../store/UIStore'
@@ -24,9 +24,12 @@ const ACTIVE_KEY = 'cabin:tutorial:pulse-cube:active'
  * element the current gesture targets (the dim is one huge box-shadow on the
  * cutout), with the instruction card sitting NEXT to the cutout. The whole
  * overlay is pointer-events:none (only the card is interactive), so every
- * gesture still lands on the real UI - and while a drag gesture is live
- * (body.cursor-locked, set by dragCursor.ts) the overlay hides entirely so
- * the dim never fights a drag in progress.
+ * gesture still lands on the real UI. The overlay NEVER hides during drags -
+ * un-dimming and re-dimming the whole screen per gesture reads as the
+ * tutorial flickering on and off. Instead the spotlight FOLLOWS the action:
+ * the target re-measures on a fast interval, so the cutout tracks a block as
+ * it's drawn or moved, and during the step-0 library drag it slides to the
+ * drop zone (the track-label column).
  *
  * Shows on a person's FIRST editor open (no visited marker in this browser),
  * then never again: completing or skipping sets the done flag, and any other
@@ -79,13 +82,14 @@ export function TutorialOverlay() {
   const tracks = useProjectStore((s) => s.tracks)
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const editingBlock = useUIStore((s) => s.editingBlock)
+  const libraryDragging = useUIStore((s) => s.libraryDragging)
+  const tracksLabelWidth = useUIStore((s) => s.tracksLabelWidth)
 
   const [engaged, setEngaged] = useState<boolean | null>(null)
   const [celebrating, setCelebrating] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
   // Step 0 only: where the curved drag arrow lands (the track-list drop zone).
   const [dropRect, setDropRect] = useState<DOMRect | null>(null)
-  const [dragging, setDragging] = useState(false)
 
   // One-shot eligibility decision (see doc comment).
   useEffect(() => {
@@ -146,7 +150,11 @@ export function TutorialOverlay() {
   }, [celebrating])
 
   // Track the target's rect (layout moves: panel resize, scroll, zoom).
-  useEffect(() => {
+  // A LAYOUT effect: when a step completes, the new target must be measured
+  // BEFORE the browser paints - with a plain effect the first painted frame
+  // still shows the PREVIOUS step's cutout (a visible flash back to the old
+  // spotlight the instant the cube lands).
+  useLayoutEffect(() => {
     if (!engaged || celebrating) return
     const measure = () => {
       const el = document.querySelector(targetSelector)
@@ -178,7 +186,8 @@ export function TutorialOverlay() {
       }
     }
     measure()
-    const iv = setInterval(measure, 200)
+    // Fast enough that the cutout visibly FOLLOWS a block being drawn/moved.
+    const iv = setInterval(measure, 100)
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
     return () => {
@@ -188,21 +197,15 @@ export function TutorialOverlay() {
     }
   }, [engaged, celebrating, targetSelector])
 
-  // Hide the whole overlay while a drag gesture is actually MOVING (ghost
-  // drags, block draw-drags, note draw-drags). Watches drag-moving, NOT
-  // cursor-locked: gestures lock the cursor on the press itself, so keying on
-  // it made the overlay blink away on every click, double-click, and plain
-  // right-click. drag-moving is only added after real pointer movement.
-  useEffect(() => {
-    if (!engaged) return
-    const sync = () => setDragging(document.body.classList.contains('drag-moving'))
-    sync()
-    const mo = new MutationObserver(sync)
-    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] })
-    return () => mo.disconnect()
-  }, [engaged])
+  // While the Cube is being carried in (step 0's library drag), the spotlight
+  // slides from the Cube item to the drop zone (the track-label column) so
+  // the dim guides the drag instead of fighting it.
+  const dropZoneSpot =
+    libraryDragging && step === 0 && dropRect
+      ? new DOMRect(dropRect.left, dropRect.top, Math.min(tracksLabelWidth + 8, dropRect.width), dropRect.height)
+      : null
 
-  if (!engaged || dragging) return null
+  if (!engaged) return null
 
   const skip = () => {
     localStorage.setItem(DONE_KEY, 'done')
@@ -213,7 +216,7 @@ export function TutorialOverlay() {
 
   const card = (style: CSSProperties, content: ReactNode) => (
     <div
-      className="pointer-events-auto fixed z-[110] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
+      className="pointer-events-auto fixed z-[110] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.6)] transition-[left,top] duration-150 ease-out"
       style={{ width: CARD_W, ...style }}
     >
       {content}
@@ -268,16 +271,20 @@ export function TutorialOverlay() {
   // card. The pass-the-block watcher above ends the tutorial.
   if (step === 5 && isPlaying) return null
 
-  if (!rect) {
+  // Mid-drag the spotlight sits on the drop zone; otherwise on the gesture target.
+  const spot = dropZoneSpot ?? rect
+
+  if (!spot) {
     // Target not on screen (yet) - no dim, just the instruction.
     return card({ bottom: 16, left: '50%', transform: 'translateX(-50%)' }, stepContent)
   }
 
   // Step 0's curved drag arrow: from the Cube's cutout down into the track
-  // list, bulging right so it reads as a "pick up and carry" motion.
+  // list, bulging right so it reads as a "pick up and carry" motion. Once the
+  // drag is live the ghost IS the motion - the arrow stands down.
   let arrowPath: string | null = null
   let arrowEnd: { x: number; y: number } | null = null
-  if (dropRect && rect) {
+  if (!dropZoneSpot && dropRect && rect) {
     const sx = rect.x + rect.width / 2 + PAD
     const sy = rect.bottom + PAD + 4
     const ex = dropRect.left + 72
@@ -289,15 +296,18 @@ export function TutorialOverlay() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[100]">
-      {/* The cutout: its oversized shadow is the screen dim. */}
+      {/* The cutout: its oversized shadow is the screen dim. Position/size
+          transition so the spotlight GLIDES as its target grows or moves
+          (drawing a block, carrying the drag) instead of jumping per measure. */}
       <div
         className="fixed rounded-lg"
         style={{
-          left: rect.x - PAD,
-          top: rect.y - PAD,
-          width: rect.width + PAD * 2,
-          height: rect.height + PAD * 2,
+          left: spot.x - PAD,
+          top: spot.y - PAD,
+          width: spot.width + PAD * 2,
+          height: spot.height + PAD * 2,
           boxShadow: '0 0 0 200vmax rgba(4, 4, 6, 0.66)',
+          transition: 'left 120ms ease-out, top 120ms ease-out, width 120ms ease-out, height 120ms ease-out',
         }}
       >
         <div
@@ -323,7 +333,7 @@ export function TutorialOverlay() {
           />
         </svg>
       )}
-      {card(cardStyle(rect), stepContent)}
+      {card(cardStyle(spot), stepContent)}
     </div>
   )
 }

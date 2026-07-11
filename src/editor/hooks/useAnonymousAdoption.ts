@@ -5,6 +5,7 @@ import { useUIStore } from '../store/UIStore'
 import * as projectStorage from '../../persistence/projectStorage'
 import { serialize } from '../../persistence/serialize'
 import { ensureSession, anonSessionsEnabled } from '../../persistence/anonSession'
+import { markAdopted } from '../../persistence/adoptionHandoff'
 import { useAuth } from '../../persistence/hooks/useAuth'
 
 /**
@@ -44,6 +45,9 @@ export function useAnonymousAdoption() {
           if (existing.length >= 1) return
           const name = useUIStore.getState().projectName?.trim() || 'Untitled'
           const project = await projectStorage.create(name, serialize())
+          // The row was seeded from the document already in memory - tell the
+          // rebind to keep it (no blank slate, no reload) and just arm autosave.
+          markAdopted(project.id, project.name)
           router.replace(`/editor?project=${project.id}`)
         } catch (err) {
           console.error('Adoption failed (staying in-memory):', err)
