@@ -21,8 +21,6 @@ export interface VideoEncodeSession {
 export function createVideoEncodeSession(
   settings: ExportSettings,
   writer: Mp4Writer,
-  /** A/V alignment shift (µs) applied to every frame after the first - see runExport. */
-  avOffsetUs = 0,
 ): VideoEncodeSession {
   let error: Error | null = null
 
@@ -47,11 +45,14 @@ export function createVideoEncodeSession(
       if (error) throw error
       // Same task as the render - the GL surface still holds this frame, so no
       // pixel readback and no preserveDrawingBuffer anywhere.
-      // The A/V shift lands on every frame except the first: the muxer requires
-      // a zero first timestamp, and holding the opening frame ~44ms longer is
-      // invisible while realigning the whole picture with the AAC audio.
+      // Uniform PTS, exactly i/fps. Do NOT add an A/V offset here: a brief
+      // "AAC priming compensation" (+44ms on every frame after the first)
+      // shipped on 2026-07-10 and made sync WORSE - audio landed audibly
+      // early. AAC decoders discard the 2112 priming samples themselves, so
+      // the audio track was never actually late; the shift was pure error.
+      // See exportEngine.runExport and mux.test.ts for the full findings.
       const frame = new VideoFrame(canvas, {
-        timestamp: frameIndex === 0 ? 0 : Math.round((frameIndex * 1e6) / fps) + avOffsetUs,
+        timestamp: Math.round((frameIndex * 1e6) / fps),
         duration: Math.round(1e6 / fps),
       })
       // Keyframe every 2 seconds of output: scrubbable, negligible size cost.

@@ -118,14 +118,21 @@ export async function runExport(
     audio: audioBuffer ? { sampleRate: audioBuffer.sampleRate, numberOfChannels: 2 } : undefined,
   })
 
-  // AAC priming: Chrome's AAC encoders (MediaFoundation on Windows,
-  // AudioToolbox on macOS) front-load the standard 2112 pre-roll samples, and
-  // with no edit list in the muxer players play them as leading near-silence -
-  // the whole audio timeline lands 2112/sampleRate (~44ms at 48k) late.
-  // Compensate by shifting the video PTS to meet it (see videoEncode).
-  const AAC_PRIMING_SAMPLES = 2112
-  const avOffsetUs = audioBuffer ? Math.round((AAC_PRIMING_SAMPLES / audioBuffer.sampleRate) * 1e6) : 0
-  const video = createVideoEncodeSession(settings, writer, avOffsetUs)
+  // A/V alignment is arithmetic and UNCOMPENSATED, on purpose. History: on
+  // 2026-07-10 an "AAC priming compensation" delayed every video frame after
+  // the first by AAC_PRIMING_US (2112 samples / 48k ≈ 44ms), on the theory
+  // that players render the encoder's priming samples as leading silence and
+  // the audio therefore lands ~44ms late. Empirically muxing the shifted
+  // timestamps through mp4-muxer (see mux.test.ts) showed the container
+  // faithfully encodes the shift - first video sample held 60.7ms, everything
+  // after +44ms - i.e. the mechanism "worked", but the premise was wrong:
+  // AAC decoders discard the priming samples themselves (implicit codec
+  // delay), so the audio was never late and the shift made audio audibly
+  // EARLY. Kept at 0 = no compensation; both tracks start at PTS 0 and both
+  // timelines derive from the same bpm arithmetic.
+  const AAC_PRIMING_US = 0 // documented above; do not resurrect without a verified mux dump
+  void AAC_PRIMING_US
+  const video = createVideoEncodeSession(settings, writer)
 
   const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null
 
