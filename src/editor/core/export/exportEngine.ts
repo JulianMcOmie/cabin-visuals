@@ -113,7 +113,15 @@ export async function runExport(
     height: settings.height,
     audio: audioBuffer ? { sampleRate: audioBuffer.sampleRate, numberOfChannels: 2 } : undefined,
   })
-  const video = createVideoEncodeSession(settings, writer)
+
+  // AAC priming: Chrome's AAC encoders (MediaFoundation on Windows,
+  // AudioToolbox on macOS) front-load the standard 2112 pre-roll samples, and
+  // with no edit list in the muxer players play them as leading near-silence -
+  // the whole audio timeline lands 2112/sampleRate (~44ms at 48k) late.
+  // Compensate by shifting the video PTS to meet it (see videoEncode).
+  const AAC_PRIMING_SAMPLES = 2112
+  const avOffsetUs = audioBuffer ? Math.round((AAC_PRIMING_SAMPLES / audioBuffer.sampleRate) * 1e6) : 0
+  const video = createVideoEncodeSession(settings, writer, avOffsetUs)
 
   const watermark = settings.watermark ? createWatermarkCompositor(settings.width, settings.height) : null
 

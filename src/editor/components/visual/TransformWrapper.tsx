@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
+import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getEffect } from '../../effects'
 import type { EffectInstance } from '../../types'
 
@@ -16,7 +17,10 @@ function SingleTransform({ instance, children }: { instance: EffectInstance; chi
     g.rotation.set(0, 0, 0)
     g.scale.set(1, 1, 1)
     if (!instance.enabled) return
-    plugin.applyTransform(g, instance.settings, useTimeStore.getState().currentBeat)
+    // Same clock rule as VisualBeatSync: an export walk drives time through the
+    // beat override while the transport stays frozen - reading currentBeat
+    // alone would pin this effect to the parked playhead for the whole export.
+    plugin.applyTransform(g, instance.settings, getBeatOverride() ?? useTimeStore.getState().currentBeat)
   })
   return <group ref={groupRef}>{children}</group>
 }

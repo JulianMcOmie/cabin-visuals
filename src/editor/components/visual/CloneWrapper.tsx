@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Mesh, type Material } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
+import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getEffect } from '../../effects'
 import type { EffectInstance } from '../../types'
 
@@ -32,7 +33,9 @@ function SingleClone({ instance, children }: { instance: EffectInstance; childre
 
   useFrame(() => {
     const s = specRef.current
-    const time = useTimeStore.getState().currentBeat
+    // Same clock rule as VisualBeatSync: exports drive time through the beat
+    // override while the transport stays frozen.
+    const time = getBeatOverride() ?? useTimeStore.getState().currentBeat
     for (let i = 0; i < count; i++) {
       const g = groupsRef.current[i]
       if (!g) continue

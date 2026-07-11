@@ -18,7 +18,12 @@ export interface VideoEncodeSession {
   dispose(): void
 }
 
-export function createVideoEncodeSession(settings: ExportSettings, writer: Mp4Writer): VideoEncodeSession {
+export function createVideoEncodeSession(
+  settings: ExportSettings,
+  writer: Mp4Writer,
+  /** A/V alignment shift (µs) applied to every frame after the first - see runExport. */
+  avOffsetUs = 0,
+): VideoEncodeSession {
   let error: Error | null = null
 
   const encoder = new VideoEncoder({
@@ -42,8 +47,11 @@ export function createVideoEncodeSession(settings: ExportSettings, writer: Mp4Wr
       if (error) throw error
       // Same task as the render - the GL surface still holds this frame, so no
       // pixel readback and no preserveDrawingBuffer anywhere.
+      // The A/V shift lands on every frame except the first: the muxer requires
+      // a zero first timestamp, and holding the opening frame ~44ms longer is
+      // invisible while realigning the whole picture with the AAC audio.
       const frame = new VideoFrame(canvas, {
-        timestamp: Math.round((frameIndex * 1e6) / fps),
+        timestamp: frameIndex === 0 ? 0 : Math.round((frameIndex * 1e6) / fps) + avOffsetUs,
         duration: Math.round(1e6 / fps),
       })
       // Keyframe every 2 seconds of output: scrubbable, negligible size cost.

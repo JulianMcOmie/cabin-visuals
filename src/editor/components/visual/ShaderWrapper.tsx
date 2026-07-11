@@ -6,6 +6,7 @@ import {
   type IUniform, type Texture,
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
+import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState } from '../../core/visual/VisualEngine'
 import { getEffect } from '../../effects'
 import type { EffectInstance } from '../../types'
@@ -103,7 +104,9 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
 
     // Render the object (with its world transform) into the source FBO.
     if (state) rig.holder.matrix.copy(state.world)
-    const beat = useTimeStore.getState().currentBeat
+    // Same clock rule as VisualBeatSync: exports drive time through the beat
+    // override while the transport stays frozen.
+    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
     const prev = gl.getRenderTarget()
     gl.setRenderTarget(rig.src)
     gl.setClearColor(0x000000, 0); gl.clear()
