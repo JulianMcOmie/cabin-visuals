@@ -236,12 +236,12 @@ export const pixelInvadersInstrument: ObjectInstrumentDef = {
   // pitch % cols picks the column the cannon zaps (default 6 columns); the
   // bottom-most survivor there explodes. Velocity = shrapnel amount.
   midiRows: [
-    { pitch: 65, label: 'Zap rightmost column' },
+    { pitch: 65, label: 'Zap column 6 · rightmost' },
     { pitch: 64, label: 'Zap column 5' },
     { pitch: 63, label: 'Zap column 4' },
     { pitch: 62, label: 'Zap column 3' },
     { pitch: 61, label: 'Zap column 2' },
-    { pitch: 60, label: 'Zap leftmost column', emphasized: true },
+    { pitch: 60, label: 'Zap column 1 · leftmost', emphasized: true },
   ],
   component: PixelInvadersVisual,
 }

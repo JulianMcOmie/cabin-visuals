@@ -7,7 +7,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { generateRows, generateAutomationRows, generateVideoClipRows, generateInstrumentRows } from './generateRows'
+import { generateRows, generateAutomationRows, generateVideoClipRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { useVideoStore } from '../../store/VideoStore'
 import { getInstrument } from '../../instruments'
@@ -24,6 +24,13 @@ interface AutomationInfo {
   paramLabel: string
   paramMin: number
   paramMax: number
+}
+
+/** Trigger-lane editor context: rows are interchangeable slots (pitch is ignored
+ *  by the engine), labelled rowLabel; cornerLabel states the lane's semantics. */
+interface TriggerInfo {
+  rowLabel: string
+  cornerLabel: string
 }
 
 const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
@@ -79,20 +86,40 @@ export function PianoRollPanel() {
 
   // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
   // Automation tracks target their parent; continuous movers target their own input.
-  // Envelope tracks deliberately fall through to the plain piano roll: they are
-  // trigger lanes - the ADSR ignores note PITCH entirely (any row works) and
-  // velocity scales the envelope's peak.
+  // Trigger lanes (mover ballistic/none, envelope gates, suppress/mute modifiers)
+  // ignore note PITCH entirely, so they get a short set of interchangeable rows
+  // instead of the full piano.
   let automation: AutomationInfo | undefined
+  let trigger: TriggerInfo | undefined
   if (track.type === 'mover') {
+    const dim = getMover(track.moverId)
+    const moverLabel = dim?.label ?? 'Mover'
     if (track.midiMode === 'amount') {
-      automation = { paramLabel: 'amount', paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX }
+      automation = { paramLabel: `${moverLabel} · Amount`, paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX }
     } else if (track.midiMode === 'continuous') {
-      const dim = getMover(track.moverId)
       const target = dim && isMoverMidiInput(dim, track.midiTargetInput)
         ? track.midiTargetInput
         : dim ? firstMoverMidiInput(dim) : undefined
       const input = dim && target ? dim.inputs[target] : undefined
-      if (input && target) automation = { paramLabel: input.label ?? target, paramMin: input.min, paramMax: input.max }
+      if (input && target) automation = { paramLabel: `${moverLabel} · ${input.label ?? target}`, paramMin: input.min, paramMax: input.max }
+    }
+    if (!automation) {
+      // Ballistic: each note fires a velocity-scaled envelope hit; pitch is ignored.
+      // None (or an unresolvable continuous target): notes are inert until a MIDI
+      // mode is picked - same short rows so the lane never shows the full piano.
+      trigger = track.midiMode === 'ballistic'
+        ? { rowLabel: 'Trigger', cornerLabel: `${moverLabel} · Trigger · velocity = strength` }
+        : { rowLabel: 'Trigger', cornerLabel: `${moverLabel} · MIDI off` }
+    }
+  } else if (track.type === 'envelope') {
+    // Envelope gates: pitch is ignored, velocity scales the envelope's peak.
+    trigger = { rowLabel: 'Trigger', cornerLabel: 'Envelope · Trigger · velocity = strength' }
+  } else if (modColor && (track.type === 'suppress' || track.type === 'mute')) {
+    // These modifiers consume only note TIMING (regions); pitch never matters.
+    // add/override keep the full piano - their pitches become real parent notes.
+    trigger = {
+      rowLabel: 'Region',
+      cornerLabel: track.type === 'suppress' ? 'Suppress · regions · pitch ignored' : 'Mute · regions · pitch ignored',
     }
   } else if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
@@ -108,8 +135,9 @@ export function PianoRollPanel() {
         if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max }
       }
     } else if (parent?.type === 'mover') {
-      const input = getMover(parent.moverId)?.inputs[track.targetParam]
-      if (input) automation = { paramLabel: track.targetParam, paramMin: input.min, paramMax: input.max }
+      const dim = getMover(parent.moverId)
+      const input = dim?.inputs[track.targetParam]
+      if (input) automation = { paramLabel: `${dim?.label ?? 'Mover'} · ${input.label ?? track.targetParam}`, paramMin: input.min, paramMax: input.max }
     } else {
       const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
@@ -124,6 +152,7 @@ export function PianoRollPanel() {
       trackColor={modColor ?? track.color}
       noteColor={modColor ?? undefined}
       automation={automation}
+      trigger={trigger}
       block={block}
       onClose={() => setEditingBlock(null)}
     />
@@ -138,11 +167,13 @@ interface PianoRollContentProps {
   noteColor?: string
   /** Set for value-keyframe tracks - rows are value-labelled and an interp picker shows. */
   automation?: AutomationInfo
+  /** Set for trigger/region lanes - a short set of interchangeable rows shows. */
+  trigger?: TriggerInfo
   block: Block
   onClose: () => void
 }
 
-function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, block, onClose }: PianoRollContentProps) {
+function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const track = useProjectStore((s) => s.tracks[trackId])
@@ -165,10 +196,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
 
   // Value lanes show value rows (pitch → param/input value) with the target name
-  // in the range gutter; a Video track shows ONLY its clip rows (one per uploaded
-  // clip); instruments that declare a MIDI vocabulary (def.midiRows) show only
-  // those labelled rows; modifiers get flat-coloured rows; anything left shows
-  // the full note rainbow.
+  // in the range gutter; trigger lanes show a short set of interchangeable rows;
+  // a Video track shows ONLY its clip rows (one per uploaded clip); instruments
+  // that declare a MIDI vocabulary (def.midiRows) show only those labelled rows;
+  // add/override modifiers get the flat-coloured full piano (their pitches become
+  // real parent notes); anything left shows the full note rainbow.
   const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const defRows = !automation && track?.type === 'base'
@@ -179,20 +211,22 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     : null
   const rows = auto
     ? auto.rows
-    : videoTrack
-      ? generateVideoClipRows(
-          (videoTrack.videoPads ?? []).map((pad, i) => {
-            const name = videoClips[pad.ref]?.fileName ?? `Clip ${i + 1}`
-            return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
-          }),
-          VIDEO_BASE_PITCH,
-          notes.map((n) => n.pitch),
-        )
-      : defRows
-        ? generateInstrumentRows(defRows, notes.map((n) => n.pitch))
-        : noteColor
-          ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
-          : generateRows(undefined)
+    : trigger
+      ? generateTriggerRows(trigger.rowLabel, noteColor ?? trackColor, notes.map((n) => n.pitch))
+      : videoTrack
+        ? generateVideoClipRows(
+            (videoTrack.videoPads ?? []).map((pad, i) => {
+              const name = videoClips[pad.ref]?.fileName ?? `Clip ${i + 1}`
+              return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
+            }),
+            VIDEO_BASE_PITCH,
+            notes.map((n) => n.pitch),
+          )
+        : defRows
+          ? generateInstrumentRows(defRows, notes.map((n) => n.pitch))
+          : noteColor
+            ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
+            : generateRows(undefined)
   const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
@@ -326,7 +360,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}
-        cornerLabel={automation?.paramLabel}
+        cornerLabel={automation?.paramLabel ?? trigger?.cornerLabel}
         block={block}
         notes={notes}
         onNotesChange={setNotes}

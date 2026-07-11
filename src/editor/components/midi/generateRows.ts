@@ -73,6 +73,38 @@ export function generateInstrumentRows(
   return rows
 }
 
+// Trigger lanes ignore note PITCH (the engine reads only timing + velocity), so
+// the editor shows a handful of interchangeable rows: enough vertical room to
+// stagger rhythm patterns without a wall of piano keys. The pitches are display
+// slots only - any pitch triggers identically.
+const TRIGGER_PITCHES = [72, 67, 64, 60]
+
+/**
+ * Rows for a trigger/region lane (mover ballistic lanes, envelope gates,
+ * suppress/mute modifiers): a short set of identical rows, all one label and
+ * colour so they read as interchangeable. Pitches already used by notes outside
+ * the slot set get dimmed extra rows (still functional - pitch is ignored) so
+ * no note can silently vanish from the editor.
+ */
+export function generateTriggerRows(
+  rowLabel: string,
+  color: string,
+  notePitches: number[],
+): MidiRow[] {
+  const known = new Set(TRIGGER_PITCHES)
+  const rows: MidiRow[] = TRIGGER_PITCHES.map((pitch) => ({ pitch, label: rowLabel, color }))
+  const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
+    const octave = Math.floor(pitch / 12) - 1
+    rows.push({
+      pitch,
+      label: `${rowLabel} · ${NOTE_NAMES[pitch % 12]}${octave}`,
+      color: 'hsl(0, 0%, 45%)',
+    })
+  }
+  return rows
+}
+
 /**
  * Rows for a Video track's pad bank: exactly one row per clip, growing as
  * clips are added — never the full piano roll. The most recently added clip

@@ -429,19 +429,21 @@ export const hopfFibrationInstrument: ObjectInstrumentDef = {
   kind: 'object',
   params: PARAMS,
   // Transforms are octave-looped (pitch % 12); one octave (48-59) is exposed.
+  // Display order groups related actions (layers, bursts/twists, rotates/flips,
+  // color); pitches are load-bearing for saved projects and stay unchanged.
   midiRows: [
     { pitch: 50, label: 'Add torus layer', emphasized: true },
+    { pitch: 51, label: 'Remove torus layer' },
+    { pitch: 48, label: 'Shift torus family · new nesting' },
     { pitch: 57, label: 'Scale burst', emphasized: true },
     { pitch: 49, label: 'Pole burst · stretch to infinity' },
     { pitch: 55, label: 'Dehn twist · corkscrew the fibers' },
     { pitch: 52, label: 'Turn inside-out' },
-    { pitch: 58, label: 'Shift colors · rotate hues' },
-    { pitch: 51, label: 'Remove torus layer' },
-    { pitch: 48, label: 'Shift torus family · new nesting' },
     { pitch: 53, label: 'Rotate rings · latitude step' },
     { pitch: 54, label: 'Rotate rings · longitude step' },
     { pitch: 56, label: 'Mirror flip' },
     { pitch: 59, label: 'Reverse spin direction' },
+    { pitch: 58, label: 'Shift colors · rotate hues' },
   ],
   component: HopfFibrationVisual,
 }

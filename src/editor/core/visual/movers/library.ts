@@ -42,9 +42,9 @@ export const translateMover: MoverDef = {
   label: 'Translate',
   amountInputs: ['dx', 'dy', 'dz'],
   inputs: {
-    dx: { default: 0, min: -10, max: 10, semantic: 'amount' },
-    dy: { default: 0, min: -10, max: 10, semantic: 'amount' },
-    dz: { default: 0, min: -10, max: 10, semantic: 'amount' },
+    dx: { default: 0, min: -10, max: 10, label: 'Move X', semantic: 'amount' },
+    dy: { default: 0, min: -10, max: 10, label: 'Move Y', semantic: 'amount' },
+    dz: { default: 0, min: -10, max: 10, label: 'Move Z', semantic: 'amount' },
   },
   apply: (inState, inputs, _ctx, out) => {
     copyBase(inState, out)
@@ -114,9 +114,9 @@ export const breatheMover: MoverDef = {
   label: 'Breathe',
   amountInputs: ['amount'],
   inputs: {
-    amount: { default: 0, min: -2, max: 2, semantic: 'amount' },
-    rate: { default: 1, min: -8, max: 8, semantic: 'rate' },
-    phase: { default: 0, min: -4, max: 4, semantic: 'phase' },
+    amount: { default: 0, min: -2, max: 2, label: 'Amount', semantic: 'amount' },
+    rate: { default: 1, min: -8, max: 8, label: 'Rate', semantic: 'rate' },
+    phase: { default: 0, min: -4, max: 4, label: 'Phase', semantic: 'phase' },
   },
   apply: (inState, inputs, ctx, out) => {
     copyBase(inState, out)
@@ -129,10 +129,10 @@ export const orbitMover: MoverDef = {
   label: 'Orbit',
   amountInputs: ['radius'],
   inputs: {
-    radius: { default: 0, min: -10, max: 10, semantic: 'amount' },
-    rate: { default: 1, min: -8, max: 8, semantic: 'rate' },
-    phase: { default: 0, min: -4, max: 4, semantic: 'phase' },
-    tilt: { default: 0, min: -Math.PI, max: Math.PI, semantic: 'angle' },
+    radius: { default: 0, min: -10, max: 10, label: 'Radius', semantic: 'amount' },
+    rate: { default: 1, min: -8, max: 8, label: 'Rate', semantic: 'rate' },
+    phase: { default: 0, min: -4, max: 4, label: 'Phase', semantic: 'phase' },
+    tilt: { default: 0, min: -Math.PI, max: Math.PI, label: 'Tilt', semantic: 'angle' },
   },
   apply: (inState, inputs, ctx, out) => {
     copyBase(inState, out)
@@ -150,10 +150,10 @@ export const dotWaveMover: MoverDef = {
   label: 'Dot Wave',
   amountInputs: ['amount'],
   inputs: {
-    amount: { default: 0, min: -5, max: 5, semantic: 'amount' },
-    rate: { default: 1, min: -8, max: 8, semantic: 'rate' },
-    indexStep: { default: 0.15, min: -2, max: 2, semantic: 'index' },
-    phase: { default: 0, min: -4, max: 4, semantic: 'phase' },
+    amount: { default: 0, min: -5, max: 5, label: 'Amount', semantic: 'amount' },
+    rate: { default: 1, min: -8, max: 8, label: 'Rate', semantic: 'rate' },
+    indexStep: { default: 0.15, min: -2, max: 2, label: 'Index Step', semantic: 'index' },
+    phase: { default: 0, min: -4, max: 4, label: 'Phase', semantic: 'phase' },
   },
   apply: (inState, inputs, ctx, out) => {
     copyBase(inState, out)
