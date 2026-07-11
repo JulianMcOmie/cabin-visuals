@@ -6,7 +6,10 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
+import { DEFAULT_ADSR } from '../core/visual/adsr'
+import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
+import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { VideoClipBank } from './VideoClipBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
@@ -493,6 +496,9 @@ export function TrackEditor() {
   const setMoverEnvelope = useProjectStore((s) => s.setMoverEnvelope)
   const setMoverWeight = useProjectStore((s) => s.setMoverWeight)
   const setMoverOpMode = useProjectStore((s) => s.setMoverOpMode)
+  const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
+  const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
+  const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
@@ -736,6 +742,91 @@ export function TrackEditor() {
                               onChange={(phase) => setMoverWeight(track.id, { ...weight, phase })}
                             />
                           </>
+                        )}
+                      </>
+                    )
+                  }
+
+                  // Envelope child track → ADSR + depth (+ the value reached at
+                  // full gain, except for the reserved Opacity target, which is a
+                  // pure multiplier). Its notes are the gates - drawn in the MIDI
+                  // editor like any lane; pitch is ignored, velocity scales peak.
+                  if (track.type === 'envelope') {
+                    const parent = track.parentId ? tracks[track.parentId] : undefined
+                    const target = track.targetParam
+                    const isOpacity = target === ENVELOPE_OPACITY_TARGET
+                    let targetLabel = 'Opacity'
+                    let bounds: { min: number; max: number; step: number } | null = null
+                    if (!isOpacity && target) {
+                      const fx = parseFxTarget(target)
+                      if (fx) {
+                        const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
+                        const plugin = inst ? getEffect(inst.pluginId) : undefined
+                        const pd = plugin?.params.find((p) => p.key === fx.key)
+                        targetLabel = pd ? `${plugin?.name} · ${pd.label}` : target
+                        if (pd && isNumberParam(pd)) bounds = { min: pd.min, max: pd.max, step: pd.step || 0.01 }
+                      } else {
+                        const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === target) : undefined
+                        targetLabel = pdef?.label ?? target
+                        if (pdef && isNumberParam(pdef)) bounds = { min: pdef.min, max: pdef.max, step: pdef.step || 0.01 }
+                      }
+                    }
+                    const adsr = { ...DEFAULT_ADSR, ...track.adsr }
+                    return (
+                      <>
+                        <p className="text-[11px] text-zinc-500 mb-1">Envelope → {targetLabel}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] mb-3">
+                          Notes on this lane gate the envelope. Pitch is ignored; velocity scales the peak.
+                        </p>
+                        <ParamSlider
+                          label="Attack (beats)"
+                          value={adsr.attackBeats}
+                          min={0}
+                          max={4}
+                          step={0.01}
+                          onChange={(attackBeats) => setEnvelopeAdsr(track.id, { ...adsr, attackBeats })}
+                        />
+                        <ParamSlider
+                          label="Decay (beats)"
+                          value={adsr.decayBeats}
+                          min={0}
+                          max={8}
+                          step={0.01}
+                          onChange={(decayBeats) => setEnvelopeAdsr(track.id, { ...adsr, decayBeats })}
+                        />
+                        <ParamSlider
+                          label="Sustain"
+                          value={adsr.sustainLevel}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(sustainLevel) => setEnvelopeAdsr(track.id, { ...adsr, sustainLevel })}
+                        />
+                        <ParamSlider
+                          label="Release (beats)"
+                          value={adsr.releaseBeats}
+                          min={0}
+                          max={8}
+                          step={0.01}
+                          onChange={(releaseBeats) => setEnvelopeAdsr(track.id, { ...adsr, releaseBeats })}
+                        />
+                        <ParamSlider
+                          label="Depth"
+                          value={track.envDepth ?? 1}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(v) => setEnvelopeDepth(track.id, v)}
+                        />
+                        {!isOpacity && bounds && (
+                          <ParamSlider
+                            label="Peak value"
+                            value={track.envTarget ?? bounds.max}
+                            min={bounds.min}
+                            max={bounds.max}
+                            step={bounds.step}
+                            onChange={(v) => setEnvelopeTarget(track.id, v)}
+                          />
                         )}
                       </>
                     )

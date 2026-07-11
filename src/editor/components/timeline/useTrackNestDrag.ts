@@ -31,9 +31,10 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (!sc) return
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
-    // Automation + ability tracks live only on their parent object - they can't be
-    // re-parented or moved to the root. (A plain pointer-down still selects the row.)
-    if (tracks[trackId].type === 'automation' || tracks[trackId].type === 'ability') return
+    // Automation + envelope + ability tracks live only on their parent object - they
+    // can't be re-parented or moved to the root. (A plain pointer-down still selects
+    // the row.)
+    if (tracks[trackId].type === 'automation' || tracks[trackId].type === 'ability' || tracks[trackId].type === 'envelope') return
     const rowHeight = useUIStore.getState().tracksRowHeight
     const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     if (rows.findIndex((r) => r.kind === 'track' && r.id === trackId) < 0) return

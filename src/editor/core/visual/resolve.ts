@@ -7,9 +7,11 @@ import type {
   ResolvedNote,
   ResolvedAutomation,
   ResolvedEffectAutomation,
+  ResolvedEnvelope,
   ResolvedMover,
   BlackoutRegion,
 } from './types'
+import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { isModifierType, combineModifier, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN, pitchToValue } from '../trackTypes'
@@ -120,6 +122,74 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       key: target.key,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+    })
+  }
+  return out
+}
+
+/** The reserved envelope target: multiplies the object's rendered opacity, so every
+ *  instrument is fade-able without exposing a param (renderer-level, per the design
+ *  doc). Wins over an instrument's own numeric param of the same key. */
+export const ENVELOPE_OPACITY_TARGET = 'opacity'
+
+const clampTo = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+
+/** Gather an object track's `envelope` child tracks. Each is a note-gated ADSR
+ *  modulating one target: the reserved 'opacity' key, one of the parent's numeric
+ *  params, or an fx-namespaced effect setting. Mute/solo mirror automation children
+ *  (their own solo pool, per object). Unknown/non-numeric targets are skipped. */
+function resolveEnvelopes(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedEnvelope[] {
+  const out: ResolvedEnvelope[] = []
+  const anyEnvSolo = (track.childIds ?? []).some((cid) => {
+    const c = p.tracks[cid]
+    return !!c && !c.instrumentId && c.type === 'envelope' && !!c.solo
+  })
+  for (const childId of track.childIds ?? []) {
+    const child = p.tracks[childId]
+    if (!child || child.instrumentId || child.type !== 'envelope') continue
+    if (child.muted || (anyEnvSolo && !child.solo)) continue
+    const target = child.targetParam
+    if (!target) continue
+    const adsr = { ...DEFAULT_ADSR, ...child.adsr }
+    const depth = clampTo(child.envDepth ?? 1, 0, 1)
+    const notes = flattenTrackNotes(child, p)
+    if (target === ENVELOPE_OPACITY_TARGET) {
+      out.push({ trackId: child.id, kind: 'opacity', min: 0, max: 1, envTarget: 1, adsr, depth, notes })
+      continue
+    }
+    const fx = parseFxTarget(target)
+    if (fx) {
+      const instance = (track.effects ?? []).find((e) => e.id === fx.instanceId)
+      const pdef = instance ? getEffect(instance.pluginId)?.params.find((pd) => pd.key === fx.key) : undefined
+      if (!instance || !pdef || !isNumberParam(pdef)) continue // 'enabled' is a 0/1 toggle - no ADSR
+      out.push({
+        trackId: child.id,
+        kind: 'fx',
+        instanceId: fx.instanceId,
+        key: fx.key,
+        fxBase: instance.settings[fx.key] ?? pdef.default,
+        min: pdef.min,
+        max: pdef.max,
+        envTarget: clampTo(child.envTarget ?? pdef.max, pdef.min, pdef.max),
+        adsr,
+        depth,
+        notes,
+      })
+      continue
+    }
+    const pdef = def?.params.find((pd) => pd.key === target)
+    if (!pdef || !isNumberParam(pdef)) continue
+    out.push({
+      trackId: child.id,
+      kind: 'param',
+      param: target,
+      paramDefault: pdef.default,
+      min: pdef.min,
+      max: pdef.max,
+      envTarget: clampTo(child.envTarget ?? pdef.max, pdef.min, pdef.max),
+      adsr,
+      depth,
+      notes,
     })
   }
   return out
@@ -294,6 +364,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
       effectAutomations: resolveEffectAutomations(track, p),
+      envelopes: resolveEnvelopes(track, def, p),
       moverChain,
       // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
       // (which lands via resolve) is always visible to it.

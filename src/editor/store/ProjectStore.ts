@@ -3,8 +3,9 @@ import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
+import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
+import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -268,6 +269,15 @@ interface ProjectState {
   /** Add an `ability` child track under `parentId` for one of the parent instrument's
    *  abilities (opt-in). No-op if that ability already has a track. */
   addAbilityTrack: (parentId: string, abilityKey: string, abilityLabel: string) => void
+  /** Add an `envelope` child track under `parentId`: its notes gate an ADSR that
+   *  modulates `targetParam` (a numeric parent param, an fx:<id>:<key> effect
+   *  setting, or the reserved 'opacity' key). `envTarget` is the value reached at
+   *  full gain (callers pass the param's max by default; omitted for 'opacity').
+   *  No-op if an envelope already targets that param. */
+  addEnvelopeTrack: (parentId: string, targetParam: string, targetLabel: string, envTarget?: number) => void
+  setEnvelopeAdsr: (trackId: string, adsr: AdsrEnvelope) => void
+  setEnvelopeDepth: (trackId: string, value: number) => void
+  setEnvelopeTarget: (trackId: string, value: number) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
@@ -962,6 +972,63 @@ export const useProjectStore = create<ProjectState>((set) => ({
           [parentId]: { ...parent, childIds: [...parent.childIds, id] },
         },
       }
+    }),
+
+  addEnvelopeTrack: (parentId, targetParam, targetLabel, envTarget) =>
+    set((s) => {
+      const parent = s.tracks[parentId]
+      if (!parent) return s
+      // One envelope lane per target - don't stack duplicates.
+      const exists = parent.childIds.some((cid) => {
+        const c = s.tracks[cid]
+        return c?.type === 'envelope' && c.targetParam === targetParam
+      })
+      if (exists) return s
+      const id = crypto.randomUUID()
+      const track: Track = {
+        id,
+        name: `Env · ${targetLabel}`,
+        type: 'envelope',
+        instrumentId: '',
+        targetParam,
+        adsr: { ...DEFAULT_ADSR },
+        envDepth: 1,
+        envTarget,
+        color: parent.color,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        parentId,
+      }
+      return {
+        tracks: {
+          ...s.tracks,
+          [id]: track,
+          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
+        },
+      }
+    }),
+
+  setEnvelopeAdsr: (trackId, adsr) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'envelope') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, adsr } } }
+    }),
+
+  setEnvelopeDepth: (trackId, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'envelope') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, envDepth: value } } }
+    }),
+
+  setEnvelopeTarget: (trackId, value) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'envelope') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, envTarget: value } } }
     }),
 
   addAbilityTrack: (parentId, abilityKey, abilityLabel) =>

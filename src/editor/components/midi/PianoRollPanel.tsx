@@ -79,6 +79,9 @@ export function PianoRollPanel() {
 
   // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
   // Automation tracks target their parent; continuous movers target their own input.
+  // Envelope tracks deliberately fall through to the plain piano roll: they are
+  // trigger lanes - the ADSR ignores note PITCH entirely (any row works) and
+  // velocity scales the envelope's peak.
   let automation: AutomationInfo | undefined
   if (track.type === 'mover') {
     if (track.midiMode === 'amount') {

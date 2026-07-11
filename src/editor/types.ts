@@ -26,6 +26,19 @@ export type TrackType =
   | 'ability'
   | 'mover'
   | 'audio'
+  | 'envelope'
+
+/**
+ * ADSR parameters for an `envelope` child track, all in BEATS (tempo-musical and
+ * deterministic - the gain is a closed-form function of the playhead beat, per the
+ * pause invariant). sustainLevel is a 0..1 level, not a time.
+ */
+export interface AdsrEnvelope {
+  attackBeats: number
+  decayBeats: number
+  sustainLevel: number
+  releaseBeats: number
+}
 
 export type MidiMode = 'none' | 'continuous' | 'amount' | 'ballistic'
 
@@ -116,6 +129,16 @@ export interface Track {
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string
+  /** For an `envelope` child track: its ADSR shape (beats / 0..1 sustain). The track's
+   *  notes are the gates; `targetParam` addresses the modulated parent param (same
+   *  addressing as automation, plus the reserved 'opacity' key). Named `adsr` - NOT
+   *  `envelope`, which is the mover ballistic {attack, decay} field below. */
+  adsr?: AdsrEnvelope
+  /** Envelope wet/dry (0..1): scales the gain before it modulates the target. */
+  envDepth?: number
+  /** Envelope target value: the param value reached at full gain (base + (envTarget -
+   *  base) * gain). Unused for the reserved 'opacity' target, which multiplies. */
+  envTarget?: number
   /** For a `mover` track: which mover def this row applies. */
   moverId?: string
   /** Mover wet/dry. Muting a mover bypasses it; it never blackouts the parent. */

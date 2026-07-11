@@ -85,6 +85,7 @@
     <li><strong>Effects picker menu + reorder</strong> - "+ Add effect" nested menu (Transform/Clone/Shader) in the track editor, and up/down arrows reorder the chain.</li>
     <li><strong>Loop regions</strong> - drag the top half of either ruler to set a region (whole-beat snap); playback wraps at its end; click clears; bottom half still scrubs.</li>
     <li><strong>Export ranges</strong> - Range picker in the export dialog: whole project / loop region / custom bars (inclusive), audio anchored mid-clip at the range start.</li>
+    <li><strong>Envelope modulator</strong> - "Add envelope track": note-gated ADSR onto any numeric param, effect setting, or the reserved Opacity target (works on every instrument).</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -103,7 +104,6 @@
     <li><strong>Per-keyframe curves</strong> - each automation segment carries its own curve instead of one mode per lane.</li>
     <li><strong>Effect-param automation</strong> - automation lanes that target an effect instance's settings, not just instrument params.</li>
     <li><strong>Drag highlights</strong> - stronger drop-target affordance for library drags, and highlight objects when hovering modulator targets.</li>
-    <li><strong>Envelope modulator</strong> - a generic ADSR that targets any numeric param (opacity being the headline use).</li>
     <li><strong>Tag automation</strong> - one automation lane drives a param across every instrument carrying a tag.</li>
     <li><strong>3D model import</strong> - a Model instrument for uploaded glTF meme assets, bytes stored like audio.</li>
   </ul>
@@ -277,7 +277,7 @@
 </div>
 
 <div class="item">
-  <h3>Generic envelope modulator - target any param (ADSR → opacity, etc.)</h3>
+  <h3><span class="badge b-done">done</span>Generic envelope modulator - shipped 2026-07-11 (envelope child tracks on the automation overlay)</h3>
   <p>Two of your notes converge here: "midi applies an ADSR to opacity easily" and Tyler's "generic ability for any property." Today modulators target instruments' <em>ports</em> (fixed, per-instrument); the missing piece is a modulator whose target is <strong>any numeric param</strong> - an Envelope modulator with A/D/S/R params, driven by its own MIDI lane, writing into the same per-frame param overlay automation uses. Needs a param-picker in the routing UI (params, not just ports) and an <code>opacity</code> param on instruments that lack one. This is the expressive middle ground between hard Mute and hand-drawn automation.</p>
   <p class="where">instruments/modulators/* (new Envelope) · routing targets (param addressing) · VisualEngine overlay</p>
 </div>

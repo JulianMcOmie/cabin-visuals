@@ -563,6 +563,181 @@ test('ballistic opacity rests at zero and peaks at full opacity by default', () 
   assert.equal(serializeState('cube-opacity-ballistic').opacity, 1)
 })
 
+test('envelope track on the reserved opacity target gates the object by its notes', () => {
+  const cube: Track = {
+    id: 'cube-env-opacity',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 1.6, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['env-opacity'],
+  }
+  const env: Track = {
+    id: 'env-opacity',
+    name: 'Env · Opacity',
+    type: 'envelope',
+    instrumentId: '',
+    targetParam: 'opacity',
+    adsr: { attackBeats: 1, decayBeats: 1, sustainLevel: 0.5, releaseBeats: 1 },
+    envDepth: 1,
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [{
+      id: 'gates',
+      startBar: 0,
+      durationBars: 2,
+      loop: false,
+      notes: [{ id: 'gate', startBeat: 0, durationBeats: 4, pitch: 60, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-env-opacity',
+  }
+
+  setProject({ tracks: { 'cube-env-opacity': cube, 'env-opacity': env }, rootTrackIds: ['cube-env-opacity'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+
+  computeAtBeat(0.5) // mid-attack
+  assert.equal(serializeState('cube-env-opacity').opacity, 0.5)
+  computeAtBeat(3) // sustaining
+  assert.equal(serializeState('cube-env-opacity').opacity, 0.5)
+  computeAtBeat(4.5) // mid-release: 0.5 * 0.5
+  assert.equal(serializeState('cube-env-opacity').opacity, 0.25)
+  computeAtBeat(8) // fully released, depth 1 → fully gated (invisible between gates)
+  assert.equal(serializeState('cube-env-opacity').opacity, 0)
+})
+
+test('envelope depth blends the opacity gate toward no-effect', () => {
+  const cube: Track = {
+    id: 'cube-env-depth',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 1.6, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['env-depth'],
+  }
+  const env: Track = {
+    id: 'env-depth',
+    name: 'Env · Opacity',
+    type: 'envelope',
+    instrumentId: '',
+    targetParam: 'opacity',
+    adsr: { attackBeats: 1, decayBeats: 1, sustainLevel: 0.5, releaseBeats: 1 },
+    envDepth: 0.5,
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [{
+      id: 'gates',
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [{ id: 'gate', startBeat: 0, durationBeats: 2, pitch: 60, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-env-depth',
+  }
+
+  setProject({ tracks: { 'cube-env-depth': cube, 'env-depth': env }, rootTrackIds: ['cube-env-depth'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+
+  // Idle (gain 0): opacity = 1 - depth = 0.5, not fully invisible.
+  computeAtBeat(10)
+  assert.equal(serializeState('cube-env-depth').opacity, 0.5)
+})
+
+test('envelope track lerps a numeric param toward its peak value', () => {
+  const cube: Track = {
+    id: 'cube-env-param',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 1.6, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['env-x'],
+  }
+  const env: Track = {
+    id: 'env-x',
+    name: 'Env · Base X Position',
+    type: 'envelope',
+    instrumentId: '',
+    targetParam: 'baseXPosition',
+    adsr: { attackBeats: 1, decayBeats: 1, sustainLevel: 1, releaseBeats: 1 },
+    envDepth: 1,
+    envTarget: 2,
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [{
+      id: 'gates',
+      startBar: 0,
+      durationBars: 2,
+      loop: false,
+      notes: [{ id: 'gate', startBeat: 0, durationBeats: 4, pitch: 60, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-env-param',
+  }
+
+  setProject({ tracks: { 'cube-env-param': cube, 'env-x': env }, rootTrackIds: ['cube-env-param'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+
+  computeAtBeat(0.5) // half gain → halfway from base 0 to envTarget 2
+  assert.equal(serializeState('cube-env-param').world[12], 1)
+  computeAtBeat(2) // sustain 1 → the full peak value
+  assert.equal(serializeState('cube-env-param').world[12], 2)
+  computeAtBeat(10) // released → back to the base param
+  assert.equal(serializeState('cube-env-param').world[12], 0)
+})
+
+test('muted envelope child is ignored', () => {
+  const cube: Track = {
+    id: 'cube-env-muted',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 1.6, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['env-muted'],
+  }
+  const env: Track = {
+    id: 'env-muted',
+    name: 'Env · Opacity',
+    type: 'envelope',
+    instrumentId: '',
+    targetParam: 'opacity',
+    adsr: { attackBeats: 1, decayBeats: 1, sustainLevel: 0.5, releaseBeats: 1 },
+    envDepth: 1,
+    color: '#6366f1',
+    muted: true,
+    solo: false,
+    blocks: [{
+      id: 'gates',
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [{ id: 'gate', startBeat: 0, durationBeats: 2, pitch: 60, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-env-muted',
+  }
+
+  setProject({ tracks: { 'cube-env-muted': cube, 'env-muted': env }, rootTrackIds: ['cube-env-muted'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+  computeAtBeat(10)
+  assert.equal(serializeState('cube-env-muted').opacity, 1)
+})
+
 test('checker white weight targets alternating grid cells', () => {
   const swarm: Track = {
     id: 'swarm-checker',

@@ -72,9 +72,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const modColor = modifierColor(track)
   const isModifier = modColor != null
   const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : modColor ?? track.color
-  // Automation and ability sub-rows render darker than their object; mover
+  // Automation, envelope and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
-  const isDarkenedRow = track.type === 'automation' || track.type === 'ability'
+  const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.

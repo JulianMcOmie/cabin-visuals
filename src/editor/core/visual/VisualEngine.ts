@@ -2,9 +2,10 @@ import { Matrix4 } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleLane } from './automation'
+import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, cloneSVInto, lerpSV, localTransformToSV } from './stateVector'
 import { subsetWeight } from './movers/registry'
-import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedObject, StateVector } from './types'
+import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedEnvelope, ResolvedObject, StateVector } from './types'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -70,6 +71,19 @@ export function syncParams(p: ProjectSnapshot) {
       d.opMode = dTrack.opMode ?? 'transform'
       for (const [inputName, input] of Object.entries(d.def.inputs)) {
         d.inputBase[inputName] = dTrack.inputValues?.[inputName] ?? input.default
+      }
+    }
+    // Envelope lanes: keep the slider-driven fields (ADSR/depth/target) live at
+    // 60fps like mover inputs; structure (notes, target kind) waits for resolve.
+    for (const env of obj.envelopes) {
+      const eTrack = p.tracks[env.trackId]
+      if (!eTrack) continue
+      env.adsr = { ...DEFAULT_ADSR, ...eTrack.adsr }
+      env.depth = clamp(eTrack.envDepth ?? 1, 0, 1)
+      if (env.kind !== 'opacity') env.envTarget = clamp(eTrack.envTarget ?? env.max, env.min, env.max)
+      if (env.kind === 'fx' && track) {
+        const inst = track.effects?.find((e) => e.id === env.instanceId)
+        if (inst && env.key !== undefined) env.fxBase = inst.settings[env.key] ?? env.fxBase
       }
     }
   }
@@ -262,6 +276,30 @@ export function computeAtBeat(beat: number) {
         if (auto.keyframes.length) params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
       }
     }
+    // Envelope lanes overlay next - documented merge order: base ← automation ←
+    // envelope. Each lane's ADSR gain is closed-form from its gate notes (adsr.ts),
+    // so this stays a pure function of the beat too. A lane with no notes is inert
+    // (adding an envelope track never changes the picture until you play gates).
+    //  - param target:   value = base + (envTarget - base) * gain * depth
+    //  - opacity target: multiplier = mix(1, gain, depth) = 1 - depth + depth*gain,
+    //    multiplied onto the object's rendered opacity below (depth 1 = fully
+    //    note-gated, invisible between gates; depth 0 = no effect)
+    //  - fx target: same lerp as params, written into effectOverrides further down
+    let opacityGate = 1
+    let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
+    for (const env of obj.envelopes) {
+      if (env.notes.length === 0) continue
+      const gain = evaluateAdsrGain(env.notes, beat, env.adsr)
+      if (env.kind === 'opacity') {
+        opacityGate *= 1 - env.depth + env.depth * gain
+      } else if (env.kind === 'param' && env.param !== undefined) {
+        if (params === obj.params) params = { ...obj.params }
+        const base = params[env.param] ?? env.paramDefault ?? 0
+        params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
+      } else if (env.kind === 'fx') {
+        ;(fxEnvelopes ??= []).push({ env, gain })
+      }
+    }
     let world = worldMatrices.get(obj.trackId)
     if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
@@ -285,7 +323,7 @@ export function computeAtBeat(beat: number) {
         }
         const elementState = applyMoverChain(obj, obj.scratchBase, beat, i, N)
         composeMatrix(elementState, obj.elementMatrices[i])
-        obj.elementOpacities[i] = clampOpacity(elementState.opacity)
+        obj.elementOpacities[i] = clampOpacity(elementState.opacity * opacityGate)
         if (i === 0) {
           hueShift = elementState.aux.hueShift ?? 0
           satShift = elementState.aux.satShift ?? 0
@@ -298,7 +336,7 @@ export function computeAtBeat(beat: number) {
       setElementChannels(obj.scratchChannels, 0, 1)
       const localState = applyMoverChain(obj, obj.scratchBase, beat, 0, 1)
       composeMatrix(localState, _local)
-      obj.elementOpacities[0] = clampOpacity(localState.opacity)
+      obj.elementOpacities[0] = clampOpacity(localState.opacity * opacityGate)
       hueShift = localState.aux.hueShift ?? 0
       satShift = localState.aux.satShift ?? 0
       lightShift = localState.aux.lightShift ?? 0
@@ -314,6 +352,17 @@ export function computeAtBeat(beat: number) {
       for (const ea of obj.effectAutomations) {
         if (!ea.keyframes.length) continue
         ;(effectOverrides[ea.instanceId] ??= {})[ea.key] = sampleLane(ea.keyframes, beat, ea.mode)
+      }
+    }
+    // fx-targeted envelopes lerp on top of the sampled automation (or the stored
+    // setting when no lane drives that key) - same merge order as params.
+    if (fxEnvelopes) {
+      effectOverrides ??= {}
+      for (const { env, gain } of fxEnvelopes) {
+        if (env.instanceId === undefined || env.key === undefined) continue
+        const slot = (effectOverrides[env.instanceId] ??= {})
+        const base = slot[env.key] ?? env.fxBase ?? 0
+        slot[env.key] = base + (env.envTarget - base) * (gain * env.depth)
       }
     }
 

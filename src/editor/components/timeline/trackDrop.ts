@@ -57,9 +57,9 @@ export function computeDropTarget(args: {
   const frac = (contentY - overIndex * rowHeight) / rowHeight
 
   // Middle band of a row → nest into it (append as its last child); automation/
-  // ability tracks are never nest targets (no children), and neither is the
-  // audio track (nothing nests under the backing track).
-  if (overTrack.type !== 'automation' && overTrack.type !== 'ability' && overTrack.type !== 'audio' && frac >= 0.25 && frac <= 0.75) {
+  // envelope/ability tracks are never nest targets (no children), and neither is
+  // the audio track (nothing nests under the backing track).
+  if (overTrack.type !== 'automation' && overTrack.type !== 'ability' && overTrack.type !== 'envelope' && overTrack.type !== 'audio' && frac >= 0.25 && frac <= 0.75) {
     return { parentId: over.id, index: undefined, line: null, intoId: over.id }
   }
 
