@@ -210,6 +210,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   orbit: 'Circles its object around its position at a set radius and tilt.',
   dotWave: "Ripples an object's elements in a traveling wave.",
   opacity: 'Fades its object in or out.',
+  color: "Shifts its object's color around the hue wheel - drive it with notes for color pops.",
 }
 
 const MOVER_INSTRUMENTS = withKind('mover', Object.values(moverRegistry).map((d) => ({

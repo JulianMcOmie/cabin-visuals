@@ -136,6 +136,11 @@ export interface ObjectState {
   elementMatrices: Matrix4[]
   elementOpacities: number[]
   opacity: number
+  /** Color-mover output (HSL offsets applied to every material's base color by
+   *  the placement wrapper): hue in wheel turns, sat/light in [-1, 1]. */
+  hueShift: number
+  satShift: number
+  lightShift: number
   /** String-valued params (color / string) for the instrument component. */
   stringParams: Record<string, string>
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The

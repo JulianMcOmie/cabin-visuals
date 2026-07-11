@@ -177,6 +177,28 @@ export const opacityMover: MoverDef = {
   },
 }
 
+export const colorMover: MoverDef = {
+  id: 'color',
+  label: 'Color',
+  amountInputs: ['hue'],
+  inputs: {
+    // Hue in full turns of the wheel (0.5 = complementary color); rate spins the
+    // wheel per beat; saturation/lightness offset in HSL space. All ride the
+    // StateVector's aux bag, so depth/weights/MIDI modes compose them like any
+    // transform - a ballistic Color mover pops the hue on every note.
+    hue: { default: 0, min: -1, max: 1, label: 'Hue Shift', semantic: 'amount' },
+    rate: { default: 0, min: -8, max: 8, label: 'Rate', semantic: 'rate' },
+    saturation: { default: 0, min: -1, max: 1, label: 'Saturation', semantic: 'amount' },
+    lightness: { default: 0, min: -1, max: 1, label: 'Lightness', semantic: 'amount' },
+  },
+  apply: (inState, inputs, ctx, out) => {
+    copyBase(inState, out)
+    out.aux.hueShift = (out.aux.hueShift ?? 0) + (inputs.hue ?? 0) + (inputs.rate ?? 0) * ctx.beat
+    out.aux.satShift = (out.aux.satShift ?? 0) + (inputs.saturation ?? 0)
+    out.aux.lightShift = (out.aux.lightShift ?? 0) + (inputs.lightness ?? 0)
+  },
+}
+
 export const MOVERS: Record<string, MoverDef> = {
   [translateMover.id]: translateMover,
   [spinMover.id]: spinMover,
@@ -184,4 +206,5 @@ export const MOVERS: Record<string, MoverDef> = {
   [orbitMover.id]: orbitMover,
   [dotWaveMover.id]: dotWaveMover,
   [opacityMover.id]: opacityMover,
+  [colorMover.id]: colorMover,
 }

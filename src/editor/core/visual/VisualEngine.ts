@@ -266,6 +266,10 @@ export function computeAtBeat(beat: number) {
     if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
     const isEnsemble = obj.elementCount > 1 || !!obj.layoutState
+    // Color-mover output (object-level: element 0's aux channels).
+    let hueShift = 0
+    let satShift = 0
+    let lightShift = 0
     if (isEnsemble) {
       if (parentWorld) world.copy(parentWorld)
       else world.identity()
@@ -282,6 +286,11 @@ export function computeAtBeat(beat: number) {
         const elementState = applyMoverChain(obj, obj.scratchBase, beat, i, N)
         composeMatrix(elementState, obj.elementMatrices[i])
         obj.elementOpacities[i] = clampOpacity(elementState.opacity)
+        if (i === 0) {
+          hueShift = elementState.aux.hueShift ?? 0
+          satShift = elementState.aux.satShift ?? 0
+          lightShift = elementState.aux.lightShift ?? 0
+        }
       }
     } else {
       const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
@@ -290,6 +299,9 @@ export function computeAtBeat(beat: number) {
       const localState = applyMoverChain(obj, obj.scratchBase, beat, 0, 1)
       composeMatrix(localState, _local)
       obj.elementOpacities[0] = clampOpacity(localState.opacity)
+      hueShift = localState.aux.hueShift ?? 0
+      satShift = localState.aux.satShift ?? 0
+      lightShift = localState.aux.lightShift ?? 0
       if (parentWorld) world.multiplyMatrices(parentWorld, _local)
       else world.copy(_local)
     }
@@ -310,6 +322,9 @@ export function computeAtBeat(beat: number) {
       elementMatrices: obj.elementMatrices,
       elementOpacities: obj.elementOpacities,
       opacity: obj.elementOpacities[0] ?? 1,
+      hueShift,
+      satShift,
+      lightShift,
       blackedOut,
       stringParams: obj.stringParams,
       abilityEvents: obj.abilityEvents,

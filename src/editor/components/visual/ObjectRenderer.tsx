@@ -4,6 +4,7 @@ import { Group, Vector3 } from 'three'
 import { getInstrument } from '../../instruments'
 import { getObjectState } from '../../core/visual/VisualEngine'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
+import { applyMaterialHueShift } from '../../core/visual/animatedColor'
 import type { ObjectState } from '../../core/visual/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
@@ -46,6 +47,9 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
     if (state && instrumentId !== 'swarm' && !stateHasVaryingElementOpacity(state)) {
       applyMaterialOpacity(g, state.opacity)
     }
+    // The Color mover's output - object-level, so it applies to every
+    // instrument (ensembles included) as one tint.
+    if (state) applyMaterialHueShift(g, state.hueShift, state.satShift, state.lightShift)
     if (isFullFrame) {
       // A full-frame instrument is a SCREEN: pinned dead-ahead of the camera and
       // parallel to it, at the same distance r3f's `viewport` sizing assumes
