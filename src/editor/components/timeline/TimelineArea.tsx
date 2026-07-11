@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent } from 'react'
-import { FileAudio, Plus } from 'lucide-react'
+import { FileAudio, Film, Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -16,6 +16,8 @@ import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { loadAudioTrack } from '../../utils/loadAudioTrack'
+import { addVideoClipsToTrack, capError } from '../../core/video/videoUploads'
+import { usePlan } from '../../../billing/usePlan'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
@@ -167,28 +169,79 @@ export function TimelineArea() {
     selectNewTrack(id)
   }
 
-  // OS-file drag: dropping audio files anywhere on the tracks section loads
-  // each one as a new audio track. Detection keys off the drag's item TYPES
-  // (file contents aren't readable until drop); the depth counter absorbs
-  // enter/leave noise from crossing child boundaries.
-  const [audioDropHover, setAudioDropHover] = useState(false)
+  // OS-file drag: dropping media anywhere on the tracks section adds tracks -
+  // each audio file becomes its own audio track; video files land together as
+  // ONE Video instrument track with a clip (pad at 0s) per file, uploading
+  // through the same pipeline as drops on the clip bank. Detection keys off
+  // the drag's item TYPES (file contents aren't readable until drop); the
+  // depth counter absorbs enter/leave noise from crossing child boundaries.
+  const { isPro } = usePlan()
+  const [mediaDropHover, setMediaDropHover] = useState<{ audio: boolean; video: boolean } | null>(null)
   const dropDepthRef = useRef(0)
-  const isAudioFileDrag = (e: ReactDragEvent) =>
-    Array.from(e.dataTransfer.items).some((it) => it.kind === 'file' && it.type.startsWith('audio/'))
-  const onAudioDrop = (e: ReactDragEvent) => {
+  // Drop problems (over-cap files, unreadable files) surface as a transient
+  // notice over the tracks - never as a bare console error.
+  const [dropNotice, setDropNotice] = useState<string | null>(null)
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showDropNotice = (message: string) => {
+    setDropNotice(message)
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = setTimeout(() => setDropNotice(null), 8000)
+  }
+  useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current) }, [])
+  const mediaKindsOf = (e: ReactDragEvent) => {
+    let audio = false
+    let video = false
+    for (const it of Array.from(e.dataTransfer.items)) {
+      if (it.kind !== 'file') continue
+      if (it.type.startsWith('audio/')) audio = true
+      if (it.type.startsWith('video/')) video = true
+    }
+    return audio || video ? { audio, video } : null
+  }
+  const onMediaDrop = (e: ReactDragEvent) => {
     e.preventDefault()
     dropDepthRef.current = 0
-    setAudioDropHover(false)
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('audio/'))
+    setMediaDropHover(null)
+    const files = Array.from(e.dataTransfer.files)
+
+    const audioFiles = files.filter((f) => f.type.startsWith('audio/'))
     void (async () => {
-      for (const file of files) {
+      for (const file of audioFiles) {
         try {
           await loadAudioTrack(file)
         } catch (err) {
           console.error('Failed to load dropped audio file', file.name, err)
+          showDropNotice(`Couldn't load ${file.name}`)
         }
       }
     })()
+
+    const videoFiles = files.filter((f) => f.type.startsWith('video/'))
+    if (videoFiles.length > 0) {
+      // An over-cap file cancels the whole video add (notify, add nothing) -
+      // half-importing a drop is more confusing than rejecting it.
+      const cap = videoFiles.map((f) => capError(f, isPro)).find((m) => m !== null)
+      if (cap) {
+        showDropNotice(cap)
+        return
+      }
+      const id = crypto.randomUUID()
+      useProjectStore.getState().addTrack({
+        id,
+        name: 'Video',
+        type: 'base',
+        instrumentId: 'video',
+        color: OBJECT_TRACK_COLOR,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+      })
+      // A new instrument becomes the selection - the clip bank opens with the
+      // uploads' progress on its rows.
+      selectNewTrack(id)
+      void addVideoClipsToTrack(id, videoFiles, isPro, showDropNotice)
+    }
   }
 
   // Drag the label column's right edge to resize it (spans the ruler corner, every
@@ -237,22 +290,23 @@ export function TimelineArea() {
       <div
         className="relative flex-1 min-h-0 overflow-hidden"
         onDragEnter={(e) => {
-          if (!isAudioFileDrag(e)) return
+          const kinds = mediaKindsOf(e)
+          if (!kinds) return
           e.preventDefault()
           dropDepthRef.current++
-          setAudioDropHover(true)
+          setMediaDropHover(kinds)
         }}
         onDragOver={(e) => {
-          if (!isAudioFileDrag(e)) return
+          if (!mediaKindsOf(e)) return
           e.preventDefault()
           e.dataTransfer.dropEffect = 'copy'
         }}
         onDragLeave={(e) => {
-          if (!isAudioFileDrag(e)) return
+          if (!mediaKindsOf(e)) return
           dropDepthRef.current = Math.max(0, dropDepthRef.current - 1)
-          if (dropDepthRef.current === 0) setAudioDropHover(false)
+          if (dropDepthRef.current === 0) setMediaDropHover(null)
         }}
-        onDrop={onAudioDrop}
+        onDrop={onMediaDrop}
       >
         {libraryDragging && (
           <div
@@ -270,11 +324,27 @@ export function TimelineArea() {
             )}
           </div>
         )}
-        {audioDropHover && (
+        {mediaDropHover && (
           <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
             <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
-              <FileAudio size={13} /> drop audio to add tracks
+              {mediaDropHover.video ? <Film size={13} /> : <FileAudio size={13} />}
+              {mediaDropHover.video && mediaDropHover.audio
+                ? 'drop files to add tracks'
+                : mediaDropHover.video
+                  ? 'drop videos to add a video track'
+                  : 'drop audio to add tracks'}
             </span>
+          </div>
+        )}
+        {dropNotice && (
+          <div className="absolute bottom-3 left-1/2 z-40 -translate-x-1/2">
+            <button
+              onClick={() => setDropNotice(null)}
+              title="Dismiss"
+              className="max-w-[560px] cursor-pointer rounded border border-[var(--warn)] bg-[var(--bg-panel)] px-3 py-1.5 text-left text-[11px] leading-snug text-[var(--warn)] shadow-lg shadow-black/40"
+            >
+              {dropNotice}
+            </button>
           </div>
         )}
         {rootTrackIds.length === 0 && (

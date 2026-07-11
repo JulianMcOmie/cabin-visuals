@@ -127,15 +127,20 @@ export function TutorialOverlay() {
     : step === 4 ? '[data-midi-close]'
     : '[data-tutorial-play]'
 
-  // Completion: they pressed play, and the playhead has traveled PAST their
-  // block - they've seen every note pulse. Auto-pause so the moment lands,
+  // Completion: the playhead has traveled PAST their block - playing (they've
+  // seen every note pulse) or scrubbed there by hand; the transport is theirs
+  // either way. Auto-pause so the moment lands (a no-op when already paused),
   // then show the final prompt.
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const blockEndBeat = firstBlock ? (firstBlock.startBar + firstBlock.durationBars) * beatsPerBar : null
   useEffect(() => {
     if (!engaged || celebrating || step !== 5 || blockEndBeat === null) return
+    // One-shot: the setIsPlaying below notifies THIS subscriber again before
+    // the effect can unsubscribe - without the flag that recurses forever.
+    let fired = false
     const unsub = useTimeStore.subscribe((s) => {
-      if (!s.isPlaying || s.currentBeat < blockEndBeat) return
+      if (fired || s.currentBeat < blockEndBeat) return
+      fired = true
       getPlaybackEngine().pause()
       useTimeStore.getState().setIsPlaying(false)
       setCelebrating(true)

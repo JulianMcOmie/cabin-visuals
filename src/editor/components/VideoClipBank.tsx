@@ -6,7 +6,16 @@ import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput 
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { useUIStore } from '../store/UIStore'
-import { beginSaveVideo, retryVideoUpload, removeVideo, getVideoSource } from '../core/video/videoSource'
+import { getVideoSource } from '../core/video/videoSource'
+import {
+  FREE_MAX_PADS,
+  addVideoClipsToTrack,
+  capError,
+  cleanOrphanSource,
+  padRoom,
+  retryVideoUploadTracked,
+  startVideoUpload,
+} from '../core/video/videoUploads'
 import { usePlan } from '../../billing/usePlan'
 import type { Track, VideoPad } from '../types'
 
@@ -17,33 +26,6 @@ import type { Track, VideoPad } from '../types'
 // picker opens the instant a file is chosen: preview scrubs the LOCAL bytes
 // while the upload runs in the background inside the modal; arming unlocks
 // when the upload lands. Each pad is one row in the MIDI editor.
-
-const MAX_PADS = 8
-// Per-plan caps on the SOURCE file (the only thing uploaded). Picking moments
-// out of it is free. PRO_MAX_MB must equal the bucket's file_size_limit
-// (migration 0004): the picker rejects oversized files instantly; the bucket
-// backstops. (Like all plan gating, the free cap is client-side only.)
-const FREE_MAX_MB = 50
-const PRO_MAX_MB = 250
-
-/** Probe duration + dimensions from the file before it enters the catalog. */
-function probeVideo(file: File): Promise<{ duration: number; width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const el = document.createElement('video')
-    const url = URL.createObjectURL(file)
-    el.preload = 'metadata'
-    el.onloadedmetadata = () => {
-      const meta = { duration: el.duration, width: el.videoWidth, height: el.videoHeight }
-      URL.revokeObjectURL(url)
-      resolve(meta)
-    }
-    el.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Could not read this video file'))
-    }
-    el.src = url
-  })
-}
 
 interface PickerState {
   /** Fresh upload: preview reads these local bytes immediately. */
@@ -301,7 +283,7 @@ function MomentPickerModal({
             className="flex h-7 cursor-pointer items-center gap-1.5 rounded bg-[var(--accent)] px-3 text-[11px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
           >
             <Plus size={11} />
-            {atPadLimit ? `${MAX_PADS}-clip limit` : `Clip at ${t.toFixed(1)}s`}
+            {atPadLimit ? `${FREE_MAX_PADS}-clip free limit` : `Clip at ${t.toFixed(1)}s`}
           </button>
           <button
             onClick={onClose}
@@ -368,20 +350,12 @@ function MomentPickerModal({
   )
 }
 
-/** One background persistence job (ref minted, bytes still uploading or
- *  failed). Absent from the map = durable (or session-only). */
-interface BgUpload {
-  progress: number
-  status: 'saving' | 'failed'
-  error: string | null
-}
-
 export function VideoClipBank({ track }: { track: Track }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Modal identity only - save/progress/error derive from bgUploads, so
-  // button-, drop- and retry-initiated uploads all report through one place.
+  // Modal identity only - save/progress/error derive from the shared upload
+  // registry (VideoStore.uploads), so button-, drop-, timeline-drop- and
+  // retry-initiated uploads all report through one place.
   const [pickerCore, setPickerCore] = useState<{ file: File | null; ref: string | null; fileName: string } | null>(null)
-  const [bgUploads, setBgUploads] = useState<Record<string, BgUpload>>({})
   const [error, setError] = useState<string | null>(null)
   // Drag affordance: any file drag in the window shows the drop cue on the
   // bank; hovering the bank itself brightens it. Hover uses a depth counter -
@@ -392,136 +366,47 @@ export function VideoClipBank({ track }: { track: Track }) {
   const hoverDepthRef = useRef(0)
   // Session guard: async pipelines check it before touching modal state.
   const pickerSeqRef = useRef(0)
-  // Uploads whose bytes are still POSTing (sync mirror of 'saving' entries).
-  const inFlightRef = useRef<Set<string>>(new Set())
-  // Refs whose orphan-cleanup must wait for their upload to settle (deleting a
-  // path that's still POSTing would race).
-  const cleanupOnSettleRef = useRef<Set<string>>(new Set())
   const setTrackVideoPads = useProjectStore((s) => s.setTrackVideoPads)
   const videoClips = useVideoStore((s) => s.videoClips)
+  const uploads = useVideoStore((s) => s.uploads)
   const { isPro } = usePlan()
-  const maxMb = isPro ? PRO_MAX_MB : FREE_MAX_MB
 
   const pads = track.videoPads ?? []
-
-  /** Is `ref` still used by any pad on any track? */
-  const sourceStillUsed = (ref: string): boolean =>
-    Object.values(useProjectStore.getState().tracks).some((t) => (t.videoPads ?? []).some((p) => p.ref === ref))
-
-  const cleanOrphan = (ref: string) => {
-    if (!sourceStillUsed(ref)) {
-      useVideoStore.getState().removeClip(ref)
-      removeVideo(ref)
-    }
-  }
-
-  const patchUpload = (ref: string, patch: Partial<BgUpload> | null) =>
-    setBgUploads((m) => {
-      if (patch === null) {
-        const { [ref]: _gone, ...rest } = m
-        return rest
-      }
-      const prev = m[ref] ?? { progress: 0, status: 'saving' as const, error: null }
-      return { ...m, [ref]: { ...prev, ...patch } }
-    })
-
-  const capError = (file: File): string | null => {
-    if (file.size <= maxMb * 1024 * 1024) return null
-    const mb = Math.round(file.size / (1024 * 1024))
-    return isPro
-      ? `${file.name} is ${mb} MB - sources are capped at ${PRO_MAX_MB} MB. Compress it first.`
-      : `${file.name} is ${mb} MB - free sources are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${PRO_MAX_MB} MB, or compress it first.`
-  }
-
-  /**
-   * Validate + begin persisting one file. Resolves with the minted ref (usable
-   * IMMEDIATELY - local bytes back it) or null if it couldn't start. The
-   * upload itself reports through bgUploads and settles in the background.
-   */
-  const startUpload = async (file: File): Promise<string | null> => {
-    const cap = capError(file)
-    if (cap) {
-      setError(cap)
-      return null
-    }
-    try {
-      const meta = await probeVideo(file)
-      let refBox: string | null = null
-      const { ref, completion } = await beginSaveVideo(file, (progress) => {
-        if (refBox) patchUpload(refBox, { progress })
-      })
-      refBox = ref
-      useVideoStore.getState().addClip({ ref, fileName: file.name, ...meta })
-      patchUpload(ref, { progress: 0, status: 'saving', error: null })
-      inFlightRef.current.add(ref)
-      void completion
-        .then(
-          () => patchUpload(ref, null), // durable
-          (err) => {
-            const message =
-              (err as { message?: string } | null)?.message ?? (err instanceof Error ? err.message : 'Upload failed')
-            console.error('Video upload failed:', message, err)
-            patchUpload(ref, { status: 'failed', error: message })
-            if (sourceStillUsed(ref)) {
-              setError(`Upload of ${file.name} failed - its clips won't survive a reload. Click one of its clips to retry.`)
-            }
-          },
-        )
-        .then(() => {
-          inFlightRef.current.delete(ref)
-          if (cleanupOnSettleRef.current.delete(ref)) cleanOrphan(ref)
-        })
-      return ref
-    } catch (err) {
-      const message =
-        (err as { message?: string } | null)?.message ?? (err instanceof Error ? err.message : 'Could not read this video')
-      console.error('Video save failed to start:', message, err)
-      setError(message)
-      return null
-    }
-  }
+  // Free plans cap the bank; Pro never hits a limit.
+  const atPadLimit = padRoom(pads.length, isPro) <= 0
 
   /** Single file (button or one-file drop): the picker opens NOW on the local
    *  bytes; the ref lands a beat later (arm unlocks). No clip is auto-added -
    *  picking the moment is the point. */
   const addSingle = (file: File) => {
     setError(null)
-    if (pads.length >= MAX_PADS) return setError(`Up to ${MAX_PADS} clips per track`)
+    if (atPadLimit) return setError(`Free plans hold up to ${FREE_MAX_PADS} clips per track - upgrade to Pro for unlimited`)
+    const cap = capError(file, isPro)
+    if (cap) return setError(cap)
     const seq = ++pickerSeqRef.current
     setPickerCore({ file, ref: null, fileName: file.name })
-    void startUpload(file).then((ref) => {
+    void startVideoUpload(file, setError).then((ref) => {
       if (!ref) {
-        // Couldn't start (cap/probe) - the error shows in the bank.
+        // Couldn't start (probe failure) - the error shows in the bank.
         if (pickerSeqRef.current === seq) setPickerCore(null)
         return
       }
       if (pickerSeqRef.current === seq) {
         setPickerCore((p) => (p ? { ...p, ref } : p)) // ARM UNLOCKED
-      } else if (inFlightRef.current.has(ref)) {
-        cleanupOnSettleRef.current.add(ref) // modal closed before the ref landed
       } else {
-        cleanOrphan(ref)
+        // Modal closed before the ref landed - a still-POSTing ref defers
+        // its own cleanup until the upload settles.
+        cleanOrphanSource(ref)
       }
     })
   }
 
   /** Multi-file drop: no modal - each file uploads in the background and lands
-   *  as one clip starting at 0s. */
+   *  as one clip starting at 0s. (Same pipeline as video files dropped
+   *  straight onto the tracks timeline.) */
   const addMany = (files: File[]) => {
     setError(null)
-    void (async () => {
-      for (const file of files) {
-        const current = useProjectStore.getState().tracks[track.id]?.videoPads ?? []
-        if (current.length >= MAX_PADS) {
-          setError(`Up to ${MAX_PADS} clips per track - some files were skipped`)
-          break
-        }
-        const ref = await startUpload(file) // resolves at mint, not upload end
-        if (!ref) continue // cap/probe failure - error already surfaced
-        const fresh = useProjectStore.getState().tracks[track.id]?.videoPads ?? []
-        setTrackVideoPads(track.id, [...fresh, { ref, inPoint: 0 }])
-      }
-    })()
+    void addVideoClipsToTrack(track.id, files, isPro, setError)
   }
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -575,19 +460,7 @@ export function VideoClipBank({ track }: { track: Track }) {
   }, [])
 
   const retryUpload = () => {
-    const ref = pickerCore?.ref
-    if (!ref) return
-    patchUpload(ref, { status: 'saving', progress: 0, error: null })
-    inFlightRef.current.add(ref)
-    void retryVideoUpload(ref, (progress) => patchUpload(ref, { progress }))
-      .then(
-        () => patchUpload(ref, null),
-        (err) => patchUpload(ref, { status: 'failed', error: err instanceof Error ? err.message : 'Upload failed' }),
-      )
-      .then(() => {
-        inFlightRef.current.delete(ref)
-        if (cleanupOnSettleRef.current.delete(ref)) cleanOrphan(ref)
-      })
+    if (pickerCore?.ref) retryVideoUploadTracked(pickerCore.ref)
   }
 
   /** Clip rows open the picker on their source (managing/adding moments is
@@ -602,7 +475,7 @@ export function VideoClipBank({ track }: { track: Track }) {
     const ref = pickerCore?.ref
     if (!ref) return
     const current = useProjectStore.getState().tracks[track.id]?.videoPads ?? []
-    if (current.length >= MAX_PADS) return
+    if (padRoom(current.length, isPro) <= 0) return
     const pad: VideoPad = { ref, inPoint: Math.round(inPoint * 1000) / 1000 }
     setTrackVideoPads(track.id, [...current, pad])
   }
@@ -619,14 +492,8 @@ export function VideoClipBank({ track }: { track: Track }) {
     const core = pickerCore
     pickerSeqRef.current++ // detach the modal from any in-flight pipeline
     setPickerCore(null)
-    if (!core?.ref) return
-    if (inFlightRef.current.has(core.ref)) {
-      // Upload still POSTing: deleting the path now would race. Completion
-      // handles cleanup (and only if nothing armed against it).
-      cleanupOnSettleRef.current.add(core.ref)
-      return
-    }
-    cleanOrphan(core.ref)
+    // A still-POSTing ref defers its own cleanup until the upload settles.
+    if (core?.ref) cleanOrphanSource(core.ref)
   }
 
   const move = (i: number, dir: -1 | 1) => {
@@ -640,7 +507,7 @@ export function VideoClipBank({ track }: { track: Track }) {
   const remove = (i: number) => {
     const removed = pads[i]
     setTrackVideoPads(track.id, pads.filter((_, k) => k !== i))
-    cleanOrphan(removed.ref)
+    cleanOrphanSource(removed.ref)
   }
 
   // The modal's view of persistence, derived from the shared upload registry.
@@ -649,7 +516,7 @@ export function VideoClipBank({ track }: { track: Track }) {
         ...pickerCore,
         ...(() => {
           if (pickerCore.ref === null) return { save: 'saving' as const, progress: 0, error: null }
-          const up = bgUploads[pickerCore.ref]
+          const up = uploads[pickerCore.ref]
           return up
             ? { save: up.status, progress: up.progress, error: up.error }
             : { save: 'saved' as const, progress: 1, error: null }
@@ -697,7 +564,7 @@ export function VideoClipBank({ track }: { track: Track }) {
       )}
       {pads.map((pad, i) => {
         const source = videoClips[pad.ref]
-        const up = bgUploads[pad.ref]
+        const up = uploads[pad.ref]
         return (
           // The row itself reopens the picker on this clip's source - that's
           // how you add more moments from a video (no separate button).
@@ -731,11 +598,11 @@ export function VideoClipBank({ track }: { track: Track }) {
 
       <button
         onClick={() => fileInputRef.current?.click()}
-        disabled={pads.length >= MAX_PADS || pickerCore !== null}
+        disabled={atPadLimit || pickerCore !== null}
         className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] disabled:opacity-50 cursor-pointer disabled:cursor-default"
       >
         <Plus size={11} />
-        {pads.length >= MAX_PADS ? `${MAX_PADS}-clip limit` : 'Upload video'}
+        {atPadLimit ? `${FREE_MAX_PADS}-clip free limit` : 'Upload video'}
       </button>
       {error && <p className="mt-1.5 text-[11px] text-[var(--warn)]">{error}</p>}
       <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={onFileInput} />
@@ -751,7 +618,7 @@ export function VideoClipBank({ track }: { track: Track }) {
           onRemove={removeFromModal}
           onRetry={retryUpload}
           onClose={closePicker}
-          atPadLimit={pads.length >= MAX_PADS}
+          atPadLimit={atPadLimit}
         />
       )}
     </div>

@@ -114,6 +114,12 @@ class PlaybackEngine {
       }
 
       onBeatChange(beat)
+      // An onBeatChange subscriber may pause() DURING this tick (the tutorial's
+      // pass-the-block watcher does). That cancels rafId, but this callback is
+      // already running - rescheduling unconditionally would resurrect the loop
+      // as a zombie that pins currentBeat to the paused transport's position
+      // every frame (scrubbing appears locked until the next play).
+      if (!this.playing) return
       this.rafId = requestAnimationFrame(tick)
     }
     this.rafId = requestAnimationFrame(tick)
