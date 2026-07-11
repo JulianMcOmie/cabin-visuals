@@ -294,6 +294,7 @@ interface ProjectState {
   removeEffect: (trackId: string, instanceId: string) => void
   setEffectSetting: (trackId: string, instanceId: string, key: string, value: number) => void
   toggleEffect: (trackId: string, instanceId: string) => void
+  reorderEffect: (trackId: string, instanceId: string, direction: -1 | 1) => void
   setBpm: (bpm: number) => void
   setTotalBars: (bars: number) => void
 }
@@ -1185,6 +1186,22 @@ export const useProjectStore = create<ProjectState>((set) => ({
           [trackId]: { ...track, effects: track.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
         },
       }
+    }),
+
+  // Chain order is meaningful: transforms nest first-innermost, clones wrap in order,
+  // shaders post-process in order. A plain array swap keeps instance ids stable, so
+  // fx automation targets (fx:<instanceId>:<key>) keep resolving after a move.
+  reorderEffect: (trackId, instanceId, direction) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track?.effects) return s
+      const from = track.effects.findIndex((e) => e.id === instanceId)
+      const to = from + direction
+      if (from < 0 || to < 0 || to >= track.effects.length) return s
+      const effects = track.effects.slice()
+      effects[from] = track.effects[to]
+      effects[to] = track.effects[from]
+      return { tracks: { ...s.tracks, [trackId]: { ...track, effects } } }
     }),
 
   setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),

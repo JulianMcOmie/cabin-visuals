@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronDown, ChevronRight, Check, X, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X, Pencil } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
-import { getEffect, type VisualEffect } from '../effects'
+import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
+import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { VideoClipBank } from './VideoClipBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
@@ -372,15 +373,32 @@ function TagEditor({
   )
 }
 
-/** One effect in the Effects tab: header (enable / name / remove) with collapsible
- *  param sliders. Collapse is local per instance, so it persists across re-renders. */
+// The picker menu's groups, generated from the registry so a new plugin shows up
+// here with no extra wiring. Category order is fixed: transform, clone, shader.
+const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
+  { key: 'transform', label: 'Transform' },
+  { key: 'clone', label: 'Clone' },
+  { key: 'shader', label: 'Shader' },
+]
+const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({
+  key: c.key,
+  label: c.label,
+  items: PLUGIN_LIST.filter((p) => p.category === c.key).map((p) => ({ id: p.id, label: p.name })),
+}))
+
+/** One effect in the Effects tab: header (enable / name / reorder / remove) with
+ *  collapsible param sliders. Collapse is local per instance, so it persists across
+ *  re-renders. Reordering is meaningful: the render chain follows array order. */
 function EffectItem({
-  plugin, inst, onToggle, onRemove, onSetSetting,
+  plugin, inst, index, count, onToggle, onRemove, onMove, onSetSetting,
 }: {
   plugin: VisualEffect
   inst: EffectInstance
+  index: number
+  count: number
   onToggle: () => void
   onRemove: () => void
+  onMove: (direction: -1 | 1) => void
   onSetSetting: (key: string, value: number) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -408,9 +426,27 @@ function EffectItem({
             {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" /> : <ChevronDown size={12} className="flex-shrink-0 text-[var(--text-muted)]" />}
           </button>
         </div>
-        <button onClick={onRemove} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer" aria-label="Remove effect">
-          <X size={12} />
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); onMove(-1) }}
+            disabled={index === 0}
+            className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default"
+            aria-label="Move effect up"
+          >
+            <ArrowUp size={11} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onMove(1) }}
+            disabled={index === count - 1}
+            className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default"
+            aria-label="Move effect down"
+          >
+            <ArrowDown size={11} />
+          </button>
+          <button onClick={onRemove} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer" aria-label="Remove effect">
+            <X size={12} />
+          </button>
+        </div>
       </div>
       {!collapsed && plugin.params.map((p) => (
         <ParamControl
@@ -461,7 +497,11 @@ export function TrackEditor() {
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
+  const reorderEffect = useProjectStore((s) => s.reorderEffect)
+  const addEffect = useProjectStore((s) => s.addEffect)
   const effectDragging = useUIStore((s) => s.effectDragging)
+  // Effects picker menu anchor (viewport coords); null = closed.
+  const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
   const track =
     (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
     (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
@@ -765,17 +805,22 @@ export function TrackEditor() {
           </>
         )}
         {tab === 'effects' && (
-          track ? (
-            <div
-              data-effects-drop
-              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
-            >
-              {(track.effects ?? []).length === 0 ? (
-                <p className="text-xs text-[var(--text-muted)] text-center mt-8">
-                  {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
-                </p>
-              ) : (
-                (track.effects ?? []).map((inst) => {
+          track ? (() => {
+            const effects = track.effects ?? []
+            // The picker only offers effects where they render: object tracks.
+            const isObject = !!getInstrument(track.instrumentId)
+            return (
+              <div
+                data-effects-drop
+                onContextMenu={isObject ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
+                className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
+              >
+                {effects.length === 0 && (
+                  <p className="text-xs text-[var(--text-muted)] text-center mt-8 mb-4">
+                    {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
+                  </p>
+                )}
+                {effects.map((inst, i) => {
                   const plugin = getEffect(inst.pluginId)
                   if (!plugin) return null
                   return (
@@ -783,15 +828,39 @@ export function TrackEditor() {
                       key={inst.id}
                       plugin={plugin}
                       inst={inst}
+                      index={i}
+                      count={effects.length}
                       onToggle={() => toggleEffect(track.id, inst.id)}
                       onRemove={() => removeEffect(track.id, inst.id)}
+                      onMove={(direction) => reorderEffect(track.id, inst.id, direction)}
                       onSetSetting={(key, value) => setEffectSetting(track.id, inst.id, key, value)}
                     />
                   )
-                })
-              )}
-            </div>
-          ) : (
+                })}
+                {isObject && (
+                  <button
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setFxMenu({ x: r.left, y: r.bottom + 4 })
+                    }}
+                    className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
+                  >
+                    <Plus size={11} />
+                    Add effect
+                  </button>
+                )}
+                {fxMenu && (
+                  <NestedMenu
+                    x={fxMenu.x}
+                    y={fxMenu.y}
+                    groups={EFFECT_MENU_GROUPS}
+                    onPick={(_, pluginId) => addEffect(track.id, pluginId)}
+                    onClose={() => setFxMenu(null)}
+                  />
+                )}
+              </div>
+            )
+          })() : (
             <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
           )
         )}

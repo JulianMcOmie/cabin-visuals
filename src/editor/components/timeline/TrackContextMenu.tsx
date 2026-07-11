@@ -1,38 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, Check } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { moverInputParamDefs, moverRegistry, getMover } from '../../core/visual/movers/registry'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
-
-/**
- * A submenu panel that keeps itself on-screen: it renders top-aligned to its
- * parent row, measures before paint, and shifts up by however much it would
- * overflow the viewport's bottom. A submenu can be much taller than the main
- * menu (one row per instrument param), so it needs its own clamping - the main
- * menu fitting is no guarantee the submenu does.
- */
-function SubMenu({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [shift, setShift] = useState(0)
-  useLayoutEffect(() => {
-    const r = ref.current?.getBoundingClientRect()
-    if (!r) return
-    const overflow = r.bottom - (window.innerHeight - 8)
-    if (overflow > 0) setShift(-Math.min(overflow, Math.max(0, r.top - 8)))
-  }, [])
-  return (
-    <div
-      ref={ref}
-      style={{ top: shift }}
-      className="absolute left-full -ml-1 min-w-[150px] py-1 rounded-md border border-zinc-700 bg-[#202024] shadow-lg shadow-black/50"
-    >
-      {children}
-    </div>
-  )
-}
+import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
 
 interface TrackContextMenuProps {
   x: number
@@ -42,10 +14,9 @@ interface TrackContextMenuProps {
 }
 
 /**
- * Right-click menu on a track's label. Two submenus, both scoped to the track's
- * instrument: "Add ability track" (reveals one of the instrument's declared ability
- * lanes - opt-in) above "Add automation track" (adds an automation child track driving
- * one of the instrument's params). Items already present are checked + disabled.
+ * Right-click menu on a track's label, rendered through the shared NestedMenu shell.
+ * Submenus scoped to the track's instrument: ability lanes, movers, automatable params,
+ * and effect-instance params. Items already present are checked + disabled.
  */
 export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuProps) {
   const track = useProjectStore((s) => s.tracks[trackId])
@@ -53,39 +24,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addAbilityTrack = useProjectStore((s) => s.addAbilityTrack)
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
-
-  const [openSub, setOpenSub] = useState<'ability' | 'automation' | 'mover' | 'effect' | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-
-  // Near the viewport's bottom/right edge the menu flips/clamps instead of
-  // running off-screen. Measured before paint so it never flashes misplaced.
-  // (Submenus clamp themselves - see SubMenu.)
-  const [placement, setPlacement] = useState<{ left: number; top: number }>({ left: x, top: y })
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    const up = y + height > window.innerHeight - 8 && y - height >= 8
-    setPlacement({
-      left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
-      top: up ? y - height : Math.min(y, Math.max(8, window.innerHeight - height - 8)),
-    })
-  }, [x, y])
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('mousedown', onDown)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [onClose])
 
   if (!track) return null
   const def = getInstrument(track.instrumentId)
@@ -114,128 +52,53 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     ]
   })
 
-  const hasAny = abilities.length > 0 || params.length > 0 || movers.length > 0 || fxItems.length > 0
+  const groups: NestedMenuGroup[] = [
+    {
+      key: 'ability',
+      label: 'Add ability track',
+      items: abilities.map((a) => {
+        const added = addedAbilities.has(a.key)
+        return { id: a.key, label: a.label, disabled: added, checked: added, swatchColor: a.color ?? '#818cf8' }
+      }),
+    },
+    {
+      key: 'mover',
+      label: 'Add mover track',
+      items: movers.map((d) => ({ id: d.id, label: d.label })),
+    },
+    {
+      key: 'automation',
+      label: 'Add automation track',
+      items: params.map((p) => {
+        const added = automatedParams.has(p.key)
+        return { id: p.key, label: p.label, disabled: added, checked: added }
+      }),
+    },
+    {
+      key: 'effect',
+      label: 'Automate effect',
+      items: fxItems.map((item) => {
+        const added = automatedParams.has(item.key)
+        return { id: item.key, label: item.label, disabled: added, checked: added }
+      }),
+    },
+  ]
 
-  return (
-    <div
-      ref={ref}
-      className="fixed z-50 min-w-[168px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
-      style={{ left: placement.left, top: placement.top }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {!hasAny && <div className="px-3 py-1.5 text-zinc-500">Nothing to add</div>}
+  const onPick = (groupKey: string, itemId: string) => {
+    if (groupKey === 'ability') {
+      const a = abilities.find((ab) => ab.key === itemId)
+      if (a) addAbilityTrack(trackId, a.key, a.label)
+    } else if (groupKey === 'mover') {
+      const d = movers.find((m) => m.id === itemId)
+      if (d) addMoverTrack(trackId, d.id, d.label)
+    } else if (groupKey === 'automation') {
+      const p = params.find((pp) => pp.key === itemId)
+      if (p) addAutomationTrack(trackId, p.key, p.label)
+    } else if (groupKey === 'effect') {
+      const item = fxItems.find((f) => f.key === itemId)
+      if (item) addAutomationTrack(trackId, item.key, item.label)
+    }
+  }
 
-      {abilities.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('ability')} onMouseLeave={() => setOpenSub(null)}>
-          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
-            <span>Add ability track</span>
-            <ChevronRight size={12} className="text-zinc-500" />
-          </div>
-          {openSub === 'ability' && (
-            <SubMenu>
-              {abilities.map((a) => {
-                const added = addedAbilities.has(a.key)
-                return (
-                  <button
-                    key={a.key}
-                    disabled={added}
-                    onClick={() => { addAbilityTrack(trackId, a.key, a.label); onClose() }}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
-                      added ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: a.color ?? '#818cf8' }} />
-                      <span className="truncate">{a.label}</span>
-                    </span>
-                    {added && <Check size={11} className="flex-shrink-0" />}
-                  </button>
-                )
-              })}
-            </SubMenu>
-          )}
-        </div>
-      )}
-
-      {movers.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('mover')} onMouseLeave={() => setOpenSub(null)}>
-          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
-            <span>Add mover track</span>
-            <ChevronRight size={12} className="text-zinc-500" />
-          </div>
-          {openSub === 'mover' && (
-            <SubMenu>
-              {movers.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => { addMoverTrack(trackId, d.id, d.label); onClose() }}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60"
-                >
-                  <span className="truncate">{d.label}</span>
-                </button>
-              ))}
-            </SubMenu>
-          )}
-        </div>
-      )}
-
-      {params.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('automation')} onMouseLeave={() => setOpenSub(null)}>
-          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
-            <span>Add automation track</span>
-            <ChevronRight size={12} className="text-zinc-500" />
-          </div>
-          {openSub === 'automation' && (
-            <SubMenu>
-              {params.map((p) => {
-                const added = automatedParams.has(p.key)
-                return (
-                  <button
-                    key={p.key}
-                    disabled={added}
-                    onClick={() => { addAutomationTrack(trackId, p.key, p.label); onClose() }}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
-                      added ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
-                    }`}
-                  >
-                    <span className="truncate">{p.label}</span>
-                    {added && <Check size={11} className="flex-shrink-0" />}
-                  </button>
-                )
-              })}
-            </SubMenu>
-          )}
-        </div>
-      )}
-
-      {fxItems.length > 0 && (
-        <div className="relative" onMouseEnter={() => setOpenSub('effect')} onMouseLeave={() => setOpenSub(null)}>
-          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
-            <span>Automate effect</span>
-            <ChevronRight size={12} className="text-zinc-500" />
-          </div>
-          {openSub === 'effect' && (
-            <SubMenu>
-              {fxItems.map((item) => {
-                const added = automatedParams.has(item.key)
-                return (
-                  <button
-                    key={item.key}
-                    disabled={added}
-                    onClick={() => { addAutomationTrack(trackId, item.key, item.label); onClose() }}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
-                      added ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
-                    }`}
-                  >
-                    <span className="truncate">{item.label}</span>
-                    {added && <Check size={11} className="flex-shrink-0" />}
-                  </button>
-                )
-              })}
-            </SubMenu>
-          )}
-        </div>
-      )}
-    </div>
-  )
+  return <NestedMenu x={x} y={y} groups={groups} onPick={onPick} onClose={onClose} />
 }

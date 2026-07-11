@@ -82,6 +82,7 @@
     <li><strong>Export filename</strong> - defaults to the project's name (sanitized); quality settings still remembered, name isn't.</li>
     <li><strong>MIDI import</strong> - drop a .mid on the tracks area (or the ruler-corner button): one track per MIDI track, full pitch kept, out-of-range notes counted in the summary.</li>
     <li><strong>Loop blocks</strong> - right-edge resize past the pattern repeats it (dashed boundaries in previews, ghost repeats in the piano roll; split keeps phase, join bakes).</li>
+    <li><strong>Effects picker menu + reorder</strong> - "+ Add effect" nested menu (Transform/Clone/Shader) in the track editor, and up/down arrows reorder the chain.</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -96,7 +97,6 @@
     <li><strong>Nested mute/solo ★</strong> - decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
     <li><strong>Copy-paste automation ★</strong> - move automation lanes between instruments (needs Tyler's clarification first).</li>
     <li><strong>Row hiding/scaling</strong> - piano-roll options to hide rows, compress row height, and filter to a scale.</li>
-    <li><strong>Effects picker menu</strong> - choose effects from a nested pop-up in the track editor, like the automation menu.</li>
     <li><strong>Symmetric effects</strong> - effects built to be automated, e.g. radial copy with an animatable radius.</li>
     <li><strong>Per-keyframe curves</strong> - each automation segment carries its own curve instead of one mode per lane.</li>
     <li><strong>Effect-param automation</strong> - automation lanes that target an effect instance's settings, not just instrument params.</li>
@@ -234,7 +234,7 @@
 </div>
 
 <div class="item">
-  <h3>Effects picker: nested pop-up menu (like the automation menu)</h3>
+  <h3><span class="badge b-done">done</span>Effects picker: nested pop-up menu (like the automation menu) - shipped 2026-07-11, with chain reordering</h3>
   <p>Reuse the right-click nested-menu component the automation/ability menu uses, populated from the effects registry (transform/clone/shader categories), as an alternative to drag-in. Mostly wiring, some menu polish.</p>
   <p class="where">components/TrackEditor.tsx (effects tab) · the existing context-menu component</p>
 </div>
