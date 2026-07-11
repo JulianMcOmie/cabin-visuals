@@ -7,18 +7,51 @@ import { getSupabase } from './supabase'
 
 const BUCKET = 'project-audio'
 
-/** Upload a clip's bytes; returns the bucket path to store as the clip ref. */
-export async function uploadAudio(projectId: string, file: File): Promise<string> {
-  const supabase = getSupabase()
-  const { data: auth, error: authError } = await supabase.auth.getUser()
+/** Mint the bucket path a new clip WILL live at. Split from the upload so a
+ *  ref exists before any bytes move - the track lands instantly against the
+ *  ref while the upload runs behind it as pure durability. */
+export async function mintAudioPath(projectId: string): Promise<string> {
+  const { data: auth, error: authError } = await getSupabase().auth.getUser()
   if (authError) throw authError
   if (!auth.user) throw new Error('Not signed in')
-  const path = `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || 'application/octet-stream',
+  return `${auth.user.id}/${projectId}/${crypto.randomUUID()}`
+}
+
+/** Upload a clip's bytes to an already-minted path. XHR rather than
+ *  supabase-js because fetch (which supabase-js wraps) exposes no upload
+ *  progress; this POSTs to the same Storage endpoint with the same auth. */
+export async function uploadAudioTo(
+  path: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  const { data: sessionData } = await getSupabase().auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Not signed in')
+
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('apikey', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve()
+      // Storage errors arrive as JSON: {statusCode, error, message}.
+      let message = `Upload failed (${xhr.status})`
+      try {
+        message = (JSON.parse(xhr.responseText) as { message?: string }).message ?? message
+      } catch { /* non-JSON body - keep the status fallback */ }
+      reject(new Error(message))
+    }
+    xhr.onerror = () => reject(new Error('Upload failed - network error'))
+    xhr.send(file)
   })
-  if (error) throw error
-  return path
 }
 
 /** A URL a player can load (signed; the bucket is private). */

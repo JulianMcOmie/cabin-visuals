@@ -4,6 +4,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useAudioStore } from '../../store/AudioStore'
 import { useUIStore } from '../../store/UIStore'
 import { selectNewBlock } from '../../utils/selection'
+import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
 import type { AudioBlock as AudioBlockType } from '../../types'
 
@@ -26,19 +27,26 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
   // Width follows tempo reactively - this subscription is the feature.
   const bpm = useProjectStore((s) => s.bpm)
   const clip = useAudioStore((s) => s.audioClips[block.clipRef])
+  const upload = useAudioStore((s) => s.uploads[block.clipRef])
   const isSelected = useUIStore((s) => s.selectedBlockIds.has(block.id))
 
   const clipSec = Math.max(0, block.trimEnd - block.trimStart)
+  // A zero-length block is a clip whose local decode hasn't landed yet (the
+  // load pipeline fills in trimEnd when it knows the duration): render a
+  // fixed-width loading placeholder instead of a sliver.
+  const pending = clipSec <= 0
   const widthBars = (clipSec * bpm) / 60 / beatsPerBar
   const left = block.startBar * barWidthPx
-  const width = Math.max(widthBars * barWidthPx, 4)
+  const width = pending ? barWidthPx * 2 : Math.max(widthBars * barWidthPx, 4)
 
   // ── Waveform: draw the [trimStart, trimEnd] slice of the clip's peak envelope ──
   const canvasRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     let cancelled = false
     const canvas = canvasRef.current
-    if (!canvas || !clip) return
+    // While pending, getPeaks would race the load pipeline's own decode of the
+    // same bytes for nothing - the effect re-runs when the duration lands.
+    if (!canvas || !clip || pending) return
     // Adaptive resolution: ask for more buckets when drawn wider than the base
     // serves (deep zoom) - a re-extraction from the cached buffer, not a decode.
     const visibleFrac = clip.duration > 0 ? clipSec / clip.duration : 1
@@ -67,7 +75,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       }
     }).catch((err) => console.warn('Waveform draw failed', err))
     return () => { cancelled = true }
-  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color])
+  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending])
 
   // ── Drag gestures: move (body), trim (edges) - free positioning, no snap ──
   // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
@@ -83,6 +91,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
   const secPerBar = (60 / bpm) * beatsPerBar
 
   const edgeZone = (e: ReactPointerEvent<HTMLDivElement>): DragMode => {
+    if (pending) return 'move' // nothing meaningful to trim until the duration lands
     const rect = e.currentTarget.getBoundingClientRect()
     const edge = Math.min(8, rect.width / 4)
     const localX = e.clientX - rect.left
@@ -196,6 +205,35 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       <span className="absolute top-0.5 left-1.5 text-[10px] text-white/70 pointer-events-none truncate max-w-full pr-2">
         {clip?.fileName}
       </span>
+      {pending && (
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white/60 animate-pulse pointer-events-none">
+          loading…
+        </span>
+      )}
+      {upload?.status === 'saving' && (
+        <>
+          <span className="absolute bottom-0.5 right-1.5 font-mono text-[9px] text-white/70 pointer-events-none">
+            ↑{Math.round(upload.progress * 100)}%
+          </span>
+          <div
+            className="absolute bottom-0 left-0 h-[2px] pointer-events-none transition-[width] duration-150"
+            style={{ width: `${upload.progress * 100}%`, backgroundColor: color }}
+          />
+        </>
+      )}
+      {upload?.status === 'failed' && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            retryAudioTrackUpload(block.clipRef)
+          }}
+          title={`${upload.error ?? 'Upload failed'} - plays this session but won't survive a reload. Click to retry.`}
+          className="absolute bottom-0.5 right-1.5 font-mono text-[10px] font-bold text-[var(--warn)] cursor-pointer"
+        >
+          !
+        </button>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import { MOVER_TRACK_COLOR } from '../utils/modifierColors'
+import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
 
@@ -166,6 +166,15 @@ export function cloneTrackTree(snapshot: TrackTreeSnapshot, parentId?: string | 
   return out
 }
 
+/** Audio tracks sit as a pinned block at the top of the root list (the backing
+ *  tracks lead the arrangement) - nothing non-audio may land above them.
+ *  Returns the first root index open to other tracks. */
+export function audioPinnedCount(tracks: Record<string, Track>, rootTrackIds: string[]): number {
+  let n = 0
+  while (n < rootTrackIds.length && tracks[rootTrackIds[n]]?.type === 'audio') n++
+  return n
+}
+
 function insertTrackTreeIntoState(
   s: ProjectState,
   tree: Track[],
@@ -189,7 +198,7 @@ function insertTrackTreeIntoState(
   }
 
   const rootTrackIds = [...s.rootTrackIds]
-  const min = tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
+  const min = audioPinnedCount(tracks, rootTrackIds)
   if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(root.id)
   else rootTrackIds.splice(Math.max(min, atIndex), 0, root.id)
   return { tracks, rootTrackIds }
@@ -252,9 +261,10 @@ interface ProjectState {
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Replace a Video track's ordered pads (its bank of source moments). */
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
-  /** Create the audio track (top of the root tracks) holding one block at bar 0
-   *  spanning the whole clip. The AudioBar's load path; one audio track for now.
-   *  Returns the new track's id (for selection). */
+  /** Create an audio track (top of the root tracks) holding one block at bar 0
+   *  spanning the whole clip. The load pipeline's landing spot - the AudioBar
+   *  button and files dropped on the track area both end here; a project can
+   *  hold several. Returns the new track's id (for selection). */
   addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => string
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
@@ -290,8 +300,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
         return { tracks }
       }
       const rootTrackIds = [...s.rootTrackIds]
-      // Never above the pinned audio track at root index 0.
-      const min = track.type !== 'audio' && s.tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
+      // Never above the pinned audio tracks at the top of the root list.
+      const min = track.type !== 'audio' ? audioPinnedCount(s.tracks, rootTrackIds) : 0
       if (atIndex == null || atIndex < 0 || atIndex > rootTrackIds.length) rootTrackIds.push(track.id)
       else rootTrackIds.splice(Math.max(min, atIndex), 0, track.id)
       return { tracks, rootTrackIds }
@@ -646,8 +656,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
         childIds.splice(i, 0, trackId)
         tracks[parentId] = { ...np, childIds }
       } else {
-        // Never above the pinned audio track at root index 0.
-        const min = tracks[rootTrackIds[0]]?.type === 'audio' ? 1 : 0
+        // Never above the pinned audio tracks at the top of the root list.
+        const min = audioPinnedCount(tracks, rootTrackIds)
         const i = index == null ? rootTrackIds.length : Math.max(min, Math.min(rootTrackIds.length, index))
         rootTrackIds.splice(i, 0, trackId)
       }
@@ -988,7 +998,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         name: clip.fileName,
         type: 'audio',
         instrumentId: '',
-        color: '#38bdf8',
+        color: AUDIO_TRACK_COLOR,
         muted: false,
         solo: false,
         blocks: [],

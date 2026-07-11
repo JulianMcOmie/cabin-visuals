@@ -1,5 +1,6 @@
 import type { Track } from '../../types'
 import type { VisualRow } from './trackTree'
+import { audioPinnedCount } from '../../store/ProjectStore'
 
 /** One indent level (px) - also the label's left-padding step (see Track). */
 export const INDENT_PX = 16
@@ -70,10 +71,7 @@ export function computeDropTarget(args: {
   const pos = siblings.indexOf(overTrackId)
   let index: number
   let top: number
-  // The audio track is pinned at the top: nothing may drop above it. A "before"
-  // drop over it becomes an "after" drop instead.
-  const pinnedTop = parentId == null && tracks[rootTrackIds[0]]?.type === 'audio'
-  if (frac < 0.25 && !(pinnedTop && overTrack.type === 'audio' && pos === 0)) {
+  if (frac < 0.25) {
     // Before `over`.
     index = pos < 0 ? 0 : pos
     top = trackRowIndex * rowHeight
@@ -85,9 +83,13 @@ export function computeDropTarget(args: {
     while (j < n && rows[j].depth > trackDepth) j++
     top = j * rowHeight
   }
-  if (pinnedTop && index === 0) {
-    index = 1
-    top = Math.max(top, rowHeight)
+  // Audio tracks are pinned as a block at the top: nothing may drop above (or
+  // between) them. A drop aimed there lands right below the block instead.
+  // Audio tracks have no child rows, so the block spans exactly pin rows.
+  const pin = parentId == null ? audioPinnedCount(tracks, rootTrackIds) : 0
+  if (index < pin) {
+    index = pin
+    top = Math.max(top, pin * rowHeight)
   }
   return { parentId, index, line: { top, left: trackDepth * INDENT_PX }, intoId: null }
 }

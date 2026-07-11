@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import { useProjectStore } from '../../store/ProjectStore'
+import { useProjectStore, audioPinnedCount } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows } from './trackTree'
@@ -103,9 +103,10 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         for (let j = 0; j < k; j++) {
           if ((s.itemTops[j] + bottomOf(j)) / 2 < gcRow) idx = j + 1
         }
-        // The audio track is pinned at root index 0 - nothing lands above it.
+        // Audio tracks are pinned as a block at the top - nothing lands above
+        // (or between) them.
         const { tracks, rootTrackIds } = useProjectStore.getState()
-        if (s.parentId == null && idx === 0 && tracks[rootTrackIds[0]]?.type === 'audio') idx = 1
+        if (s.parentId == null) idx = Math.max(idx, audioPinnedCount(tracks, rootTrackIds))
         insertIndex = idx
         gapRow = idx < k ? s.itemTops[idx] : s.containerEnd
       }

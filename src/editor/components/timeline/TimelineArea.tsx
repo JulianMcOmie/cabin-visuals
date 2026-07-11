@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Plus } from 'lucide-react'
+import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent } from 'react'
+import { FileAudio, Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -15,6 +15,7 @@ import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
+import { loadAudioTrack } from '../../utils/loadAudioTrack'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 
@@ -160,6 +161,30 @@ export function TimelineArea() {
     selectNewTrack(id)
   }
 
+  // OS-file drag: dropping audio files anywhere on the tracks section loads
+  // each one as a new audio track. Detection keys off the drag's item TYPES
+  // (file contents aren't readable until drop); the depth counter absorbs
+  // enter/leave noise from crossing child boundaries.
+  const [audioDropHover, setAudioDropHover] = useState(false)
+  const dropDepthRef = useRef(0)
+  const isAudioFileDrag = (e: ReactDragEvent) =>
+    Array.from(e.dataTransfer.items).some((it) => it.kind === 'file' && it.type.startsWith('audio/'))
+  const onAudioDrop = (e: ReactDragEvent) => {
+    e.preventDefault()
+    dropDepthRef.current = 0
+    setAudioDropHover(false)
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('audio/'))
+    void (async () => {
+      for (const file of files) {
+        try {
+          await loadAudioTrack(file)
+        } catch (err) {
+          console.error('Failed to load dropped audio file', file.name, err)
+        }
+      }
+    })()
+  }
+
   // Drag the label column's right edge to resize it (spans the ruler corner, every
   // track label, and the empty space below - one handle along the whole edge).
   function startLabelResize(e: ReactPointerEvent) {
@@ -203,7 +228,33 @@ export function TimelineArea() {
           under the label edge when scrolled). overflow-hidden clips the playhead
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div
+        className="relative flex-1 min-h-0 overflow-hidden"
+        onDragEnter={(e) => {
+          if (!isAudioFileDrag(e)) return
+          e.preventDefault()
+          dropDepthRef.current++
+          setAudioDropHover(true)
+        }}
+        onDragOver={(e) => {
+          if (!isAudioFileDrag(e)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={(e) => {
+          if (!isAudioFileDrag(e)) return
+          dropDepthRef.current = Math.max(0, dropDepthRef.current - 1)
+          if (dropDepthRef.current === 0) setAudioDropHover(false)
+        }}
+        onDrop={onAudioDrop}
+      >
+        {audioDropHover && (
+          <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
+            <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
+              <FileAudio size={13} /> drop audio to add tracks
+            </span>
+          </div>
+        )}
         {rootTrackIds.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <p className="text-xs text-[var(--text-muted)] text-center px-4">

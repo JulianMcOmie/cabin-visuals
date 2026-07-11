@@ -6,7 +6,7 @@ import { Block } from './Block'
 import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
-import { modifierColor } from '../../utils/modifierColors'
+import { modifierColor, AUDIO_TRACK_COLOR } from '../../utils/modifierColors'
 import { selectTrack, shouldSuppressTrackSelect } from '../../utils/selection'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
@@ -71,7 +71,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   // A no-instrument track whose type is a modifier is an event-modifier (control) row.
   const modColor = modifierColor(track)
   const isModifier = modColor != null
-  const blockColor = modColor ?? track.color
+  const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : modColor ?? track.color
   // Automation and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability'
