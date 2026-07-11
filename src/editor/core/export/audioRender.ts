@@ -1,7 +1,8 @@
 // The audio half of export: the whole track rendered in ONE offline pass -
 // no frame stepping, no realtime. Every audible block schedules its clip slice
 // into an OfflineAudioContext through the same blockPlacement() the live
-// AudioEngine arms with (from beat 0 - the trivial case), under the same 0.85
+// AudioEngine arms with (anchored at the export range's start beat - the same
+// math a mid-project play press uses), under the same 0.85
 // master gain, so the file sounds exactly like the editor. The rendered buffer
 // is AAC-encoded into the muxer; A/V sync is arithmetic, not synchronization -
 // both timelines derive from the same bpm.
@@ -14,7 +15,8 @@ import type { Mp4Writer } from './mux'
 export const EXPORT_AUDIO_BITRATE = 192_000
 
 /**
- * Mix every audible audio block into one stereo buffer spanning the project.
+ * Mix every audible audio block into one stereo buffer spanning the export
+ * range: buffer t=0 is `fromBeat`, blocks straddling it join mid-clip.
  * Mute/solo fold in exactly as the live engine's setBlocks does. Returns null
  * when there is nothing audible to render (caller emits a video-only file).
  */
@@ -23,6 +25,7 @@ export async function renderAudioTrack(
   bpm: number,
   beatsPerBar: number,
   durationSec: number,
+  fromBeat = 0,
 ): Promise<AudioBuffer | null> {
   const anySolo = audioTracks.some((t) => t.solo)
   const blocks = audioTracks
@@ -40,7 +43,7 @@ export async function renderAudioTrack(
   master.connect(ctx.destination)
 
   blocks.forEach((block, i) => {
-    const p = blockPlacement(block, 0, bpm, beatsPerBar)
+    const p = blockPlacement(block, fromBeat, bpm, beatsPerBar)
     if (!p) return
     const src = ctx.createBufferSource()
     src.buffer = buffers[i] // resampled by the source node if rates differ

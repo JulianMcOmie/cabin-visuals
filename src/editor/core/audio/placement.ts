@@ -2,7 +2,8 @@
 // AudioEngine.armBlock so live playback and offline export literally share it.
 // Three cases per block relative to `atBeat`: past (null - leave idle), future
 // (delay ahead), mid-clip (join at an in-clip offset). The live engine calls
-// this at transport events with the seek beat; export calls it once with 0.
+// this at transport events with the seek beat; export calls it once with the
+// export range's start beat (0 for a whole-project export).
 
 import type { AudioBlock } from '../../types'
 

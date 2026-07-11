@@ -84,6 +84,7 @@
     <li><strong>Loop blocks</strong> - right-edge resize past the pattern repeats it (dashed boundaries in previews, ghost repeats in the piano roll; split keeps phase, join bakes).</li>
     <li><strong>Effects picker menu + reorder</strong> - "+ Add effect" nested menu (Transform/Clone/Shader) in the track editor, and up/down arrows reorder the chain.</li>
     <li><strong>Loop regions</strong> - drag the top half of either ruler to set a region (whole-beat snap); playback wraps at its end; click clears; bottom half still scrubs.</li>
+    <li><strong>Export ranges</strong> - Range picker in the export dialog: whole project / loop region / custom bars (inclusive), audio anchored mid-clip at the range start.</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -102,7 +103,6 @@
     <li><strong>Per-keyframe curves</strong> - each automation segment carries its own curve instead of one mode per lane.</li>
     <li><strong>Effect-param automation</strong> - automation lanes that target an effect instance's settings, not just instrument params.</li>
     <li><strong>Drag highlights</strong> - stronger drop-target affordance for library drags, and highlight objects when hovering modulator targets.</li>
-    <li><strong>Export ranges</strong> - export a section of the project (and later, the loop region).</li>
     <li><strong>Envelope modulator</strong> - a generic ADSR that targets any numeric param (opacity being the headline use).</li>
     <li><strong>Tag automation</strong> - one automation lane drives a param across every instrument carrying a tag.</li>
     <li><strong>3D model import</strong> - a Model instrument for uploaded glTF meme assets, bytes stored like audio.</li>
@@ -271,7 +271,7 @@
 </div>
 
 <div class="item">
-  <h3>Export sections/ranges (and loops, once loops exist)</h3>
+  <h3><span class="badge b-done">done</span>Export sections/ranges (and loops) - shipped 2026-07-11</h3>
   <p>Named as deferred in the export plan; now a real item. The engine is already range-shaped - <code>walkFrames</code> just needs a start beat and the audio render an offset (the placement helper's <code>fromBeat</code> argument literally exists for this). The work is UI: a range picker in the ExportDialog (bar in/out), and later "export the loop region" becomes one preset of the same range.</p>
   <p class="where">core/export/exportEngine.ts (start/end beats) · audioRender.ts (fromBeat) · ExportDialog.tsx</p>
 </div>
