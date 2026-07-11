@@ -14,6 +14,8 @@ import { getInstrument } from '../../instruments'
 import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { isNumberParam } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
+import { getEffect } from '../../effects'
+import { parseFxTarget } from '../../effects/automation'
 import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
@@ -91,7 +93,18 @@ export function PianoRollPanel() {
     }
   } else if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
-    if (parent?.type === 'mover') {
+    const fx = parseFxTarget(track.targetParam)
+    if (fx) {
+      // Effect automation: value range from the plugin's param (On/Off = 0..1).
+      const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
+      const plugin = inst ? getEffect(inst.pluginId) : undefined
+      if (fx.key === 'enabled') {
+        automation = { paramLabel: `${plugin?.name ?? 'Effect'} · On (≥ 0.5)`, paramMin: 0, paramMax: 1 }
+      } else {
+        const pd = plugin?.params.find((p) => p.key === fx.key)
+        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max }
+      }
+    } else if (parent?.type === 'mover') {
       const input = getMover(parent.moverId)?.inputs[track.targetParam]
       if (input) automation = { paramLabel: track.targetParam, paramMin: input.min, paramMax: input.max }
     } else {

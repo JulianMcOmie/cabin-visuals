@@ -306,6 +306,17 @@ export function computeAtBeat(beat: number) {
       else world.copy(_local)
     }
 
+    // Effect automation lanes sample per frame into an override map the effect
+    // wrappers merge over each instance's stored settings ('enabled' as 0/1).
+    let effectOverrides: Record<string, Record<string, number>> | undefined
+    if (obj.effectAutomations.length) {
+      effectOverrides = {}
+      for (const ea of obj.effectAutomations) {
+        if (!ea.keyframes.length) continue
+        ;(effectOverrides[ea.instanceId] ??= {})[ea.key] = sampleLane(ea.keyframes, beat, ea.mode)
+      }
+    }
+
     // Muted (or soloed-out) objects are hidden, and a `mute` modifier blacks out its span.
     const blackedOut = obj.muted || obj.blackouts.some((r) => beat >= r.start && beat < r.end)
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
@@ -325,6 +336,7 @@ export function computeAtBeat(beat: number) {
       hueShift,
       satShift,
       lightShift,
+      effectOverrides,
       blackedOut,
       stringParams: obj.stringParams,
       abilityEvents: obj.abilityEvents,

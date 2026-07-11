@@ -8,6 +8,7 @@ import { applyMaterialHueShift } from '../../core/visual/animatedColor'
 import type { ObjectState } from '../../core/visual/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
+import { parseFxTarget } from '../../effects/automation'
 import { TransformWrapper } from './TransformWrapper'
 import { CloneWrapper } from './CloneWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
@@ -33,7 +34,23 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
   const plugins = useProjectStore((s) => s.tracks[trackId]?.effects) ?? []
-  const shaderInstances = plugins.filter((p) => p.enabled && getEffect(p.pluginId)?.category === 'shader')
+  // Shader instances whose 'enabled' is automated must stay MOUNTED while their
+  // checkbox is off - the automation lane can switch them on mid-project. A
+  // stable string of automated instance ids keeps the selector reference-clean.
+  const fxEnabledAutomated = useProjectStore((s) => {
+    const t = s.tracks[trackId]
+    if (!t) return ''
+    const ids: string[] = []
+    for (const cid of t.childIds) {
+      const c = s.tracks[cid]
+      const target = c?.type === 'automation' ? parseFxTarget(c.targetParam) : null
+      if (target?.key === 'enabled') ids.push(target.instanceId)
+    }
+    return ids.sort().join(',')
+  })
+  const shaderInstances = plugins.filter(
+    (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
+  )
 
   const isFullFrame = !!def?.fullFrame
   // NOTE: the per-track "In front" switch is applied a level up - VisualScene
@@ -78,8 +95,8 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   }
 
   const content = (
-    <CloneWrapper plugins={plugins}>
-      <TransformWrapper plugins={plugins}>
+    <CloneWrapper trackId={trackId} plugins={plugins}>
+      <TransformWrapper trackId={trackId} plugins={plugins}>
         <Component trackId={trackId} />
       </TransformWrapper>
     </CloneWrapper>

@@ -6,9 +6,12 @@ import type {
   ResolvedObject,
   ResolvedNote,
   ResolvedAutomation,
+  ResolvedEffectAutomation,
   ResolvedMover,
   BlackoutRegion,
 } from './types'
+import { getEffect } from '../../effects'
+import { parseFxTarget } from '../../effects/automation'
 import { isModifierType, combineModifier, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN, pitchToValue } from '../trackTypes'
 import { extractKeyframes, type AutomationKeyframe } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
@@ -80,6 +83,43 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
       param,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+    })
+  }
+  return out
+}
+
+/** Gather automation children whose target is fx-namespaced (`fx:<instanceId>:<key>`)
+ *  into effect-override lanes. `enabled` is the 0/1 pseudo-param; anything else must
+ *  match one of the plugin's numeric params (its [min,max] scales the pitch mapping). */
+function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEffectAutomation[] {
+  const out: ResolvedEffectAutomation[] = []
+  const effects = track.effects ?? []
+  if (effects.length === 0) return out
+  const anyAutoSolo = (track.childIds ?? []).some((cid) => {
+    const c = p.tracks[cid]
+    return !!c && !c.instrumentId && c.type === 'automation' && !!c.solo
+  })
+  for (const childId of track.childIds ?? []) {
+    const child = p.tracks[childId]
+    if (!child || child.instrumentId || child.type !== 'automation') continue
+    if (child.muted || (anyAutoSolo && !child.solo)) continue
+    const target = parseFxTarget(child.targetParam)
+    if (!target) continue
+    const instance = effects.find((e) => e.id === target.instanceId)
+    if (!instance) continue
+    let min = 0
+    let max = 1
+    if (target.key !== 'enabled') {
+      const pdef = getEffect(instance.pluginId)?.params.find((pd) => pd.key === target.key)
+      if (!pdef || !isNumberParam(pdef)) continue
+      min = pdef.min
+      max = pdef.max
+    }
+    out.push({
+      instanceId: target.instanceId,
+      key: target.key,
+      mode: child.interpolation ?? 'linear',
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars),
     })
   }
   return out
@@ -253,6 +293,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       blackouts,
       abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
+      effectAutomations: resolveEffectAutomations(track, p),
       moverChain,
       // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
       // (which lands via resolve) is always visible to it.

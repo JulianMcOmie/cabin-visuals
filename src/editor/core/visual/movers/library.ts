@@ -179,7 +179,7 @@ export const opacityMover: MoverDef = {
 
 export const colorMover: MoverDef = {
   id: 'color',
-  label: 'Color',
+  label: 'Color Shift',
   amountInputs: ['hue'],
   inputs: {
     // Hue in full turns of the wheel (0.5 = complementary color); rate spins the

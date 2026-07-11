@@ -28,6 +28,17 @@ export interface ResolvedAutomation {
   keyframes: AutomationKeyframe[]
 }
 
+/** A resolved automation lane targeting one effect instance's setting (or its
+ *  'enabled' pseudo-param as a 0/1 lane). Sampled per frame in computeAtBeat
+ *  into ObjectState.effectOverrides; the effect wrappers merge it over the
+ *  instance's stored settings. */
+export interface ResolvedEffectAutomation {
+  instanceId: string
+  key: string
+  mode: InterpolationMode
+  keyframes: AutomationKeyframe[]
+}
+
 /** One of a track's notes, flattened to absolute project beats, carrying the
  *  bounds of its containing block so the engine can tell which notes are "live". */
 export interface ResolvedNote {
@@ -73,6 +84,8 @@ export interface ResolvedObject {
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
+  /** Automation lanes targeting this object's effect instances. */
+  effectAutomations: ResolvedEffectAutomation[]
   /** Video-instrument-only: ordered pads (fresh array per resolve). */
   videoPads?: VideoPad[]
   /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
@@ -141,6 +154,9 @@ export interface ObjectState {
   hueShift: number
   satShift: number
   lightShift: number
+  /** Sampled effect automation for this frame: instanceId → key → value
+   *  ('enabled' as 0/1). Absent when the object has no effect automation. */
+  effectOverrides?: Record<string, Record<string, number>>
   /** String-valued params (color / string) for the instrument component. */
   stringParams: Record<string, string>
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The

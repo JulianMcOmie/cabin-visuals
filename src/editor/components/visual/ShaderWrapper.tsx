@@ -9,6 +9,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState } from '../../core/visual/VisualEngine'
 import { getEffect } from '../../effects'
+import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
@@ -116,13 +117,15 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
     let inputTex: Texture = rig.src.texture
     let a = rig.ping, b = rig.pong
     for (const inst of plugins) {
-      if (!inst.enabled) continue
+      // Settings/enabled as of this frame (stored values merged with automation).
+      const eff = effectiveEffectState(inst, state?.effectOverrides)
+      if (!eff.enabled) continue
       const pass = passes.get(inst.id)
       if (!pass) continue
       pass.mat.uniforms.tDiffuse.value = inputTex
       if (pass.mat.uniforms.time) pass.mat.uniforms.time.value = beat
       for (const pd of pass.plugin?.params ?? []) {
-        if (pass.mat.uniforms[pd.key]) pass.mat.uniforms[pd.key].value = inst.settings[pd.key] ?? pd.default
+        if (pass.mat.uniforms[pd.key]) pass.mat.uniforms[pd.key].value = eff.settings[pd.key] ?? pd.default
       }
       rig.quad.material = pass.mat
       gl.setRenderTarget(a)

@@ -4,6 +4,8 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { moverInputParamDefs, moverRegistry, getMover } from '../../core/visual/movers/registry'
+import { getEffect } from '../../effects'
+import { fxTarget } from '../../effects/automation'
 
 /**
  * A submenu panel that keeps itself on-screen: it renders top-aligned to its
@@ -52,7 +54,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
 
-  const [openSub, setOpenSub] = useState<'ability' | 'automation' | 'mover' | null>(null)
+  const [openSub, setOpenSub] = useState<'ability' | 'automation' | 'mover' | 'effect' | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Near the viewport's bottom/right edge the menu flips/clamps instead of
@@ -98,7 +100,21 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
 
-  const hasAny = abilities.length > 0 || params.length > 0 || movers.length > 0
+  // Effect automation targets: per instance, its On/Off pseudo-param plus every
+  // numeric plugin param, addressed by the fx-namespaced targetParam.
+  const fxItems = (track.effects ?? []).flatMap((inst) => {
+    const plugin = getEffect(inst.pluginId)
+    if (!plugin) return []
+    return [
+      { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
+      ...plugin.params.filter(isNumberParam).map((p) => ({
+        key: fxTarget(inst.id, p.key),
+        label: `${plugin.name} · ${p.label}`,
+      })),
+    ]
+  })
+
+  const hasAny = abilities.length > 0 || params.length > 0 || movers.length > 0 || fxItems.length > 0
 
   return (
     <div
@@ -183,6 +199,35 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
                     }`}
                   >
                     <span className="truncate">{p.label}</span>
+                    {added && <Check size={11} className="flex-shrink-0" />}
+                  </button>
+                )
+              })}
+            </SubMenu>
+          )}
+        </div>
+      )}
+
+      {fxItems.length > 0 && (
+        <div className="relative" onMouseEnter={() => setOpenSub('effect')} onMouseLeave={() => setOpenSub(null)}>
+          <div className="flex items-center justify-between px-3 py-1.5 text-zinc-200 hover:bg-zinc-700/60 cursor-default">
+            <span>Automate effect</span>
+            <ChevronRight size={12} className="text-zinc-500" />
+          </div>
+          {openSub === 'effect' && (
+            <SubMenu>
+              {fxItems.map((item) => {
+                const added = automatedParams.has(item.key)
+                return (
+                  <button
+                    key={item.key}
+                    disabled={added}
+                    onClick={() => { addAutomationTrack(trackId, item.key, item.label); onClose() }}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left ${
+                      added ? 'text-zinc-500 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60'
+                    }`}
+                  >
+                    <span className="truncate">{item.label}</span>
                     {added && <Check size={11} className="flex-shrink-0" />}
                   </button>
                 )
