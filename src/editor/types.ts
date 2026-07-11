@@ -101,6 +101,9 @@ export interface Track {
   color: string
   muted: boolean
   solo: boolean
+  /** Draw this object on top of everything else (depth-ignored overlay).
+   *  Unset = the instrument's own default (e.g. Text Display defaults on). */
+  onTop?: boolean
   blocks: Block[]
   parentId?: string
   childIds: string[]

@@ -139,7 +139,9 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
   return (
     <>
       {createPortal(children, rig.holder)}
-      {/* The post-processed result, drawn as a clip-space fullscreen overlay. */}
+      {/* The post-processed result, drawn as a clip-space fullscreen overlay.
+          (An "In front" track mounts in VisualScene's second pass, overlay and
+          all - layering needs no special handling here.) */}
       <mesh ref={outMeshRef} frustumCulled={false} renderOrder={999}>
         <planeGeometry args={[2, 2]} />
         <shaderMaterial

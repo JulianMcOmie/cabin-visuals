@@ -35,6 +35,8 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   const shaderInstances = plugins.filter((p) => p.enabled && getEffect(p.pluginId)?.category === 'shader')
 
   const isFullFrame = !!def?.fullFrame
+  // NOTE: the per-track "In front" switch is applied a level up - VisualScene
+  // mounts on-top tracks into a second, depth-cleared render pass (drei Hud).
 
   useFrame(({ camera }) => {
     const g = groupRef.current

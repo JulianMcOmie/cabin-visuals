@@ -134,6 +134,9 @@ export interface ObjectInstrumentDef {
    *  than sitting at a 3D position. The renderer skips the placement transform + the
    *  transform/clone effect chain for these. */
   fullFrame?: boolean
+  /** Tracks of this instrument draw on top of everything by default (the per-track
+   *  "In front" toggle overrides). Text wants this: words are captions, not scenery. */
+  defaultOnTop?: boolean
 }
 
 /** A numeric param's schema default (no track/registry lookup). Non-numeric params → 0. */

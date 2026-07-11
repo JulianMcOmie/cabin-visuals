@@ -449,6 +449,7 @@ export function TrackEditor() {
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
+  const setTrackOnTop = useProjectStore((s) => s.setTrackOnTop)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
   const setMoverDepth = useProjectStore((s) => s.setMoverDepth)
   const setMoverMidiMode = useProjectStore((s) => s.setMoverMidiMode)
@@ -703,9 +704,35 @@ export function TrackEditor() {
                   // Object track → its param sliders, then its tags.
                   const def = getInstrument(track.instrumentId)
                   const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
+                  const onTop = track.onTop ?? def?.defaultOnTop ?? false
                   return (
                     <>
                       {track.instrumentId === 'video' && <VideoClipBank track={track} />}
+                      {/* Layering: every object gets the switch; Text defaults on. */}
+                      <div className="mb-4 flex items-center justify-between">
+                        <span
+                          className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none"
+                          title="Draw this instrument on top of everything else in the scene"
+                        >
+                          IN FRONT
+                        </span>
+                        <button
+                          onClick={() => setTrackOnTop(track.id, !onTop)}
+                          title="Draw this instrument on top of everything else in the scene"
+                          className={`h-5 w-9 rounded-full p-0.5 transition-colors cursor-pointer ${
+                            onTop ? 'bg-[var(--accent)]' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
+                          }`}
+                          role="switch"
+                          aria-checked={onTop}
+                          aria-label="Draw in front of everything"
+                        >
+                          <span
+                            className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                              onTop ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
                       {!def || def.params.length === 0 ? (
                         <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                       ) : (

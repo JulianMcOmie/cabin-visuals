@@ -109,8 +109,9 @@ export function useNoteGestures({
   // cursor globally via the body.scrubbing class, so no scrub guard is needed.)
   const handleHoverChange = useCallback((target: 'noteBody' | 'noteEdge' | null) => {
     if (dragStateRef.current.type !== 'none') return
+    // Note bodies keep the default cursor (hover, move, and alt-copy alike) -
+    // only the resize edges advertise themselves.
     if (target === 'noteEdge') setCursor('ew-resize')
-    else if (target === 'noteBody') setCursor('grab')
     else setCursor('default')
   }, [setCursor])
 
@@ -397,8 +398,8 @@ export function useNoteGestures({
         originalStartBeats,
         originalPitches,
       })
-      setCursor('copy')
-      beginGestureTracking('copy')
+      setCursor('default')
+      beginGestureTracking('default')
       return
     }
 
@@ -421,8 +422,8 @@ export function useNoteGestures({
       originalStartBeats,
       originalPitches,
     })
-    setCursor('grabbing')
-    beginGestureTracking('grabbing')
+    setCursor('default')
+    beginGestureTracking('default')
   }, [selectedNoteIds, notes, onNotesChange, setCursor, beginGestureTracking, gridRef])
 
   // Handle note hover for cursor changes. stopPropagation keeps the grid's

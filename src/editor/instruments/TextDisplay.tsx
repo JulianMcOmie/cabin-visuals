@@ -597,4 +597,5 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   ],
   component: TextDisplayVisual,
   fullFrame: true,
+  defaultOnTop: true,
 }

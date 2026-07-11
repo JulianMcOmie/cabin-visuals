@@ -259,6 +259,8 @@ interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
+  /** Draw this object on top of everything (depth-ignored overlay). */
+  setTrackOnTop: (trackId: string, onTop: boolean) => void
   /** Replace a Video track's ordered pads (its bank of source moments). */
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Create an audio track (top of the root tracks) holding one block at bar 0
@@ -981,6 +983,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, tags } } }
+    }),
+
+  setTrackOnTop: (trackId, onTop) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, onTop } } }
     }),
 
   setTrackVideoPads: (trackId, videoPads) =>
