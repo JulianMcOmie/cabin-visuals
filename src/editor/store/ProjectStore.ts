@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR } from '../utils/modifierColors'
+import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
+import type { ImportedMidiTrack } from '../core/midiImport'
 import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
 
 export const MIN_BPM = 20
@@ -268,6 +269,11 @@ interface ProjectState {
    *  button and files dropped on the track area both end here; a project can
    *  hold several. Returns the new track's id (for selection). */
   addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => string
+  /** Create one root track per imported MIDI track (default instrument, one
+   *  block spanning its notes, whole bars), growing totalBars if the content
+   *  overruns. One set() so the whole import is a single undo step. Returns
+   *  the new track ids in order. */
+  importMidiTracks: (imported: ImportedMidiTrack[]) => string[]
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
   deleteAudioBlock: (trackId: string, blockId: string) => void
@@ -1024,6 +1030,54 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [id, ...s.rootTrackIds] }
     })
     return id
+  },
+
+  importMidiTracks: (imported) => {
+    const ids: string[] = []
+    set((s) => {
+      const withNotes = imported.filter((t) => t.notes.length > 0)
+      if (withNotes.length === 0) return s
+      const tracks = { ...s.tracks }
+      const rootTrackIds = [...s.rootTrackIds]
+      let maxEndBar = 0
+      withNotes.forEach((t, i) => {
+        // One block spanning first note to last, on whole project bars; the
+        // notes' file-absolute beats become block-relative.
+        const firstBeat = Math.min(...t.notes.map((n) => n.startBeat))
+        const startBar = Math.floor(firstBeat / s.beatsPerBar)
+        const blockStartBeat = startBar * s.beatsPerBar
+        const durationBars = Math.max(1, Math.ceil((t.endBeat - blockStartBeat) / s.beatsPerBar))
+        const block: Block = {
+          id: crypto.randomUUID(),
+          startBar,
+          durationBars,
+          loop: false,
+          notes: t.notes.map((n) => ({ ...n, startBeat: n.startBeat - blockStartBeat })),
+        }
+        const id = crypto.randomUUID()
+        tracks[id] = {
+          id,
+          name: t.name || `MIDI ${i + 1}`,
+          type: 'base',
+          instrumentId: 'cube',
+          color: OBJECT_TRACK_COLOR,
+          muted: false,
+          solo: false,
+          blocks: [block],
+          childIds: [],
+        }
+        rootTrackIds.push(id)
+        ids.push(id)
+        maxEndBar = Math.max(maxEndBar, startBar + durationBars)
+      })
+      // Grow (never shrink) the project if the file overruns; blocks past the
+      // MAX_TOTAL_BARS clamp are tolerated, the timeline just ends sooner.
+      const totalBars = maxEndBar > s.totalBars
+        ? Math.min(MAX_TOTAL_BARS, maxEndBar)
+        : s.totalBars
+      return { tracks, rootTrackIds, totalBars }
+    })
+    return ids
   },
 
   addAudioBlock: (trackId, block) =>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent } from 'react'
-import { FileAudio, Film, Plus } from 'lucide-react'
+import { FileAudio, FileMusic, Film, Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -17,6 +17,8 @@ import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { loadAudioTrack } from '../../utils/loadAudioTrack'
 import { addVideoClipsToTrack, capError } from '../../core/video/videoUploads'
+import { parseMidiFile, isMidiFileName, isMidiMimeType } from '../../core/midiImport'
+import { getInstrument } from '../../instruments'
 import { usePlan } from '../../../billing/usePlan'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
@@ -176,35 +178,82 @@ export function TimelineArea() {
   // the drag's item TYPES (file contents aren't readable until drop); the
   // depth counter absorbs enter/leave noise from crossing child boundaries.
   const { isPro } = usePlan()
-  const [mediaDropHover, setMediaDropHover] = useState<{ audio: boolean; video: boolean } | null>(null)
+  const [mediaDropHover, setMediaDropHover] = useState<{ audio: boolean; video: boolean; midi: boolean } | null>(null)
   const dropDepthRef = useRef(0)
   // Drop problems (over-cap files, unreadable files) surface as a transient
-  // notice over the tracks - never as a bare console error.
-  const [dropNotice, setDropNotice] = useState<string | null>(null)
+  // notice over the tracks - never as a bare console error. Import summaries
+  // reuse the same slot with an 'info' tone.
+  const [dropNotice, setDropNotice] = useState<{ message: string; tone: 'warn' | 'info' } | null>(null)
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const showDropNotice = (message: string) => {
-    setDropNotice(message)
+  const showDropNotice = (message: string, tone: 'warn' | 'info' = 'warn') => {
+    setDropNotice({ message, tone })
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current)
     noticeTimerRef.current = setTimeout(() => setDropNotice(null), 8000)
   }
   useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current) }, [])
+  // MIDI is sniffed before the audio/ prefix - 'audio/midi' must not read as
+  // audio. Empty-type .mid drags stay invisible until drop (no filename here).
   const mediaKindsOf = (e: ReactDragEvent) => {
     let audio = false
     let video = false
+    let midi = false
     for (const it of Array.from(e.dataTransfer.items)) {
       if (it.kind !== 'file') continue
-      if (it.type.startsWith('audio/')) audio = true
-      if (it.type.startsWith('video/')) video = true
+      if (isMidiMimeType(it.type)) midi = true
+      else if (it.type.startsWith('audio/')) audio = true
+      else if (it.type.startsWith('video/')) video = true
     }
-    return audio || video ? { audio, video } : null
+    return audio || video || midi ? { audio, video, midi } : null
   }
+  // .mid files → new tracks through the pure parser + one store write, shared
+  // by the header button and OS drops. Routed by extension, not MIME type -
+  // browsers report 'audio/midi', 'audio/mid', or nothing for the same file.
+  const importMidiFiles = (files: File[]) => {
+    void (async () => {
+      const createdIds: string[] = []
+      let trackCount = 0
+      let noteCount = 0
+      let outsideCount = 0
+      // The default instrument's declared vocabulary. Out-of-range notes still
+      // import (the document keeps full pitch); the summary just counts them.
+      const mapped = new Set(getInstrument('cube')?.midiRows?.map((r) => r.pitch) ?? [])
+      for (const file of files) {
+        let imported
+        try {
+          imported = parseMidiFile(await file.arrayBuffer())
+        } catch {
+          showDropNotice(`Couldn't read ${file.name}`)
+          continue
+        }
+        if (imported.length === 0) {
+          showDropNotice(`No notes in ${file.name}`)
+          continue
+        }
+        createdIds.push(...useProjectStore.getState().importMidiTracks(imported))
+        for (const t of imported) {
+          trackCount++
+          noteCount += t.notes.length
+          if (mapped.size > 0) outsideCount += t.notes.filter((n) => !mapped.has(n.pitch)).length
+        }
+      }
+      if (createdIds.length === 0) return
+      selectNewTrack(createdIds[0])
+      const summary = `${trackCount} ${trackCount === 1 ? 'track' : 'tracks'} · ${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`
+      showDropNotice(outsideCount > 0 ? `${summary} · ${outsideCount} outside Cube's range` : summary, 'info')
+    })()
+  }
+  const midiInputRef = useRef<HTMLInputElement>(null)
   const onMediaDrop = (e: ReactDragEvent) => {
     e.preventDefault()
     dropDepthRef.current = 0
     setMediaDropHover(null)
     const files = Array.from(e.dataTransfer.files)
 
-    const audioFiles = files.filter((f) => f.type.startsWith('audio/'))
+    const isMidiFile = (f: File) => isMidiFileName(f.name) || isMidiMimeType(f.type)
+    const midiFiles = files.filter(isMidiFile)
+    if (midiFiles.length > 0) importMidiFiles(midiFiles)
+
+    const audioFiles = files.filter((f) => !isMidiFile(f) && f.type.startsWith('audio/'))
     void (async () => {
       for (const file of audioFiles) {
         try {
@@ -276,6 +325,26 @@ export function TimelineArea() {
               >
                 <Plus size={11} />
               </button>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+                onClick={() => midiInputRef.current?.click()}
+                title="Import MIDI file"
+              >
+                <FileMusic size={11} />
+              </button>
+              <input
+                ref={midiInputRef}
+                type="file"
+                accept=".mid,.midi"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? [])
+                  // Reset so re-picking the same file fires change again.
+                  e.target.value = ''
+                  if (files.length > 0) importMidiFiles(files)
+                }}
+              />
             </div>
           }
         />
@@ -327,12 +396,14 @@ export function TimelineArea() {
         {mediaDropHover && (
           <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
             <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
-              {mediaDropHover.video ? <Film size={13} /> : <FileAudio size={13} />}
-              {mediaDropHover.video && mediaDropHover.audio
+              {mediaDropHover.video ? <Film size={13} /> : mediaDropHover.midi ? <FileMusic size={13} /> : <FileAudio size={13} />}
+              {[mediaDropHover.audio, mediaDropHover.video, mediaDropHover.midi].filter(Boolean).length > 1
                 ? 'drop files to add tracks'
                 : mediaDropHover.video
                   ? 'drop videos to add a video track'
-                  : 'drop audio to add tracks'}
+                  : mediaDropHover.midi
+                    ? 'drop MIDI to add tracks'
+                    : 'drop audio to add tracks'}
             </span>
           </div>
         )}
@@ -341,9 +412,13 @@ export function TimelineArea() {
             <button
               onClick={() => setDropNotice(null)}
               title="Dismiss"
-              className="max-w-[560px] cursor-pointer rounded border border-[var(--warn)] bg-[var(--bg-panel)] px-3 py-1.5 text-left text-[11px] leading-snug text-[var(--warn)] shadow-lg shadow-black/40"
+              className={`max-w-[560px] cursor-pointer rounded border bg-[var(--bg-panel)] px-3 py-1.5 text-left text-[11px] leading-snug shadow-lg shadow-black/40 ${
+                dropNotice.tone === 'info'
+                  ? 'border-[var(--accent)] text-[var(--accent)]'
+                  : 'border-[var(--warn)] text-[var(--warn)]'
+              }`}
             >
-              {dropNotice}
+              {dropNotice.message}
             </button>
           </div>
         )}

@@ -80,6 +80,7 @@
     <li><strong>Mass mute/solo</strong> - drag across M/S buttons to paint one state over many tracks, Logic-style.</li>
     <li><strong>Fullscreen visual</strong> - button on the canvas panel or F takes the visual fullscreen.</li>
     <li><strong>Export filename</strong> - defaults to the project's name (sanitized); quality settings still remembered, name isn't.</li>
+    <li><strong>MIDI import</strong> - drop a .mid on the tracks area (or the ruler-corner button): one track per MIDI track, full pitch kept, out-of-range notes counted in the summary.</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -93,7 +94,6 @@
     <li><strong>Sign-in-to-save</strong> - anonymous Supabase sessions: logged-out work autosaves and converts in place at signup (designed 2026-07-06, docs ready).</li>
     <li><strong>Nested mute/solo ★</strong> - decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
     <li><strong>Copy-paste automation ★</strong> - move automation lanes between instruments (needs Tyler's clarification first).</li>
-    <li><strong>MIDI import</strong> - parse .mid files into blocks/notes; keep full pitch data and let the editor view reconcile narrow instruments.</li>
     <li><strong>Row hiding/scaling</strong> - piano-roll options to hide rows, compress row height, and filter to a scale.</li>
     <li><strong>Loop blocks</strong> - right-edge resize past the content repeats the pattern (the loop flag exists, nothing consumes it).</li>
     <li><strong>Effects picker menu</strong> - choose effects from a nested pop-up in the track editor, like the automation menu.</li>
@@ -215,7 +215,7 @@
 </div>
 
 <div class="item">
-  <h3>MIDI import (file → blocks/notes)</h3>
+  <h3><span class="badge b-done">done</span>MIDI import (file → blocks/notes) - shipped 2026-07-11</h3>
   <p><code>@tonejs/midi</code> and <code>midi-file</code> are already in package.json. Parse → one block per MIDI track (or per region), notes mapped to beats via the file's PPQ and your bpm. Drop-target or a button next to Add Track.</p>
   <p><span class="badge b-design">design</span> Your row-reconciliation question: for instruments with narrow pitch ranges (drum-style/trigger lanes), imported notes outside the range need a policy - clamp, fold into range (mod), or drop with a count shown. Recommend: import faithfully into the block (data keeps full pitch), and let the <em>editor view</em> handle display (ties into row-hiding below); instruments already ignore pitches they don't map.</p>
   <p class="where">new core/midiImport.ts · components (drop/button UI)</p>
