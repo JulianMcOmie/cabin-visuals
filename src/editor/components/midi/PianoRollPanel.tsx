@@ -7,7 +7,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { generateRows, generateAutomationRows, generateVideoClipRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
+import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { useVideoStore } from '../../store/VideoStore'
 import { getInstrument } from '../../instruments'
@@ -16,14 +16,17 @@ import { isNumberParam } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
+import { MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
-/** Automation editor context: the param a lane drives, and its value bounds. */
+/** Automation editor context: the param a lane drives, and its value bounds.
+ *  kind picks the row model - 'value' shows 13 value-labelled rows across the
+ *  automation span; 'toggle' shows exactly On/Off (booleans, effect enabled). */
 interface AutomationInfo {
   paramLabel: string
   paramMin: number
   paramMax: number
+  kind: 'value' | 'toggle'
 }
 
 /** Trigger-lane editor context: rows are interchangeable slots (pitch is ignored
@@ -86,22 +89,23 @@ export function PianoRollPanel() {
 
   // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
   // Automation tracks target their parent; continuous movers target their own input.
-  // Trigger lanes (mover ballistic/none, envelope gates, suppress/mute modifiers)
-  // ignore note PITCH entirely, so they get a short set of interchangeable rows
-  // instead of the full piano.
+  // Trigger lanes (mover ballistic/none, envelope gates, suppress/mute modifiers,
+  // ability lanes) ignore note PITCH entirely, so they get a short set of
+  // interchangeable rows instead of the full piano.
   let automation: AutomationInfo | undefined
   let trigger: TriggerInfo | undefined
+  let abilityColor: string | undefined
   if (track.type === 'mover') {
     const dim = getMover(track.moverId)
     const moverLabel = dim?.label ?? 'Mover'
     if (track.midiMode === 'amount') {
-      automation = { paramLabel: `${moverLabel} · Amount`, paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX }
+      automation = { paramLabel: `${moverLabel} · Amount`, paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX, kind: 'value' }
     } else if (track.midiMode === 'continuous') {
       const target = dim && isMoverMidiInput(dim, track.midiTargetInput)
         ? track.midiTargetInput
         : dim ? firstMoverMidiInput(dim) : undefined
       const input = dim && target ? dim.inputs[target] : undefined
-      if (input && target) automation = { paramLabel: `${moverLabel} · ${input.label ?? target}`, paramMin: input.min, paramMax: input.max }
+      if (input && target) automation = { paramLabel: `${moverLabel} · ${input.label ?? target}`, paramMin: input.min, paramMax: input.max, kind: 'value' }
     }
     if (!automation) {
       // Ballistic: each note fires a velocity-scaled envelope hit; pitch is ignored.
@@ -121,26 +125,43 @@ export function PianoRollPanel() {
       rowLabel: 'Region',
       cornerLabel: track.type === 'suppress' ? 'Suppress · regions · pitch ignored' : 'Mute · regions · pitch ignored',
     }
+  } else if (track.type === 'ability') {
+    // Ability lanes consume note TIMING + VELOCITY only (see Cube's shatter: it
+    // reads beat/duration/velocity off abilityEvents, never pitch), so they get the
+    // short trigger rows. An ability that wants real pitches must declare
+    // editor: 'pitched' on its AbilityLaneDef to keep the full piano.
+    const parent = track.parentId ? tracks[track.parentId] : undefined
+    const ability = parent
+      ? getInstrument(parent.instrumentId)?.abilities?.find((a) => a.key === track.abilityKey)
+      : undefined
+    if (ability?.editor !== 'pitched') {
+      const label = ability?.label ?? 'Ability'
+      trigger = { rowLabel: label, cornerLabel: `${label} · Trigger · velocity = strength` }
+      abilityColor = ability?.color
+    }
   } else if (track.type === 'automation' && track.targetParam) {
     const parent = track.parentId ? tracks[track.parentId] : undefined
     const fx = parseFxTarget(track.targetParam)
     if (fx) {
-      // Effect automation: value range from the plugin's param (On/Off = 0..1).
+      // Effect automation: value range from the plugin's param. The enabled
+      // pseudo-param and boolean params are toggles (two rows, On/Off).
       const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
       const plugin = inst ? getEffect(inst.pluginId) : undefined
       if (fx.key === 'enabled') {
-        automation = { paramLabel: `${plugin?.name ?? 'Effect'} · On (≥ 0.5)`, paramMin: 0, paramMax: 1 }
+        automation = { paramLabel: `${plugin?.name ?? 'Effect'} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       } else {
         const pd = plugin?.params.find((p) => p.key === fx.key)
-        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max }
+        if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value' }
+        else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else if (parent?.type === 'mover') {
       const dim = getMover(parent.moverId)
       const input = dim?.inputs[track.targetParam]
-      if (input) automation = { paramLabel: `${dim?.label ?? 'Mover'} · ${input.label ?? track.targetParam}`, paramMin: input.min, paramMax: input.max }
+      if (input) automation = { paramLabel: `${dim?.label ?? 'Mover'} · ${input.label ?? track.targetParam}`, paramMin: input.min, paramMax: input.max, kind: 'value' }
     } else {
       const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
-      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max }
+      if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
+      else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }
   }
 
@@ -150,7 +171,7 @@ export function PianoRollPanel() {
       trackId={track.id}
       trackName={track.name}
       trackColor={modColor ?? track.color}
-      noteColor={modColor ?? undefined}
+      noteColor={modColor ?? abilityColor}
       automation={automation}
       trigger={trigger}
       block={block}
@@ -195,22 +216,22 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
 
-  // Value lanes show value rows (pitch → param/input value) with the target name
-  // in the range gutter; trigger lanes show a short set of interchangeable rows;
-  // a Video track shows ONLY its clip rows (one per uploaded clip); instruments
-  // that declare a MIDI vocabulary (def.midiRows) show only those labelled rows;
-  // add/override modifiers get the flat-coloured full piano (their pitches become
-  // real parent notes); anything left shows the full note rainbow.
+  // Value lanes show 13 value-labelled rows (pitch → param/input value) with the
+  // target name in the frozen corner; toggle lanes show exactly On/Off; trigger
+  // lanes show a short set of interchangeable rows; a Video track shows ONLY its
+  // clip rows (one per uploaded clip); instruments that declare a MIDI vocabulary
+  // (def.midiRows) show only those labelled rows; add/override modifiers get the
+  // flat-coloured full piano (their pitches become real parent notes); anything
+  // left shows the full note rainbow.
   const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const defRows = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRows
     : undefined
-  const auto = automation
-    ? generateAutomationRows({ min: AUTOMATION_PITCH_MIN, max: AUTOMATION_PITCH_MAX }, automation.paramMin, automation.paramMax, automation.paramLabel)
-    : null
-  const rows = auto
-    ? auto.rows
+  const rows = automation
+    ? automation.kind === 'toggle'
+      ? generateToggleRows(notes.map((n) => n.pitch))
+      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch))
     : trigger
       ? generateTriggerRows(trigger.rowLabel, noteColor ?? trackColor, notes.map((n) => n.pitch))
       : videoTrack

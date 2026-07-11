@@ -1,4 +1,5 @@
-import type { MidiRow, RangeLabel } from './types'
+import type { MidiRow } from './types'
+import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, pitchToValue } from '../../core/trackTypes'
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -146,48 +147,81 @@ export function generateVideoClipRows(
   return rows
 }
 
+// Value lanes encode a param value in each note's PITCH via pitchToValue over the
+// fixed AUTOMATION_PITCH_MIN..MAX span (core/trackTypes.ts). That mapping is FROZEN -
+// saved projects hold notes at arbitrary pitches in the span - so the editor may only
+// choose WHICH pitches to show as rows, never re-map a pitch to a different value.
+// 13 evenly-spaced samples keep the lane readable without a wall of unlabeled rows.
+const VALUE_ROW_STEPS = 12
+
+/** Compact value label: whole numbers stay whole, decimals trimmed to what the
+ *  row step actually needs (e.g. "1", "0.75", "12.5"). */
+function formatValueCompact(value: number, rowStep: number): string {
+  const decimals = rowStep >= 1 ? 0 : rowStep >= 0.1 ? 1 : rowStep >= 0.01 ? 2 : 3
+  return Number(value.toFixed(decimals)).toString()
+}
+
 /**
- * Generate rows for automation tracks where pitch maps to a parameter value.
- * Shows value labels instead of note names. Only labels a subset of rows.
+ * Rows for a value lane (instrument-param / effect-param / mover-input automation,
+ * mover amount + continuous MIDI): 13 rows sampled evenly across the automation
+ * pitch span, EVERY row labelled with the param value that pitch maps to (top row
+ * is the max, bottom the min). Notes at in-between pitches remain fully valid to
+ * the engine; any pitch outside the sampled set gets a dimmed extra row labelled
+ * with its own value so no note can silently vanish from the editor.
  */
-export function generateAutomationRows(
-  noteRange: { min: number; max: number },
+export function generateValueRows(
   paramMin: number,
   paramMax: number,
-  paramLabel: string,
-): { rows: MidiRow[]; rangeLabels: RangeLabel[] } {
-  const pitchMin = noteRange.min
-  const pitchMax = noteRange.max
-  const pitchSpan = pitchMax - pitchMin
+  notePitches: number[],
+  formatValue?: (value: number) => string,
+): MidiRow[] {
+  const rowStep = Math.abs(paramMax - paramMin) / VALUE_ROW_STEPS
+  const fmt = formatValue ?? ((v: number) => formatValueCompact(v, rowStep))
+  const pitchSpan = AUTOMATION_PITCH_MAX - AUTOMATION_PITCH_MIN
   const rows: MidiRow[] = []
+  const known = new Set<number>()
 
-  const labelCount = Math.min(9, pitchSpan + 1)
-  const labelledPitches = new Set<number>()
-  for (let i = 0; i < labelCount; i++) {
-    labelledPitches.add(Math.round(pitchMin + (i / (labelCount - 1)) * pitchSpan))
+  for (let k = VALUE_ROW_STEPS; k >= 0; k--) {
+    const pitch = Math.round(AUTOMATION_PITCH_MIN + (k / VALUE_ROW_STEPS) * pitchSpan)
+    if (known.has(pitch)) continue // guard: a narrow span could round two samples together
+    known.add(pitch)
+    const t = pitchSpan > 0 ? (pitch - AUTOMATION_PITCH_MIN) / pitchSpan : 0
+    let label = fmt(pitchToValue(pitch, paramMin, paramMax))
+    if (k === VALUE_ROW_STEPS) label += ' · max'
+    if (k === 0) label += ' · min'
+    rows.push({ pitch, label, color: `hsl(${t * 240}, 60%, 50%)` })
   }
 
-  for (let pitch = pitchMax; pitch >= pitchMin; pitch--) {
-    const t = pitchSpan > 0 ? (pitch - pitchMin) / pitchSpan : 0
-    const value = paramMin + t * (paramMax - paramMin)
-
-    const formatted = value >= 100 ? Math.round(value).toString()
-      : value >= 1 ? value.toFixed(1)
-      : value.toFixed(3)
-
-    const hue = t * 240
+  // Orphans keep value labels (not note names): the engine reads them as values,
+  // and pitchToValue clamps, so out-of-span pitches truthfully read as min/max.
+  const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
     rows.push({
       pitch,
-      label: labelledPitches.has(pitch) ? formatted : '',
-      color: `hsl(${hue}, 60%, 50%)`,
+      label: fmt(pitchToValue(pitch, paramMin, paramMax)),
+      color: 'hsl(0, 0%, 45%)',
     })
   }
+  return rows
+}
 
-  const rangeLabels: RangeLabel[] = [{
-    startPitch: pitchMin,
-    endPitch: pitchMax,
-    label: paramLabel,
-  }]
-
-  return { rows, rangeLabels }
+/**
+ * Rows for a boolean (toggle) lane - effect On/Off and boolean params: exactly two
+ * rows, On at the top of the automation span and Off at the bottom. The engine reads
+ * the same pitch mapping as any value lane (value >= 0.5 of the span means on), so
+ * in-between pitches from saved projects appear as dimmed extra rows labelled by
+ * which side of the threshold they land on.
+ */
+export function generateToggleRows(notePitches: number[]): MidiRow[] {
+  const rows: MidiRow[] = [
+    { pitch: AUTOMATION_PITCH_MAX, label: 'On', color: 'hsl(145, 60%, 45%)' },
+    { pitch: AUTOMATION_PITCH_MIN, label: 'Off', color: 'hsl(0, 0%, 55%)' },
+  ]
+  const known = new Set([AUTOMATION_PITCH_MAX, AUTOMATION_PITCH_MIN])
+  const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
+    const on = pitchToValue(pitch, 0, 1) >= 0.5
+    rows.push({ pitch, label: on ? 'On' : 'Off', color: 'hsl(0, 0%, 45%)' })
+  }
+  return rows
 }
