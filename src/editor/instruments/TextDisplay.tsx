@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
+import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ResolvedNote } from '../core/visual/types'
@@ -247,9 +247,12 @@ const PARAMS: ParamDef[] = [
   { key: 'flightDrift', label: 'Flight Drift', min: 0, max: 3, step: 0.1, default: 0.3 },
   { key: 'flightTumble', label: 'Flight Tumble', min: 0, max: 5, step: 0.1, default: 0.5 },
   { key: 'flightSubdivRate', label: 'Flight Spawns/Beat', min: 1, max: 32, step: 1, default: 8 },
+  { key: 'hue', label: 'Hue Shift', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'rainbowEnabled', label: 'Rainbow', type: 'boolean', default: 0 },
   { key: 'rainbowCycleLength', label: 'Rainbow Cycle Length', min: 2, max: 64, step: 1, default: 12 },
 ]
+const _hueColor = new Color()
+
 function TextDisplayVisual({ trackId }: { trackId: string }) {
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)
@@ -358,6 +361,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const flightSubdivRate = p.flightSubdivRate ?? 8
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
+    // Hue Shift rotates whatever color is about to draw (authored or rainbow).
+    // Quantized to 1/120th turns so an automated lane reuses a bounded set of
+    // cached word canvases instead of minting one per sampled float.
+    const hueShift = Math.round((((p.hue ?? 0) % 1) + 1) % 1 * 120) / 120
+    const shiftHex = (hex: string) =>
+      hueShift > 0 ? `#${_hueColor.set(hex).offsetHSL(hueShift, 0, 0).getHexString()}` : hex
 
     const entries = parseTextEntries(text)
     if (entries.length === 0) { meshRef.current.visible = false; return }
@@ -437,7 +446,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // Rainbow hue cycles on beat subdivisions.
     const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
     const rainbowHue = rainbowEnabled ? ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
-    const effectiveColor = rainbowEnabled ? hslToHex(rainbowHue, 1, 0.55) : color
+    const effectiveColor = shiftHex(rainbowEnabled ? hslToHex(rainbowHue, 1, 0.55) : color)
 
     const baseScale = Math.min(viewport.width, viewport.height) * 0.6 * fontSize
 
@@ -468,7 +477,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         if (depth > flightMaxDepth) continue
 
         const sprEntry = entries[(Math.max(1, wordCountAt(spawnBeat)) - 1) % entries.length] ?? entries[0]
-        const sprColor = rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color
+        const sprColor = shiftHex(rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color)
         const seed = k * 13 + 7
         const vx = (seededRand(seed) - 0.5) * flightDrift
         const vy = (seededRand(seed + 1) - 0.5) * flightDrift * 0.6
