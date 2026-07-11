@@ -76,6 +76,8 @@ export function useLibraryDrag() {
         // Keep the default arrow throughout and suppress hover/interactions elsewhere.
         lockCursor('default')
         setGhostName(item.name)
+        // The timeline lights up the label column as the drop zone.
+        useUIStore.getState().setLibraryDragging(true)
         // Ghost mounts on this render; position it once it exists (next frame).
         const px = ev.clientX
         const py = ev.clientY
@@ -112,6 +114,7 @@ export function useLibraryDrag() {
       if (!started) return
       unlockCursor()
       useUIStore.getState().setTrackDrop(null)
+      useUIStore.getState().setLibraryDragging(false)
       setGhostName(null)
       if (target) {
         const track = makeTrack(item, target.parentId)

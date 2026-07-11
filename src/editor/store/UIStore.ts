@@ -65,6 +65,11 @@ interface UIState {
   effectDragging: boolean
   setEffectDragging: (v: boolean) => void
 
+  // True while an instrument is being dragged from the library - the timeline uses it
+  // to light up the track-label column as the drop zone.
+  libraryDragging: boolean
+  setLibraryDragging: (v: boolean) => void
+
   // The open project's row name (set at load) - display-only editor chrome, e.g.
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
@@ -135,6 +140,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   effectDragging: false,
   setEffectDragging: (v) => set({ effectDragging: v }),
+
+  libraryDragging: false,
+  setLibraryDragging: (v) => set({ libraryDragging: v }),
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),

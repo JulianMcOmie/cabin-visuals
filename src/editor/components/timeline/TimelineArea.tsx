@@ -71,6 +71,12 @@ export function TimelineArea() {
   // dim (the dragged source), a row to highlight (nest-into), or an insertion line.
   const trackDrop = useUIStore((s) => s.trackDrop)
 
+  // While a library instrument is being dragged, the label column lights up as
+  // the drop zone; once the cursor is over it the insertion line / nest
+  // highlight takes over, so the hint text stands down (the border stays).
+  const libraryDragging = useUIStore((s) => s.libraryDragging)
+  const libraryDropReady = useUIStore((s) => s.libraryDragging && !!s.trackDrop)
+
   // Alt copy-drag still reflows rows to open a gap at its live insertion point. The
   // gap is a VISUAL row index (root tracks aren't at index*rowHeight once lanes exist);
   // it only opens when there's a real target (insertIndex != null).
@@ -248,6 +254,22 @@ export function TimelineArea() {
         }}
         onDrop={onAudioDrop}
       >
+        {libraryDragging && (
+          <div
+            className={`pointer-events-none absolute top-0 bottom-0 left-0 z-30 flex items-center justify-center border border-dashed transition-colors ${
+              libraryDropReady
+                ? 'border-[var(--accent)] bg-[var(--accent)]/15'
+                : 'border-[var(--border-strong)] bg-[var(--accent)]/5'
+            }`}
+            style={{ width: labelWidth }}
+          >
+            {!libraryDropReady && (
+              <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-2.5 py-1.5 font-mono text-[11px] text-[var(--text-3)]">
+                <Plus size={12} /> drop here
+              </span>
+            )}
+          </div>
+        )}
         {audioDropHover && (
           <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
             <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
