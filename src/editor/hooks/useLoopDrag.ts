@@ -28,9 +28,9 @@ export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
     if (anchor == null) return
     const originX = e.clientX
     let dragging = false
-    // The loop lane reads as selection, not resizing - keep the default arrow
-    // for the whole gesture (matches the lane's hover cursor).
-    lockCursor('default')
+    // The loop lane shows the grab cursor for the whole gesture (matches the
+    // lane's hover cursor).
+    lockCursor('grab')
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {

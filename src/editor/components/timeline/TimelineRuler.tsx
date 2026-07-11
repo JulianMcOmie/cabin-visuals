@@ -58,10 +58,10 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timel
           else onScrubStart(e)
         }}
         onPointerMove={(e) => {
-          // The loop lane (top half) reads as selection - default arrow; only
-          // the scrub half advertises ew-resize.
+          // The loop lane (top half) shows the grab cursor; only the scrub
+          // half advertises ew-resize.
           const rect = e.currentTarget.getBoundingClientRect()
-          e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
+          e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'grab' : 'ew-resize'
         }}
       >
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>

@@ -333,10 +333,10 @@ export function MidiEditor({
             startScrub(e)
           }}
           onPointerMove={(e) => {
-            // The loop lane (top half) reads as selection - default arrow; only
-            // the scrub half advertises ew-resize.
+            // The loop lane (top half) shows the grab cursor; only the scrub
+            // half advertises ew-resize.
             const rect = e.currentTarget.getBoundingClientRect()
-            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
+            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'grab' : 'ew-resize'
           }}
         >
           {/* Subtle divider separating the top (numbers) and bottom (ticks) halves -
