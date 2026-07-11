@@ -81,23 +81,25 @@ export function NestedMenu({
   }, [x, y])
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    window.addEventListener('mousedown', onDown)
     window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
   const visible = groups.filter((g) => g.items.length > 0)
 
   return (
+    <>
+      {/* Full-screen backdrop: an outside click closes the menu AND is swallowed -
+          without it the closing click falls through to whatever sits beneath
+          (panel toggles, note draws, marquees). */}
+      <div
+        className="fixed inset-0 z-50"
+        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }}
+        onContextMenu={(e) => e.preventDefault()}
+      />
     <div
       ref={ref}
       className="fixed z-50 min-w-[168px] py-1 rounded-md border border-zinc-700 bg-[#202024] text-xs shadow-lg shadow-black/50 select-none"
@@ -142,5 +144,6 @@ export function NestedMenu({
         </div>
       ))}
     </div>
+    </>
   )
 }
