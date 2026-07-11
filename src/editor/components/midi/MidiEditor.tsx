@@ -388,6 +388,17 @@ export function MidiEditor({
         style={{ cursor: 'default' }}
         onClick={handleContainerClick}
         onScroll={onScrollSync}
+        onPointerDown={(e) => {
+          // The empty space below the last row (short row lists leave plenty) is
+          // still "the grid" for selection: start the marquee there too. Only
+          // presses landing on the scroll container itself qualify (the grid,
+          // labels, and notes handle their own), and the label column's x-range
+          // stays inert - it isn't part of the grid.
+          if (e.target !== e.currentTarget) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          if (e.clientX - rect.left < labelWidth + PLAYHEAD_TRIANGLE_HALF) return
+          handleBackgroundPointerDown(e)
+        }}
       >
       <div style={{ width: canvasWidth, height: canvasHeight, position: 'relative', display: 'flex' }}>
         {/* Labels column - frozen on horizontal scroll (sticky left), like the ruler

@@ -153,8 +153,17 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       suppressTrackSelectBriefly()
 
       if (d.type === 'marquee') {
-        const minX = Math.min(d.startClientX, e.clientX)
-        const maxX = Math.max(d.startClientX, e.clientX)
+        // The marquee never extends into the (sticky) track-label column: clamp
+        // the pointer to the labels' on-screen right edge before hit-testing
+        // and drawing the rectangle. The playhead gutter IS fair game - only
+        // the labels themselves are out of bounds.
+        const sc = laneRef.current?.closest('[data-tracks-scroll]')
+        const labelEdge = sc
+          ? sc.getBoundingClientRect().left + useUIStore.getState().tracksLabelWidth
+          : -Infinity
+        const px = Math.max(labelEdge, e.clientX)
+        const minX = Math.min(d.startClientX, px)
+        const maxX = Math.max(d.startClientX, px)
         const minY = Math.min(d.startClientY, e.clientY)
         const maxY = Math.max(d.startClientY, e.clientY)
         // Hit-test block elements by their client rects (scroll-independent).

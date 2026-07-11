@@ -5,6 +5,7 @@ import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from './coor
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { useTimeStore } from '../../store/TimeStore'
+import { useUIStore } from '../../store/UIStore'
 
 const NOTE_EDGE_WIDTH = 8
 
@@ -244,8 +245,19 @@ export function useNoteGestures({
         latest.current.onNotesChange(next)
         pendingCommitRef.current = next
       } else if (ds.type === 'marquee') {
-        setDragState(prev => ({ ...prev, currentX: grid.x, currentY: grid.y }))
-        const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, grid.x, grid.y)
+        // The rectangle never extends into the (sticky) label column: clamp to
+        // the labels' ON-SCREEN right edge, expressed in grid coordinates so it
+        // holds at any horizontal scroll. The playhead-triangle gutter is fair
+        // game - only the labels are out of bounds. Also never above the ruler.
+        const gridR = gridRef.current?.getBoundingClientRect()
+        const contR = containerRef.current?.getBoundingClientRect()
+        const minGridX = gridR && contR
+          ? contR.left + useUIStore.getState().midiLabelWidth - gridR.left
+          : 0
+        const gx = Math.max(minGridX, grid.x)
+        const gy = Math.max(0, grid.y)
+        setDragState(prev => ({ ...prev, currentX: gx, currentY: gy }))
+        const ids = latest.current.getNotesInMarquee(ds.startX, ds.startY, gx, gy)
         setSelectedNoteIds(new Set([...marqueeBaseRef.current, ...ids]))
       }
     }
@@ -273,7 +285,7 @@ export function useNoteGestures({
 
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
-  }, [setCursor, gridRef])
+  }, [setCursor, gridRef, containerRef])
 
   // If the component unmounts mid-drag, tear the window listeners down
   useEffect(() => {
