@@ -24,6 +24,29 @@ export interface InstrumentItem {
 const withKind = (kind: LibraryKind, items: Omit<InstrumentItem, 'kind'>[]): InstrumentItem[] =>
   items.map((i) => ({ ...i, kind }))
 
+// The essentials most projects reach for first - surfaced above the object list.
+// They are ordinary object instruments; only the grouping differs.
+const MAIN_INSTRUMENTS = withKind('object', [
+  { id: 'cameraControl', name: 'Camera', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="3.5" width="7.5" height="5.5" rx="1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <path d="M8.5 5.3 L11 4 V8.5 L8.5 7.2 Z" fill="none" stroke="#818cf8" strokeWidth="1" strokeLinejoin="round" />
+      <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'video', name: 'Video', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
+      <path d="M5 4.8 L7.6 6 L5 7.2 Z" fill="#f472b6" />
+    </svg>
+  )},
+  { id: 'textDisplay', name: 'Text Display', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
+    </svg>
+  )},
+])
+
 const OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: 'Cube', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'swarm', name: 'Swarm', icon: (
@@ -62,17 +85,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M4 11 Q4 6 6 1 Q8 6 8 11" fill="none" stroke="#a78bfa" strokeWidth="1.1" />
       <circle cx="6" cy="2" r="0.7" fill="#a78bfa" />
-    </svg>
-  )},
-  { id: 'textDisplay', name: 'Text Display', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
-    </svg>
-  )},
-  { id: 'video', name: 'Video', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
-      <path d="M5 4.8 L7.6 6 L5 7.2 Z" fill="#f472b6" />
     </svg>
   )},
   { id: 'stars', name: 'Stars', icon: (
@@ -154,13 +166,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="5.5" fill="#ffcc00" />
       <circle cx="4" cy="5" r="1" fill="#000" /><circle cx="8" cy="5" r="1" fill="#000" />
       <path d="M3.5 7.5 Q6 10 8.5 7.5" fill="none" stroke="#000" strokeWidth="1" strokeLinecap="round" />
-    </svg>
-  )},
-  { id: 'cameraControl', name: 'Camera', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect x="1" y="3.5" width="7.5" height="5.5" rx="1" fill="none" stroke="#818cf8" strokeWidth="1" />
-      <path d="M8.5 5.3 L11 4 V8.5 L8.5 7.2 Z" fill="none" stroke="#818cf8" strokeWidth="1" strokeLinejoin="round" />
-      <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
     </svg>
   )},
   { id: 'windowsXp', name: 'Windows XP', icon: (
@@ -325,6 +330,7 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto timeline-scrollbar pb-4">
         {tab === 'instruments' && (
           <>
+            <Section title="Main" description="The essentials: the Camera that films the scene, Video for cutting between uploaded clips, and Text for words on screen." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene - for example, a cube or sphere." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
