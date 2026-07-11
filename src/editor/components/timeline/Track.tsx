@@ -148,7 +148,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 if (e.key === 'Enter') e.currentTarget.blur()
                 else if (e.key === 'Escape') { e.currentTarget.value = track.name; e.currentTarget.blur() }
               }}
-              className="w-full min-w-0 text-[11px] font-medium text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none"
+              className="w-full min-w-0 select-text text-[11px] font-medium text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none"
             />
           ) : (
             <span

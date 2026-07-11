@@ -18,6 +18,9 @@ const EDGE_PX = 8
 
 interface DragState {
   mode: 'moving' | 'resizing-left' | 'resizing-right'
+  /** Right-edge grabs on the TOP half of the header/handle arm looping (dragging
+   *  past the pattern repeats it); bottom-half grabs are a plain resize. */
+  loopArm: boolean
   startClientX: number
   originStartBar: number
   originDurationBars: number
@@ -58,9 +61,10 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
 
   // Begin a drag in an explicit mode. Shared by the ruler header (which picks the
   // mode from where you grabbed it) and the grid edge handles (fixed left/right).
-  const beginDrag = useCallback((clientX: number, mode: DragState['mode']) => {
+  const beginDrag = useCallback((clientX: number, mode: DragState['mode'], loopArm = false) => {
     dragRef.current = {
       mode,
+      loopArm,
       startClientX: clientX,
       originStartBar: block.startBar,
       originDurationBars: block.durationBars,
@@ -89,12 +93,25 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
         update(l.trackId, l.blockId, { startBar })
       } else if (d.mode === 'resizing-right') {
         const durationBars = Math.max(oneBeat, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
-        // Same loop contract as the timeline gesture: growing past the authored
-        // pattern repeats it, shrinking back inside returns a plain block.
-        const loops = d.originNotes.length > 0 && durationBars > d.patternBars + 1e-9
-        update(l.trackId, l.blockId, loops
-          ? { durationBars, loop: true, loopLengthBars: d.patternBars }
-          : { durationBars, loop: false, loopLengthBars: undefined })
+        if (d.loopArm) {
+          // Same loop contract as the timeline gesture: growing past the authored
+          // pattern repeats it, shrinking back inside returns a plain block.
+          const loops = d.originNotes.length > 0 && durationBars > d.patternBars + 1e-9
+          update(l.trackId, l.blockId, loops
+            ? { durationBars, loop: true, loopLengthBars: d.patternBars }
+            : { durationBars, loop: false, loopLengthBars: undefined })
+        } else if (d.originLoop) {
+          // Bottom-half grab on an already-looping block: a plain resize that
+          // keeps the loop as-is, except shrinking to <= the pattern length
+          // still un-loops it (shrink-to-unloop works from either half).
+          const stillLoops = durationBars > d.patternBars + 1e-9
+          update(l.trackId, l.blockId, stillLoops
+            ? { durationBars, loop: true, loopLengthBars: d.patternBars }
+            : { durationBars, loop: false, loopLengthBars: undefined })
+        } else {
+          // Bottom-half grab on a plain block: never engages looping.
+          update(l.trackId, l.blockId, { durationBars })
+        }
       } else {
         const end = d.originStartBar + d.originDurationBars
         const startBar = Math.max(0, Math.min(end - oneBeat, d.originStartBar + deltaBars))
@@ -125,13 +142,22 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const x = e.clientX - rect.left
     const edge = Math.min(EDGE_PX, rect.width / 4)
     const mode: DragState['mode'] = x < edge ? 'resizing-left' : x > rect.width - edge ? 'resizing-right' : 'moving'
-    beginDrag(e.clientX, mode)
+    // Only the TOP half of the right edge arms looping; the bottom half resizes plainly.
+    const loopArm = mode === 'resizing-right' && e.clientY < rect.top + rect.height / 2
+    beginDrag(e.clientX, mode, loopArm)
   }, [beginDrag])
 
-  // Grid edge handles: fixed-side resize.
+  // Grid edge handles: fixed-side resize. The right handle's top half arms looping.
   const handleResizePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>, side: 'left' | 'right') => {
     e.stopPropagation()
-    beginDrag(e.clientX, side === 'left' ? 'resizing-left' : 'resizing-right')
+    // The handle spans the grid CONTENT (taller than the viewport and scrolled),
+    // so its raw midpoint can sit anywhere - even off-screen, making the top
+    // half unreachable. Split the part of the handle the user can actually see.
+    const rect = e.currentTarget.getBoundingClientRect()
+    const visibleTop = Math.max(rect.top, 0)
+    const visibleBottom = Math.min(rect.bottom, window.innerHeight)
+    const loopArm = side === 'right' && e.clientY < (visibleTop + visibleBottom) / 2
+    beginDrag(e.clientX, side === 'left' ? 'resizing-left' : 'resizing-right', loopArm)
   }, [beginDrag])
 
   return { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown }

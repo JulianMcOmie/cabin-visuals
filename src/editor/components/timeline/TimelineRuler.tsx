@@ -49,13 +49,19 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timel
         {corner}
       </div>
       <div
-        className="relative flex-1 overflow-hidden cursor-ew-resize"
+        className="relative flex-1 overflow-hidden"
         onPointerDown={(e) => {
           // Top half = the loop lane (drag defines a region, click clears it);
           // bottom half = the scrub, unchanged.
           const rect = e.currentTarget.getBoundingClientRect()
           if (e.clientY < rect.top + rect.height / 2) onLoopDragStart(e)
           else onScrubStart(e)
+        }}
+        onPointerMove={(e) => {
+          // The loop lane (top half) reads as selection - default arrow; only
+          // the scrub half advertises ew-resize.
+          const rect = e.currentTarget.getBoundingClientRect()
+          e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
         }}
       >
         <div ref={contentRef} className="absolute top-0 bottom-0" style={{ left: PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}>

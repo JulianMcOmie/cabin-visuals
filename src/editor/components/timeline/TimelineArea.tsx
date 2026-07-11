@@ -445,7 +445,7 @@ export function TimelineArea() {
         <div
           ref={scrollRef}
           data-tracks-scroll
-          className="absolute inset-0 overflow-auto timeline-scrollbar"
+          className="absolute inset-0 overflow-auto timeline-scrollbar select-none"
           onScroll={onTimelineScroll}
         >
           <div

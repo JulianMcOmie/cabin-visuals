@@ -299,6 +299,9 @@ export function useNoteGestures({
   // Handle note body pointer down -> start moving or resizing
   const handleNotePointerDown = useCallback((e: React.PointerEvent, note: Note) => {
     e.stopPropagation()
+    // Shift-click toggles selection; keep it from extending the browser's DOM
+    // text selection across the app.
+    if (e.shiftKey) e.preventDefault()
     if (!gridRef.current) return
     const grid = clientToGrid(e.clientX, e.clientY, gridRef.current.getBoundingClientRect())
 
@@ -491,7 +494,9 @@ export function useNoteGestures({
     }
 
     // Left-click = marquee selection. Capture the base selection (kept on
-    // shift, cleared otherwise) so live updates union against it.
+    // shift, cleared otherwise) so live updates union against it. Shift also
+    // preventDefaults so the click can't extend the DOM text selection.
+    if (e.shiftKey) e.preventDefault()
     const base = e.shiftKey ? new Set(selectedNoteIds) : new Set<string>()
     marqueeBaseRef.current = base
     setSelectedNoteIds(base)

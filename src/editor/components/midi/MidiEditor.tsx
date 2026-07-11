@@ -291,7 +291,7 @@ export function MidiEditor({
   const blockWidthPx = beatToX(blockDurationBeats, pixelsPerBeat)
 
   return (
-    <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21]">
+    <div className="relative flex-1 flex flex-col min-h-0 bg-[#1e1e21] select-none">
       {/* Resize handle along the label gutter's right edge - spans the full height
           (ruler corner + every row label). Invisible; the cursor is the affordance -
           mirrors the tracks label column exactly. */}
@@ -333,7 +333,10 @@ export function MidiEditor({
             startScrub(e)
           }}
           onPointerMove={(e) => {
-            e.currentTarget.style.cursor = 'ew-resize'
+            // The loop lane (top half) reads as selection - default arrow; only
+            // the scrub half advertises ew-resize.
+            const rect = e.currentTarget.getBoundingClientRect()
+            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
           }}
         >
           {/* Subtle divider separating the top (numbers) and bottom (ticks) halves -

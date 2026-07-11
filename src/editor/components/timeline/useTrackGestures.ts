@@ -91,6 +91,9 @@ type DragState =
       startY: number
       barWidthPx: number
       totalBars: number
+      /** Right-edge grabs on the TOP half of the block arm looping (dragging past
+       *  the pattern repeats it); bottom-half grabs are a plain resize. */
+      loopArm: boolean
       origins: Map<string, BlockOrigin>
       /** Owning track id per VISUAL row (track rows + ability-lane sub-rows), so a
        *  vertical block move indexes by the rows the user actually sees. Lane rows map
@@ -235,13 +238,26 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         for (const [blockId, o] of d.origins) {
           const maxDuration = d.totalBars - o.startBar
           const newDuration = Math.max(oneBeat, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
-          // Past the authored pattern the block loops (pattern length locked at
-          // drag start); back inside it is a plain block again. Empty blocks
-          // never loop - there is nothing to repeat.
-          const loops = o.notes.length > 0 && newDuration > o.patternBars + 1e-9
-          store.updateBlock(o.trackId, blockId, loops
-            ? { durationBars: newDuration, loop: true, loopLengthBars: o.patternBars }
-            : { durationBars: newDuration, loop: false, loopLengthBars: undefined })
+          if (d.loopArm) {
+            // Top-half grab: past the authored pattern the block loops (pattern
+            // length locked at drag start); back inside it is a plain block
+            // again. Empty blocks never loop - there is nothing to repeat.
+            const loops = o.notes.length > 0 && newDuration > o.patternBars + 1e-9
+            store.updateBlock(o.trackId, blockId, loops
+              ? { durationBars: newDuration, loop: true, loopLengthBars: o.patternBars }
+              : { durationBars: newDuration, loop: false, loopLengthBars: undefined })
+          } else if (o.loop) {
+            // Bottom-half grab on an already-looping block: a plain resize that
+            // keeps the loop as-is, except shrinking to <= the pattern length
+            // still un-loops it (shrink-to-unloop works from either half).
+            const stillLoops = newDuration > o.patternBars + 1e-9
+            store.updateBlock(o.trackId, blockId, stillLoops
+              ? { durationBars: newDuration, loop: true, loopLengthBars: o.patternBars }
+              : { durationBars: newDuration, loop: false, loopLengthBars: undefined })
+          } else {
+            // Bottom-half grab on a plain block: never engages looping.
+            store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
+          }
         }
       } else if (d.type === 'resizing-left') {
         const beatsPerBar = useProjectStore.getState().beatsPerBar
@@ -314,8 +330,10 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     if (e.button !== 0) return
     e.stopPropagation()
 
-    // Shift toggles selection without starting a drag.
+    // Shift toggles selection without starting a drag. preventDefault keeps the
+    // shift-click from extending the browser's DOM text selection across the app.
     if (e.shiftKey) {
+      e.preventDefault()
       const next = new Set(selectedBlockIds)
       if (next.has(blockId)) next.delete(blockId)
       else next.add(blockId)
@@ -331,6 +349,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const edge = Math.min(EDGE_PX, w / 4)
     const type: DragState['type'] =
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
+    // Only the TOP half of the right edge arms looping; the bottom half is a
+    // plain resize (see the resizing-right move handler).
+    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2
 
     // Select this block (keep an existing multi-selection it belongs to), then
     // arm the drag for the whole selection.
@@ -363,6 +384,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     const rows = flattenVisualRows(allTracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
     dragRef.current = {
       type,
+      loopArm,
       startX: e.clientX,
       startY: e.clientY,
       barWidthPx: useProjectStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
@@ -394,6 +416,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     if (e.button !== 0) return
+    // Shift-marquee adds to the selection; keep the shift-click itself from
+    // extending the browser's DOM text selection.
+    if (e.shiftKey) e.preventDefault()
     const base = e.shiftKey ? new Set(selectedBlockIds) : new Set<string>()
     if (!e.shiftKey) setSelectedBlockIds(new Set())
     dragRef.current = {

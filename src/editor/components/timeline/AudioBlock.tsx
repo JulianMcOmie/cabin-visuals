@@ -107,8 +107,11 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
     // Same selection semantics as MIDI blocks: shift toggles; a plain click on an
     // unselected block makes it the only selected block (track selection stays);
     // clicking an already-selected block keeps the selection.
+    // preventDefault keeps the shift-click from extending the browser's DOM
+    // text selection across the app.
     const ui = useUIStore.getState()
     if (e.shiftKey) {
+      e.preventDefault()
       const next = new Set(ui.selectedBlockIds)
       if (next.has(block.id)) next.delete(block.id)
       else next.add(block.id)
