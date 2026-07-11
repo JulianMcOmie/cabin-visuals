@@ -7,6 +7,7 @@ import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
 import { useMidiBlockGestures } from './useMidiBlockGestures'
+import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
@@ -229,6 +230,23 @@ export function MidiEditor({
 
   // All notes including the one being drawn
   const allNotes = drawingNote ? [...notes, drawingNote] : notes
+
+  // Loop ghosts: the pattern's repeats, dimmed and non-interactive, computed from
+  // the live local notes so they track in-flight edits. repeat 0 is the authored
+  // note itself and is skipped - except when a note sits outside the pattern
+  // window (its phase folds modulo the loop length); then the folded position
+  // shows as a ghost too, because that is where it plays.
+  const loopBeats = block.loop
+    ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: allNotes }, beatsPerBar)
+    : null
+  const loopGhosts = loopBeats != null && loopBeats > 0 && loopBeats < blockDurationBeats
+    ? tileLoopNotes(allNotes, loopBeats, blockDurationBeats, 2000)
+        .filter((t) => t.repeat > 0 || t.startBeat !== t.note.startBeat)
+    : []
+  const loopBoundaries: number[] = []
+  if (loopBeats != null && loopBeats > 0) {
+    for (let b = loopBeats; b < blockDurationBeats; b += loopBeats) loopBoundaries.push(b)
+  }
 
   // Marquee overlay (grid-local pixels)
   const marqueeStyle = useMemo(() => {
@@ -587,6 +605,47 @@ export function MidiEditor({
               }}
             />
           ))}
+
+          {/* Loop boundaries: dashed line at each pattern repeat inside the block. */}
+          {loopBoundaries.map((b) => (
+            <div
+              key={`loop:${b}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: blockStartPx + beatToX(b, pixelsPerBeat),
+                width: 0,
+                borderLeft: '1px dashed rgba(129, 140, 248, 0.45)',
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+
+          {/* Ghost repeats: where the pattern plays again, read-only (edit the
+              pattern; every repeat follows). Rendered before the notes so real
+              notes always sit on top. */}
+          {loopGhosts.map((t) => {
+            const rowIndex = pitchToRowIndex(t.note.pitch)
+            if (rowIndex === -1) return null
+            const row = rows[rowIndex]
+            return (
+              <div
+                key={`${t.note.id}:${t.repeat}`}
+                style={{
+                  position: 'absolute',
+                  left: blockStartPx + beatToX(t.startBeat, pixelsPerBeat),
+                  top: rowIndexToY(rowIndex, rowHeight) + 2,
+                  width: Math.max(beatToX(t.durationBeats, pixelsPerBeat), 8),
+                  height: rowHeight - 4,
+                  backgroundColor: row.color,
+                  opacity: 0.3,
+                  borderRadius: 3,
+                  pointerEvents: 'none',
+                }}
+              />
+            )
+          })}
 
           {/* Notes */}
           {allNotes.map((note) => {

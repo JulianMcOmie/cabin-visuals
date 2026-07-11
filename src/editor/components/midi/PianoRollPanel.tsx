@@ -242,6 +242,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         </span>
         <span className="text-xs text-zinc-600">
           Bar {block.startBar + 1} · {block.durationBars} bar{block.durationBars !== 1 ? 's' : ''}
+          {block.loop && block.loopLengthBars != null && ` · loops every ${block.loopLengthBars} bar${block.loopLengthBars !== 1 ? 's' : ''}`}
+          {block.loop && block.loopLengthBars == null && ' · loops'}
         </span>
 
         <div className="w-px h-4 bg-zinc-800" />

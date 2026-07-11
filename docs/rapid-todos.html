@@ -81,6 +81,7 @@
     <li><strong>Fullscreen visual</strong> - button on the canvas panel or F takes the visual fullscreen.</li>
     <li><strong>Export filename</strong> - defaults to the project's name (sanitized); quality settings still remembered, name isn't.</li>
     <li><strong>MIDI import</strong> - drop a .mid on the tracks area (or the ruler-corner button): one track per MIDI track, full pitch kept, out-of-range notes counted in the summary.</li>
+    <li><strong>Loop blocks</strong> - right-edge resize past the pattern repeats it (dashed boundaries in previews, ghost repeats in the piano roll; split keeps phase, join bakes).</li>
   </ul>
   <h3>🟢 Easy remaining</h3>
   <ul>
@@ -95,7 +96,6 @@
     <li><strong>Nested mute/solo ★</strong> - decide the parent/child semantics with Tyler, then implement in resolve + audio arm.</li>
     <li><strong>Copy-paste automation ★</strong> - move automation lanes between instruments (needs Tyler's clarification first).</li>
     <li><strong>Row hiding/scaling</strong> - piano-roll options to hide rows, compress row height, and filter to a scale.</li>
-    <li><strong>Loop blocks</strong> - right-edge resize past the content repeats the pattern (the loop flag exists, nothing consumes it).</li>
     <li><strong>Effects picker menu</strong> - choose effects from a nested pop-up in the track editor, like the automation menu.</li>
     <li><strong>Symmetric effects</strong> - effects built to be automated, e.g. radial copy with an animatable radius.</li>
     <li><strong>Per-keyframe curves</strong> - each automation segment carries its own curve instead of one mode per lane.</li>
@@ -228,7 +228,7 @@
 </div>
 
 <div class="item">
-  <h3>Loop MIDI blocks via right-edge resize</h3>
+  <h3><span class="badge b-done">done</span>Loop MIDI blocks via right-edge resize - shipped 2026-07-11</h3>
   <p>The <code>loop</code> flag exists on Block but nothing consumes it - <code>flattenBlocks</code> plays notes once. Two parts: resolve expands looped blocks (repeat the note pattern to fill <code>durationBars</code>), and the timeline right-edge resize past the content length sets <code>loop</code> + shows the repeat boundary in the preview. The resize gesture itself already exists.</p>
   <p class="where">core/visual/resolve.ts (flattenBlocks) · components/timeline/Block.tsx · useTrackGestures.ts</p>
 </div>

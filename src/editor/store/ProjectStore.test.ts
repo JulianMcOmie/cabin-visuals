@@ -54,8 +54,15 @@ test('splitBlockAtBeat keeps loop phase for the right-hand block', () => {
   assert.equal(split.right.id, 'right-loop')
   assert.equal(split.right.startBar, 1.5)
   assert.equal(split.right.durationBars, 2.5)
+  assert.equal(split.left.loop, true)
+  assert.equal(split.right.loop, true)
+  assert.equal(split.left.loopLengthBars, 1)
+  assert.equal(split.right.loopLengthBars, 1)
+  // Phase preserved modulo the loop length, normalized into the pattern window:
+  // the original pulse plays at absolute beats 1, 5, 9, 13; the right half
+  // (beats 6..16) keeps 9 and 13 = local phase 3 in a 4-beat loop.
   assert.deepEqual(split.right.notes.map((n) => ({ id: n.id, startBeat: n.startBeat })), [
-    { id: 'right-pulse', startBeat: -5 },
+    { id: 'right-pulse', startBeat: 3 },
   ])
 })
 

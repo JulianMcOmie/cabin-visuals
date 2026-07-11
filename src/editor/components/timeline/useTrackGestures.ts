@@ -5,6 +5,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
+import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
@@ -21,6 +22,10 @@ interface BlockOrigin {
   startBar: number
   durationBars: number
   notes: Note[]
+  loop: boolean
+  /** The authored pattern length at drag start: the loop length for a looping
+   *  block, the whole duration otherwise. Right-resize past it engages looping. */
+  patternBars: number
 }
 
 const EDGE_PX = 8
@@ -229,7 +234,13 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         for (const [blockId, o] of d.origins) {
           const maxDuration = d.totalBars - o.startBar
           const newDuration = Math.max(oneBeat, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
-          store.updateBlock(o.trackId, blockId, { durationBars: newDuration })
+          // Past the authored pattern the block loops (pattern length locked at
+          // drag start); back inside it is a plain block again. Empty blocks
+          // never loop - there is nothing to repeat.
+          const loops = o.notes.length > 0 && newDuration > o.patternBars + 1e-9
+          store.updateBlock(o.trackId, blockId, loops
+            ? { durationBars: newDuration, loop: true, loopLengthBars: o.patternBars }
+            : { durationBars: newDuration, loop: false, loopLengthBars: undefined })
         }
       } else if (d.type === 'resizing-left') {
         const beatsPerBar = useProjectStore.getState().beatsPerBar
@@ -239,10 +250,13 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           const end = o.startBar + o.durationBars
           const newStartBar = Math.max(0, Math.min(end - oneBeat, snapBar(o.startBar + deltaBars)))
           // Counter-shift notes (block-relative) so they stay put in absolute time,
-          // written atomically with the start so they don't move on resize.
+          // written atomically with the start so they don't move on resize. A
+          // looping block also gets its loop length pinned: the shifted notes
+          // would otherwise change an inferred length and break the phase.
           const offsetBeats = (o.startBar - newStartBar) * beatsPerBar
           const notes = o.notes.map((n) => ({ ...n, startBeat: n.startBeat + offsetBeats }))
-          store.updateBlock(o.trackId, blockId, { startBar: newStartBar, durationBars: end - newStartBar, notes })
+          const updates = { startBar: newStartBar, durationBars: end - newStartBar, notes }
+          store.updateBlock(o.trackId, blockId, o.loop ? { ...updates, loopLengthBars: o.patternBars } : updates)
         }
       }
     }
@@ -271,7 +285,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   // visual-row list; a block's `trackIndex` is the visual index of ITS track row, so
   // `trackIndex + rowDelta` lands on the row the user drags to (lane rows included).
   const captureOrigins = (dragSet: Set<string>, rows: ReturnType<typeof flattenVisualRows>) => {
-    const { tracks } = useProjectStore.getState()
+    const { tracks, beatsPerBar } = useProjectStore.getState()
     const origins = new Map<string, BlockOrigin>()
     rows.forEach((row, idx) => {
       if (row.kind !== 'track') return
@@ -279,7 +293,15 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       if (!t) return
       for (const b of t.blocks) {
         if (dragSet.has(b.id)) {
-          origins.set(b.id, { trackId: row.id, trackIndex: idx, startBar: b.startBar, durationBars: b.durationBars, notes: b.notes })
+          origins.set(b.id, {
+            trackId: row.id,
+            trackIndex: idx,
+            startBar: b.startBar,
+            durationBars: b.durationBars,
+            notes: b.notes,
+            loop: b.loop,
+            patternBars: b.loop ? loopLengthBeats(b, beatsPerBar) / beatsPerBar : b.durationBars,
+          })
         }
       }
     })

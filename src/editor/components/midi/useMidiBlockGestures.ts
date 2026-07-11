@@ -1,6 +1,7 @@
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import type { Block, Note } from '../../types'
 
 interface UseMidiBlockGesturesOptions {
@@ -21,6 +22,10 @@ interface DragState {
   originStartBar: number
   originDurationBars: number
   originNotes: Note[]
+  originLoop: boolean
+  /** Pattern length at drag start (loop length if looping, else the duration) -
+   *  right-resize past it engages looping, back inside clears it. */
+  patternBars: number
 }
 
 /**
@@ -60,6 +65,10 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       originStartBar: block.startBar,
       originDurationBars: block.durationBars,
       originNotes: latest.current.notes,
+      originLoop: block.loop,
+      patternBars: block.loop
+        ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: latest.current.notes }, latest.current.beatsPerBar) / latest.current.beatsPerBar
+        : block.durationBars,
     }
 
     lockCursor(mode === 'moving' ? 'grabbing' : 'ew-resize')
@@ -80,16 +89,24 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
         update(l.trackId, l.blockId, { startBar })
       } else if (d.mode === 'resizing-right') {
         const durationBars = Math.max(oneBeat, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
-        update(l.trackId, l.blockId, { durationBars })
+        // Same loop contract as the timeline gesture: growing past the authored
+        // pattern repeats it, shrinking back inside returns a plain block.
+        const loops = d.originNotes.length > 0 && durationBars > d.patternBars + 1e-9
+        update(l.trackId, l.blockId, loops
+          ? { durationBars, loop: true, loopLengthBars: d.patternBars }
+          : { durationBars, loop: false, loopLengthBars: undefined })
       } else {
         const end = d.originStartBar + d.originDurationBars
         const startBar = Math.max(0, Math.min(end - oneBeat, d.originStartBar + deltaBars))
         // Counter-shift notes so they stay put in absolute time as the start moves,
         // written in the SAME updateBlock call so block + notes change atomically
-        // (one store write → one render; no flicker, no re-sync clobber).
+        // (one store write → one render; no flicker, no re-sync clobber). A looping
+        // block also gets its loop length pinned, since the shifted notes would
+        // change an inferred length and break the phase.
         const offsetBeats = (d.originStartBar - startBar) * l.beatsPerBar
         const notes = d.originNotes.map((n) => ({ ...n, startBeat: n.startBeat + offsetBeats }))
-        update(l.trackId, l.blockId, { startBar, durationBars: end - startBar, notes })
+        const updates = { startBar, durationBars: end - startBar, notes }
+        update(l.trackId, l.blockId, d.originLoop ? { ...updates, loopLengthBars: d.patternBars } : updates)
       }
     }
     const onUp = () => {
@@ -99,7 +116,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
-  }, [block.startBar, block.durationBars])
+  }, [block.startBar, block.durationBars, block.loop, block.loopLengthBars])
 
   // Ruler header: edges resize, body moves (mode chosen from the grab position).
   const handleHeaderPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {

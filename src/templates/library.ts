@@ -4,7 +4,7 @@ import type { ProjectDocument } from '../persistence/types'
 // The template library. Each template is a complete v2 project document tuned
 // around each instrument's actual pitch vocabulary (Stars 48=warp/57=pulse,
 // WindowsXP 36-59=window-spawn melody, DotField 36-47=bass shake, etc.) - not
-// arbitrary notes. All patterns are written out in full (Block.loop is inert).
+// arbitrary notes. All patterns are written out in full (no loop: true blocks).
 // One full-frame instrument per template at most; positioned objects layer on top.
 
 export interface TemplateDef {

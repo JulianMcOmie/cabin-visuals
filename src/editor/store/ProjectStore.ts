@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
+import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { Track, TrackType, Block, Note, AudioBlock, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
 
@@ -67,15 +68,26 @@ export function splitBlockAtBeat(
   }
 
   if (block.loop) {
+    // Both halves keep looping. The right half starts mid-stream, so each note
+    // shifts by the split offset modulo the loop length - the phase its repeats
+    // had before the cut, kept inside the pattern window [0, loop length).
+    // The loop length is pinned explicitly on both halves because the right
+    // half's re-phased notes could infer a different one.
+    const loopBeats = loopLengthBeats(block, beatsPerBar)
+    const loopLengthBars = loopBeats / beatsPerBar
     return {
-      left,
+      left: { ...left, loopLengthBars },
       right: {
         ...right,
-        notes: block.notes.map((note) => ({
-          ...note,
-          id: makeId(),
-          startBeat: note.startBeat - splitOffsetBeats,
-        })),
+        loopLengthBars,
+        notes: block.notes.map((note) => {
+          const rem = (note.startBeat - splitOffsetBeats) % loopBeats
+          return {
+            ...note,
+            id: makeId(),
+            startBeat: rem < 0 ? rem + loopBeats : rem,
+          }
+        }),
       },
     }
   }
@@ -539,6 +551,18 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
         const notes = sortedBlocks.flatMap((block) => {
           const blockStartBeat = block.startBar * beatsPerBar
+          // A looped block joins as its literal repeats (baked); the joined
+          // block is plain, so the loop must become real notes. Fresh ids -
+          // one pattern note becomes several.
+          if (block.loop) {
+            return tileLoopNotes(block.notes, loopLengthBeats(block, beatsPerBar), block.durationBars * beatsPerBar)
+              .map((t) => ({
+                ...t.note,
+                id: crypto.randomUUID(),
+                startBeat: blockStartBeat + t.startBeat - joinedStartBeat,
+                durationBeats: t.durationBeats,
+              }))
+          }
           return block.notes.map((note) => ({
             ...note,
             startBeat: blockStartBeat + note.startBeat - joinedStartBeat,
@@ -549,6 +573,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
           ...sourceBlock,
           startBar,
           durationBars: endBar - startBar,
+          loop: false,
+          loopLengthBars: undefined,
           notes,
         }
 

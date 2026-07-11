@@ -4,8 +4,8 @@ import type { ProjectDocument } from '../persistence/types'
 // Authoring helpers for template documents. Templates are plain v2 project
 // documents built at module load; ids only need to be unique within one
 // document (rows are independent JSONB), so a readable counter beats UUIDs.
-// NOTE: Block.loop is inert in the resolver - patterns are generated in full
-// across the block's whole length, never left to a loop flag.
+// NOTE: templates write every pattern in full across the block's whole length
+// and keep loop: false - they never lean on the resolver's loop expansion.
 
 let seq = 0
 const nid = (hint: string) => `tpl-${hint}${(seq++).toString(36)}`

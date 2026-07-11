@@ -1,4 +1,5 @@
 import { useUIStore } from '../../store/UIStore'
+import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
 
@@ -51,15 +52,25 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         setEditingBlock({ trackId, blockId: block.id })
       }}
     >
-      <NotePreview notes={block.notes} totalBeats={totalBeatsInBlock} color={color} />
+      <NotePreview
+        notes={block.notes}
+        totalBeats={totalBeatsInBlock}
+        loopBeats={block.loop ? loopLengthBeats(block, beatsPerBar) : null}
+        color={color}
+      />
     </div>
   )
 }
 
+// Preview divs per looped block stay bounded; a tiny pattern in a huge block
+// caps out instead of flooding the DOM.
+const PREVIEW_NOTE_CAP = 512
+
 /** Miniature of the block's notes: x/width from time, y from pitch - normalized to
  *  the block's own pitch range (at least an octave, so near-monotone lines stay
- *  calm), dashes long notes read as dashes and hits as ticks. */
-function NotePreview({ notes, totalBeats, color }: { notes: BlockType['notes']; totalBeats: number; color: string }) {
+ *  calm), dashes long notes read as dashes and hits as ticks. A looping block
+ *  tiles the pattern (repeats dimmed) with a dashed line at each loop boundary. */
+function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string }) {
   if (notes.length === 0 || totalBeats <= 0) return null
   let minPitch = Infinity
   let maxPitch = -Infinity
@@ -69,16 +80,26 @@ function NotePreview({ notes, totalBeats, color }: { notes: BlockType['notes']; 
   }
   const span = Math.max(12, maxPitch - minPitch)
   const lo = (minPitch + maxPitch) / 2 - span / 2
+
+  const looping = loopBeats != null && loopBeats > 0 && loopBeats < totalBeats
+  const occurrences = looping
+    ? tileLoopNotes(notes, loopBeats, totalBeats, PREVIEW_NOTE_CAP)
+    : notes.map((note) => ({ note, startBeat: note.startBeat, durationBeats: note.durationBeats, repeat: 0 }))
+  const boundaries: number[] = []
+  if (looping) {
+    for (let b = loopBeats; b < totalBeats; b += loopBeats) boundaries.push(b)
+  }
+
   return (
     <>
-      {notes.map((note) => {
-        const leftPct = (note.startBeat / totalBeats) * 100
-        const widthPct = (note.durationBeats / totalBeats) * 100
+      {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
+        const leftPct = (startBeat / totalBeats) * 100
+        const widthPct = (durationBeats / totalBeats) * 100
         // Top pitch at the top; 8%–88% band keeps dashes inside the rounded border.
         const topPct = 8 + (1 - (note.pitch - lo) / span) * 80
         return (
           <div
-            key={note.id}
+            key={`${note.id}:${repeat}`}
             className="absolute rounded-full pointer-events-none"
             style={{
               left: `${leftPct}%`,
@@ -86,10 +107,24 @@ function NotePreview({ notes, totalBeats, color }: { notes: BlockType['notes']; 
               top: `${topPct}%`,
               height: 2,
               backgroundColor: color + 'cc',
+              opacity: repeat > 0 ? 0.55 : 1,
             }}
           />
         )
       })}
+      {boundaries.map((b) => (
+        <div
+          key={`loop:${b}`}
+          className="absolute pointer-events-none"
+          style={{
+            left: `${(b / totalBeats) * 100}%`,
+            top: '8%',
+            bottom: '8%',
+            width: 0,
+            borderLeft: `1px dashed ${color}88`,
+          }}
+        />
+      ))}
     </>
   )
 }
