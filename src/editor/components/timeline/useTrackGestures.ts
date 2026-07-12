@@ -244,8 +244,8 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (d.loopArm) {
             // Top-half grab: past the authored pattern the block loops (pattern
             // length locked at drag start); back inside it is a plain block
-            // again. Empty blocks never loop - there is nothing to repeat.
-            const loops = o.notes.length > 0 && newDuration > o.patternBars + 1e-9
+            // again. Empty patterns can loop too, ready for notes added later.
+            const loops = newDuration > o.patternBars + 1e-9
             store.updateBlock(o.trackId, blockId, loops
               ? { durationBars: newDuration, loop: true, loopLengthBars: o.patternBars }
               : { durationBars: newDuration, loop: false, loopLengthBars: undefined })
@@ -354,9 +354,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a
     // plain resize (see the resizing-right move handler).
-    const blockCanLoop = (useProjectStore.getState().tracks[trackId]?.blocks
-      .find((block) => block.id === blockId)?.notes.length ?? 0) > 0
-    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2 && blockCanLoop
+    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2
 
     // Select this block (keep an existing multi-selection it belongs to), then
     // arm the drag for the whole selection.

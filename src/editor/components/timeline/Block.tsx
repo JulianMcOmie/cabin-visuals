@@ -22,7 +22,6 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
   const totalBeatsInBlock = block.durationBars * beatsPerBar
-  const canLoop = block.notes.length > 0
 
   return (
     <div
@@ -53,7 +52,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         // repeat) - dedicated loop icon cursor. The bottom half and
         // the left edge are plain resizes; the body is a move (default).
         const topHalf = e.clientY < rect.top + rect.height / 2
-        const onLoopHandle = onRightEdge && topHalf && canLoop
+        const onLoopHandle = onRightEdge && topHalf
         e.currentTarget.style.cursor =
           onLoopHandle ? LOOP_CURSOR : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
         // Tooltip tracks the zone under the pointer (updated live so it swaps as
