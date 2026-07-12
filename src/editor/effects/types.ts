@@ -2,24 +2,10 @@ import type { Group, Matrix4 } from 'three'
 import type { ParamDef } from '../instruments/types'
 
 // Effects are plugins applied to an object's rendered output, ported from Excellent DAW.
-// Three categories, chained per object (plan §4.6): transform ▸ clone ▸ shader.
-export type EffectCategory = 'transform' | 'clone' | 'shader'
+// Two categories, chained per object: transform ▸ shader. (Clone effects were
+// replaced by VisualCopy splitters.)
+export type EffectCategory = 'transform' | 'shader'
 
-/**
- * What a clone plugin produces: how many copies to render, each copy's transform,
- * and optionally its opacity (for trail/falloff). Evaluated per frame; `time` =
- * the beat.
- *
- * @deprecated Legacy render-time duplication. New duplication belongs in the
- * ordered mover-and-splitter VisualCopy system. Keep this contract for existing
- * saved projects during migration; do not add new clone effects.
- */
-export interface CloneSpec {
-  count: number
-  getTransform: (index: number, settings: Record<string, number>, time: number) => Matrix4
-  /** 0..1 per copy - drives trail/edge fade (echo, linear duplicate). Omit for opaque. */
-  getOpacity?: (index: number, settings: Record<string, number>, time: number) => number
-}
 
 export interface VisualEffect {
   id: string
@@ -31,11 +17,6 @@ export interface VisualEffect {
   /** Transform plugins mutate the wrapping group each frame. `settings` are the instance's
    *  param values; `time` is the current beat (so effects are music-synced). */
   applyTransform?: (group: Group, settings: Record<string, number>, time: number) => void
-  /**
-   * Clone plugins replicate the object into `count` copies, each with its own transform.
-   * @deprecated Use a VisualCopy splitter for new duplication behavior.
-   */
-  getClones?: (settings: Record<string, number>) => CloneSpec
   /** Shader plugins: a GLSL fragment shader (screen-space; samples `tDiffuse`, sees
    *  `time`/`resolution` + a uniform per param). Applied as an FBO post-process pass. */
   fragmentShader?: string

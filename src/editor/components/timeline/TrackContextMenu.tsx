@@ -1,7 +1,6 @@
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
-import { moverInputParamDefs, moverRegistry, getMover } from '../../core/visual/movers/registry'
 import { listMoverOrSplitterDefinitions } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
@@ -30,16 +29,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   if (!track) return null
   const def = getInstrument(track.instrumentId)
-  const dimDef = track.type === 'mover' ? getMover(track.moverId) : undefined
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number).
-  const params = track.type === 'mover' && dimDef
-    ? moverInputParamDefs(dimDef).filter(isNumberParam)
-    : (def?.params ?? []).filter(isNumberParam)
-  // Legacy movers plus new-registry movers, then splitters as their own group.
-  // addMoverTrack routes each id by registry ownership.
+  const params = (def?.params ?? []).filter(isNumberParam)
   const newDefs = def ? listMoverOrSplitterDefinitions() : []
-  const movers = def ? [...Object.values(moverRegistry), ...newDefs.filter((d) => d.kind === 'mover')] : []
+  const movers = newDefs.filter((d) => d.kind === 'mover')
   const splitters = newDefs.filter((d) => d.kind === 'splitter')
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))

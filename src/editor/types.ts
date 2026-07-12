@@ -41,18 +41,6 @@ export interface AdsrEnvelope {
   releaseBeats: number
 }
 
-export type MidiMode = 'none' | 'continuous' | 'amount' | 'ballistic'
-
-export type SubsetWeightSpec =
-  | { mode: 'all' }
-  | { mode: 'odd' }
-  | { mode: 'even' }
-  | { mode: 'firstHalf' }
-  | { mode: 'secondHalf' }
-  | { mode: 'checkerWhite' }
-  | { mode: 'checkerBlack' }
-  | { mode: 'gradient'; slope: number; phase: number }
-
 /**
  * A positioned, trimmed reference to an audio clip - the audio analogue of a MIDI
  * Block. The clip (bytes + descriptor) is the material; this is the placement.
@@ -132,30 +120,19 @@ export interface Track {
   abilityKey?: string
   /** For an `envelope` child track: its ADSR shape (beats / 0..1 sustain). The track's
    *  notes are the gates; `targetParam` addresses the modulated parent param (same
-   *  addressing as automation, plus the reserved 'opacity' key). Named `adsr` - NOT
-   *  `envelope`, which is the mover ballistic {attack, decay} field below. */
+   *  addressing as automation, plus the reserved 'opacity' key). */
   adsr?: AdsrEnvelope
   /** Envelope wet/dry (0..1): scales the gain before it modulates the target. */
   envDepth?: number
   /** Envelope target value: the param value reached at full gain (base + (envTarget -
    *  base) * gain). Unused for the reserved 'opacity' target, which multiplies. */
   envTarget?: number
-  /** For a `mover` track: which mover def this row applies. Registry ownership
-   *  routes it: ids in the new VisualCopy registry resolve through the ordered
-   *  mover-and-splitter chain; unknown ids fall back to the legacy runtime. */
+  /** For a `mover` track: which MoverOrSplitterDefinition this row applies. */
   moverId?: string
-  /** For a `splitter` track: which MoverOrSplitterDefinition this row applies.
-   *  Splitters exist only in the new VisualCopy registry (no legacy fallback). */
+  /** For a `splitter` track: which MoverOrSplitterDefinition this row applies. */
   splitterId?: string
-  /** Mover wet/dry. Muting a mover bypasses it; it never blackouts the parent. */
-  depth?: number
-  /** Mover input base values, keyed by the def's input names. */
+  /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>
-  envelope?: { attack: number; decay: number }
-  midiMode?: MidiMode
-  midiTargetInput?: string
-  weight?: SubsetWeightSpec
-  opMode?: 'transform' | 'add'
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */

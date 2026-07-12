@@ -1,12 +1,11 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
-import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad, PhotoPad } from '../types'
+import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, VideoPad, PhotoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -132,8 +131,6 @@ function cloneTrackRecord(t: Track, id: string, parentId: string | null, childId
     tags: t.tags ? [...t.tags] : undefined,
     targets: t.targets?.map((r) => ({ ...r, scope: cloneRoutingScope(r.scope, idMap) })),
     inputValues: t.inputValues ? { ...t.inputValues } : undefined,
-    envelope: t.envelope ? { ...t.envelope } : undefined,
-    weight: t.weight ? { ...t.weight } : undefined,
     effects: t.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),
     audioBlocks: t.audioBlocks?.map(cloneAudioBlock),
   }
@@ -258,12 +255,6 @@ interface ProjectState {
   setTrackMover: (trackId: string, moverId: string, name: string) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
-  setMoverDepth: (trackId: string, value: number) => void
-  setMoverMidiMode: (trackId: string, mode: MidiMode) => void
-  setMoverMidiTarget: (trackId: string, input: string | undefined) => void
-  setMoverEnvelope: (trackId: string, envelope: { attack: number; decay: number }) => void
-  setMoverWeight: (trackId: string, weight: SubsetWeightSpec) => void
-  setMoverOpMode: (trackId: string, mode: 'transform' | 'add') => void
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
@@ -783,12 +774,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
             params: {},
             stringParams: {},
             moverId: undefined,
-            depth: undefined,
+            splitterId: undefined,
             inputValues: undefined,
-            envelope: undefined,
-            midiMode: undefined,
-            midiTargetInput: undefined,
-            weight: undefined,
             name: name ?? track.name,
           },
         },
@@ -810,12 +797,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
             params: {},
             stringParams: {},
             moverId: undefined,
-            depth: undefined,
+            splitterId: undefined,
             inputValues: undefined,
-            envelope: undefined,
-            midiMode: undefined,
-            midiTargetInput: undefined,
-            weight: undefined,
             name,
           },
         },
@@ -825,13 +808,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setTrackMover: (trackId, moverId, name) =>
     set((s) => {
       const track = s.tracks[trackId]
-      // New-registry (VisualCopy) movers and splitters convert the track too,
-      // but carry none of the legacy runtime fields - their definitions own
-      // their MIDI grammar. Splitters store their id in splitterId.
-      const newDef = getMoverOrSplitterDefinition(moverId)
-      const def = newDef ? undefined : getMover(moverId)
-      if (!track || (!def && !newDef)) return s
-      const isSplitter = newDef?.kind === 'splitter'
+      const def = getMoverOrSplitterDefinition(moverId)
+      if (!track || !def) return s
+      const isSplitter = def.kind === 'splitter'
       return {
         tracks: {
           ...s.tracks,
@@ -841,17 +820,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
             instrumentId: '',
             moverId: isSplitter ? undefined : moverId,
             splitterId: isSplitter ? moverId : undefined,
-            depth: def ? track.depth ?? 1 : undefined,
             inputValues: {},
-            envelope: def ? track.envelope ?? { attack: 0.05, decay: 0.4 } : undefined,
-            midiMode: def ? track.midiMode ?? 'none' : undefined,
-            midiTargetInput: def
-              ? isMoverMidiInput(def, track.midiTargetInput)
-                ? track.midiTargetInput
-                : firstMoverMidiInput(def)
-              : undefined,
-            weight: def ? track.weight ?? { mode: 'all' } : undefined,
-            opMode: def ? track.opMode ?? 'transform' : undefined,
             params: {},
             stringParams: {},
             color: MOVER_TRACK_COLOR,
@@ -864,13 +833,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addMoverTrack: (parentId, moverId, moverLabel) =>
     set((s) => {
       const parent = s.tracks[parentId]
-      // Registry ownership routes the id: new-registry movers AND splitters
-      // come through here too, carrying none of the legacy runtime fields.
-      const newDef = getMoverOrSplitterDefinition(moverId)
-      const def = newDef ? undefined : getMover(moverId)
-      if (!parent || (!def && !newDef)) return s
+      const def = getMoverOrSplitterDefinition(moverId)
+      if (!parent || !def) return s
       const id = crypto.randomUUID()
-      const isSplitter = newDef?.kind === 'splitter'
+      const isSplitter = def.kind === 'splitter'
       const track: Track = {
         id,
         name: moverLabel,
@@ -878,13 +844,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         instrumentId: '',
         moverId: isSplitter ? undefined : moverId,
         splitterId: isSplitter ? moverId : undefined,
-        depth: def ? 1 : undefined,
         inputValues: {},
-        envelope: def ? { attack: 0.05, decay: 0.4 } : undefined,
-        midiMode: def ? 'none' : undefined,
-        midiTargetInput: def ? firstMoverMidiInput(def) : undefined,
-        weight: def ? { mode: 'all' } : undefined,
-        opMode: def ? 'transform' : undefined,
         color: MOVER_TRACK_COLOR,
         muted: false,
         solo: false,
@@ -906,54 +866,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track || (track.type !== 'mover' && track.type !== 'splitter')) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
-    }),
-
-  setMoverDepth: (trackId, value) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, depth: value } } }
-    }),
-
-  setMoverMidiMode: (trackId, mode) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      const def = getMover(track.moverId)
-      const midiTargetInput = mode === 'continuous' && def && !isMoverMidiInput(def, track.midiTargetInput)
-        ? firstMoverMidiInput(def)
-        : track.midiTargetInput
-      return { tracks: { ...s.tracks, [trackId]: { ...track, midiMode: mode, midiTargetInput } } }
-    }),
-
-  setMoverMidiTarget: (trackId, input) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      const def = getMover(track.moverId)
-      if (!def || !isMoverMidiInput(def, input)) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, midiTargetInput: input } } }
-    }),
-
-  setMoverEnvelope: (trackId, envelope) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, envelope } } }
-    }),
-
-  setMoverWeight: (trackId, weight) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, weight } } }
-    }),
-
-  setMoverOpMode: (trackId, opMode) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, opMode } } }
     }),
 
   addAutomationTrack: (parentId, paramKey, paramLabel) =>

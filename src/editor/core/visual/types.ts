@@ -3,10 +3,9 @@
 // way (engine → document), which keeps the editor independent of the engine.
 
 import type { Matrix4 } from 'three'
-import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, InterpolationMode, MidiMode, PhotoPad, SubsetWeightSpec, VideoPad } from '../../types'
+import type { LocalTransform, TransformCtx } from '../../instruments/types'
+import type { AdsrEnvelope, InterpolationMode, PhotoPad, VideoPad } from '../../types'
 import type { AutomationKeyframe } from './automation'
-import type { MoverDef } from './movers/types'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
 export interface StateVector {
@@ -104,10 +103,6 @@ export interface ResolvedObject {
   stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
-  elementCount: number
-  layoutState?: (ctx: ElementLayoutCtx, out: StateVector) => void
-  elementMatrices: Matrix4[]
-  elementOpacities: number[]
   /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
   notes: ResolvedNote[]
   /** Blackout spans from `mute` child modifiers - the object is hidden inside them. */
@@ -128,41 +123,13 @@ export interface ResolvedObject {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (fresh array per resolve). */
   photoPads?: PhotoPad[]
-  /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
-  moverChain: ResolvedMover[]
-  /** The new ordered mover-and-splitter chain (VisualCopy pipeline): local
-   *  children in exact childIds order, then matching global entries in exact
-   *  rootTrackIds order. Legacy movers stay in `moverChain`, which executes as
-   *  a separate earlier stage; only entries here participate in exact
-   *  non-commutative ordering. */
+  /** The ordered mover-and-splitter chain (VisualCopy pipeline): local children
+   *  in exact childIds order, then matching global entries in exact
+   *  rootTrackIds order. */
   moverAndSplitterChain: MoverOrSplitter[]
   scratchBase: StateVector
-  scratchA: StateVector
-  scratchB: StateVector
-  scratchEntry: StateVector
-  scratchAdd: StateVector
-  scratchInputs: Record<string, number>
-  scratchChannels: Record<string, number>
   /** Cross-cutting group labels - top-level movers target tags (see Routing). */
   tags: string[]
-}
-
-export interface ResolvedMover {
-  trackId: string
-  def: MoverDef
-  depth: number
-  bypassed: boolean
-  inputBase: Record<string, number>
-  opMode: 'transform' | 'add'
-  midiMode: MidiMode
-  midiTargetInput?: string
-  interpolation: InterpolationMode
-  envelope?: { attack: number; decay: number }
-  notes: ResolvedNote[]
-  continuousKeyframes: Record<string, AutomationKeyframe[]>
-  amountKeyframes: AutomationKeyframe[]
-  weight: SubsetWeightSpec
-  automations: ResolvedAutomation[]
 }
 
 export interface ResolvedGraph {
@@ -192,16 +159,7 @@ export interface ObjectState {
   /** World transform (local composed with all ancestors). Reused across frames -
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
-  elementCount: number
-  /** Per-element local matrices for ensemble instruments; empty for single objects. */
-  elementMatrices: Matrix4[]
-  elementOpacities: number[]
   opacity: number
-  /** Color-mover output (HSL offsets applied to every material's base color by
-   *  the placement wrapper): hue in wheel turns, sat/light in [-1, 1]. */
-  hueShift: number
-  satShift: number
-  lightShift: number
   /** Sampled effect automation for this frame: instanceId → key → value
    *  ('enabled' as 0/1). Absent when the object has no effect automation. */
   effectOverrides?: Record<string, Record<string, number>>
