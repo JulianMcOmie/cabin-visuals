@@ -34,19 +34,18 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'shatter', label: 'Shatter', color: '#f472b6' },
   ],
   // The cube's transform as data, so the engine can compose it with its parent's:
-  // position from the X param, an opt-in spin from the beat, and a breathing scale
-  // boosted by the note-pulse energy. The engine writes the composed world matrix to state.
+  // position from the X param, an opt-in spin from the beat, and a static base scale
+  // boosted only by note-pulse energy. The engine writes the composed world matrix to state.
   localTransform: ({ params, energy, beat }) => {
     const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
     const baseYPosition = params.baseYPosition ?? paramDefault(cubeInstrument, 'baseYPosition')
     const baseZPosition = params.baseZPosition ?? paramDefault(cubeInstrument, 'baseZPosition')
     const spinSpeed = params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
-    const breathe = 1.15 + Math.sin(beat * 0.9) * 0.2
     return {
       position: [baseXPosition, baseYPosition, baseZPosition],
       rotation: [beat * 0.09 * spinSpeed, beat * 0.22 * spinSpeed, 0],
-      scale: (baseSize / 1.6) * breathe * (1 + energy * 0.35),
+      scale: (baseSize / 1.6) * (1 + energy * 0.35),
     }
   },
   component: Cube,
