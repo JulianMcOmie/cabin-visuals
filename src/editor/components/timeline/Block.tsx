@@ -88,7 +88,7 @@ const PREVIEW_NOTE_CAP = 512
 /** Miniature of the block's notes: x/width from time, y from pitch - normalized to
  *  the block's own pitch range (at least an octave, so near-monotone lines stay
  *  calm), dashes long notes read as dashes and hits as ticks. A looping block
- *  tiles the pattern (repeats dimmed) with a dashed line at each loop boundary. */
+ *  tiles the pattern (repeats dimmed) inside individually rounded sections. */
 function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string }) {
   if (notes.length === 0 || totalBeats <= 0) return null
   let minPitch = Infinity
@@ -104,13 +104,35 @@ function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType
   const occurrences = looping
     ? tileLoopNotes(notes, loopBeats, totalBeats, PREVIEW_NOTE_CAP)
     : notes.map((note) => ({ note, startBeat: note.startBeat, durationBeats: note.durationBeats, repeat: 0 }))
-  const boundaries: number[] = []
+  const sections: { startBeat: number; durationBeats: number }[] = []
   if (looping) {
-    for (let b = loopBeats; b < totalBeats; b += loopBeats) boundaries.push(b)
+    for (let startBeat = 0; startBeat < totalBeats; startBeat += loopBeats) {
+      sections.push({ startBeat, durationBeats: Math.min(loopBeats, totalBeats - startBeat) })
+    }
   }
 
   return (
     <>
+      {sections.map(({ startBeat, durationBeats }) => {
+        const leftPct = (startBeat / totalBeats) * 100
+        const widthPct = (durationBeats / totalBeats) * 100
+        return (
+          <div
+            key={`loop-section:${startBeat}`}
+            data-loop-section=""
+            className="absolute pointer-events-none rounded-[3px]"
+            style={{
+              left: `calc(${leftPct}% + 1px)`,
+              width: `max(calc(${widthPct}% - 2px), 1px)`,
+              top: 1,
+              bottom: 1,
+              border: `1px solid ${color}88`,
+              backgroundColor: color + '0d',
+              boxSizing: 'border-box',
+            }}
+          />
+        )
+      })}
       {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
         const leftPct = (startBeat / totalBeats) * 100
         const widthPct = (durationBeats / totalBeats) * 100
@@ -131,19 +153,6 @@ function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType
           />
         )
       })}
-      {boundaries.map((b) => (
-        <div
-          key={`loop:${b}`}
-          className="absolute pointer-events-none"
-          style={{
-            left: `${(b / totalBeats) * 100}%`,
-            top: '8%',
-            bottom: '8%',
-            width: 0,
-            borderLeft: `1px dashed ${color}88`,
-          }}
-        />
-      ))}
     </>
   )
 }
