@@ -5,6 +5,9 @@ import { lockCursor, unlockCursor } from '../utils/dragCursor'
 // Under this much horizontal movement the press is a click, and a click on the
 // loop lane clears the region.
 const CLICK_THRESHOLD_PX = 3
+const MIN_RESIZED_LOOP_BEATS = 1
+
+export type LoopResizeEdge = 'start' | 'end'
 
 interface UseLoopDragOptions {
   /** Map a pointer clientX to a whole-beat boundary (snapped + clamped by the
@@ -86,5 +89,27 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
   }, [])
 
-  return { startLoopDrag, startLoopMove }
+  const startLoopResize = useCallback((e: ReactPointerEvent, edge: LoopResizeEdge) => {
+    e.stopPropagation()
+    const origin = useTimeStore.getState().loopRegion
+    if (!origin) return
+
+    lockCursor('ew-resize')
+    const controller = new AbortController()
+    const onMove = (ev: PointerEvent) => {
+      const beat = computeRef.current(ev.clientX)
+      if (beat == null) return
+      useTimeStore.getState().setLoopRegion(edge === 'start'
+        ? { ...origin, startBeat: Math.max(0, Math.min(beat, origin.endBeat - MIN_RESIZED_LOOP_BEATS)) }
+        : { ...origin, endBeat: Math.min(maxBeatRef.current, Math.max(beat, origin.startBeat + MIN_RESIZED_LOOP_BEATS)) })
+    }
+    const onUp = () => {
+      unlockCursor()
+      controller.abort()
+    }
+    window.addEventListener('pointermove', onMove, { signal: controller.signal })
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+  }, [])
+
+  return { startLoopDrag, startLoopMove, startLoopResize }
 }

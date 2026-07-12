@@ -103,7 +103,7 @@ export function TimelineArea() {
 
   // Loop-region drag on the ruler's top half - same clientX -> beat math as the
   // scrub, but snapped to whole beats (loop boundaries are bar-ish, not fine).
-  const { startLoopDrag, startLoopMove } = useLoopDrag({
+  const { startLoopDrag, startLoopMove, startLoopResize } = useLoopDrag({
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
@@ -373,6 +373,7 @@ export function TimelineArea() {
           onScrubStart={startScrub}
           onLoopDragStart={startLoopDrag}
           onLoopMoveStart={startLoopMove}
+          onLoopResizeStart={startLoopResize}
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
           gutterPx={0}

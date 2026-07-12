@@ -100,7 +100,7 @@ export function MidiEditor({
   // scrub, but snapped to whole beats. The region is absolute project beats
   // (this ruler spans the whole project, with the block at blockStartBeat).
   const loopRegion = useTimeStore((s) => s.loopRegion)
-  const { startLoopDrag, startLoopMove } = useLoopDrag({
+  const { startLoopDrag, startLoopMove, startLoopResize } = useLoopDrag({
     computeBeat: (clientX) => {
       if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
@@ -367,10 +367,22 @@ export function MidiEditor({
               }}
             >
               <div
+                data-loop-resize-handle="start"
+                className="absolute top-0 bottom-0 left-0 cursor-ew-resize"
+                style={{ width: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
+                onPointerDown={(e) => startLoopResize(e, 'start')}
+              />
+              <div
                 data-loop-move-handle=""
                 className="absolute top-0 bottom-0 cursor-grab"
                 style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
                 onPointerDown={startLoopMove}
+              />
+              <div
+                data-loop-resize-handle="end"
+                className="absolute top-0 bottom-0 right-0 cursor-ew-resize"
+                style={{ width: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
+                onPointerDown={(e) => startLoopResize(e, 'end')}
               />
             </div>
           )}

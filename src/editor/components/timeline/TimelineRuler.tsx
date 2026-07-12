@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import type { LoopResizeEdge } from '../../hooks/useLoopDrag'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
@@ -11,6 +12,8 @@ interface TimelineRulerProps {
   onLoopDragStart: (e: ReactPointerEvent) => void
   /** Move the existing loop region by dragging its safe middle area. */
   onLoopMoveStart: (e: ReactPointerEvent) => void
+  /** Resize one boundary of the existing loop region. */
+  onLoopResizeStart: (e: ReactPointerEvent, edge: LoopResizeEdge) => void
   /** Width of one bar in pixels (beatsPerBar * pixelsPerBeat). */
   barWidthPx: number
   /** Full timeline width in pixels (totalBars * barWidthPx). */
@@ -33,7 +36,7 @@ interface TimelineRulerProps {
  * triangle is clipped to the strip (never drawn over the corner). The playhead
  * line itself lives in the lanes (TimelineArea).
  */
-export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
+export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, onLoopResizeStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
@@ -88,10 +91,22 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
               }}
             >
               <div
+                data-loop-resize-handle="start"
+                className="absolute top-0 bottom-0 left-0 cursor-ew-resize pointer-events-auto"
+                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                onPointerDown={(e) => onLoopResizeStart(e, 'start')}
+              />
+              <div
                 data-loop-move-handle=""
                 className="absolute top-0 bottom-0 cursor-grab pointer-events-auto"
                 style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET }}
                 onPointerDown={onLoopMoveStart}
+              />
+              <div
+                data-loop-resize-handle="end"
+                className="absolute top-0 bottom-0 right-0 cursor-ew-resize pointer-events-auto"
+                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                onPointerDown={(e) => onLoopResizeStart(e, 'end')}
               />
             </div>
           )}
