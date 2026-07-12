@@ -2,6 +2,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { moverInputParamDefs, moverRegistry, getMover } from '../../core/visual/movers/registry'
+import { listMoverOrSplitterDefinitions } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
@@ -35,7 +36,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const params = track.type === 'mover' && dimDef
     ? moverInputParamDefs(dimDef).filter(isNumberParam)
     : (def?.params ?? []).filter(isNumberParam)
-  const movers = def ? Object.values(moverRegistry) : []
+  // Legacy movers plus new-registry movers, then splitters as their own group.
+  // addMoverTrack routes each id by registry ownership.
+  const newDefs = def ? listMoverOrSplitterDefinitions() : []
+  const movers = def ? [...Object.values(moverRegistry), ...newDefs.filter((d) => d.kind === 'mover')] : []
+  const splitters = newDefs.filter((d) => d.kind === 'splitter')
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
@@ -93,6 +98,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       items: movers.map((d) => ({ id: d.id, label: d.label })),
     },
     {
+      key: 'splitter',
+      label: 'Add splitter track',
+      items: splitters.map((d) => ({ id: d.id, label: d.label })),
+    },
+    {
       key: 'automation',
       label: 'Add automation track',
       items: params.map((p) => {
@@ -124,6 +134,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (a) addAbilityTrack(trackId, a.key, a.label)
     } else if (groupKey === 'mover') {
       const d = movers.find((m) => m.id === itemId)
+      if (d) addMoverTrack(trackId, d.id, d.label)
+    } else if (groupKey === 'splitter') {
+      const d = splitters.find((m) => m.id === itemId)
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'automation') {
       const p = params.find((pp) => pp.key === itemId)

@@ -604,15 +604,17 @@ export function TrackEditor() {
             {track ? (
               <>
                 {(() => {
-                  // New-registry (VisualCopy) mover: its params render straight from
-                  // the definition schema; the legacy runtime controls (depth, MIDI
-                  // mode, weight, op mode) don't exist for it - the definition owns
-                  // its own MIDI grammar, shown as labelled piano-roll rows.
-                  const newMoverDef = track.type === 'mover' ? getMoverOrSplitterDefinition(track.moverId) : undefined
+                  // New-registry (VisualCopy) mover or splitter: its params render
+                  // straight from the definition schema; the legacy runtime controls
+                  // (depth, MIDI mode, weight, op mode) don't exist for it - the
+                  // definition owns its own MIDI grammar, shown as labelled rows.
+                  const newMoverDef = track.type === 'mover' || track.type === 'splitter'
+                    ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
+                    : undefined
                   if (newMoverDef) {
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-3">Mover:</p>
+                        <p className="text-[11px] text-zinc-500 mb-3">{newMoverDef.kind === 'splitter' ? 'Splitter:' : 'Mover:'}</p>
                         {newMoverDef.params.map((p) => (
                           <ParamControl
                             key={p.key}

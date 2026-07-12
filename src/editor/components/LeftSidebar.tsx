@@ -13,7 +13,7 @@ import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
  *  event-modifier child track (whose `id` is the modifier's track type). */
-export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover'
+export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter'
 
 export interface InstrumentItem {
   id: string
@@ -220,6 +220,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   opacity: 'Fades its object in or out.',
   color: "Shifts its object's color around the hue wheel - drive it with notes for color pops.",
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
+  radial: 'Splits its object into N copies fanned around a circle - movers above it spread out radially.',
 }
 
 // New-registry (VisualCopy) movers list alongside the legacy ones; the shared
@@ -239,6 +240,22 @@ const MOVER_INSTRUMENTS = withKind('mover', [
     </svg>
   ),
 })))
+
+const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions()
+  .filter((d) => d.kind === 'splitter')
+  .map((d) => ({
+    id: d.id,
+    name: d.label,
+    description: MOVER_DESCRIPTIONS[d.id] ?? `Splits its object into copies with the ${d.label} layout.`,
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#f472b6" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6" cy="6" r="1.4" />
+        <path d="M6 4.6 V1.5" />
+        <path d="M7.2 6.8 L9.9 8.3" />
+        <path d="M4.8 6.8 L2.1 8.3" />
+      </svg>
+    ),
+  })))
 
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
@@ -323,7 +340,7 @@ export function LeftSidebar() {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
-    else if (item.kind === 'mover') setTrackMover(selectedTrackId, item.id, item.name)
+    else if (item.kind === 'mover' || item.kind === 'splitter') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
@@ -363,6 +380,7 @@ export function LeftSidebar() {
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Splitter" description="A Splitter renders its object several times - each copy gets its own transform, and movers ABOVE the splitter spread across the copies." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play - for example, the mute modifier mutes its parent when a note is currently playing." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}

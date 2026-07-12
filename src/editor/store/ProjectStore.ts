@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
-import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
@@ -825,19 +825,22 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setTrackMover: (trackId, moverId, name) =>
     set((s) => {
       const track = s.tracks[trackId]
-      // New-registry (VisualCopy) movers convert the track too, but carry none
-      // of the legacy runtime fields - their definitions own their MIDI grammar.
-      const isNewMover = hasMoverOrSplitterDefinition(moverId)
-      const def = isNewMover ? undefined : getMover(moverId)
-      if (!track || (!def && !isNewMover)) return s
+      // New-registry (VisualCopy) movers and splitters convert the track too,
+      // but carry none of the legacy runtime fields - their definitions own
+      // their MIDI grammar. Splitters store their id in splitterId.
+      const newDef = getMoverOrSplitterDefinition(moverId)
+      const def = newDef ? undefined : getMover(moverId)
+      if (!track || (!def && !newDef)) return s
+      const isSplitter = newDef?.kind === 'splitter'
       return {
         tracks: {
           ...s.tracks,
           [trackId]: {
             ...track,
-            type: 'mover',
+            type: isSplitter ? 'splitter' : 'mover',
             instrumentId: '',
-            moverId,
+            moverId: isSplitter ? undefined : moverId,
+            splitterId: isSplitter ? moverId : undefined,
             depth: def ? track.depth ?? 1 : undefined,
             inputValues: {},
             envelope: def ? track.envelope ?? { attack: 0.05, decay: 0.4 } : undefined,
@@ -861,22 +864,27 @@ export const useProjectStore = create<ProjectState>((set) => ({
   addMoverTrack: (parentId, moverId, moverLabel) =>
     set((s) => {
       const parent = s.tracks[parentId]
-      const def = getMover(moverId)
-      if (!parent || !def) return s
+      // Registry ownership routes the id: new-registry movers AND splitters
+      // come through here too, carrying none of the legacy runtime fields.
+      const newDef = getMoverOrSplitterDefinition(moverId)
+      const def = newDef ? undefined : getMover(moverId)
+      if (!parent || (!def && !newDef)) return s
       const id = crypto.randomUUID()
+      const isSplitter = newDef?.kind === 'splitter'
       const track: Track = {
         id,
         name: moverLabel,
-        type: 'mover',
+        type: isSplitter ? 'splitter' : 'mover',
         instrumentId: '',
-        moverId,
-        depth: 1,
+        moverId: isSplitter ? undefined : moverId,
+        splitterId: isSplitter ? moverId : undefined,
+        depth: def ? 1 : undefined,
         inputValues: {},
-        envelope: { attack: 0.05, decay: 0.4 },
-        midiMode: 'none',
-        midiTargetInput: firstMoverMidiInput(def),
-        weight: { mode: 'all' },
-        opMode: 'transform',
+        envelope: def ? { attack: 0.05, decay: 0.4 } : undefined,
+        midiMode: def ? 'none' : undefined,
+        midiTargetInput: def ? firstMoverMidiInput(def) : undefined,
+        weight: def ? { mode: 'all' } : undefined,
+        opMode: def ? 'transform' : undefined,
         color: MOVER_TRACK_COLOR,
         muted: false,
         solo: false,
@@ -896,7 +904,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setMoverInput: (trackId, key, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'mover') return s
+      if (!track || (track.type !== 'mover' && track.type !== 'splitter')) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
     }),
 
