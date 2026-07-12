@@ -5,7 +5,7 @@ import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../types'
+import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad, PhotoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -286,6 +286,8 @@ interface ProjectState {
   setTrackOnTop: (trackId: string, onTop: boolean) => void
   /** Replace a Video track's ordered pads (its bank of source moments). */
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
+  /** Replace a Photo track's ordered photos (its bank). */
+  setTrackPhotoPads: (trackId: string, photoPads: PhotoPad[]) => void
   /** Create an audio track (top of the root tracks) holding one block at bar 0
    *  spanning the whole clip. The load pipeline's landing spot - the AudioBar
    *  button and files dropped on the track area both end here; a project can
@@ -1097,6 +1099,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, videoPads } } }
+    }),
+
+  setTrackPhotoPads: (trackId, photoPads) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, photoPads } } }
     }),
 
   addAudioTrack: (clip) => {

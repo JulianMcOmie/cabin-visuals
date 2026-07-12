@@ -42,6 +42,13 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <path d="M5 4.8 L7.6 6 L5 7.2 Z" fill="#f472b6" />
     </svg>
   )},
+  { id: 'photo', name: 'Photo', description: 'Shows your uploaded photos full-frame - each note cuts to a photo.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
+      <circle cx="4" cy="5" r="1" fill="#f472b6" />
+      <path d="M2 8.5 L4.8 5.8 L6.5 7.2 L8 6 L10 8.5 Z" fill="#f472b6" />
+    </svg>
+  )},
   { id: 'textDisplay', name: 'Text Display', description: 'Shows words across the screen, advancing one per note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>

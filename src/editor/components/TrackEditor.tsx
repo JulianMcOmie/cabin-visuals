@@ -12,6 +12,7 @@ import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { VideoClipBank } from './VideoClipBank'
+import { PhotoBank } from './PhotoBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec } from '../types'
@@ -839,6 +840,7 @@ export function TrackEditor() {
                   return (
                     <>
                       {track.instrumentId === 'video' && <VideoClipBank track={track} />}
+                      {track.instrumentId === 'photo' && <PhotoBank track={track} />}
                       {/* Layering: every object gets the switch; Text defaults on. */}
                       <div className="mb-4 flex items-center justify-between">
                         <span

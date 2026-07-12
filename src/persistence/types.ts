@@ -1,6 +1,7 @@
 import type { Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
+import type { PhotoClip } from '../editor/store/PhotoStore'
 
 /**
  * The serialized project - the shape of the `projects.data` blob. A thin
@@ -21,6 +22,9 @@ import type { VideoClip } from '../editor/store/VideoStore'
  * v4: video pads - each track's `videoRefs: string[]` became
  * `videoPads: VideoPad[]` ((source, in-point) pairs; see upgrade.ts). The
  * `videoClips` source catalog is unchanged.
+ * `photoClips` (the Photo instrument's SOURCE catalog) is additive within v4 -
+ * absent in older saves, defaulted on hydrate; photo placement lives inside
+ * `tracks` as `photoPads`. No schema bump: purely additive.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -31,6 +35,7 @@ export interface ProjectDocument {
   rootTrackIds: string[]
   audioClips: Record<string, AudioClip>
   videoClips?: Record<string, VideoClip>
+  photoClips?: Record<string, PhotoClip>
 }
 
 /** A fresh, valid document - matches the stores' initial state. */
@@ -44,5 +49,6 @@ export function emptyDocument(): ProjectDocument {
     rootTrackIds: [],
     audioClips: {},
     videoClips: {},
+    photoClips: {},
   }
 }

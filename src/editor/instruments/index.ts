@@ -30,6 +30,7 @@ import { scoreTickerInstrument } from './ScoreTicker'
 import { swarmInstrument } from './Swarm'
 import { pointLightInstrument } from './PointLightObject'
 import { videoInstrument } from './Video'
+import { photoInstrument } from './Photo'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -64,6 +65,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [swarmInstrument.id]: swarmInstrument,
   [pointLightInstrument.id]: pointLightInstrument,
   [videoInstrument.id]: videoInstrument,
+  [photoInstrument.id]: photoInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

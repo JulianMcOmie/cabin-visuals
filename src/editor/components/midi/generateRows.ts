@@ -147,6 +147,48 @@ export function generateVideoClipRows(
   return rows
 }
 
+/**
+ * Rows for a Photo track's photo bank: exactly one row per photo, growing as
+ * photos are added - never the full piano roll. The most recently added photo
+ * sits at the TOP (rows stack upward, matching pitches ascending upward).
+ * Pitches already used by notes that no longer map to a photo (bank
+ * reordered/shrunk) get dimmed extra rows so no note can silently vanish.
+ * An empty bank shows a single hint row at baseNote. (The still-image sibling
+ * of generateVideoClipRows.)
+ */
+export function generatePhotoRows(
+  photoNames: string[],
+  baseNote: number,
+  notePitches: number[],
+): MidiRow[] {
+  const rows: MidiRow[] = []
+  const photoPitches = new Set<number>()
+  for (let i = photoNames.length - 1; i >= 0; i--) {
+    const pitch = baseNote + i
+    photoPitches.add(pitch)
+    const hue = (i / Math.max(1, photoNames.length)) * 300
+    rows.push({
+      pitch,
+      label: `${i + 1} · ${photoNames[i]}`,
+      color: `hsl(${hue}, 65%, 55%)`,
+      emphasized: i === 0,
+    })
+  }
+  const orphans = [...new Set(notePitches)].filter((p) => !photoPitches.has(p)).sort((a, b) => b - a)
+  for (const pitch of orphans) {
+    const octave = Math.floor(pitch / 12) - 1
+    rows.push({
+      pitch,
+      label: `${NOTE_NAMES[pitch % 12]}${octave} · no photo`,
+      color: 'hsl(0, 0%, 45%)',
+    })
+  }
+  if (rows.length === 0) {
+    rows.push({ pitch: baseNote, label: 'Add photos in the inspector', color: 'hsl(0, 0%, 45%)' })
+  }
+  return rows
+}
+
 // Value lanes encode a param value in each note's PITCH via pitchToValue over the
 // fixed AUTOMATION_PITCH_MIN..MAX span (core/trackTypes.ts). That mapping is FROZEN -
 // saved projects hold notes at arbitrary pitches in the span - so the editor may only

@@ -157,6 +157,19 @@ export interface Track {
   /** Video-instrument-only: the ordered pads of its bank. Order is the MIDI
    *  mapping - index 0 answers baseNote. Bytes live behind core/video. */
   videoPads?: VideoPad[]
+  /** Photo-instrument-only: the ordered photos of its bank. Order is the MIDI
+   *  mapping - index 0 answers baseNote. Bytes live behind core/photo. */
+  photoPads?: PhotoPad[]
+}
+
+/**
+ * One photo in a Photo track's bank: a reference to an uploaded still image. A
+ * note hit cuts to it full-frame; it latches until the next note-on. No
+ * in-point - a still image has no timeline, so placement is just the ref.
+ */
+export interface PhotoPad {
+  /** Source photo ref (PhotoStore catalog / core/photo bytes). */
+  ref: string
 }
 
 /**

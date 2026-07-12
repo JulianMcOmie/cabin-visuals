@@ -7,11 +7,13 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
-import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
+import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
 import { modifierColor } from '../../utils/modifierColors'
 import { useVideoStore } from '../../store/VideoStore'
+import { usePhotoStore } from '../../store/PhotoStore'
 import { getInstrument } from '../../instruments'
 import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
+import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
 import { getEffect } from '../../effects'
@@ -229,7 +231,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // flat-coloured full piano (their pitches become real parent notes); anything
   // left shows the full note rainbow.
   const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
+  const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
+  const photoClips = usePhotoStore((s) => s.photoClips)
   const defRows = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRows
     : undefined
@@ -246,6 +250,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
               return pad.inPoint > 0 ? `${name} @ ${pad.inPoint.toFixed(1)}s` : name
             }),
             VIDEO_BASE_PITCH,
+            notes.map((n) => n.pitch),
+          )
+        : photoTrack
+        ? generatePhotoRows(
+            (photoTrack.photoPads ?? []).map((pad, i) => photoClips[pad.ref]?.fileName ?? `Photo ${i + 1}`),
+            PHOTO_BASE_PITCH,
             notes.map((n) => n.pitch),
           )
         : defRows

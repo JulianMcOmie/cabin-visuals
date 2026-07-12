@@ -4,7 +4,7 @@
 
 import type { Matrix4 } from 'three'
 import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, InterpolationMode, MidiMode, SubsetWeightSpec, VideoPad } from '../../types'
+import type { AdsrEnvelope, InterpolationMode, MidiMode, PhotoPad, SubsetWeightSpec, VideoPad } from '../../types'
 import type { AutomationKeyframe } from './automation'
 import type { MoverDef } from './movers/types'
 
@@ -125,6 +125,8 @@ export interface ResolvedObject {
   envelopes: ResolvedEnvelope[]
   /** Video-instrument-only: ordered pads (fresh array per resolve). */
   videoPads?: VideoPad[]
+  /** Photo-instrument-only: ordered photos (fresh array per resolve). */
+  photoPads?: PhotoPad[]
   /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
   moverChain: ResolvedMover[]
   scratchBase: StateVector
@@ -176,6 +178,8 @@ export interface ObjectState {
   energy: number
   /** Video-instrument-only: ordered pads (per-resolve identity). */
   videoPads?: VideoPad[]
+  /** Photo-instrument-only: ordered photos (per-resolve identity). */
+  photoPads?: PhotoPad[]
   /** True this frame if a mute modifier's region covers the current beat (hide it). */
   blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames -

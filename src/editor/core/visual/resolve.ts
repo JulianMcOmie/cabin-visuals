@@ -369,6 +369,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
       // (which lands via resolve) is always visible to it.
       videoPads: track.videoPads ? [...track.videoPads] : undefined,
+      // Same contract for the Photo instrument's bank.
+      photoPads: track.photoPads ? [...track.photoPads] : undefined,
       scratchBase: identitySV(),
       scratchA: identitySV(),
       scratchB: identitySV(),

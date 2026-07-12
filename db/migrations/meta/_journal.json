@@ -36,6 +36,13 @@
       "when": 1783734000000,
       "tag": "0004_project_videos_size_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783820400000,
+      "tag": "0005_project_photos_bucket",
+      "breakpoints": true
     }
   ]
 }
