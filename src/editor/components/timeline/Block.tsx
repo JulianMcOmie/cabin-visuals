@@ -53,6 +53,14 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         const topHalf = e.clientY < rect.top + rect.height / 2
         e.currentTarget.style.cursor =
           onRightEdge && topHalf ? 'grab' : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
+        // Tooltip tracks the zone under the pointer (updated live so it swaps as
+        // you cross the halves): the right edge splits top = loop, bottom =
+        // resize; the left edge resizes; the body opens the editor.
+        e.currentTarget.title = onRightEdge
+          ? 'Right edge: drag the top half to loop, the bottom half to resize'
+          : onLeftEdge
+            ? 'Drag to resize'
+            : 'Double-click to edit notes'
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
