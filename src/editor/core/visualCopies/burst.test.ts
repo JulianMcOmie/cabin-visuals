@@ -97,7 +97,7 @@ test('sharpness makes the early burst more violent without changing the destinat
   close(evaluateBurstOffset(notes, sharp, 2)[0], 1)
 })
 
-test('through the chain: the offset pre-multiplies, keeping directions cardinal', () => {
+test('through the chain: the offset composes locally, so upstream entries re-frame it', () => {
   const chain = [
     // An upstream mover that rotates the copy 90° about Z (local composition).
     {
@@ -113,8 +113,9 @@ test('through the chain: the offset pre-multiplies, keeping directions cardinal'
   ]
   const copies = resolveVisualCopies(chain, 5)
   const e = copies[0].transform.elements
-  // Position is (1, 0, 0) - the +X burst ignores the upstream rotation.
-  assert.deepEqual([e[12], e[13], e[14]].map((n) => Math.round(n * 1e9) / 1e9), [1, 0, 0])
+  // Position is (0, 1, 0) - the +X burst happens inside the rotated frame.
+  const round = (n: number) => Math.round(n * 1e9) / 1e9 || 0
+  assert.deepEqual([e[12], e[13], e[14]].map(round), [0, 1, 0])
 })
 
 test('evaluation is pure: scrubbing reproduces offsets exactly', () => {

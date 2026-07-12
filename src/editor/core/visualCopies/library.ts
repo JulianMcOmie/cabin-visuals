@@ -120,10 +120,12 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
     return {
       apply(visualCopy, { beat }) {
         const [x, y, z] = evaluateBurstOffset(notes, settings, beat)
-        // Composed in the chain-root (placement) frame - delta PRE-multiplies -
-        // so burst directions stay cardinal regardless of upstream rotations.
+        // LOCAL composition (previous * delta): the burst translates in the
+        // reference frame established by the entries above it, so a splitter
+        // above this mover re-frames each copy's directions (a Radial above a
+        // Burst blooms every copy outward along its own axes).
         const next: VisualCopy = {
-          transform: new Matrix4().makeTranslation(x, y, z).multiply(visualCopy.transform),
+          transform: visualCopy.transform.clone().multiply(new Matrix4().makeTranslation(x, y, z)),
           opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }
@@ -135,10 +137,11 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 
 // ── Radial ───────────────────────────────────────────────────────────────────
 // Radial splitter: N structural copies, copy i rotated by i/N of a full turn
-// about the chosen plane's normal. The rotation PRE-multiplies (chain-root
-// frame), so translations already applied by movers ABOVE it spread radially -
-// one Burst +X note blooms every copy outward in its own direction. Movers
-// below it move all copies identically (or per-index if they read context).
+// about the chosen plane's normal. The rotation composes LOCALLY (previous *
+// delta), so it changes each copy's REFERENCE FRAME: movers BELOW it operate
+// in their copy's rotated axes - one Burst +X note blooms every copy outward
+// in its own direction. Movers above it are unaffected by the split frames
+// (each copy inherits their motion, then rotates in place).
 // Slot count comes only from settings, never from MIDI, so downstream indices
 // and the React occurrence list stay stable; notes are ignored.
 
@@ -179,7 +182,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     return {
       apply(visualCopy) {
         return rotations.map((rotation) => ({
-          transform: rotation.clone().multiply(visualCopy.transform),
+          transform: visualCopy.transform.clone().multiply(rotation),
           opacity: visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }))

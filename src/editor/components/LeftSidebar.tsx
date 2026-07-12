@@ -220,7 +220,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   opacity: 'Fades its object in or out.',
   color: "Shifts its object's color around the hue wheel - drive it with notes for color pops.",
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
-  radial: 'Splits its object into N copies fanned around a circle - movers above it spread out radially.',
+  radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 
 // New-registry (VisualCopy) movers list alongside the legacy ones; the shared
@@ -380,7 +380,7 @@ export function LeftSidebar() {
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Splitter" description="A Splitter renders its object several times - each copy gets its own transform, and movers ABOVE the splitter spread across the copies." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play - for example, the mute modifier mutes its parent when a note is currently playing." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
           </>
         )}
