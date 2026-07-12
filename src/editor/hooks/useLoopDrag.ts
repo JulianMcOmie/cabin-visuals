@@ -28,9 +28,8 @@ export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
     if (anchor == null) return
     const originX = e.clientX
     let dragging = false
-    // The loop lane shows the grab cursor for the whole gesture (matches the
-    // lane's hover cursor).
-    lockCursor('grab')
+    // Hover shows the open-hand grab; the active drag closes it to grabbing.
+    lockCursor('grabbing')
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
