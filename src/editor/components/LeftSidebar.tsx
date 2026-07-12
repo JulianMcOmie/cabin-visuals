@@ -58,15 +58,6 @@ const MAIN_INSTRUMENTS = withKind('object', [
 
 const OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: 'Cube', description: 'A cube that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
-  { id: 'swarm', name: 'Swarm', description: 'A ring, line, or grid of helmets that glow with each note.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="#22d3ee">
-        <circle cx="6" cy="1.5" r="0.8" /><circle cx="9.2" cy="2.8" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
-        <circle cx="9.2" cy="9.2" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="2.8" cy="9.2" r="0.8" />
-        <circle cx="1.5" cy="6" r="0.8" /><circle cx="2.8" cy="2.8" r="0.8" />
-      </g>
-    </svg>
-  )},
   { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <circle cx="6" cy="5" r="2.5" fill="#facc15" />

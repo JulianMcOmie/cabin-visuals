@@ -121,15 +121,6 @@ function clampOpacity(v: number): number {
   return clamp(v, 0, 1)
 }
 
-function setElementChannels(out: Record<string, number>, i: number, N: number): void {
-  for (const key in out) delete out[key]
-  out.i = i
-  out.n = N
-  out.frac = N <= 1 ? 0 : i / (N - 1)
-  out.parity = i % 2
-}
-
-
 /** Per frame (runs first, from VisualBeatSync): compose each object's world
  *  transform down the hierarchy, then stash state for the renderer to pull.
  *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
@@ -175,30 +166,12 @@ export function computeAtBeat(beat: number) {
     let world = worldMatrices.get(obj.trackId)
     if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
-    const isEnsemble = obj.elementCount > 1 || !!obj.layoutState
-    if (isEnsemble) {
-      if (parentWorld) world.copy(parentWorld)
-      else world.identity()
-      const N = obj.elementCount
-      for (let i = 0; i < N; i++) {
-        if (obj.layoutState) {
-          setElementChannels(obj.scratchChannels, i, N)
-          obj.layoutState({ params, energy, beat, i, N, channels: obj.scratchChannels }, obj.scratchBase)
-        } else {
-          const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
-          localTransformToSV(local, obj.scratchBase)
-        }
-        composeMatrix(obj.scratchBase, obj.elementMatrices[i])
-        obj.elementOpacities[i] = clampOpacity(obj.scratchBase.opacity * opacityGate)
-      }
-    } else {
-      const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
-      localTransformToSV(local, obj.scratchBase)
-      composeMatrix(obj.scratchBase, _local)
-      obj.elementOpacities[0] = clampOpacity(obj.scratchBase.opacity * opacityGate)
-      if (parentWorld) world.multiplyMatrices(parentWorld, _local)
-      else world.copy(_local)
-    }
+    const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
+    localTransformToSV(local, obj.scratchBase)
+    composeMatrix(obj.scratchBase, _local)
+    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate)
+    if (parentWorld) world.multiplyMatrices(parentWorld, _local)
+    else world.copy(_local)
 
     // Effect automation lanes sample per frame into an override map the effect
     // wrappers merge over each instance's stored settings ('enabled' as 0/1).
@@ -235,10 +208,7 @@ export function computeAtBeat(beat: number) {
       videoPads: obj.videoPads,
       photoPads: obj.photoPads,
       world,
-      elementCount: obj.elementCount,
-      elementMatrices: obj.elementMatrices,
-      elementOpacities: obj.elementOpacities,
-      opacity: obj.elementOpacities[0] ?? 1,
+      opacity,
       effectOverrides,
       blackedOut,
       stringParams: obj.stringParams,

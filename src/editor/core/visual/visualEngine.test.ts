@@ -20,9 +20,6 @@ function serializeState(trackId: string) {
   return {
     world: state.world.toArray().map(round),
     opacity: round(state.opacity),
-    elementCount: state.elementCount,
-    elementMatrices: state.elementMatrices.slice(0, state.elementCount).map((m) => m.toArray().map(round)),
-    elementOpacities: state.elementOpacities.slice(0, state.elementCount).map(round),
     activeNotes: state.activeNotes.map((n) => ({ beat: n.beat, pitch: n.pitch, durationBeats: n.durationBeats })),
     energy: round(state.energy),
   }

@@ -3,7 +3,7 @@
 // way (engine → document), which keeps the editor independent of the engine.
 
 import type { Matrix4 } from 'three'
-import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instruments/types'
+import type { LocalTransform, TransformCtx } from '../../instruments/types'
 import type { AdsrEnvelope, InterpolationMode, PhotoPad, VideoPad } from '../../types'
 import type { AutomationKeyframe } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
@@ -103,10 +103,6 @@ export interface ResolvedObject {
   stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
-  elementCount: number
-  layoutState?: (ctx: ElementLayoutCtx, out: StateVector) => void
-  elementMatrices: Matrix4[]
-  elementOpacities: number[]
   /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
   notes: ResolvedNote[]
   /** Blackout spans from `mute` child modifiers - the object is hidden inside them. */
@@ -132,7 +128,6 @@ export interface ResolvedObject {
    *  rootTrackIds order. */
   moverAndSplitterChain: MoverOrSplitter[]
   scratchBase: StateVector
-  scratchChannels: Record<string, number>
   /** Cross-cutting group labels - top-level movers target tags (see Routing). */
   tags: string[]
 }
@@ -164,10 +159,6 @@ export interface ObjectState {
   /** World transform (local composed with all ancestors). Reused across frames -
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
-  elementCount: number
-  /** Per-element local matrices for ensemble instruments; empty for single objects. */
-  elementMatrices: Matrix4[]
-  elementOpacities: number[]
   opacity: number
   /** Sampled effect automation for this frame: instanceId → key → value
    *  ('enabled' as 0/1). Absent when the object has no effect automation. */

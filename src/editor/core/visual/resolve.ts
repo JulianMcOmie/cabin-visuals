@@ -305,8 +305,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const def = getInstrument(track.instrumentId)
     if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing
     const params = track.params ?? {}
-    const paramsForCount = paramsWithDefaults(def, params)
-    const elementCount = Math.max(1, Math.min(512, Math.round(def?.elementCount?.(paramsForCount) ?? 1)))
     const { notes, blackouts } = applyModifiers(track, flattenTrackNotes(track, p), p)
     const moverAndSplitterChain = resolveMoverAndSplitterChain(track, p)
     objects.push({
@@ -317,10 +315,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       params,
       stringParams: track.stringParams ?? {},
       localTransform: def?.localTransform,
-      elementCount,
-      layoutState: def?.layoutState,
-      elementMatrices: Array.from({ length: elementCount }, () => new Matrix4()),
-      elementOpacities: Array.from({ length: elementCount }, () => 1),
       notes,
       blackouts,
       abilityEvents: resolveAbilityEvents(track, p),
@@ -334,7 +328,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // Same contract for the Photo instrument's bank.
       photoPads: track.photoPads ? [...track.photoPads] : undefined,
       scratchBase: identitySV(),
-      scratchChannels: {},
       tags,
     })
     for (const tag of tags) {

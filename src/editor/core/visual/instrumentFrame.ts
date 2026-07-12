@@ -58,14 +58,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(state.abilityEvents)
     put(state.videoPads)
     put(state.photoPads)
-    // Mover-system outputs (Swarm et al. read these). The arrays are
-    // per-resolve identities whose CONTENTS are pure functions of the fields
-    // already compared here (beat, params, ports, notes), so ref-compare is
-    // exact: same refs + same inputs ⇒ same element transforms.
     put(state.opacity)
-    put(state.elementCount)
-    put(state.elementMatrices)
-    put(state.elementOpacities)
     // Mutated in place each computeAtBeat: compare by element.
     const w = state.world.elements
     for (let k = 0; k < 16; k++) put(w[k])

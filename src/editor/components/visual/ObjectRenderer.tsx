@@ -6,7 +6,6 @@ import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { applyMaterialHueShift } from '../../core/visual/animatedColor'
-import type { ObjectState } from '../../core/visual/types'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -24,15 +23,6 @@ import { ShaderWrapper } from './ShaderWrapper'
  * given by index and does not know sibling occurrences exist.
  */
 const _composed = new Matrix4()
-
-function stateHasVaryingElementOpacity(state: ObjectState): boolean {
-  if (state.elementCount <= 1) return false
-  const first = state.elementOpacities[0] ?? 1
-  for (let i = 1; i < state.elementCount; i++) {
-    if (Math.abs((state.elementOpacities[i] ?? 1) - first) > 0.0001) return true
-  }
-  return false
-}
 
 export function ObjectRenderer({
   trackId,
@@ -77,9 +67,7 @@ export function ObjectRenderer({
     // as identity so the single-object path never flickers.
     const visualCopy = getVisualCopy(trackId, visualCopyIndex)
     g.visible = !state?.blackedOut
-    if (state && instrumentId !== 'swarm' && !stateHasVaryingElementOpacity(state)) {
-      applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
-    }
+    if (state) applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
     // This copy's color shift, applied as one tint to every material.
     if (state) {
       applyMaterialHueShift(

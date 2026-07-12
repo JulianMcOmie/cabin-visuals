@@ -4,7 +4,6 @@
 // component; the registry (./index) just collects them.
 
 import type { FC } from 'react'
-import type { StateVector } from '../core/visual/types'
 
 // A param is either numeric-valued (number / select / boolean - stored in track.params)
 // or string-valued (color / string - stored in track.stringParams). The union keeps the
@@ -103,12 +102,6 @@ export interface TransformCtx {
   beat: number
 }
 
-export interface ElementLayoutCtx extends TransformCtx {
-  i: number
-  N: number
-  channels: Record<string, number>
-}
-
 /** An object / source / shape instrument - renders something. */
 export interface ObjectInstrumentDef {
   id: string
@@ -125,9 +118,6 @@ export interface ObjectInstrumentDef {
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */
   localTransform?: (ctx: TransformCtx) => LocalTransform
-  /** Ensemble instruments can ask the engine to evaluate one state vector per element. */
-  elementCount?: (params: Record<string, number>) => number
-  layoutState?: (ctx: ElementLayoutCtx, out: StateVector) => void
   /** The R3F visual; pulls its per-frame state by trackId from the engine. */
   component: FC<{ trackId: string }>
   /** A full-frame instrument sizes itself to the viewport (a screen-filling plane) rather

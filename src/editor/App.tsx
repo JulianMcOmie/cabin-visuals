@@ -77,7 +77,7 @@ function Scene() {
       <ExportDriver />
       <RenderGovernor />
       {process.env.NODE_ENV === 'development' && <DevThreeHook />}
-      {/* Suspense: Swarm's GLB model loads through useLoader. */}
+      {/* Suspense: instruments may load assets through useLoader. */}
       <Suspense fallback={null}>
         <VisualScene />
       </Suspense>

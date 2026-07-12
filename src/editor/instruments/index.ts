@@ -27,7 +27,6 @@ import { paddleBounceInstrument } from './PaddleBounce'
 import { pixelBlastInstrument } from './PixelBlast'
 import { pixelInvadersInstrument } from './PixelInvaders'
 import { scoreTickerInstrument } from './ScoreTicker'
-import { swarmInstrument } from './Swarm'
 import { pointLightInstrument } from './PointLightObject'
 import { videoInstrument } from './Video'
 import { photoInstrument } from './Photo'
@@ -62,7 +61,6 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [pixelBlastInstrument.id]: pixelBlastInstrument,
   [pixelInvadersInstrument.id]: pixelInvadersInstrument,
   [scoreTickerInstrument.id]: scoreTickerInstrument,
-  [swarmInstrument.id]: swarmInstrument,
   [pointLightInstrument.id]: pointLightInstrument,
   [videoInstrument.id]: videoInstrument,
   [photoInstrument.id]: photoInstrument,
