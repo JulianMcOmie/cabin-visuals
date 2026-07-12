@@ -5,6 +5,9 @@ import { sampleLane } from './automation'
 import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, cloneSVInto, lerpSV, localTransformToSV } from './stateVector'
 import { subsetWeight } from './movers/registry'
+import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
+import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedMover, ResolvedGraph, ObjectState, ResolvedEnvelope, ResolvedObject, StateVector } from './types'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
@@ -20,6 +23,15 @@ const states = new Map<string, ObjectState>()
 // of each object's parent transform during composition.
 const worldMatrices = new Map<string, Matrix4>()
 const _local = new Matrix4()
+
+// Per-track VisualCopy cache - deliberately SEPARATE from ObjectState. The
+// STRUCTURAL copy count is fixed once per resolve (definitions contract: count
+// never depends on beat - MIDI gates opacity, not slots); the copy VALUES
+// (matrices/opacity/color shift) refresh imperatively per frame in
+// computeAtBeat, so React never reconciles during playback.
+const visualCopiesByTrack = new Map<string, VisualCopy[]>()
+const visualCopyCounts = new Map<string, number>()
+const copyCountWarned = new Set<string>()
 
 // External-store signal for the object list, so VisualScene reconciles the scene
 // tree when objects appear/disappear (on resolve) - never per frame.
@@ -39,6 +51,17 @@ export function setProject(p: ProjectSnapshot) {
   const live = new Set(graph.objects.map((o) => o.trackId))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)
   for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
+  for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
+  for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
+  copyCountWarned.clear()
+  // Fix each track's STRUCTURAL copy count now, with one evaluation. Counts are
+  // beat-independent by contract, so the probe beat is arbitrary; the values are
+  // real too, so copies are readable before the first computeAtBeat.
+  for (const obj of graph.objects) {
+    const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
+    visualCopyCounts.set(obj.trackId, copies.length)
+    visualCopiesByTrack.set(obj.trackId, copies)
+  }
   publishList()
 }
 
@@ -393,12 +416,54 @@ export function computeAtBeat(beat: number) {
       notes: obj.notes,
       activeNotes,
     })
+
+    // Evaluate the new VisualCopy chain at this beat (pure function of beat +
+    // resolved chain, so scrub == playback == export). The structural count was
+    // fixed at resolve time; a definition that varies its count with the beat
+    // violates its contract, so clamp back to structure rather than let the
+    // renderer's occurrence list silently disagree with React's.
+    const copies = resolveVisualCopies(obj.moverAndSplitterChain, beat)
+    const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
+    if (copies.length !== structuralCount) {
+      if (!copyCountWarned.has(obj.trackId)) {
+        copyCountWarned.add(obj.trackId)
+        console.warn(
+          `VisualCopy count for track ${obj.trackId} changed with the beat (${copies.length} vs structural ${structuralCount}). ` +
+            'Splitter definitions must gate copies by opacity, not by adding/removing slots.',
+        )
+      }
+      while (copies.length < structuralCount) {
+        const hidden = identityVisualCopy()
+        hidden.opacity = 0
+        copies.push(hidden)
+      }
+      copies.length = structuralCount
+    }
+    visualCopiesByTrack.set(obj.trackId, copies)
   }
 }
 
 /** Pull API for the renderer. */
 export function getObjectState(trackId: string): ObjectState | undefined {
   return states.get(trackId)
+}
+
+// ── VisualCopy pull API (separate cache, never part of ObjectState) ──
+
+/** All of a track's copies at the last computed beat ([] for unknown tracks). */
+export function getVisualCopies(trackId: string): VisualCopy[] {
+  return visualCopiesByTrack.get(trackId) ?? []
+}
+
+/** One occurrence's copy - what an ObjectRenderer pulls per frame. */
+export function getVisualCopy(trackId: string, visualCopyIndex: number): VisualCopy | undefined {
+  return visualCopiesByTrack.get(trackId)?.[visualCopyIndex]
+}
+
+/** The STRUCTURAL copy count (fixed per resolve; ≥1 for every live object).
+ *  Zero only for tracks that resolve to no object. */
+export function getVisualCopyCount(trackId: string): number {
+  return visualCopyCounts.get(trackId) ?? 0
 }
 
 // ── Object-list subscription (VisualScene via useSyncExternalStore) ──
