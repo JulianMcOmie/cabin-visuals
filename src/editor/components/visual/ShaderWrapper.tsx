@@ -40,12 +40,15 @@ const OUTPUT_FRAG = `
  */
 export function ShaderWrapper({
   trackId,
-  visualCopyIndex = 0,
+  visualCopyIndex,
   plugins,
   children,
 }: {
   trackId: string
-  /** Which VisualCopy occurrence this wrapper renders (composed into the holder). */
+  /** Which VisualCopy occurrence this wrapper renders (composed into the holder).
+   *  Full-frame occurrences OMIT it: their placement group inside the offscreen
+   *  scene already carries the copy transform via the screen anchor, so the
+   *  holder composing it too would apply the copy twice. */
   visualCopyIndex?: number
   plugins: EffectInstance[]
   children: ReactNode
@@ -117,7 +120,7 @@ export function ShaderWrapper({
     // Render the object (with its world transform composed with this
     // occurrence's VisualCopy transform) into the source FBO.
     if (state) {
-      const visualCopy = getVisualCopy(trackId, visualCopyIndex)
+      const visualCopy = visualCopyIndex === undefined ? undefined : getVisualCopy(trackId, visualCopyIndex)
       if (visualCopy) rig.holder.matrix.multiplyMatrices(state.world, visualCopy.transform)
       else rig.holder.matrix.copy(state.world)
     }

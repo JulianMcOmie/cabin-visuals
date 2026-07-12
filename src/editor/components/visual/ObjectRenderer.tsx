@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Group, Matrix4, Vector3 } from 'three'
+import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { applyMaterialHueShift } from '../../core/visual/animatedColor'
 import type { ObjectState } from '../../core/visual/types'
@@ -22,7 +23,6 @@ import { ShaderWrapper } from './ShaderWrapper'
  * This component never resolves copy logic - it pulls exactly the one copy it was
  * given by index and does not know sibling occurrences exist.
  */
-const _camForward = new Vector3()
 const _composed = new Matrix4()
 
 function stateHasVaryingElementOpacity(state: ObjectState): boolean {
@@ -91,17 +91,12 @@ export function ObjectRenderer({
       )
     }
     if (isFullFrame) {
-      // A full-frame instrument is a SCREEN: pinned dead-ahead of the camera and
-      // parallel to it, at the same distance r3f's `viewport` sizing assumes
-      // (camera → origin), so a viewport-sized plane fills the frame exactly.
-      // Without this the plane stands at the world origin and the (pitched)
-      // camera views it at an angle - 2D instruments read as a tilted backdrop.
-      // (The VisualCopy transform does not apply here yet - the camera-facing
-      // screen anchor lands in the full-frame commit.)
-      const dist = camera.position.length()
-      camera.getWorldDirection(_camForward)
-      g.position.copy(camera.position).addScaledVector(_camForward, dist)
-      g.quaternion.copy(camera.quaternion)
+      // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
+      // occurrence's VisualCopy transform applies inside screen space, so an
+      // identity copy pins the viewport-filling plane exactly as before and
+      // translated/scaled copies move as screen-space layers.
+      composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
+      _composed.decompose(g.position, g.quaternion, g.scale)
     } else if (state) {
       if (visualCopy) {
         _composed.multiplyMatrices(state.world, visualCopy.transform)
@@ -118,9 +113,11 @@ export function ObjectRenderer({
   // Full-frame instruments (viewport-filling planes) skip the placement transform and the
   // transform/clone effect chain; shaders may still post-process them.
   if (isFullFrame) {
+    // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
+    // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}><Component trackId={trackId} /></group>
     return shaderInstances.length > 0
-      ? <ShaderWrapper trackId={trackId} visualCopyIndex={visualCopyIndex} plugins={shaderInstances}>{frame}</ShaderWrapper>
+      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{frame}</ShaderWrapper>
       : frame
   }
 
