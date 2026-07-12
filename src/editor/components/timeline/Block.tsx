@@ -1,5 +1,6 @@
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
+import { LOOP_CURSOR } from '../../utils/dragCursor'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
 
@@ -21,6 +22,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
   const totalBeatsInBlock = block.durationBars * beatsPerBar
+  const canLoop = block.notes.length > 0
 
   return (
     <div
@@ -48,16 +50,19 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         const onRightEdge = localX > w - edge
         const onLeftEdge = localX < edge
         // The top half of the right edge arms looping (drag past the pattern to
-        // repeat) - normal cursor, matching the ruler loop lane. The bottom half and
+        // repeat) - dedicated loop icon cursor. The bottom half and
         // the left edge are plain resizes; the body is a move (default).
         const topHalf = e.clientY < rect.top + rect.height / 2
+        const onLoopHandle = onRightEdge && topHalf && canLoop
         e.currentTarget.style.cursor =
-          onRightEdge && topHalf ? 'default' : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
+          onLoopHandle ? LOOP_CURSOR : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
         // Tooltip tracks the zone under the pointer (updated live so it swaps as
         // you cross the halves): the right edge splits top = loop, bottom =
         // resize; the left edge resizes; the body opens the editor.
-        e.currentTarget.title = onRightEdge
-          ? 'Right edge: drag the top half to loop, the bottom half to resize'
+        e.currentTarget.title = onLoopHandle
+          ? 'Drag to loop'
+          : onRightEdge
+            ? 'Drag to resize'
           : onLeftEdge
             ? 'Drag to resize'
             : 'Double-click to edit notes'
