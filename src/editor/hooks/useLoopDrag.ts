@@ -44,7 +44,14 @@ export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
     }
     const onUp = () => {
       unlockCursor()
-      if (!dragging) useTimeStore.getState().setLoopRegion(null)
+      if (!dragging) {
+        const { loopRegion, setLoopRegion } = useTimeStore.getState()
+        // A click on the existing band clears it. Clicking elsewhere is inert so
+        // the loop is not accidentally lost while positioning the pointer.
+        if (loopRegion && anchor >= loopRegion.startBeat && anchor <= loopRegion.endBeat) {
+          setLoopRegion(null)
+        }
+      }
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
