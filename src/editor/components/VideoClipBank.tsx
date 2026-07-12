@@ -41,6 +41,14 @@ interface PickerState {
   error: string | null
 }
 
+/** Cap an in-flight upload's shown progress at 99%: the last bytes and the
+ *  server round-trip are unpredictable, so 100% would sit there looking stuck.
+ *  A finished upload drops out of the registry, so the badge vanishes at 99
+ *  rather than ever reading 100. */
+function savingPercent(progress: number): number {
+  return Math.min(99, Math.round(progress * 100))
+}
+
 /** A pad from the picker's source, as shown (and deletable) in the modal. */
 interface ArmedClip {
   bankIndex: number
@@ -334,10 +342,10 @@ function MomentPickerModal({
         ) : picker.save === 'saving' ? (
           <div className="mt-3">
             <p className="mb-1 font-mono text-[10px] text-[var(--text-muted)]">
-              SAVING {Math.round(picker.progress * 100)}% · clips arm instantly - the upload just makes them survive reloads
+              SAVING {savingPercent(picker.progress)}% · clips arm instantly - the upload just makes them survive reloads
             </p>
             <div className="h-1 w-full overflow-hidden rounded bg-[var(--bg-elevated)]">
-              <div className="h-full rounded bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${picker.progress * 100}%` }} />
+              <div className="h-full rounded bg-[var(--accent)] transition-[width] duration-150" style={{ width: `${savingPercent(picker.progress)}%` }} />
             </div>
           </div>
         ) : armedClips.length > 0 ? (
@@ -582,7 +590,7 @@ export function VideoClipBank({ track }: { track: Track }) {
             <span className="flex-shrink-0 font-mono text-[10px] text-[var(--text-muted)]">@ {pad.inPoint.toFixed(1)}s</span>
             {up && (up.status === 'saving' ? (
               <span className="flex-shrink-0 font-mono text-[9px] text-[var(--accent)]" title="Uploading in the background">
-                ↑{Math.round(up.progress * 100)}%
+                ↑{savingPercent(up.progress)}%
               </span>
             ) : (
               <span className="flex-shrink-0 font-mono text-[9px] font-bold text-[var(--warn)]" title={`${up.error ?? 'Upload failed'} - click to retry`}>
