@@ -543,6 +543,7 @@ export function TrackEditor() {
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const setTrackOnTop = useProjectStore((s) => s.setTrackOnTop)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
+  const setDirectorSceneBindings = useProjectStore((s) => s.setDirectorSceneBindings)
   const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
   const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
   const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
@@ -715,6 +716,15 @@ export function TrackEditor() {
                     const director = getDirector(track.directorId)
                     const scenes = useProjectStore.getState().scenes
                     const rows = director?.midiRows(track, scenes, useProjectStore.getState().sceneOrder) ?? []
+                    const bindings = (track.sceneBindings ?? []).filter((binding) => scenes[binding.sceneId] && !scenes[binding.sceneId].isMain)
+                    const cutCount = Math.min(bindings.length, Math.max(1, Math.round(track.params?.sceneCount ?? 3)))
+                    const moveBinding = (index: number, direction: -1 | 1) => {
+                      const nextIndex = index + direction
+                      if (nextIndex < 0 || nextIndex >= bindings.length) return
+                      const ordered = bindings.slice()
+                      ;[ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]]
+                      setDirectorSceneBindings(track.id, ordered)
+                    }
                     return (
                       <>
                         <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">DIRECTOR</p>
@@ -731,15 +741,35 @@ export function TrackEditor() {
                             onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                           />
                         )) : <p className="mb-4 text-[11px] text-[var(--text-muted)]">No parameters</p>}
-                        <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">MIDI ROWS</p>
-                        <div className="space-y-1">
-                          {rows.map((row) => (
-                            <div key={row.pitch} className="flex items-center justify-between rounded bg-[var(--bg-elevated)] px-2 py-1 text-[11px]">
-                              <span className="text-[var(--text-2)]">{row.label}</span>
-                              <span className="font-mono text-[var(--text-muted)]">{row.pitch}</span>
+                        {track.directorId === 'cut' ? (
+                          <>
+                            <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">SCENE ORDER</p>
+                            <div className="space-y-1">
+                              {bindings.map((binding, index) => (
+                                <div key={binding.sceneId} className={`flex items-center gap-2 rounded bg-[var(--bg-elevated)] px-2 py-1 text-[11px] ${index >= cutCount ? 'opacity-45' : ''}`}>
+                                  <span className="w-10 flex-shrink-0 font-mono text-[10px] text-[var(--text-muted)]">{index < cutCount ? `Cut ${index + 1}` : 'Unused'}</span>
+                                  <span className="min-w-0 flex-1 truncate text-[var(--text-2)]">{scenes[binding.sceneId]?.name}</span>
+                                  <span className="font-mono text-[var(--text-muted)]">{binding.pitch}</span>
+                                  <button onClick={() => moveBinding(index, -1)} disabled={index === 0} aria-label={`Move ${scenes[binding.sceneId]?.name} earlier`} className="disabled:opacity-25 hover:text-[var(--text)] cursor-pointer disabled:cursor-default"><ArrowUp size={11} /></button>
+                                  <button onClick={() => moveBinding(index, 1)} disabled={index === bindings.length - 1} aria-label={`Move ${scenes[binding.sceneId]?.name} later`} className="disabled:opacity-25 hover:text-[var(--text)] cursor-pointer disabled:cursor-default"><ArrowDown size={11} /></button>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                            <p className="mt-3 text-[10px] leading-relaxed text-[var(--text-muted)]">Each active cut has one MIDI row. The scene exists in its partition only while that row's note is held.</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">MIDI ROWS</p>
+                            <div className="space-y-1">
+                              {rows.map((row) => (
+                                <div key={row.pitch} className="flex items-center justify-between rounded bg-[var(--bg-elevated)] px-2 py-1 text-[11px]">
+                                  <span className="text-[var(--text-2)]">{row.label}</span>
+                                  <span className="font-mono text-[var(--text-muted)]">{row.pitch}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </>
                     )
                   }

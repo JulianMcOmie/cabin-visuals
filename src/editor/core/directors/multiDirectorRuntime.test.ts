@@ -23,3 +23,18 @@ test('Main resolves an ordered array of simultaneous directors, never a singular
   computeAtBeat(0)
   assert.deepEqual(getCompositionLayers().map((layer) => layer.directorTrackId), ['a', 'b'])
 })
+
+test('an active hold-gated director may intentionally resolve to an empty frame', () => {
+  const cut: Track = {
+    ...director('cut'), directorId: 'cut', sceneBindings: [{ pitch: 60, sceneId: 'visual' }], blocks: [],
+  }
+  const main: Scene = { id: 'main', name: 'Main', isMain: true, backgroundColor: '#000000', tracks: { cut }, rootTrackIds: ['cut'] }
+  const visual: Scene = { id: 'visual', name: 'Scene 1', isMain: false, backgroundColor: '#000000', tracks: {}, rootTrackIds: [] }
+  setProject({
+    scenes: { main, visual }, sceneOrder: ['main', 'visual'], activeSceneId: 'main',
+    tracks: {}, rootTrackIds: [], audioTracks: {}, audioRootTrackIds: [],
+    bpm: 120, beatsPerBar: 4, totalBars: 8,
+  } as unknown as ProjectState)
+  computeAtBeat(0)
+  assert.deepEqual(getCompositionLayers(), [])
+})

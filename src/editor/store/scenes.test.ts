@@ -67,3 +67,19 @@ test('scene background color defaults, edits, duplicates, and persists with the 
   hydrate(document)
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#123456')
 })
+
+test('adding a scene extends every director binding and keeps the active Main view in sync', () => {
+  hydrate(emptyDocument())
+  const state = useProjectStore.getState()
+  const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
+  state.setActiveScene(mainId)
+  state.addTrack({
+    id: 'cut', name: 'Cut', type: 'director', instrumentId: '', directorId: 'cut',
+    color: '#6366f1', muted: false, solo: false, blocks: [], childIds: [], sceneBindings: [],
+  })
+
+  const nextSceneId = useProjectStore.getState().addScene()
+  const next = useProjectStore.getState()
+  assert.equal(next.tracks.cut.sceneBindings?.at(-1)?.sceneId, nextSceneId)
+  assert.equal(next.scenes[mainId].tracks.cut.sceneBindings?.at(-1)?.sceneId, nextSceneId)
+})

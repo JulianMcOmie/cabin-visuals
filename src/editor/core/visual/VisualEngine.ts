@@ -196,7 +196,10 @@ function resolveComposition(beat: number): CompositionLayer[] {
       sceneOrder: project!.sceneOrder,
     }) ?? []
   })
-  if (layers.length > 0 || !visualFallback) return layers
+  // A director is allowed to intentionally produce no layers (for example,
+  // Cut when none of its hold-gated rows are active). Only projects with no
+  // active director at all receive the implicit Scene 1 fallback.
+  if (directors.length > 0 || !visualFallback) return layers
   return [{ directorTrackId: '__implicit__', sceneId: visualFallback, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
 }
 

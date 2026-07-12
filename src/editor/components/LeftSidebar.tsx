@@ -56,6 +56,7 @@ const MAIN_INSTRUMENTS = withKind('object', [
 
 const DIRECTOR_INSTRUMENTS = withKind('director', [
   { id: 'sceneSwitcher', name: 'Scene Switcher', description: 'Cuts the Main output to the scene triggered by each labelled MIDI row.', icon: <Sparkles size={12} className="text-indigo-400" /> },
+  { id: 'cut', name: 'Cut', description: 'Partitions the frame between held scene rows, with straight or diagonal cuts.', icon: <Sparkles size={12} className="text-fuchsia-400" /> },
 ])
 
 const OBJECT_INSTRUMENTS = withKind('object', [

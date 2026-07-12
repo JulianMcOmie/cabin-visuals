@@ -269,6 +269,7 @@ export interface ProjectState {
   /** Convert a track into a mover row (no instrument). */
   setTrackMover: (trackId: string, moverId: string, name: string) => void
   setTrackDirector: (trackId: string, directorId: string, name: string) => void
+  setDirectorSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
@@ -413,13 +414,16 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const main = scenes[mainId]
         const tracks = { ...main.tracks }
         for (const [trackId, track] of Object.entries(tracks)) {
-          if (track.type !== 'director' || track.directorId !== 'sceneSwitcher') continue
+          if (track.type !== 'director') continue
           const nextPitch = Math.max(59, ...(track.sceneBindings ?? []).map((b) => b.pitch)) + 1
           tracks[trackId] = { ...track, sceneBindings: [...(track.sceneBindings ?? []), { sceneId: id, pitch: nextPitch }] }
         }
         scenes[mainId] = { ...main, tracks }
       }
-      return { scenes, sceneOrder: [...s.sceneOrder, id] }
+      const sceneOrder = [...s.sceneOrder, id]
+      return mainId === s.activeSceneId
+        ? { scenes, sceneOrder, ...viewForScene(scenes, mainId, s.audioTracks, s.audioRootTrackIds) }
+        : { scenes, sceneOrder }
     })
     return id
   },
@@ -1004,6 +1008,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           },
         },
       }
+    }),
+
+  setDirectorSceneBindings: (trackId, bindings) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'director') return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, sceneBindings: bindings } } }
     }),
 
   addMoverTrack: (parentId, moverId, moverLabel) =>

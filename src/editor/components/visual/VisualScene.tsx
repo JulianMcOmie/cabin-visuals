@@ -4,7 +4,8 @@ import {
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
-  PlaneGeometry,
+  BufferGeometry,
+  Float32BufferAttribute,
   Scene as ThreeScene,
   WebGLRenderTarget,
   LinearFilter,
@@ -19,6 +20,33 @@ interface MountedScene {
   base: ThreeScene
   front: ThreeScene
   target: WebGLRenderTarget
+}
+
+function makeCompositorGeometry() {
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(12), 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(8), 2))
+  geometry.setIndex([0, 1, 2, 0, 2, 3])
+  return geometry
+}
+
+/** Shape one compositor quad into a full-height screen partition while keeping
+ * UVs in final-frame coordinates, so each scene is cropped rather than squeezed. */
+function setPartitionGeometry(geometry: BufferGeometry, partition?: { index: number; count: number; slant: number }) {
+  const count = partition ? Math.max(1, partition.count) : 1
+  const start = partition ? partition.index / count : 0
+  const end = partition ? (partition.index + 1) / count : 1
+  const halfSlant = (partition?.slant ?? 0) / 2
+  const xs = [start - halfSlant, end - halfSlant, end + halfSlant, start + halfSlant]
+  const ys = [0, 0, 1, 1]
+  const positions = geometry.getAttribute('position') as Float32BufferAttribute
+  const uvs = geometry.getAttribute('uv') as Float32BufferAttribute
+  for (let i = 0; i < 4; i++) {
+    positions.setXYZ(i, -1 + xs[i] * 2, -1 + ys[i] * 2, 0)
+    uvs.setXY(i, xs[i], ys[i])
+  }
+  positions.needsUpdate = true
+  uvs.needsUpdate = true
 }
 
 function lights() {
@@ -67,9 +95,8 @@ export function VisualScene() {
     const scene = new ThreeScene()
     const cam = new OrthographicCamera(-1, 1, 1, -1, 0, 2)
     cam.position.z = 1
-    const geometry = new PlaneGeometry(2, 2)
     const meshes: Mesh[] = []
-    return { scene, cam, geometry, meshes }
+    return { scene, cam, meshes }
   }, [])
 
   useEffect(() => {
@@ -91,8 +118,10 @@ export function VisualScene() {
   }, [mounted])
 
   useEffect(() => () => {
-    compositor.geometry.dispose()
-    for (const mesh of compositor.meshes) (mesh.material as MeshBasicMaterial).dispose()
+    for (const mesh of compositor.meshes) {
+      mesh.geometry.dispose()
+      ;(mesh.material as MeshBasicMaterial).dispose()
+    }
   }, [compositor])
 
   const onTopKey = useProjectStore((s) => objects.map((o) => {
@@ -121,7 +150,10 @@ export function VisualScene() {
 
       while (compositor.meshes.length < layers.length) {
         const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
-        const mesh = new Mesh(compositor.geometry, material)
+        const geometry = makeCompositorGeometry()
+        setPartitionGeometry(geometry)
+        const mesh = new Mesh(geometry, material)
+        mesh.frustumCulled = false
         compositor.meshes.push(mesh)
         compositor.scene.add(mesh)
       }
@@ -136,12 +168,18 @@ export function VisualScene() {
         material.map = runtime.target.texture
         material.opacity = layer.opacity
         material.needsUpdate = true
-        mesh.position.set(
-          -1 + layer.viewport.x * 2 + layer.viewport.width,
-          -1 + layer.viewport.y * 2 + layer.viewport.height,
-          -i * 0.001,
-        )
-        mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+        setPartitionGeometry(mesh.geometry, layer.partition)
+        if (layer.partition) {
+          mesh.position.set(0, 0, -i * 0.001)
+          mesh.scale.set(1, 1, 1)
+        } else {
+          mesh.position.set(
+            -1 + layer.viewport.x * 2 + layer.viewport.width,
+            -1 + layer.viewport.y * 2 + layer.viewport.height,
+            -i * 0.001,
+          )
+          mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+        }
         mesh.renderOrder = i
       })
 
