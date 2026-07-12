@@ -74,8 +74,6 @@ export function combineModifier(
 // rendering, hence promoted here.
 export const AUTOMATION_PITCH_MIN = 36
 export const AUTOMATION_PITCH_MAX = 84
-export const MIDI_AMOUNT_MIN = -1
-export const MIDI_AMOUNT_MAX = 1
 
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 

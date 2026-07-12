@@ -7,7 +7,6 @@ import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
-import { moverRegistry } from '../core/visual/movers/registry'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import type { TrackType } from '../types'
 
@@ -212,23 +211,13 @@ const MODIFIER_INSTRUMENTS = withKind('modifier', [
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
-  translate: 'Shifts its object by a fixed x, y, z offset.',
-  spin: 'Rotates its object about an axis, in place or orbiting.',
-  breathe: "Pulses its object's scale in a slow sine wave.",
-  orbit: 'Circles its object around its position at a set radius and tilt.',
-  dotWave: "Ripples an object's elements in a traveling wave.",
-  opacity: 'Fades its object in or out.',
-  color: "Shifts its object's color around the hue wheel - drive it with notes for color pops.",
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 
-// New-registry (VisualCopy) movers list alongside the legacy ones; the shared
-// 'mover' track type routes by registry ownership at resolve.
-const MOVER_INSTRUMENTS = withKind('mover', [
-  ...Object.values(moverRegistry),
-  ...listMoverOrSplitterDefinitions().filter((d) => d.kind === 'mover'),
-].map((d) => ({
+const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
+  .filter((d) => d.kind === 'mover')
+  .map((d) => ({
   id: d.id,
   name: d.label,
   description: MOVER_DESCRIPTIONS[d.id] ?? `Moves its object with the ${d.label} transform.`,

@@ -80,14 +80,13 @@ export function ObjectRenderer({
     if (state && instrumentId !== 'swarm' && !stateHasVaryingElementOpacity(state)) {
       applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
     }
-    // The Color mover's output - object-level, so it applies to every
-    // instrument (ensembles included) as one tint - plus this copy's shift.
+    // This copy's color shift, applied as one tint to every material.
     if (state) {
       applyMaterialHueShift(
         g,
-        state.hueShift + (visualCopy?.colorShift.hue ?? 0),
-        state.satShift + (visualCopy?.colorShift.saturation ?? 0),
-        state.lightShift + (visualCopy?.colorShift.lightness ?? 0),
+        visualCopy?.colorShift.hue ?? 0,
+        visualCopy?.colorShift.saturation ?? 0,
+        visualCopy?.colorShift.lightness ?? 0,
       )
     }
     if (isFullFrame) {

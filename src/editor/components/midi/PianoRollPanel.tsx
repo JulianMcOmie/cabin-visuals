@@ -15,12 +15,10 @@ import { getInstrument } from '../../instruments'
 import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
-import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
 import type { Block, InterpolationMode } from '../../types'
 
 /** Automation editor context: the param a lane drives, and its value bounds.
@@ -96,41 +94,16 @@ export function PianoRollPanel() {
   // editor by the modifier so it reads consistently with its timeline row.
   const modColor = modifierColor(track)
 
-  // Value lanes edit parameter/input VALUES (rows labelled by value), not pitches.
-  // Automation tracks target their parent; continuous movers target their own input.
-  // Trigger lanes (mover ballistic/none, envelope gates, suppress/mute modifiers,
-  // ability lanes) ignore note PITCH entirely, so they get a short set of
-  // interchangeable rows instead of the full piano.
+  // Value lanes edit parameter VALUES (rows labelled by value), not pitches.
+  // Automation tracks target their parent. Trigger lanes (envelope gates,
+  // suppress/mute modifiers, ability lanes) ignore note PITCH entirely, so they
+  // get a short set of interchangeable rows instead of the full piano.
   let automation: AutomationInfo | undefined
   let trigger: TriggerInfo | undefined
   let abilityColor: string | undefined
-  // A new-registry (VisualCopy) mover/splitter declares its own labelled MIDI
-  // vocabulary (midiRows as a function of its settings) - it skips the legacy
-  // value/trigger lane models entirely and renders like an instrument with rows.
-  const newMoverDef = track.type === 'mover' || track.type === 'splitter'
-    ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
-    : undefined
-  if (track.type === 'mover' && !newMoverDef) {
-    const dim = getMover(track.moverId)
-    const moverLabel = dim?.label ?? 'Mover'
-    if (track.midiMode === 'amount') {
-      automation = { paramLabel: `${moverLabel} · Amount`, paramMin: MIDI_AMOUNT_MIN, paramMax: MIDI_AMOUNT_MAX, kind: 'value' }
-    } else if (track.midiMode === 'continuous') {
-      const target = dim && isMoverMidiInput(dim, track.midiTargetInput)
-        ? track.midiTargetInput
-        : dim ? firstMoverMidiInput(dim) : undefined
-      const input = dim && target ? dim.inputs[target] : undefined
-      if (input && target) automation = { paramLabel: `${moverLabel} · ${input.label ?? target}`, paramMin: input.min, paramMax: input.max, kind: 'value' }
-    }
-    if (!automation) {
-      // Ballistic: each note fires a velocity-scaled envelope hit; pitch is ignored.
-      // None (or an unresolvable continuous target): notes are inert until a MIDI
-      // mode is picked - same short rows so the lane never shows the full piano.
-      trigger = track.midiMode === 'ballistic'
-        ? { rowLabel: 'Trigger', cornerLabel: `${moverLabel} · Trigger · velocity = strength` }
-        : { rowLabel: 'Trigger', cornerLabel: `${moverLabel} · MIDI off` }
-    }
-  } else if (track.type === 'envelope') {
+  // Movers/splitters declare their own labelled MIDI vocabulary (midiRows as a
+  // function of settings), resolved in PianoRollContent - no lane model here.
+  if (track.type === 'envelope') {
     // Envelope gates: pitch is ignored, velocity scales the envelope's peak.
     trigger = { rowLabel: 'Trigger', cornerLabel: 'Envelope · Trigger · velocity = strength' }
   } else if (modColor && (track.type === 'suppress' || track.type === 'mute')) {
@@ -169,10 +142,6 @@ export function PianoRollPanel() {
         if (pd && isNumberParam(pd)) automation = { paramLabel: `${plugin?.name} · ${pd.label}`, paramMin: pd.min, paramMax: pd.max, kind: 'value' }
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
-    } else if (parent?.type === 'mover') {
-      const dim = getMover(parent.moverId)
-      const input = dim?.inputs[track.targetParam]
-      if (input) automation = { paramLabel: `${dim?.label ?? 'Mover'} · ${input.label ?? track.targetParam}`, paramMin: input.min, paramMax: input.max, kind: 'value' }
     } else {
       const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }

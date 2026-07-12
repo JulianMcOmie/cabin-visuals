@@ -5,7 +5,6 @@ import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X, Pencil }
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
-import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
@@ -16,7 +15,7 @@ import { VideoClipBank } from './VideoClipBank'
 import { PhotoBank } from './PhotoBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec, Track } from '../types'
+import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -542,12 +541,6 @@ export function TrackEditor() {
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const setTrackOnTop = useProjectStore((s) => s.setTrackOnTop)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
-  const setMoverDepth = useProjectStore((s) => s.setMoverDepth)
-  const setMoverMidiMode = useProjectStore((s) => s.setMoverMidiMode)
-  const setMoverMidiTarget = useProjectStore((s) => s.setMoverMidiTarget)
-  const setMoverEnvelope = useProjectStore((s) => s.setMoverEnvelope)
-  const setMoverWeight = useProjectStore((s) => s.setMoverWeight)
-  const setMoverOpMode = useProjectStore((s) => s.setMoverOpMode)
   const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
   const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
   const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
@@ -628,157 +621,6 @@ export function TrackEditor() {
                       </>
                     )
                   }
-                  const dimDef = track.type === 'mover' ? getMover(track.moverId) : undefined
-                  if (dimDef) {
-                    const inputs = moverInputParamDefs(dimDef)
-                    const midiTargetOptions = inputs.filter(isNumberParam)
-                    const inputNames = midiTargetOptions.map((p) => p.key)
-                    const midiTargetInput = isMoverMidiInput(dimDef, track.midiTargetInput)
-                      ? track.midiTargetInput
-                      : inputNames[0]
-                    const midiMode = track.midiMode ?? 'none'
-                    const envelope = track.envelope ?? { attack: 0.05, decay: 0.4 }
-                    const weight = track.weight ?? ({ mode: 'all' } satisfies SubsetWeightSpec)
-                    const setWeightMode = (mode: SubsetWeightSpec['mode']) => {
-                      if (mode === 'gradient') setMoverWeight(track.id, { mode, slope: 1, phase: 0 })
-                      else setMoverWeight(track.id, { mode })
-                    }
-                    return (
-                      <>
-                        <p className="text-[11px] text-zinc-500 mb-3">Mover:</p>
-                        <div className="mb-4">
-                          <div className="text-xs text-zinc-300 mb-1.5">Operation</div>
-                          <select
-                            value={track.opMode ?? 'transform'}
-                            onChange={(e) => setMoverOpMode(track.id, e.target.value as 'transform' | 'add')}
-                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
-                          >
-                            <option value="transform">Transform</option>
-                            <option value="add">Add</option>
-                          </select>
-                        </div>
-                        <ParamControl
-                          param={MOVER_DEPTH_PARAM}
-                          numValue={track.depth ?? 1}
-                          strValue={undefined}
-                          onNum={(v) => setMoverDepth(track.id, v)}
-                        />
-                        {inputs.map((p) => (
-                          <ParamControl
-                            key={p.key}
-                            param={p}
-                            numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
-                            strValue={undefined}
-                            onNum={(v) => setMoverInput(track.id, p.key, v)}
-                          />
-                        ))}
-
-                        {!track.parentId && <MoverTargets track={track} />}
-
-                        <div className="mb-4">
-                          <div className="text-xs text-zinc-300 mb-1.5">MIDI Mode</div>
-                          <select
-                            value={midiMode}
-                            onChange={(e) => setMoverMidiMode(track.id, e.target.value as MidiMode)}
-                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
-                          >
-                            <option value="none">None</option>
-                            <option value="continuous">Continuous</option>
-                            <option value="amount">Amount</option>
-                            <option value="ballistic">Ballistic</option>
-                          </select>
-                        </div>
-
-                        {(midiMode === 'continuous' || midiMode === 'amount') && (
-                          <>
-                            {midiMode === 'continuous' && (
-                              <div className="mb-4">
-                                <div className="text-xs text-zinc-300 mb-1.5">MIDI Target</div>
-                                <select
-                                  value={midiTargetInput}
-                                  onChange={(e) => setMoverMidiTarget(track.id, e.target.value)}
-                                  className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
-                                >
-                                  {midiTargetOptions.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-                                </select>
-                              </div>
-                            )}
-                            <div className="mb-4">
-                              <div className="text-xs text-zinc-300 mb-1.5">Interpolation</div>
-                              <select
-                                value={track.interpolation ?? 'linear'}
-                                onChange={(e) => setTrackInterpolation(track.id, e.target.value as InterpolationMode)}
-                                className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
-                              >
-                                {INTERP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                              </select>
-                            </div>
-                          </>
-                        )}
-
-                        {midiMode === 'ballistic' && (
-                          <>
-                            <ParamSlider
-                              label="Attack"
-                              value={envelope.attack}
-                              min={0.01}
-                              max={4}
-                              step={0.01}
-                              onChange={(attack) => setMoverEnvelope(track.id, { ...envelope, attack })}
-                            />
-                            <ParamSlider
-                              label="Decay"
-                              value={envelope.decay}
-                              min={0.01}
-                              max={8}
-                              step={0.01}
-                              onChange={(decay) => setMoverEnvelope(track.id, { ...envelope, decay })}
-                            />
-                          </>
-                        )}
-
-                        <div className="mb-4">
-                          <div className="text-xs text-zinc-300 mb-1.5">Weight</div>
-                          <select
-                            value={weight.mode}
-                            onChange={(e) => setWeightMode(e.target.value as SubsetWeightSpec['mode'])}
-                            className="w-full h-7 px-2 rounded bg-zinc-800 text-xs text-zinc-200 border border-zinc-700 outline-none"
-                          >
-                            <option value="all">All</option>
-                            <option value="odd">Odd</option>
-                            <option value="even">Even</option>
-                            <option value="firstHalf">First half</option>
-                            <option value="secondHalf">Second half</option>
-                            <option value="checkerWhite">Checker white</option>
-                            <option value="checkerBlack">Checker black</option>
-                            <option value="gradient">Gradient</option>
-                          </select>
-                        </div>
-
-                        {weight.mode === 'gradient' && (
-                          <>
-                            <ParamSlider
-                              label="Slope"
-                              value={weight.slope}
-                              min={-4}
-                              max={4}
-                              step={0.01}
-                              onChange={(slope) => setMoverWeight(track.id, { ...weight, slope })}
-                            />
-                            <ParamSlider
-                              label="Phase"
-                              value={weight.phase}
-                              min={-1}
-                              max={2}
-                              step={0.01}
-                              onChange={(phase) => setMoverWeight(track.id, { ...weight, phase })}
-                            />
-                          </>
-                        )}
-                      </>
-                    )
-                  }
-
                   // Envelope child track → ADSR + depth (+ the value reached at
                   // full gain, except for the reserved Opacity target, which is a
                   // pure multiplier). Its notes are the gates - drawn in the MIDI

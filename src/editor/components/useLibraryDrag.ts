@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
-import { firstMoverMidiInput, getMover } from '../core/visual/movers/registry'
 import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
@@ -17,13 +16,10 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // A modifier is a no-instrument child track whose type IS the modifier (its id);
   // objects/modulators carry an instrumentId and the default 'base' type.
   const isModifier = item.kind === 'modifier'
-  const isMover = item.kind === 'mover'
-  const isSplitter = item.kind === 'splitter'
-  // A new-registry (VisualCopy) mover shares the 'mover' track type but none of
-  // the legacy runtime fields - its definition owns its own MIDI grammar.
-  // Splitters exist only in the new registry.
-  const isLegacyMover = isMover && !hasMoverOrSplitterDefinition(item.id)
-  const def = isLegacyMover ? getMover(item.id) : undefined
+  // Movers and splitters resolve through the MoverOrSplitter registry; ignore
+  // ids the registry doesn't know.
+  const isMover = item.kind === 'mover' && hasMoverOrSplitterDefinition(item.id)
+  const isSplitter = item.kind === 'splitter' && hasMoverOrSplitterDefinition(item.id)
   return {
     id: crypto.randomUUID(),
     name: item.name,
@@ -31,13 +27,7 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
     instrumentId: isModifier || isMover || isSplitter ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
-    depth: isLegacyMover ? 1 : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
-    envelope: isLegacyMover ? { attack: 0.05, decay: 0.4 } : undefined,
-    midiMode: isLegacyMover ? 'none' : undefined,
-    midiTargetInput: def ? firstMoverMidiInput(def) : undefined,
-    weight: isLegacyMover ? { mode: 'all' } : undefined,
-    opMode: isLegacyMover ? 'transform' : undefined,
     color: item.kind === 'object' ? OBJECT_TRACK_COLOR : MOVER_TRACK_COLOR,
     muted: false,
     solo: false,

@@ -128,16 +128,14 @@ test('settings merge definition defaults with the track inputValues', () => {
   assert.deepEqual(log, ['lift(1)']) // the param's declared default
 })
 
-test('legacy mover ids do not enter the new chain (and vice versa)', () => {
+test('unknown mover ids (e.g. deleted legacy movers) resolve to nothing', () => {
   const p = snapshot([
     track({ id: 'cube', instrumentId: 'cube', childIds: ['legacy', 'new'] }),
-    track({ id: 'legacy', type: 'mover', moverId: 'spin', parentId: 'cube', depth: 1 }),
+    track({ id: 'legacy', type: 'mover', moverId: 'spin', parentId: 'cube' }),
     track({ id: 'new', type: 'mover', moverId: 'test.chainLift', parentId: 'cube' }),
   ], ['cube'])
   const obj = objectByTrackId(p, 'cube')
-  assert.equal(obj.moverChain.length, 1, 'legacy spin resolves through the legacy chain')
-  assert.equal(obj.moverChain[0].def.id, 'spin')
-  assert.equal(obj.moverAndSplitterChain.length, 1, 'only the new-registry mover enters the new chain')
+  assert.equal(obj.moverAndSplitterChain.length, 1, 'only the registered mover enters the chain')
 })
 
 test('muted entries drop out; solo pools among new-chain children', () => {
