@@ -89,6 +89,7 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
                 backgroundColor: loopRegion.enabled ? 'rgba(250, 204, 21, 0.3)' : 'rgba(161, 161, 170, 0.25)',
                 borderLeft: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
                 borderRight: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
+                zIndex: 5,
               }}
             >
               <div
