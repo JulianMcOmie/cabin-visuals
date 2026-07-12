@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
-import { setProject, syncParams, computeAtBeat } from './VisualEngine'
+import { setProject, syncParams, computeAtBeat, getMountedRenderScenes } from './VisualEngine'
 import { getBeatOverride } from './beatOverride'
 import { PauseCanary } from './pauseCanary'
 
@@ -16,8 +16,8 @@ import { PauseCanary } from './pauseCanary'
  *    keeps rendering the previous resolved graph until the new one lands.
  */
 export function VisualBeatSync() {
-  const canary = useRef<PauseCanary | null>(null)
-  useFrame((rootState) => {
+  const canaries = useRef(new Map<string, PauseCanary>())
+  useFrame(() => {
     const { currentBeat, isPlaying } = useTimeStore.getState()
     // Export walks time through the override so the transport never moves.
     const beat = getBeatOverride() ?? currentBeat
@@ -25,9 +25,13 @@ export function VisualBeatSync() {
     // Dev-only pause-invariant tripwire (see pauseCanary.ts). The project state
     // ref is the edit stamp: edits while paused legitimately change the scene.
     if (process.env.NODE_ENV !== 'production') {
-      ;(canary.current ??= new PauseCanary()).check(
-        rootState.scene, beat, isPlaying, useProjectStore.getState(),
-      )
+      const roots = getMountedRenderScenes()
+      for (const [key, scene] of roots) {
+        let canary = canaries.current.get(key)
+        if (!canary) { canary = new PauseCanary(); canaries.current.set(key, canary) }
+        canary.check(scene, beat, isPlaying, useProjectStore.getState())
+      }
+      for (const key of canaries.current.keys()) if (!roots.has(key)) canaries.current.delete(key)
     }
   })
 

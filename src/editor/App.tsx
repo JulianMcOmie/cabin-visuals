@@ -26,6 +26,7 @@ import { ExportDialog } from './components/ExportDialog'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
+import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
@@ -410,6 +411,7 @@ export default function EditorApp() {
                 </div>
 
                 {/* Tracks / Piano Roll */}
+                <SceneTabs />
                 <div className="flex-1 min-h-0">
                   <BottomArea />
                 </div>

@@ -123,13 +123,20 @@ export function doc(opts: {
     rootTrackIds.push(t.id)
   }
 
+  const mainId = nid('main')
+  const sceneId = nid('scene')
   return {
-    schemaVersion: 2,
+    schemaVersion: 5,
     bpm: opts.bpm,
     beatsPerBar: opts.beatsPerBar ?? 4,
     totalBars: opts.totalBars ?? 16,
-    tracks,
-    rootTrackIds,
+    scenes: {
+      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
+      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, tracks, rootTrackIds },
+    },
+    sceneOrder: [mainId, sceneId],
+    audioTracks: {},
+    audioRootTrackIds: [],
     audioClips: {},
   }
 }

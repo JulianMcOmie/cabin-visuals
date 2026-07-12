@@ -49,12 +49,35 @@ function documentToPreview(doc: unknown): ProjectPreview {
       audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
     }>
     rootTrackIds?: string[]
+    scenes?: Record<string, {
+      isMain?: boolean
+      tracks?: Record<string, {
+        type?: string
+        color?: string
+        blocks?: { startBar?: number; durationBars?: number }[]
+        audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
+      }>
+      rootTrackIds?: string[]
+    }>
+    sceneOrder?: string[]
+    audioTracks?: Record<string, {
+      type?: string
+      color?: string
+      blocks?: { startBar?: number; durationBars?: number }[]
+      audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
+    }>
+    audioRootTrackIds?: string[]
     totalBars?: number
     beatsPerBar?: number
     bpm?: number
   }
-  const tracks = d.tracks ?? {}
-  const rootIds = Array.isArray(d.rootTrackIds) ? d.rootTrackIds : []
+  const firstScene = d.sceneOrder?.map((id) => d.scenes?.[id]).find((scene) => scene && !scene.isMain)
+  const tracks = firstScene
+    ? { ...(d.audioTracks ?? {}), ...(firstScene.tracks ?? {}) }
+    : d.tracks ?? {}
+  const rootIds = firstScene
+    ? [...(d.audioRootTrackIds ?? []), ...(firstScene.rootTrackIds ?? [])]
+    : Array.isArray(d.rootTrackIds) ? d.rootTrackIds : []
   const totalBars = Math.max(1, d.totalBars ?? 1)
   const beatsPerBar = d.beatsPerBar ?? 4
   const bpm = d.bpm ?? 120

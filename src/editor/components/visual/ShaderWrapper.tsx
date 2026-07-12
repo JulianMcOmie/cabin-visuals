@@ -114,8 +114,8 @@ export function ShaderWrapper({
 
   useFrame(() => {
     const state = getObjectState(trackId)
-    if (outMeshRef.current) outMeshRef.current.visible = !state?.blackedOut
-    if (state?.blackedOut) return
+    if (outMeshRef.current) outMeshRef.current.visible = !!state && !state.blackedOut
+    if (!state || state.blackedOut) return
 
     // Render the object (with its world transform composed with this
     // occurrence's VisualCopy transform) into the source FBO.

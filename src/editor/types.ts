@@ -28,6 +28,19 @@ export type TrackType =
   | 'audio'
   | 'envelope'
   | 'splitter'
+  | 'director'
+
+export type SceneId = string
+
+/** A self-contained editable visual world. Main is represented by the same shape,
+ * but accepts director tracks instead of object instruments. */
+export interface Scene {
+  id: SceneId
+  name: string
+  isMain: boolean
+  tracks: Record<string, Track>
+  rootTrackIds: string[]
+}
 
 /**
  * ADSR parameters for an `envelope` child track, all in BEATS (tempo-musical and
@@ -131,6 +144,10 @@ export interface Track {
   moverId?: string
   /** For a `splitter` track: which MoverOrSplitterDefinition this row applies. */
   splitterId?: string
+  /** Main-scene-only: the director plugin this track instantiates. */
+  directorId?: string
+  /** Director MIDI rows bind stable pitches to scene identities. */
+  sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
   /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */

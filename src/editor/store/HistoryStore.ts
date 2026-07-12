@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { useProjectStore } from './ProjectStore'
+import { useProjectStore, viewForScene } from './ProjectStore'
 
 type Snapshot = Record<string, unknown>
 const LIMIT = 100          // cap the stack; oldest entries fall off
@@ -14,7 +14,11 @@ const DEBOUNCE_MS = 80
 // Generic on purpose: add track.effects / a project name later and it's covered.
 const pick = (s: Record<string, unknown>): Snapshot => {
   const out: Snapshot = {}
-  for (const k in s) if (typeof s[k] !== 'function') out[k] = s[k]
+  for (const k in s) {
+    if (typeof s[k] === 'function') continue
+    if (k === 'tracks' || k === 'rootTrackIds' || k === 'activeSceneId') continue
+    out[k] = s[k]
+  }
   return out
 }
 const snapshot = () => pick(useProjectStore.getState() as unknown as Record<string, unknown>)
@@ -52,7 +56,19 @@ export const useHistoryStore = create<HistoryState>((set, get) => {
 
   const restore = (snap: Snapshot) => {
     applying = true
-    useProjectStore.setState(snap) // shallow-merges data back; actions untouched
+    const current = useProjectStore.getState()
+    const scenes = snap.scenes as typeof current.scenes
+    const sceneOrder = snap.sceneOrder as string[]
+    const audioTracks = snap.audioTracks as typeof current.audioTracks
+    const audioRootTrackIds = snap.audioRootTrackIds as string[]
+    const activeSceneId = scenes[current.activeSceneId]
+      ? current.activeSceneId
+      : sceneOrder.find((id) => !scenes[id]?.isMain) ?? sceneOrder[0]
+    useProjectStore.setState({
+      ...snap,
+      activeSceneId,
+      ...viewForScene(scenes, activeSceneId, audioTracks, audioRootTrackIds),
+    }) // shallow-merges data back; actions untouched
     applying = false
   }
 

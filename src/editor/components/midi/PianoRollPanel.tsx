@@ -16,6 +16,7 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
+import { getDirector } from '../../core/directors'
 import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -214,11 +215,16 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const rowsDef = track && (track.type === 'mover' || track.type === 'splitter')
     ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
     : undefined
+  const scenes = useProjectStore((s) => s.scenes)
+  const sceneOrder = useProjectStore((s) => s.sceneOrder)
+  const directorRows = !automation && track?.type === 'director'
+    ? getDirector(track.directorId)?.midiRows(track, scenes, sceneOrder)
+    : undefined
   const defRows = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRows
     : !automation && !trigger && rowsDef?.midiRows && track
       ? rowsDef.midiRows(mergeDefinitionSettings(rowsDef, track.inputValues))
-      : undefined
+      : directorRows
   const rows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch))

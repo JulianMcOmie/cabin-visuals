@@ -5,7 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import type { Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, VideoPad, PhotoPad } from '../types'
+import type { Scene, Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, VideoPad, PhotoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -216,7 +216,17 @@ function insertTrackTreeIntoState(
   return { tracks, rootTrackIds }
 }
 
-interface ProjectState {
+export interface ProjectState {
+  scenes: Record<string, Scene>
+  /** Main first, followed by visual scenes in tab order. */
+  sceneOrder: string[]
+  /** Ephemeral editor selection. Persistence/history deliberately omit it. */
+  activeSceneId: string
+  /** Project-global audio, projected into every active scene's compatibility view. */
+  audioTracks: Record<string, Track>
+  audioRootTrackIds: string[]
+  /** Compatibility view of active scene + global audio. Existing editor gestures
+   * keep using this while scene ownership lives exclusively in `scenes`. */
   tracks: Record<string, Track>
   rootTrackIds: string[]
   // Project-level musical settings. Here (not TimeStore) so they're part of the
@@ -224,6 +234,12 @@ interface ProjectState {
   bpm: number
   beatsPerBar: number
   totalBars: number
+  setActiveScene: (sceneId: string) => void
+  addScene: () => string
+  renameScene: (sceneId: string, name: string) => void
+  duplicateScene: (sceneId: string) => string | null
+  deleteScene: (sceneId: string) => void
+  reorderScenes: (sceneIds: string[]) => void
   addTrack: (track: Track, atIndex?: number) => void
   addBlock: (trackId: string, block: Block) => void
   addBlocks: (trackId: string, blocks: Block[]) => void
@@ -253,6 +269,7 @@ interface ProjectState {
   setTrackModifier: (trackId: string, type: TrackType, name: string) => void
   /** Convert a track into a mover row (no instrument). */
   setTrackMover: (trackId: string, moverId: string, name: string) => void
+  setTrackDirector: (trackId: string, directorId: string, name: string) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
@@ -303,12 +320,167 @@ interface ProjectState {
   setTotalBars: (bars: number) => void
 }
 
-export const useProjectStore = create<ProjectState>((set) => ({
+function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
+  const mainId = crypto.randomUUID()
+  const firstId = crypto.randomUUID()
+  return {
+    scenes: {
+      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
+      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] },
+    },
+    sceneOrder: [mainId, firstId],
+    activeSceneId: firstId,
+  }
+}
+
+export function viewForScene(
+  scenes: Record<string, Scene>,
+  sceneId: string,
+  audioTracks: Record<string, Track>,
+  audioRootTrackIds: string[],
+): Pick<ProjectState, 'tracks' | 'rootTrackIds'> {
+  const scene = scenes[sceneId]
+  return {
+    tracks: { ...audioTracks, ...(scene?.tracks ?? {}) },
+    rootTrackIds: [...audioRootTrackIds, ...(scene?.rootTrackIds ?? [])],
+  }
+}
+
+export function sceneSnapshot(state: ProjectState, sceneId: string) {
+  const scene = state.scenes[sceneId]
+  return scene ? { tracks: scene.tracks, rootTrackIds: scene.rootTrackIds, bpm: state.bpm, beatsPerBar: state.beatsPerBar, totalBars: state.totalBars } : null
+}
+
+export const useProjectStore = create<ProjectState>((rawSet) => {
+  const initial = makeInitialScenes()
+
+  // Every legacy track edit writes the active compatibility view. Split that
+  // patch back into global audio and the active scene before publishing it.
+  const set = ((partial: unknown) => rawSet((s) => {
+    const value = typeof partial === 'function'
+      ? (partial as (state: ProjectState) => Partial<ProjectState> | ProjectState)(s)
+      : partial as Partial<ProjectState>
+    if (value === s) return s
+    if (!value || (!('tracks' in value) && !('rootTrackIds' in value))) return value
+
+    const nextTracks = value.tracks ?? s.tracks
+    const nextRoots = value.rootTrackIds ?? s.rootTrackIds
+    const audioTracks: Record<string, Track> = {}
+    const sceneTracks: Record<string, Track> = {}
+    for (const [id, track] of Object.entries(nextTracks)) {
+      if (track.type === 'audio') audioTracks[id] = track
+      else sceneTracks[id] = track
+    }
+    const audioRootTrackIds = nextRoots.filter((id) => !!audioTracks[id])
+    const sceneRootTrackIds = nextRoots.filter((id) => !!sceneTracks[id])
+    const active = s.scenes[s.activeSceneId]
+    if (!active) return value
+    return {
+      ...value,
+      scenes: {
+        ...s.scenes,
+        [active.id]: { ...active, tracks: sceneTracks, rootTrackIds: sceneRootTrackIds },
+      },
+      audioTracks,
+      audioRootTrackIds,
+    }
+  })) as typeof rawSet
+
+  return ({
+  scenes: initial.scenes,
+  sceneOrder: initial.sceneOrder,
+  activeSceneId: initial.activeSceneId,
+  audioTracks: {},
+  audioRootTrackIds: [],
   tracks: {},
   rootTrackIds: [],
   bpm: 120,
   beatsPerBar: 4,
   totalBars: 32,
+
+  setActiveScene: (sceneId) => rawSet((s) => {
+    if (!s.scenes[sceneId] || sceneId === s.activeSceneId) return s
+    return { activeSceneId: sceneId, ...viewForScene(s.scenes, sceneId, s.audioTracks, s.audioRootTrackIds) }
+  }),
+
+  addScene: () => {
+    const id = crypto.randomUUID()
+    rawSet((s) => {
+      const visualCount = s.sceneOrder.filter((sid) => !s.scenes[sid]?.isMain).length
+      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, tracks: {}, rootTrackIds: [] }
+      const scenes = { ...s.scenes, [id]: scene }
+      const mainId = s.sceneOrder.find((sid) => s.scenes[sid]?.isMain)
+      if (mainId) {
+        const main = scenes[mainId]
+        const tracks = { ...main.tracks }
+        for (const [trackId, track] of Object.entries(tracks)) {
+          if (track.type !== 'director' || track.directorId !== 'sceneSwitcher') continue
+          const nextPitch = Math.max(59, ...(track.sceneBindings ?? []).map((b) => b.pitch)) + 1
+          tracks[trackId] = { ...track, sceneBindings: [...(track.sceneBindings ?? []), { sceneId: id, pitch: nextPitch }] }
+        }
+        scenes[mainId] = { ...main, tracks }
+      }
+      return { scenes, sceneOrder: [...s.sceneOrder, id] }
+    })
+    return id
+  },
+
+  renameScene: (sceneId, name) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    const trimmed = name.trim()
+    if (!scene || !trimmed || trimmed === scene.name || scene.isMain) return s
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, name: trimmed } } }
+  }),
+
+  duplicateScene: (sceneId) => {
+    let nextId: string | null = null
+    rawSet((s) => {
+      const source = s.scenes[sceneId]
+      if (!source || source.isMain) return s
+      const tracks: Record<string, Track> = {}
+      const rootTrackIds: string[] = []
+      for (const rootId of source.rootTrackIds) {
+        const snapshot = snapshotTrackTree(rootId, source.tracks)
+        if (!snapshot) continue
+        const tree = cloneTrackTree(snapshot, null)
+        if (tree[0]) rootTrackIds.push(tree[0].id)
+        for (const track of tree) tracks[track.id] = track
+      }
+      nextId = crypto.randomUUID()
+      const scene: Scene = { id: nextId, name: `${source.name} Copy`, isMain: false, tracks, rootTrackIds }
+      const at = Math.max(0, s.sceneOrder.indexOf(sceneId)) + 1
+      const sceneOrder = s.sceneOrder.slice()
+      sceneOrder.splice(at, 0, nextId)
+      return { scenes: { ...s.scenes, [nextId]: scene }, sceneOrder }
+    })
+    return nextId
+  },
+
+  deleteScene: (sceneId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    const visuals = s.sceneOrder.filter((id) => !s.scenes[id]?.isMain)
+    if (!scene || scene.isMain || visuals.length <= 1) return s
+    const scenes = { ...s.scenes }
+    delete scenes[sceneId]
+    const mainId = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
+    if (mainId && scenes[mainId]) {
+      const main = scenes[mainId]
+      const tracks = Object.fromEntries(Object.entries(main.tracks).map(([id, track]) => [
+        id,
+        track.sceneBindings ? { ...track, sceneBindings: track.sceneBindings.filter((binding) => binding.sceneId !== sceneId) } : track,
+      ]))
+      scenes[mainId] = { ...main, tracks }
+    }
+    const sceneOrder = s.sceneOrder.filter((id) => id !== sceneId)
+    const activeSceneId = s.activeSceneId === sceneId ? visuals.find((id) => id !== sceneId)! : s.activeSceneId
+    return { scenes, sceneOrder, activeSceneId, ...viewForScene(scenes, activeSceneId, s.audioTracks, s.audioRootTrackIds) }
+  }),
+
+  reorderScenes: (sceneIds) => rawSet((s) => {
+    const main = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
+    const valid = sceneIds.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
+    return { sceneOrder: main ? [main, ...valid] : valid }
+  }),
 
   addTrack: (track, atIndex) =>
     set((s) => {
@@ -830,6 +1002,28 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }
     }),
 
+  setTrackDirector: (trackId, directorId, name) =>
+    set((s) => {
+      const scene = s.scenes[s.activeSceneId]
+      const track = s.tracks[trackId]
+      if (!scene?.isMain || !track) return s
+      const visualIds = s.sceneOrder.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: {
+            ...track,
+            name,
+            type: 'director',
+            instrumentId: '',
+            directorId,
+            sceneBindings: visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })),
+            childIds: [],
+          },
+        },
+      }
+    }),
+
   addMoverTrack: (parentId, moverId, moverLabel) =>
     set((s) => {
       const parent = s.tracks[parentId]
@@ -1211,4 +1405,5 @@ export const useProjectStore = create<ProjectState>((set) => ({
   // Blocks past the new end are left alone (the timeline just ends sooner);
   // the transport clamps the playhead to the project length on its own.
   setTotalBars: (bars) => set({ totalBars: Math.max(MIN_TOTAL_BARS, Math.min(MAX_TOTAL_BARS, Math.round(bars))) }),
-}))
+  })
+})

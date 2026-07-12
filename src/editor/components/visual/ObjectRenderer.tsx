@@ -65,7 +65,7 @@ export function ObjectRenderer({
     // multiplies, color shift adds. A missing copy (pre-first-resolve) renders
     // as identity so the single-object path never flickers.
     const visualCopy = getVisualCopy(trackId, visualCopyIndex)
-    g.visible = !state?.blackedOut
+    g.visible = !!state && !state.blackedOut
     if (state) applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
     // This copy's color shift, applied as one tint to every material.
     if (state) {

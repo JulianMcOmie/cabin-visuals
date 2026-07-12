@@ -6,6 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { getDirector } from '../core/directors'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
@@ -701,6 +702,39 @@ export function TrackEditor() {
                             onChange={(v) => setEnvelopeTarget(track.id, v)}
                           />
                         )}
+                      </>
+                    )
+                  }
+
+                  if (track.type === 'director') {
+                    const director = getDirector(track.directorId)
+                    const scenes = useProjectStore.getState().scenes
+                    const rows = director?.midiRows(track, scenes, useProjectStore.getState().sceneOrder) ?? []
+                    return (
+                      <>
+                        <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">DIRECTOR</p>
+                        <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
+                          {director?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.
+                        </p>
+                        {(director?.params.length ?? 0) > 0 ? director!.params.map((p) => (
+                          <ParamControl
+                            key={p.key}
+                            param={p}
+                            numValue={track.params?.[p.key]}
+                            strValue={track.stringParams?.[p.key]}
+                            onNum={(v) => setTrackParam(track.id, p.key, v)}
+                            onStr={(v) => setTrackStringParam(track.id, p.key, v)}
+                          />
+                        )) : <p className="mb-4 text-[11px] text-[var(--text-muted)]">No parameters</p>}
+                        <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">MIDI ROWS</p>
+                        <div className="space-y-1">
+                          {rows.map((row) => (
+                            <div key={row.pitch} className="flex items-center justify-between rounded bg-[var(--bg-elevated)] px-2 py-1 text-[11px]">
+                              <span className="text-[var(--text-2)]">{row.label}</span>
+                              <span className="font-mono text-[var(--text-muted)]">{row.pitch}</span>
+                            </div>
+                          ))}
+                        </div>
                       </>
                     )
                   }
