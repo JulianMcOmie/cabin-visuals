@@ -21,9 +21,6 @@ const DRAG_THRESHOLD_PX = 3
 
 interface DragState {
   mode: 'moving' | 'resizing-left' | 'resizing-right'
-  /** Right-edge grabs on the TOP half of the header/handle arm looping (dragging
-   *  past the pattern repeats it); bottom-half grabs are a plain resize. */
-  loopArm: boolean
   startClientX: number
   startClientY: number
   didDrag: boolean
@@ -63,16 +60,14 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const x = e.clientX - rect.left
     const edge = Math.min(EDGE_PX, rect.width / 4)
     const onRightEdge = x > rect.width - edge
-    const loopArm = onRightEdge && e.clientY < rect.top + rect.height / 2
-    e.currentTarget.style.cursor = loopArm ? 'default' : x < edge || onRightEdge ? 'ew-resize' : 'default'
+    e.currentTarget.style.cursor = x < edge || onRightEdge ? 'ew-resize' : 'default'
   }, [])
 
   // Begin a drag in an explicit mode. Shared by the ruler header (which picks the
   // mode from where you grabbed it) and the grid edge handles (fixed left/right).
-  const beginDrag = useCallback((clientX: number, clientY: number, mode: DragState['mode'], loopArm = false, seekOnClick = false) => {
+  const beginDrag = useCallback((clientX: number, clientY: number, mode: DragState['mode'], seekOnClick = false) => {
     dragRef.current = {
       mode,
-      loopArm,
       startClientX: clientX,
       startClientY: clientY,
       didDrag: false,
@@ -93,7 +88,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       if (!d.didDrag) {
         d.didDrag = Math.hypot(ev.clientX - d.startClientX, ev.clientY - d.startClientY) >= DRAG_THRESHOLD_PX
         if (!d.didDrag) return
-        lockCursor(d.loopArm ? 'default' : d.mode === 'moving' ? 'default' : 'ew-resize')
+        lockCursor(d.mode === 'moving' ? 'default' : 'ew-resize')
       }
       const l = latest.current
       const maxBar = l.maxBeats / l.beatsPerBar
@@ -107,23 +102,15 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
         update(l.trackId, l.blockId, { startBar })
       } else if (d.mode === 'resizing-right') {
         const durationBars = Math.max(oneBeat, Math.min(maxBar - d.originStartBar, d.originDurationBars + deltaBars))
-        if (d.loopArm) {
-          // Same loop contract as the timeline gesture: growing past the authored
-          // pattern repeats it, shrinking back inside returns a plain block.
-          const loops = d.originNotes.length > 0 && durationBars > d.patternBars + 1e-9
-          update(l.trackId, l.blockId, loops
-            ? { durationBars, loop: true, loopLengthBars: d.patternBars }
-            : { durationBars, loop: false, loopLengthBars: undefined })
-        } else if (d.originLoop) {
-          // Bottom-half grab on an already-looping block: a plain resize that
-          // keeps the loop as-is, except shrinking to <= the pattern length
-          // still un-loops it (shrink-to-unloop works from either half).
+        if (d.originLoop) {
+          // Resizing an already-looping block keeps its loop as-is, except
+          // shrinking to <= the pattern length still returns it to a plain block.
           const stillLoops = durationBars > d.patternBars + 1e-9
           update(l.trackId, l.blockId, stillLoops
             ? { durationBars, loop: true, loopLengthBars: d.patternBars }
             : { durationBars, loop: false, loopLengthBars: undefined })
         } else {
-          // Bottom-half grab on a plain block: never engages looping.
+          // MIDI-editor edge drags resize plain blocks without engaging looping.
           update(l.trackId, l.blockId, { durationBars })
         }
       } else {
@@ -158,22 +145,13 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const x = e.clientX - rect.left
     const edge = Math.min(EDGE_PX, rect.width / 4)
     const mode: DragState['mode'] = x < edge ? 'resizing-left' : x > rect.width - edge ? 'resizing-right' : 'moving'
-    // Only the TOP half of the right edge arms looping; the bottom half resizes plainly.
-    const loopArm = mode === 'resizing-right' && e.clientY < rect.top + rect.height / 2
-    beginDrag(e.clientX, e.clientY, mode, loopArm, true)
+    beginDrag(e.clientX, e.clientY, mode, true)
   }, [beginDrag])
 
-  // Grid edge handles: fixed-side resize. The right handle's top half arms looping.
+  // Grid edge handles always resize their fixed side in the MIDI editor.
   const handleResizePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>, side: 'left' | 'right') => {
     e.stopPropagation()
-    // The handle spans the grid CONTENT (taller than the viewport and scrolled),
-    // so its raw midpoint can sit anywhere - even off-screen, making the top
-    // half unreachable. Split the part of the handle the user can actually see.
-    const rect = e.currentTarget.getBoundingClientRect()
-    const visibleTop = Math.max(rect.top, 0)
-    const visibleBottom = Math.min(rect.bottom, window.innerHeight)
-    const loopArm = side === 'right' && e.clientY < (visibleTop + visibleBottom) / 2
-    beginDrag(e.clientX, e.clientY, side === 'left' ? 'resizing-left' : 'resizing-right', loopArm)
+    beginDrag(e.clientX, e.clientY, side === 'left' ? 'resizing-left' : 'resizing-right')
   }, [beginDrag])
 
   return { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown }

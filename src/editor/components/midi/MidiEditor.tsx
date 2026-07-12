@@ -635,15 +635,6 @@ export function MidiEditor({
           <div
             style={{ position: 'absolute', top: 0, bottom: 0, left: blockStartPx + blockWidthPx - 4, width: 8, cursor: 'ew-resize', zIndex: 4 }}
             onPointerDown={(e) => handleResizePointerDown(e, 'right')}
-            onPointerMove={(e) => {
-              // Normal cursor on the top half of what the user can see (the handle
-              // spans the scrolled grid, so split the visible portion) - matches
-              // the loop-arm split in handleResizePointerDown.
-              const rect = e.currentTarget.getBoundingClientRect()
-              const visibleTop = Math.max(rect.top, 0)
-              const visibleBottom = Math.min(rect.bottom, window.innerHeight)
-              e.currentTarget.style.cursor = e.clientY < (visibleTop + visibleBottom) / 2 ? 'default' : 'ew-resize'
-            }}
           />
 
           {/* Range label background bands */}
