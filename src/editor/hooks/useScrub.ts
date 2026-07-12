@@ -59,5 +59,5 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
   }, [scrubTo])
 
-  return { scrubbingRef, startScrub }
+  return { scrubbingRef, startScrub, scrubTo }
 }

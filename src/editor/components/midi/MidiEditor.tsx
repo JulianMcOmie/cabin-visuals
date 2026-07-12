@@ -83,7 +83,7 @@ export function MidiEditor({
   }
 
   // Scrubbing: map a clientX to an absolute beat (snapped, clamped to the timeline)
-  const { scrubbingRef, startScrub } = useScrub({
+  const { scrubbingRef, startScrub, scrubTo } = useScrub({
     computeBeat: (clientX) => {
       if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
@@ -148,6 +148,7 @@ export function MidiEditor({
     pixelsPerBeat,
     beatsPerBar,
     maxBeats: initialTotalBeats,
+    onHeaderClick: scrubTo,
   })
 
   // Alt+scroll zoom (horizontal = pixelsPerBeat, vertical = rowScale)

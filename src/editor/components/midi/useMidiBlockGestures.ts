@@ -12,9 +12,12 @@ interface UseMidiBlockGesturesOptions {
   beatsPerBar: number
   /** Total beats the editor timeline spans (for clamping the block to the canvas). */
   maxBeats: number
+  /** Seek the playhead when the block header is clicked without being dragged. */
+  onHeaderClick: (clientX: number) => void
 }
 
 const EDGE_PX = 8
+const DRAG_THRESHOLD_PX = 3
 
 interface DragState {
   mode: 'moving' | 'resizing-left' | 'resizing-right'
@@ -22,6 +25,9 @@ interface DragState {
    *  past the pattern repeats it); bottom-half grabs are a plain resize. */
   loopArm: boolean
   startClientX: number
+  startClientY: number
+  didDrag: boolean
+  seekOnClick: boolean
   originStartBar: number
   originDurationBars: number
   originNotes: Note[]
@@ -42,30 +48,33 @@ interface DragState {
  * a left-resize offsets every note's startBeat by the opposite of the start shift.
  * Moving the block intentionally carries its notes; right-resize leaves them be.
  */
-export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, beatsPerBar, maxBeats }: UseMidiBlockGesturesOptions) {
+export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, beatsPerBar, maxBeats, onHeaderClick }: UseMidiBlockGesturesOptions) {
   const dragRef = useRef<DragState | null>(null)
 
   // Mirrored for the window listener so it never reads a stale closure.
-  const latest = useRef({ trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats })
-  latest.current = { trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats }
+  const latest = useRef({ trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats, onHeaderClick })
+  latest.current = { trackId, blockId: block.id, notes, pixelsPerBeat, beatsPerBar, maxBeats, onHeaderClick }
 
-  // Hover cursor: resize near the edges, grab in the middle (skipped mid-drag so
-  // the locked cursor wins).
+  // Hover cursor: resize near the edges, normal arrow in the middle. Moving the
+  // block keeps the arrow throughout the gesture.
   const handleHeaderPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const edge = Math.min(EDGE_PX, rect.width / 4)
-    e.currentTarget.style.cursor = x < edge || x > rect.width - edge ? 'ew-resize' : 'grab'
+    e.currentTarget.style.cursor = x < edge || x > rect.width - edge ? 'ew-resize' : 'default'
   }, [])
 
   // Begin a drag in an explicit mode. Shared by the ruler header (which picks the
   // mode from where you grabbed it) and the grid edge handles (fixed left/right).
-  const beginDrag = useCallback((clientX: number, mode: DragState['mode'], loopArm = false) => {
+  const beginDrag = useCallback((clientX: number, clientY: number, mode: DragState['mode'], loopArm = false, seekOnClick = false) => {
     dragRef.current = {
       mode,
       loopArm,
       startClientX: clientX,
+      startClientY: clientY,
+      didDrag: false,
+      seekOnClick,
       originStartBar: block.startBar,
       originDurationBars: block.durationBars,
       originNotes: latest.current.notes,
@@ -75,12 +84,15 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
         : block.durationBars,
     }
 
-    lockCursor(mode === 'moving' ? 'grabbing' : 'ew-resize')
-
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
       const d = dragRef.current
       if (!d) return
+      if (!d.didDrag) {
+        d.didDrag = Math.hypot(ev.clientX - d.startClientX, ev.clientY - d.startClientY) >= DRAG_THRESHOLD_PX
+        if (!d.didDrag) return
+        lockCursor(d.mode === 'moving' ? 'default' : 'ew-resize')
+      }
       const l = latest.current
       const maxBar = l.maxBeats / l.beatsPerBar
       const oneBeat = 1 / l.beatsPerBar
@@ -127,6 +139,8 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       }
     }
     const onUp = () => {
+      const d = dragRef.current
+      if (d && !d.didDrag && d.seekOnClick) latest.current.onHeaderClick(d.startClientX)
       dragRef.current = null
       unlockCursor()
       controller.abort()
@@ -144,7 +158,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const mode: DragState['mode'] = x < edge ? 'resizing-left' : x > rect.width - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half resizes plainly.
     const loopArm = mode === 'resizing-right' && e.clientY < rect.top + rect.height / 2
-    beginDrag(e.clientX, mode, loopArm)
+    beginDrag(e.clientX, e.clientY, mode, loopArm, true)
   }, [beginDrag])
 
   // Grid edge handles: fixed-side resize. The right handle's top half arms looping.
@@ -157,7 +171,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const visibleTop = Math.max(rect.top, 0)
     const visibleBottom = Math.min(rect.bottom, window.innerHeight)
     const loopArm = side === 'right' && e.clientY < (visibleTop + visibleBottom) / 2
-    beginDrag(e.clientX, side === 'left' ? 'resizing-left' : 'resizing-right', loopArm)
+    beginDrag(e.clientX, e.clientY, side === 'left' ? 'resizing-left' : 'resizing-right', loopArm)
   }, [beginDrag])
 
   return { handleHeaderPointerDown, handleHeaderPointerMove, handleResizePointerDown }
