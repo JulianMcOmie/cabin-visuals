@@ -11,11 +11,9 @@ export function SceneTabs() {
   const setActiveScene = useProjectStore((s) => s.setActiveScene)
   const addScene = useProjectStore((s) => s.addScene)
   const renameScene = useProjectStore((s) => s.renameScene)
-  const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
   const duplicateScene = useProjectStore((s) => s.duplicateScene)
   const deleteScene = useProjectStore((s) => s.deleteScene)
   const visualCount = sceneOrder.filter((id) => !scenes[id]?.isMain).length
-  const activeScene = scenes[activeSceneId]
 
   const select = (id: string) => {
     useUIStore.getState().setEditingBlock(null)
@@ -75,17 +73,6 @@ export function SceneTabs() {
       <button onClick={create} title="Add scene" className="mb-1 ml-1 flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer">
         <Plus size={13} />
       </button>
-      {activeScene && !activeScene.isMain && (
-        <label className="ml-auto mb-1 flex h-6 items-center gap-2 px-1 text-[10px] text-[var(--text-muted)]">
-          Background
-          <input
-            type="color"
-            value={activeScene.backgroundColor}
-            onChange={(e) => setSceneBackgroundColor(activeScene.id, e.currentTarget.value)}
-            className="h-5 w-7 cursor-pointer rounded border border-[var(--border)] bg-transparent p-0"
-          />
-        </label>
-      )}
     </div>
   )
 }

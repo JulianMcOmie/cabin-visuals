@@ -146,7 +146,9 @@ export function VisualScene() {
       })
 
       gl.setRenderTarget(previous)
-      gl.setClearColor(0x09090b, 1)
+      const project = useProjectStore.getState()
+      const mainId = project.sceneOrder.find((id) => project.scenes[id]?.isMain)
+      gl.setClearColor(mainId ? project.scenes[mainId].backgroundColor : DEFAULT_SCENE_BACKGROUND, 1)
       gl.clear(true, true, true)
       gl.render(compositor.scene, compositor.cam)
     } finally {

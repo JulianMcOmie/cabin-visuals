@@ -535,7 +535,9 @@ export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const tracks = useProjectStore((s) => s.tracks)
-  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
+  const activeSceneId = useProjectStore((s) => s.activeSceneId)
+  const activeScene = useProjectStore((s) => s.scenes[s.activeSceneId])
+  const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
@@ -553,28 +555,27 @@ export function TrackEditor() {
   const effectDragging = useUIStore((s) => s.effectDragging)
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
-  const track =
-    (selectedTrackId ? tracks[selectedTrackId] : undefined) ??
-    (rootTrackIds[0] ? tracks[rootTrackIds[0]] : undefined) ??
-    null
+  const track = selectedTrackId ? tracks[selectedTrackId] ?? null : null
 
   // Dragging an effect from the library flips this panel to its Effects tab so the
   // drop zone is visible.
-  useEffect(() => { if (effectDragging) setTab('effects') }, [effectDragging])
+  useEffect(() => { if (effectDragging && track) setTab('effects') }, [effectDragging, track])
+  useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
 
   return (
     <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* Header: TRACK caps label + accent track name (double-click renames). */}
+      {/* A scene tab selects the scene inspector; selecting a timeline row swaps
+          this same surface back to the track inspector. */}
       <div className="h-8 flex-shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)]">
-        <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">TRACK</span>
+        <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">{track ? 'TRACK' : 'SCENE'}</span>
         {track
           ? <EditableTrackName trackId={track.id} name={track.name} />
-          : <span className="text-[11px] text-[var(--text-muted)] select-none">-</span>}
+          : <span className="text-[11px] font-semibold text-[var(--accent)] select-none">{activeScene?.name ?? '-'}</span>}
       </div>
 
       {/* Tabs - flat segmented row, inset accent underline on the active tab. */}
       <div className="flex flex-shrink-0 border-b border-[var(--border)]">
-        {TABS.map((t, i) => (
+        {track ? TABS.map((t, i) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -588,7 +589,11 @@ export function TrackEditor() {
           >
             {t.label}
           </button>
-        ))}
+        )) : (
+          <div className="flex-1 h-7 flex items-center justify-center bg-[var(--bg-app)] text-[11px] font-semibold text-[var(--text)] shadow-[inset_0_-2px_0_var(--accent)]">
+            Settings
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
@@ -798,9 +803,18 @@ export function TrackEditor() {
                   )
                 })()}
               </>
-            ) : (
-              <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
-            )}
+            ) : activeScene ? (
+              <>
+                <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">PARAMETERS</p>
+                <ParamControl
+                  param={{ key: 'backgroundColor', label: 'Background', type: 'color', default: '#000000' }}
+                  numValue={undefined}
+                  strValue={activeScene.backgroundColor}
+                  onNum={() => {}}
+                  onStr={(color) => setSceneBackgroundColor(activeScene.id, color)}
+                />
+              </>
+            ) : null}
           </>
         )}
         {tab === 'effects' && (
