@@ -17,7 +17,7 @@ let moveTracker: ((e: PointerEvent) => void) | null = null
 
 // Lucide Repeat2, rendered as a compact high-contrast cursor for the timeline's
 // loop-only edge zone. The hotspot sits at the icon's center.
-const LOOP_CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="6" fill="#18181b" stroke="#facc15" stroke-width="1.5"/><g transform="translate(4 4)" fill="none" stroke="#facc15" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 9 3-3 3 3"/><path d="M13 18H7a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h6a2 2 0 0 1 2 2v10"/></g></svg>`
+const LOOP_CURSOR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="6" fill="#000" stroke="#fff" stroke-width="1.5"/><g transform="translate(4 4)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 9 3-3 3 3"/><path d="M13 18H7a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h6a2 2 0 0 1 2 2v10"/></g></svg>`
 export const LOOP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(LOOP_CURSOR_SVG)}") 8 8, default`
 
 export function lockCursor(cursor: string) {
