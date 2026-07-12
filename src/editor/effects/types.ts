@@ -5,8 +5,15 @@ import type { ParamDef } from '../instruments/types'
 // Three categories, chained per object (plan §4.6): transform ▸ clone ▸ shader.
 export type EffectCategory = 'transform' | 'clone' | 'shader'
 
-/** What a clone plugin produces: how many copies to render, each copy's transform, and
- *  optionally its opacity (for trail/falloff). Evaluated per frame; `time` = the beat. */
+/**
+ * What a clone plugin produces: how many copies to render, each copy's transform,
+ * and optionally its opacity (for trail/falloff). Evaluated per frame; `time` =
+ * the beat.
+ *
+ * @deprecated Legacy render-time duplication. New duplication belongs in the
+ * ordered mover-and-splitter VisualCopy system. Keep this contract for existing
+ * saved projects during migration; do not add new clone effects.
+ */
 export interface CloneSpec {
   count: number
   getTransform: (index: number, settings: Record<string, number>, time: number) => Matrix4
@@ -24,7 +31,10 @@ export interface VisualEffect {
   /** Transform plugins mutate the wrapping group each frame. `settings` are the instance's
    *  param values; `time` is the current beat (so effects are music-synced). */
   applyTransform?: (group: Group, settings: Record<string, number>, time: number) => void
-  /** Clone plugins replicate the object into `count` copies, each with its own transform. */
+  /**
+   * Clone plugins replicate the object into `count` copies, each with its own transform.
+   * @deprecated Use a VisualCopy splitter for new duplication behavior.
+   */
   getClones?: (settings: Record<string, number>) => CloneSpec
   /** Shader plugins: a GLSL fragment shader (screen-space; samples `tDiffuse`, sees
    *  `time`/`resolution` + a uniform per param). Applied as an FBO post-process pass. */

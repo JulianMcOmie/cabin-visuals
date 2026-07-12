@@ -199,6 +199,10 @@ export const colorMover: MoverDef = {
   },
 }
 
+/**
+ * @deprecated Legacy StateVector mover registry. New mover definitions belong
+ * to the VisualCopy definition registry.
+ */
 export const MOVERS: Record<string, MoverDef> = {
   [translateMover.id]: translateMover,
   [spinMover.id]: spinMover,
