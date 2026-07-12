@@ -7,7 +7,7 @@ import {
 } from 'three'
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
-import { getObjectState } from '../../core/visual/VisualEngine'
+import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
@@ -38,7 +38,18 @@ const OUTPUT_FRAG = `
  * as a clip-space fullscreen overlay (depth-test off) over the 3D scene. So a shaded object
  * becomes a full-frame post-processed layer; un-shaded objects render normally, unaffected.
  */
-export function ShaderWrapper({ trackId, plugins, children }: { trackId: string; plugins: EffectInstance[]; children: ReactNode }) {
+export function ShaderWrapper({
+  trackId,
+  visualCopyIndex = 0,
+  plugins,
+  children,
+}: {
+  trackId: string
+  /** Which VisualCopy occurrence this wrapper renders (composed into the holder). */
+  visualCopyIndex?: number
+  plugins: EffectInstance[]
+  children: ReactNode
+}) {
   const { gl, camera, size } = useThree()
   const outMeshRef = useRef<Mesh>(null)
 
@@ -103,8 +114,13 @@ export function ShaderWrapper({ trackId, plugins, children }: { trackId: string;
     if (outMeshRef.current) outMeshRef.current.visible = !state?.blackedOut
     if (state?.blackedOut) return
 
-    // Render the object (with its world transform) into the source FBO.
-    if (state) rig.holder.matrix.copy(state.world)
+    // Render the object (with its world transform composed with this
+    // occurrence's VisualCopy transform) into the source FBO.
+    if (state) {
+      const visualCopy = getVisualCopy(trackId, visualCopyIndex)
+      if (visualCopy) rig.holder.matrix.multiplyMatrices(state.world, visualCopy.transform)
+      else rig.holder.matrix.copy(state.world)
+    }
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.
     const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat

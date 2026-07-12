@@ -33,13 +33,30 @@ const visualCopiesByTrack = new Map<string, VisualCopy[]>()
 const visualCopyCounts = new Map<string, number>()
 const copyCountWarned = new Set<string>()
 
+/** One structural render-list entry per VisualCopy occurrence. The renderer
+ *  mounts one ObjectRenderer per entry; each pulls exactly its copy per frame.
+ *  Entry count changes only on resolve (chain/config edits), NEVER from MIDI
+ *  gates - hidden copies stay mounted at opacity zero. */
+export interface ObjectListEntry {
+  trackId: string
+  instrumentId: string
+  visualCopyIndex: number
+}
+
 // External-store signal for the object list, so VisualScene reconciles the scene
 // tree when objects appear/disappear (on resolve) - never per frame.
-let objectList: { trackId: string; instrumentId: string }[] = []
+let objectList: ObjectListEntry[] = []
 const listeners = new Set<() => void>()
 
 function publishList() {
-  objectList = graph.objects.map((o) => ({ trackId: o.trackId, instrumentId: o.instrumentId }))
+  objectList = graph.objects.flatMap((o) => {
+    const count = Math.max(1, visualCopyCounts.get(o.trackId) ?? 1)
+    return Array.from({ length: count }, (_, visualCopyIndex) => ({
+      trackId: o.trackId,
+      instrumentId: o.instrumentId,
+      visualCopyIndex,
+    }))
+  })
   listeners.forEach((l) => l())
 }
 

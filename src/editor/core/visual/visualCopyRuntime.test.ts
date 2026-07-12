@@ -11,6 +11,7 @@ import type { ResolvedNote } from './types'
 import type { VisualCopy } from '../visualCopies/types'
 import {
   computeAtBeat,
+  getObjectList,
   getVisualCopies,
   getVisualCopy,
   getVisualCopyCount,
@@ -174,6 +175,39 @@ test('MIDI gates change opacity without changing the copy count', () => {
   assert.equal(getVisualCopies('cube').length, 2)
   assert.deepEqual(getVisualCopies('cube').map((c) => c.opacity), [0, 0])
   assert.equal(getVisualCopyCount('cube'), 2)
+})
+
+test('the structural object list has one entry per copy index', () => {
+  setProject(project([
+    track({ id: 'solo', instrumentId: 'cube' }),
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.gatedSplit', parentId: 'cube' }),
+  ], ['solo', 'cube']))
+
+  assert.deepEqual(getObjectList(), [
+    { trackId: 'solo', instrumentId: 'cube', visualCopyIndex: 0 },
+    { trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 0 },
+    { trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 1 },
+  ])
+})
+
+test('per-frame evaluation never republishes the structural list', () => {
+  setProject(project([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({
+      id: 's', type: 'splitter', splitterId: 'test.gatedSplit', parentId: 'cube',
+      blocks: [{
+        id: 'b', startBar: 0, durationBars: 1, loop: false,
+        notes: [{ id: 'n1', startBeat: 0, durationBeats: 1, pitch: 60, velocity: 1 }],
+      }],
+    }),
+  ], ['cube']))
+
+  const before = getObjectList()
+  computeAtBeat(0.5) // gate open
+  computeAtBeat(10) // gates closed - copies hidden, never unmounted
+  assert.equal(getObjectList(), before, 'list reference is stable across frames')
+  assert.equal(before.length, 2)
 })
 
 test('re-resolving drops caches for removed tracks', () => {
