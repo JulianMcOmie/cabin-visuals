@@ -18,9 +18,11 @@ import { ObjectRenderer } from './ObjectRenderer'
  * objects depth-test among themselves like a normal scene.
  */
 export function VisualScene() {
+  // One entry per VisualCopy occurrence (structural: changes on resolve only).
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
-  // One char per object: '1' = in front. A string so the zustand selector is
-  // reference-stable and this only re-renders when a flag actually flips.
+  // One char per occurrence: '1' = in front. A string so the zustand selector is
+  // reference-stable and this only re-renders when a flag actually flips. The
+  // flag is per TRACK, so it applies to every one of the track's occurrences.
   const onTopKey = useProjectStore((s) =>
     objects
       .map((o) => ((s.tracks[o.trackId]?.onTop ?? getInstrument(o.instrumentId)?.defaultOnTop ?? false) ? '1' : '0'))
@@ -33,7 +35,12 @@ export function VisualScene() {
   return (
     <>
       {scene.map((o) => (
-        <ObjectRenderer key={o.trackId} trackId={o.trackId} instrumentId={o.instrumentId} />
+        <ObjectRenderer
+          key={`${o.trackId}:${o.visualCopyIndex}`}
+          trackId={o.trackId}
+          instrumentId={o.instrumentId}
+          visualCopyIndex={o.visualCopyIndex}
+        />
       ))}
       {front.length > 0 && (
         <Hud renderPriority={1}>
@@ -44,7 +51,12 @@ export function VisualScene() {
           <pointLight position={[-4, -2, 3]} color="#818cf8" intensity={3} />
           <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
           {front.map((o) => (
-            <ObjectRenderer key={o.trackId} trackId={o.trackId} instrumentId={o.instrumentId} />
+            <ObjectRenderer
+              key={`${o.trackId}:${o.visualCopyIndex}`}
+              trackId={o.trackId}
+              instrumentId={o.instrumentId}
+              visualCopyIndex={o.visualCopyIndex}
+            />
           ))}
         </Hud>
       )}

@@ -11,6 +11,7 @@ export interface MoverInputDef {
   hidden?: boolean
 }
 
+/** @deprecated Context for the legacy StateVector mover runtime. */
 export interface MoverCtx {
   beat: number
   i: number
@@ -18,6 +19,11 @@ export interface MoverCtx {
   channels: Record<string, number>
 }
 
+/**
+ * @deprecated Legacy StateVector mover definition. New movers operate on
+ * VisualCopy through the ordered mover-and-splitter chain. Keep this runtime for
+ * existing projects until explicit migrations exist; do not add definitions here.
+ */
 export interface MoverDef {
   id: string
   label: string

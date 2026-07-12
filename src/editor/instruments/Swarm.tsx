@@ -129,6 +129,10 @@ function buildHelmetParts(scene: { updateWorldMatrix: (updateParents: boolean, u
   })
 }
 
+/**
+ * @deprecated Swarm-specific engine multiplicity will be replaced by generic
+ * splitter-produced VisualCopy values. Kept temporarily for saved projects.
+ */
 export const swarmInstrument: ObjectInstrumentDef = {
   id: 'swarm',
   name: 'Swarm',

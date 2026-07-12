@@ -7,6 +7,7 @@ import type { ElementLayoutCtx, LocalTransform, TransformCtx } from '../../instr
 import type { AdsrEnvelope, InterpolationMode, MidiMode, PhotoPad, SubsetWeightSpec, VideoPad } from '../../types'
 import type { AutomationKeyframe } from './automation'
 import type { MoverDef } from './movers/types'
+import type { MoverOrSplitter } from '../visualCopies/types'
 
 export interface StateVector {
   pos: [number, number, number]
@@ -129,6 +130,12 @@ export interface ResolvedObject {
   photoPads?: PhotoPad[]
   /** Ordered child mover chain. Muted movers are bypassed, not blacked out. */
   moverChain: ResolvedMover[]
+  /** The new ordered mover-and-splitter chain (VisualCopy pipeline): local
+   *  children in exact childIds order, then matching global entries in exact
+   *  rootTrackIds order. Legacy movers stay in `moverChain`, which executes as
+   *  a separate earlier stage; only entries here participate in exact
+   *  non-commutative ordering. */
+  moverAndSplitterChain: MoverOrSplitter[]
   scratchBase: StateVector
   scratchA: StateVector
   scratchB: StateVector

@@ -77,6 +77,10 @@ function SingleClone({ trackId, instance, children }: { trackId: string; instanc
  * Wrap an object in its clone-effect chain. Sits between the placement group and the
  * transform chain (plan order: transform ▸ clone), so each copy is the transformed object.
  * Multiple clone plugins nest (clones-of-clones, e.g. a ring of tiles).
+ *
+ * @deprecated Legacy render-time duplication. New duplication is resolved as
+ * VisualCopy values by the ordered mover-and-splitter system. This remains only
+ * so existing saved clone effects continue to render during migration.
  */
 export function CloneWrapper({ trackId, plugins, children }: { trackId: string; plugins: EffectInstance[]; children: ReactNode }) {
   const clones = plugins.filter((i) => getEffect(i.pluginId)?.category === 'clone')

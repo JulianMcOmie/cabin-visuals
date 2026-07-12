@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Group, Vector3 } from 'three'
+import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
-import { getObjectState } from '../../core/visual/VisualEngine'
+import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { applyMaterialHueShift } from '../../core/visual/animatedColor'
 import type { ObjectState } from '../../core/visual/types'
@@ -14,12 +15,15 @@ import { CloneWrapper } from './CloneWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
 
 /**
- * Renders one object. A placement group carries the object's world transform (composed
- * with ancestors by the engine) and the mute blackout; the object's transform effects
+ * Renders ONE OCCURRENCE of one object: the placement group carries the object's
+ * world transform (composed with ancestors by the engine) times this occurrence's
+ * VisualCopy transform, plus the mute blackout; the object's transform effects
  * wrap the instrument component inside it, so they operate in the object's own frame.
  * The instrument component (code Cube or spec renderer) draws the mesh at local origin.
+ * This component never resolves copy logic - it pulls exactly the one copy it was
+ * given by index and does not know sibling occurrences exist.
  */
-const _camForward = new Vector3()
+const _composed = new Matrix4()
 
 function stateHasVaryingElementOpacity(state: ObjectState): boolean {
   if (state.elementCount <= 1) return false
@@ -30,7 +34,15 @@ function stateHasVaryingElementOpacity(state: ObjectState): boolean {
   return false
 }
 
-export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; instrumentId: string }) {
+export function ObjectRenderer({
+  trackId,
+  instrumentId,
+  visualCopyIndex,
+}: {
+  trackId: string
+  instrumentId: string
+  visualCopyIndex: number
+}) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
   const plugins = useProjectStore((s) => s.tracks[trackId]?.effects) ?? []
@@ -60,25 +72,38 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
     const g = groupRef.current
     if (!g) return
     const state = getObjectState(trackId)
+    // This occurrence's copy: transform composes with placement, opacity
+    // multiplies, color shift adds. A missing copy (pre-first-resolve) renders
+    // as identity so the single-object path never flickers.
+    const visualCopy = getVisualCopy(trackId, visualCopyIndex)
     g.visible = !state?.blackedOut
     if (state && instrumentId !== 'swarm' && !stateHasVaryingElementOpacity(state)) {
-      applyMaterialOpacity(g, state.opacity)
+      applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
     }
     // The Color mover's output - object-level, so it applies to every
-    // instrument (ensembles included) as one tint.
-    if (state) applyMaterialHueShift(g, state.hueShift, state.satShift, state.lightShift)
+    // instrument (ensembles included) as one tint - plus this copy's shift.
+    if (state) {
+      applyMaterialHueShift(
+        g,
+        state.hueShift + (visualCopy?.colorShift.hue ?? 0),
+        state.satShift + (visualCopy?.colorShift.saturation ?? 0),
+        state.lightShift + (visualCopy?.colorShift.lightness ?? 0),
+      )
+    }
     if (isFullFrame) {
-      // A full-frame instrument is a SCREEN: pinned dead-ahead of the camera and
-      // parallel to it, at the same distance r3f's `viewport` sizing assumes
-      // (camera → origin), so a viewport-sized plane fills the frame exactly.
-      // Without this the plane stands at the world origin and the (pitched)
-      // camera views it at an angle - 2D instruments read as a tilted backdrop.
-      const dist = camera.position.length()
-      camera.getWorldDirection(_camForward)
-      g.position.copy(camera.position).addScaledVector(_camForward, dist)
-      g.quaternion.copy(camera.quaternion)
+      // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
+      // occurrence's VisualCopy transform applies inside screen space, so an
+      // identity copy pins the viewport-filling plane exactly as before and
+      // translated/scaled copies move as screen-space layers.
+      composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
+      _composed.decompose(g.position, g.quaternion, g.scale)
     } else if (state) {
-      state.world.decompose(g.position, g.quaternion, g.scale)
+      if (visualCopy) {
+        _composed.multiplyMatrices(state.world, visualCopy.transform)
+        _composed.decompose(g.position, g.quaternion, g.scale)
+      } else {
+        state.world.decompose(g.position, g.quaternion, g.scale)
+      }
     }
   })
 
@@ -88,6 +113,8 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
   // Full-frame instruments (viewport-filling planes) skip the placement transform and the
   // transform/clone effect chain; shaders may still post-process them.
   if (isFullFrame) {
+    // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
+    // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}><Component trackId={trackId} /></group>
     return shaderInstances.length > 0
       ? <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{frame}</ShaderWrapper>
@@ -102,10 +129,11 @@ export function ObjectRenderer({ trackId, instrumentId }: { trackId: string; ins
     </CloneWrapper>
   )
 
-  // Shader path: the object is rendered offscreen (with its world transform) and drawn
-  // back as a post-processed full-frame overlay - so no in-scene placement group here.
+  // Shader path: the object is rendered offscreen (with its world transform composed
+  // with this occurrence's copy transform) and drawn back as a post-processed
+  // full-frame overlay - so no in-scene placement group here.
   if (shaderInstances.length > 0) {
-    return <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{content}</ShaderWrapper>
+    return <ShaderWrapper trackId={trackId} visualCopyIndex={visualCopyIndex} plugins={shaderInstances}>{content}</ShaderWrapper>
   }
 
   return <group ref={groupRef}>{content}</group>
