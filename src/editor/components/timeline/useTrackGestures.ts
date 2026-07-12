@@ -328,7 +328,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     return origins
   }
 
-  const handleBlockPointerDown = useCallback((e: ReactPointerEvent, _trackId: string, blockId: string) => {
+  const handleBlockPointerDown = useCallback((e: ReactPointerEvent, trackId: string, blockId: string) => {
     // Let right-click fall through to the lane (block drawing) instead of moving.
     if (e.button !== 0) return
     e.stopPropagation()
@@ -354,7 +354,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a
     // plain resize (see the resizing-right move handler).
-    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2
+    const blockCanLoop = (useProjectStore.getState().tracks[trackId]?.blocks
+      .find((block) => block.id === blockId)?.notes.length ?? 0) > 0
+    const loopArm = type === 'resizing-right' && e.clientY < rect.top + rect.height / 2 && blockCanLoop
 
     // Select this block (keep an existing multi-selection it belongs to), then
     // arm the drag for the whole selection.
