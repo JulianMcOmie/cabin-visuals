@@ -38,3 +38,15 @@ export interface MoverOrSplitterDefinition<Settings> {
   midiRows?: (settings: Settings) => MidiRowDef[]
   resolve(args: { settings: Settings; notes: ResolvedNote[] }): MoverOrSplitter
 }
+
+/** The settings a definition's resolve()/midiRows() receive: its numeric param
+ *  defaults overlaid with the track's stored inputValues. One helper so the
+ *  engine and the editor UI derive identical settings. */
+export function mergeDefinitionSettings(
+  def: MoverOrSplitterDefinition<any>,
+  inputValues: Record<string, number> | undefined,
+): Record<string, number> {
+  const settings: Record<string, number> = {}
+  for (const pd of def.params) if (typeof pd.default === 'number') settings[pd.key] = pd.default
+  return Object.assign(settings, inputValues)
+}

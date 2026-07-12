@@ -5,6 +5,7 @@
 // exist. This module must not import the legacy registry.
 
 import type { MoverOrSplitterDefinition } from './definitions'
+import { MOVER_OR_SPLITTER_DEFINITIONS } from './library'
 
 const definitions = new Map<string, MoverOrSplitterDefinition<any>>()
 
@@ -28,7 +29,19 @@ export function hasMoverOrSplitterDefinition(id: string | undefined): boolean {
   return !!id && definitions.has(id)
 }
 
+/** Every registered definition, in registration order (library order first) -
+ *  the library picker enumerates these. */
+export function listMoverOrSplitterDefinitions(): MoverOrSplitterDefinition<any>[] {
+  return [...definitions.values()]
+}
+
 /** Test-only escape hatch so fake definitions don't leak between test files. */
 export function unregisterMoverOrSplitterDefinitionForTests(id: string): void {
   definitions.delete(id)
+}
+
+// Seed the production library (mirrors the legacy registry importing its
+// library). Test fakes register on top with distinct 'test.*' ids.
+for (const definition of MOVER_OR_SPLITTER_DEFINITIONS) {
+  registerMoverOrSplitterDefinition(definition)
 }

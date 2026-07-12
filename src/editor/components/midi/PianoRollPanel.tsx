@@ -16,6 +16,8 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../../core/visual/movers/registry'
+import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
+import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN } from '../../core/trackTypes'
@@ -102,7 +104,13 @@ export function PianoRollPanel() {
   let automation: AutomationInfo | undefined
   let trigger: TriggerInfo | undefined
   let abilityColor: string | undefined
-  if (track.type === 'mover') {
+  // A new-registry (VisualCopy) mover/splitter declares its own labelled MIDI
+  // vocabulary (midiRows as a function of its settings) - it skips the legacy
+  // value/trigger lane models entirely and renders like an instrument with rows.
+  const newMoverDef = track.type === 'mover' || track.type === 'splitter'
+    ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
+    : undefined
+  if (track.type === 'mover' && !newMoverDef) {
     const dim = getMover(track.moverId)
     const moverLabel = dim?.label ?? 'Mover'
     if (track.midiMode === 'amount') {
@@ -234,9 +242,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const photoClips = usePhotoStore((s) => s.photoClips)
+  const rowsDef = track && (track.type === 'mover' || track.type === 'splitter')
+    ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
+    : undefined
   const defRows = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRows
-    : undefined
+    : !automation && !trigger && rowsDef?.midiRows && track
+      ? rowsDef.midiRows(mergeDefinitionSettings(rowsDef, track.inputValues))
+      : undefined
   const rows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch))

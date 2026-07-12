@@ -19,6 +19,7 @@ import { extractKeyframes, type AutomationKeyframe } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput, DEFAULT_SUBSET_WEIGHT } from './movers/registry'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
+import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
@@ -306,9 +307,7 @@ function moverOrSplitterId(track: Track): string | undefined {
 function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
   if (!def) return null
-  const settings: Record<string, number> = {}
-  for (const pd of def.params) if (typeof pd.default === 'number') settings[pd.key] = pd.default
-  Object.assign(settings, track.inputValues)
+  const settings = mergeDefinitionSettings(def, track.inputValues)
   return def.resolve({ settings, notes: flattenTrackNotes(track, p) })
 }
 

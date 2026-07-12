@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
 import { firstMoverMidiInput, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
+import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
@@ -824,8 +825,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setTrackMover: (trackId, moverId, name) =>
     set((s) => {
       const track = s.tracks[trackId]
-      const def = getMover(moverId)
-      if (!track || !def) return s
+      // New-registry (VisualCopy) movers convert the track too, but carry none
+      // of the legacy runtime fields - their definitions own their MIDI grammar.
+      const isNewMover = hasMoverOrSplitterDefinition(moverId)
+      const def = isNewMover ? undefined : getMover(moverId)
+      if (!track || (!def && !isNewMover)) return s
       return {
         tracks: {
           ...s.tracks,
@@ -834,15 +838,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
             type: 'mover',
             instrumentId: '',
             moverId,
-            depth: track.depth ?? 1,
+            depth: def ? track.depth ?? 1 : undefined,
             inputValues: {},
-            envelope: track.envelope ?? { attack: 0.05, decay: 0.4 },
-            midiMode: track.midiMode ?? 'none',
-            midiTargetInput: isMoverMidiInput(def, track.midiTargetInput)
-              ? track.midiTargetInput
-              : firstMoverMidiInput(def),
-            weight: track.weight ?? { mode: 'all' },
-            opMode: track.opMode ?? 'transform',
+            envelope: def ? track.envelope ?? { attack: 0.05, decay: 0.4 } : undefined,
+            midiMode: def ? track.midiMode ?? 'none' : undefined,
+            midiTargetInput: def
+              ? isMoverMidiInput(def, track.midiTargetInput)
+                ? track.midiTargetInput
+                : firstMoverMidiInput(def)
+              : undefined,
+            weight: def ? track.weight ?? { mode: 'all' } : undefined,
+            opMode: def ? track.opMode ?? 'transform' : undefined,
             params: {},
             stringParams: {},
             color: MOVER_TRACK_COLOR,

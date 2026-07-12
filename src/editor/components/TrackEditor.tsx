@@ -6,6 +6,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { MOVER_DEPTH_PARAM, moverInputParamDefs, getMover, isMoverMidiInput } from '../core/visual/movers/registry'
+import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
@@ -15,7 +16,7 @@ import { VideoClipBank } from './VideoClipBank'
 import { PhotoBank } from './PhotoBank'
 import { isNumberParam, type ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec } from '../types'
+import type { InterpolationMode, MidiMode, Routing, EffectInstance, SubsetWeightSpec, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -480,6 +481,57 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
   { value: 'smooth-step', label: 'Smooth Step' },
 ]
 
+
+/** The top-level mover targets picker (#tag / branch / track scopes), shared by
+ *  legacy movers and new-registry (VisualCopy) movers and splitters. */
+function MoverTargets({ track }: { track: Track }) {
+  const tracks = useProjectStore((s) => s.tracks)
+  const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
+  const objectTracks = Object.values(tracks).filter((t) => getInstrument(t.instrumentId) && t.id !== track.id)
+  const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
+  const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
+  const keyOf = (r: Routing) =>
+    r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
+    : r.scope.kind === 'track' ? `track:${r.scope.id}`
+    : `subtree:${r.scope.id}`
+  const options = [
+    ...allTags.map((tag) => ({
+      key: `tag:${tag}`,
+      label: `#${tag}`,
+      routing: { port: 'mover', scope: { kind: 'tag' as const, tag }, amount: 1 },
+    })),
+    ...branchTracks.map((t) => ({
+      key: `subtree:${t.id}`,
+      label: `${t.name} (branch)`,
+      routing: { port: 'mover', scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
+    })),
+    ...objectTracks.map((t) => ({
+      key: `track:${t.id}`,
+      label: t.name,
+      routing: { port: 'mover', scope: { kind: 'track' as const, id: t.id }, amount: 1 },
+    })),
+  ]
+  const selected = new Set(track.targets?.map(keyOf))
+  const toggle = (key: string) => {
+    const next = (track.targets ?? []).slice()
+    const idx = next.findIndex((r) => keyOf(r) === key)
+    if (idx >= 0) next.splice(idx, 1)
+    else {
+      const opt = options.find((o) => o.key === key)
+      if (opt) next.push(opt.routing)
+    }
+    setTrackTargets(track.id, next)
+  }
+  return (
+    <div className="mb-4">
+      <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
+      {options.length === 0
+        ? <p className="text-[11px] text-zinc-600">No objects to target</p>
+        : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
+    </div>
+  )
+}
+
 export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -487,7 +539,6 @@ export function TrackEditor() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
-  const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const setTrackOnTop = useProjectStore((s) => s.setTrackOnTop)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
@@ -553,7 +604,29 @@ export function TrackEditor() {
             {track ? (
               <>
                 {(() => {
-                    const dimDef = track.type === 'mover' ? getMover(track.moverId) : undefined
+                  // New-registry (VisualCopy) mover: its params render straight from
+                  // the definition schema; the legacy runtime controls (depth, MIDI
+                  // mode, weight, op mode) don't exist for it - the definition owns
+                  // its own MIDI grammar, shown as labelled piano-roll rows.
+                  const newMoverDef = track.type === 'mover' ? getMoverOrSplitterDefinition(track.moverId) : undefined
+                  if (newMoverDef) {
+                    return (
+                      <>
+                        <p className="text-[11px] text-zinc-500 mb-3">Mover:</p>
+                        {newMoverDef.params.map((p) => (
+                          <ParamControl
+                            key={p.key}
+                            param={p}
+                            numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
+                            strValue={undefined}
+                            onNum={(v) => setMoverInput(track.id, p.key, v)}
+                          />
+                        ))}
+                        {!track.parentId && <MoverTargets track={track} />}
+                      </>
+                    )
+                  }
+                  const dimDef = track.type === 'mover' ? getMover(track.moverId) : undefined
                   if (dimDef) {
                     const inputs = moverInputParamDefs(dimDef)
                     const midiTargetOptions = inputs.filter(isNumberParam)
@@ -598,51 +671,7 @@ export function TrackEditor() {
                           />
                         ))}
 
-                        {!track.parentId && (() => {
-                          const objectTracks = Object.values(tracks).filter((t) => getInstrument(t.instrumentId) && t.id !== track.id)
-                          const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
-                          const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
-                          const keyOf = (r: Routing) =>
-                            r.scope.kind === 'tag' ? `tag:${r.scope.tag}`
-                            : r.scope.kind === 'track' ? `track:${r.scope.id}`
-                            : `subtree:${r.scope.id}`
-                          const options = [
-                            ...allTags.map((tag) => ({
-                              key: `tag:${tag}`,
-                              label: `#${tag}`,
-                              routing: { port: 'mover', scope: { kind: 'tag' as const, tag }, amount: 1 },
-                            })),
-                            ...branchTracks.map((t) => ({
-                              key: `subtree:${t.id}`,
-                              label: `${t.name} (branch)`,
-                              routing: { port: 'mover', scope: { kind: 'subtree' as const, id: t.id }, amount: 1 },
-                            })),
-                            ...objectTracks.map((t) => ({
-                              key: `track:${t.id}`,
-                              label: t.name,
-                              routing: { port: 'mover', scope: { kind: 'track' as const, id: t.id }, amount: 1 },
-                            })),
-                          ]
-                          const selected = new Set(track.targets?.map(keyOf))
-                          const toggle = (key: string) => {
-                            const next = (track.targets ?? []).slice()
-                            const idx = next.findIndex((r) => keyOf(r) === key)
-                            if (idx >= 0) next.splice(idx, 1)
-                            else {
-                              const opt = options.find((o) => o.key === key)
-                              if (opt) next.push(opt.routing)
-                            }
-                            setTrackTargets(track.id, next)
-                          }
-                          return (
-                            <div className="mb-4">
-                              <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
-                              {options.length === 0
-                                ? <p className="text-[11px] text-zinc-600">No objects to target</p>
-                                : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
-                            </div>
-                          )
-                        })()}
+                        {!track.parentId && <MoverTargets track={track} />}
 
                         <div className="mb-4">
                           <div className="text-xs text-zinc-300 mb-1.5">MIDI Mode</div>
