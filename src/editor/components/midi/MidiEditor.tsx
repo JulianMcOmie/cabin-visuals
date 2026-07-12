@@ -353,15 +353,16 @@ export function MidiEditor({
           {loopRegion && (
             <div
               data-loop-region=""
+              data-loop-enabled={loopRegion.enabled ? 'true' : 'false'}
               style={{
                 position: 'absolute',
                 top: 0,
                 height: '50%',
                 left: beatToX(loopRegion.startBeat, pixelsPerBeat),
                 width: beatToX(loopRegion.endBeat - loopRegion.startBeat, pixelsPerBeat),
-                backgroundColor: 'rgba(250, 204, 21, 0.3)',
-                borderLeft: '1px solid #facc15',
-                borderRight: '1px solid #facc15',
+                backgroundColor: loopRegion.enabled ? 'rgba(250, 204, 21, 0.3)' : 'rgba(161, 161, 170, 0.25)',
+                borderLeft: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
+                borderRight: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
                 pointerEvents: 'none',
                 zIndex: 5,
               }}

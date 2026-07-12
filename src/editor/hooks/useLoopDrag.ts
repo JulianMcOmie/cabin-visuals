@@ -9,6 +9,11 @@ const MIN_RESIZED_LOOP_BEATS = 1
 
 export type LoopResizeEdge = 'start' | 'end'
 
+function toggleLoopEnabled() {
+  const { loopRegion, setLoopRegion } = useTimeStore.getState()
+  if (loopRegion) setLoopRegion({ ...loopRegion, enabled: !loopRegion.enabled })
+}
+
 interface UseLoopDragOptions {
   /** Map a pointer clientX to a whole-beat boundary (snapped + clamped by the
    *  caller), or null to ignore the event. */
@@ -47,16 +52,17 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
       useTimeStore.getState().setLoopRegion({
         startBeat: Math.min(anchor, beat),
         endBeat: Math.max(anchor, beat),
+        enabled: true,
       })
     }
     const onUp = () => {
       unlockCursor()
       if (!dragging) {
-        const { loopRegion, setLoopRegion } = useTimeStore.getState()
-        // A click on the existing band clears it. Clicking elsewhere is inert so
-        // the loop is not accidentally lost while positioning the pointer.
+        const { loopRegion } = useTimeStore.getState()
+        // A click on the existing band toggles playback while preserving its range.
+        // Clicking elsewhere is inert so the loop is not accidentally lost.
         if (loopRegion && anchor >= loopRegion.startBeat && anchor <= loopRegion.endBeat) {
-          setLoopRegion(null)
+          toggleLoopEnabled()
         }
       }
       controller.abort()
@@ -71,18 +77,23 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
     const origin = useTimeStore.getState().loopRegion
     if (anchor == null || !origin) return
 
+    const originX = e.clientX
+    let dragging = false
     lockCursor('grabbing')
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
+      if (!dragging && Math.abs(ev.clientX - originX) < CLICK_THRESHOLD_PX) return
+      dragging = true
       const beat = computeRef.current(ev.clientX)
       if (beat == null) return
       const duration = origin.endBeat - origin.startBeat
       const maxStart = Math.max(0, maxBeatRef.current - duration)
       const startBeat = Math.max(0, Math.min(maxStart, origin.startBeat + beat - anchor))
-      useTimeStore.getState().setLoopRegion({ startBeat, endBeat: startBeat + duration })
+      useTimeStore.getState().setLoopRegion({ ...origin, startBeat, endBeat: startBeat + duration })
     }
     const onUp = () => {
       unlockCursor()
+      if (!dragging) toggleLoopEnabled()
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
@@ -94,9 +105,13 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
     const origin = useTimeStore.getState().loopRegion
     if (!origin) return
 
+    const originX = e.clientX
+    let dragging = false
     lockCursor('ew-resize')
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
+      if (!dragging && Math.abs(ev.clientX - originX) < CLICK_THRESHOLD_PX) return
+      dragging = true
       const beat = computeRef.current(ev.clientX)
       if (beat == null) return
       useTimeStore.getState().setLoopRegion(edge === 'start'
@@ -105,6 +120,7 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
     }
     const onUp = () => {
       unlockCursor()
+      if (!dragging) toggleLoopEnabled()
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })

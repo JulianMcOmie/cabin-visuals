@@ -80,14 +80,15 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
           {loopRegion && (
             <div
               data-loop-region=""
+              data-loop-enabled={loopRegion.enabled ? 'true' : 'false'}
               className="absolute top-0 pointer-events-none"
               style={{
                 left: loopRegion.startBeat * pixelsPerBeat,
                 width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
                 height: '50%',
-                backgroundColor: 'rgba(250, 204, 21, 0.3)',
-                borderLeft: '1px solid #facc15',
-                borderRight: '1px solid #facc15',
+                backgroundColor: loopRegion.enabled ? 'rgba(250, 204, 21, 0.3)' : 'rgba(161, 161, 170, 0.25)',
+                borderLeft: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
+                borderRight: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
               }}
             >
               <div

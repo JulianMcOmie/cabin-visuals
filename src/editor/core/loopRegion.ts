@@ -3,6 +3,7 @@
 export interface LoopRegion {
   startBeat: number
   endBeat: number
+  enabled: boolean
 }
 
 // Regions shorter than this are inert - a degenerate drag must not trap the
@@ -13,7 +14,7 @@ export const MIN_LOOP_LENGTH_BEATS = 0.25
  *  The region only acts when playback reaches its end - a playhead before or
  *  inside the region plays normally. */
 export function shouldLoopWrap(beat: number, region: LoopRegion | null): boolean {
-  if (!region) return false
+  if (!region?.enabled) return false
   if (region.endBeat - region.startBeat < MIN_LOOP_LENGTH_BEATS) return false
   return beat >= region.endBeat
 }
