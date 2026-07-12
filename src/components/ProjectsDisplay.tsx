@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
 import type { User } from '@supabase/supabase-js'
@@ -8,11 +8,13 @@ import { CabinLogo } from "./CabinLogo"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { TEMPLATES, type TemplateDef } from "../templates"
+import type { ProjectPreview } from "../persistence/projectStorage"
 
 export interface ProjectMetadata {
   id: string
   name: string
   updatedAt: string
+  preview?: ProjectPreview
 }
 
 // Mono-caps edited stamp for the card footer: TODAY / 1D AGO / … / date.
@@ -25,73 +27,38 @@ const formatLastEdited = (iso: string): string => {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
 }
 
-const TRACK_PALETTE = ['var(--track-1)', 'var(--track-2)', 'var(--track-3)', 'var(--track-4)', 'var(--track-5)']
-const TRACK_HEX = ['#35a7e6', '#4ec3c9', '#c583d6', '#8d8ff0', '#d6839e']
-
-// The project list carries no document data, so the mini-timeline thumbnail is
-// generated deterministically from the project id (placeholder until real
-// per-project track data is available): hash the id into a seed, then draw a
-// stable pseudo-random arrangement of rows/blocks from it.
-const hashSeed = (s: string): number => {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
+// Mini timeline of the project's REAL arrangement: one row per root track drawn
+// in that track's own color, blocks positioned/sized as a percentage of the
+// project length (derived server-side in projectStorage.documentToPreview). An
+// empty project (no blocks yet) shows a muted hint instead of fake rows.
+function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
+  const rows = preview?.rows ?? []
+  if (rows.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Empty</span>
+      </div>
+    )
   }
-  return ((h >>> 0) % 2147483646) + 1 // 1..2147483646 (LCG needs a non-zero seed)
-}
-
-const seededRandom = (seed: number) => {
-  let s = seed
-  return () => {
-    s = (s * 16807) % 2147483647
-    return s / 2147483647
-  }
-}
-
-interface ThumbBlock { left: number; width: number }
-interface ThumbRow { colorIndex: number; blocks: ThumbBlock[] }
-
-const buildThumbRows = (projectId: string): ThumbRow[] => {
-  const rnd = seededRandom(hashSeed(projectId))
-  const rowCount = 3 + Math.floor(rnd() * 2) // 3–4 rows
-  const paletteStart = Math.floor(rnd() * TRACK_HEX.length)
-  return Array.from({ length: rowCount }, (_, ri) => ({
-    colorIndex: (paletteStart + ri) % TRACK_HEX.length,
-    blocks: Array.from({ length: 2 + Math.floor(rnd() * 2) }, () => ({
-      left: rnd() * 60,
-      width: 12 + rnd() * 28,
-    })),
-  }))
-}
-
-// Mini timeline: rows of 14px blocks styled like editor blocks (translucent
-// fill, 1px border, 2px color spine) in the track palette.
-function ProjectThumbnail({ projectId }: { projectId: string }) {
-  const rows = useMemo(() => buildThumbRows(projectId), [projectId])
   return (
     <div className="flex h-full flex-col justify-center gap-1.5">
-      {rows.map((row, ri) => {
-        const hex = TRACK_HEX[row.colorIndex]
-        const varColor = TRACK_PALETTE[row.colorIndex]
-        return (
-          <div key={ri} className="relative h-3.5">
-            {row.blocks.map((b, bi) => (
-              <div
-                key={bi}
-                className="absolute inset-y-0 rounded-[3px]"
-                style={{
-                  left: `${b.left}%`,
-                  width: `${b.width}%`,
-                  backgroundColor: hex + '24',
-                  border: `1px solid ${hex}55`,
-                  borderLeft: `2px solid ${varColor}`,
-                }}
-              />
-            ))}
-          </div>
-        )
-      })}
+      {rows.map((row, ri) => (
+        <div key={ri} className="relative h-3.5">
+          {row.blocks.map((b, bi) => (
+            <div
+              key={bi}
+              className="absolute inset-y-0 rounded-[3px]"
+              style={{
+                left: `${b.left}%`,
+                width: `${b.width}%`,
+                backgroundColor: row.color + '24',
+                border: `1px solid ${row.color}55`,
+                borderLeft: `2px solid ${row.color}`,
+              }}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }
@@ -196,7 +163,7 @@ export default function ProjectsDisplay({
             >
               <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
                 <div className="absolute inset-x-3 inset-y-2.5">
-                  <ProjectThumbnail projectId={project.id} />
+                  <ProjectThumbnail preview={project.preview} />
                 </div>
                 <button
                   onClick={(e) => handleDeleteProject(e, project.id)}
