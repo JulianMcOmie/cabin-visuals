@@ -52,10 +52,15 @@ const DEFAULT_QUANTIZE = 0.25
 // work past the block. Longer projects span their full length (TimeStore.totalBars).
 const INITIAL_TOTAL_BARS = 10
 
+// Values are in beats: 1/4 note = 1 beat. The T entries are triplet grids -
+// three notes in the space of the next-larger straight value (1/8T = three per
+// beat = 1/3 beat), the "triplets" Tyler asked for.
 const QUANTIZE_OPTIONS = [
   { value: 1, label: '1/4' },
   { value: 0.5, label: '1/8' },
+  { value: 1 / 3, label: '1/8T' },
   { value: 0.25, label: '1/16' },
+  { value: 1 / 6, label: '1/16T' },
   { value: 0.125, label: '1/32' },
 ]
 
