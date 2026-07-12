@@ -101,50 +101,57 @@ export function VisualScene() {
 
   useFrame(() => {
     const previous = gl.getRenderTarget()
-    const layers = getCompositionLayers()
-    const requested = new Set(layers.map((layer) => layer.sceneId))
+    const previousAutoClear = gl.autoClear
+    gl.autoClear = false
+    try {
+      const layers = getCompositionLayers()
+      const requested = new Set(layers.map((layer) => layer.sceneId))
 
-    for (const sceneId of requested) {
-      const runtime = mounted.get(sceneId)
-      if (!runtime) continue
-      gl.setRenderTarget(runtime.target)
-      gl.setClearColor(0x09090b, 0)
+      for (const sceneId of requested) {
+        const runtime = mounted.get(sceneId)
+        if (!runtime) continue
+        gl.setRenderTarget(runtime.target)
+        gl.setClearColor(0x09090b, 0)
+        gl.clear(true, true, true)
+        gl.render(runtime.base, camera)
+        gl.clearDepth()
+        gl.render(runtime.front, camera)
+      }
+
+      while (compositor.meshes.length < layers.length) {
+        const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
+        const mesh = new Mesh(compositor.geometry, material)
+        compositor.meshes.push(mesh)
+        compositor.scene.add(mesh)
+      }
+      compositor.meshes.forEach((mesh, i) => {
+        const layer = layers[i]
+        mesh.visible = !!layer
+        if (!layer) return
+        const runtime = mounted.get(layer.sceneId)
+        mesh.visible = !!runtime
+        if (!runtime) return
+        const material = mesh.material as MeshBasicMaterial
+        material.map = runtime.target.texture
+        material.opacity = layer.opacity
+        material.needsUpdate = true
+        mesh.position.set(
+          -1 + layer.viewport.x * 2 + layer.viewport.width,
+          -1 + layer.viewport.y * 2 + layer.viewport.height,
+          -i * 0.001,
+        )
+        mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+        mesh.renderOrder = i
+      })
+
+      gl.setRenderTarget(previous)
+      gl.setClearColor(0x09090b, 1)
       gl.clear(true, true, true)
-      gl.render(runtime.base, camera)
-      gl.clearDepth()
-      gl.render(runtime.front, camera)
+      gl.render(compositor.scene, compositor.cam)
+    } finally {
+      gl.setRenderTarget(previous)
+      gl.autoClear = previousAutoClear
     }
-
-    while (compositor.meshes.length < layers.length) {
-      const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
-      const mesh = new Mesh(compositor.geometry, material)
-      compositor.meshes.push(mesh)
-      compositor.scene.add(mesh)
-    }
-    compositor.meshes.forEach((mesh, i) => {
-      const layer = layers[i]
-      mesh.visible = !!layer
-      if (!layer) return
-      const runtime = mounted.get(layer.sceneId)
-      mesh.visible = !!runtime
-      if (!runtime) return
-      const material = mesh.material as MeshBasicMaterial
-      material.map = runtime.target.texture
-      material.opacity = layer.opacity
-      material.needsUpdate = true
-      mesh.position.set(
-        -1 + layer.viewport.x * 2 + layer.viewport.width,
-        -1 + layer.viewport.y * 2 + layer.viewport.height,
-        -i * 0.001,
-      )
-      mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
-      mesh.renderOrder = i
-    })
-
-    gl.setRenderTarget(previous)
-    gl.setClearColor(0x09090b, 1)
-    gl.clear(true, true, true)
-    gl.render(compositor.scene, compositor.cam)
   }, 100)
 
   return (
