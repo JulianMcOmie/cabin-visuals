@@ -103,13 +103,14 @@ export function TimelineArea() {
 
   // Loop-region drag on the ruler's top half - same clientX -> beat math as the
   // scrub, but snapped to whole beats (loop boundaries are bar-ish, not fine).
-  const { startLoopDrag } = useLoopDrag({
+  const { startLoopDrag, startLoopMove } = useLoopDrag({
     computeBeat: (clientX) => {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
       const beat = Math.round((clientX - rect.left) / pixelsPerBeat)
       return Math.max(0, Math.min(maxBeat, beat))
     },
+    maxBeat,
   })
 
   // Restore the saved scroll on mount (before paint), and save it on unmount, so
@@ -371,6 +372,7 @@ export function TimelineArea() {
         <TimelineRuler
           onScrubStart={startScrub}
           onLoopDragStart={startLoopDrag}
+          onLoopMoveStart={startLoopMove}
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
           gutterPx={0}

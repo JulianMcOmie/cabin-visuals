@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
@@ -100,13 +100,14 @@ export function MidiEditor({
   // scrub, but snapped to whole beats. The region is absolute project beats
   // (this ruler spans the whole project, with the block at blockStartBeat).
   const loopRegion = useTimeStore((s) => s.loopRegion)
-  const { startLoopDrag } = useLoopDrag({
+  const { startLoopDrag, startLoopMove } = useLoopDrag({
     computeBeat: (clientX) => {
       if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
       const beat = Math.round(xToBeat(clientX - rect.left, pixelsPerBeat))
       return Math.max(0, Math.min(initialTotalBeats, beat))
     },
+    maxBeat: initialTotalBeats,
   })
 
   const {
@@ -319,6 +320,7 @@ export function MidiEditor({
         </div>
         {/* Strip viewport clips the translated inner content (mirrors the grid scroll). */}
         <div
+          data-loop-lane=""
           style={{
             flex: 1,
             position: 'relative',
@@ -350,19 +352,27 @@ export function MidiEditor({
               it scrolls with the ruler. Same accent as the tracks ruler band. */}
           {loopRegion && (
             <div
+              data-loop-region=""
               style={{
                 position: 'absolute',
                 top: 0,
                 height: '50%',
                 left: beatToX(loopRegion.startBeat, pixelsPerBeat),
                 width: beatToX(loopRegion.endBeat - loopRegion.startBeat, pixelsPerBeat),
-                backgroundColor: 'rgba(53, 167, 230, 0.25)',
-                borderLeft: '1px solid rgba(53, 167, 230, 0.9)',
-                borderRight: '1px solid rgba(53, 167, 230, 0.9)',
+                backgroundColor: 'rgba(250, 204, 21, 0.3)',
+                borderLeft: '1px solid #facc15',
+                borderRight: '1px solid #facc15',
                 pointerEvents: 'none',
                 zIndex: 5,
               }}
-            />
+            >
+              <div
+                data-loop-move-handle=""
+                className="absolute top-0 bottom-0 cursor-grab"
+                style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
+                onPointerDown={startLoopMove}
+              />
+            </div>
           )}
 
           {/* Faint, short beat ticks (every beat that isn't a bar line) */}

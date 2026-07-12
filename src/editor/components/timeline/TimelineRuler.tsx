@@ -2,13 +2,15 @@ import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 're
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
-import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 
 interface TimelineRulerProps {
   /** Begin a scrub gesture (provided by TimelineArea via useScrub). */
   onScrubStart: (e: ReactPointerEvent) => void
   /** Begin a loop-region drag (provided by TimelineArea via useLoopDrag). */
   onLoopDragStart: (e: ReactPointerEvent) => void
+  /** Move the existing loop region by dragging its safe middle area. */
+  onLoopMoveStart: (e: ReactPointerEvent) => void
   /** Width of one bar in pixels (beatsPerBar * pixelsPerBeat). */
   barWidthPx: number
   /** Full timeline width in pixels (totalBars * barWidthPx). */
@@ -31,7 +33,7 @@ interface TimelineRulerProps {
  * triangle is clipped to the strip (never drawn over the corner). The playhead
  * line itself lives in the lanes (TimelineArea).
  */
-export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
+export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
@@ -49,6 +51,7 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timel
         {corner}
       </div>
       <div
+        data-loop-lane=""
         className="relative flex-1 overflow-hidden"
         onPointerDown={(e) => {
           // Top half = the loop lane (drag defines a region, click clears it);
@@ -73,16 +76,24 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, barWidthPx, timel
               it scrolls with the ruler. Region set = looping on. */}
           {loopRegion && (
             <div
+              data-loop-region=""
               className="absolute top-0 pointer-events-none"
               style={{
                 left: loopRegion.startBeat * pixelsPerBeat,
                 width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
                 height: '50%',
-                backgroundColor: 'rgba(53, 167, 230, 0.25)',
-                borderLeft: '1px solid var(--accent)',
-                borderRight: '1px solid var(--accent)',
+                backgroundColor: 'rgba(250, 204, 21, 0.3)',
+                borderLeft: '1px solid #facc15',
+                borderRight: '1px solid #facc15',
               }}
-            />
+            >
+              <div
+                data-loop-move-handle=""
+                className="absolute top-0 bottom-0 cursor-grab pointer-events-auto"
+                style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET }}
+                onPointerDown={onLoopMoveStart}
+              />
+            </div>
           )}
 
           {/* Faint, short beat ticks */}

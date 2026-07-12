@@ -10,6 +10,9 @@ export const PLAYHEAD_SNAP_BEATS = 0.25
  */
 export const PLAYHEAD_TRIANGLE_HALF = 6
 
+/** Inset from each loop-band edge that remains outside the draggable middle. */
+export const LOOP_MOVE_EDGE_INSET = 10
+
 /**
  * Window-resize hit area (px) of the bottom panel's top Separator. Half of it
  * reaches down into the top of the tracks ruler; that strip is reserved for

@@ -10,6 +10,8 @@ interface UseLoopDragOptions {
   /** Map a pointer clientX to a whole-beat boundary (snapped + clamped by the
    *  caller), or null to ignore the event. */
   computeBeat: (clientX: number) => number | null
+  /** Last beat available on this ruler, used to clamp moved loop regions. */
+  maxBeat: number
 }
 
 /**
@@ -18,9 +20,11 @@ interface UseLoopDragOptions {
  * click clears it. Window-level listeners + the shared cursor lock, same shape
  * as useScrub. The region lives in TimeStore (ephemeral transport state).
  */
-export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
+export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
   const computeRef = useRef(computeBeat)
   computeRef.current = computeBeat
+  const maxBeatRef = useRef(maxBeat)
+  maxBeatRef.current = maxBeat
 
   const startLoopDrag = useCallback((e: ReactPointerEvent) => {
     e.stopPropagation()
@@ -58,5 +62,29 @@ export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
   }, [])
 
-  return { startLoopDrag }
+  const startLoopMove = useCallback((e: ReactPointerEvent) => {
+    e.stopPropagation()
+    const anchor = computeRef.current(e.clientX)
+    const origin = useTimeStore.getState().loopRegion
+    if (anchor == null || !origin) return
+
+    lockCursor('grabbing')
+    const controller = new AbortController()
+    const onMove = (ev: PointerEvent) => {
+      const beat = computeRef.current(ev.clientX)
+      if (beat == null) return
+      const duration = origin.endBeat - origin.startBeat
+      const maxStart = Math.max(0, maxBeatRef.current - duration)
+      const startBeat = Math.max(0, Math.min(maxStart, origin.startBeat + beat - anchor))
+      useTimeStore.getState().setLoopRegion({ startBeat, endBeat: startBeat + duration })
+    }
+    const onUp = () => {
+      unlockCursor()
+      controller.abort()
+    }
+    window.addEventListener('pointermove', onMove, { signal: controller.signal })
+    window.addEventListener('pointerup', onUp, { signal: controller.signal })
+  }, [])
+
+  return { startLoopDrag, startLoopMove }
 }
