@@ -24,26 +24,29 @@ import { ShaderWrapper } from './ShaderWrapper'
 const _composed = new Matrix4()
 
 export function ObjectRenderer({
+  sceneId,
   trackId,
   instrumentId,
   visualCopyIndex,
 }: {
+  sceneId: string
   trackId: string
   instrumentId: string
   visualCopyIndex: number
 }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
-  const plugins = useProjectStore((s) => s.tracks[trackId]?.effects) ?? []
+  const plugins = useProjectStore((s) => s.scenes[sceneId]?.tracks[trackId]?.effects) ?? []
   // Shader instances whose 'enabled' is automated must stay MOUNTED while their
   // checkbox is off - the automation lane can switch them on mid-project. A
   // stable string of automated instance ids keeps the selector reference-clean.
   const fxEnabledAutomated = useProjectStore((s) => {
-    const t = s.tracks[trackId]
+    const sceneTracks = s.scenes[sceneId]?.tracks
+    const t = sceneTracks?.[trackId]
     if (!t) return ''
     const ids: string[] = []
     for (const cid of t.childIds) {
-      const c = s.tracks[cid]
+      const c = sceneTracks?.[cid]
       const target = c?.type === 'automation' ? parseFxTarget(c.targetParam) : null
       if (target?.key === 'enabled') ids.push(target.instanceId)
     }

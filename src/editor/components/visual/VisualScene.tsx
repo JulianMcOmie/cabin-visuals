@@ -165,14 +165,14 @@ export function VisualScene() {
             {createPortal(
             <>
               {lights()}
-              {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+              {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
               {lights()}
-              {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+              {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
             </>,
             runtime.front,
             )}
