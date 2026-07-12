@@ -334,10 +334,10 @@ export function MidiEditor({
             startScrub(e)
           }}
           onPointerMove={(e) => {
-            // The loop lane (top half) shows the grab cursor; only the scrub
+            // The loop lane (top half) shows the normal cursor; only the scrub
             // half advertises ew-resize.
             const rect = e.currentTarget.getBoundingClientRect()
-            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'grab' : 'ew-resize'
+            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
           }}
         >
           {/* Subtle divider separating the top (numbers) and bottom (ticks) halves -
@@ -613,13 +613,13 @@ export function MidiEditor({
             style={{ position: 'absolute', top: 0, bottom: 0, left: blockStartPx + blockWidthPx - 4, width: 8, cursor: 'ew-resize', zIndex: 4 }}
             onPointerDown={(e) => handleResizePointerDown(e, 'right')}
             onPointerMove={(e) => {
-              // Grab cursor on the top half of what the user can see (the handle
+              // Normal cursor on the top half of what the user can see (the handle
               // spans the scrolled grid, so split the visible portion) - matches
               // the loop-arm split in handleResizePointerDown.
               const rect = e.currentTarget.getBoundingClientRect()
               const visibleTop = Math.max(rect.top, 0)
               const visibleBottom = Math.min(rect.bottom, window.innerHeight)
-              e.currentTarget.style.cursor = e.clientY < (visibleTop + visibleBottom) / 2 ? 'grab' : 'ew-resize'
+              e.currentTarget.style.cursor = e.clientY < (visibleTop + visibleBottom) / 2 ? 'default' : 'ew-resize'
             }}
           />
 

@@ -48,11 +48,11 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         const onRightEdge = localX > w - edge
         const onLeftEdge = localX < edge
         // The top half of the right edge arms looping (drag past the pattern to
-        // repeat) - grab cursor, matching the ruler loop lane. The bottom half and
+        // repeat) - normal cursor, matching the ruler loop lane. The bottom half and
         // the left edge are plain resizes; the body is a move (default).
         const topHalf = e.clientY < rect.top + rect.height / 2
         e.currentTarget.style.cursor =
-          onRightEdge && topHalf ? 'grab' : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
+          onRightEdge && topHalf ? 'default' : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
         // Tooltip tracks the zone under the pointer (updated live so it swaps as
         // you cross the halves): the right edge splits top = loop, bottom =
         // resize; the left edge resizes; the body opens the editor.

@@ -28,8 +28,8 @@ export function useLoopDrag({ computeBeat }: UseLoopDragOptions) {
     if (anchor == null) return
     const originX = e.clientX
     let dragging = false
-    // Hover shows the open-hand grab; the active drag closes it to grabbing.
-    lockCursor('grabbing')
+    // Keep the loop-region gesture on the normal arrow cursor throughout.
+    lockCursor('default')
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {

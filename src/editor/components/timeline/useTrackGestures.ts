@@ -151,8 +151,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   const beginGestureTracking = useCallback(() => {
     const controller = new AbortController()
     abortRef.current = controller
-    const t = dragRef.current?.type
-    lockCursor(t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
+    const gesture = dragRef.current
+    const t = gesture?.type
+    lockCursor(gesture && 'loopArm' in gesture && gesture.loopArm
+      ? 'default'
+      : t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
 
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current

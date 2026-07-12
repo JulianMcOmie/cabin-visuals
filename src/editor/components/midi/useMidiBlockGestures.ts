@@ -62,7 +62,9 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const edge = Math.min(EDGE_PX, rect.width / 4)
-    e.currentTarget.style.cursor = x < edge || x > rect.width - edge ? 'ew-resize' : 'default'
+    const onRightEdge = x > rect.width - edge
+    const loopArm = onRightEdge && e.clientY < rect.top + rect.height / 2
+    e.currentTarget.style.cursor = loopArm ? 'default' : x < edge || onRightEdge ? 'ew-resize' : 'default'
   }, [])
 
   // Begin a drag in an explicit mode. Shared by the ruler header (which picks the
@@ -91,7 +93,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       if (!d.didDrag) {
         d.didDrag = Math.hypot(ev.clientX - d.startClientX, ev.clientY - d.startClientY) >= DRAG_THRESHOLD_PX
         if (!d.didDrag) return
-        lockCursor(d.mode === 'moving' ? 'default' : 'ew-resize')
+        lockCursor(d.loopArm ? 'default' : d.mode === 'moving' ? 'default' : 'ew-resize')
       }
       const l = latest.current
       const maxBar = l.maxBeats / l.beatsPerBar
