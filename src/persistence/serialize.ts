@@ -2,6 +2,7 @@ import { useProjectStore } from '../editor/store/ProjectStore'
 import { useAudioStore } from '../editor/store/AudioStore'
 import { useVideoStore } from '../editor/store/VideoStore'
 import { usePhotoStore } from '../editor/store/PhotoStore'
+import { useTimeStore } from '../editor/store/TimeStore'
 import type { ProjectDocument } from './types'
 import { CURRENT_VERSION } from './upgrade'
 
@@ -18,15 +19,18 @@ export function serialize(state = useProjectStore.getState()): ProjectDocument {
   doc.audioClips = useAudioStore.getState().audioClips
   doc.videoClips = useVideoStore.getState().videoClips
   doc.photoClips = usePhotoStore.getState().photoClips
+  doc.loopRegion = useTimeStore.getState().loopRegion
   return doc as unknown as ProjectDocument
 }
 
 /** Document → stores. The inverse of serialize(); same shape HistoryStore
  *  restores into on undo (setState shallow-merges; actions are untouched). */
 export function hydrate(doc: ProjectDocument) {
-  const { schemaVersion: _v, audioClips, videoClips, photoClips, ...fields } = doc
+  const { schemaVersion: _v, audioClips, videoClips, photoClips, loopRegion, ...fields } = doc
+  void _v
   useProjectStore.setState(fields)
   useAudioStore.setState({ audioClips: audioClips ?? {} })
   useVideoStore.setState({ videoClips: videoClips ?? {} })
   usePhotoStore.setState({ photoClips: photoClips ?? {} })
+  useTimeStore.setState({ loopRegion: loopRegion ?? null })
 }

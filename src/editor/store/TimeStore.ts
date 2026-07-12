@@ -5,8 +5,8 @@ import type { LoopRegion } from '../core/loopRegion'
 interface TimeState {
   currentBeat: number
   isPlaying: boolean
-  // Transport loop region - ephemeral like currentBeat, never persisted
-  // (autosave subscribes to ProjectStore; this must stay out of it).
+  // Transport loop region is project-scoped and persisted; currentBeat and
+  // isPlaying remain ephemeral session state.
   loopRegion: LoopRegion | null
   setIsPlaying: (playing: boolean) => void
   setCurrentBeat: (beat: number) => void

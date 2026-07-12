@@ -2,6 +2,7 @@ import type { Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
+import type { LoopRegion } from '../editor/core/loopRegion'
 
 /**
  * The serialized project - the shape of the `projects.data` blob. A thin
@@ -25,6 +26,7 @@ import type { PhotoClip } from '../editor/store/PhotoStore'
  * `photoClips` (the Photo instrument's SOURCE catalog) is additive within v4 -
  * absent in older saves, defaulted on hydrate; photo placement lives inside
  * `tracks` as `photoPads`. No schema bump: purely additive.
+ * `loopRegion` is also additive within v4; older saves hydrate it as unset.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -36,6 +38,7 @@ export interface ProjectDocument {
   audioClips: Record<string, AudioClip>
   videoClips?: Record<string, VideoClip>
   photoClips?: Record<string, PhotoClip>
+  loopRegion?: LoopRegion | null
 }
 
 /** A fresh, valid document - matches the stores' initial state. */
@@ -50,5 +53,6 @@ export function emptyDocument(): ProjectDocument {
     audioClips: {},
     videoClips: {},
     photoClips: {},
+    loopRegion: null,
   }
 }

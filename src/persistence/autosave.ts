@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useProjectStore } from '../editor/store/ProjectStore'
 import { useAudioStore } from '../editor/store/AudioStore'
+import { useTimeStore } from '../editor/store/TimeStore'
 import { serialize } from './serialize'
 import * as projectStorage from './projectStorage'
 
@@ -65,6 +66,9 @@ export function startAutosave(projectId: string): () => void {
   const unsubAudio = useAudioStore.subscribe((state, prev) => {
     if (state.audioClips !== prev.audioClips) markDirty()
   })
+  const unsubLoop = useTimeStore.subscribe((state, prev) => {
+    if (state.loopRegion !== prev.loopRegion) markDirty()
+  })
 
   // Flush-on-exit so the debounce window can't eat the last edit. `hidden`
   // fires early enough for the request to get off; beforeunload is best-effort.
@@ -79,6 +83,7 @@ export function startAutosave(projectId: string): () => void {
     stopped = true
     unsubProject()
     unsubAudio()
+    unsubLoop()
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('beforeunload', onBeforeUnload)
     if (timer) { clearTimeout(timer); timer = null }
