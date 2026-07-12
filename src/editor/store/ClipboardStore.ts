@@ -9,7 +9,11 @@ import type { TrackTreeSnapshot } from './ProjectStore'
  */
 export type Clip =
   | { kind: 'notes'; notes: Note[] }
-  | { kind: 'blocks'; blocks: Block[]; sourceTrackId: string }
+  // Each copied block carries the track it came from (startBar normalized so the
+  // earliest across ALL copied blocks is 0). Paste dispatches on how many
+  // distinct source tracks there are: one -> the selected track; several ->
+  // each block back into its own source track (preserving the arrangement).
+  | { kind: 'blocks'; blocks: { sourceTrackId: string; block: Block }[] }
   | { kind: 'track'; tree: TrackTreeSnapshot }
 
 interface ClipboardState {

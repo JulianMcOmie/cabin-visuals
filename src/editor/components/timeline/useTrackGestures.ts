@@ -450,11 +450,12 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (picked.length === 0) return
           e.preventDefault()
           const base = Math.min(...picked.map((p) => p.block.startBar))
-          const earliest = picked.reduce((a, b) => (b.block.startBar < a.block.startBar ? b : a))
           useClipboardStore.getState().setClip({
             kind: 'blocks',
-            sourceTrackId: earliest.trackId,
-            blocks: picked.map((p) => ({ ...p.block, startBar: p.block.startBar - base })),
+            blocks: picked.map((p) => ({
+              sourceTrackId: p.trackId,
+              block: { ...p.block, startBar: p.block.startBar - base },
+            })),
           })
         } else {
           const trackId = useUIStore.getState().selectedTrackId
@@ -476,15 +477,34 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         const { beatsPerBar } = useProjectStore.getState()
 
         if (clip.kind === 'blocks') {
-          const targetTrackId = useUIStore.getState().selectedTrackId ?? clip.sourceTrackId
-          if (!store.tracks[targetTrackId]) return
           e.preventDefault()
           const targetBar = currentBeat / beatsPerBar // fractional bar is fine
-          const positioned = clip.blocks.map((b) => cloneBlock({ ...b, startBar: targetBar + b.startBar }))
-          store.addBlocks(targetTrackId, positioned)
-          setSelectedBlockIds(new Set(positioned.map((b) => b.id)))
+          const distinctSources = new Set(clip.blocks.map((b) => b.sourceTrackId))
+          // Multi-track copy: each block returns to its own source track, so the
+          // arrangement is preserved (blocks whose source track is gone are
+          // dropped). Single-track copy: everything lands on the selected track
+          // (or the source track when nothing is selected).
+          const multiTrack = distinctSources.size > 1
+          const pasted: Block[] = []
+          if (multiTrack) {
+            for (const { sourceTrackId, block } of clip.blocks) {
+              if (!store.tracks[sourceTrackId]) continue
+              const clone = cloneBlock({ ...block, startBar: targetBar + block.startBar })
+              store.addBlock(sourceTrackId, clone)
+              pasted.push(clone)
+            }
+          } else {
+            const soleSource = clip.blocks[0]?.sourceTrackId
+            const targetTrackId = useUIStore.getState().selectedTrackId ?? soleSource
+            if (!targetTrackId || !store.tracks[targetTrackId]) return
+            const positioned = clip.blocks.map((b) => cloneBlock({ ...b.block, startBar: targetBar + b.block.startBar }))
+            store.addBlocks(targetTrackId, positioned)
+            pasted.push(...positioned)
+          }
+          if (pasted.length === 0) return
+          setSelectedBlockIds(new Set(pasted.map((b) => b.id)))
           // Teleport the playhead to the end of the last pasted block.
-          const endBeat = Math.max(...positioned.map((b) => b.startBar + b.durationBars)) * beatsPerBar
+          const endBeat = Math.max(...pasted.map((b) => b.startBar + b.durationBars)) * beatsPerBar
           useTimeStore.getState().setCurrentBeat(endBeat)
         } else if (clip.kind === 'track') {
           e.preventDefault()
