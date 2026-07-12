@@ -58,11 +58,14 @@ export function usePlayback() {
   }, []);
 
   const play = useCallback(async () => {
-    const { currentBeat } = useTimeStore.getState();
+    const { currentBeat, loopRegion } = useTimeStore.getState();
     const { totalBars, beatsPerBar, tracks } = useProjectStore.getState();
     const maxBeat = totalBars * beatsPerBar;
-    // If parked at (or past) the end, start over from 0 instead of no-op'ing.
-    const start = currentBeat >= maxBeat ? 0 : currentBeat;
+    // Starting transport with an active loop always begins at the loop's left
+    // edge. Otherwise, only wrap when parked at (or past) the project end.
+    const start = loopRegion?.enabled
+      ? loopRegion.startBeat
+      : currentBeat >= maxBeat ? 0 : currentBeat;
     // Make sure every block's buffer is decoded before the transport starts
     // (normally a no-op - clips pre-decode when their block is inserted).
     const audio = getAudioEngine();
