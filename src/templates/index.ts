@@ -5,8 +5,10 @@
 export { type TemplateDef } from './library'
 import { TEMPLATES as VOL1, type TemplateDef } from './library'
 import { retroArcade } from './library-vol2'
+import { slideshow } from './library-slideshow'
 
-export const TEMPLATES: TemplateDef[] = [...VOL1, retroArcade]
+// Slideshow leads: it is the "bring your own photos" starting point.
+export const TEMPLATES: TemplateDef[] = [slideshow, ...VOL1, retroArcade]
 
 export function getTemplate(id: string): TemplateDef | undefined {
   return TEMPLATES.find((t) => t.id === id)

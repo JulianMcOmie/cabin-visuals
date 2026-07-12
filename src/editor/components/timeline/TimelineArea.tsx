@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type DragEvent as ReactDragEvent } from 'react'
-import { FileAudio, FileMusic, Film, Plus } from 'lucide-react'
+import { FileAudio, FileMusic, Film, Image as ImageIcon, Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -18,6 +18,7 @@ import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { loadAudioTrack } from '../../utils/loadAudioTrack'
 import { addVideoClipsToTrack, capError, FREE_TOTAL_BYTES, totalVideoBytes } from '../../core/video/videoUploads'
+import { addPhotosToTrack } from '../../core/photo/photoUploads'
 import { parseMidiFile, isMidiFileName, isMidiMimeType } from '../../core/midiImport'
 import { getInstrument } from '../../instruments'
 import { usePlan } from '../../../billing/usePlan'
@@ -190,7 +191,7 @@ export function TimelineArea() {
   // the drag's item TYPES (file contents aren't readable until drop); the
   // depth counter absorbs enter/leave noise from crossing child boundaries.
   const { isPro } = usePlan()
-  const [mediaDropHover, setMediaDropHover] = useState<{ audio: boolean; video: boolean; midi: boolean } | null>(null)
+  const [mediaDropHover, setMediaDropHover] = useState<{ audio: boolean; video: boolean; midi: boolean; photo: boolean } | null>(null)
   const dropDepthRef = useRef(0)
   // Drop problems (over-cap files, unreadable files) surface as a transient
   // notice over the tracks - never as a bare console error. Import summaries
@@ -209,13 +210,42 @@ export function TimelineArea() {
     let audio = false
     let video = false
     let midi = false
+    let photo = false
     for (const it of Array.from(e.dataTransfer.items)) {
       if (it.kind !== 'file') continue
       if (isMidiMimeType(it.type)) midi = true
       else if (it.type.startsWith('audio/')) audio = true
       else if (it.type.startsWith('video/')) video = true
+      else if (it.type.startsWith('image/')) photo = true
     }
-    return audio || video || midi ? { audio, video, midi } : null
+    return audio || video || midi || photo ? { audio, video, midi, photo } : null
+  }
+
+  // Image drops append to a photo track rather than making a new one each time -
+  // the selected track if it's a photo instrument, else the first photo track in
+  // the project, else a fresh one. Lets the Slideshow template (its one track is
+  // a photo instrument) grow by dragging photos straight onto the timeline.
+  const addPhotoFiles = (files: File[]) => {
+    const { tracks, rootTrackIds } = useProjectStore.getState()
+    const selectedId = useUIStore.getState().selectedTrackId
+    const isPhotoTrack = (id: string | null | undefined) => !!id && tracks[id]?.instrumentId === 'photo'
+    let targetId = isPhotoTrack(selectedId) ? selectedId! : rootTrackIds.find(isPhotoTrack)
+    if (!targetId) {
+      targetId = crypto.randomUUID()
+      useProjectStore.getState().addTrack({
+        id: targetId,
+        name: 'Photo',
+        type: 'base',
+        instrumentId: 'photo',
+        color: OBJECT_TRACK_COLOR,
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+      })
+    }
+    selectNewTrack(targetId)
+    void addPhotosToTrack(targetId, files, isPro, showDropNotice)
   }
   // .mid files → new tracks through the pure parser + one store write, shared
   // by the header button and OS drops. Routed by extension, not MIME type -
@@ -318,6 +348,9 @@ export function TimelineArea() {
       selectNewTrack(id)
       void addVideoClipsToTrack(id, videoFiles, isPro, showDropNotice)
     }
+
+    const photoFiles = files.filter((f) => f.type.startsWith('image/'))
+    if (photoFiles.length > 0) addPhotoFiles(photoFiles)
   }
 
   // Drag the label column's right edge to resize it (spans the ruler corner, every
@@ -424,14 +457,16 @@ export function TimelineArea() {
         {mediaDropHover && (
           <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
             <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
-              {mediaDropHover.video ? <Film size={13} /> : mediaDropHover.midi ? <FileMusic size={13} /> : <FileAudio size={13} />}
-              {[mediaDropHover.audio, mediaDropHover.video, mediaDropHover.midi].filter(Boolean).length > 1
+              {mediaDropHover.video ? <Film size={13} /> : mediaDropHover.photo ? <ImageIcon size={13} /> : mediaDropHover.midi ? <FileMusic size={13} /> : <FileAudio size={13} />}
+              {[mediaDropHover.audio, mediaDropHover.video, mediaDropHover.midi, mediaDropHover.photo].filter(Boolean).length > 1
                 ? 'drop files to add tracks'
                 : mediaDropHover.video
                   ? 'drop videos to add a video track'
-                  : mediaDropHover.midi
-                    ? 'drop MIDI to add tracks'
-                    : 'drop audio to add tracks'}
+                  : mediaDropHover.photo
+                    ? 'drop photos to add to the slideshow'
+                    : mediaDropHover.midi
+                      ? 'drop MIDI to add tracks'
+                      : 'drop audio to add tracks'}
             </span>
           </div>
         )}
