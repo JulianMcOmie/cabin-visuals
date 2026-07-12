@@ -7,10 +7,11 @@ export interface CompositionLayer {
   opacity: number
   /** Normalized viewport in final-frame coordinates. */
   viewport: { x: number; y: number; width: number; height: number }
-  /** Optional full-frame band mask. Adjacent layers share the same boundaries,
-   * so straight and diagonal partitions meet without gaps or overlap. `slant`
-   * is the normalized horizontal shift from the bottom to the top edge. */
-  partition?: { index: number; count: number; slant: number }
+  /** Optional full-frame partition mask. Linear layers share straight or
+   * diagonal boundaries; radial layers form concentric rings, inner-to-outer. */
+  partition?:
+    | { kind: 'linear'; index: number; count: number; slant: number }
+    | { kind: 'radial'; index: number; count: number }
   /** Future directors can request a named scene camera without changing the
    * composition contract. Omitted means the scene's default camera. */
   cameraId?: string

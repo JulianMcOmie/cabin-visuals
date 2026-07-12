@@ -58,7 +58,11 @@ test('each held row controls existence in its fixed screen partition', () => {
 })
 
 test('straight and diagonal styles alter only the shared partition slant', () => {
-  assert.equal(resolve(makeTrack({ cutStyle: 0 }), 1)[0]?.partition?.slant, 0)
-  assert.ok((resolve(makeTrack({ cutStyle: 1 }), 1)[0]?.partition?.slant ?? 0) > 0)
-  assert.ok((resolve(makeTrack({ cutStyle: 2 }), 1)[0]?.partition?.slant ?? 0) < 0)
+  const slant = (style: number) => {
+    const partition = resolve(makeTrack({ cutStyle: style }), 1)[0]?.partition
+    return partition?.kind === 'linear' ? partition.slant : 0
+  }
+  assert.equal(slant(0), 0)
+  assert.ok(slant(1) > 0)
+  assert.ok(slant(2) < 0)
 })

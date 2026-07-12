@@ -11,6 +11,7 @@ import {
   LinearFilter,
 } from 'three'
 import { getCompositionLayers, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
+import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { DEFAULT_SCENE_BACKGROUND } from '../../types'
@@ -20,6 +21,13 @@ interface MountedScene {
   base: ThreeScene
   front: ThreeScene
   target: WebGLRenderTarget
+}
+
+interface PartitionUniforms {
+  radial: { value: number }
+  index: { value: number }
+  count: { value: number }
+  aspect: { value: number }
 }
 
 function makeCompositorGeometry() {
@@ -32,11 +40,12 @@ function makeCompositorGeometry() {
 
 /** Shape one compositor quad into a full-height screen partition while keeping
  * UVs in final-frame coordinates, so each scene is cropped rather than squeezed. */
-function setPartitionGeometry(geometry: BufferGeometry, partition?: { index: number; count: number; slant: number }) {
-  const count = partition ? Math.max(1, partition.count) : 1
-  const start = partition ? partition.index / count : 0
-  const end = partition ? (partition.index + 1) / count : 1
-  const halfSlant = (partition?.slant ?? 0) / 2
+function setPartitionGeometry(geometry: BufferGeometry, partition?: CompositionLayer['partition']) {
+  const linear = partition?.kind === 'linear' ? partition : undefined
+  const count = linear ? Math.max(1, linear.count) : 1
+  const start = linear ? linear.index / count : 0
+  const end = linear ? (linear.index + 1) / count : 1
+  const halfSlant = (linear?.slant ?? 0) / 2
   const xs = [start - halfSlant, end - halfSlant, end + halfSlant, start + halfSlant]
   const ys = [0, 0, 1, 1]
   const positions = geometry.getAttribute('position') as Float32BufferAttribute
@@ -47,6 +56,49 @@ function setPartitionGeometry(geometry: BufferGeometry, partition?: { index: num
   }
   positions.needsUpdate = true
   uvs.needsUpdate = true
+}
+
+function makeCompositorMaterial() {
+  const uniforms: PartitionUniforms = {
+    radial: { value: 0 },
+    index: { value: 0 },
+    count: { value: 1 },
+    aspect: { value: 1 },
+  }
+  const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
+  material.userData.partitionUniforms = uniforms
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, {
+      partitionRadial: uniforms.radial,
+      partitionIndex: uniforms.index,
+      partitionCount: uniforms.count,
+      partitionAspect: uniforms.aspect,
+    })
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec2 vPartitionUv;\nvoid main() {')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvPartitionUv = uv;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', `
+varying vec2 vPartitionUv;
+uniform float partitionRadial;
+uniform float partitionIndex;
+uniform float partitionCount;
+uniform float partitionAspect;
+void main() {`)
+      .replace('#include <clipping_planes_fragment>', `
+#include <clipping_planes_fragment>
+if (partitionRadial > 0.5) {
+  vec2 p = vPartitionUv - vec2(0.5);
+  p.x *= partitionAspect;
+  float maxRadius = 0.5 * length(vec2(partitionAspect, 1.0));
+  float radius = length(p) / maxRadius;
+  float innerRadius = partitionIndex / partitionCount;
+  float outerRadius = (partitionIndex + 1.0) / partitionCount;
+  if (radius < innerRadius || radius > outerRadius) discard;
+}`)
+  }
+  material.customProgramCacheKey = () => 'scene-partition-v1'
+  return material
 }
 
 function lights() {
@@ -149,7 +201,7 @@ export function VisualScene() {
       }
 
       while (compositor.meshes.length < layers.length) {
-        const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
+        const material = makeCompositorMaterial()
         const geometry = makeCompositorGeometry()
         setPartitionGeometry(geometry)
         const mesh = new Mesh(geometry, material)
@@ -165,10 +217,18 @@ export function VisualScene() {
         mesh.visible = !!runtime
         if (!runtime) return
         const material = mesh.material as MeshBasicMaterial
-        material.map = runtime.target.texture
+        if (material.map !== runtime.target.texture) {
+          material.map = runtime.target.texture
+          material.needsUpdate = true
+        }
         material.opacity = layer.opacity
-        material.needsUpdate = true
         setPartitionGeometry(mesh.geometry, layer.partition)
+        const uniforms = material.userData.partitionUniforms as PartitionUniforms
+        const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
+        uniforms.radial.value = radial ? 1 : 0
+        uniforms.index.value = radial?.index ?? 0
+        uniforms.count.value = Math.max(1, radial?.count ?? 1)
+        uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
         if (layer.partition) {
           mesh.position.set(0, 0, -i * 0.001)
           mesh.scale.set(1, 1, 1)

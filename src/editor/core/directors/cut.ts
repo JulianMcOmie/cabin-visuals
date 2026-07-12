@@ -3,18 +3,24 @@ import type { Scene, Track } from '../../types'
 import type { DirectorInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
 
-const DEFAULT_COUNT = 3
-const MAX_COUNT = 8
+export const DEFAULT_PARTITION_COUNT = 3
+export const MAX_PARTITION_COUNT = 8
 
-function visualBindings(track: Track, scenes: Record<string, Scene>, sceneOrder: string[]) {
+export function orderedVisualBindings(track: Track, scenes: Record<string, Scene>, sceneOrder: string[]) {
   const visualIds = sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain)
   return track.sceneBindings?.length
     ? track.sceneBindings.filter((binding) => scenes[binding.sceneId] && !scenes[binding.sceneId].isMain)
     : visualIds.map((sceneId, index) => ({ sceneId, pitch: 60 + index }))
 }
 
-function sceneCount(track: Track, available: number): number {
-  return Math.min(available, Math.max(1, Math.min(MAX_COUNT, Math.round(track.params?.sceneCount ?? DEFAULT_COUNT))))
+export function partitionSceneCount(track: Track, available: number): number {
+  return Math.min(available, Math.max(1, Math.min(MAX_PARTITION_COUNT, Math.round(track.params?.sceneCount ?? DEFAULT_PARTITION_COUNT))))
+}
+
+export function heldDirectorPitches(track: Track, beat: number, beatsPerBar: number, totalBars: number) {
+  return new Set(flattenTrackNotes(track, beatsPerBar, totalBars)
+    .filter((note) => beat >= note.beat && beat < note.beat + note.durationBeats)
+    .map((note) => note.pitch))
 }
 
 function partitionSlant(track: Track): number {
@@ -26,7 +32,7 @@ export const cutDirector: DirectorInstrumentDef = {
   id: 'cut',
   name: 'Cut',
   params: [
-    { key: 'sceneCount', label: 'Scenes', min: 1, max: MAX_COUNT, step: 1, default: DEFAULT_COUNT },
+    { key: 'sceneCount', label: 'Scenes', min: 1, max: MAX_PARTITION_COUNT, step: 1, default: DEFAULT_PARTITION_COUNT },
     {
       key: 'cutStyle',
       label: 'Cuts',
@@ -40,8 +46,8 @@ export const cutDirector: DirectorInstrumentDef = {
     },
   ],
   midiRows(track, scenes, sceneOrder) {
-    const bindings = visualBindings(track, scenes, sceneOrder)
-    const count = sceneCount(track, bindings.length)
+    const bindings = orderedVisualBindings(track, scenes, sceneOrder)
+    const count = partitionSceneCount(track, bindings.length)
     return bindings.slice(0, count).map((binding, index) => ({
       pitch: binding.pitch,
       label: scenes[binding.sceneId]?.name ?? 'Missing scene',
@@ -50,20 +56,17 @@ export const cutDirector: DirectorInstrumentDef = {
     }))
   },
   resolve(track, context) {
-    const bindings = visualBindings(track, context.scenes, context.sceneOrder)
-    const count = sceneCount(track, bindings.length)
+    const bindings = orderedVisualBindings(track, context.scenes, context.sceneOrder)
+    const count = partitionSceneCount(track, bindings.length)
     if (count === 0) return []
-    const notes = flattenTrackNotes(track, context.beatsPerBar, context.totalBars)
-    const heldPitches = new Set(notes
-      .filter((note) => context.beat >= note.beat && context.beat < note.beat + note.durationBeats)
-      .map((note) => note.pitch))
+    const heldPitches = heldDirectorPitches(track, context.beat, context.beatsPerBar, context.totalBars)
     const slant = partitionSlant(track)
     return bindings.slice(0, count).flatMap((binding, index) => heldPitches.has(binding.pitch) ? [{
       directorTrackId: track.id,
       sceneId: binding.sceneId,
       opacity: 1,
       viewport: { ...FULL_FRAME },
-      partition: { index, count, slant },
+      partition: { kind: 'linear' as const, index, count, slant },
     }] : [])
   },
 }
