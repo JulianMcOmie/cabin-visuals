@@ -54,14 +54,15 @@ test('slot 0 is unrotated and copies preserve opacity and color shift', () => {
   assert.equal(input.opacity, 0.5, 'input copy is not mutated')
 })
 
-test('a burst above the radial spreads its translation radially (XY plane)', () => {
-  // Burst +X by 1 (landed), then split 4 ways about Z: slots at 0/90/180/270 deg.
+test('radial above the burst re-frames it: the translation spreads radially (XY plane)', () => {
+  // Split 4 ways about Z, then burst +X by 1 (landed): each copy translates
+  // along its OWN rotated axes - slots at 0/90/180/270 deg.
   const chain = [
+    radialSplitter.resolve({ settings: settings({ copies: 4 }), notes: [] }),
     burstMover.resolve({
       settings: { burstBeats: 1, easing: 5, sharpness: 1, distanceX: 1, distanceY: 1, distanceZ: 1, distance: 1 },
       notes: [note(0, 60)], // Right (+X)
     }),
-    radialSplitter.resolve({ settings: settings({ copies: 4 }), notes: [] }),
   ]
   const copies = resolveVisualCopies(chain, 5)
   assert.deepEqual(copies.map(positionOf), [
@@ -72,13 +73,13 @@ test('a burst above the radial spreads its translation radially (XY plane)', () 
   ])
 })
 
-test('radial above the burst is different: all copies translate identically', () => {
+test('a burst above the radial is different: copies rotate in place at the moved position', () => {
   const chain = [
-    radialSplitter.resolve({ settings: settings({ copies: 4 }), notes: [] }),
     burstMover.resolve({
       settings: { burstBeats: 1, easing: 5, sharpness: 1, distanceX: 1, distanceY: 1, distanceZ: 1, distance: 1 },
       notes: [note(0, 60)],
     }),
+    radialSplitter.resolve({ settings: settings({ copies: 4 }), notes: [] }),
   ]
   const copies = resolveVisualCopies(chain, 5)
   assert.equal(copies.length, 4)
@@ -87,11 +88,11 @@ test('radial above the burst is different: all copies translate identically', ()
 
 test('the plane select changes the spread plane', () => {
   const chain = (plane: number) => [
+    radialSplitter.resolve({ settings: settings({ copies: 4, plane }), notes: [] }),
     burstMover.resolve({
       settings: { burstBeats: 1, easing: 5, sharpness: 1, distanceX: 1, distanceY: 1, distanceZ: 1, distance: 1 },
       notes: [note(0, 60)],
     }),
-    radialSplitter.resolve({ settings: settings({ copies: 4, plane }), notes: [] }),
   ]
   // XZ (about Y): +X spreads through -Z ... (right-handed: R_y(90deg) maps +X to -Z).
   assert.deepEqual(resolveVisualCopies(chain(1), 5).map(positionOf), [
@@ -102,11 +103,11 @@ test('the plane select changes the spread plane', () => {
   ])
   // YZ (about X): a +Y burst spreads through +Z.
   const yChain = [
+    radialSplitter.resolve({ settings: settings({ copies: 4, plane: 2 }), notes: [] }),
     burstMover.resolve({
       settings: { burstBeats: 1, easing: 5, sharpness: 1, distanceX: 1, distanceY: 1, distanceZ: 1, distance: 1 },
       notes: [note(0, 62)], // Up (+Y)
     }),
-    radialSplitter.resolve({ settings: settings({ copies: 4, plane: 2 }), notes: [] }),
   ]
   assert.deepEqual(resolveVisualCopies(yChain, 5).map(positionOf), [
     [0, 1, 0],

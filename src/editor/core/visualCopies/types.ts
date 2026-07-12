@@ -21,8 +21,15 @@ export interface VisualCopy {
    * Applied on top of the object's existing track/world placement:
    * `final = existing placement * transform`. Position, orientation, and scale
    * all live here; self-rotation vs orbit are different COMPOSITION operations
-   * (local: `previous * delta`; parent-space: `delta * previous`), and each
+   * (local: `previous * delta`; chain-root: `delta * previous`), and each
    * mover/splitter definition must document which one it uses.
+   *
+   * The DEFAULT convention is LOCAL composition: each chain entry re-frames
+   * the entries below it, so the accumulated transform IS the copy's reference
+   * frame (a splitter that rotates copies makes downstream translations move
+   * each copy along its own axes). No separate frame matrix is needed -
+   * a definition wanting frame-independent (chain-root) motion opts out by
+   * pre-multiplying instead.
    */
   transform: Matrix4
   /** Multiplied into the object's existing rendered opacity (0..1). */
