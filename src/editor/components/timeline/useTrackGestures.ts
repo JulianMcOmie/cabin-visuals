@@ -40,7 +40,7 @@ function rootAncestorId(tracks: Record<string, Track>, id: string): string {
 
 function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   if (track.type === 'audio') return false
-  if (copiedRoot.type === 'mover') return track.type === 'base' && !track.parentId
+  if (copiedRoot.type === 'mover' || copiedRoot.type === 'splitter') return track.type === 'base' && !track.parentId
   if (copiedRoot.type === 'ability') return track.type === 'base'
   if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover'
   if (copiedRoot.type === 'envelope') return track.type === 'base'

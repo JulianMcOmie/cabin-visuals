@@ -11,25 +11,28 @@ import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/modifierColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'mover' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // A modifier is a no-instrument child track whose type IS the modifier (its id);
   // objects/modulators carry an instrumentId and the default 'base' type.
   const isModifier = item.kind === 'modifier'
   const isMover = item.kind === 'mover'
+  const isSplitter = item.kind === 'splitter'
   // A new-registry (VisualCopy) mover shares the 'mover' track type but none of
   // the legacy runtime fields - its definition owns its own MIDI grammar.
+  // Splitters exist only in the new registry.
   const isLegacyMover = isMover && !hasMoverOrSplitterDefinition(item.id)
   const def = isLegacyMover ? getMover(item.id) : undefined
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isModifier ? (item.id as TrackType) : isMover ? 'mover' : 'base',
-    instrumentId: isModifier || isMover ? '' : item.id,
+    type: isModifier ? (item.id as TrackType) : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isModifier || isMover || isSplitter ? '' : item.id,
     moverId: isMover ? item.id : undefined,
+    splitterId: isSplitter ? item.id : undefined,
     depth: isLegacyMover ? 1 : undefined,
-    inputValues: isMover ? {} : undefined,
+    inputValues: isMover || isSplitter ? {} : undefined,
     envelope: isLegacyMover ? { attack: 0.05, decay: 0.4 } : undefined,
     midiMode: isLegacyMover ? 'none' : undefined,
     midiTargetInput: def ? firstMoverMidiInput(def) : undefined,

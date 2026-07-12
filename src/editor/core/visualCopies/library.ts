@@ -3,7 +3,7 @@
 // its complete MIDI grammar - the kernel and the chain resolver know nothing
 // about pitches or velocities.
 
-import { Matrix4 } from 'three'
+import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
@@ -133,5 +133,60 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   },
 }
 
+// ── Radial ───────────────────────────────────────────────────────────────────
+// Radial splitter: N structural copies, copy i rotated by i/N of a full turn
+// about the chosen plane's normal. The rotation PRE-multiplies (chain-root
+// frame), so translations already applied by movers ABOVE it spread radially -
+// one Burst +X note blooms every copy outward in its own direction. Movers
+// below it move all copies identically (or per-index if they read context).
+// Slot count comes only from settings, never from MIDI, so downstream indices
+// and the React occurrence list stay stable; notes are ignored.
+
+export interface RadialSettings {
+  copies: number
+  /** 0 = XY (about Z), 1 = XZ (about Y), 2 = YZ (about X). */
+  plane: number
+}
+
+const RADIAL_MAX_COPIES = 32
+const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
+
+export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
+  id: 'radial',
+  label: 'Radial',
+  kind: 'splitter',
+  params: [
+    { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
+    {
+      key: 'plane',
+      label: 'Plane',
+      type: 'select',
+      options: [
+        { value: 0, label: 'XY' },
+        { value: 1, label: 'XZ' },
+        { value: 2, label: 'YZ' },
+      ],
+      default: 0,
+    },
+  ],
+  resolve({ settings }) {
+    const count = Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies)))
+    const axis = RADIAL_AXES[settings.plane] ?? RADIAL_AXES[0]
+    // Structural slot rotations, in slot order (slot 0 is unrotated).
+    const rotations = Array.from({ length: count }, (_, slot) =>
+      new Matrix4().makeRotationAxis(axis, (slot / count) * Math.PI * 2),
+    )
+    return {
+      apply(visualCopy) {
+        return rotations.map((rotation) => ({
+          transform: rotation.clone().multiply(visualCopy.transform),
+          opacity: visualCopy.opacity,
+          colorShift: { ...visualCopy.colorShift },
+        }))
+      },
+    }
+  },
+}
+
 /** Every production definition, in picker order. Seeded into the registry. */
-export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [burstMover]
+export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [burstMover, radialSplitter]
