@@ -29,6 +29,7 @@ class PlaybackEngine {
   private rafId: number | null = null
   private callbacks: EngineCallbacks | null = null
   private playing = false
+  private lastTrackedBeat: number | null = null
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
@@ -53,6 +54,7 @@ class PlaybackEngine {
     getAudioEngine().armAll(startBeat, when, bpm, beatsPerBar)
 
     this.playing = true
+    this.lastTrackedBeat = startBeat
     this.cancelBeatTracking()
     this.startBeatTracking()
   }
@@ -61,6 +63,7 @@ class PlaybackEngine {
     Tone.getTransport().pause()
     getAudioEngine().stopAll()
     this.playing = false
+    this.lastTrackedBeat = null
     this.cancelBeatTracking()
   }
 
@@ -83,6 +86,7 @@ class PlaybackEngine {
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     Tone.getTransport().position = beatToPosition(beat, beatsPerBar)
+    this.lastTrackedBeat = beat
     if (this.playing) {
       const when = Tone.now() + AUDIO_LOOKAHEAD
       getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
@@ -104,6 +108,8 @@ class PlaybackEngine {
       if (!this.callbacks) return
       const { onBeatChange, getBeatsPerBar, getMaxBeat, getLoopRegion, onEnd } = this.callbacks
       const beat = positionToBeat(Tone.getTransport().position, getBeatsPerBar())
+      const previousBeat = this.lastTrackedBeat ?? beat
+      this.lastTrackedBeat = beat
       const maxBeat = getMaxBeat()
 
       // Loop-region wrap, checked before the end-of-timeline stop so a region
@@ -111,7 +117,7 @@ class PlaybackEngine {
       // live RAF tick - export drives beats through the beat override and
       // never runs this loop, so exports walk straight through the region.
       const region = getLoopRegion()
-      if (region && shouldLoopWrap(beat, region)) {
+      if (region && shouldLoopWrap(previousBeat, beat, region)) {
         this.seek(region.startBeat)
         onBeatChange(region.startBeat)
         // Same zombie guard as below: an onBeatChange subscriber may pause().
@@ -124,6 +130,7 @@ class PlaybackEngine {
         Tone.getTransport().stop()
         getAudioEngine().stopAll()
         this.playing = false
+        this.lastTrackedBeat = null
         onBeatChange(maxBeat)
         onEnd()
         return

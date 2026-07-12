@@ -10,11 +10,10 @@ export interface LoopRegion {
 // transport in a zero-length seek loop.
 export const MIN_LOOP_LENGTH_BEATS = 0.25
 
-/** True when a playing transport at `beat` should wrap back to the region start.
- *  The region only acts when playback reaches its end - a playhead before or
- *  inside the region plays normally. */
-export function shouldLoopWrap(beat: number, region: LoopRegion | null): boolean {
+/** True when forward playback crosses the region end. Merely enabling a region
+ *  behind the playhead must not pull the transport backward into it. */
+export function shouldLoopWrap(previousBeat: number, beat: number, region: LoopRegion | null): boolean {
   if (!region?.enabled) return false
   if (region.endBeat - region.startBeat < MIN_LOOP_LENGTH_BEATS) return false
-  return beat >= region.endBeat
+  return previousBeat < region.endBeat && beat >= region.endBeat
 }
