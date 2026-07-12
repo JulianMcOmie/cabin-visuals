@@ -27,6 +27,7 @@ export type TrackType =
   | 'mover'
   | 'audio'
   | 'envelope'
+  | 'splitter'
 
 /**
  * ADSR parameters for an `envelope` child track, all in BEATS (tempo-musical and
@@ -139,8 +140,13 @@ export interface Track {
   /** Envelope target value: the param value reached at full gain (base + (envTarget -
    *  base) * gain). Unused for the reserved 'opacity' target, which multiplies. */
   envTarget?: number
-  /** For a `mover` track: which mover def this row applies. */
+  /** For a `mover` track: which mover def this row applies. Registry ownership
+   *  routes it: ids in the new VisualCopy registry resolve through the ordered
+   *  mover-and-splitter chain; unknown ids fall back to the legacy runtime. */
   moverId?: string
+  /** For a `splitter` track: which MoverOrSplitterDefinition this row applies.
+   *  Splitters exist only in the new VisualCopy registry (no legacy fallback). */
+  splitterId?: string
   /** Mover wet/dry. Muting a mover bypasses it; it never blackouts the parent. */
   depth?: number
   /** Mover input base values, keyed by the def's input names. */

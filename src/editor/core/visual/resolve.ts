@@ -18,6 +18,8 @@ import { isModifierType, combineModifier, MIDI_AMOUNT_MAX, MIDI_AMOUNT_MIN, pitc
 import { extractKeyframes, type AutomationKeyframe } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 import { firstMoverMidiInput, getMover, isMoverMidiInput, DEFAULT_SUBSET_WEIGHT } from './movers/registry'
+import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
+import type { MoverOrSplitter } from '../visualCopies/types'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -288,6 +290,46 @@ function resolveMoverChain(track: Track, p: ProjectSnapshot): ResolvedMover[] {
   return chain
 }
 
+/** The definition id a track contributes to the new mover-and-splitter chain.
+ *  Registry ownership routes movers during migration: a `mover` track whose id
+ *  is unknown to the new registry stays on the legacy path. */
+function moverOrSplitterId(track: Track): string | undefined {
+  if (track.type === 'splitter') return track.splitterId
+  if (track.type === 'mover') return track.moverId
+  return undefined
+}
+
+/** Resolve one mover/splitter track through the new registry: merge the
+ *  definition's numeric param defaults with the track's stored inputValues,
+ *  flatten its notes, and let the definition close over both. Returns null for
+ *  legacy/unknown ids. */
+function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
+  const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
+  if (!def) return null
+  const settings: Record<string, number> = {}
+  for (const pd of def.params) if (typeof pd.default === 'number') settings[pd.key] = pd.default
+  Object.assign(settings, track.inputValues)
+  return def.resolve({ settings, notes: flattenTrackNotes(track, p) })
+}
+
+/** Collect an object track's new-registry mover and splitter children together,
+ *  in exact childIds order. Muted entries are removed from the chain (a
+ *  structural change - the copy count may drop); solo is a pool among the
+ *  new-chain children only, mirroring the legacy mover pool. */
+function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOrSplitter[] {
+  const candidates = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+  const anySolo = candidates.some((c) => c.solo)
+  const chain: MoverOrSplitter[] = []
+  for (const child of candidates) {
+    if (child.muted || (anySolo && !child.solo)) continue
+    const resolved = resolveMoverOrSplitterTrack(child, p)
+    if (resolved) chain.push(resolved)
+  }
+  return chain
+}
+
 /** Fold a track's event-modifier children into its note stream (in child order) and
  *  collect blackout regions from `mute` children. A modifier is a no-instrument child
  *  whose type is a modifier type - consumed here, never resolved as its own object. */
@@ -347,6 +389,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const elementCount = Math.max(1, Math.min(512, Math.round(def?.elementCount?.(paramsForCount) ?? 1)))
     const { notes, blackouts } = applyModifiers(track, flattenTrackNotes(track, p), p)
     const moverChain = resolveMoverChain(track, p)
+    const moverAndSplitterChain = resolveMoverAndSplitterChain(track, p)
     objects.push({
       trackId: id,
       instrumentId: track.instrumentId,
@@ -366,6 +409,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       effectAutomations: resolveEffectAutomations(track, p),
       envelopes: resolveEnvelopes(track, def, p),
       moverChain,
+      moverAndSplitterChain,
       // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
       // (which lands via resolve) is always visible to it.
       videoPads: track.videoPads ? [...track.videoPads] : undefined,
@@ -428,6 +472,25 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         const obj = objectById.get(targetObjectId)
         if (!obj) continue
         obj.moverChain.push(d)
+      }
+    }
+  }
+
+  // Top-level NEW movers and splitters: same track/tag/subtree expansion, but
+  // they append to moverAndSplitterChain - after every object's local children,
+  // in exact rootTrackIds order. Duplicate routes from one entry to the same
+  // target object are deduplicated. Muted entries are skipped entirely.
+  for (const trackId of p.rootTrackIds) {
+    const track = p.tracks[trackId]
+    if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
+    const resolved = resolveMoverOrSplitterTrack(track, p)
+    if (!resolved) continue
+    const seenTargets = new Set<string>()
+    for (const routing of track.targets ?? []) {
+      for (const targetObjectId of objectsForScope(routing.scope)) {
+        if (seenTargets.has(targetObjectId)) continue
+        seenTargets.add(targetObjectId)
+        objectById.get(targetObjectId)?.moverAndSplitterChain.push(resolved)
       }
     }
   }
