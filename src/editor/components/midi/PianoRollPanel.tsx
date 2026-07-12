@@ -18,6 +18,7 @@ import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { getDirector } from '../../core/directors'
 import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
+import { getPriorVisualCopyCount } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import type { Block, InterpolationMode } from '../../types'
@@ -182,6 +183,9 @@ interface PianoRollContentProps {
 function PianoRollContent({ trackId, trackName, trackColor, noteColor, automation, trigger, block, onClose }: PianoRollContentProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
+  const bpm = useProjectStore((s) => s.bpm)
+  const tracks = useProjectStore((s) => s.tracks)
+  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const track = useProjectStore((s) => s.tracks[trackId])
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
@@ -223,7 +227,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const defRows = !automation && track?.type === 'base'
     ? getInstrument(track.instrumentId)?.midiRows
     : !automation && !trigger && rowsDef?.midiRows && track
-      ? rowsDef.midiRows(mergeDefinitionSettings(rowsDef, track.inputValues))
+      ? rowsDef.midiRows(
+          mergeDefinitionSettings(rowsDef, track.inputValues),
+          { priorCount: getPriorVisualCopyCount(track.id, { tracks, rootTrackIds, bpm, beatsPerBar, totalBars }) },
+        )
       : directorRows
   const rows = automation
     ? automation.kind === 'toggle'
@@ -247,7 +254,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             notes.map((n) => n.pitch),
           )
         : defRows
-          ? generateInstrumentRows(defRows, notes.map((n) => n.pitch))
+          ? generateInstrumentRows(defRows, rowsDef?.strictMidiRows ? [] : notes.map((n) => n.pitch))
           : noteColor
             ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
             : generateRows(undefined)

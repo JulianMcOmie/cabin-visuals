@@ -8,6 +8,7 @@ import {
 import { useTimeStore } from '../../store/TimeStore'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
+import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
@@ -123,6 +124,13 @@ export function ShaderWrapper({
       const visualCopy = visualCopyIndex === undefined ? undefined : getVisualCopy(trackId, visualCopyIndex)
       if (visualCopy) rig.holder.matrix.multiplyMatrices(state.world, visualCopy.transform)
       else rig.holder.matrix.copy(state.world)
+      // Non-full-frame shader objects bypass ObjectRenderer's placement group,
+      // so compose object + VisualCopy opacity here before rendering the source
+      // FBO. Full-frame objects keep their inner placement group and therefore
+      // arrive with visualCopyIndex undefined; applying again would double-fade.
+      if (visualCopyIndex !== undefined) {
+        applyMaterialOpacity(rig.holder, state.opacity * (visualCopy?.opacity ?? 1))
+      }
     }
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.

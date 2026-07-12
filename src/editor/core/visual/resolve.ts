@@ -19,6 +19,7 @@ import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import type { MoverOrSplitter } from '../visualCopies/types'
+import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -248,6 +249,68 @@ function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOr
     if (resolved) chain.push(resolved)
   }
   return chain
+}
+
+function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
+  return (track.targets ?? []).some(({ scope }) => {
+    if (scope.kind === 'track') return scope.id === object.id
+    if (scope.kind === 'tag') return (object.tags ?? []).includes(scope.tag)
+    let current: Track | undefined = object
+    while (current) {
+      if (current.id === scope.id) return true
+      current = current.parentId ? p.tracks[current.parentId] : undefined
+    }
+    return false
+  })
+}
+
+/** Structural copy count immediately before one mover/splitter track. This is
+ * editor metadata only: it evaluates the same enabled prefix as resolveProject,
+ * so an index-aware definition can expose exactly the rows it can address. A
+ * top-level entry may target objects with different prefix counts; one MIDI lane
+ * must serve all of them, so its row set uses the largest target count. */
+export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): number {
+  const target = p.tracks[trackId]
+  if (!target) return 1
+
+  if (target.parentId) {
+    const parent = p.tracks[target.parentId]
+    if (!parent) return 1
+    const candidates = (parent.childIds ?? [])
+      .map((id) => p.tracks[id])
+      .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
+    const anySolo = candidates.some((child) => child.solo)
+    const prefix: MoverOrSplitter[] = []
+    for (const child of candidates) {
+      if (child.id === trackId) break
+      if (child.muted || (anySolo && !child.solo)) continue
+      const resolved = resolveMoverOrSplitterTrack(child, p)
+      if (resolved) prefix.push(resolved)
+    }
+    return resolveVisualCopies(prefix, 0).length
+  }
+
+  const objects = Object.values(p.tracks).filter(
+    (track) => !!track.instrumentId && !!getInstrument(track.instrumentId),
+  )
+  const targetObjects = objects.filter((object) => globalTrackTargetsObject(target, object, p))
+  let largestCount = 1
+  for (const object of targetObjects) {
+    const prefix = resolveMoverAndSplitterChain(object, p)
+    for (const rootId of p.rootTrackIds) {
+      if (rootId === trackId) break
+      const global = p.tracks[rootId]
+      if (
+        !global || global.muted ||
+        !getMoverOrSplitterDefinition(moverOrSplitterId(global)) ||
+        !globalTrackTargetsObject(global, object, p)
+      ) continue
+      const resolved = resolveMoverOrSplitterTrack(global, p)
+      if (resolved) prefix.push(resolved)
+    }
+    largestCount = Math.max(largestCount, resolveVisualCopies(prefix, 0).length)
+  }
+  return largestCount
 }
 
 /** Fold a track's event-modifier children into its note stream (in child order) and

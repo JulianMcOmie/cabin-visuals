@@ -9,7 +9,7 @@ import {
 } from '../visualCopies/registry'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
-import { resolveProject, type ProjectSnapshot } from './resolve'
+import { getPriorVisualCopyCount, resolveProject, type ProjectSnapshot } from './resolve'
 
 // Chain resolution wiring tests: which tracks enter the new ordered
 // mover-and-splitter chain, and in what order. Definitions here are fakes that
@@ -115,6 +115,16 @@ test('mixed local movers and splitters resolve in exact childIds order', () => {
   // lift(1) once (count 1), split once, lift(9) twice (post-split count 2).
   assert.deepEqual(log, ['lift(1)', 'split', 'lift(9)', 'lift(9)'])
   assert.equal(copies.length, 2)
+})
+
+test('prior copy count stops at the selected chain entry', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['before', 'visibility', 'after'] }),
+    track({ id: 'before', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube' }),
+    track({ id: 'visibility', type: 'mover', moverId: 'visibility', parentId: 'cube' }),
+    track({ id: 'after', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube' }),
+  ], ['cube'])
+  assert.equal(getPriorVisualCopyCount('visibility', p), 2)
 })
 
 test('settings merge definition defaults with the track inputValues', () => {

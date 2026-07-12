@@ -35,7 +35,9 @@ export interface MoverOrSplitterDefinition<Settings> {
   label: string
   kind: 'mover' | 'splitter'
   params: ParamDef[]
-  midiRows?: (settings: Settings) => MidiRowDef[]
+  midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
+  /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
+  strictMidiRows?: boolean
   resolve(args: { settings: Settings; notes: ResolvedNote[] }): MoverOrSplitter
 }
 

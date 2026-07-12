@@ -191,5 +191,212 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   },
 }
 
+// ── Grid ────────────────────────────────────────────────────────────────────
+
+export interface GridSettings {
+  rows: number
+  columns: number
+  /** 0 = XY, 1 = XZ, 2 = YZ. */
+  plane: number
+  /** 0 = English, 1 = reverse English, 2 = columns first, 3 = reverse columns. */
+  indexing: number
+}
+
+const GRID_MAX_DIMENSION = 32
+const GRID_PLANES: [0 | 1 | 2, 0 | 1 | 2][] = [
+  [0, 1],
+  [0, 2],
+  [1, 2],
+]
+
+/** Cell coordinates in the exact order downstream movers will see them. */
+export function gridCellOrder(rows: number, columns: number, indexing: number): [number, number][] {
+  const cells: [number, number][] = []
+  if (indexing === 2 || indexing === 3) {
+    for (let column = 0; column < columns; column++) {
+      for (let row = 0; row < rows; row++) cells.push([row, column])
+    }
+  } else {
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) cells.push([row, column])
+    }
+  }
+  return indexing === 1 || indexing === 3 ? cells.reverse() : cells
+}
+
+export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
+  id: 'grid',
+  label: 'Grid',
+  kind: 'splitter',
+  params: [
+    { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
+    { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
+    {
+      key: 'plane',
+      label: 'Axes',
+      type: 'select',
+      options: [
+        { value: 0, label: 'X / Y' },
+        { value: 1, label: 'X / Z' },
+        { value: 2, label: 'Y / Z' },
+      ],
+      default: 0,
+    },
+    {
+      key: 'indexing',
+      label: 'Indexing',
+      type: 'select',
+      options: [
+        { value: 0, label: 'English reading order' },
+        { value: 1, label: 'English, reversed' },
+        { value: 2, label: 'Columns first' },
+        { value: 3, label: 'Columns first, reversed' },
+      ],
+      default: 0,
+    },
+  ],
+  resolve({ settings }) {
+    const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
+    const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
+    const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
+    const cells = gridCellOrder(rows, columns, settings.indexing).map(([row, column]) => {
+      const position: [number, number, number] = [0, 0, 0]
+      const scale: [number, number, number] = [1, 1, 1]
+      position[horizontalAxis] = (column + 0.5) / columns - 0.5
+      position[verticalAxis] = 0.5 - (row + 0.5) / rows
+      scale[horizontalAxis] = 1 / columns
+      scale[verticalAxis] = 1 / rows
+      return new Matrix4()
+        .makeTranslation(position[0], position[1], position[2])
+        .multiply(new Matrix4().makeScale(scale[0], scale[1], scale[2]))
+    })
+    return {
+      apply(visualCopy) {
+        return cells.map((cell) => ({
+          transform: visualCopy.transform.clone().multiply(cell),
+          opacity: visualCopy.opacity,
+          colorShift: { ...visualCopy.colorShift },
+        }))
+      },
+    }
+  },
+}
+
+// ── Visibility ───────────────────────────────────────────────────────────────────
+
+export interface VisibilitySettings {
+  /** 0 = one note per index; other values are each group's percentage width. */
+  grouping: number
+  attackBeats: number
+  decayBeats: number
+  sustainLevel: number
+  releaseBeats: number
+}
+
+const VISIBILITY_TOP_PITCH = 127
+const VISIBILITY_GROUPING_OPTIONS = [
+  { value: 0, label: 'Each index' },
+  { value: 10, label: '10% groups' },
+  { value: 20, label: '20% groups' },
+  { value: 25, label: '25% groups' },
+  { value: 50, label: '50% groups' },
+]
+
+function visibilityGroupCount(grouping: number, priorCount: number): number {
+  return grouping > 0 ? Math.min(priorCount, Math.ceil(100 / grouping)) : priorCount
+}
+
+function visibilityMidiRows(
+  settings: VisibilitySettings,
+  context: { priorCount: number } = { priorCount: 1 },
+): MidiRowDef[] {
+  const priorCount = Math.max(1, Math.min(128, Math.round(context.priorCount)))
+  const groupCount = visibilityGroupCount(settings.grouping, priorCount)
+  return Array.from({ length: groupCount }, (_, index) => {
+    if (settings.grouping <= 0) return { pitch: VISIBILITY_TOP_PITCH - index, label: `Index ${index + 1}` }
+    const start = Math.min(100, index * settings.grouping)
+    const end = Math.min(100, (index + 1) * settings.grouping)
+    return { pitch: VISIBILITY_TOP_PITCH - index, label: `${start}–${end}%` }
+  })
+}
+
+function noteControlsVisibilityIndex(note: ResolvedNote, index: number, count: number, grouping: number): boolean {
+  const noteIndex = VISIBILITY_TOP_PITCH - note.pitch
+  if (grouping <= 0) return noteIndex === index
+  const groupCount = visibilityGroupCount(grouping, count)
+  const groupIndex = Math.min(groupCount - 1, Math.floor((index / Math.max(1, count)) * groupCount))
+  return noteIndex === groupIndex
+}
+
+/** Closed-form ADSR for one index/group. Velocity is intentionally ignored:
+ * a held gate means visible (1), exactly as the mover's MIDI contract states. */
+export function evaluateVisibilityOpacity(
+  notes: readonly ResolvedNote[],
+  beat: number,
+  index: number,
+  count: number,
+  settings: VisibilitySettings,
+): number {
+  const attack = Math.max(0, settings.attackBeats)
+  const decay = Math.max(0, settings.decayBeats)
+  const release = Math.max(0, settings.releaseBeats)
+  const sustain = Math.max(0, Math.min(1, settings.sustainLevel))
+  const heldValue = (age: number): number => {
+    if (attack > 0 && age < attack) return age / attack
+    if (decay > 0 && age < attack + decay) return 1 - (1 - sustain) * ((age - attack) / decay)
+    return sustain
+  }
+
+  let opacity = 0
+  for (const note of notes) {
+    if (!noteControlsVisibilityIndex(note, index, count, settings.grouping)) continue
+    const age = beat - note.beat
+    if (age < 0) continue
+    const hold = Math.max(note.durationBeats || 0, attack)
+    if (age < hold) opacity = Math.max(opacity, heldValue(age))
+    else if (release > 0 && age < hold + release) {
+      opacity = Math.max(opacity, heldValue(hold) * (1 - (age - hold) / release))
+    }
+  }
+  return Math.max(0, Math.min(1, opacity))
+}
+
+export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
+  id: 'visibility',
+  label: 'Visibility',
+  kind: 'mover',
+  params: [
+    {
+      key: 'grouping',
+      label: 'Note mapping',
+      type: 'select',
+      options: VISIBILITY_GROUPING_OPTIONS,
+      default: 0,
+    },
+    { key: 'attackBeats', label: 'Attack (beats)', min: 0, max: 8, step: 0.01, default: 0 },
+    { key: 'decayBeats', label: 'Decay (beats)', min: 0, max: 8, step: 0.01, default: 0 },
+    { key: 'sustainLevel', label: 'Sustain', min: 0, max: 1, step: 0.01, default: 1 },
+    { key: 'releaseBeats', label: 'Release (beats)', min: 0, max: 8, step: 0.01, default: 0.05 },
+  ],
+  midiRows: visibilityMidiRows,
+  strictMidiRows: true,
+  resolve({ settings, notes }) {
+    return {
+      apply(visualCopy, { beat, index, count }) {
+        return [{
+          transform: visualCopy.transform.clone(),
+          opacity: visualCopy.opacity * evaluateVisibilityOpacity(notes, beat, index, count, settings),
+          colorShift: { ...visualCopy.colorShift },
+        }]
+      },
+    }
+  },
+}
+
 /** Every production definition, in picker order. Seeded into the registry. */
-export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [burstMover, radialSplitter]
+export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
+  burstMover,
+  visibilityMover,
+  radialSplitter,
+  gridSplitter,
+]
