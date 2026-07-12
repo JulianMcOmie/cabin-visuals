@@ -45,7 +45,14 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         const w = rect.width
         const edge = Math.min(8, w / 4)
         const localX = e.clientX - rect.left
-        e.currentTarget.style.cursor = localX < edge || localX > w - edge ? 'ew-resize' : 'default'
+        const onRightEdge = localX > w - edge
+        const onLeftEdge = localX < edge
+        // The top half of the right edge arms looping (drag past the pattern to
+        // repeat) - grab cursor, matching the ruler loop lane. The bottom half and
+        // the left edge are plain resizes; the body is a move (default).
+        const topHalf = e.clientY < rect.top + rect.height / 2
+        e.currentTarget.style.cursor =
+          onRightEdge && topHalf ? 'grab' : onRightEdge || onLeftEdge ? 'ew-resize' : 'default'
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
