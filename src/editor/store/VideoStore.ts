@@ -11,6 +11,9 @@ export interface VideoClip {
   duration: number // seconds
   width: number
   height: number
+  /** Source file size in bytes. Optional + additive: clips from documents
+   *  saved before this field existed load fine and count as 0 toward totals. */
+  bytes?: number
 }
 
 /** One background upload's live state. Absent from the map = durable (or

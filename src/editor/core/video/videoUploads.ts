@@ -33,6 +33,31 @@ export function capError(file: File, isPro: boolean): string | null {
     : `${file.name} is ${mb} MB - free sources are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${PRO_MAX_MB} MB, or compress it first.`
 }
 
+// Free plans also cap TOTAL video stored in a project; Pro is unlimited total.
+// (Per-upload caps above still apply to Pro.)
+export const FREE_TOTAL_BYTES = 1024 ** 3 // 1 GiB
+
+/** Sum of every catalogued clip's source bytes. Legacy/unknown sizes (clips
+ *  saved before VideoClip.bytes existed) count as 0. */
+export function totalVideoBytes(): number {
+  return Object.values(useVideoStore.getState().videoClips).reduce((sum, clip) => sum + (clip.bytes ?? 0), 0)
+}
+
+/**
+ * The user-facing rejection when adding `file` would push a FREE project past
+ * its 1 GB total, or null if it fits (Pro has no total cap).
+ *
+ * This is per-PROJECT client-side accounting: the catalog only knows the clips
+ * of the currently open project, so this bounds one project, not the account.
+ * A true per-account storage quota needs a server-side check (out of scope).
+ */
+export function totalCapError(file: File, isPro: boolean): string | null {
+  if (isPro) return null // Pro: unlimited total video storage.
+  if (totalVideoBytes() + file.size <= FREE_TOTAL_BYTES) return null
+  const gb = (totalVideoBytes() / 1024 ** 3).toFixed(1)
+  return `This project already has ${gb} GB of video - the free plan holds 1 GB total. Upgrade to Pro for unlimited video storage.`
+}
+
 /** Probe duration + dimensions from the file before it enters the catalog. */
 export function probeVideo(file: File): Promise<{ duration: number; width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -90,7 +115,7 @@ export async function startVideoUpload(file: File, onError?: (message: string) =
       if (refBox) useVideoStore.getState().patchUpload(refBox, { progress })
     })
     refBox = ref
-    useVideoStore.getState().addClip({ ref, fileName: file.name, ...meta })
+    useVideoStore.getState().addClip({ ref, fileName: file.name, bytes: file.size, ...meta })
     useVideoStore.getState().patchUpload(ref, { progress: 0, status: 'saving', error: null })
     inFlight.add(ref)
     void completion
@@ -159,6 +184,14 @@ export async function addVideoClipsToTrack(
     const cap = capError(file, isPro)
     if (cap) {
       onError?.(cap)
+      continue
+    }
+    // Per-PROJECT total-storage cap (free = 1 GB). Each file already added this
+    // loop is in the catalog, so totalVideoBytes() grows as we go - the check is
+    // naturally cumulative across a multi-file add.
+    const totalCap = totalCapError(file, isPro)
+    if (totalCap) {
+      onError?.(totalCap)
       continue
     }
     const ref = await startVideoUpload(file, onError) // resolves at mint, not upload end

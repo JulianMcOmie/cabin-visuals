@@ -15,6 +15,7 @@ import {
   padRoom,
   retryVideoUploadTracked,
   startVideoUpload,
+  totalCapError,
 } from '../core/video/videoUploads'
 import { usePlan } from '../../billing/usePlan'
 import type { Track, VideoPad } from '../types'
@@ -391,6 +392,8 @@ export function VideoClipBank({ track }: { track: Track }) {
     if (atPadLimit) return setError(`Free plans hold up to ${FREE_MAX_PADS} clips per track - upgrade to Pro for unlimited`)
     const cap = capError(file, isPro)
     if (cap) return setError(cap)
+    const totalCap = totalCapError(file, isPro)
+    if (totalCap) return setError(totalCap)
     const seq = ++pickerSeqRef.current
     setPickerCore({ file, ref: null, fileName: file.name })
     void startVideoUpload(file, setError).then((ref) => {

@@ -17,7 +17,7 @@ import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { loadAudioTrack } from '../../utils/loadAudioTrack'
-import { addVideoClipsToTrack, capError } from '../../core/video/videoUploads'
+import { addVideoClipsToTrack, capError, FREE_TOTAL_BYTES, totalVideoBytes } from '../../core/video/videoUploads'
 import { parseMidiFile, isMidiFileName, isMidiMimeType } from '../../core/midiImport'
 import { getInstrument } from '../../instruments'
 import { usePlan } from '../../../billing/usePlan'
@@ -285,6 +285,21 @@ export function TimelineArea() {
       if (cap) {
         showDropNotice(cap)
         return
+      }
+      // Free plans also cap TOTAL video per project (1 GB); Pro is unlimited.
+      // Sum every dropped file against the remaining headroom - if the batch
+      // overflows, cancel the whole drop (same all-or-nothing rule as above).
+      // Per-PROJECT client-side accounting only (the catalog knows just the
+      // open project); a true per-account quota needs a server check.
+      if (!isPro) {
+        const dropBytes = videoFiles.reduce((sum, f) => sum + f.size, 0)
+        if (totalVideoBytes() + dropBytes > FREE_TOTAL_BYTES) {
+          const gb = (totalVideoBytes() / 1024 ** 3).toFixed(1)
+          showDropNotice(
+            `This project already has ${gb} GB of video - the free plan holds 1 GB total. Upgrade to Pro for unlimited video storage.`,
+          )
+          return
+        }
       }
       const id = crypto.randomUUID()
       useProjectStore.getState().addTrack({

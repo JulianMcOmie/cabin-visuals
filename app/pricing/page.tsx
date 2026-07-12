@@ -13,6 +13,7 @@ const FREE_FEATURES = [
   'The full editor - every instrument and template',
   '720p video export with a small watermark',
   '1 saved project',
+  '50 MB per video, 1 GB total video storage',
   'Try templates instantly, no account needed',
 ]
 
@@ -20,6 +21,7 @@ const PRO_FEATURES = [
   'Watermark-free video export',
   'Full HD 1080p export quality',
   'Unlimited projects',
+  '250 MB per video, unlimited video storage',
   'Support an independent visual music tool',
 ]
 
