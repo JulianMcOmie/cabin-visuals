@@ -232,7 +232,7 @@ function SaveStatusChip() {
 
 function Header() {
   const isPlaying = useTimeStore((s) => s.isPlaying)
-  const { play, pause, reset } = usePlayback();
+  const { play, pause, reset, restart } = usePlayback();
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
@@ -296,8 +296,8 @@ function Header() {
               : <SkipBack size={11} fill="currentColor" />}
           </button>
           <button
-            onClick={isPlaying ? reset : play}
-            title={isPlaying ? 'Restart from beginning' : 'Play (Space)'}
+            onClick={isPlaying ? restart : play}
+            title={isPlaying ? 'Restart playback' : 'Play (Space)'}
             data-tutorial-play=""
             className="flex items-center justify-center w-[34px] h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] transition-colors cursor-pointer"
           >

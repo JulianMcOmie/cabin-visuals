@@ -88,9 +88,20 @@ export function usePlayback() {
     if (useTimeStore.getState().isPlaying) engine.play(0);
   }, []);
 
+  // The main Play button doubles as restart while transport is running. Keep
+  // that restart inside an active loop; without one it retains the old beat-0
+  // behavior. The separate return-to-start control still always targets 0.
+  const restart = useCallback(() => {
+    const { isPlaying, loopRegion } = useTimeStore.getState();
+    const start = loopRegion?.enabled ? loopRegion.startBeat : 0;
+    useTimeStore.getState().setCurrentBeat(start);
+    if (isPlaying) engine.play(start);
+  }, []);
+
   return {
     play,
     pause,
-    reset
+    reset,
+    restart,
   }
 }
