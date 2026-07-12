@@ -93,6 +93,22 @@ class PlaybackEngine {
     }
   }
 
+  /** Silence audio for the duration of a scrub. The transport keeps running so the
+   *  playhead still follows the drag; each move uses scrubSeek (no re-arm) and the
+   *  release calls seek() to resume. Re-arming on every move instead would stack
+   *  many overlapping clip fragments within the lookahead window into a runaway
+   *  gain sum - the scrub "earrape". */
+  beginScrub() {
+    if (this.playing) getAudioEngine().stopAll()
+  }
+
+  /** Move the playhead during a scrub WITHOUT re-arming audio (see beginScrub). */
+  scrubSeek(beat: number) {
+    if (!this.callbacks) return
+    Tone.getTransport().position = beatToPosition(beat, this.callbacks.getBeatsPerBar())
+    this.lastTrackedBeat = beat
+  }
+
   /** Re-arm audio at the current position (block edits / mute toggles while playing). */
   rearmAudio() {
     if (!this.playing || !this.callbacks) return

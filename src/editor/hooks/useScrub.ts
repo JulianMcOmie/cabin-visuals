@@ -27,6 +27,8 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
   const onEndRef = useRef(onEnd)
   onEndRef.current = onEnd
 
+  // A discrete seek (e.g. a single click on a block header): move the playhead and,
+  // if playing, re-arm audio at the new spot so it keeps sounding.
   const scrubTo = useCallback((clientX: number) => {
     const beat = computeRef.current(clientX)
     if (beat == null) return
@@ -36,6 +38,16 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     if (useTimeStore.getState().isPlaying) getPlaybackEngine().seek(beat)
   }, [])
 
+  // A single move within a drag: track the playhead but do NOT re-arm audio -
+  // that stacks overlapping clip fragments into a runaway gain sum (earrape).
+  // Audio is silenced for the gesture (beginScrub) and resumed on release.
+  const scrubMove = useCallback((clientX: number) => {
+    const beat = computeRef.current(clientX)
+    if (beat == null) return
+    useTimeStore.getState().setCurrentBeat(beat)
+    if (useTimeStore.getState().isPlaying) getPlaybackEngine().scrubSeek(beat)
+  }, [])
+
   const startScrub = useCallback((e: ReactPointerEvent) => {
     e.stopPropagation()
     scrubbingRef.current = true
@@ -43,21 +55,27 @@ export function useScrub({ computeBeat, onStart, onEnd }: UseScrubOptions) {
     // outruns the RAF-driven playhead and leaves the grab handle.
     lockCursor('ew-resize')
     onStartRef.current?.()
-    scrubTo(e.clientX)
+    // Silence audio for the drag; it resumes from the drop point on release.
+    if (useTimeStore.getState().isPlaying) getPlaybackEngine().beginScrub()
+    scrubMove(e.clientX)
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
-      if (scrubbingRef.current) scrubTo(ev.clientX)
+      if (scrubbingRef.current) scrubMove(ev.clientX)
     }
     const onUp = () => {
       scrubbingRef.current = false
       unlockCursor()
       onEndRef.current?.()
+      // Re-arm and resume audio from the final playhead position.
+      if (useTimeStore.getState().isPlaying) {
+        getPlaybackEngine().seek(useTimeStore.getState().currentBeat)
+      }
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
-  }, [scrubTo])
+  }, [scrubMove])
 
   return { scrubbingRef, startScrub, scrubTo }
 }
