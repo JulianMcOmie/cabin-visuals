@@ -25,4 +25,28 @@ test('v4 migration creates Main and Scene 1 with exclusive visual ownership', ()
   assert.equal(first.tracks.visual, visual)
   assert.equal(doc.audioTracks.audio, audio)
   assert.deepEqual(doc.audioRootTrackIds, ['audio'])
+  assert.equal(main.backgroundColor, '#000000')
+  assert.equal(first.backgroundColor, '#000000')
+})
+
+test('v5 migration gives every existing scene a black background', () => {
+  const doc = upgradeDocument({
+    schemaVersion: 5,
+    bpm: 120,
+    beatsPerBar: 4,
+    totalBars: 32,
+    scenes: {
+      main: { id: 'main', name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
+      one: { id: 'one', name: 'Scene 1', isMain: false, tracks: { visual }, rootTrackIds: ['visual'] },
+    },
+    sceneOrder: ['main', 'one'],
+    activeSceneId: 'one',
+    audioTracks: {},
+    audioRootTrackIds: [],
+    audioClips: {},
+  })
+
+  assert.equal(doc.schemaVersion, 6)
+  assert.equal(doc.scenes.main.backgroundColor, '#000000')
+  assert.equal(doc.scenes.one.backgroundColor, '#000000')
 })

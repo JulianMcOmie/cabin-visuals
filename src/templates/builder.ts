@@ -1,4 +1,4 @@
-import type { Block, Note, Track, TrackType, Routing } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Block, type Note, type Track, type TrackType, type Routing } from '../editor/types'
 import type { ProjectDocument } from '../persistence/types'
 
 // Authoring helpers for template documents. Templates are plain v2 project
@@ -126,13 +126,13 @@ export function doc(opts: {
   const mainId = nid('main')
   const sceneId = nid('scene')
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     bpm: opts.bpm,
     beatsPerBar: opts.beatsPerBar ?? 4,
     totalBars: opts.totalBars ?? 16,
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
-      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, tracks, rootTrackIds },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks, rootTrackIds },
     },
     sceneOrder: [mainId, sceneId],
     audioTracks: {},

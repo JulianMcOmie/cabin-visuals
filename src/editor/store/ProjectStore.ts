@@ -5,7 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import type { Scene, Track, TrackType, Block, Note, AudioBlock, AdsrEnvelope, EffectInstance, InterpolationMode, VideoPad, PhotoPad } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type TrackType, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -220,7 +220,7 @@ export interface ProjectState {
   scenes: Record<string, Scene>
   /** Main first, followed by visual scenes in tab order. */
   sceneOrder: string[]
-  /** Ephemeral editor selection. Persistence/history deliberately omit it. */
+  /** Selected editor tab. Persisted with the project, but omitted from undo history. */
   activeSceneId: string
   /** Project-global audio, projected into every active scene's compatibility view. */
   audioTracks: Record<string, Track>
@@ -237,6 +237,7 @@ export interface ProjectState {
   setActiveScene: (sceneId: string) => void
   addScene: () => string
   renameScene: (sceneId: string, name: string) => void
+  setSceneBackgroundColor: (sceneId: string, color: string) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
   reorderScenes: (sceneIds: string[]) => void
@@ -325,8 +326,8 @@ function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: strin
   const firstId = crypto.randomUUID()
   return {
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
-      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstId],
     activeSceneId: firstId,
@@ -407,7 +408,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const id = crypto.randomUUID()
     rawSet((s) => {
       const visualCount = s.sceneOrder.filter((sid) => !s.scenes[sid]?.isMain).length
-      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, tracks: {}, rootTrackIds: [] }
+      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] }
       const scenes = { ...s.scenes, [id]: scene }
       const mainId = s.sceneOrder.find((sid) => s.scenes[sid]?.isMain)
       if (mainId) {
@@ -432,6 +433,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, name: trimmed } } }
   }),
 
+  setSceneBackgroundColor: (sceneId, color) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene || scene.backgroundColor === color) return s
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundColor: color } } }
+  }),
+
   duplicateScene: (sceneId) => {
     let nextId: string | null = null
     rawSet((s) => {
@@ -447,7 +454,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         for (const track of tree) tracks[track.id] = track
       }
       nextId = crypto.randomUUID()
-      const scene: Scene = { id: nextId, name: `${source.name} Copy`, isMain: false, tracks, rootTrackIds }
+      const scene: Scene = { id: nextId, name: `${source.name} Copy`, isMain: false, backgroundColor: source.backgroundColor, tracks, rootTrackIds }
       const at = Math.max(0, s.sceneOrder.indexOf(sceneId)) + 1
       const sceneOrder = s.sceneOrder.slice()
       sceneOrder.splice(at, 0, nextId)

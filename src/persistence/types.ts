@@ -1,4 +1,4 @@
-import type { Scene, Track } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
@@ -27,6 +27,7 @@ import type { LoopRegion } from '../editor/core/loopRegion'
  * absent in older saves, defaulted on hydrate; photo placement lives inside
  * `tracks` as `photoPads`. No schema bump: purely additive.
  * `loopRegion` is also additive within v4; older saves hydrate it as unset.
+ * v5 introduced scenes; v6 adds each scene's background color.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -52,13 +53,13 @@ export function emptyDocument(): ProjectDocument {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
-      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstSceneId],
     activeSceneId: firstSceneId,

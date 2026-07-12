@@ -1,10 +1,10 @@
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import type { Scene, Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type EffectInstance, type VideoPad } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 5
+export const CURRENT_VERSION = 6
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -127,8 +127,8 @@ UPGRADES[4] = (doc) => {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   const scenes: Record<string, Scene> = {
-    [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
-    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, tracks: visualTracks, rootTrackIds },
+    [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: visualTracks, rootTrackIds },
   }
   const project = { ...rest }
   delete project.tracks
@@ -141,6 +141,18 @@ UPGRADES[4] = (doc) => {
     audioTracks,
     audioRootTrackIds,
   }
+}
+
+// ── v5 → v6 ──────────────────────────────────────────────────────────────────
+// Scene backgrounds become an explicit scene-level parameter. Old scenes adopt
+// the new black default rather than depending on a renderer-owned clear color.
+UPGRADES[5] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Omit<Scene, 'backgroundColor'> & { backgroundColor?: string }> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
+    scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND }
+  }
+  return { ...rest, scenes }
 }
 
 /**

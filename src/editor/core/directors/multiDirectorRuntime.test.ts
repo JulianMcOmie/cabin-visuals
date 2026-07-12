@@ -13,8 +13,8 @@ const director = (id: string): Track => ({
 test('Main resolves an ordered array of simultaneous directors, never a singular slot', () => {
   const a = director('a')
   const b = director('b')
-  const main: Scene = { id: 'main', name: 'Main', isMain: true, tracks: { a, b }, rootTrackIds: ['a', 'b'] }
-  const visual: Scene = { id: 'visual', name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] }
+  const main: Scene = { id: 'main', name: 'Main', isMain: true, backgroundColor: '#000000', tracks: { a, b }, rootTrackIds: ['a', 'b'] }
+  const visual: Scene = { id: 'visual', name: 'Scene 1', isMain: false, backgroundColor: '#000000', tracks: {}, rootTrackIds: [] }
   setProject({
     scenes: { main, visual }, sceneOrder: ['main', 'visual'], activeSceneId: 'main',
     tracks: {}, rootTrackIds: [], audioTracks: {}, audioRootTrackIds: [],

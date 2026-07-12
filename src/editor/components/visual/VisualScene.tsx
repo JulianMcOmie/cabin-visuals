@@ -12,6 +12,7 @@ import {
 import { getCompositionLayers, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
+import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 
 interface MountedScene {
@@ -111,7 +112,7 @@ export function VisualScene() {
         const runtime = mounted.get(sceneId)
         if (!runtime) continue
         gl.setRenderTarget(runtime.target)
-        gl.setClearColor(0x09090b, 0)
+        gl.setClearColor(useProjectStore.getState().scenes[sceneId]?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, 1)
         gl.clear(true, true, true)
         gl.render(runtime.base, camera)
         gl.clearDepth()

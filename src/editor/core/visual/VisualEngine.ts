@@ -9,7 +9,7 @@ import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
-import type { Scene } from '../../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
 import { getDirector, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
@@ -82,7 +82,7 @@ function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
   if ('scenes' in p) return p
   const id = '__legacy_scene__'
   return {
-    scenes: { [id]: { id, name: 'Scene 1', isMain: false, tracks: p.tracks, rootTrackIds: p.rootTrackIds } },
+    scenes: { [id]: { id, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: p.tracks, rootTrackIds: p.rootTrackIds } },
     sceneOrder: [id],
     activeSceneId: id,
     bpm: p.bpm,

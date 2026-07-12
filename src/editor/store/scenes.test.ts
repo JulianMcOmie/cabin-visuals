@@ -53,3 +53,17 @@ test('older v5 documents without a selected scene fall back to the first visual 
 
   assert.equal(useProjectStore.getState().activeSceneId, firstVisualId)
 })
+
+test('scene background color defaults, edits, duplicates, and persists with the scene', () => {
+  hydrate(emptyDocument())
+  const sceneId = useProjectStore.getState().activeSceneId
+  assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#000000')
+
+  useProjectStore.getState().setSceneBackgroundColor(sceneId, '#123456')
+  const copyId = useProjectStore.getState().duplicateScene(sceneId)!
+  assert.equal(useProjectStore.getState().scenes[copyId].backgroundColor, '#123456')
+
+  const document = serialize()
+  hydrate(document)
+  assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#123456')
+})

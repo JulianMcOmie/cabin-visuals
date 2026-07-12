@@ -31,6 +31,7 @@ export type TrackType =
   | 'director'
 
 export type SceneId = string
+export const DEFAULT_SCENE_BACKGROUND = '#000000'
 
 /** A self-contained editable visual world. Main is represented by the same shape,
  * but accepts director tracks instead of object instruments. */
@@ -38,6 +39,7 @@ export interface Scene {
   id: SceneId
   name: string
   isMain: boolean
+  backgroundColor: string
   tracks: Record<string, Track>
   rootTrackIds: string[]
 }
