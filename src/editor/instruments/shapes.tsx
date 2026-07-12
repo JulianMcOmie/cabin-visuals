@@ -2,7 +2,7 @@ import { specInstrument } from './specInstrument'
 import type { MidiRowDef, ParamDef } from './types'
 import type { Primitive } from '../core/visual/renderSpec'
 
-// Basic shapes share the Cube's params/ports so they self-pulse and respond to the same
+// Basic shapes share the Cube's params/ports so they respond to the same
 // modulators - the only difference between them is the geometry primitive. Their whole
 // behaviour lives in the RenderSpec (as data), not a hand-written component.
 const SHAPE_PARAMS: ParamDef[] = [
@@ -35,8 +35,8 @@ function basicShape(id: string, name: string, primitive: Primitive) {
       transform: {
         position: ['param.baseXPosition', 'param.baseYPosition', 'param.baseZPosition'],
         rotation: ['beat * 0.09', 'beat * 0.22', '0'],
-        // breathe × energy pulse (matches the Cube), plus the `scale` port for headroom.
-        scale: '(param.baseSize / 1.6) * (1.15 + sin(beat * 0.9) * 0.2) * (1 + port.energy * 0.35 + port.scale)',
+        // Static base size, plus note energy and the explicit `scale` port.
+        scale: '(param.baseSize / 1.6) * (1 + port.energy * 0.35 + port.scale)',
       },
       appearance: {
         hue: 'param.baseHue + port.hue * 60',
