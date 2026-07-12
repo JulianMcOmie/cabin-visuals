@@ -185,9 +185,9 @@ test('the structural object list has one entry per copy index', () => {
   ], ['solo', 'cube']))
 
   assert.deepEqual(getObjectList(), [
-    { trackId: 'solo', instrumentId: 'cube', visualCopyIndex: 0 },
-    { trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 0 },
-    { trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 1 },
+    { sceneId: '__legacy_scene__', trackId: 'solo', instrumentId: 'cube', visualCopyIndex: 0 },
+    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 0 },
+    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 1 },
   ])
 })
 

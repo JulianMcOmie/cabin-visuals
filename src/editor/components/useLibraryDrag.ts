@@ -10,7 +10,7 @@ import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/modifierColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track, TrackType } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' | 'director' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // A modifier is a no-instrument child track whose type IS the modifier (its id);
@@ -20,20 +20,25 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // ids the registry doesn't know.
   const isMover = item.kind === 'mover' && hasMoverOrSplitterDefinition(item.id)
   const isSplitter = item.kind === 'splitter' && hasMoverOrSplitterDefinition(item.id)
+  const isDirector = item.kind === 'director'
+  const state = useProjectStore.getState()
+  const visualIds = state.sceneOrder.filter((id) => state.scenes[id] && !state.scenes[id].isMain)
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isModifier ? (item.id as TrackType) : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
-    instrumentId: isModifier || isMover || isSplitter ? '' : item.id,
+    type: isDirector ? 'director' : isModifier ? (item.id as TrackType) : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isModifier || isMover || isSplitter || isDirector ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
+    directorId: isDirector ? item.id : undefined,
+    sceneBindings: isDirector ? visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })) : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
     color: item.kind === 'object' ? OBJECT_TRACK_COLOR : MOVER_TRACK_COLOR,
     muted: false,
     solo: false,
     blocks: [],
     childIds: [],
-    parentId: parentId ?? undefined,
+    parentId: isDirector ? undefined : parentId ?? undefined,
   }
 }
 
@@ -102,6 +107,7 @@ export function useLibraryDrag() {
           })
         }
       }
+      if (drop && item.kind === 'director') drop = { ...drop, parentId: null, intoId: null }
       target = drop ? { parentId: drop.parentId, index: drop.index } : null
       useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
     }

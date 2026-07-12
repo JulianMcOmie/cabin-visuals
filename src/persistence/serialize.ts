@@ -13,14 +13,20 @@ import { CURRENT_VERSION } from './upgrade'
  * rides along from AudioStore (metadata only; bytes are the bucket's job).
  */
 export function serialize(state = useProjectStore.getState()): ProjectDocument {
-  const doc: Record<string, unknown> = { schemaVersion: CURRENT_VERSION }
-  const s = state as unknown as Record<string, unknown>
-  for (const k in s) if (typeof s[k] !== 'function') doc[k] = s[k]
-  doc.audioClips = useAudioStore.getState().audioClips
-  doc.videoClips = useVideoStore.getState().videoClips
-  doc.photoClips = usePhotoStore.getState().photoClips
-  doc.loopRegion = useTimeStore.getState().loopRegion
-  return doc as unknown as ProjectDocument
+  return {
+    schemaVersion: CURRENT_VERSION,
+    bpm: state.bpm,
+    beatsPerBar: state.beatsPerBar,
+    totalBars: state.totalBars,
+    scenes: state.scenes,
+    sceneOrder: state.sceneOrder,
+    audioTracks: state.audioTracks,
+    audioRootTrackIds: state.audioRootTrackIds,
+    audioClips: useAudioStore.getState().audioClips,
+    videoClips: useVideoStore.getState().videoClips,
+    photoClips: usePhotoStore.getState().photoClips,
+    loopRegion: useTimeStore.getState().loopRegion,
+  }
 }
 
 /** Document → stores. The inverse of serialize(); same shape HistoryStore
@@ -28,7 +34,14 @@ export function serialize(state = useProjectStore.getState()): ProjectDocument {
 export function hydrate(doc: ProjectDocument) {
   const { schemaVersion: _v, audioClips, videoClips, photoClips, loopRegion, ...fields } = doc
   void _v
-  useProjectStore.setState(fields)
+  const activeSceneId = fields.sceneOrder.find((id) => !fields.scenes[id]?.isMain) ?? fields.sceneOrder[0]
+  const scene = fields.scenes[activeSceneId]
+  useProjectStore.setState({
+    ...fields,
+    activeSceneId,
+    tracks: { ...fields.audioTracks, ...(scene?.tracks ?? {}) },
+    rootTrackIds: [...fields.audioRootTrackIds, ...(scene?.rootTrackIds ?? [])],
+  })
   useAudioStore.setState({ audioClips: audioClips ?? {} })
   useVideoStore.setState({ videoClips: videoClips ?? {} })
   usePhotoStore.setState({ photoClips: photoClips ?? {} })

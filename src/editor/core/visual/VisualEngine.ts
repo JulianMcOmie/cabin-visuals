@@ -1,4 +1,4 @@
-import { Matrix4 } from 'three'
+import { Matrix4, type Scene as ThreeScene } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleLane } from './automation'
@@ -8,12 +8,28 @@ import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
+import type { ProjectState } from '../../store/ProjectStore'
+import type { Scene } from '../../types'
+import { getDirector, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
 // useFrame. The only React-visible signal is the object LIST (see below).
 
-let graph: ResolvedGraph = { objects: [], tagIndex: new Map() }
+let graphs = new Map<string, ResolvedGraph>()
+interface VisualProject {
+  scenes: Record<string, Scene>
+  sceneOrder: string[]
+  activeSceneId: string
+  bpm: number
+  beatsPerBar: number
+  totalBars: number
+}
+let project: VisualProject | null = null
+let compositionLayers: CompositionLayer[] = []
+let activeTrackIds = new Set<string>()
+let mainCompositionOverride = false
+let mountedRenderScenes = new Map<string, ThreeScene>()
 // Project bpm, mirrored on every setProject/syncParams - computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
 let bpm = 120
@@ -37,6 +53,7 @@ const copyCountWarned = new Set<string>()
  *  Entry count changes only on resolve (chain/config edits), NEVER from MIDI
  *  gates - hidden copies stay mounted at opacity zero. */
 export interface ObjectListEntry {
+  sceneId: string
   trackId: string
   instrumentId: string
   visualCopyIndex: number
@@ -48,23 +65,50 @@ let objectList: ObjectListEntry[] = []
 const listeners = new Set<() => void>()
 
 function publishList() {
-  objectList = graph.objects.flatMap((o) => {
+  objectList = [...graphs.entries()].flatMap(([sceneId, graph]) => graph.objects.flatMap((o) => {
     const count = Math.max(1, visualCopyCounts.get(o.trackId) ?? 1)
     return Array.from({ length: count }, (_, visualCopyIndex) => ({
+      sceneId,
       trackId: o.trackId,
       instrumentId: o.instrumentId,
       visualCopyIndex,
     }))
-  })
+  }))
   listeners.forEach((l) => l())
 }
 
 /** Re-derive the graph from the project (called debounced, off the edit path). */
-export function setProject(p: ProjectSnapshot) {
-  graph = resolveProject(p)
+function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
+  if ('scenes' in p) return p
+  const id = '__legacy_scene__'
+  return {
+    scenes: { [id]: { id, name: 'Scene 1', isMain: false, tracks: p.tracks, rootTrackIds: p.rootTrackIds } },
+    sceneOrder: [id],
+    activeSceneId: id,
+    bpm: p.bpm,
+    beatsPerBar: p.beatsPerBar,
+    totalBars: p.totalBars ?? 32,
+  }
+}
+
+export function setProject(input: ProjectState | ProjectSnapshot) {
+  const p = normalizeProject(input)
+  project = p
+  graphs = new Map()
+  for (const sceneId of p.sceneOrder) {
+    const scene = p.scenes[sceneId]
+    if (!scene || scene.isMain) continue
+    graphs.set(sceneId, resolveProject({
+      tracks: scene.tracks,
+      rootTrackIds: scene.rootTrackIds,
+      bpm: p.bpm,
+      beatsPerBar: p.beatsPerBar,
+      totalBars: p.totalBars,
+    }))
+  }
   bpm = p.bpm
   // Drop per-object caches for tracks that no longer resolve to an object.
-  const live = new Set(graph.objects.map((o) => o.trackId))
+  const live = new Set([...graphs.values()].flatMap((graph) => graph.objects.map((o) => o.trackId)))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)
   for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
   for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
@@ -73,7 +117,7 @@ export function setProject(p: ProjectSnapshot) {
   // Fix each track's STRUCTURAL copy count now, with one evaluation. Counts are
   // beat-independent by contract, so the probe beat is arbitrary; the values are
   // real too, so copies are readable before the first computeAtBeat.
-  for (const obj of graph.objects) {
+  for (const graph of graphs.values()) for (const obj of graph.objects) {
     const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
     visualCopyCounts.set(obj.trackId, copies.length)
     visualCopiesByTrack.set(obj.trackId, copies)
@@ -89,10 +133,13 @@ export function setProject(p: ProjectSnapshot) {
  * of params - `computeAtBeat`/renderers are unchanged. Tracks not yet (or no longer)
  * in the graph are skipped; the debounced setProject reconciles structure shortly.
  */
-export function syncParams(p: ProjectSnapshot) {
+export function syncParams(input: ProjectState | ProjectSnapshot) {
+  const p = normalizeProject(input)
+  project = p
   bpm = p.bpm
-  for (const obj of graph.objects) {
-    const track = p.tracks[obj.trackId]
+  for (const [sceneId, graph] of graphs) for (const obj of graph.objects) {
+    const sceneTracks = p.scenes[sceneId]?.tracks ?? {}
+    const track = sceneTracks[obj.trackId]
     if (track) {
       obj.params = track.params ?? {}
       obj.stringParams = track.stringParams ?? {}
@@ -100,7 +147,7 @@ export function syncParams(p: ProjectSnapshot) {
     // Envelope lanes: keep the slider-driven fields (ADSR/depth/target) live at
     // 60fps like instrument params; structure (notes, target kind) waits for resolve.
     for (const env of obj.envelopes) {
-      const eTrack = p.tracks[env.trackId]
+      const eTrack = sceneTracks[env.trackId]
       if (!eTrack) continue
       env.adsr = { ...DEFAULT_ADSR, ...eTrack.adsr }
       env.depth = clamp(eTrack.envDepth ?? 1, 0, 1)
@@ -121,13 +168,50 @@ function clampOpacity(v: number): number {
   return clamp(v, 0, 1)
 }
 
+function resolveComposition(beat: number): CompositionLayer[] {
+  if (!project) return []
+  const selected = mainCompositionOverride
+    ? project.sceneOrder.map((id) => project!.scenes[id]).find((scene) => scene?.isMain)
+    : project.scenes[project.activeSceneId]
+  if (selected && !selected.isMain) {
+    return [{ directorTrackId: '__preview__', sceneId: selected.id, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
+  }
+
+  const main = project.sceneOrder.map((id) => project!.scenes[id]).find((scene) => scene?.isMain)
+  const visualFallback = project.sceneOrder.find((id) => project!.scenes[id] && !project!.scenes[id].isMain)
+  if (!main) return visualFallback
+    ? [{ directorTrackId: '__implicit__', sceneId: visualFallback, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
+    : []
+
+  const directors = main.rootTrackIds.map((id) => main.tracks[id]).filter((track) => track?.type === 'director' && !track.muted)
+  const anySolo = directors.some((track) => track.solo)
+  const layers = directors.flatMap((track) => {
+    if (anySolo && !track.solo) return []
+    const def = getDirector(track.directorId)
+    return def?.resolve(track, {
+      beat,
+      beatsPerBar: project!.beatsPerBar,
+      totalBars: project!.totalBars,
+      scenes: project!.scenes,
+      sceneOrder: project!.sceneOrder,
+    }) ?? []
+  })
+  if (layers.length > 0 || !visualFallback) return layers
+  return [{ directorTrackId: '__implicit__', sceneId: visualFallback, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
+}
+
 /** Per frame (runs first, from VisualBeatSync): compose each object's world
  *  transform down the hierarchy, then stash state for the renderer to pull.
  *  graph.objects is in parent-before-child order (resolve walks the tree DFS), so a
  *  parent's world is always ready when its children compose. */
 export function computeAtBeat(beat: number) {
   const secPerBeat = 60 / bpm
-  for (const obj of graph.objects) {
+  compositionLayers = resolveComposition(beat)
+  const activeSceneIds = new Set(compositionLayers.map((layer) => layer.sceneId))
+  activeTrackIds = new Set()
+  const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
+  for (const graph of activeGraphs) for (const obj of graph.objects) {
+    activeTrackIds.add(obj.trackId)
     // The note-pulse signal (the old implicit `energy` port, now direct).
     const energy = !obj.muted && obj.notes.length > 0 ? evaluatePulse(obj.notes, beat) : 0
     // Automation drives params over time: overlay each lane's sampled value onto the
@@ -245,7 +329,27 @@ export function computeAtBeat(beat: number) {
 
 /** Pull API for the renderer. */
 export function getObjectState(trackId: string): ObjectState | undefined {
-  return states.get(trackId)
+  return activeTrackIds.has(trackId) ? states.get(trackId) : undefined
+}
+
+/** Ordered final-frame layers. Multiple director tracks already concatenate here;
+ * the first UI only exposes Scene Switcher, but the engine has no singular-director path. */
+export function getCompositionLayers(): CompositionLayer[] {
+  return compositionLayers
+}
+
+export function setMainCompositionOverride(value: boolean) {
+  mainCompositionOverride = value
+}
+
+/** Dev invariant plumbing: logical scenes live outside R3F's default root scene,
+ * so the pause canary needs the actual portal targets rather than rootState.scene. */
+export function setMountedRenderScenes(scenes: Map<string, ThreeScene>) {
+  mountedRenderScenes = scenes
+}
+
+export function getMountedRenderScenes(): Map<string, ThreeScene> {
+  return mountedRenderScenes
 }
 
 // ── VisualCopy pull API (separate cache, never part of ObjectState) ──

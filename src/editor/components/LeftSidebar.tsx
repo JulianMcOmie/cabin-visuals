@@ -12,7 +12,7 @@ import type { TrackType } from '../types'
 
 /** What dragging an item creates: an object/modulator instrument track, or an
  *  event-modifier child track (whose `id` is the modifier's track type). */
-export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter'
+export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' | 'director'
 
 export interface InstrumentItem {
   id: string
@@ -54,6 +54,10 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
     </svg>
   )},
+])
+
+const DIRECTOR_INSTRUMENTS = withKind('director', [
+  { id: 'sceneSwitcher', name: 'Scene Switcher', description: 'Cuts the Main output to the scene triggered by each labelled MIDI row.', icon: <Sparkles size={12} className="text-indigo-400" /> },
 ])
 
 const OBJECT_INSTRUMENTS = withKind('object', [
@@ -316,10 +320,13 @@ export function LeftSidebar() {
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackModifier = useProjectStore((s) => s.setTrackModifier)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
+  const setTrackDirector = useProjectStore((s) => s.setTrackDirector)
+  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
-    if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
+    if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
+    else if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
     else if (item.kind === 'mover' || item.kind === 'splitter') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
@@ -355,6 +362,9 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto timeline-scrollbar pb-4">
         {tab === 'instruments' && (
           <>
+            {activeIsMain ? (
+              <Section title="Director" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            ) : <>
             <Section title="Main" description="The essentials: the Camera that films the scene, Video for cutting between uploaded clips, and Text for words on screen." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene - for example, a cube or sphere." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             {/* Modulators are retired from the library (movers replace them);
@@ -362,6 +372,7 @@ export function LeftSidebar() {
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play - for example, the mute modifier mutes its parent when a note is currently playing." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            </>}
           </>
         )}
         {tab === 'effects' && (

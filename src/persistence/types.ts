@@ -1,4 +1,4 @@
-import type { Track } from '../editor/types'
+import type { Scene, Track } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
@@ -33,8 +33,12 @@ export interface ProjectDocument {
   bpm: number
   beatsPerBar: number
   totalBars: number
-  tracks: Record<string, Track>
-  rootTrackIds: string[]
+  scenes: Record<string, Scene>
+  /** Display order, including Main first. Exactly one referenced scene has isMain=true. */
+  sceneOrder: string[]
+  /** Audio remains project-global and is projected into every scene timeline. */
+  audioTracks: Record<string, Track>
+  audioRootTrackIds: string[]
   audioClips: Record<string, AudioClip>
   videoClips?: Record<string, VideoClip>
   photoClips?: Record<string, PhotoClip>
@@ -43,13 +47,20 @@ export interface ProjectDocument {
 
 /** A fresh, valid document - matches the stores' initial state. */
 export function emptyDocument(): ProjectDocument {
+  const mainId = crypto.randomUUID()
+  const firstSceneId = crypto.randomUUID()
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,
-    tracks: {},
-    rootTrackIds: [],
+    scenes: {
+      [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
+      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] },
+    },
+    sceneOrder: [mainId, firstSceneId],
+    audioTracks: {},
+    audioRootTrackIds: [],
     audioClips: {},
     videoClips: {},
     photoClips: {},

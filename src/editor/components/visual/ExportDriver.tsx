@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { setBeatOverride } from '../../core/visual/beatOverride'
+import { setMainCompositionOverride } from '../../core/visual/VisualEngine'
 import { registerFrameDriver } from '../../core/export/frameDriver'
 
 /**
@@ -35,6 +36,7 @@ export function ExportDriver() {
         if (saved) return // already pinned
         const s = get()
         saved = { frameloop: s.frameloop, width: s.size.width, height: s.size.height, dpr: s.viewport.dpr }
+        setMainCompositionOverride(true)
         s.setFrameloop('never')
         s.setDpr(1)
         s.setSize(width, height)
@@ -48,6 +50,7 @@ export function ExportDriver() {
         // Clear the override even when never pinned - the pre-export snapshot
         // render sets it, and a failure before pin() must not leave it stuck.
         setBeatOverride(null)
+        setMainCompositionOverride(false)
         if (!saved) return
         const s = get()
         s.setSize(saved.width, saved.height) // also resets the element's CSS box

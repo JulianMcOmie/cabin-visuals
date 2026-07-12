@@ -1,10 +1,10 @@
 import type { ProjectDocument } from './types'
 import { emptyDocument } from './types'
-import type { Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
+import type { Scene, Track, AudioBlock, EffectInstance, VideoPad } from '../editor/types'
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 4
+export const CURRENT_VERSION = 5
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -102,6 +102,44 @@ UPGRADES[3] = (doc) => {
     }
   }
   return { ...rest, tracks }
+}
+
+// ── v4 → v5 ──────────────────────────────────────────────────────────────────
+// The single global visual track forest becomes Scene 1. Main is an empty scene
+// of the same shape, ready for director tracks. Audio remains project-global and
+// is projected into every scene's editor view; it never participates in visual
+// scene ownership or director switching.
+UPGRADES[4] = (doc) => {
+  const rest = doc as {
+    tracks?: Record<string, Track>
+    rootTrackIds?: string[]
+  } & Record<string, unknown>
+  const tracks = rest.tracks ?? {}
+  const roots = rest.rootTrackIds ?? []
+  const audioTracks: Record<string, Track> = {}
+  const visualTracks: Record<string, Track> = {}
+  for (const [id, track] of Object.entries(tracks)) {
+    if (track.type === 'audio') audioTracks[id] = track
+    else visualTracks[id] = track
+  }
+  const audioRootTrackIds = roots.filter((id) => audioTracks[id])
+  const rootTrackIds = roots.filter((id) => visualTracks[id])
+  const mainId = crypto.randomUUID()
+  const firstSceneId = crypto.randomUUID()
+  const scenes: Record<string, Scene> = {
+    [mainId]: { id: mainId, name: 'Main', isMain: true, tracks: {}, rootTrackIds: [] },
+    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, tracks: visualTracks, rootTrackIds },
+  }
+  const project = { ...rest }
+  delete project.tracks
+  delete project.rootTrackIds
+  return {
+    ...project,
+    scenes,
+    sceneOrder: [mainId, firstSceneId],
+    audioTracks,
+    audioRootTrackIds,
+  }
 }
 
 /**

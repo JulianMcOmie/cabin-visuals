@@ -30,6 +30,7 @@ export function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
+  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const maxBeat = totalBars * beatsPerBar
@@ -169,12 +170,18 @@ export function TimelineArea() {
   })
 
   function insertTrack() {
+    const state = useProjectStore.getState()
+    const isMain = !!state.scenes[state.activeSceneId]?.isMain
     const id = crypto.randomUUID()
-    useProjectStore.getState().addTrack({
+    state.addTrack({
       id,
-      name: 'Cube',
-      type: 'base' as const,
-      instrumentId: 'cube',
+      name: isMain ? 'Scene Switcher' : 'Cube',
+      type: isMain ? 'director' as const : 'base' as const,
+      instrumentId: isMain ? '' : 'cube',
+      directorId: isMain ? 'sceneSwitcher' : undefined,
+      sceneBindings: isMain
+        ? state.sceneOrder.filter((sceneId) => !state.scenes[sceneId]?.isMain).map((sceneId, i) => ({ sceneId, pitch: 60 + i }))
+        : undefined,
       color: OBJECT_TRACK_COLOR,
       muted: false,
       solo: false,
@@ -390,9 +397,10 @@ export function TimelineArea() {
                 <Plus size={11} />
               </button>
               <button
-                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
+                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-35 disabled:cursor-default transition-colors cursor-pointer"
                 onClick={() => midiInputRef.current?.click()}
-                title="Import MIDI file"
+                disabled={activeIsMain}
+                title={activeIsMain ? 'MIDI import is available inside visual scenes' : 'Import MIDI file'}
               >
                 <FileMusic size={11} />
               </button>
