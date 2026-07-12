@@ -10,7 +10,6 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { TransformWrapper } from './TransformWrapper'
-import { CloneWrapper } from './CloneWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
 
 /**
@@ -97,8 +96,8 @@ export function ObjectRenderer({
   if (!def) return null
   const Component = def.component
 
-  // Full-frame instruments (viewport-filling planes) skip the placement transform and the
-  // transform/clone effect chain; shaders may still post-process them.
+  // Full-frame instruments (viewport-filling planes) skip the placement transform and
+  // the transform effect chain; shaders may still post-process them.
   if (isFullFrame) {
     // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
     // scene (this group's useFrame) already composes the copy transform.
@@ -109,11 +108,9 @@ export function ObjectRenderer({
   }
 
   const content = (
-    <CloneWrapper trackId={trackId} plugins={plugins}>
-      <TransformWrapper trackId={trackId} plugins={plugins}>
-        <Component trackId={trackId} />
-      </TransformWrapper>
-    </CloneWrapper>
+    <TransformWrapper trackId={trackId} plugins={plugins}>
+      <Component trackId={trackId} />
+    </TransformWrapper>
   )
 
   // Shader path: the object is rendered offscreen (with its world transform composed

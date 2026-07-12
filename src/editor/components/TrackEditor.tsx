@@ -381,7 +381,6 @@ function TagEditor({
 // here with no extra wiring. Category order is fixed: transform, clone, shader.
 const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
   { key: 'transform', label: 'Transform' },
-  { key: 'clone', label: 'Clone' },
   { key: 'shader', label: 'Shader' },
 ]
 const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({
