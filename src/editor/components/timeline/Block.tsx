@@ -90,9 +90,11 @@ const PREVIEW_NOTE_CAP = 512
  *  calm), dashes long notes read as dashes and hits as ticks. A looping block
  *  tiles the pattern (repeats dimmed) with a dashed line at each loop boundary. */
 function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string }) {
-  if (notes.length === 0 || totalBeats <= 0) return null
-  let minPitch = Infinity
-  let maxPitch = -Infinity
+  if (totalBeats <= 0) return null
+  // Loop boundaries describe the block's repeated pattern even when that
+  // pattern is currently empty, so note previews and divisions stay separate.
+  let minPitch = notes[0]?.pitch ?? 60
+  let maxPitch = minPitch
   for (const n of notes) {
     if (n.pitch < minPitch) minPitch = n.pitch
     if (n.pitch > maxPitch) maxPitch = n.pitch
