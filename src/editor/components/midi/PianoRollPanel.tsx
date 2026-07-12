@@ -8,7 +8,6 @@ import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
-import { modifierColor } from '../../utils/modifierColors'
 import { useVideoStore } from '../../store/VideoStore'
 import { usePhotoStore } from '../../store/PhotoStore'
 import { getInstrument } from '../../instruments'
@@ -92,13 +91,9 @@ export function PianoRollPanel() {
 
   if (!editingBlock || !track || !block) return null
 
-  // For a modifier its blocks hold regions/patterns, not pitched notes - colour the
-  // editor by the modifier so it reads consistently with its timeline row.
-  const modColor = modifierColor(track)
-
   // Value lanes edit parameter VALUES (rows labelled by value), not pitches.
-  // Automation tracks target their parent. Trigger lanes (envelope gates,
-  // suppress/mute modifiers, ability lanes) ignore note PITCH entirely, so they
+  // Automation tracks target their parent. Trigger lanes (envelope gates and
+  // ability lanes) ignore note PITCH entirely, so they
   // get a short set of interchangeable rows instead of the full piano.
   let automation: AutomationInfo | undefined
   let trigger: TriggerInfo | undefined
@@ -108,13 +103,6 @@ export function PianoRollPanel() {
   if (track.type === 'envelope') {
     // Envelope gates: pitch is ignored, velocity scales the envelope's peak.
     trigger = { rowLabel: 'Trigger', cornerLabel: 'Envelope · Trigger · velocity = strength' }
-  } else if (modColor && (track.type === 'suppress' || track.type === 'mute')) {
-    // These modifiers consume only note TIMING (regions); pitch never matters.
-    // add/override keep the full piano - their pitches become real parent notes.
-    trigger = {
-      rowLabel: 'Region',
-      cornerLabel: track.type === 'suppress' ? 'Suppress · regions · pitch ignored' : 'Mute · regions · pitch ignored',
-    }
   } else if (track.type === 'ability') {
     // Ability lanes consume note TIMING + VELOCITY only (see Cube's shatter: it
     // reads beat/duration/velocity off abilityEvents, never pitch), so they get the
@@ -156,8 +144,8 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={modColor ?? track.color}
-      noteColor={modColor ?? abilityColor}
+      trackColor={track.color}
+      noteColor={abilityColor}
       automation={automation}
       trigger={trigger}
       block={block}
@@ -170,7 +158,7 @@ interface PianoRollContentProps {
   trackId: string
   trackName: string
   trackColor: string
-  /** Flat colour for all rows/notes (modifiers), instead of the per-pitch rainbow. */
+  /** Optional flat colour for all rows/notes instead of the per-pitch rainbow. */
   noteColor?: string
   /** Set for value-keyframe tracks - rows are value-labelled and an interp picker shows. */
   automation?: AutomationInfo
@@ -209,9 +197,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   // target name in the frozen corner; toggle lanes show exactly On/Off; trigger
   // lanes show a short set of interchangeable rows; a Video track shows ONLY its
   // clip rows (one per uploaded clip); instruments that declare a MIDI vocabulary
-  // (def.midiRows) show only those labelled rows; add/override modifiers get the
-  // flat-coloured full piano (their pitches become real parent notes); anything
-  // left shows the full note rainbow.
+  // (def.midiRows) show only those labelled rows; anything left shows the full
+  // note rainbow.
   const videoTrack = !automation && track?.type === 'base' && track.instrumentId === 'video' ? track : null
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)

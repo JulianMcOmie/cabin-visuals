@@ -6,16 +6,13 @@ import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/modifierColors'
+import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/trackColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
-import type { Track, TrackType } from '../types'
+import type { Track } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' | 'director' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'director' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
-  // A modifier is a no-instrument child track whose type IS the modifier (its id);
-  // objects/modulators carry an instrumentId and the default 'base' type.
-  const isModifier = item.kind === 'modifier'
   // Movers and splitters resolve through the MoverOrSplitter registry; ignore
   // ids the registry doesn't know.
   const isMover = item.kind === 'mover' && hasMoverOrSplitterDefinition(item.id)
@@ -26,8 +23,8 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isDirector ? 'director' : isModifier ? (item.id as TrackType) : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
-    instrumentId: isModifier || isMover || isSplitter || isDirector ? '' : item.id,
+    type: isDirector ? 'director' : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isMover || isSplitter || isDirector ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
     directorId: isDirector ? item.id : undefined,

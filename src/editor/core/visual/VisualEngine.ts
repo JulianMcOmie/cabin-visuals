@@ -279,8 +279,8 @@ export function computeAtBeat(beat: number) {
       }
     }
 
-    // Muted (or soloed-out) objects are hidden, and a `mute` modifier blacks out its span.
-    const blackedOut = obj.muted || obj.blackouts.some((r) => beat >= r.start && beat < r.end)
+    // Muted (or soloed-out) objects are hidden.
+    const blackedOut = obj.muted
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))

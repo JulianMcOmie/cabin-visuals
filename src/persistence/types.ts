@@ -27,7 +27,8 @@ import type { LoopRegion } from '../editor/core/loopRegion'
  * absent in older saves, defaulted on hydrate; photo placement lives inside
  * `tracks` as `photoPads`. No schema bump: purely additive.
  * `loopRegion` is also additive within v4; older saves hydrate it as unset.
- * v5 introduced scenes; v6 adds each scene's background color.
+ * v5 introduced scenes; v6 adds each scene's background color; v7 removes
+ * retired event-modifier tracks.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -53,7 +54,7 @@ export function emptyDocument(): ProjectDocument {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,

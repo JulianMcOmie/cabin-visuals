@@ -1,4 +1,3 @@
-import { Matrix4 } from 'three'
 import type { Track } from '../../types'
 import { getInstrument } from '../../instruments'
 import type {
@@ -8,12 +7,10 @@ import type {
   ResolvedAutomation,
   ResolvedEffectAutomation,
   ResolvedEnvelope,
-  BlackoutRegion,
 } from './types'
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { isModifierType, combineModifier } from '../trackTypes'
 import { extractKeyframes } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
@@ -54,13 +51,6 @@ function flattenTree(p: ProjectSnapshot): string[] {
 
 function flattenTrackNotes(track: Track, p: ProjectSnapshot): ResolvedNote[] {
   return flattenTrackNotesRaw(track, p.beatsPerBar, p.totalBars)
-}
-
-function paramsWithDefaults(def: ObjectInstrumentDef | undefined, params: Record<string, number>): Record<string, number> {
-  if (!def) return params
-  const out: Record<string, number> = {}
-  for (const p of def.params) if (typeof p.default === 'number') out[p.key] = p.default
-  return { ...out, ...params }
 }
 
 /** Gather an object track's `automation` child tracks into resolved keyframe lanes.
@@ -313,34 +303,6 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   return largestCount
 }
 
-/** Fold a track's event-modifier children into its note stream (in child order) and
- *  collect blackout regions from `mute` children. A modifier is a no-instrument child
- *  whose type is a modifier type - consumed here, never resolved as its own object. */
-function applyModifiers(
-  track: Track,
-  baseNotes: ResolvedNote[],
-  p: ProjectSnapshot,
-): { notes: ResolvedNote[]; blackouts: BlackoutRegion[] } {
-  let notes = baseNotes
-  const blackouts: BlackoutRegion[] = []
-  // Per-object solo among this track's modifier children.
-  const anyModSolo = (track.childIds ?? []).some((cid) => {
-    const c = p.tracks[cid]
-    return !!c && !c.instrumentId && isModifierType(c.type) && !!c.solo
-  })
-  for (const childId of track.childIds ?? []) {
-    const child = p.tracks[childId]
-    if (!child || child.instrumentId || !isModifierType(child.type)) continue
-    if (child.muted || (anyModSolo && !child.solo)) continue
-    const self = flattenTrackNotes(child, p)
-    if (child.type === 'mute') {
-      for (const n of self) blackouts.push({ start: n.beat, end: n.beat + (n.durationBeats || 0.25) })
-    }
-    notes = combineModifier(child.type, notes, self, p.beatsPerBar)
-  }
-  return { notes, blackouts }
-}
-
 /**
  * Flatten the project into resolved objects (with their mover chains) plus the tag
  * index. Objects resolve first so tag-scoped top-level movers can expand to the
@@ -352,8 +314,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const tagIndex = new Map<string, string[]>()
 
   // Real solo, scoped to OBJECTS: if any object is soloed, non-soloed objects go off
-  // (muted). Children (modifiers/automation) keep their own mute, so soloing an
-  // object never disables its own automation or its modifiers. Ability-lane solo is
+  // (muted). Child automation keeps its own mute, so soloing an object never
+  // disables its automation. Ability-lane solo is
   // separate (per object, in resolveAbilityEvents).
   const isObjectTrack = (t: Track) => !!t.instrumentId
   const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && isObjectTrack(t))
@@ -363,12 +325,11 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const track = p.tracks[id]
     if (!track || !track.instrumentId) continue
 
-    // Object track - fold its event-modifier children into its note stream.
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
     if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing
     const params = track.params ?? {}
-    const { notes, blackouts } = applyModifiers(track, flattenTrackNotes(track, p), p)
+    const notes = flattenTrackNotes(track, p)
     const moverAndSplitterChain = resolveMoverAndSplitterChain(track, p)
     objects.push({
       trackId: id,
@@ -379,7 +340,6 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       stringParams: track.stringParams ?? {},
       localTransform: def?.localTransform,
       notes,
-      blackouts,
       abilityEvents: resolveAbilityEvents(track, p),
       automations: resolveAutomations(track, def, p),
       effectAutomations: resolveEffectAutomations(track, p),

@@ -18,10 +18,6 @@ export interface Block {
 
 export type TrackType =
   | 'base'
-  | 'add'
-  | 'mute'
-  | 'suppress'
-  | 'override'
   | 'automation'
   | 'ability'
   | 'mover'

@@ -1,18 +1,16 @@
 'use client'
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronRight, Plus, Ban, EyeOff, Replace, Sparkles, Info } from 'lucide-react'
+import { ChevronRight, Plus, Sparkles, Info } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import type { TrackType } from '../types'
 
-/** What dragging an item creates: an object/modulator instrument track, or an
- *  event-modifier child track (whose `id` is the modifier's track type). */
-export type LibraryKind = 'object' | 'modulator' | 'modifier' | 'mover' | 'splitter' | 'director'
+/** What dragging an item creates. */
+export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
 
 export interface InstrumentItem {
   id: string
@@ -195,15 +193,6 @@ const OBJECT_INSTRUMENTS = withKind('object', [
   )},
 ])
 
-// Event modifiers - dropped into an object, they transform its note stream at resolve
-// (their `id` is the track type). No instrument; edited as MIDI regions.
-const MODIFIER_INSTRUMENTS = withKind('modifier', [
-  { id: 'suppress', name: 'Suppress', description: "Drops the parent's notes that start inside its own notes.", icon: <Ban size={12} className="text-zinc-400" /> },
-  { id: 'mute', name: 'Mute', description: 'Hides the parent object while one of its notes is playing.', icon: <EyeOff size={12} className="text-zinc-400" /> },
-  { id: 'add', name: 'Add', description: "Layers its own notes into the parent's note stream.", icon: <Plus size={12} className="text-zinc-400" /> },
-  { id: 'override', name: 'Override', description: "Replaces the parent's notes within the bars its notes span.", icon: <Replace size={12} className="text-zinc-400" /> },
-])
-
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
@@ -318,7 +307,6 @@ export function LeftSidebar() {
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
-  const setTrackModifier = useProjectStore((s) => s.setTrackModifier)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
   const setTrackDirector = useProjectStore((s) => s.setTrackDirector)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
@@ -326,7 +314,6 @@ export function LeftSidebar() {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
-    else if (item.kind === 'modifier') setTrackModifier(selectedTrackId, item.id as TrackType, item.name)
     else if (item.kind === 'mover' || item.kind === 'splitter') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
@@ -371,7 +358,6 @@ export function LeftSidebar() {
                 the code stays until existing projects are migrated off ports. */}
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Modifier" description="A Modifier instrument is a child of an object that reshapes its parent's notes before they play - for example, the mute modifier mutes its parent when a note is currently playing." items={MODIFIER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             </>}
           </>
         )}

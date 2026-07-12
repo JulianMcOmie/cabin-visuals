@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 6
+export const CURRENT_VERSION = 7
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -152,6 +152,48 @@ UPGRADES[5] = (doc) => {
   for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
     scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND }
   }
+  return { ...rest, scenes }
+}
+
+// ── v6 → v7 ──────────────────────────────────────────────────────────────────
+// Event modifiers were retired. Remove their tracks while promoting any nested
+// children to the nearest surviving parent, so unrelated user tracks are kept.
+UPGRADES[6] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const modifierTypes = new Set(['add', 'mute', 'suppress', 'override'])
+  const scenes: Record<string, Scene> = {}
+
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const removed = new Set(Object.values(scene.tracks)
+      .filter((track) => modifierTypes.has(track.type as string))
+      .map((track) => track.id))
+    const promote = (trackId: string, seen = new Set<string>()): string[] => {
+      if (seen.has(trackId)) return []
+      if (!removed.has(trackId)) return [trackId]
+      seen.add(trackId)
+      return (scene.tracks[trackId]?.childIds ?? []).flatMap((childId) => promote(childId, seen))
+    }
+
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      if (removed.has(trackId)) continue
+      let parentId = track.parentId
+      while (parentId && removed.has(parentId)) parentId = scene.tracks[parentId]?.parentId
+      const { parentId: _oldParentId, ...trackWithoutParent } = track
+      void _oldParentId
+      tracks[trackId] = {
+        ...trackWithoutParent,
+        ...(parentId ? { parentId } : {}),
+        childIds: track.childIds.flatMap((childId) => promote(childId)),
+      }
+    }
+    scenes[sceneId] = {
+      ...scene,
+      tracks,
+      rootTrackIds: scene.rootTrackIds.flatMap((trackId) => promote(trackId)),
+    }
+  }
+
   return { ...rest, scenes }
 }
 

@@ -5,7 +5,7 @@ import { FileAudio, FileMusic, Film, Image as ImageIcon, Plus } from 'lucide-rea
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
-import { OBJECT_TRACK_COLOR } from '../../utils/modifierColors'
+import { OBJECT_TRACK_COLOR } from '../../utils/trackColors'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'

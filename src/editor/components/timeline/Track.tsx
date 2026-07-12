@@ -6,7 +6,7 @@ import { Block } from './Block'
 import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
-import { modifierColor, AUDIO_TRACK_COLOR } from '../../utils/modifierColors'
+import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
 import { selectTrack, shouldSuppressTrackSelect } from '../../utils/selection'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
@@ -68,10 +68,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const isSelected = selectedTrackId === track.id
   const hasChildren = track.childIds.length > 0
-  // A no-instrument track whose type is a modifier is an event-modifier (control) row.
-  const modColor = modifierColor(track)
-  const isModifier = modColor != null
-  const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : modColor ?? track.color
+  const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
   // Automation, envelope and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
@@ -154,7 +151,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             <span
               onDoubleClick={() => setRenaming(true)}
               title="Double-click to rename"
-              className={`text-[11px] font-medium truncate ${isModifier ? 'text-[var(--text-2)]' : 'text-[var(--text)]'}`}
+              className="text-[11px] font-medium truncate text-[var(--text)]"
             >
               {track.name}
             </span>

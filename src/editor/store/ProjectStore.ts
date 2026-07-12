@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/modifierColors'
+import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type TrackType, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -266,8 +266,6 @@ export interface ProjectState {
   setTrackParam: (trackId: string, key: string, value: number) => void
   setTrackStringParam: (trackId: string, key: string, value: string) => void
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
-  /** Convert a track into an event modifier of the given type (no instrument). */
-  setTrackModifier: (trackId: string, type: TrackType, name: string) => void
   /** Convert a track into a mover row (no instrument). */
   setTrackMover: (trackId: string, moverId: string, name: string) => void
   setTrackDirector: (trackId: string, directorId: string, name: string) => void
@@ -956,29 +954,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             splitterId: undefined,
             inputValues: undefined,
             name: name ?? track.name,
-          },
-        },
-      }
-    }),
-
-  // Convert to an event modifier: set the type, drop the instrument + params.
-  setTrackModifier: (trackId, type, name) =>
-    set((s) => {
-      const track = s.tracks[trackId]
-      if (!track) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: {
-            ...track,
-            type,
-            instrumentId: '',
-            params: {},
-            stringParams: {},
-            moverId: undefined,
-            splitterId: undefined,
-            inputValues: undefined,
-            name,
           },
         },
       }

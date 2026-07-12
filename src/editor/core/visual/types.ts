@@ -81,14 +81,8 @@ export interface ResolvedNote {
   blockEndBeat: number
   pitch: number
   velocity: number
-  /** Note length in beats - a modifier note's [beat, beat+durationBeats) is its region. */
+  /** Note length in beats. */
   durationBeats: number
-}
-
-/** A time span (beats) during which a muted object is hidden at render. */
-export interface BlackoutRegion {
-  start: number
-  end: number
 }
 
 /** A renderable object instance derived from a track. */
@@ -103,10 +97,8 @@ export interface ResolvedObject {
   stringParams: Record<string, string>
   /** The instrument's local-transform fn (from its def), composed by the engine. */
   localTransform?: (ctx: TransformCtx) => LocalTransform
-  /** The object's notes after its child event modifiers (suppress/add/override) fold in. */
+  /** The object's resolved notes. */
   notes: ResolvedNote[]
-  /** Blackout spans from `mute` child modifiers - the object is hidden inside them. */
-  blackouts: BlackoutRegion[]
   /** This object's ability-lane notes, keyed by the instrument's ability key. The
    *  instrument's own render consumes these (the code escape hatch). Empty if the
    *  instrument declares no abilities or none have been played. */
@@ -154,7 +146,7 @@ export interface ObjectState {
   videoPads?: VideoPad[]
   /** Photo-instrument-only: ordered photos (per-resolve identity). */
   photoPads?: PhotoPad[]
-  /** True this frame if a mute modifier's region covers the current beat (hide it). */
+  /** True this frame when the object track is muted or excluded by solo. */
   blackedOut: boolean
   /** World transform (local composed with all ancestors). Reused across frames -
    *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
