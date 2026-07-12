@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
   Mesh,
@@ -149,26 +149,28 @@ export function VisualScene() {
 
   return (
     <>
-      {[...mounted.entries()].flatMap(([sceneId, runtime]) => {
+      {[...mounted.entries()].map(([sceneId, runtime]) => {
         const sceneObjects = objects.filter((o) => o.sceneId === sceneId)
         const base = sceneObjects.filter((o) => onTopKey[objects.indexOf(o)] !== '1')
         const front = sceneObjects.filter((o) => onTopKey[objects.indexOf(o)] === '1')
-        return [
-          createPortal(
+        return (
+          <Fragment key={sceneId}>
+            {createPortal(
             <>
               {lights()}
               {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
             </>,
             runtime.base,
-          ),
-          createPortal(
+            )}
+            {createPortal(
             <>
               {lights()}
               {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
             </>,
             runtime.front,
-          ),
-        ]
+            )}
+          </Fragment>
+        )
       })}
     </>
   )
