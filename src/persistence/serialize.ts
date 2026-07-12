@@ -20,6 +20,7 @@ export function serialize(state = useProjectStore.getState()): ProjectDocument {
     totalBars: state.totalBars,
     scenes: state.scenes,
     sceneOrder: state.sceneOrder,
+    activeSceneId: state.activeSceneId,
     audioTracks: state.audioTracks,
     audioRootTrackIds: state.audioRootTrackIds,
     audioClips: useAudioStore.getState().audioClips,
@@ -34,7 +35,9 @@ export function serialize(state = useProjectStore.getState()): ProjectDocument {
 export function hydrate(doc: ProjectDocument) {
   const { schemaVersion: _v, audioClips, videoClips, photoClips, loopRegion, ...fields } = doc
   void _v
-  const activeSceneId = fields.sceneOrder.find((id) => !fields.scenes[id]?.isMain) ?? fields.sceneOrder[0]
+  const activeSceneId = fields.activeSceneId && fields.scenes[fields.activeSceneId]
+    ? fields.activeSceneId
+    : fields.sceneOrder.find((id) => !fields.scenes[id]?.isMain) ?? fields.sceneOrder[0]
   const scene = fields.scenes[activeSceneId]
   useProjectStore.setState({
     ...fields,

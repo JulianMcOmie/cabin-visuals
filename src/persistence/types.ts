@@ -36,6 +36,8 @@ export interface ProjectDocument {
   scenes: Record<string, Scene>
   /** Display order, including Main first. Exactly one referenced scene has isMain=true. */
   sceneOrder: string[]
+  /** Last selected editor tab. Optional so early v5 documents still hydrate. */
+  activeSceneId?: string
   /** Audio remains project-global and is projected into every scene timeline. */
   audioTracks: Record<string, Track>
   audioRootTrackIds: string[]
@@ -59,6 +61,7 @@ export function emptyDocument(): ProjectDocument {
       [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstSceneId],
+    activeSceneId: firstSceneId,
     audioTracks: {},
     audioRootTrackIds: [],
     audioClips: {},

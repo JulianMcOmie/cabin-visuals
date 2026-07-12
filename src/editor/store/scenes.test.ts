@@ -27,3 +27,29 @@ test('active compatibility fields are not serialized as a second ownership sourc
   assert.equal('rootTrackIds' in doc, false)
   assert.ok(doc.scenes)
 })
+
+test('selected scene is persisted and restored without duplicating its tracks', () => {
+  hydrate(emptyDocument())
+  const secondId = useProjectStore.getState().addScene()
+  useProjectStore.getState().setActiveScene(secondId)
+  useProjectStore.getState().addTrack(cube('selected'))
+
+  const doc = serialize()
+  assert.equal(doc.activeSceneId, secondId)
+  hydrate(doc)
+
+  const state = useProjectStore.getState()
+  assert.equal(state.activeSceneId, secondId)
+  assert.ok(state.tracks.selected)
+  assert.equal(state.scenes[secondId].tracks.selected, state.tracks.selected)
+})
+
+test('older v5 documents without a selected scene fall back to the first visual scene', () => {
+  const doc = emptyDocument()
+  const firstVisualId = doc.sceneOrder.find((id) => !doc.scenes[id].isMain)!
+  delete doc.activeSceneId
+
+  hydrate(doc)
+
+  assert.equal(useProjectStore.getState().activeSceneId, firstVisualId)
+})

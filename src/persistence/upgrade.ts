@@ -137,6 +137,7 @@ UPGRADES[4] = (doc) => {
     ...project,
     scenes,
     sceneOrder: [mainId, firstSceneId],
+    activeSceneId: firstSceneId,
     audioTracks,
     audioRootTrackIds,
   }
