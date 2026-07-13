@@ -469,6 +469,7 @@ export const fractalTunnelInstrument: ObjectInstrumentDef = {
   id: 'fractalTunnel',
   name: 'Fractal Tunnel',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Every note does the same thing regardless of pitch: it steps the flower's
   // hue by 30° (or, with Color Pulse on, fires an inverted-color ring instead).

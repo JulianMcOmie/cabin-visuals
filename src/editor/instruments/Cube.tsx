@@ -8,6 +8,7 @@ export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
   name: 'Cube',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: [
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
     // Color as a hue slider (0–360) - keeps every param numeric.

@@ -530,6 +530,7 @@ export const emojiDisplayInstrument: ObjectInstrumentDef = {
   id: 'emojiDisplay',
   name: 'Emoji Display',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   midiRows: [
     { pitch: 43, label: 'Show 8th emoji in list' },

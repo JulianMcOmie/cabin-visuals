@@ -662,6 +662,7 @@ export const dotFieldInstrument: ObjectInstrumentDef = {
   id: 'dotField',
   name: 'Dot Field',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Held notes in 36-47 shake the field - higher rows shake harder and sharper
   // (quantized to 6 labelled steps). EVERY note also kicks the field scale,

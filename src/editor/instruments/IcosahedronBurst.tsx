@@ -97,6 +97,7 @@ export const icosahedronBurstInstrument: ObjectInstrumentDef = {
   id: 'icosahedronBurst',
   name: 'Icosahedron Burst',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Every note spawns one expanding shell regardless of pitch (hue steps per note in
   // play order), so the vocabulary is a single trigger row.

@@ -132,6 +132,7 @@ export const cameraControlInstrument: ObjectInstrumentDef = {
   id: 'cameraControl',
   name: 'Camera',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   midiRows: [
     { pitch: 76, label: 'Camera punch · max', emphasized: true },

@@ -154,6 +154,7 @@ export const videoInstrument: ObjectInstrumentDef = {
   id: 'video',
   name: 'Video',
   kind: 'object',
+  userInterfaceRenderer: 'video',
   params: [
     { key: 'loop', label: 'Loop Clips', type: 'boolean' as const, default: 1 },
     {

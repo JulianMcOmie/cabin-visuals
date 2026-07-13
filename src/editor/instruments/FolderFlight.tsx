@@ -204,6 +204,7 @@ export const folderFlightInstrument: ObjectInstrumentDef = {
   id: 'folderFlight',
   name: 'Folder Flight',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   midiRows: [
     { pitch: 71, label: 'Launch folder · top' },

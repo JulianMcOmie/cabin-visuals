@@ -352,6 +352,7 @@ export const particleStreamsInstrument: ObjectInstrumentDef = {
   id: 'particleStreams',
   name: 'Particle Streams',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Any pitch (24-96) fires a stream burst; velocity sets its intensity. In pitch-color
   // mode the pitch class picks the stream hue ((pitch % 12) / 12); the default mono mode
