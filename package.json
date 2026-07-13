@@ -38,6 +38,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "dynamic": "^4.2.2",
+    "framer-motion": "^12.42.2",
     "idb": "^8.0.2",
     "immer": "^11.1.3",
     "lodash": "^4.17.21",

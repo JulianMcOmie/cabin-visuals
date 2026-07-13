@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { CabinLogo } from '../../src/components/CabinLogo';
+import { Appear } from '../../src/components/motionPresets';
 
 /* Class strings shared by every form on these pages. */
 export const authLabelClass =
@@ -28,9 +29,9 @@ export function AuthShell({ children, footnote }: { children: ReactNode; footnot
       <Link href="/" className="mb-7 flex cursor-pointer select-none flex-col items-center" aria-label="Cabin Visuals home">
         <CabinLogo className="h-14 w-auto" />
       </Link>
-      <div className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
+      <Appear className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
         {children}
-      </div>
+      </Appear>
       {footnote && (
         <p className="mt-5 text-center font-mono text-[11px] text-[var(--text-muted)]">{footnote}</p>
       )}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ProjectsDisplay from '../../src/components/ProjectsDisplay'
+import { ProjectsSkeleton } from '../../src/components/ProjectsSkeleton'
 import { createClient } from '../../src/utils/supabase/client'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 import { useProjectList } from '../../src/persistence/hooks/useProjectList'
@@ -77,10 +78,8 @@ export default function ProjectsPage() {
     })()
   }, [authLoading, projectsLoading, user, isAnonymous, plan.loading, plan.isPro, projects.length, createProject, router])
 
-  const handleCreateProject = async () => {
+  const handleCreateProject = async (name: string) => {
     if (atFreeLimit) { promptUpgrade(); return }
-    const name = prompt("Enter new project name:", "Untitled Project")
-    if (name === null) return
     try {
       const project = await createProject(name)
       router.push(`/editor?project=${project.id}`)
@@ -129,11 +128,9 @@ export default function ProjectsPage() {
   }
 
   if (authLoading || projectsLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#111' }}>
-        <div className="w-8 h-8 border-2 border-slate-700 border-t-[#00a8ff] rounded-full animate-spin"></div>
-      </div>
-    )
+    // Same chrome as the loaded page and the navigation boundary, so the header
+    // stays put and the background never flashes a different color.
+    return <ProjectsSkeleton />
   }
 
   return (
