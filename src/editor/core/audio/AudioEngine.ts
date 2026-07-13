@@ -20,6 +20,7 @@ interface Entry {
   /** The clip the player's buffer was built from - rebuilt if the block is retargeted. */
   ref: string
   loaded: boolean
+  buffer: AudioBuffer | null
 }
 
 /** A block plus its track's audibility (mute/solo folded in at gather time). */
@@ -38,6 +39,36 @@ class AudioEngine {
   private gain(): Tone.Gain {
     if (!this.masterGain) this.masterGain = new Tone.Gain(0.85).toDestination()
     return this.masterGain
+  }
+
+  /**
+   * Deterministically sample the audible timeline at the playhead. Unlike a
+   * realtime analyser this is stable while paused/scrubbing and also works while
+   * export renders frames without running the speakers' AudioContext clock.
+   */
+  getWaveformAtBeat(atBeat: number, bpm: number, beatsPerBar: number, sampleCount = 1024): Float32Array {
+    const count = Math.max(2, Math.round(sampleCount))
+    const out = new Float32Array(count)
+    const projectSec = atBeat * 60 / Math.max(1, bpm)
+    const windowSec = 1 / 50
+
+    for (const { block, audible } of this.blocks) {
+      if (!audible) continue
+      const buffer = this.entries.get(block.id)?.buffer
+      if (!buffer) continue
+      const blockStartSec = block.startBar * beatsPerBar * 60 / Math.max(1, bpm)
+      const channels = buffer.numberOfChannels
+      const channelData = Array.from({ length: channels }, (_, channel) => buffer.getChannelData(channel))
+      for (let i = 0; i < count; i++) {
+        const clipSec = block.trimStart + projectSec - blockStartSec + (i / (count - 1)) * windowSec
+        if (clipSec < block.trimStart || clipSec >= block.trimEnd) continue
+        const frame = Math.min(buffer.length - 1, Math.max(0, Math.floor(clipSec * buffer.sampleRate)))
+        let sample = 0
+        for (let channel = 0; channel < channels; channel++) sample += channelData[channel][frame]
+        out[i] += (sample / Math.max(1, channels)) * 0.85
+      }
+    }
+    return out
   }
 
   /**
@@ -74,13 +105,14 @@ class AudioEngine {
         const existing = this.entries.get(block.id)
         if (existing && existing.ref === block.clipRef) return
         existing?.player.dispose()
-        const entry: Entry = { player: new Tone.Player().connect(this.gain()), ref: block.clipRef, loaded: false }
+        const entry: Entry = { player: new Tone.Player().connect(this.gain()), ref: block.clipRef, loaded: false, buffer: null }
         this.entries.set(block.id, entry)
         try {
           const buffer = await getBuffer(block.clipRef)
           // The block may have been retargeted/deleted while decoding.
           if (this.entries.get(block.id) !== entry) return
           entry.player.buffer = new Tone.ToneAudioBuffer(buffer)
+          entry.buffer = buffer
           entry.loaded = true
         } catch (err) {
           console.error('Failed to load audio clip', block.clipRef, err)

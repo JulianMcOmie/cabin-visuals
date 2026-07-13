@@ -48,6 +48,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     }
     put(state.beat)
     put(state.secPerBeat)
+    put(state.beatsPerBar)
     put(state.blackedOut)
     put(root.size.width)
     put(root.size.height)

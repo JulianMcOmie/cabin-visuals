@@ -293,6 +293,7 @@ export function computeAtBeat(beat: number) {
     states.set(obj.trackId, {
       beat,
       secPerBeat,
+      beatsPerBar: project?.beatsPerBar ?? 4,
       params,
       energy,
       videoPads: obj.videoPads,
