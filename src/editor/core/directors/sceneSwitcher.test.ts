@@ -12,8 +12,8 @@ const track: Track = {
   blocks: [{
     id: 'b', startBar: 0, durationBars: 4, loop: false,
     notes: [
-      { id: 'n1', startBeat: 2, durationBeats: 0.25, pitch: 61, velocity: 100 },
-      { id: 'n2', startBeat: 6, durationBeats: 0.25, pitch: 60, velocity: 100 },
+      { id: 'n1', startBeat: 2, durationBeats: 4, pitch: 61, velocity: 100 },
+      { id: 'n2', startBeat: 4, durationBeats: 1, pitch: 60, velocity: 100 },
     ],
   }],
 }
@@ -22,15 +22,17 @@ const resolve = (beat: number) => sceneSwitcherDirector.resolve(track, {
   beat, beatsPerBar: 4, totalBars: 8, scenes, sceneOrder: ['main', 'one', 'two'],
 })
 
-test('Scene Switcher defaults to the first visual scene before any trigger', () => {
-  assert.equal(resolve(0)[0]?.sceneId, 'one')
+test('Scene Switcher emits no layer when no mapped row is held', () => {
+  assert.deepEqual(resolve(0), [])
+  assert.deepEqual(resolve(6), [])
 })
 
-test('Scene Switcher cuts exactly on note onset and reconstructs when scrubbing', () => {
-  assert.equal(resolve(1.999)[0]?.sceneId, 'one')
+test('Scene Switcher uses the latest held row, then reveals an older held row on release', () => {
+  assert.deepEqual(resolve(1.999), [])
   assert.equal(resolve(2)[0]?.sceneId, 'two')
+  assert.equal(resolve(4)[0]?.sceneId, 'one')
+  assert.equal(resolve(4.999)[0]?.sceneId, 'one')
   assert.equal(resolve(5)[0]?.sceneId, 'two')
-  assert.equal(resolve(6)[0]?.sceneId, 'one')
   assert.equal(resolve(3)[0]?.sceneId, 'two')
 })
 

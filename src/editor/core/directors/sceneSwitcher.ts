@@ -20,21 +20,21 @@ export const sceneSwitcherDirector: DirectorInstrumentDef = {
       }))
   },
   resolve: (track, context) => {
-    const visualIds = context.sceneOrder.filter((id) => context.scenes[id] && !context.scenes[id].isMain)
-    const fallback = visualIds[0]
-    if (!fallback) return []
     const bindings = orderedSceneBindings(track, context.scenes, context.sceneOrder)
     const byPitch = new Map(bindings.map((b) => [b.pitch, b.sceneId]))
     const notes = flattenTrackNotes(track, context.beatsPerBar, context.totalBars)
-    let selected = fallback
+    let selected: string | null = null
     let latestBeat = -Infinity
     for (const note of notes) {
-      if (note.beat > context.beat || note.beat < latestBeat) continue
+      const held = context.beat >= note.beat && context.beat < note.beat + note.durationBeats
+      if (!held || note.beat < latestBeat) continue
       const sceneId = byPitch.get(note.pitch)
       if (!sceneId || context.scenes[sceneId]?.isMain) continue
       selected = sceneId
       latestBeat = note.beat
     }
-    return [{ directorTrackId: track.id, sceneId: selected, opacity: 1, viewport: { ...FULL_FRAME } }]
+    return selected
+      ? [{ directorTrackId: track.id, sceneId: selected, opacity: 1, viewport: { ...FULL_FRAME } }]
+      : []
   },
 }

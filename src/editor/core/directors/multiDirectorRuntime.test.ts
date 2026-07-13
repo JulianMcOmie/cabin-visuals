@@ -6,7 +6,11 @@ import { computeAtBeat, getCompositionLayers, setProject } from '../visual/Visua
 
 const director = (id: string): Track => ({
   id, name: id, type: 'director', instrumentId: '', directorId: 'sceneSwitcher',
-  color: '#6366f1', muted: false, solo: false, blocks: [], childIds: [],
+  color: '#6366f1', muted: false, solo: false, childIds: [],
+  blocks: [{
+    id: `${id}-block`, startBar: 0, durationBars: 2, loop: false,
+    notes: [{ id: `${id}-note`, startBeat: 0, durationBeats: 8, pitch: 60, velocity: 100 }],
+  }],
   sceneBindings: [{ pitch: 60, sceneId: 'visual' }],
 })
 
