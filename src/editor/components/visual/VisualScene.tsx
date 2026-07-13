@@ -92,9 +92,8 @@ if (partitionRadial > 0.5) {
   p.x *= partitionAspect;
   float maxRadius = 0.5 * length(vec2(partitionAspect, 1.0));
   float radius = length(p) / maxRadius;
-  float innerRadius = partitionIndex / partitionCount;
   float outerRadius = (partitionIndex + 1.0) / partitionCount;
-  if (radius < innerRadius || radius > outerRadius) discard;
+  if (radius > outerRadius) discard;
 }`)
   }
   material.customProgramCacheKey = () => 'scene-partition-v1'

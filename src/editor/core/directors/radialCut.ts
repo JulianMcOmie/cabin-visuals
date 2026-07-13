@@ -29,12 +29,17 @@ export const radialCutDirector: DirectorInstrumentDef = {
     const count = partitionSceneCount(track, bindings.length)
     if (count === 0) return []
     const heldPitches = heldDirectorPitches(track, context.beat, context.beatsPerBar, context.totalBars)
-    return bindings.slice(0, count).flatMap((binding, index) => heldPitches.has(binding.pitch) ? [{
-      directorTrackId: track.id,
-      sceneId: binding.sceneId,
-      opacity: 1,
-      viewport: { ...FULL_FRAME },
-      partition: { kind: 'radial' as const, index, count },
-    }] : [])
+    // Bindings stay small-to-large for MIDI/UI order, but compositing runs
+    // large-to-small so every smaller disc sits visibly above the larger one.
+    return bindings.slice(0, count)
+      .map((binding, index) => ({ binding, index }))
+      .reverse()
+      .flatMap(({ binding, index }) => heldPitches.has(binding.pitch) ? [{
+        directorTrackId: track.id,
+        sceneId: binding.sceneId,
+        opacity: 1,
+        viewport: { ...FULL_FRAME },
+        partition: { kind: 'radial' as const, index, count },
+      }] : [])
   },
 }

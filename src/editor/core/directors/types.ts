@@ -8,7 +8,7 @@ export interface CompositionLayer {
   /** Normalized viewport in final-frame coordinates. */
   viewport: { x: number; y: number; width: number; height: number }
   /** Optional full-frame partition mask. Linear layers share straight or
-   * diagonal boundaries; radial layers form concentric rings, inner-to-outer. */
+   * diagonal boundaries; radial layers form nested discs, small-to-large. */
   partition?:
     | { kind: 'linear'; index: number; count: number; slant: number }
     | { kind: 'radial'; index: number; count: number }

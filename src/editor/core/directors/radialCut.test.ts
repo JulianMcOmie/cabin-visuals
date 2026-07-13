@@ -57,13 +57,13 @@ test('new scenes append to an incomplete saved binding list', () => {
   )
 })
 
-test('held rows map to fixed concentric partitions from center to outside', () => {
+test('held rows map to nested discs composited from largest to smallest', () => {
   assert.deepEqual(resolve(-0.1), [])
   assert.deepEqual(resolve(0).map((layer) => [layer.sceneId, layer.partition]), [
     ['three', { kind: 'radial', index: 0, count: 3 }],
   ])
   assert.deepEqual(resolve(1).map((layer) => [layer.sceneId, layer.partition?.index]), [
-    ['three', 0], ['one', 1], ['two', 2],
+    ['two', 2], ['one', 1], ['three', 0],
   ])
   assert.deepEqual(resolve(2).map((layer) => [layer.sceneId, layer.partition?.index]), [['two', 2]])
 })
