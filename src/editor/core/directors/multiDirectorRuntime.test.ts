@@ -45,3 +45,29 @@ test('an active hold-gated director may intentionally resolve to an empty frame'
   computeAtBeat(0)
   assert.deepEqual(getCompositionLayers(), [])
 })
+
+test('an empty Radial Cut above an active director contributes nothing and reveals the lower layer', () => {
+  const radial: Track = {
+    ...director('radial'), directorId: 'radialCut', sceneBindings: [{ pitch: 60, sceneId: 'overlay' }], blocks: [],
+  }
+  const base = { ...director('base'), sceneBindings: [{ pitch: 60, sceneId: 'base-scene' }] }
+  const main: Scene = {
+    id: 'main', name: 'Main', isMain: true, backgroundColor: '#000000', backgroundTransparent: false,
+    tracks: { radial, base }, rootTrackIds: ['radial', 'base'],
+  }
+  const baseScene: Scene = {
+    id: 'base-scene', name: 'Base', isMain: false, backgroundColor: '#000000', backgroundTransparent: false,
+    tracks: {}, rootTrackIds: [],
+  }
+  const overlay: Scene = {
+    id: 'overlay', name: 'Overlay', isMain: false, backgroundColor: '#000000', backgroundTransparent: false,
+    tracks: {}, rootTrackIds: [],
+  }
+  setProject({
+    scenes: { main, 'base-scene': baseScene, overlay }, sceneOrder: ['main', 'base-scene', 'overlay'], activeSceneId: 'main',
+    tracks: {}, rootTrackIds: [], audioTracks: {}, audioRootTrackIds: [],
+    bpm: 120, beatsPerBar: 4, totalBars: 8,
+  } as unknown as ProjectState)
+  computeAtBeat(0)
+  assert.deepEqual(getCompositionLayers().map((layer) => layer.directorTrackId), ['base'])
+})
