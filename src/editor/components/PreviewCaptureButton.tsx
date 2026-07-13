@@ -1,49 +1,71 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useProjectStore } from '../store/ProjectStore'
-import { useTimeStore } from '../store/TimeStore'
-import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
-import { resolveExportRange, defaultBitrate, type ExportSettings } from '../core/export/types'
+import { capturePreviewClip, PREVIEW_CAPTURE_VERSION } from '../core/export/previewCapture'
+import { TEMPLATES } from '../../templates'
 
-// DEV-ONLY. Downloads a short, looping clip of the CURRENT project's real render,
-// for use as a template gallery preview (uploaded to the public template-previews
-// bucket, keyed by template id). Reuses the export pipeline verbatim - just with
-// preset preview settings - so a clip is pixel-identical to what a user gets.
-// Open /editor?template=<id>, click, upload the downloaded <id>.mp4.
-//
-// The clip is the first PREVIEW_BARS bars, which loops cleanly at the templates'
-// shared 120 bpm (2 bars = 8 beats = 4s). Small, no audio, no watermark.
-const PREVIEW_BARS = 2
-const PREVIEW_WIDTH = 640
-const PREVIEW_HEIGHT = 360
+// A content hash of a template's document, id-independent: the `tpl-…` tokens are
+// generated off a global counter (editing one template shifts another's ids), so
+// they're stripped before hashing - only real content (notes, params, colors,
+// bpm) changes the hash. The capture-settings version is folded in. FNV-1a.
+function templateHash(document: unknown): string {
+  const normalized = `${PREVIEW_CAPTURE_VERSION}:` + JSON.stringify(document).replace(/tpl-[a-z0-9]+/g, '')
+  let h = 0x811c9dc5
+  for (let i = 0; i < normalized.length; i++) {
+    h ^= normalized.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16)
+}
+
+// DEV-ONLY. Two roles, both around capturePreviewClip():
+//  - a button that downloads a preview clip of the current template (manual use);
+//  - window hooks (__capturePreview / __templateIds) that the headless
+//    `npm run previews` script drives to regenerate + upload every clip at once.
+// Only mounted in development (see App.tsx), so it never ships.
+
+declare global {
+  interface Window {
+    __capturePreview?: () => Promise<string | null>
+    __templateIds?: string[]
+    /** id -> content hash, so the automation script skips unchanged templates. */
+    __templateHashes?: Record<string, string>
+  }
+}
 
 export function PreviewCaptureButton() {
   const [busy, setBusy] = useState(false)
   const templateId = useSearchParams().get('template')
 
+  // Expose the capture entry point + the template id list for the automation
+  // script. Returns base64 so it crosses the Playwright bridge as a plain string.
+  useEffect(() => {
+    window.__templateIds = TEMPLATES.map((t) => t.id)
+    window.__templateHashes = Object.fromEntries(TEMPLATES.map((t) => [t.id, templateHash(t.document)]))
+    window.__capturePreview = async () => {
+      const blob = await capturePreviewClip()
+      if (!blob) return null
+      const buf = await blob.arrayBuffer()
+      let binary = ''
+      const bytes = new Uint8Array(buf)
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      return btoa(binary)
+    }
+    return () => {
+      delete window.__capturePreview
+      delete window.__templateIds
+      delete window.__templateHashes
+    }
+  }, [])
+
   const capture = async () => {
     if (busy) return
     setBusy(true)
     try {
-      const { bpm, beatsPerBar, totalBars } = useProjectStore.getState()
-      const settings: ExportSettings = {
-        width: PREVIEW_WIDTH,
-        height: PREVIEW_HEIGHT,
-        fps: 30,
-        includeAudio: false,
-        videoBitrate: defaultBitrate(PREVIEW_WIDTH, 30),
-        fileName: templateId ?? 'preview',
-        watermark: false,
-        rangeMode: 'custom',
-        rangeFromBar: 1,
-        rangeToBar: PREVIEW_BARS,
-      }
-      const range = resolveExportRange(settings, beatsPerBar, totalBars, useTimeStore.getState().loopRegion)
-      const { blob } = await runExport(settings, { bpm, beatsPerBar, totalBars, range })
-      if (blob) downloadBlob(blob, `${settings.fileName}.mp4`)
+      const blob = await capturePreviewClip()
+      if (blob) downloadBlob(blob, `${templateId ?? 'preview'}.mp4`)
     } catch (err) {
       console.error('Preview capture failed', err)
     } finally {

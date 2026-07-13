@@ -8,6 +8,7 @@
     "start": "next start",
     "test:visual": "node --import tsx --test src/editor/core/visual/*.test.ts src/editor/core/visualCopies/*.test.ts src/editor/core/directors/*.test.ts src/editor/core/photo/*.test.ts src/editor/store/scenes.test.ts src/persistence/*.test.ts",
     "lint": "next lint",
+    "previews": "node scripts/generate-previews.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -79,7 +80,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
     "pg": "^8.22.0",
-    "playwright": "^1.60.0",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4.1.4",
     "typescript": "^5"
   }
