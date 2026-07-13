@@ -6,6 +6,7 @@ import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
+import { useUIStore } from '../../store/UIStore'
 
 interface TrackContextMenuProps {
   x: number
@@ -26,6 +27,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
   const addEnvelopeTrack = useProjectStore((s) => s.addEnvelopeTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
+  const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
+  const scenes = useProjectStore((s) => s.scenes)
+  const sceneOrder = useProjectStore((s) => s.sceneOrder)
+  const activeSceneId = useProjectStore((s) => s.activeSceneId)
 
   if (!track) return null
   const def = getInstrument(track.instrumentId)
@@ -39,6 +44,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
   const envelopedParams = new Set(childTracks.filter((c) => c?.type === 'envelope').map((c) => c!.targetParam))
+  const moveDestinations = !track.parentId && track.type !== 'audio'
+    ? sceneOrder
+      .map((id) => scenes[id])
+      .filter((scene) => scene && scene.id !== activeSceneId && scene.isMain === (track.type === 'director'))
+    : []
 
   // Effect automation targets: per instance, its On/Off pseudo-param plus every
   // numeric plugin param, addressed by the fx-namespaced targetParam.
@@ -120,6 +130,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
         return { id: item.key, label: item.label, disabled: added, checked: added }
       }),
     },
+    {
+      key: 'move-scene',
+      label: 'Move to scene',
+      items: moveDestinations.map((scene) => ({ id: scene.id, label: scene.name })),
+    },
   ]
 
   const onPick = (groupKey: string, itemId: string) => {
@@ -141,6 +156,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     } else if (groupKey === 'effect') {
       const item = fxItems.find((f) => f.key === itemId)
       if (item) addAutomationTrack(trackId, item.key, item.label)
+    } else if (groupKey === 'move-scene') {
+      moveTrackToScene(trackId, itemId)
+      useUIStore.getState().setSelectedTrackId(null)
     }
   }
 

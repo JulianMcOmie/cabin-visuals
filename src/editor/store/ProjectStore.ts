@@ -253,6 +253,8 @@ export interface ProjectState {
   splitBlocksAtBeat: (blockIds: Set<string>, beat: number) => Set<string> | null
   joinBlocks: (blockIds: Set<string>) => Set<string> | null
   deleteTrack: (trackId: string) => void
+  /** Move one root track and its complete child subtree to another compatible scene. */
+  moveTrackToScene: (trackId: string, targetSceneId: string) => void
   /** Returns the new copy's id (for selection), or null if the source vanished. */
   insertTrackCopy: (srcId: string, index: number) => string | null
   addTrackTree: (tree: Track[], atIndex?: number) => void
@@ -818,6 +820,33 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         : s.rootTrackIds
       return { tracks, rootTrackIds }
     }),
+
+  moveTrackToScene: (trackId, targetSceneId) => rawSet((s) => {
+    const source = s.scenes[s.activeSceneId]
+    const target = s.scenes[targetSceneId]
+    const root = source?.tracks[trackId]
+    if (!source || !target || source.id === target.id || !root || root.parentId || root.type === 'audio') return s
+    if ((root.type === 'director') !== target.isMain) return s
+
+    const snapshot = snapshotTrackTree(trackId, source.tracks)
+    if (!snapshot) return s
+    const movedIds = Object.keys(snapshot.tracks)
+    if (movedIds.some((id) => target.tracks[id])) return s
+
+    const sourceTracks = { ...source.tracks }
+    for (const id of movedIds) delete sourceTracks[id]
+    const targetTracks = { ...target.tracks }
+    for (const [id, track] of Object.entries(snapshot.tracks)) {
+      targetTracks[id] = id === trackId ? { ...track, parentId: undefined } : track
+    }
+
+    const scenes = {
+      ...s.scenes,
+      [source.id]: { ...source, tracks: sourceTracks, rootTrackIds: source.rootTrackIds.filter((id) => id !== trackId) },
+      [target.id]: { ...target, tracks: targetTracks, rootTrackIds: [...target.rootTrackIds, trackId] },
+    }
+    return { scenes, ...viewForScene(scenes, s.activeSceneId, s.audioTracks, s.audioRootTrackIds) }
+  }),
 
   // Insert an identical copy of a track subtree at a given sibling/root index
   // (Alt-drag commit). The original is left untouched.

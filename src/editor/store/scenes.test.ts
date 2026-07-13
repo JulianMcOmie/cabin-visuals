@@ -83,3 +83,47 @@ test('adding a scene extends every director binding and keeps the active Main vi
   assert.equal(next.tracks.cut.sceneBindings?.at(-1)?.sceneId, nextSceneId)
   assert.equal(next.scenes[mainId].tracks.cut.sceneBindings?.at(-1)?.sceneId, nextSceneId)
 })
+
+test('moving a root track transfers its complete subtree with stable ids', () => {
+  hydrate(emptyDocument())
+  const sourceId = useProjectStore.getState().activeSceneId
+  const targetId = useProjectStore.getState().addScene()
+  const root = { ...cube('visual'), childIds: ['motion'] }
+  const child: Track = {
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
+  }
+  useProjectStore.getState().addTrackTree([root, child])
+
+  useProjectStore.getState().moveTrackToScene(root.id, targetId)
+  const moved = useProjectStore.getState()
+  assert.equal(moved.scenes[sourceId].tracks.visual, undefined)
+  assert.equal(moved.scenes[sourceId].tracks.motion, undefined)
+  assert.deepEqual(moved.scenes[targetId].rootTrackIds, ['visual'])
+  assert.equal(moved.scenes[targetId].tracks.visual.childIds[0], 'motion')
+  assert.equal(moved.scenes[targetId].tracks.motion.parentId, 'visual')
+  assert.equal(moved.tracks.visual, undefined)
+
+  moved.setActiveScene(targetId)
+  assert.equal(useProjectStore.getState().tracks.visual.id, 'visual')
+  assert.equal(useProjectStore.getState().tracks.motion.id, 'motion')
+})
+
+test('scene transfer rejects child rows and incompatible Main destinations', () => {
+  hydrate(emptyDocument())
+  const state = useProjectStore.getState()
+  const sourceId = state.activeSceneId
+  const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
+  const root = { ...cube('visual'), childIds: ['motion'] }
+  const child: Track = {
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
+  }
+  state.addTrackTree([root, child])
+
+  useProjectStore.getState().moveTrackToScene('motion', mainId)
+  useProjectStore.getState().moveTrackToScene('visual', mainId)
+  assert.ok(useProjectStore.getState().scenes[sourceId].tracks.visual)
+  assert.ok(useProjectStore.getState().scenes[sourceId].tracks.motion)
+  assert.equal(useProjectStore.getState().scenes[mainId].tracks.visual, undefined)
+})
