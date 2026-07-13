@@ -8,6 +8,13 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
+import {
+  constantOrbitMover,
+  constantRotateMover,
+  orbitBurstMover,
+  rotateBurstMover,
+} from './rotationMovers'
+import { translationOscillatorMover } from './translationOscillator'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
@@ -396,6 +403,11 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
 /** Every production definition, in picker order. Seeded into the registry. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   burstMover,
+  rotateBurstMover,
+  orbitBurstMover,
+  constantRotateMover,
+  constantOrbitMover,
+  translationOscillatorMover,
   visibilityMover,
   radialSplitter,
   gridSplitter,
