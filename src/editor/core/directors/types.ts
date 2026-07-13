@@ -37,3 +37,6 @@ export interface DirectorInstrumentDef {
 }
 
 export const FULL_FRAME = { x: 0, y: 0, width: 1, height: 1 } as const
+export const DIRECTOR_OPACITY_PARAM: ParamDef = {
+  key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1,
+}

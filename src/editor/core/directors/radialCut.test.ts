@@ -4,7 +4,7 @@ import type { Scene, Track } from '../../types'
 import { radialCutDirector } from './radialCut'
 
 const scene = (id: string, name: string, isMain = false): Scene => ({
-  id, name, isMain, backgroundColor: '#000000', tracks: {}, rootTrackIds: [],
+  id, name, isMain, backgroundColor: '#000000', backgroundTransparent: false, tracks: {}, rootTrackIds: [],
 })
 const scenes = {
   main: scene('main', 'Main', true),

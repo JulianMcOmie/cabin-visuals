@@ -60,12 +60,15 @@ test('scene background color defaults, edits, duplicates, and persists with the 
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#000000')
 
   useProjectStore.getState().setSceneBackgroundColor(sceneId, '#123456')
+  useProjectStore.getState().setSceneBackgroundTransparent(sceneId, true)
   const copyId = useProjectStore.getState().duplicateScene(sceneId)!
   assert.equal(useProjectStore.getState().scenes[copyId].backgroundColor, '#123456')
+  assert.equal(useProjectStore.getState().scenes[copyId].backgroundTransparent, true)
 
   const document = serialize()
   hydrate(document)
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#123456')
+  assert.equal(useProjectStore.getState().scenes[sceneId].backgroundTransparent, true)
 })
 
 test('adding a scene extends every director binding and keeps the active Main view in sync', () => {

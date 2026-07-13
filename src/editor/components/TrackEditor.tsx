@@ -7,6 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { getDirector } from '../core/directors'
+import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
@@ -401,6 +402,7 @@ export function TrackEditor() {
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const activeScene = useProjectStore((s) => s.scenes[s.activeSceneId])
   const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
+  const setSceneBackgroundTransparent = useProjectStore((s) => s.setSceneBackgroundTransparent)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
@@ -596,7 +598,13 @@ export function TrackEditor() {
                         <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
                           {director?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.
                         </p>
-                        {(director?.params.length ?? 0) > 0 ? director!.params.map((p) => (
+                        <ParamControl
+                          param={DIRECTOR_OPACITY_PARAM}
+                          numValue={track.params?.opacity}
+                          strValue={undefined}
+                          onNum={(v) => setTrackParam(track.id, 'opacity', v)}
+                        />
+                        {(director?.params.length ?? 0) > 0 && director!.params.map((p) => (
                           <ParamControl
                             key={p.key}
                             param={p}
@@ -605,7 +613,7 @@ export function TrackEditor() {
                             onNum={(v) => setTrackParam(track.id, p.key, v)}
                             onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                           />
-                        )) : <p className="mb-4 text-[11px] text-[var(--text-muted)]">No parameters</p>}
+                        ))}
                         {isPartitionDirector ? (
                           <>
                             <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">SCENE ORDER</p>
@@ -710,6 +718,12 @@ export function TrackEditor() {
                   strValue={activeScene.backgroundColor}
                   onNum={() => {}}
                   onStr={(color) => setSceneBackgroundColor(activeScene.id, color)}
+                />
+                <ParamControl
+                  param={{ key: 'backgroundTransparent', label: 'Transparent background', type: 'boolean', default: 0 }}
+                  numValue={activeScene.backgroundTransparent ? 1 : 0}
+                  strValue={undefined}
+                  onNum={(value) => setSceneBackgroundTransparent(activeScene.id, value >= 0.5)}
                 />
               </>
             ) : null}

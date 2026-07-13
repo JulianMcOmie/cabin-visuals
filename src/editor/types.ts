@@ -36,6 +36,7 @@ export interface Scene {
   name: string
   isMain: boolean
   backgroundColor: string
+  backgroundTransparent: boolean
   tracks: Record<string, Track>
   rootTrackIds: string[]
 }

@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 7
+export const CURRENT_VERSION = 8
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -127,8 +127,8 @@ UPGRADES[4] = (doc) => {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   const scenes: Record<string, Scene> = {
-    [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
-    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: visualTracks, rootTrackIds },
+    [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+    [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: visualTracks, rootTrackIds },
   }
   const project = { ...rest }
   delete project.tracks
@@ -150,7 +150,7 @@ UPGRADES[5] = (doc) => {
   const rest = doc as { scenes?: Record<string, Omit<Scene, 'backgroundColor'> & { backgroundColor?: string }> } & Record<string, unknown>
   const scenes: Record<string, Scene> = {}
   for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
-    scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND }
+    scenes[id] = { ...scene, backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false }
   }
   return { ...rest, scenes }
 }
@@ -194,6 +194,18 @@ UPGRADES[6] = (doc) => {
     }
   }
 
+  return { ...rest, scenes }
+}
+
+// ── v7 → v8 ──────────────────────────────────────────────────────────────────
+// Scene render targets may now preserve a transparent background. Existing
+// projects stay visually identical by remaining opaque.
+UPGRADES[7] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Omit<Scene, 'backgroundTransparent'> & { backgroundTransparent?: boolean }> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
+    scenes[id] = { ...scene, backgroundTransparent: scene.backgroundTransparent ?? false }
+  }
   return { ...rest, scenes }
 }
 

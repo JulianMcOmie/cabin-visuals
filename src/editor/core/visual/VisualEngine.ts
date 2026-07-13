@@ -82,7 +82,7 @@ function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
   if ('scenes' in p) return p
   const id = '__legacy_scene__'
   return {
-    scenes: { [id]: { id, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: p.tracks, rootTrackIds: p.rootTrackIds } },
+    scenes: { [id]: { id, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: p.tracks, rootTrackIds: p.rootTrackIds } },
     sceneOrder: [id],
     activeSceneId: id,
     bpm: p.bpm,
@@ -185,16 +185,19 @@ function resolveComposition(beat: number): CompositionLayer[] {
 
   const directors = main.rootTrackIds.map((id) => main.tracks[id]).filter((track) => track?.type === 'director' && !track.muted)
   const anySolo = directors.some((track) => track.solo)
-  const layers = directors.flatMap((track) => {
+  // Timeline rows are a visual stack: the first/topmost director renders last.
+  // Resolve bottom-to-top, preserving each director's own internal layer order.
+  const layers = directors.slice().reverse().flatMap((track) => {
     if (anySolo && !track.solo) return []
     const def = getDirector(track.directorId)
-    return def?.resolve(track, {
+    const opacity = clampOpacity(track.params?.opacity ?? 1)
+    return (def?.resolve(track, {
       beat,
       beatsPerBar: project!.beatsPerBar,
       totalBars: project!.totalBars,
       scenes: project!.scenes,
       sceneOrder: project!.sceneOrder,
-    }) ?? []
+    }) ?? []).map((layer) => ({ ...layer, opacity: clampOpacity(layer.opacity * opacity) }))
   })
   // A director is allowed to intentionally produce no layers (for example,
   // Cut when none of its hold-gated rows are active). Only projects with no

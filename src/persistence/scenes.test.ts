@@ -46,7 +46,7 @@ test('v5 migration gives every existing scene a black background', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 7)
+  assert.equal(doc.schemaVersion, 8)
   assert.equal(doc.scenes.main.backgroundColor, '#000000')
   assert.equal(doc.scenes.one.backgroundColor, '#000000')
 })
@@ -81,9 +81,31 @@ test('v6 migration removes modifiers and promotes their nested tracks', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 7)
+  assert.equal(doc.schemaVersion, 8)
   assert.deepEqual(doc.scenes.one.rootTrackIds, ['visual'])
   assert.deepEqual(doc.scenes.one.tracks.visual.childIds, ['modifier-child'])
   assert.equal(doc.scenes.one.tracks.modifier, undefined)
   assert.equal(doc.scenes.one.tracks['modifier-child'].parentId, 'visual')
+})
+
+test('v7 migration keeps existing scene backgrounds opaque', () => {
+  const doc = upgradeDocument({
+    schemaVersion: 7,
+    bpm: 120,
+    beatsPerBar: 4,
+    totalBars: 32,
+    scenes: {
+      main: { id: 'main', name: 'Main', isMain: true, backgroundColor: '#000', tracks: {}, rootTrackIds: [] },
+      one: { id: 'one', name: 'Scene 1', isMain: false, backgroundColor: '#123456', tracks: { visual }, rootTrackIds: ['visual'] },
+    },
+    sceneOrder: ['main', 'one'],
+    activeSceneId: 'one',
+    audioTracks: {},
+    audioRootTrackIds: [],
+    audioClips: {},
+  })
+
+  assert.equal(doc.schemaVersion, 8)
+  assert.equal(doc.scenes.main.backgroundTransparent, false)
+  assert.equal(doc.scenes.one.backgroundTransparent, false)
 })

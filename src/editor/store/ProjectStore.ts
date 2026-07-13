@@ -238,6 +238,7 @@ export interface ProjectState {
   addScene: () => string
   renameScene: (sceneId: string, name: string) => void
   setSceneBackgroundColor: (sceneId: string, color: string) => void
+  setSceneBackgroundTransparent: (sceneId: string, transparent: boolean) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
   reorderScenes: (sceneIds: string[]) => void
@@ -327,8 +328,8 @@ function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: strin
   const firstId = crypto.randomUUID()
   return {
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
-      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      [firstId]: { id: firstId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstId],
     activeSceneId: firstId,
@@ -409,7 +410,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const id = crypto.randomUUID()
     rawSet((s) => {
       const visualCount = s.sceneOrder.filter((sid) => !s.scenes[sid]?.isMain).length
-      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] }
+      const scene: Scene = { id, name: `Scene ${visualCount + 1}`, isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] }
       const scenes = { ...s.scenes, [id]: scene }
       const mainId = s.sceneOrder.find((sid) => s.scenes[sid]?.isMain)
       if (mainId) {
@@ -443,6 +444,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundColor: color } } }
   }),
 
+  setSceneBackgroundTransparent: (sceneId, transparent) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene || scene.backgroundTransparent === transparent) return s
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundTransparent: transparent } } }
+  }),
+
   duplicateScene: (sceneId) => {
     let nextId: string | null = null
     rawSet((s) => {
@@ -458,7 +465,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         for (const track of tree) tracks[track.id] = track
       }
       nextId = crypto.randomUUID()
-      const scene: Scene = { id: nextId, name: `${source.name} Copy`, isMain: false, backgroundColor: source.backgroundColor, tracks, rootTrackIds }
+      const scene: Scene = {
+        id: nextId,
+        name: `${source.name} Copy`,
+        isMain: false,
+        backgroundColor: source.backgroundColor,
+        backgroundTransparent: source.backgroundTransparent,
+        tracks,
+        rootTrackIds,
+      }
       const at = Math.max(0, s.sceneOrder.indexOf(sceneId)) + 1
       const sceneOrder = s.sceneOrder.slice()
       sceneOrder.splice(at, 0, nextId)
@@ -1032,6 +1047,8 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             type: 'director',
             instrumentId: '',
             directorId,
+            params: {},
+            stringParams: {},
             sceneBindings: visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })),
             childIds: [],
           },

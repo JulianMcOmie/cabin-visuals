@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { Scene, Track } from '../../types'
 import { sceneSwitcherDirector } from './sceneSwitcher'
 
-const scene = (id: string, name: string, isMain = false): Scene => ({ id, name, isMain, backgroundColor: '#000000', tracks: {}, rootTrackIds: [] })
+const scene = (id: string, name: string, isMain = false): Scene => ({ id, name, isMain, backgroundColor: '#000000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] })
 const scenes = { main: scene('main', 'Main', true), one: scene('one', 'Scene 1'), two: scene('two', 'Scene 2') }
 const track: Track = {
   id: 'switcher', name: 'Scene Switcher', type: 'director', instrumentId: '', directorId: 'sceneSwitcher',

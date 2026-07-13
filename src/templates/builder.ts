@@ -126,13 +126,13 @@ export function doc(opts: {
   const mainId = nid('main')
   const sceneId = nid('scene')
   return {
-    schemaVersion: 6,
+    schemaVersion: 8,
     bpm: opts.bpm,
     beatsPerBar: opts.beatsPerBar ?? 4,
     totalBars: opts.totalBars ?? 16,
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
-      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks, rootTrackIds },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks, rootTrackIds },
     },
     sceneOrder: [mainId, sceneId],
     audioTracks: {},

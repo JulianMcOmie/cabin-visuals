@@ -28,7 +28,7 @@ import type { LoopRegion } from '../editor/core/loopRegion'
  * `tracks` as `photoPads`. No schema bump: purely additive.
  * `loopRegion` is also additive within v4; older saves hydrate it as unset.
  * v5 introduced scenes; v6 adds each scene's background color; v7 removes
- * retired event-modifier tracks.
+ * retired event-modifier tracks; v8 adds transparent scene backgrounds.
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -54,13 +54,13 @@ export function emptyDocument(): ProjectDocument {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,
     scenes: {
-      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
-      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, tracks: {}, rootTrackIds: [] },
+      [mainId]: { id: mainId, name: 'Main', isMain: true, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      [firstSceneId]: { id: firstSceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
     },
     sceneOrder: [mainId, firstSceneId],
     activeSceneId: firstSceneId,

@@ -192,8 +192,9 @@ export function VisualScene() {
       for (const sceneId of requested) {
         const runtime = mounted.get(sceneId)
         if (!runtime) continue
+        const projectScene = useProjectStore.getState().scenes[sceneId]
         gl.setRenderTarget(runtime.target)
-        gl.setClearColor(useProjectStore.getState().scenes[sceneId]?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, 1)
+        gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
         gl.clear(true, true, true)
         gl.render(runtime.base, camera)
         gl.clearDepth()
@@ -246,7 +247,8 @@ export function VisualScene() {
       gl.setRenderTarget(previous)
       const project = useProjectStore.getState()
       const mainId = project.sceneOrder.find((id) => project.scenes[id]?.isMain)
-      gl.setClearColor(mainId ? project.scenes[mainId].backgroundColor : DEFAULT_SCENE_BACKGROUND, 1)
+      const main = mainId ? project.scenes[mainId] : undefined
+      gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
       gl.render(compositor.scene, compositor.cam)
     } finally {
