@@ -60,10 +60,26 @@ test('new scenes append to an incomplete saved binding list', () => {
 test('held rows map to nested discs composited from largest to smallest', () => {
   assert.deepEqual(resolve(-0.1), [])
   assert.deepEqual(resolve(0).map((layer) => [layer.sceneId, layer.partition]), [
-    ['three', { kind: 'radial', index: 0, count: 3 }],
+    ['three', { kind: 'radial', index: 0, count: 3, radiusIndex: 2 }],
   ])
   assert.deepEqual(resolve(1).map((layer) => [layer.sceneId, layer.partition?.index]), [
     ['two', 2], ['one', 1], ['three', 0],
   ])
   assert.deepEqual(resolve(2).map((layer) => [layer.sceneId, layer.partition?.index]), [['two', 2]])
+})
+
+test('the outermost held slot expands to the large radius when larger slots are absent', () => {
+  const mediumOnly: Track = {
+    ...track,
+    blocks: [{
+      id: 'medium-only', startBar: 0, durationBars: 1, loop: false,
+      notes: [{ id: 'medium', startBeat: 0, durationBeats: 2, pitch: 61, velocity: 100 }],
+    }],
+  }
+  const layers = radialCutDirector.resolve(mediumOnly, {
+    beat: 1, beatsPerBar: 4, totalBars: 8, scenes, sceneOrder: ['main', 'one', 'two', 'three', 'four'],
+  })
+  assert.deepEqual(layers.map((layer) => layer.partition), [
+    { kind: 'radial', index: 1, count: 3, radiusIndex: 2 },
+  ])
 })

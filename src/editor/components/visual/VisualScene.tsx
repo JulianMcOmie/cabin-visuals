@@ -9,6 +9,11 @@ import {
   Scene as ThreeScene,
   WebGLRenderTarget,
   LinearFilter,
+  AddEquation,
+  CustomBlending,
+  OneFactor,
+  OneMinusDstColorFactor,
+  OneMinusSrcAlphaFactor,
 } from 'three'
 import { getCompositionLayers, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
 import type { CompositionLayer } from '../../core/directors'
@@ -20,7 +25,9 @@ import { ObjectRenderer } from './ObjectRenderer'
 interface MountedScene {
   base: ThreeScene
   front: ThreeScene
+  invert: ThreeScene
   target: WebGLRenderTarget
+  invertTarget: WebGLRenderTarget
 }
 
 interface PartitionUniforms {
@@ -58,7 +65,7 @@ function setPartitionGeometry(geometry: BufferGeometry, partition?: CompositionL
   uvs.needsUpdate = true
 }
 
-function makeCompositorMaterial() {
+function makeCompositorMaterial(invertBehind = false) {
   const uniforms: PartitionUniforms = {
     radial: { value: 0 },
     index: { value: 0 },
@@ -66,6 +73,17 @@ function makeCompositorMaterial() {
     aspect: { value: 1 },
   }
   const material = new MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false })
+  if (invertBehind) {
+    // The mask is a premultiplied white glyph. This blend computes, per channel:
+    // alpha * (1 - destination) + destination * (1 - alpha).
+    material.premultipliedAlpha = true
+    material.blending = CustomBlending
+    material.blendEquation = AddEquation
+    material.blendSrc = OneMinusDstColorFactor
+    material.blendDst = OneMinusSrcAlphaFactor
+    material.blendSrcAlpha = OneFactor
+    material.blendDstAlpha = OneMinusSrcAlphaFactor
+  }
   material.userData.partitionUniforms = uniforms
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, {
@@ -95,8 +113,16 @@ if (partitionRadial > 0.5) {
   float outerRadius = (partitionIndex + 1.0) / partitionCount;
   if (radius > outerRadius) discard;
 }`)
+    if (invertBehind) {
+      // Use the mask alpha as premultiplied white regardless of the offscreen
+      // mask's RGB encoding, effects, or antialias interpolation.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <premultiplied_alpha_fragment>',
+        'gl_FragColor.rgb = vec3(gl_FragColor.a);',
+      )
+    }
   }
-  material.customProgramCacheKey = () => 'scene-partition-v1'
+  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v1' : 'scene-partition-v1'
   return material
 }
 
@@ -131,7 +157,12 @@ export function VisualScene() {
       map.set(sceneId, {
         base: new ThreeScene(),
         front: new ThreeScene(),
+        invert: new ThreeScene(),
         target: new WebGLRenderTarget(Math.max(1, size.width), Math.max(1, size.height), {
+          minFilter: LinearFilter,
+          magFilter: LinearFilter,
+        }),
+        invertTarget: new WebGLRenderTarget(Math.max(1, size.width), Math.max(1, size.height), {
           minFilter: LinearFilter,
           magFilter: LinearFilter,
         }),
@@ -144,14 +175,19 @@ export function VisualScene() {
 
   const compositor = useMemo(() => {
     const scene = new ThreeScene()
+    const invertScene = new ThreeScene()
     const cam = new OrthographicCamera(-1, 1, 1, -1, 0, 2)
     cam.position.z = 1
     const meshes: Mesh[] = []
-    return { scene, cam, meshes }
+    const invertMeshes: Mesh[] = []
+    return { scene, invertScene, cam, meshes, invertMeshes }
   }, [])
 
   useEffect(() => {
-    for (const runtime of mounted.values()) runtime.target.setSize(Math.max(1, size.width), Math.max(1, size.height))
+    for (const runtime of mounted.values()) {
+      runtime.target.setSize(Math.max(1, size.width), Math.max(1, size.height))
+      runtime.invertTarget.setSize(Math.max(1, size.width), Math.max(1, size.height))
+    }
   }, [mounted, size.width, size.height])
 
   useEffect(() => {
@@ -159,13 +195,17 @@ export function VisualScene() {
     for (const [sceneId, runtime] of mounted) {
       roots.set(`${sceneId}:base`, runtime.base)
       roots.set(`${sceneId}:front`, runtime.front)
+      roots.set(`${sceneId}:invert`, runtime.invert)
     }
     setMountedRenderScenes(roots)
     return () => setMountedRenderScenes(new Map())
   }, [mounted])
 
   useEffect(() => () => {
-    for (const runtime of mounted.values()) runtime.target.dispose()
+    for (const runtime of mounted.values()) {
+      runtime.target.dispose()
+      runtime.invertTarget.dispose()
+    }
   }, [mounted])
 
   useEffect(() => () => {
@@ -173,11 +213,19 @@ export function VisualScene() {
       mesh.geometry.dispose()
       ;(mesh.material as MeshBasicMaterial).dispose()
     }
+    for (const mesh of compositor.invertMeshes) {
+      mesh.geometry.dispose()
+      ;(mesh.material as MeshBasicMaterial).dispose()
+    }
   }, [compositor])
 
-  const onTopKey = useProjectStore((s) => objects.map((o) => {
+  const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
-    return (track?.onTop ?? getInstrument(o.instrumentId)?.defaultOnTop ?? false) ? '1' : '0'
+    const onTop = track?.onTop ?? getInstrument(o.instrumentId)?.defaultOnTop ?? false
+    const finalInvert = onTop
+      && o.instrumentId === 'textDisplay'
+      && (track?.params?.colorMode ?? 0) >= 0.5
+    return finalInvert ? 'I' : onTop ? 'F' : 'B'
   }).join(''))
 
   useFrame(() => {
@@ -198,6 +246,13 @@ export function VisualScene() {
         gl.render(runtime.base, camera)
         gl.clearDepth()
         gl.render(runtime.front, camera)
+
+        // Final-invert text is isolated as a transparent mask. It is applied only
+        // after every requested scene layer has been composited below.
+        gl.setRenderTarget(runtime.invertTarget)
+        gl.setClearColor(0x000000, 0)
+        gl.clear(true, true, true)
+        gl.render(runtime.invert, camera)
       }
 
       while (compositor.meshes.length < layers.length) {
@@ -226,7 +281,7 @@ export function VisualScene() {
         const uniforms = material.userData.partitionUniforms as PartitionUniforms
         const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
         uniforms.radial.value = radial ? 1 : 0
-        uniforms.index.value = radial?.index ?? 0
+        uniforms.index.value = radial?.radiusIndex ?? radial?.index ?? 0
         uniforms.count.value = Math.max(1, radial?.count ?? 1)
         uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
         if (layer.partition) {
@@ -250,6 +305,50 @@ export function VisualScene() {
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
       gl.render(compositor.scene, compositor.cam)
+
+      while (compositor.invertMeshes.length < layers.length) {
+        const material = makeCompositorMaterial(true)
+        const geometry = makeCompositorGeometry()
+        setPartitionGeometry(geometry)
+        const mesh = new Mesh(geometry, material)
+        mesh.frustumCulled = false
+        compositor.invertMeshes.push(mesh)
+        compositor.invertScene.add(mesh)
+      }
+      compositor.invertMeshes.forEach((mesh, i) => {
+        const layer = layers[i]
+        mesh.visible = !!layer
+        if (!layer) return
+        const runtime = mounted.get(layer.sceneId)
+        mesh.visible = !!runtime
+        if (!runtime) return
+        const material = mesh.material as MeshBasicMaterial
+        if (material.map !== runtime.invertTarget.texture) {
+          material.map = runtime.invertTarget.texture
+          material.needsUpdate = true
+        }
+        material.opacity = layer.opacity
+        setPartitionGeometry(mesh.geometry, layer.partition)
+        const uniforms = material.userData.partitionUniforms as PartitionUniforms
+        const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
+        uniforms.radial.value = radial ? 1 : 0
+        uniforms.index.value = radial?.index ?? 0
+        uniforms.count.value = Math.max(1, radial?.count ?? 1)
+        uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+        if (layer.partition) {
+          mesh.position.set(0, 0, -i * 0.001)
+          mesh.scale.set(1, 1, 1)
+        } else {
+          mesh.position.set(
+            -1 + layer.viewport.x * 2 + layer.viewport.width,
+            -1 + layer.viewport.y * 2 + layer.viewport.height,
+            -i * 0.001,
+          )
+          mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+        }
+        mesh.renderOrder = i
+      })
+      gl.render(compositor.invertScene, compositor.cam)
     } finally {
       gl.setRenderTarget(previous)
       gl.autoClear = previousAutoClear
@@ -260,8 +359,9 @@ export function VisualScene() {
     <>
       {[...mounted.entries()].map(([sceneId, runtime]) => {
         const sceneObjects = objects.filter((o) => o.sceneId === sceneId)
-        const base = sceneObjects.filter((o) => onTopKey[objects.indexOf(o)] !== '1')
-        const front = sceneObjects.filter((o) => onTopKey[objects.indexOf(o)] === '1')
+        const base = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'B')
+        const front = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'F')
+        const invert = sceneObjects.filter((o) => placementKey[objects.indexOf(o)] === 'I')
         return (
           <Fragment key={sceneId}>
             {createPortal(
@@ -277,6 +377,13 @@ export function VisualScene() {
               {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
             </>,
             runtime.front,
+            )}
+            {createPortal(
+            <>
+              {lights()}
+              {invert.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:invert`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+            </>,
+            runtime.invert,
             )}
           </Fragment>
         )

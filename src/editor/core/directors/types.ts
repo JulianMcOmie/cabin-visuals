@@ -11,7 +11,7 @@ export interface CompositionLayer {
    * diagonal boundaries; radial layers form nested discs, small-to-large. */
   partition?:
     | { kind: 'linear'; index: number; count: number; slant: number }
-    | { kind: 'radial'; index: number; count: number }
+    | { kind: 'radial'; index: number; count: number; radiusIndex?: number }
   /** Future directors can request a named scene camera without changing the
    * composition contract. Omitted means the scene's default camera. */
   cameraId?: string
