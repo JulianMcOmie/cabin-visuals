@@ -100,5 +100,14 @@ export function specInstrument(opts: {
     <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} paramDefaults={paramDefaults} />
   )
 
-  return { id: opts.id, name: opts.name, kind: 'object', params: opts.params, midiRows: opts.midiRows, localTransform, component: Component }
+  return {
+    id: opts.id,
+    name: opts.name,
+    kind: 'object',
+    userInterfaceRenderer: 'parameters',
+    params: opts.params,
+    midiRows: opts.midiRows,
+    localTransform,
+    component: Component,
+  }
 }

@@ -218,6 +218,7 @@ export const crtScanlinesInstrument: ObjectInstrumentDef = {
   id: 'crtScanlines',
   name: 'CRT Scanlines',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Flash color comes from the pitch class (hue = pitch % 12 · 30°); notes at
   // or above the Static Blip Pitch (default 72) also fire a channel-change

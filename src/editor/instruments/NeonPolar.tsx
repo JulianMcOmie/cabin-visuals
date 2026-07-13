@@ -349,6 +349,7 @@ export const neonPolarInstrument: ObjectInstrumentDef = {
   id: 'neonPolar',
   name: 'Neon Polar',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Held notes in 48-59 jitter the curves and shift their frequency: higher
   // rows shake harder/sharper and multiply the curve frequency (more petals),

@@ -232,6 +232,7 @@ export const pixelInvadersInstrument: ObjectInstrumentDef = {
   id: 'pixelInvaders',
   name: 'Pixel Invaders',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // pitch % cols picks the column the cannon zaps (default 6 columns); the
   // bottom-most survivor there explodes. Velocity = shrapnel amount.

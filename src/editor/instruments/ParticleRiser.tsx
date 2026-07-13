@@ -235,6 +235,7 @@ export const particleRiserInstrument: ObjectInstrumentDef = {
   id: 'particleRiser',
   name: 'Particle Riser',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Any pitch (24-96) triggers a riser; the pitch class picks the riser's hue
   // ((pitch % 12) / 12), velocity sets intensity and note length stretches the climb.

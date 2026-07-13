@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X, Pencil } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
@@ -12,10 +12,8 @@ import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
-import { VideoClipBank } from './VideoClipBank'
-import { PhotoBank } from './PhotoBank'
-import { isNumberParam, type ParamDef } from '../instruments/types'
-import { lockCursor, unlockCursor } from '../utils/dragCursor'
+import { isNumberParam, isStringParam } from '../instruments/types'
+import { getUserInterfaceRenderer, ParamControl, ParamSlider, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
@@ -61,142 +59,6 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
         <Pencil size={10} />
       </button>
     </div>
-  )
-}
-
-/** One param row: label | 3px accent slider | mono value - 100px / 1fr / 44px. */
-function ParamSlider({
-  label, value, min, max, step, onChange,
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  onChange: (value: number) => void
-}) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const pct = ((value - min) / (max - min)) * 100
-
-  const setFromClientX = (clientX: number) => {
-    const el = trackRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const raw = min + t * (max - min)
-    const snapped = Math.max(min, Math.min(max, Math.round(raw / step) * step))
-    onChange(snapped)
-  }
-
-  const onPointerDown = (e: ReactPointerEvent) => {
-    e.preventDefault()
-    lockCursor('grabbing')
-    setFromClientX(e.clientX)
-    const controller = new AbortController()
-    window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
-    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
-  }
-
-  return (
-    <div className="grid grid-cols-[100px_1fr_44px] items-center gap-2.5 mb-[13px]">
-      <span className="text-[11px] text-[var(--text-3)] truncate" title={label}>{label}</span>
-      <div
-        ref={trackRef}
-        onPointerDown={onPointerDown}
-        className="relative h-[3px] bg-[var(--border)] rounded-full cursor-pointer select-none"
-      >
-        <div
-          className="absolute left-0 top-0 h-full rounded-full bg-[var(--accent)]"
-          style={{ width: `${pct}%` }}
-        />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-[9px] h-[9px] rounded-full bg-[var(--text)]"
-          style={{ left: `calc(${pct}% - 4px)` }}
-        />
-      </div>
-      <span className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">
-        {value.toFixed(2)}
-      </span>
-    </div>
-  )
-}
-
-/** Renders the right control for any param type: slider (number), dropdown (select),
- *  toggle (boolean), colour picker (color), or text/textarea (string). Numeric values
- *  go through `onNum`; string values (color/string) through `onStr`. */
-function ParamControl({ param, numValue, strValue, onNum, onStr }: {
-  param: ParamDef
-  numValue: number | undefined
-  strValue: string | undefined
-  onNum: (v: number) => void
-  onStr?: (v: string) => void
-}) {
-  if (param.type === 'select') {
-    return (
-      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
-        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
-        <select
-          value={numValue ?? param.default}
-          onChange={(e) => onNum(Number(e.target.value))}
-          className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
-        >
-          {param.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-    )
-  }
-  if (param.type === 'boolean') {
-    const on = (numValue ?? param.default) >= 0.5
-    return (
-      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
-        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
-        <div className="flex justify-end">
-          <button
-            onClick={() => onNum(on ? 0 : 1)}
-            className={`w-8 h-4 rounded-full relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
-            aria-label={param.label}
-          >
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-[var(--text)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
-          </button>
-        </div>
-      </div>
-    )
-  }
-  if (param.type === 'color') {
-    return (
-      <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
-        <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
-        <div className="flex justify-end">
-          <input
-            type="color"
-            value={strValue ?? param.default}
-            onChange={(e) => onStr?.(e.target.value)}
-            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0"
-          />
-        </div>
-      </div>
-    )
-  }
-  if (param.type === 'string') {
-    const value = strValue ?? param.default
-    return (
-      <div className="mb-[13px]">
-        <div className="text-[11px] text-[var(--text-3)] mb-1.5">{param.label}</div>
-        {param.multiline
-          ? <textarea value={value} onChange={(e) => onStr?.(e.target.value)} rows={3} className="w-full px-2 py-1 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none focus:border-[var(--accent)] resize-y" />
-          : <input type="text" value={value} onChange={(e) => onStr?.(e.target.value)} className="w-full h-6 px-2 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none focus:border-[var(--accent)]" />}
-      </div>
-    )
-  }
-  return (
-    <ParamSlider
-      label={param.label}
-      value={numValue ?? param.default}
-      min={param.min}
-      max={param.max}
-      step={param.step}
-      onChange={onNum}
-    />
   )
 }
 
@@ -757,7 +619,7 @@ export function TrackEditor() {
                                 </div>
                               ))}
                             </div>
-                            <p className="mt-3 text-[10px] leading-relaxed text-[var(--text-muted)]">Each active {partitionLabel.toLowerCase()} has one MIDI row. The scene exists in its partition only while that row's note is held.</p>
+                            <p className="mt-3 text-[10px] leading-relaxed text-[var(--text-muted)]">Each active {partitionLabel.toLowerCase()} has one MIDI row. The scene exists in its partition only while that row’s note is held.</p>
                           </>
                         ) : (
                           <>
@@ -776,14 +638,26 @@ export function TrackEditor() {
                     )
                   }
 
-                  // Object track → its param sliders, then its tags.
+                  // Object track → its registered settings UI, then its common track controls.
                   const def = getInstrument(track.instrumentId)
                   const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
                   const onTop = track.onTop ?? def?.defaultOnTop ?? false
+                  const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
+                  const userInterfaceParameters: UserInterfaceParameter[] = def?.params.map((parameter) => {
+                    const stringParameter = isStringParam(parameter)
+                    return {
+                      definition: parameter,
+                      value: stringParameter
+                        ? track.stringParams?.[parameter.key] ?? parameter.default
+                        : track.params?.[parameter.key] ?? parameter.default,
+                      setValue: (value) => {
+                        if (stringParameter) setTrackStringParam(track.id, parameter.key, String(value))
+                        else setTrackParam(track.id, parameter.key, Number(value))
+                      },
+                    }
+                  }) ?? []
                   return (
                     <>
-                      {track.instrumentId === 'video' && <VideoClipBank track={track} />}
-                      {track.instrumentId === 'photo' && <PhotoBank track={track} />}
                       {/* Layering: every object gets the switch; Text defaults on. */}
                       <div className="mb-4 flex items-center justify-between">
                         <span
@@ -809,22 +683,13 @@ export function TrackEditor() {
                           />
                         </button>
                       </div>
-                      {!def || def.params.length === 0 ? (
+                      {!UserInterfaceRenderer ? (
                         <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                       ) : (
-                        <>
-                          <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">PARAMETERS</p>
-                          {def.params.map((p) => (
-                            <ParamControl
-                              key={p.key}
-                              param={p}
-                              numValue={track.params?.[p.key]}
-                              strValue={track.stringParams?.[p.key]}
-                              onNum={(v) => setTrackParam(track.id, p.key, v)}
-                              onStr={(v) => setTrackStringParam(track.id, p.key, v)}
-                            />
-                          ))}
-                        </>
+                        <UserInterfaceRenderer
+                          targetId={track.id}
+                          parameters={userInterfaceParameters}
+                        />
                       )}
                       <TagEditor
                         tags={track.tags ?? []}

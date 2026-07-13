@@ -167,6 +167,7 @@ export const photoInstrument: ObjectInstrumentDef = {
   id: 'photo',
   name: 'Photo',
   kind: 'object',
+  userInterfaceRenderer: 'photo',
   params: [
     {
       key: 'fit',

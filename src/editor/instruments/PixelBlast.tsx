@@ -140,6 +140,7 @@ export const pixelBlastInstrument: ObjectInstrumentDef = {
   id: 'pixelBlast',
   name: 'Pixel Blast',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Pitch class = X column (0 far left … 11 far right), octave = Y band
   // (higher octave explodes higher). Velocity = blast size + particle count.

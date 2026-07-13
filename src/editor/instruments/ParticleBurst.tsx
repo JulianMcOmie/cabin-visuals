@@ -493,6 +493,7 @@ export const particleBurstInstrument: ObjectInstrumentDef = {
   id: 'particleBurst',
   name: 'Particle Burst',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Pitch (36-71) selects one of the 36 color presets (pitch - 36 = preset index);
   // velocity scales brightness. Ten representative presets spanning the range

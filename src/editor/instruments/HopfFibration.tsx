@@ -427,6 +427,7 @@ export const hopfFibrationInstrument: ObjectInstrumentDef = {
   id: 'hopfFibration',
   name: 'Hopf Fibration',
   kind: 'object',
+  userInterfaceRenderer: 'parameters',
   params: PARAMS,
   // Transforms are octave-looped (pitch % 12); one octave (48-59) is exposed.
   // Display order groups related actions (layers, bursts/twists, rotates/flips,
