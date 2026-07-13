@@ -1,16 +1,14 @@
 import { flattenTrackNotes } from '../visual/noteFlatten'
 import type { DirectorInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
+import { orderedSceneBindings } from './sceneBindings'
 
 export const sceneSwitcherDirector: DirectorInstrumentDef = {
   id: 'sceneSwitcher',
   name: 'Scene Switcher',
   params: [],
   midiRows: (track, scenes, sceneOrder) => {
-    const visualIds = sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain)
-    const bindings = track.sceneBindings?.length
-      ? track.sceneBindings.filter((b) => scenes[b.sceneId] && !scenes[b.sceneId].isMain)
-      : visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i }))
+    const bindings = orderedSceneBindings(track, scenes, sceneOrder)
     return bindings
       .slice()
       .sort((a, b) => b.pitch - a.pitch)
@@ -25,9 +23,7 @@ export const sceneSwitcherDirector: DirectorInstrumentDef = {
     const visualIds = context.sceneOrder.filter((id) => context.scenes[id] && !context.scenes[id].isMain)
     const fallback = visualIds[0]
     if (!fallback) return []
-    const bindings = track.sceneBindings?.length
-      ? track.sceneBindings
-      : visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i }))
+    const bindings = orderedSceneBindings(track, context.scenes, context.sceneOrder)
     const byPitch = new Map(bindings.map((b) => [b.pitch, b.sceneId]))
     const notes = flattenTrackNotes(track, context.beatsPerBar, context.totalBars)
     let selected = fallback

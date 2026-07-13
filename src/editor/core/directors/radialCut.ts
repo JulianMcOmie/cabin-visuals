@@ -4,9 +4,9 @@ import {
   DEFAULT_PARTITION_COUNT,
   MAX_PARTITION_COUNT,
   heldDirectorPitches,
-  orderedVisualBindings,
   partitionSceneCount,
 } from './cut'
+import { orderedSceneBindings } from './sceneBindings'
 
 export const radialCutDirector: DirectorInstrumentDef = {
   id: 'radialCut',
@@ -15,7 +15,7 @@ export const radialCutDirector: DirectorInstrumentDef = {
     { key: 'sceneCount', label: 'Scenes', min: 1, max: MAX_PARTITION_COUNT, step: 1, default: DEFAULT_PARTITION_COUNT },
   ],
   midiRows(track, scenes, sceneOrder) {
-    const bindings = orderedVisualBindings(track, scenes, sceneOrder)
+    const bindings = orderedSceneBindings(track, scenes, sceneOrder)
     const count = partitionSceneCount(track, bindings.length)
     return bindings.slice(0, count).map((binding, index) => ({
       pitch: binding.pitch,
@@ -25,7 +25,7 @@ export const radialCutDirector: DirectorInstrumentDef = {
     }))
   },
   resolve(track, context) {
-    const bindings = orderedVisualBindings(track, context.scenes, context.sceneOrder)
+    const bindings = orderedSceneBindings(track, context.scenes, context.sceneOrder)
     const count = partitionSceneCount(track, bindings.length)
     if (count === 0) return []
     const heldPitches = heldDirectorPitches(track, context.beat, context.beatsPerBar, context.totalBars)

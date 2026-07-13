@@ -7,6 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { getDirector } from '../core/directors'
+import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
@@ -716,7 +717,7 @@ export function TrackEditor() {
                     const director = getDirector(track.directorId)
                     const scenes = useProjectStore.getState().scenes
                     const rows = director?.midiRows(track, scenes, useProjectStore.getState().sceneOrder) ?? []
-                    const bindings = (track.sceneBindings ?? []).filter((binding) => scenes[binding.sceneId] && !scenes[binding.sceneId].isMain)
+                    const bindings = orderedSceneBindings(track, scenes, useProjectStore.getState().sceneOrder)
                     const cutCount = Math.min(bindings.length, Math.max(1, Math.round(track.params?.sceneCount ?? 3)))
                     const isPartitionDirector = track.directorId === 'cut' || track.directorId === 'radialCut'
                     const partitionLabel = track.directorId === 'radialCut' ? 'Ring' : 'Cut'

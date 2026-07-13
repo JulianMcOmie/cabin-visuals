@@ -45,6 +45,18 @@ test('Radial Cut defaults to three ordered MIDI rows and supports an adjustable 
   assert.equal(radialCutDirector.midiRows({ ...track, params: { sceneCount: 2 } }, scenes, ['main', 'one', 'two', 'three', 'four']).length, 2)
 })
 
+test('new scenes append to an incomplete saved binding list', () => {
+  const stale = {
+    ...track,
+    params: { sceneCount: 3 },
+    sceneBindings: [{ pitch: 60, sceneId: 'one' }, { pitch: 61, sceneId: 'two' }],
+  }
+  assert.deepEqual(
+    radialCutDirector.midiRows(stale, scenes, ['main', 'one', 'two', 'three', 'four']).map((row) => [row.pitch, row.label]),
+    [[60, 'Scene 1'], [61, 'Scene 2'], [62, 'Scene 3']],
+  )
+})
+
 test('held rows map to fixed concentric partitions from center to outside', () => {
   assert.deepEqual(resolve(-0.1), [])
   assert.deepEqual(resolve(0).map((layer) => [layer.sceneId, layer.partition]), [

@@ -1,17 +1,11 @@
 import { flattenTrackNotes } from '../visual/noteFlatten'
-import type { Scene, Track } from '../../types'
+import type { Track } from '../../types'
 import type { DirectorInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
+import { orderedSceneBindings } from './sceneBindings'
 
 export const DEFAULT_PARTITION_COUNT = 3
 export const MAX_PARTITION_COUNT = 8
-
-export function orderedVisualBindings(track: Track, scenes: Record<string, Scene>, sceneOrder: string[]) {
-  const visualIds = sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain)
-  return track.sceneBindings?.length
-    ? track.sceneBindings.filter((binding) => scenes[binding.sceneId] && !scenes[binding.sceneId].isMain)
-    : visualIds.map((sceneId, index) => ({ sceneId, pitch: 60 + index }))
-}
 
 export function partitionSceneCount(track: Track, available: number): number {
   return Math.min(available, Math.max(1, Math.min(MAX_PARTITION_COUNT, Math.round(track.params?.sceneCount ?? DEFAULT_PARTITION_COUNT))))
@@ -46,7 +40,7 @@ export const cutDirector: DirectorInstrumentDef = {
     },
   ],
   midiRows(track, scenes, sceneOrder) {
-    const bindings = orderedVisualBindings(track, scenes, sceneOrder)
+    const bindings = orderedSceneBindings(track, scenes, sceneOrder)
     const count = partitionSceneCount(track, bindings.length)
     return bindings.slice(0, count).map((binding, index) => ({
       pitch: binding.pitch,
@@ -56,7 +50,7 @@ export const cutDirector: DirectorInstrumentDef = {
     }))
   },
   resolve(track, context) {
-    const bindings = orderedVisualBindings(track, context.scenes, context.sceneOrder)
+    const bindings = orderedSceneBindings(track, context.scenes, context.sceneOrder)
     const count = partitionSceneCount(track, bindings.length)
     if (count === 0) return []
     const heldPitches = heldDirectorPitches(track, context.beat, context.beatsPerBar, context.totalBars)
