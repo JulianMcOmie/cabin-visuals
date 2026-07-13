@@ -1,45 +1,29 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { MotionConfig } from "framer-motion"
 import { CabinLogo } from "./CabinLogo"
+import { Appear, Reveal } from "./motionPresets"
 import { ProfileMenu } from "./ProfileMenu"
-import { createClient } from "../utils/supabase/client"
+import { useAuth } from "../persistence/hooks/useAuth"
 import { track } from "../analytics/analytics"
-import type { User } from '@supabase/supabase-js'
 
 export default function LandingPage() {
   const videoSectionRef = useRef<HTMLElement>(null)
   const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-
-  useEffect(() => {
-    let isMounted = true
-    const supabase = createClient()
-
-    supabase.auth.getUser().then(({ data }) => {
-      if (isMounted) setUser(data.user)
-    })
-
-    // Listen ONLY for sign out events to update UI
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (isMounted && event === 'SIGNED_OUT') setUser(null)
-      }
-    )
-
-    return () => {
-      isMounted = false
-      subscription.unsubscribe()
-    }
-  }, [])
+  // Shared cached auth (not a private per-mount fetch), so navigating back to
+  // the landing page renders the known sign-in state instead of re-running the
+  // login/signup -> profile flip.
+  const { user } = useAuth()
 
   const scrollToVideo = () => {
     videoSectionRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex min-h-screen flex-col bg-[var(--bg-page)] text-[var(--text)] font-sans">
       {/* Nav - 64px, hairline border */}
       <header className="border-b border-[var(--border-subtle)]">
@@ -83,18 +67,16 @@ export default function LandingPage() {
       <main className="flex-1">
         {/* Hero */}
         <section className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-10 px-6 pt-[104px] pb-[88px] text-center">
-          <div className="flex flex-col items-center gap-7">
+          <Appear className="flex flex-col items-center gap-7">
             <CabinLogo className="block h-[150px] w-auto" />
             <h1 className="m-0 text-[44px] font-bold leading-[1.08] tracking-[-0.03em] text-[var(--text)] md:text-[64px]">
-              <span>The </span>
-              <span className="text-[var(--accent)]">visual music</span>
-              <span> workstation</span>
+              <span>The visual music workstation</span>
             </h1>
             <p className="m-0 max-w-[620px] text-[18px] leading-[1.55] text-[var(--text-3)]">
               Create visuals like you create music.
             </p>
-          </div>
-          <div className="flex flex-col items-center gap-[18px]">
+          </Appear>
+          <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
             <div className="flex items-center gap-3">
               {user ? (
                 // Show "Take me to my projects" if user is logged in
@@ -124,7 +106,7 @@ export default function LandingPage() {
             <span className="font-mono text-[12px] text-[var(--text-muted)]">
               No account needed - the editor opens in your browser
             </span>
-          </div>
+          </Appear>
         </section>
 
         {/* Video Section */}
@@ -133,7 +115,7 @@ export default function LandingPage() {
           id="demo-video"
           className="mx-auto flex w-full max-w-[1200px] justify-center px-6 pb-24"
         >
-          <div className="w-full max-w-[960px]">
+          <Reveal className="w-full max-w-[960px]">
             <div className="flex items-center gap-2 px-0.5 pb-2.5">
               <span className="h-2 w-2 rounded-[2px] bg-[var(--accent)]"></span>
               <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">DEMO - 2:41</span>
@@ -147,7 +129,7 @@ export default function LandingPage() {
                 allowFullScreen
               ></iframe>
             </div>
-          </div>
+          </Reveal>
         </section>
       </main>
 
@@ -159,5 +141,6 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   )
 }

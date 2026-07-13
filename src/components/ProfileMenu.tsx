@@ -29,14 +29,26 @@ const getInitials = (p: ProfileData | null): string => {
   return f && l ? `${f}${l}` : f || l || '?'
 }
 
+// Cache the fetched profile per user id. The header remounts on every client
+// navigation, so without this the avatar would re-query and flash "?" each
+// time; a cached value renders the initials immediately.
+const profileCache = new Map<string, ProfileData | null>()
+
 export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const { user, isAnonymous } = useAuth()
   const permanent = !!user && !isAnonymous
-  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const [profile, setProfile] = useState<ProfileData | null>(() =>
+    user ? profileCache.get(user.id) ?? null : null,
+  )
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     if (!permanent || !user) return
+    // Already fetched (even a null result) - reuse it, no re-query.
+    if (profileCache.has(user.id)) {
+      setProfile(profileCache.get(user.id) ?? null)
+      return
+    }
     let mounted = true
     createClient()
       .from('profiles')
@@ -44,6 +56,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
       .eq('user_id', user.id)
       .single()
       .then(({ data }) => {
+        profileCache.set(user.id, data ?? null)
         if (mounted) setProfile(data ?? null)
       })
     return () => {

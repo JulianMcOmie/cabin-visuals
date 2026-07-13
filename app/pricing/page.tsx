@@ -8,6 +8,8 @@ import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { startCheckout, usePlan } from '../../src/billing/usePlan'
 import { track } from '../../src/analytics/analytics'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
+import { MotionConfig } from 'framer-motion'
+import { Appear } from '../../src/components/motionPresets'
 
 const FREE_FEATURES = [
   'The full editor - every instrument and template',
@@ -51,6 +53,7 @@ export default function PricingPage() {
   }, [])
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text)] font-sans">
       {/* Nav - 64px, hairline border (same as Landing) */}
       <header className="border-b border-[var(--border-subtle)]">
@@ -72,16 +75,16 @@ export default function PricingPage() {
       </header>
 
       <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
-        <div className="mt-16 mb-12 text-center">
+        <Appear className="mt-16 mb-12 text-center">
           <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Make music you can see</h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
             Start free. Upgrade when you want your exports clean and full-res.
           </p>
-        </div>
+        </Appear>
 
         <div className="mx-auto grid max-w-[760px] gap-5 md:grid-cols-2">
           {/* Free */}
-          <div className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
+          <Appear delay={0.05} className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
             <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">FREE</span>
             <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">Everything you need to start creating.</p>
             <div className="mt-[18px] flex items-baseline gap-1">
@@ -101,10 +104,10 @@ export default function PricingPage() {
             >
               {hasAccount ? 'Go to your projects' : 'Start creating'}
             </Link>
-          </div>
+          </Appear>
 
           {/* Pro */}
-          <div className="relative flex flex-col rounded-lg border border-[rgba(53,167,230,0.5)] bg-[var(--bg-panel)] p-7">
+          <Appear delay={0.1} className="relative flex flex-col rounded-lg border border-[rgba(53,167,230,0.5)] bg-[var(--bg-panel)] p-7">
             <span className="absolute -top-2.5 right-5 rounded px-[9px] py-[3px] font-mono text-[10px] font-bold tracking-[0.08em] bg-[var(--accent)] text-[var(--on-accent)]">
               PRO
             </span>
@@ -142,7 +145,7 @@ export default function PricingPage() {
                 )}
               </button>
             )}
-          </div>
+          </Appear>
         </div>
 
         <p className="mt-9 text-center text-[12px] text-[var(--text-muted)]">
@@ -150,5 +153,6 @@ export default function PricingPage() {
         </p>
       </main>
     </div>
+    </MotionConfig>
   )
 }
