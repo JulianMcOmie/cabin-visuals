@@ -1,8 +1,26 @@
-import { useRef, useEffect, useState } from 'react'
+import { useContext, useRef, useEffect, useState } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, CanvasTexture, LinearFilter, DoubleSide, type Material } from 'three'
+import {
+  AddEquation,
+  CanvasTexture,
+  Color,
+  CustomBlending,
+  DoubleSide,
+  Group,
+  LinearFilter,
+  Mesh,
+  MeshBasicMaterial,
+  NormalBlending,
+  OneFactor,
+  OneMinusDstColorFactor,
+  OneMinusSrcAlphaFactor,
+  PlaneGeometry,
+  SrcAlphaFactor,
+  type Material,
+} from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
-import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
+import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
+import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
@@ -45,6 +63,28 @@ function hslToHex(h: number, s: number, l: number): string {
 
 const TEXT_CANVAS_SIZE = 1024
 const TEXT_ALPHA_TEST = 0.001
+
+/**
+ * Invert mode uses fixed-function blending to calculate, per channel:
+ *   alpha * (1 - destination) + destination * (1 - alpha)
+ * Premultiplying the white glyph makes its RGB equal its coverage alpha, so this
+ * remains smooth at antialiased edges without sampling the framebuffer in a shader.
+ */
+function configureTextMaterial(material: MeshBasicMaterial, invertBehind: boolean): void {
+  material.userData[FORCE_TRANSPARENT_KEY] = true
+  material.transparent = true
+  if (material.premultipliedAlpha === invertBehind
+    && material.blending === (invertBehind ? CustomBlending : NormalBlending)) return
+
+  material.premultipliedAlpha = invertBehind
+  material.blending = invertBehind ? CustomBlending : NormalBlending
+  material.blendEquation = AddEquation
+  material.blendSrc = invertBehind ? OneMinusDstColorFactor : SrcAlphaFactor
+  material.blendDst = OneMinusSrcAlphaFactor
+  material.blendSrcAlpha = invertBehind ? OneFactor : null
+  material.blendDstAlpha = invertBehind ? OneMinusSrcAlphaFactor : null
+  material.needsUpdate = true
+}
 
 interface TextEntry {
   text: string
@@ -227,7 +267,13 @@ const PARAMS: ParamDef[] = [
       { value: 3, label: 'Sans-serif' },
     ],
   },
-  { key: 'color', label: 'Color', type: 'color', default: '#ffffff' },
+  {
+    key: 'colorMode', label: 'Text Color', type: 'select', default: 0, options: [
+      { value: 0, label: 'Custom' },
+      { value: 1, label: 'Invert Behind' },
+    ],
+  },
+  { key: 'color', label: 'Custom Color', type: 'color', default: '#ffffff' },
   { key: 'strokeColor', label: 'Stroke Color', type: 'color', default: '#000000' },
   { key: 'fontSize', label: 'Font Size', min: 0.1, max: 5, step: 0.1, default: 1 },
   { key: 'strokeWidth', label: 'Stroke Width', min: 0, max: 0.2, step: 0.01, default: 0.05 },
@@ -254,6 +300,7 @@ const PARAMS: ParamDef[] = [
 const _hueColor = new Color()
 
 function TextDisplayVisual({ trackId }: { trackId: string }) {
+  const renderingFinalInvertMask = useContext(FinalInvertMaskContext)
   const groupRef = useRef<Group>(null)
   const meshRef = useRef<Mesh>(null)
   const textureRef = useRef<CanvasTexture | null>(null)
@@ -288,6 +335,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       textures.push(echoTex)
       lastWords.push('')
       const mat = new MeshBasicMaterial({ map: echoTex, transparent: true, alphaTest: TEXT_ALPHA_TEST, depthWrite: false, opacity: 0 })
+      configureTextMaterial(mat, false)
       const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
       mesh.visible = false
       meshes.push(mesh)
@@ -326,6 +374,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     texture.minFilter = LinearFilter
     texture.magFilter = LinearFilter
     const mat = new MeshBasicMaterial({ map: texture, transparent: true, alphaTest: TEXT_ALPHA_TEST, opacity: 1, side: DoubleSide, depthWrite: false, toneMapped: false })
+    configureTextMaterial(mat, false)
     const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
     group.add(mesh)
     const entry: FlightPooled = { mesh, texture, mat, key: '', active: true }
@@ -340,6 +389,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const text = state.stringParams.text ?? 'HELLO'
     const family = fontStack(p.font ?? 0)
     const color = state.stringParams.color || '#ffffff'
+    const invertBehind = (p.colorMode ?? 0) >= 0.5
     const strokeColor = state.stringParams.strokeColor || ''
     const fontSize = p.fontSize ?? 1
     const strokeWidth = p.strokeWidth ?? 0.05
@@ -447,14 +497,21 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
     const rainbowHue = rainbowEnabled ? ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
     const effectiveColor = shiftHex(rainbowEnabled ? hslToHex(rainbowHue, 1, 0.55) : color)
+    const canvasColor = invertBehind ? '#ffffff' : effectiveColor
+    const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
 
     const baseScale = Math.min(viewport.width, viewport.height) * 0.6 * fontSize
 
+    const invertInThisPass = invertBehind && !renderingFinalInvertMask
+    configureTextMaterial(meshRef.current.material as MeshBasicMaterial, invertInThisPass)
+    for (const mesh of echoMeshesRef.current) configureTextMaterial(mesh.material as MeshBasicMaterial, invertInThisPass)
+    for (const spr of flightPoolRef.current) configureTextMaterial(spr.mat, invertInThisPass)
+
     // Re-render main texture when the word or styling changes.
-    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${family}|${effectiveColor}|${strokeColor}`
+    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${family}|${canvasColor}|${canvasStrokeColor}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      textureRef.current.image = createTextCanvas(currentEntry, strokeWidth, family, effectiveColor, strokeColor)
+      textureRef.current.image = createTextCanvas(currentEntry, strokeWidth, family, canvasColor, canvasStrokeColor)
       textureRef.current.needsUpdate = true
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
@@ -477,7 +534,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         if (depth > flightMaxDepth) continue
 
         const sprEntry = entries[(Math.max(1, wordCountAt(spawnBeat)) - 1) % entries.length] ?? entries[0]
-        const sprColor = shiftHex(rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color)
+        const sprColor = invertBehind
+          ? '#ffffff'
+          : shiftHex(rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color)
         const seed = k * 13 + 7
         const vx = (seededRand(seed) - 0.5) * flightDrift
         const vy = (seededRand(seed + 1) - 0.5) * flightDrift * 0.6
@@ -485,10 +544,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const tumbleY = (seededRand(seed + 3) - 0.5) * flightTumble
 
         const spr = acquireFlightSprite(groupRef.current)
-        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${family}|${sprColor}|${strokeColor}`
+        configureTextMaterial(spr.mat, invertInThisPass)
+        const sprStrokeColor = invertBehind ? '#ffffff' : strokeColor
+        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${family}|${sprColor}|${sprStrokeColor}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          spr.texture.image = createTextCanvas(sprEntry, strokeWidth, family, sprColor, strokeColor)
+          spr.texture.image = createTextCanvas(sprEntry, strokeWidth, family, sprColor, sprStrokeColor)
           spr.texture.needsUpdate = true
         }
         spr.mesh.position.set(
@@ -561,9 +622,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
       const echoEntry = entries[echoIdx % entries.length]
       const tex = echoTexturesRef.current[tap]
-      const echoKey = `${echoEntry.cacheKey}|${effectiveColor}|${strokeColor}`
+      const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        tex.image = createTextCanvas(echoEntry, strokeWidth, family, effectiveColor, strokeColor)
+        tex.image = createTextCanvas(echoEntry, strokeWidth, family, canvasColor, canvasStrokeColor)
         tex.needsUpdate = true
         echoLastWordsRef.current[tap] = echoKey
       }
@@ -584,7 +645,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     <group ref={groupRef}>
       <mesh ref={meshRef}>
         <planeGeometry args={[1, 1]} />
-        <meshBasicMaterial map={textureRef.current} transparent alphaTest={TEXT_ALPHA_TEST} depthWrite={false} />
+        <meshBasicMaterial
+          map={textureRef.current}
+          transparent
+          alphaTest={TEXT_ALPHA_TEST}
+          depthWrite={false}
+        />
       </mesh>
     </group>
   )

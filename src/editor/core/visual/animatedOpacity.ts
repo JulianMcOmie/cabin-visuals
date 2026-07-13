@@ -14,6 +14,7 @@ import type { Group, Material } from 'three'
 // value instead of fighting it.
 
 export const BASE_OPACITY_KEY = '__cabinBaseOpacity'
+export const FORCE_TRANSPARENT_KEY = '__cabinForceTransparent'
 
 /** Instrument-side per-frame opacity write: sets the material's opacity AND its
  *  recorded base so the wrapper's mover pass multiplies rather than overwrites. */
@@ -39,7 +40,9 @@ export function applyMaterialOpacity(root: Group, opacity: number): void {
         ? material.userData[BASE_OPACITY_KEY] as number
         : material.opacity
       material.userData[BASE_OPACITY_KEY] = baseOpacity
-      material.transparent = resolvedOpacity < 0.999 || baseOpacity < 0.999
+      material.transparent = material.userData[FORCE_TRANSPARENT_KEY] === true
+        || resolvedOpacity < 0.999
+        || baseOpacity < 0.999
       material.opacity = clampOpacity(baseOpacity * resolvedOpacity)
     }
   })
