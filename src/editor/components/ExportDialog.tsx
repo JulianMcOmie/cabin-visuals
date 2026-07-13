@@ -305,7 +305,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
                 >
                   Upgrade to Pro
                 </a>{' '}
-                for clean 1080p.
+                for clean exports up to 4K.
               </p>
             )}
 

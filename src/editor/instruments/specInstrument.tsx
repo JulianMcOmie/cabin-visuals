@@ -1,5 +1,5 @@
 import { useRef, type ReactElement } from 'react'
-import { Mesh, MeshStandardMaterial } from 'three'
+import { Mesh, MeshPhysicalMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { compileExpr, type RenderSpec, type Compiled, type Scope, type Primitive, type Expr } from '../core/visual/renderSpec'
@@ -33,22 +33,66 @@ interface CompiledAppearance {
 /** The generic renderer for a RenderSpec object: the world transform + blackout are
  *  applied by ObjectRenderer's placement group (this mesh sits at local origin); the
  *  appearance bindings are evaluated onto the material each frame. */
-function SpecRenderer({ trackId, primitive, appearance, paramDefaults }: { trackId: string; primitive: Primitive; appearance: CompiledAppearance; paramDefaults: Record<string, number> }) {
+interface DirectColorParam {
+  key: string
+  default: string
+  legacyHueParam?: string
+}
+
+export interface MaterialPreset {
+  metalness?: number
+  roughness?: number
+  clearcoat?: number
+  clearcoatRoughness?: number
+  iridescence?: number
+  iridescenceIOR?: number
+  envMapIntensity?: number
+  flatShading?: boolean
+}
+
+function SpecRenderer({ trackId, primitive, appearance, paramDefaults, colorParam, material }: {
+  trackId: string
+  primitive: Primitive
+  appearance: CompiledAppearance
+  paramDefaults: Record<string, number>
+  colorParam?: DirectColorParam
+  material: MaterialPreset
+}) {
   const meshRef = useRef<Mesh>(null)
   useInstrumentFrame(trackId, (state) => {
     if (!meshRef.current) return
-    const mat = meshRef.current.material as MeshStandardMaterial
+    const mat = meshRef.current.material as MeshPhysicalMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an
     // unset param reads its default (not 0) - a fresh track has no params yet.
     const scope: Scope = { param: { ...paramDefaults, ...state.params }, port: { energy: state.energy }, beat: state.beat }
-    if (appearance.hue) mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
+    if (colorParam) {
+      const directColor = state.stringParams[colorParam.key]
+      const legacyHue = colorParam.legacyHueParam ? state.params[colorParam.legacyHueParam] : undefined
+      if (directColor) mat.color.set(directColor)
+      else if (legacyHue !== undefined) mat.color.setHSL(((legacyHue % 360) + 360) % 360 / 360, 0.65, 0.6)
+      else mat.color.set(colorParam.default)
+    } else if (appearance.hue) {
+      mat.color.setHSL(((appearance.hue(scope) % 360) + 360) % 360 / 360, 0.65, 0.6)
+    }
     if (appearance.emissive) mat.emissiveIntensity = appearance.emissive(scope)
     if (appearance.opacity) { mat.transparent = true; setAnimatedOpacity(mat, appearance.opacity(scope)) }
   })
   return (
-    <mesh ref={meshRef}>
+    <mesh ref={meshRef} castShadow receiveShadow>
       {primitiveGeometry(primitive)}
-      <meshStandardMaterial color="#6366f1" metalness={0.4} roughness={0.35} emissive="#312e81" emissiveIntensity={0.2} />
+      <meshPhysicalMaterial
+        color="#6366f1"
+        metalness={material.metalness ?? 0.4}
+        roughness={material.roughness ?? 0.35}
+        clearcoat={material.clearcoat ?? 0.35}
+        clearcoatRoughness={material.clearcoatRoughness ?? 0.2}
+        iridescence={material.iridescence ?? 0}
+        iridescenceIOR={material.iridescenceIOR ?? 1.3}
+        envMapIntensity={material.envMapIntensity ?? 1.1}
+        flatShading={material.flatShading ?? false}
+        emissive="#312e81"
+        emissiveIntensity={0.2}
+      />
     </mesh>
   )
 }
@@ -66,6 +110,9 @@ export function specInstrument(opts: {
   params: ParamDef[]
   midiRows?: MidiRowDef[]
   spec: RenderSpec
+  /** Direct string-valued material color, with an optional old hue-param fallback. */
+  colorParam?: DirectColorParam
+  material?: MaterialPreset
 }): ObjectInstrumentDef {
   const { spec } = opts
 
@@ -97,7 +144,14 @@ export function specInstrument(opts: {
   }
 
   const Component = ({ trackId }: { trackId: string }) => (
-    <SpecRenderer trackId={trackId} primitive={spec.primitive} appearance={appearance} paramDefaults={paramDefaults} />
+    <SpecRenderer
+      trackId={trackId}
+      primitive={spec.primitive}
+      appearance={appearance}
+      paramDefaults={paramDefaults}
+      colorParam={opts.colorParam}
+      material={opts.material ?? {}}
+    />
   )
 
   return {

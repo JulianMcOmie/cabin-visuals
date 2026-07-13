@@ -52,6 +52,18 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <text x="6" y="9.5" fontSize="11" fontWeight="900" fontFamily="Arial Black, sans-serif" textAnchor="middle" fill="#818cf8">T</text>
     </svg>
   )},
+  { id: 'oscilloscope', name: 'Oscilloscope', description: 'Draws the mixed audio output as a live full-screen waveform.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M0.5 6 H2.2 L3.2 2.5 L4.7 9.5 L6.2 4 L7.5 7.5 L8.7 5 H11.5" fill="none" stroke="#22d3ee" strokeWidth="1.1" strokeLinejoin="round" />
+    </svg>
+  )},
+  { id: 'colorFilters', name: 'Color Filters', description: 'Applies scene-wide color remaps while its labeled MIDI notes are held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
+      <circle cx="7.8" cy="4.5" r="3" fill="none" stroke="#f472b6" strokeWidth="1" />
+      <circle cx="6" cy="7.7" r="3" fill="none" stroke="#facc15" strokeWidth="1" />
+    </svg>
+  )},
 ])
 
 const DIRECTOR_INSTRUMENTS = withKind('director', [
@@ -354,7 +366,7 @@ export function LeftSidebar() {
             {activeIsMain ? (
               <Section title="Director" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             ) : <>
-            <Section title="Main" description="The essentials: the Camera that films the scene, Video for cutting between uploaded clips, and Text for words on screen." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene - for example, a cube or sphere." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}

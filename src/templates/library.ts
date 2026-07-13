@@ -133,7 +133,8 @@ const minimalPulse: TemplateDef = {
         name: 'Cube',
         instrumentId: 'cube',
         color: '#6366f1',
-        params: { baseSize: 2, spinSpeed: 0.8, baseHue: 200 },
+        params: { baseSize: 2, spinSpeed: 0.8 },
+        stringParams: { baseColor: '#57afdb' },
         blocks: [block(0, BARS, [])],
         children: [
           {

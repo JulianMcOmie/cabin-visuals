@@ -57,14 +57,22 @@ export function resolveExportRange(
 }
 
 export const RESOLUTIONS = [
+  { label: '4K', width: 3840, height: 2160 },
   { label: '1080p', width: 1920, height: 1080 },
   { label: '720p', width: 1280, height: 720 },
 ] as const
 
-/** 12 Mbps at 1080p60 reads clean for motion-heavy visuals; scale down with area/rate. */
+/** Motion-friendly H.264 bitrates for each fixed output tier. */
 export function defaultBitrate(width: number, fps: number): number {
+  if (width >= 3840) return fps === 30 ? 35_000_000 : 50_000_000
   const base = width >= 1920 ? 12_000_000 : 8_000_000
   return fps === 30 ? Math.round(base * 0.75) : base
+}
+
+/** H.264 High profile level required by the selected frame size/rate. */
+export function videoCodec(width: number, fps: number): string {
+  if (width >= 3840) return fps === 30 ? 'avc1.640033' : 'avc1.640034'
+  return 'avc1.64002a'
 }
 
 export function defaultSettings(fileName: string): ExportSettings {

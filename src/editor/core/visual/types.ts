@@ -138,6 +138,8 @@ export interface ObjectState {
   beat: number
   /** Seconds per beat (60/bpm this frame), for beat-age → seconds conversions. */
   secPerBeat: number
+  /** Project meter, needed by playhead-pure visuals that align to bar-based media. */
+  beatsPerBar: number
   params: Record<string, number>
   /** Decaying pulse from the object's own most recent note (the old implicit
    *  `energy` port) - the universal "a note just hit" signal instruments read. */

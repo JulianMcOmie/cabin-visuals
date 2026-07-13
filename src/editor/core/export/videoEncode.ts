@@ -2,7 +2,7 @@
 // into the muxer, and the backpressure gate the frame loop leans on - encode()
 // is fire-and-forget, so without the gate a fast walk would balloon the queue.
 
-import type { ExportSettings } from './types'
+import { videoCodec, type ExportSettings } from './types'
 import type { Mp4Writer } from './mux'
 
 /** Encoder queue depth the loop tolerates before waiting on 'dequeue'. Small on
@@ -29,7 +29,7 @@ export function createVideoEncodeSession(
     error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
   })
   encoder.configure({
-    codec: 'avc1.64002a', // H.264 High 4.2 - covers 1080p60
+    codec: videoCodec(settings.width, settings.fps),
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,

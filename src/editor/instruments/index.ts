@@ -30,6 +30,8 @@ import { scoreTickerInstrument } from './ScoreTicker'
 import { pointLightInstrument } from './PointLightObject'
 import { videoInstrument } from './Video'
 import { photoInstrument } from './Photo'
+import { oscilloscopeInstrument } from './Oscilloscope'
+import { colorFiltersInstrument } from './ColorFilters'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -64,6 +66,8 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [pointLightInstrument.id]: pointLightInstrument,
   [videoInstrument.id]: videoInstrument,
   [photoInstrument.id]: photoInstrument,
+  [oscilloscopeInstrument.id]: oscilloscopeInstrument,
+  [colorFiltersInstrument.id]: colorFiltersInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

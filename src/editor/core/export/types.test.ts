@@ -1,12 +1,25 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { makeTimebase, resolveExportRange } from './types'
+import { defaultBitrate, makeTimebase, RESOLUTIONS, resolveExportRange, videoCodec } from './types'
 
 // 120 bpm, 4/4, 4 bars, 60 fps: the arithmetic stays exact in these cases.
 const BPM = 120
 const BPB = 4
 const BARS = 4
 const FPS = 60
+
+test('export resolutions include 4K UHD', () => {
+  assert.deepEqual(RESOLUTIONS[0], { label: '4K', width: 3840, height: 2160 })
+})
+
+test('4K uses appropriate H.264 levels and bitrates', () => {
+  assert.equal(videoCodec(3840, 30), 'avc1.640033')
+  assert.equal(videoCodec(3840, 60), 'avc1.640034')
+  assert.equal(defaultBitrate(3840, 30), 35_000_000)
+  assert.equal(defaultBitrate(3840, 60), 50_000_000)
+  assert.equal(videoCodec(1920, 60), 'avc1.64002a')
+  assert.equal(defaultBitrate(1920, 60), 12_000_000)
+})
 
 test('whole-project timebase is unchanged by the range parameter being absent', () => {
   const tb = makeTimebase(BPM, BPB, BARS, FPS)

@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 8
+export const CURRENT_VERSION = 9
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -205,6 +205,49 @@ UPGRADES[7] = (doc) => {
   const scenes: Record<string, Scene> = {}
   for (const [id, scene] of Object.entries(rest.scenes ?? {})) {
     scenes[id] = { ...scene, backgroundTransparent: scene.backgroundTransparent ?? false }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v8 → v9 ──────────────────────────────────────────────────────────────────
+// Cube/Circle/Triangle used to expose Base Color as a numeric 0–360 hue. Store
+// the equivalent concrete color so the editor can use a native color picker.
+UPGRADES[8] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const shapeIds = new Set(['cube', 'circle', 'triangle'])
+  const hueToHex = (hue: number) => {
+    const h = ((hue % 360) + 360) % 360
+    const saturation = 0.65
+    const lightness = 0.6
+    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+    const x = chroma * (1 - Math.abs((h / 60) % 2 - 1))
+    const m = lightness - chroma / 2
+    let r = 0, g = 0, b = 0
+    if (h < 60) { r = chroma; g = x } else if (h < 120) { r = x; g = chroma }
+    else if (h < 180) { g = chroma; b = x } else if (h < 240) { g = x; b = chroma }
+    else if (h < 300) { r = x; b = chroma } else { r = chroma; b = x }
+    const hex = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, '0')
+    return `#${hex(r)}${hex(g)}${hex(b)}`
+  }
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      if (!shapeIds.has(track.instrumentId) || track.stringParams?.baseColor) {
+        tracks[trackId] = track
+        continue
+      }
+      const { baseHue, ...params } = track.params ?? {}
+      tracks[trackId] = {
+        ...track,
+        params,
+        stringParams: {
+          ...track.stringParams,
+          baseColor: hueToHex(baseHue ?? 240),
+        },
+      }
+    }
+    scenes[sceneId] = { ...scene, tracks }
   }
   return { ...rest, scenes }
 }

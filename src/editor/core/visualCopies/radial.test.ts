@@ -29,6 +29,7 @@ test('radial is registered as a production splitter defaulting to 6 XY copies', 
   assert.equal(def?.kind, 'splitter')
   assert.equal(def?.label, 'Radial')
   assert.equal(DEFAULTS.copies, 6)
+  assert.equal(DEFAULTS.radius, 0)
   assert.equal(DEFAULTS.plane, 0)
   const copies = resolveVisualCopies([radialSplitter.resolve({ settings: settings(), notes: [] })], 0)
   assert.equal(copies.length, 6)
@@ -52,6 +53,43 @@ test('slot 0 is unrotated and copies preserve opacity and color shift', () => {
     assert.equal(copy.colorShift.hue, 0.25)
   }
   assert.equal(input.opacity, 0.5, 'input copy is not mutated')
+})
+
+test('radius spaces copies around the selected radial plane', () => {
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(copies.map(positionOf), [
+    [2, 0, 0],
+    [0, 2, 0],
+    [-2, 0, 0],
+    [0, -2, 0],
+  ])
+
+  const yz = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 1, plane: 2 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(yz.map(positionOf), [
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, -1, 0],
+    [0, 0, -1],
+  ])
+})
+
+test('radial MIDI rows disable copies only while their notes are held', () => {
+  const radialSettings = settings({ copies: 3 })
+  const rows = radialSplitter.midiRows!(radialSettings)
+  assert.deepEqual(rows.map((row) => row.label), [
+    'Disable copy 1',
+    'Disable copy 2',
+    'Disable copy 3',
+  ])
+  assert.equal(radialSplitter.strictMidiRows, true)
+
+  const resolved = radialSplitter.resolve({ settings: radialSettings, notes: [note(0, rows[2].pitch)] })
+  assert.deepEqual(resolveVisualCopies([resolved], 0.5).map((copy) => copy.opacity), [1, 1, 0])
+  assert.deepEqual(resolveVisualCopies([resolved], 1).map((copy) => copy.opacity), [1, 1, 1])
 })
 
 test('radial above the burst re-frames it: the translation spreads radially (XY plane)', () => {
