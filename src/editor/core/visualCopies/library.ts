@@ -154,12 +154,41 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 
 export interface RadialSettings {
   copies: number
+  radius: number
   /** 0 = XY (about Z), 1 = XZ (about Y), 2 = YZ (about X). */
   plane: number
 }
 
 const RADIAL_MAX_COPIES = 32
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
+const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
+
+const SPLITTER_TOP_PITCH = 127
+const MIDI_PITCH_COUNT = 128
+
+function splitterMidiRows(count: number, singular: string, plural: string): MidiRowDef[] {
+  const rowCount = Math.min(MIDI_PITCH_COUNT, count)
+  return Array.from({ length: rowCount }, (_, rowIndex) => {
+    const first = Math.floor((rowIndex * count) / rowCount) + 1
+    const last = Math.floor(((rowIndex + 1) * count) / rowCount)
+    const label = first === last ? `Disable ${singular} ${first}` : `Disable ${plural} ${first}–${last}`
+    return { pitch: SPLITTER_TOP_PITCH - rowIndex, label }
+  })
+}
+
+function noteDisablesSplitterSlot(
+  notes: readonly ResolvedNote[],
+  beat: number,
+  slot: number,
+  slotCount: number,
+): boolean {
+  const rowCount = Math.min(MIDI_PITCH_COUNT, slotCount)
+  const rowIndex = Math.min(rowCount - 1, Math.floor((slot * rowCount) / slotCount))
+  const pitch = SPLITTER_TOP_PITCH - rowIndex
+  return notes.some((note) =>
+    note.pitch === pitch && beat >= note.beat && beat < note.beat + (note.durationBeats || 0.05),
+  )
+}
 
 export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
@@ -167,6 +196,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   kind: 'splitter',
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
+    { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 0 },
     {
       key: 'plane',
       label: 'Plane',
@@ -179,18 +209,32 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
       default: 0,
     },
   ],
-  resolve({ settings }) {
+  midiRows: (settings) => splitterMidiRows(
+    Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies))),
+    'copy',
+    'copies',
+  ),
+  strictMidiRows: true,
+  resolve({ settings, notes }) {
     const count = Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies)))
-    const axis = RADIAL_AXES[settings.plane] ?? RADIAL_AXES[0]
-    // Structural slot rotations, in slot order (slot 0 is unrotated).
-    const rotations = Array.from({ length: count }, (_, slot) =>
-      new Matrix4().makeRotationAxis(axis, (slot / count) * Math.PI * 2),
+    const plane = settings.plane === 1 || settings.plane === 2 ? settings.plane : 0
+    const axis = RADIAL_AXES[plane]
+    const direction = RADIAL_DIRECTIONS[plane]
+    // Structural slot transforms, in slot order (slot 0 is unrotated).
+    const transforms = Array.from({ length: count }, (_, slot) =>
+      new Matrix4()
+        .makeRotationAxis(axis, (slot / count) * Math.PI * 2)
+        .multiply(new Matrix4().makeTranslation(
+          direction[0] * settings.radius,
+          direction[1] * settings.radius,
+          direction[2] * settings.radius,
+        )),
     )
     return {
-      apply(visualCopy) {
-        return rotations.map((rotation) => ({
-          transform: visualCopy.transform.clone().multiply(rotation),
-          opacity: visualCopy.opacity,
+      apply(visualCopy, { beat }) {
+        return transforms.map((transform, slot) => ({
+          transform: visualCopy.transform.clone().multiply(transform),
+          opacity: noteDisablesSplitterSlot(notes, beat, slot, count) ? 0 : visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }))
       },
@@ -203,6 +247,8 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 export interface GridSettings {
   rows: number
   columns: number
+  /** Multiplier for the distance between cell centers; 1 preserves the unit grid. */
+  spacing: number
   /** 0 = XY, 1 = XZ, 2 = YZ. */
   plane: number
   /** 0 = English, 1 = reverse English, 2 = columns first, 3 = reverse columns. */
@@ -238,6 +284,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   params: [
     { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
+    { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.1, default: 1 },
     {
       key: 'plane',
       label: 'Axes',
@@ -262,15 +309,21 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
       default: 0,
     },
   ],
-  resolve({ settings }) {
+  midiRows: (settings) => {
+    const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
+    const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
+    return splitterMidiRows(rows * columns, 'cell', 'cells')
+  },
+  strictMidiRows: true,
+  resolve({ settings, notes }) {
     const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
     const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
     const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
     const cells = gridCellOrder(rows, columns, settings.indexing).map(([row, column]) => {
       const position: [number, number, number] = [0, 0, 0]
       const scale: [number, number, number] = [1, 1, 1]
-      position[horizontalAxis] = (column + 0.5) / columns - 0.5
-      position[verticalAxis] = 0.5 - (row + 0.5) / rows
+      position[horizontalAxis] = ((column + 0.5) / columns - 0.5) * settings.spacing
+      position[verticalAxis] = (0.5 - (row + 0.5) / rows) * settings.spacing
       scale[horizontalAxis] = 1 / columns
       scale[verticalAxis] = 1 / rows
       return new Matrix4()
@@ -278,10 +331,10 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
         .multiply(new Matrix4().makeScale(scale[0], scale[1], scale[2]))
     })
     return {
-      apply(visualCopy) {
-        return cells.map((cell) => ({
+      apply(visualCopy, { beat }) {
+        return cells.map((cell, slot) => ({
           transform: visualCopy.transform.clone().multiply(cell),
-          opacity: visualCopy.opacity,
+          opacity: noteDisablesSplitterSlot(notes, beat, slot, cells.length) ? 0 : visualCopy.opacity,
           colorShift: { ...visualCopy.colorShift },
         }))
       },

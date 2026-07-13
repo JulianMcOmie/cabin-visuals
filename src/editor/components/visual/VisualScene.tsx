@@ -8,20 +8,33 @@ import {
   Float32BufferAttribute,
   Scene as ThreeScene,
   WebGLRenderTarget,
+  HalfFloatType,
   LinearFilter,
   AddEquation,
   CustomBlending,
   OneFactor,
   OneMinusDstColorFactor,
   OneMinusSrcAlphaFactor,
+  PlaneGeometry,
+  ShaderMaterial,
+  PMREMGenerator,
+  Vector2,
+  type Texture,
 } from 'three'
-import { getCompositionLayers, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
+import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
+import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
+import { getBeatOverride } from '../../core/visual/beatOverride'
+import { useTimeStore } from '../../store/TimeStore'
+
+RectAreaLightUniformsLib.init()
 
 interface MountedScene {
   base: ThreeScene
@@ -29,6 +42,8 @@ interface MountedScene {
   invert: ThreeScene
   target: WebGLRenderTarget
   invertTarget: WebGLRenderTarget
+  filterTargets: [WebGLRenderTarget, WebGLRenderTarget]
+  outputTexture: Texture
 }
 
 interface PartitionUniforms {
@@ -45,6 +60,159 @@ function makeCompositorGeometry() {
   geometry.setIndex([0, 1, 2, 0, 2, 3])
   return geometry
 }
+
+const COLOR_FILTER_VERTEX = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 1.0);
+}`
+
+const COLOR_FILTER_FRAGMENT = `
+uniform sampler2D tDiffuse;
+uniform float mode;
+uniform float amount;
+uniform float time;
+varying vec2 vUv;
+
+vec3 hueShift(vec3 color, float turns) {
+  vec3 axis = normalize(vec3(1.0));
+  float angle = turns * 6.28318530718;
+  return color * cos(angle)
+    + cross(axis, color) * sin(angle)
+    + axis * dot(axis, color) * (1.0 - cos(angle));
+}
+
+void main() {
+  vec4 source = texture2D(tDiffuse, vUv);
+  vec3 color = source.rgb;
+  float hdrScale = max(1.0, max(color.r, max(color.g, color.b)));
+  vec3 working = color / hdrScale;
+  float luma = dot(working, vec3(0.2126, 0.7152, 0.0722));
+  vec3 filtered = working;
+
+  if (mode < 1.5) {
+    filtered = vec3(1.0) - working;
+  } else if (mode < 2.5) {
+    filtered = vec3(1.0) - abs(working * 2.0 - vec3(1.0));
+  } else if (mode < 3.5) {
+    filtered = working.gbr;
+  } else if (mode < 4.5) {
+    filtered = working.brg;
+  } else if (mode < 5.5) {
+    filtered = vec3(
+      smoothstep(0.0, 0.55, luma),
+      smoothstep(0.25, 0.78, luma),
+      smoothstep(0.62, 1.0, luma)
+    );
+  } else if (mode < 6.5) {
+    vec3 shadow = vec3(0.015, 0.02, 0.16);
+    vec3 light = vec3(1.0, 0.02, 0.62);
+    filtered = mix(shadow, light, smoothstep(0.05, 0.95, luma));
+    filtered += vec3(0.0, 0.35, 0.45) * smoothstep(0.55, 1.0, working.g);
+  } else if (mode < 7.5) {
+    filtered = floor(working * 4.0 + 0.5) / 4.0;
+  } else if (mode < 8.5) {
+    filtered = 0.5 + 0.5 * cos(6.28318530718 * (luma + vec3(0.0, 0.33, 0.67)));
+  } else {
+    filtered = hueShift(working, 0.16 + mod(time * 0.035, 1.0));
+  }
+
+  filtered *= hdrScale;
+  gl_FragColor = vec4(mix(color, clamp(filtered, 0.0, hdrScale), amount), source.a);
+}`
+
+const BLOOM_FRAGMENT = `
+uniform sampler2D tDiffuse;
+uniform vec2 resolution;
+uniform vec2 direction;
+uniform float extract;
+varying vec2 vUv;
+
+vec3 sampleBloom(vec2 uv) {
+  vec3 color = texture2D(tDiffuse, uv).rgb;
+  if (extract > 0.5) {
+    float brightness = max(color.r, max(color.g, color.b));
+    color *= smoothstep(0.9, 1.65, brightness);
+  }
+  return color;
+}
+
+void main() {
+  vec2 stepUv = direction / resolution;
+  vec3 color = sampleBloom(vUv) * 0.227027;
+  color += sampleBloom(vUv + stepUv * 1.384615) * 0.316216;
+  color += sampleBloom(vUv - stepUv * 1.384615) * 0.316216;
+  color += sampleBloom(vUv + stepUv * 3.230769) * 0.070270;
+  color += sampleBloom(vUv - stepUv * 3.230769) * 0.070270;
+  gl_FragColor = vec4(color, 1.0);
+}`
+
+const FINAL_GRADE_FRAGMENT = `
+uniform sampler2D tScene;
+uniform sampler2D tBloom;
+uniform vec2 resolution;
+uniform float time;
+varying vec2 vUv;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+vec3 fxaa(vec2 uv) {
+  vec2 inverseResolution = 1.0 / resolution;
+  vec3 rgbNW = texture2D(tScene, uv + vec2(-1.0, -1.0) * inverseResolution).rgb;
+  vec3 rgbNE = texture2D(tScene, uv + vec2( 1.0, -1.0) * inverseResolution).rgb;
+  vec3 rgbSW = texture2D(tScene, uv + vec2(-1.0,  1.0) * inverseResolution).rgb;
+  vec3 rgbSE = texture2D(tScene, uv + vec2( 1.0,  1.0) * inverseResolution).rgb;
+  vec3 rgbM = texture2D(tScene, uv).rgb;
+  vec3 lumaWeights = vec3(0.299, 0.587, 0.114);
+  float lumaNW = dot(rgbNW, lumaWeights);
+  float lumaNE = dot(rgbNE, lumaWeights);
+  float lumaSW = dot(rgbSW, lumaWeights);
+  float lumaSE = dot(rgbSE, lumaWeights);
+  float lumaM = dot(rgbM, lumaWeights);
+  float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+  float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+
+  vec2 direction;
+  direction.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+  direction.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+  float directionReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.03125, 0.0078125);
+  float inverseDirectionMin = 1.0 / (min(abs(direction.x), abs(direction.y)) + directionReduce);
+  direction = clamp(direction * inverseDirectionMin, vec2(-8.0), vec2(8.0)) * inverseResolution;
+
+  vec3 rgbA = 0.5 * (
+    texture2D(tScene, uv + direction * (1.0 / 3.0 - 0.5)).rgb +
+    texture2D(tScene, uv + direction * (2.0 / 3.0 - 0.5)).rgb
+  );
+  vec3 rgbB = rgbA * 0.5 + 0.25 * (
+    texture2D(tScene, uv + direction * -0.5).rgb +
+    texture2D(tScene, uv + direction * 0.5).rgb
+  );
+  float lumaB = dot(rgbB, lumaWeights);
+  return (lumaB < lumaMin || lumaB > lumaMax) ? rgbA : rgbB;
+}
+
+void main() {
+  vec4 source = texture2D(tScene, vUv);
+  vec3 color = fxaa(vUv) + texture2D(tBloom, vUv).rgb * 0.48;
+
+  float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  color = mix(vec3(luma), color, 1.08);
+  color = (color - 0.5) * 1.045 + 0.5;
+
+  vec2 centered = vUv - 0.5;
+  centered.x *= resolution.x / max(1.0, resolution.y);
+  float vignette = smoothstep(0.92, 0.20, length(centered));
+  color *= mix(0.82, 1.0, vignette);
+
+  float grain = hash(gl_FragCoord.xy + vec2(time * 19.7, time * 7.3)) - 0.5;
+  color += grain * 0.014;
+  gl_FragColor = vec4(max(color, 0.0), source.a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`
 
 /** Shape one compositor quad into a full-height screen partition while keeping
  * UVs in final-frame coordinates, so each scene is cropped rather than squeezed. */
@@ -130,10 +298,26 @@ if (partitionRadial > 0.5) {
 function lights() {
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[4, 6, 4]} intensity={1.4} castShadow />
-      <pointLight position={[-4, -2, 3]} color="#818cf8" intensity={3} />
-      <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
+      <ambientLight intensity={0.12} />
+      <hemisphereLight color="#dbeafe" groundColor="#170921" intensity={0.55} />
+      <rectAreaLight position={[4, 4, 5]} rotation={[-0.62, 0.62, 0]} color="#fff7ed" intensity={6} width={5} height={5} />
+      <directionalLight
+        position={[4, 7, 5]}
+        intensity={2.4}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={10}
+        shadow-camera-bottom={-10}
+        shadow-camera-near={0.1}
+        shadow-camera-far={30}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.035}
+      />
+      <pointLight position={[-4, 2, -3]} color="#60a5fa" intensity={7} distance={20} decay={2} />
+      <pointLight position={[3, -1, 3]} color="#fb7185" intensity={3.5} distance={16} decay={2} />
     </>
   )
 }
@@ -151,22 +335,34 @@ function lights() {
 export function VisualScene() {
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size } = useThree()
+  const environment = useMemo(() => {
+    const room = new RoomEnvironment()
+    const pmrem = new PMREMGenerator(gl)
+    const target = pmrem.fromScene(room, 0.04)
+    room.dispose()
+    pmrem.dispose()
+    return target
+  }, [gl])
   const sceneKey = [...new Set(objects.map((o) => o.sceneId))].sort().join(',')
   const mounted = useMemo(() => {
     const map = new Map<string, MountedScene>()
     for (const sceneId of sceneKey ? sceneKey.split(',') : []) {
+      const options = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
+      const maskOptions = { minFilter: LinearFilter, magFilter: LinearFilter }
+      const width = Math.max(1, size.width)
+      const height = Math.max(1, size.height)
+      const target = new WebGLRenderTarget(width, height, options)
       map.set(sceneId, {
         base: new ThreeScene(),
         front: new ThreeScene(),
         invert: new ThreeScene(),
-        target: new WebGLRenderTarget(Math.max(1, size.width), Math.max(1, size.height), {
-          minFilter: LinearFilter,
-          magFilter: LinearFilter,
-        }),
-        invertTarget: new WebGLRenderTarget(Math.max(1, size.width), Math.max(1, size.height), {
-          minFilter: LinearFilter,
-          magFilter: LinearFilter,
-        }),
+        target,
+        invertTarget: new WebGLRenderTarget(width, height, maskOptions),
+        filterTargets: [
+          new WebGLRenderTarget(width, height, options),
+          new WebGLRenderTarget(width, height, options),
+        ],
+        outputTexture: target.texture,
       })
     }
     return map
@@ -181,15 +377,86 @@ export function VisualScene() {
     cam.position.z = 1
     const meshes: Mesh[] = []
     const invertMeshes: Mesh[] = []
-    return { scene, invertScene, cam, meshes, invertMeshes }
+    const filterScene = new ThreeScene()
+    const filterCam = new OrthographicCamera(-1, 1, 1, -1, 0, 2)
+    filterCam.position.z = 1
+    const filterMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: COLOR_FILTER_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        mode: { value: 0 },
+        amount: { value: 1 },
+        time: { value: 0 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
+    const filterMesh = new Mesh(new PlaneGeometry(2, 2), filterMaterial)
+    filterMesh.frustumCulled = false
+    filterScene.add(filterMesh)
+    const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
+    const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
+    const bloomTargets: [WebGLRenderTarget, WebGLRenderTarget] = [
+      new WebGLRenderTarget(1, 1, hdrOptions),
+      new WebGLRenderTarget(1, 1, hdrOptions),
+    ]
+    const bloomMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: BLOOM_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        resolution: { value: new Vector2(1, 1) },
+        direction: { value: new Vector2(1, 0) },
+        extract: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    })
+    const finalMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: FINAL_GRADE_FRAGMENT,
+      uniforms: {
+        tScene: { value: compositeTarget.texture },
+        tBloom: { value: bloomTargets[1].texture },
+        resolution: { value: new Vector2(1, 1) },
+        time: { value: 0 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
+    return {
+      scene, invertScene, cam, meshes, invertMeshes,
+      filterScene, filterCam, filterMesh, filterMaterial,
+      compositeTarget, bloomTargets, bloomMaterial, finalMaterial,
+    }
   }, [])
 
   useEffect(() => {
     for (const runtime of mounted.values()) {
       runtime.target.setSize(Math.max(1, size.width), Math.max(1, size.height))
       runtime.invertTarget.setSize(Math.max(1, size.width), Math.max(1, size.height))
+      runtime.filterTargets.forEach((target) => target.setSize(Math.max(1, size.width), Math.max(1, size.height)))
     }
-  }, [mounted, size.width, size.height])
+    const width = Math.max(1, size.width)
+    const height = Math.max(1, size.height)
+    const bloomWidth = Math.max(1, Math.ceil(width / 2))
+    const bloomHeight = Math.max(1, Math.ceil(height / 2))
+    compositor.compositeTarget.setSize(width, height)
+    compositor.bloomTargets.forEach((target) => target.setSize(bloomWidth, bloomHeight))
+    compositor.bloomMaterial.uniforms.resolution.value.set(bloomWidth, bloomHeight)
+    compositor.finalMaterial.uniforms.resolution.value.set(width, height)
+  }, [compositor, mounted, size.width, size.height])
+
+  useEffect(() => {
+    for (const runtime of mounted.values()) {
+      runtime.base.environment = environment.texture
+      runtime.front.environment = environment.texture
+    }
+  }, [environment, mounted])
+
+  useEffect(() => () => environment.dispose(), [environment])
 
   useEffect(() => {
     const roots = new Map<string, ThreeScene>()
@@ -206,6 +473,7 @@ export function VisualScene() {
     for (const runtime of mounted.values()) {
       runtime.target.dispose()
       runtime.invertTarget.dispose()
+      runtime.filterTargets.forEach((target) => target.dispose())
     }
   }, [mounted])
 
@@ -218,7 +486,28 @@ export function VisualScene() {
       mesh.geometry.dispose()
       ;(mesh.material as MeshBasicMaterial).dispose()
     }
+    compositor.filterMesh.geometry.dispose()
+    compositor.filterMaterial.dispose()
+    compositor.bloomMaterial.dispose()
+    compositor.finalMaterial.dispose()
+    compositor.compositeTarget.dispose()
+    compositor.bloomTargets.forEach((target) => target.dispose())
   }, [compositor])
+
+  const colorFilterTrackIds = useMemo(() => {
+    const byScene = new Map<string, string[]>()
+    const seen = new Set<string>()
+    for (const object of objects) {
+      if (object.instrumentId !== 'colorFilters') continue
+      const key = `${object.sceneId}:${object.trackId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const ids = byScene.get(object.sceneId) ?? []
+      ids.push(object.trackId)
+      byScene.set(object.sceneId, ids)
+    }
+    return byScene
+  }, [objects])
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
@@ -248,6 +537,28 @@ export function VisualScene() {
         gl.clearDepth()
         gl.render(runtime.front, camera)
 
+        // Scene-wide color filters are ordinary scene tracks whose held notes
+        // choose post-process modes. Multiple tracks chain in resolved order.
+        let filteredTexture: Texture = runtime.target.texture
+        let filterPass = 0
+        for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
+          const filter = resolveActiveColorFilter(getObjectState(trackId))
+          if (!filter) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.filterMaterial
+          compositor.filterMaterial.uniforms.tDiffuse.value = filteredTexture
+          compositor.filterMaterial.uniforms.mode.value = filter.mode
+          compositor.filterMaterial.uniforms.amount.value = filter.amount
+          compositor.filterMaterial.uniforms.time.value = filter.beat
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
+        runtime.outputTexture = filteredTexture
+
         // Final-invert text is isolated as a transparent mask. It is applied only
         // after every requested scene layer has been composited below.
         gl.setRenderTarget(runtime.invertTarget)
@@ -273,8 +584,8 @@ export function VisualScene() {
         mesh.visible = !!runtime
         if (!runtime) return
         const material = mesh.material as MeshBasicMaterial
-        if (material.map !== runtime.target.texture) {
-          material.map = runtime.target.texture
+        if (material.map !== runtime.outputTexture) {
+          material.map = runtime.outputTexture
           material.needsUpdate = true
         }
         material.opacity = layer.opacity
@@ -299,13 +610,39 @@ export function VisualScene() {
         mesh.renderOrder = i
       })
 
-      gl.setRenderTarget(previous)
       const project = useProjectStore.getState()
       const mainId = project.sceneOrder.find((id) => project.scenes[id]?.isMain)
       const main = mainId ? project.scenes[mainId] : undefined
+      gl.setRenderTarget(compositor.compositeTarget)
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
       gl.render(compositor.scene, compositor.cam)
+
+      // A compact HDR post chain: thresholded half-resolution bloom followed by
+      // one final grade. It stays inside this compositor so scene switching,
+      // partitions, filters, preview and export all receive the exact same look.
+      compositor.filterMesh.material = compositor.bloomMaterial
+      compositor.bloomMaterial.uniforms.tDiffuse.value = compositor.compositeTarget.texture
+      compositor.bloomMaterial.uniforms.direction.value.set(1, 0)
+      compositor.bloomMaterial.uniforms.extract.value = 1
+      gl.setRenderTarget(compositor.bloomTargets[0])
+      gl.setClearColor(0x000000, 0)
+      gl.clear(true, true, true)
+      gl.render(compositor.filterScene, compositor.filterCam)
+
+      compositor.bloomMaterial.uniforms.tDiffuse.value = compositor.bloomTargets[0].texture
+      compositor.bloomMaterial.uniforms.direction.value.set(0, 1)
+      compositor.bloomMaterial.uniforms.extract.value = 0
+      gl.setRenderTarget(compositor.bloomTargets[1])
+      gl.clear(true, true, true)
+      gl.render(compositor.filterScene, compositor.filterCam)
+
+      compositor.filterMesh.material = compositor.finalMaterial
+      compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
+      gl.setRenderTarget(previous)
+      gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
+      gl.clear(true, true, true)
+      gl.render(compositor.filterScene, compositor.filterCam)
 
       while (compositor.invertMeshes.length < layers.length) {
         const material = makeCompositorMaterial(true)

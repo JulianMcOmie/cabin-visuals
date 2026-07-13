@@ -1,7 +1,9 @@
 import { useRef } from 'react'
-import { Mesh, MeshStandardMaterial } from 'three'
+import { Mesh, MeshPhysicalMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
+
+const DEFAULT_BASE_COLOR = '#5757db'
 
 // The cube's definition lives next to its visual - schema and component can't drift.
 export const cubeInstrument: ObjectInstrumentDef = {
@@ -11,8 +13,7 @@ export const cubeInstrument: ObjectInstrumentDef = {
   userInterfaceRenderer: 'parameters',
   params: [
     { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
-    // Color as a hue slider (0–360) - keeps every param numeric.
-    { key: 'baseHue', label: 'Base Color', min: 0, max: 360, step: 1, default: 240 },
+    { key: 'baseColor', label: 'Base Color', type: 'color', default: DEFAULT_BASE_COLOR },
     { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 },
     { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 0 },
     { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 0 },
@@ -69,11 +70,14 @@ export function Cube({ trackId }: { trackId: string }) {
     if (!meshRef.current) return
     // The note-pulse signal, computed directly from the object's own notes.
     const energy = state.energy
-    const baseHue = state.params.baseHue ?? paramDefault(cubeInstrument, 'baseHue')
+    const baseColor = state.stringParams.baseColor
+    const legacyBaseHue = state.params.baseHue
 
-    const mat = meshRef.current.material as MeshStandardMaterial
-    mat.color.setHSL(baseHue / 360, 0.65, 0.6)
-    mat.emissiveIntensity = 0.2 + energy * 1.2
+    const mat = meshRef.current.material as MeshPhysicalMaterial
+    if (baseColor) mat.color.set(baseColor)
+    else if (legacyBaseHue !== undefined) mat.color.setHSL(legacyBaseHue / 360, 0.65, 0.6)
+    else mat.color.set(DEFAULT_BASE_COLOR)
+    mat.emissiveIntensity = 0.25 + energy * 2.5
 
     // Shatter: sample this track's Shatter lane at the current beat - a pure function
     // of the beat, so scrubbing mirrors playback exactly. The burst is MAX at the note
@@ -110,25 +114,31 @@ export function Cube({ trackId }: { trackId: string }) {
 
   return (
     <group>
-      <mesh ref={meshRef}>
+      <mesh ref={meshRef} castShadow receiveShadow>
         <boxGeometry args={[1.6, 1.6, 1.6]} />
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           color="#6366f1"
-          metalness={0.4}
-          roughness={0.35}
+          metalness={0.08}
+          roughness={0.24}
+          clearcoat={0.9}
+          clearcoatRoughness={0.16}
+          envMapIntensity={1.25}
           emissive="#312e81"
-          emissiveIntensity={0.2}
+          emissiveIntensity={0.25}
         />
       </mesh>
       {CORNERS.map((_, i) => (
-        <mesh key={i} ref={(el) => { fragRefs.current[i] = el }} visible={false}>
+        <mesh key={i} ref={(el) => { fragRefs.current[i] = el }} visible={false} castShadow receiveShadow>
           <boxGeometry args={[1.6, 1.6, 1.6]} />
-          <meshStandardMaterial
+          <meshPhysicalMaterial
             color="#f472b6"
-            metalness={0.4}
-            roughness={0.3}
+            metalness={0.65}
+            roughness={0.18}
+            clearcoat={0.45}
+            clearcoatRoughness={0.1}
+            envMapIntensity={1.4}
             emissive="#be185d"
-            emissiveIntensity={0.9}
+            emissiveIntensity={1.4}
           />
         </mesh>
       ))}

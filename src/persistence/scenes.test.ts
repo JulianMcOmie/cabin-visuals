@@ -22,7 +22,11 @@ test('v4 migration creates Main and Scene 1 with exclusive visual ownership', ()
   assert.ok(first)
   assert.deepEqual(main.rootTrackIds, [])
   assert.deepEqual(first.rootTrackIds, ['visual'])
-  assert.deepEqual(first.tracks.visual, visual)
+  assert.deepEqual(first.tracks.visual, {
+    ...visual,
+    params: {},
+    stringParams: { baseColor: '#5757db' },
+  })
   assert.equal(doc.audioTracks.audio, audio)
   assert.deepEqual(doc.audioRootTrackIds, ['audio'])
   assert.equal(main.backgroundColor, '#000000')
@@ -46,7 +50,7 @@ test('v5 migration gives every existing scene a black background', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 8)
+  assert.equal(doc.schemaVersion, 9)
   assert.equal(doc.scenes.main.backgroundColor, '#000000')
   assert.equal(doc.scenes.one.backgroundColor, '#000000')
 })
@@ -81,7 +85,7 @@ test('v6 migration removes modifiers and promotes their nested tracks', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 8)
+  assert.equal(doc.schemaVersion, 9)
   assert.deepEqual(doc.scenes.one.rootTrackIds, ['visual'])
   assert.deepEqual(doc.scenes.one.tracks.visual.childIds, ['modifier-child'])
   assert.equal(doc.scenes.one.tracks.modifier, undefined)
@@ -105,7 +109,30 @@ test('v7 migration keeps existing scene backgrounds opaque', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 8)
+  assert.equal(doc.schemaVersion, 9)
   assert.equal(doc.scenes.main.backgroundTransparent, false)
   assert.equal(doc.scenes.one.backgroundTransparent, false)
+})
+
+test('v8 migration converts basic-shape hue sliders to concrete colors', () => {
+  const hueCube: Track = { ...visual, params: { baseHue: 200, baseSize: 2 } }
+  const doc = upgradeDocument({
+    schemaVersion: 8,
+    bpm: 120,
+    beatsPerBar: 4,
+    totalBars: 32,
+    scenes: {
+      main: { id: 'main', name: 'Main', isMain: true, backgroundColor: '#000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] },
+      one: { id: 'one', name: 'Scene 1', isMain: false, backgroundColor: '#000', backgroundTransparent: false, tracks: { visual: hueCube }, rootTrackIds: ['visual'] },
+    },
+    sceneOrder: ['main', 'one'],
+    activeSceneId: 'one',
+    audioTracks: {},
+    audioRootTrackIds: [],
+    audioClips: {},
+  })
+
+  assert.equal(doc.schemaVersion, 9)
+  assert.equal(doc.scenes.one.tracks.visual.stringParams?.baseColor, '#57afdb')
+  assert.deepEqual(doc.scenes.one.tracks.visual.params, { baseSize: 2 })
 })

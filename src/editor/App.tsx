@@ -68,12 +68,8 @@ function Scene() {
   // paused). RenderGovernor requests single frames when an input changes.
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    <Canvas frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 1.2, 5], fov: 55 }} gl={{ antialias: true }}>
+    <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 1.2, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[4, 6, 4]} intensity={1.4} castShadow />
-      <pointLight position={[-4, -2, 3]} color="#818cf8" intensity={3} />
-      <pointLight position={[3, 3, -4]} color="#f0abfc" intensity={1.5} />
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
