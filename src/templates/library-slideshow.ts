@@ -20,10 +20,10 @@ export const slideshow: TemplateDef = {
   id: 'slideshow',
   name: 'Slideshow',
   description: 'Drop your photos onto the timeline and they cut on every beat, in order.',
-  bpm: 90,
+  bpm: 120,
   gradient: ['#f59e0b', '#ec4899'],
   document: doc({
-    bpm: 90,
+    bpm: 120,
     totalBars: BARS,
     tracks: [
       track({

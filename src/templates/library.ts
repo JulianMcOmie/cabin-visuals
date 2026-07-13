@@ -66,10 +66,10 @@ const hyperspeed: TemplateDef = {
   id: 'hyperspeed',
   name: 'Hyperspeed',
   description: 'DnB energy - a particle field shakes on the bass while shapes strafe past.',
-  bpm: 172,
+  bpm: 120,
   gradient: ['#06b6d4', '#f43f5e'],
   document: doc({
-    bpm: 172,
+    bpm: 120,
     totalBars: BARS,
     tracks: [
       track({
@@ -111,10 +111,10 @@ const minimalPulse: TemplateDef = {
   id: 'minimal-pulse',
   name: 'Minimal Pulse',
   description: 'Stripped techno - metronome geometry and one cube that shatters on cue.',
-  bpm: 126,
+  bpm: 120,
   gradient: ['#334155', '#94a3b8'],
   document: doc({
-    bpm: 126,
+    bpm: 120,
     totalBars: BARS,
     tracks: [
       track({

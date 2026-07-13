@@ -14,10 +14,10 @@ export const retroArcade: TemplateDef = {
   id: 'retro-arcade',
   name: 'Retro Arcade',
   description: 'Invaders zapped in rhythm on a humming CRT while the score spins up.',
-  bpm: 130,
+  bpm: 120,
   gradient: ['#39ff14', '#ff004d'],
   document: doc({
-    bpm: 130,
+    bpm: 120,
     totalBars: BARS,
     tracks: [
       track({

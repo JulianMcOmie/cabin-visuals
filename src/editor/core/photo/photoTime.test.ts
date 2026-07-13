@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { activePhotoAt } from './photoTime'
+import { activePhotoAt, photoTransitionAt } from './photoTime'
 import type { ResolvedNote } from '../visual/types'
 
 const note = (beat: number, pitch: number, blockStartBeat: number, blockEndBeat: number): ResolvedNote =>
@@ -54,4 +54,61 @@ test('scrub == playback: same beat, same answer, any order of queries', () => {
   const a = activePhotoAt(notes, 12.25, BASE, 4)
   for (const probe of [3, 15, 7, 12.25, 0.1]) activePhotoAt(notes, probe, BASE, 4)
   assert.deepEqual(activePhotoAt(notes, 12.25, BASE, 4), a)
+})
+
+// --- transitions --------------------------------------------------------------
+
+test('transition: zero length is a hard cut (progress 1, no from)', () => {
+  const notes = [note(0, 48, 0, 16), note(6, 50, 0, 16)]
+  assert.deepEqual(photoTransitionAt(notes, 6, BASE, 4, 0), {
+    toIndex: 2,
+    fromIndex: null,
+    progress: 1,
+  })
+})
+
+test('transition: blends from the previously latched photo, mid-way', () => {
+  const notes = [note(0, 48, 0, 16), note(6, 50, 0, 16)] // photo 0 -> photo 2
+  // 1 beat into a 2-beat transition = halfway, coming from photo 0.
+  assert.deepEqual(photoTransitionAt(notes, 7, BASE, 4, 2), {
+    toIndex: 2,
+    fromIndex: 0,
+    progress: 0.5,
+  })
+})
+
+test('transition: finishes to progress 1 with no from once elapsed', () => {
+  const notes = [note(0, 48, 0, 16), note(6, 50, 0, 16)]
+  assert.deepEqual(photoTransitionAt(notes, 9, BASE, 4, 2), {
+    toIndex: 2,
+    fromIndex: null,
+    progress: 1,
+  })
+})
+
+test('transition: nothing on screen before -> blends from black (from null)', () => {
+  const notes = [note(6, 50, 0, 16)] // first photo ever, no predecessor
+  assert.deepEqual(photoTransitionAt(notes, 6.5, BASE, 4, 2), {
+    toIndex: 2,
+    fromIndex: null,
+    progress: 0.25,
+  })
+})
+
+test('transition: re-triggering the same photo has no from to blend', () => {
+  const notes = [note(0, 48, 0, 16), note(6, 48, 0, 16)] // photo 0 -> photo 0
+  const tr = photoTransitionAt(notes, 6.5, BASE, 4, 2)
+  assert.equal(tr?.toIndex, 0)
+  assert.equal(tr?.fromIndex, null)
+})
+
+test('transition: predecessor whose block already ended blends from black', () => {
+  const notes = [note(2, 48, 0, 8), note(10, 50, 8, 24)] // gap: photo 0 dies at 8
+  const tr = photoTransitionAt(notes, 10.5, BASE, 4, 2)
+  assert.equal(tr?.toIndex, 2)
+  assert.equal(tr?.fromIndex, null) // photo 0's block was over at the cut
+})
+
+test('transition: no active photo -> null', () => {
+  assert.equal(photoTransitionAt([note(4, 48, 0, 16)], 2, BASE, 4, 2), null)
 })

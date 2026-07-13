@@ -9,6 +9,7 @@ import { CabinLogo } from "./CabinLogo"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { TEMPLATES, type TemplateDef } from "../templates"
+import { TemplatePreviewVideo } from "./TemplatePreviewVideo"
 import type { ProjectPreview } from "../persistence/projectStorage"
 
 export interface ProjectMetadata {
@@ -396,12 +397,10 @@ function CreateProjectModal({
                   title={`Create a project from “${tpl.name}”`}
                 >
                   <div
-                    className="relative h-24"
+                    className="relative h-24 overflow-hidden"
                     style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
                   >
-                    <span className="absolute bottom-2 right-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white/90">
-                      {tpl.bpm} BPM
-                    </span>
+                    <TemplatePreviewVideo id={tpl.id} />
                   </div>
                   <div className="p-3">
                     <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>
