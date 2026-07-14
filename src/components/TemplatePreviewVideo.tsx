@@ -21,7 +21,10 @@ export function TemplatePreviewVideo({ id }: { id: string }) {
       playsInline
       preload="metadata"
       onError={() => setOk(false)}
-      className="absolute inset-0 h-full w-full object-cover"
+      // Bleed 1px past every edge (clipped by the card's overflow-hidden) so a
+      // subpixel rounding gap can't let the gradient behind peek through - it
+      // showed as a thin accent-coloured line on the right of some cards.
+      className="absolute -inset-px h-[calc(100%+2px)] w-[calc(100%+2px)] object-cover"
     />
   )
 }

@@ -42,8 +42,11 @@ export function PreviewCaptureButton() {
   // Expose the capture entry point + the template id list for the automation
   // script. Returns base64 so it crosses the Playwright bridge as a plain string.
   useEffect(() => {
-    window.__templateIds = TEMPLATES.map((t) => t.id)
-    window.__templateHashes = Object.fromEntries(TEMPLATES.map((t) => [t.id, templateHash(t.document)]))
+    // Only templates that actually get a captured video clip - 'animatedSlideshow'
+    // ones (Slideshow) render blank and use a bespoke card animation instead.
+    const videoTemplates = TEMPLATES.filter((t) => t.cardPreview !== 'animatedSlideshow')
+    window.__templateIds = videoTemplates.map((t) => t.id)
+    window.__templateHashes = Object.fromEntries(videoTemplates.map((t) => [t.id, templateHash(t.document)]))
     window.__capturePreview = async () => {
       const blob = await capturePreviewClip()
       if (!blob) return null

@@ -65,6 +65,15 @@ const argv = process.argv.slice(2)
 const forceAll = argv.includes('--all')
 const onlyIds = argv.filter((a) => !a.startsWith('--'))
 
+// Create the public bucket if it doesn't exist yet (service-role can; idempotent).
+async function ensureBucket() {
+  const { error } = await supabase.storage.createBucket(BUCKET, { public: true })
+  if (error && !/exist/i.test(error.message)) {
+    console.error(`Could not ensure bucket "${BUCKET}": ${error.message}`)
+    process.exit(1)
+  }
+}
+
 async function loadManifest() {
   const { data, error } = await supabase.storage.from(BUCKET).download(MANIFEST)
   if (error || !data) return {}
@@ -74,6 +83,8 @@ async function loadManifest() {
     return {}
   }
 }
+
+await ensureBucket()
 
 const browser = await chromium.launch({
   headless: false,

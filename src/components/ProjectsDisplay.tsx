@@ -10,6 +10,7 @@ import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { TEMPLATES, type TemplateDef } from "../templates"
 import { TemplatePreviewVideo } from "./TemplatePreviewVideo"
+import { TemplateSlideshowPreview } from "./TemplateSlideshowPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
 
 export interface ProjectMetadata {
@@ -400,7 +401,9 @@ function CreateProjectModal({
                     className="relative h-24 overflow-hidden"
                     style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
                   >
-                    <TemplatePreviewVideo id={tpl.id} />
+                    {tpl.cardPreview === 'animatedSlideshow'
+                      ? <TemplateSlideshowPreview />
+                      : <TemplatePreviewVideo id={tpl.id} />}
                   </div>
                   <div className="p-3">
                     <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>

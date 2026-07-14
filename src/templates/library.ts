@@ -14,6 +14,12 @@ export interface TemplateDef {
   bpm: number
   /** Gallery card backdrop. */
   gradient: [string, string]
+  /** How the gallery card previews this template. 'video' (default) plays a
+   *  captured clip of its real render; 'animatedSlideshow' uses a bespoke canvas
+   *  animation instead - for Slideshow, whose real render is blank until the user
+   *  adds photos, so there is nothing to capture. 'animatedSlideshow' templates
+   *  are skipped by the preview-capture script. */
+  cardPreview?: 'video' | 'animatedSlideshow'
   document: ProjectDocument
 }
 

@@ -22,6 +22,7 @@ export const slideshow: TemplateDef = {
   description: 'Drop your photos onto the timeline and they cut on every beat, in order.',
   bpm: 120,
   gradient: ['#f59e0b', '#ec4899'],
+  cardPreview: 'animatedSlideshow',
   document: doc({
     bpm: 120,
     totalBars: BARS,
