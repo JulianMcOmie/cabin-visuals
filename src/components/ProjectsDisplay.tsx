@@ -397,10 +397,11 @@ function CreateProjectModal({
                   className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left transition-colors hover:border-[rgba(53,167,230,0.6)]"
                   title={`Create a project from “${tpl.name}”`}
                 >
-                  <div
-                    className="relative h-24 overflow-hidden"
-                    style={{ background: `linear-gradient(135deg, ${tpl.gradient[0]}, ${tpl.gradient[1]})` }}
-                  >
+                  {/* No coloured backdrop: the video/canvas always covers the
+                      preview, so a gradient here only leaked its colour past the
+                      clipped corners/edges (the "pink/green corners"). Dark base
+                      instead - any subpixel gap now reads as the card, not a hue. */}
+                  <div className="relative h-24 bg-[var(--bg-app)]">
                     {tpl.cardPreview === 'animatedSlideshow'
                       ? <TemplateSlideshowPreview />
                       : <TemplatePreviewVideo id={tpl.id} />}

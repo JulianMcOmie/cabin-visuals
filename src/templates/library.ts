@@ -12,8 +12,6 @@ export interface TemplateDef {
   name: string
   description: string
   bpm: number
-  /** Gallery card backdrop. */
-  gradient: [string, string]
   /** How the gallery card previews this template. 'video' (default) plays a
    *  captured clip of its real render; 'animatedSlideshow' uses a bespoke canvas
    *  animation instead - for Slideshow, whose real render is blank until the user
@@ -34,7 +32,6 @@ const retroDesktop: TemplateDef = {
   name: 'Retro Desktop',
   description: 'XP nostalgia - windows pop to the melody, folders fly, the screen shakes.',
   bpm: 120,
-  gradient: ['#0058ee', '#3a9d3f'],
   document: doc({
     bpm: 120,
     totalBars: BARS,
@@ -73,7 +70,6 @@ const hyperspeed: TemplateDef = {
   name: 'Hyperspeed',
   description: 'DnB energy - a particle field shakes on the bass while shapes strafe past.',
   bpm: 120,
-  gradient: ['#06b6d4', '#f43f5e'],
   document: doc({
     bpm: 120,
     totalBars: BARS,
@@ -118,7 +114,6 @@ const minimalPulse: TemplateDef = {
   name: 'Minimal Pulse',
   description: 'Stripped techno - metronome geometry and one cube that shatters on cue.',
   bpm: 120,
-  gradient: ['#334155', '#94a3b8'],
   document: doc({
     bpm: 120,
     totalBars: BARS,

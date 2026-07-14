@@ -15,7 +15,6 @@ export const retroArcade: TemplateDef = {
   name: 'Retro Arcade',
   description: 'Invaders zapped in rhythm on a humming CRT while the score spins up.',
   bpm: 120,
-  gradient: ['#39ff14', '#ff004d'],
   document: doc({
     bpm: 120,
     totalBars: BARS,
