@@ -9,7 +9,7 @@ import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
-import { clampToFreeTier, defaultBitrate, defaultSettings, resolveExportRange, RESOLUTIONS, type ExportRangeMode, type ExportSettings } from '../core/export/types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRangeMode, type ExportSettings } from '../core/export/types'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -58,7 +58,16 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
     if (!raw) return isPro ? { ...base, watermark: false } : clampToFreeTier(base)
     const saved = JSON.parse(raw) as Partial<ExportSettings>
     const merged = sanitizeRange({ ...base, ...saved, fileName: base.fileName })
-    merged.videoBitrate = defaultBitrate(merged.width, merged.fps)
+    // Pre-aspect saves (or hand-edited storage) may not sit on a known tier of
+    // the saved aspect - snap to the 1080p tier rather than exporting an odd size.
+    if (merged.aspect !== '16:9' && merged.aspect !== '9:16') merged.aspect = '16:9'
+    const tiers = resolutionsFor(merged.aspect)
+    if (!tiers.some((r) => r.width === merged.width && r.height === merged.height)) {
+      const tier = tiers.find((r) => r.label === '1080p') ?? tiers[0]
+      merged.width = tier.width
+      merged.height = tier.height
+    }
+    merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
     merged.watermark = !isPro
     return isPro ? merged : clampToFreeTier(merged)
   } catch {
@@ -120,7 +129,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
     // Belt-and-braces: re-derive the tier gates at start, whatever the UI state says.
     const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
-    const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(tiered.width, tiered.fps) }
+    const effective = { ...tiered, includeAudio: tiered.includeAudio && audioOk, videoBitrate: defaultBitrate(Math.max(tiered.width, tiered.height), tiered.fps) }
     // Persist quality preferences only - the filename belongs to the project,
     // and the watermark flag to the plan.
     const { fileName: _fileName, watermark: _watermark, ...remembered } = effective
@@ -197,20 +206,44 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
         {phase.kind === 'settings' && (
           <div className="flex flex-col gap-3">
             <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
+              Aspect
+              <select
+                value={settings.aspect}
+                onChange={(e) => {
+                  const aspect = e.target.value as ExportAspect
+                  setSettings((s) => {
+                    // Keep the same quality tier, rotated: 1920×1080 ↔ 1080×1920.
+                    const tiers = resolutionsFor(aspect)
+                    const tier = tiers.find((r) => Math.max(r.width, r.height) === Math.max(s.width, s.height)) ?? tiers[1]
+                    return { ...s, aspect, width: tier.width, height: tier.height }
+                  })
+                }}
+                className="h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
+              >
+                <option value="16:9">16:9 landscape</option>
+                <option value="9:16">9:16 vertical (TikTok, Reels, Shorts)</option>
+              </select>
+            </label>
+
+            <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
               Resolution
               <select
                 value={settings.width}
                 onChange={(e) => {
-                  const r = RESOLUTIONS.find((r) => r.width === Number(e.target.value)) ?? RESOLUTIONS[0]
+                  const tiers = resolutionsFor(settings.aspect)
+                  const r = tiers.find((r) => r.width === Number(e.target.value)) ?? tiers[0]
                   setSettings((s) => ({ ...s, width: r.width, height: r.height }))
                 }}
                 className="h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
               >
-                {RESOLUTIONS.map((r) => (
-                  <option key={r.width} value={r.width} disabled={!isPro && r.width > 1280}>
-                    {r.label}{!isPro && r.width > 1280 ? ' - Pro' : ''}
-                  </option>
-                ))}
+                {resolutionsFor(settings.aspect).map((r) => {
+                  const gated = !isPro && Math.max(r.width, r.height) > 1280
+                  return (
+                    <option key={r.width} value={r.width} disabled={gated}>
+                      {r.label} ({r.width}×{r.height}){gated ? ' - Pro' : ''}
+                    </option>
+                  )
+                })}
               </select>
             </label>
 

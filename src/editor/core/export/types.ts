@@ -4,6 +4,9 @@
 
 export type ExportRangeMode = 'whole' | 'loop' | 'custom'
 
+/** Output orientation. '9:16' is the vertical TikTok/Reels/Shorts frame. */
+export type ExportAspect = '16:9' | '9:16'
+
 /** A slice of the project in absolute beats, [startBeat, endBeat). */
 export interface BeatRange {
   startBeat: number
@@ -11,9 +14,11 @@ export interface BeatRange {
 }
 
 export interface ExportSettings {
-  /** Output size, fixed 16:9 - independent of the editing window. */
+  /** Output size - independent of the editing window. width/height already
+   *  encode the orientation; `aspect` is what the dialog's pickers key off. */
   width: number
   height: number
+  aspect: ExportAspect
   fps: 30 | 60
   /** Off = skip the offline audio render entirely; video-only MP4. */
   includeAudio: boolean
@@ -62,16 +67,28 @@ export const RESOLUTIONS = [
   { label: '720p', width: 1280, height: 720 },
 ] as const
 
+/** The tier list for an aspect: canonical 16:9, or the same tiers rotated
+ *  (portrait "1080p" = 1080×1920, TikTok's native frame). */
+export function resolutionsFor(aspect: ExportAspect): { label: string; width: number; height: number }[] {
+  return aspect === '9:16'
+    ? RESOLUTIONS.map((r) => ({ label: r.label, width: r.height, height: r.width }))
+    : RESOLUTIONS.map((r) => ({ ...r }))
+}
+
+// Bitrate and H.264 level are pixel-rate properties - orientation-agnostic -
+// so both key off the frame's LONG edge: 1080×1920 is the same tier as
+// 1920×1080. Callers pass max(width, height).
+
 /** Motion-friendly H.264 bitrates for each fixed output tier. */
-export function defaultBitrate(width: number, fps: number): number {
-  if (width >= 3840) return fps === 30 ? 35_000_000 : 50_000_000
-  const base = width >= 1920 ? 12_000_000 : 8_000_000
+export function defaultBitrate(longEdge: number, fps: number): number {
+  if (longEdge >= 3840) return fps === 30 ? 35_000_000 : 50_000_000
+  const base = longEdge >= 1920 ? 12_000_000 : 8_000_000
   return fps === 30 ? Math.round(base * 0.75) : base
 }
 
 /** H.264 High profile level required by the selected frame size/rate. */
-export function videoCodec(width: number, fps: number): string {
-  if (width >= 3840) return fps === 30 ? 'avc1.640033' : 'avc1.640034'
+export function videoCodec(longEdge: number, fps: number): string {
+  if (longEdge >= 3840) return fps === 30 ? 'avc1.640033' : 'avc1.640034'
   return 'avc1.64002a'
 }
 
@@ -79,6 +96,7 @@ export function defaultSettings(fileName: string): ExportSettings {
   return {
     width: 1920,
     height: 1080,
+    aspect: '16:9',
     fps: 60,
     includeAudio: true,
     videoBitrate: defaultBitrate(1920, 60),
@@ -93,10 +111,11 @@ export function defaultSettings(fileName: string): ExportSettings {
 /** The free-tier ceiling: 720p, watermarked. Applied to settings at dialog-open
  *  AND at export-start, so a stale localStorage 1080p can't leak through. */
 export function clampToFreeTier(s: ExportSettings): ExportSettings {
+  const portrait = s.aspect === '9:16'
   return {
     ...s,
-    width: 1280,
-    height: 720,
+    width: portrait ? 720 : 1280,
+    height: portrait ? 1280 : 720,
     videoBitrate: defaultBitrate(1280, s.fps),
     watermark: true,
   }

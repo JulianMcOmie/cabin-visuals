@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultBitrate, makeTimebase, RESOLUTIONS, resolveExportRange, videoCodec } from './types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, makeTimebase, RESOLUTIONS, resolutionsFor, resolveExportRange, videoCodec } from './types'
 
 // 120 bpm, 4/4, 4 bars, 60 fps: the arithmetic stays exact in these cases.
 const BPM = 120
@@ -19,6 +19,34 @@ test('4K uses appropriate H.264 levels and bitrates', () => {
   assert.equal(defaultBitrate(3840, 60), 50_000_000)
   assert.equal(videoCodec(1920, 60), 'avc1.64002a')
   assert.equal(defaultBitrate(1920, 60), 12_000_000)
+})
+
+test('9:16 tiers are the 16:9 tiers rotated', () => {
+  assert.deepEqual(resolutionsFor('9:16'), [
+    { label: '4K', width: 2160, height: 3840 },
+    { label: '1080p', width: 1080, height: 1920 },
+    { label: '720p', width: 720, height: 1280 },
+  ])
+  assert.deepEqual(resolutionsFor('16:9'), [...RESOLUTIONS.map((r) => ({ ...r }))])
+})
+
+test('portrait exports get the same tier codec/bitrate via the long edge', () => {
+  // 1080×1920 is the same pixel rate as 1920×1080 - callers pass max(w, h).
+  assert.equal(videoCodec(Math.max(1080, 1920), 60), videoCodec(1920, 60))
+  assert.equal(defaultBitrate(Math.max(1080, 1920), 60), 12_000_000)
+  assert.equal(videoCodec(Math.max(2160, 3840), 60), 'avc1.640034')
+})
+
+test('free tier clamps portrait to 720×1280, landscape to 1280×720', () => {
+  const base = defaultSettings('x')
+  assert.deepEqual(
+    (({ width, height }) => ({ width, height }))(clampToFreeTier({ ...base, aspect: '9:16', width: 1080, height: 1920 })),
+    { width: 720, height: 1280 },
+  )
+  assert.deepEqual(
+    (({ width, height }) => ({ width, height }))(clampToFreeTier({ ...base, width: 1920, height: 1080 })),
+    { width: 1280, height: 720 },
+  )
 })
 
 test('whole-project timebase is unchanged by the range parameter being absent', () => {

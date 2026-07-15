@@ -44,6 +44,7 @@ export async function capturePreviewClip(): Promise<Blob | null> {
   const settings: ExportSettings = {
     width: PREVIEW_WIDTH,
     height: PREVIEW_HEIGHT,
+    aspect: '16:9',
     fps: 30,
     includeAudio: false,
     videoBitrate: defaultBitrate(PREVIEW_WIDTH, 30),

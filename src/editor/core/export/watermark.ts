@@ -17,9 +17,11 @@ export function createWatermarkCompositor(width: number, height: number): Waterm
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not create watermark canvas')
 
-  // Sized off output height so 720p and 1080p read identically.
-  const fontPx = Math.max(14, Math.round(height * 0.030))
-  const pad = Math.round(height * 0.032)
+  // Sized off the SHORT edge so every tier and orientation reads identically
+  // (landscape: short edge = height, unchanged; portrait: = width).
+  const shortEdge = Math.min(width, height)
+  const fontPx = Math.max(14, Math.round(shortEdge * 0.030))
+  const pad = Math.round(shortEdge * 0.032)
 
   return {
     compose(src) {

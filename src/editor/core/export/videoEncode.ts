@@ -29,7 +29,7 @@ export function createVideoEncodeSession(
     error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
   })
   encoder.configure({
-    codec: videoCodec(settings.width, settings.fps),
+    codec: videoCodec(Math.max(settings.width, settings.height), settings.fps),
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,
