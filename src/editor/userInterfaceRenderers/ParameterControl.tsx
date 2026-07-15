@@ -75,7 +75,10 @@ export function ParamToggle({ on, onChange, label }: { on: boolean; onChange: (o
       aria-checked={on}
       aria-label={label}
     >
-      <span className={`absolute top-[1px] w-3 h-3 rounded-[2px] bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      {/* Vertical centering via transform, not a pixel offset: a hand-tuned
+          top offset rounds differently at fractional display scales (125%,
+          150%) and reads high or low; the transform centers at any DPR. */}
+      <span className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-[2px] bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
   )
 }

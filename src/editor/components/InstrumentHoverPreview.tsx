@@ -13,13 +13,11 @@ import type { ObjectState, ResolvedNote } from '../core/visual/types'
 import type { InstrumentItem } from './LeftSidebar'
 
 /**
- * The hover popup for the instrument browser: name + description, plus a live
- * mini-canvas where that's meaningful. Objects render through their real
- * instrument component fed a synthetic ObjectState - in a block (so ambient
- * layers show) but with no note onsets, per the block-gated visibility rule.
- * Movers and splitters render a plain cube run through the definition's
- * resolved chain with a synthetic looping note pattern, so you see what the
- * mover DOES rather than what it is.
+ * The hover popup for the instrument browser: a live mini-canvas. Objects
+ * render through their real instrument component fed a synthetic ObjectState
+ * playing one note per beat, so the preview shows the instrument DOING its
+ * thing. Movers and splitters render a plain cube run through the definition's
+ * resolved chain with the same looping pattern.
  *
  * The preview canvas is a separate R3F root; its driver advances a private
  * beat off the canvas clock. That clock never touches the transport or the
@@ -29,6 +27,28 @@ import type { InstrumentItem } from './LeftSidebar'
 
 const PREVIEW_BPM = 120
 const BEATS_PER_SEC = PREVIEW_BPM / 60
+// The pattern loops over this span; the driver starts a few beats IN so the
+// first rendered frame already has notes in the past - motion from frame one,
+// no dead ramp-up while the popup appears.
+const LOOP_BEATS = 16
+const START_OFFSET_BEATS = 4
+
+/** One note per beat, cycling a mid-range pitch arc so pitch-mapped
+ *  instruments (spawn height, lane position) visibly vary. */
+function makeLoopNotes(pitches: number[]): ResolvedNote[] {
+  return Array.from({ length: LOOP_BEATS }, (_, i) => ({
+    beat: i,
+    blockStartBeat: 0,
+    blockEndBeat: 1e9,
+    pitch: pitches[i % pitches.length],
+    velocity: 100,
+    durationBeats: 0.5,
+  }))
+}
+
+function previewBeat(elapsedSec: number): number {
+  return (elapsedSec * BEATS_PER_SEC + START_OFFSET_BEATS) % LOOP_BEATS
+}
 
 // Instruments whose idle render needs context a popup can't provide (uploads,
 // live audio, the scene camera, a scene to filter). Text-only popup for these.
@@ -44,18 +64,10 @@ export function canPreview(item: InstrumentItem): boolean {
 
 const PREVIEW_TRACK_ID = '__instrument-preview__'
 
-/** One never-onsetting note whose block bounds cover every beat: beatInBlock
- *  is true (ambient layers render) while "no notes are playing". */
-const COVERAGE_NOTE: ResolvedNote = Object.freeze({
-  beat: 1e9,
-  blockStartBeat: 0,
-  blockEndBeat: 1e9,
-  pitch: 60,
-  velocity: 0,
-  durationBeats: 1,
-})
+// A gentle arc through the middle of most instruments' pitch ranges.
+const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64])
 
-function makeIdleState(instrumentId: string): ObjectState {
+function makePreviewState(instrumentId: string): ObjectState {
   const def = getInstrument(instrumentId)
   const params: Record<string, number> = {}
   const stringParams: Record<string, string> = {}
@@ -74,17 +86,28 @@ function makeIdleState(instrumentId: string): ObjectState {
     opacity: 1,
     stringParams,
     abilityEvents: new Map(),
-    notes: [COVERAGE_NOTE],
+    notes: OBJECT_NOTES,
     activeNotes: [],
   }
 }
 
 /** Mounted BEFORE the instrument component (r3f runs useFrame in mount order),
- *  so the state is registered and ticked ahead of the instrument's read. */
+ *  so the state is registered and ticked ahead of the instrument's read.
+ *  Recomputes activeNotes and the decaying energy pulse each frame - the
+ *  preview's stand-in for what computeAtBeat derives on the main canvas. */
 function ObjectPreviewDriver({ instrumentId }: { instrumentId: string }) {
-  const state = useMemo(() => makeIdleState(instrumentId), [instrumentId])
+  const state = useMemo(() => makePreviewState(instrumentId), [instrumentId])
   useFrame((root) => {
-    state.beat = root.clock.elapsedTime * BEATS_PER_SEC
+    const beat = previewBeat(root.clock.elapsedTime)
+    state.beat = beat
+    state.activeNotes.length = 0
+    let lastOnset = -Infinity
+    let lastVel = 0
+    for (const n of state.notes) {
+      if (beat >= n.beat && beat < n.beat + n.durationBeats) state.activeNotes.push(n)
+      if (n.beat <= beat && n.beat > lastOnset) { lastOnset = n.beat; lastVel = n.velocity }
+    }
+    state.energy = lastOnset === -Infinity ? 0 : (lastVel / 127) * Math.exp(-3 * (beat - lastOnset))
     setPreviewObjectState(PREVIEW_TRACK_ID, state)
   })
   useEffect(() => {
@@ -109,18 +132,9 @@ function ObjectPreview({ instrumentId }: { instrumentId: string }) {
 
 // ── Mover/splitter preview: a cube through the resolved chain ───────────────
 
-// A looping bar of synthetic notes across the common trigger/gate pitches so
-// ballistic lanes fire and gate rows toggle. The driver wraps its beat to this
-// span, so the pattern repeats forever.
-const MOVER_LOOP_BEATS = 16
-const MOVER_NOTES: ResolvedNote[] = [72, 67, 64, 60, 72, 67, 64, 60].map((pitch, i) => ({
-  beat: i * 2,
-  blockStartBeat: 0,
-  blockEndBeat: 1e9,
-  pitch,
-  velocity: 100,
-  durationBeats: 1,
-}))
+// One note per beat across the common trigger/gate pitches so ballistic lanes
+// fire and gate rows toggle, looping like the object pattern.
+const MOVER_NOTES = makeLoopNotes([72, 67, 64, 60])
 
 const MAX_COPIES = 24
 const CUBE_BASE_COLOR = new Color('#35a7e6')
@@ -135,7 +149,7 @@ function MoverPreview({ moverId }: { moverId: string }) {
 
   useFrame((root) => {
     if (!chain) return
-    const beat = (root.clock.elapsedTime * BEATS_PER_SEC) % MOVER_LOOP_BEATS
+    const beat = previewBeat(root.clock.elapsedTime)
     const copies: VisualCopy[] = chain.apply(identityVisualCopy(), { beat, index: 0, count: 1 })
     const meshes = meshesRef.current
     for (let i = 0; i < meshes.length; i++) {
