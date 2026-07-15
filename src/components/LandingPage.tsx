@@ -70,10 +70,10 @@ export default function LandingPage() {
           <Appear className="flex flex-col items-center gap-7">
             <CabinLogo className="block h-[150px] w-auto" />
             <h1 className="m-0 text-[44px] font-bold leading-[1.08] tracking-[-0.03em] text-[var(--text)] md:text-[64px]">
-              <span>The visual music workstation</span>
+              <span>Create insanely great visuals for music</span>
             </h1>
             <p className="m-0 max-w-[620px] text-[18px] leading-[1.55] text-[var(--text-3)]">
-              Create visuals like you create music.
+              One-of-a-kind workstation for music-synced visuals
             </p>
           </Appear>
           <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
