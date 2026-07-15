@@ -75,7 +75,7 @@ export function ParamToggle({ on, onChange, label }: { on: boolean; onChange: (o
       aria-checked={on}
       aria-label={label}
     >
-      <span className={`absolute top-0.5 w-3 h-3 rounded-[2px] bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      <span className={`absolute top-[1px] w-3 h-3 rounded-[2px] bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
   )
 }

@@ -169,30 +169,24 @@ function MoverPreview({ moverId }: { moverId: string }) {
 // ── The popup ────────────────────────────────────────────────────────────────
 
 export function InstrumentPreviewPopup({ item, anchor }: { item: InstrumentItem; anchor: { left: number; top: number } }) {
-  const showCanvas = canPreview(item)
+  // Visual only - no popup at all for instruments with nothing to render
+  // (their rows keep the native title tooltip instead).
+  if (!canPreview(item)) return null
   // Keep the popup on-screen for rows near the bottom of the viewport.
-  const top = Math.max(8, Math.min(anchor.top - 12, (typeof window !== 'undefined' ? window.innerHeight : 800) - (showCanvas ? 210 : 90)))
+  const top = Math.max(8, Math.min(anchor.top - 12, (typeof window !== 'undefined' ? window.innerHeight : 800) - 148))
   return (
     <div
-      className="fixed z-[90] w-[228px] rounded border border-[var(--border)] bg-[var(--bg-panel)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
+      className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
       style={{ left: anchor.left + 8, top }}
     >
-      {showCanvas && (
-        <div className="w-full h-[128px] bg-[var(--bg-canvas)]">
-          <Canvas dpr={1} frameloop="always" camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
-            <color attach="background" args={['#09090b']} />
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[3, 4, 5]} intensity={1.1} />
-            {item.kind === 'object'
-              ? <ObjectPreview instrumentId={item.id} />
-              : <MoverPreview moverId={item.id} />}
-          </Canvas>
-        </div>
-      )}
-      <div className="p-2.5">
-        <div className="text-[11px] font-semibold text-[var(--text)] mb-0.5">{item.name}</div>
-        <div className="text-[11px] leading-relaxed text-[var(--text-3)]">{item.description}</div>
-      </div>
+      <Canvas dpr={1} frameloop="always" camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
+        <color attach="background" args={['#09090b']} />
+        <ambientLight intensity={0.7} />
+        <directionalLight position={[3, 4, 5]} intensity={1.1} />
+        {item.kind === 'object'
+          ? <ObjectPreview instrumentId={item.id} />
+          : <MoverPreview moverId={item.id} />}
+      </Canvas>
     </div>
   )
 }

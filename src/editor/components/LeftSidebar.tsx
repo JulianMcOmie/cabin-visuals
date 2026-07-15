@@ -8,7 +8,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { InstrumentPreviewPopup } from './InstrumentHoverPreview'
+import { canPreview, InstrumentPreviewPopup } from './InstrumentHoverPreview'
 
 /** What dragging an item creates. */
 export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
@@ -256,7 +256,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
     if (previewTimer.current) clearTimeout(previewTimer.current)
     previewTimer.current = setTimeout(
       () => setPreview({ item, anchor: { left: rect.right, top: rect.top } }),
-      350,
+      100,
     )
   }
   const leaveRow = () => {
@@ -315,6 +315,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               onDoubleClick={() => onItemDoubleClick(item)}
               onMouseEnter={(e) => enterRow(e, item)}
               onMouseLeave={leaveRow}
+              title={canPreview(item) ? undefined : item.description}
               className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
             >
               <span className="flex-shrink-0 flex items-center justify-center w-3.5">
