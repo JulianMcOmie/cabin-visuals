@@ -6,7 +6,7 @@ import type { UserInterfaceRendererId } from './ids'
 
 export type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 export type { UserInterfaceRendererId } from './ids'
-export { ParamControl, ParamSlider } from './ParameterControl'
+export { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 
 export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInterfaceRendererDefinition> = {
   parameters: parametersUserInterfaceRenderer,

@@ -15,7 +15,7 @@ import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { isNumberParam, isStringParam } from '../instruments/types'
-import { getUserInterfaceRenderer, ParamControl, ParamSlider, type UserInterfaceParameter } from '../userInterfaceRenderers'
+import { getUserInterfaceRenderer, ParamControl, ParamSlider, ParamToggle, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
@@ -675,22 +675,11 @@ export function TrackEditor() {
                         >
                           IN FRONT
                         </span>
-                        <button
-                          onClick={() => setTrackOnTop(track.id, !onTop)}
-                          title="Draw this instrument on top of everything else in the scene"
-                          className={`h-5 w-9 rounded-full p-0.5 transition-colors cursor-pointer ${
-                            onTop ? 'bg-[var(--accent)]' : 'bg-[var(--bg-elevated)] border border-[var(--border)]'
-                          }`}
-                          role="switch"
-                          aria-checked={onTop}
-                          aria-label="Draw in front of everything"
-                        >
-                          <span
-                            className={`block h-4 w-4 rounded-full bg-white transition-transform ${
-                              onTop ? 'translate-x-4' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
+                        <ParamToggle
+                          on={onTop}
+                          onChange={(v) => setTrackOnTop(track.id, v)}
+                          label="Draw in front of everything"
+                        />
                       </div>
                       {!UserInterfaceRenderer ? (
                         <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>

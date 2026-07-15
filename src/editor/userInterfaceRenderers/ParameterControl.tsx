@@ -63,6 +63,23 @@ export function ParamSlider({
   )
 }
 
+/** THE toggle switch for settings panels (boolean params, IN FRONT, etc.) -
+ *  one component so every panel gets the same tile: square-ish with rounded
+ *  corners, dampened-blue when on, matching the slider family. */
+export function ParamToggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      className={`w-8 h-4 rounded-[3px] relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+    >
+      <span className={`absolute top-0.5 w-3 h-3 rounded-[2px] bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+    </button>
+  )
+}
+
 /** The existing stock control mapping, shared by renderer-driven and legacy panels. */
 export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
   param: ParamDef
@@ -91,13 +108,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
         <span className="text-[11px] text-[var(--text-3)] truncate" title={param.label}>{param.label}</span>
         <div className="flex justify-end">
-          <button
-            onClick={() => onNum(on ? 0 : 1)}
-            className={`w-8 h-4 relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
-            aria-label={param.label}
-          >
-            <span className={`absolute top-0.5 w-3 h-3 bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
-          </button>
+          <ParamToggle on={on} onChange={(v) => onNum(v ? 1 : 0)} label={param.label} />
         </div>
       </div>
     )
