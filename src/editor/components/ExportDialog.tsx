@@ -366,6 +366,9 @@ function RunningView({ phase, fps, onCancel }: { phase: Extract<Phase, { kind: '
           {remaining != null && `~${Math.max(1, Math.round(remaining))}s left`}
         </span>
       </div>
+      <p className="text-[11px] text-[var(--text-muted)] leading-snug">
+        Stay on this tab for the fastest export - it keeps going in the background, just slower.
+      </p>
       <button onClick={onCancel} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Cancel</button>
     </div>
   )

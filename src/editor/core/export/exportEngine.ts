@@ -29,6 +29,20 @@ export type FramePreparer = (beat: number) => Promise<void> | void
 
 const framePreparers = new Set<FramePreparer>()
 
+// The loop's once-a-second yield must NOT be setTimeout: hidden tabs throttle
+// timers to >=1s wakeups (and ~1/minute once "intensive" throttling kicks in
+// after 5 minutes), which would grind a backgrounded export to a near-stall.
+// MessageChannel tasks are exempt from background timer throttling, so the
+// export keeps walking frames off-screen - slower if the GPU deprioritizes,
+// but never stalled, and (frames being pure functions of beat) never wrong.
+function yieldMacrotask(): Promise<void> {
+  return new Promise((resolve) => {
+    const ch = new MessageChannel()
+    ch.port1.onmessage = () => resolve()
+    ch.port2.postMessage(null)
+  })
+}
+
 export function registerFramePreparer(fn: FramePreparer): () => void {
   framePreparers.add(fn)
   return () => framePreparers.delete(fn)
@@ -64,7 +78,7 @@ export async function walkFrames(
       hooks.onProgress?.(i, timebase.frameCount)
       // Yield a macrotask so the progress UI paints and aborts can land even
       // when the sink never truly waits (fast encoders, or the no-op sink).
-      await new Promise((r) => setTimeout(r, 0))
+      await yieldMacrotask()
     }
   }
   hooks.onProgress?.(timebase.frameCount, timebase.frameCount)
