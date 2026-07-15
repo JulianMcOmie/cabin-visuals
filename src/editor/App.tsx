@@ -25,7 +25,6 @@ import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { ExportDialog } from './components/ExportDialog'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
-import { PreviewCaptureButton } from './components/PreviewCaptureButton'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
@@ -83,13 +82,34 @@ function Scene() {
   )
 }
 
-// The visual panel: the canvas plus a fullscreen toggle (button or F).
-// Fullscreen targets the panel div, so the beat overlay and this button ride
-// along; R3F resizes to the new box on its own, and the aspect-aware
-// instruments re-compose - the same path the export pin exercises.
+// The visual panel: the canvas plus fullscreen (button or F) and an aspect
+// pin. Fullscreen targets the panel div, so the beat overlay and the buttons
+// ride along; R3F resizes to whatever box the canvas gets, and the
+// aspect-aware instruments re-compose - the same path the export pin
+// exercises, which is exactly why pinning the editor view to 16:9 or 9:16
+// previews what an export at that aspect will compose like.
+
+type ViewAspect = 'fill' | '16:9' | '9:16'
+const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
+
 function VisualPanel() {
   const panelRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [aspect, setAspect] = useState<ViewAspect>('fill')
+  // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
+  // can't contain-fit an aspect-ratio box against both dimensions).
+  const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect
+      setPanelSize({ w: r.width, h: r.height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current)
@@ -115,12 +135,35 @@ function VisualPanel() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  // Contain-fit the chosen aspect inside the panel; 'fill' keeps the old
+  // fill-the-panel behavior (box = null → plain inset-0).
+  let box: { w: number; h: number } | null = null
+  if (aspect !== 'fill' && panelSize) {
+    const target = aspect === '16:9' ? 16 / 9 : 9 / 16
+    let w = panelSize.w
+    let h = w / target
+    if (h > panelSize.h) { h = panelSize.h; w = h * target }
+    box = { w, h }
+  }
+
   return (
-    <div ref={panelRef} className="relative h-full bg-[var(--bg-canvas)]">
+    <div ref={panelRef} className={`relative h-full ${box ? 'bg-[var(--bg-canvas-deep)]' : 'bg-[var(--bg-canvas)]'}`}>
+      <div
+        className={`absolute ${box ? 'border border-[var(--border-subtle)]' : 'inset-0'}`}
+        style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
+      >
+        <Scene />
+      </div>
       <BeatOverlay />
-      <Scene />
       <TutorialOverlay />
       <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
+        <button
+          onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
+          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
+          className="flex items-center justify-center h-6 px-1.5 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] font-mono text-[9px] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer uppercase tracking-wide"
+        >
+          {aspect === 'fill' ? 'Fill' : aspect}
+        </button>
         <button
           onClick={toggle}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
@@ -312,7 +355,6 @@ function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-        {process.env.NODE_ENV === 'development' && <PreviewCaptureButton />}
         {permanent && !plan.loading && !plan.isPro && (
           <Link
             href="/pricing"
