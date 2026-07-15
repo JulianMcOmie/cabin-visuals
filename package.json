@@ -57,6 +57,8 @@
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.0.0",
     "react-resizable-panels": "^4.5.7",
+    "resend": "^6.17.2",
+    "server-only": "^0.0.1",
     "shadcn": "^2.4.1",
     "sonner": "^2.0.3",
     "stripe": "^22.3.0",

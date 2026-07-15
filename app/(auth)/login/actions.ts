@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../src/utils/supabase/server' // Updated path
+import { notifyOwner } from '../../../src/notifications/ownerNotify'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -34,7 +35,7 @@ export async function handleSignInWithGoogle(idToken: string) {
   }
 
   console.log("Attempting signInWithIdToken...");
-  const { error } = await supabase.auth.signInWithIdToken({
+  const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'google',
     token: idToken,
   });
@@ -46,6 +47,20 @@ export async function handleSignInWithGoogle(idToken: string) {
   }
 
   console.log("signInWithIdToken success!");
+
+  // Owner ping for FIRST-TIME Google users only (never throws). This action
+  // serves login and signup alike, so "new" = the auth row was created within
+  // the last minute - a returning login carries an old created_at.
+  const user = data?.user
+  if (user?.created_at && Date.now() - new Date(user.created_at).getTime() < 60_000) {
+    const meta = user.user_metadata ?? {}
+    await notifyOwner('🎉 New Cabin Visuals signup', [
+      `Name: ${meta.name ?? ([meta.given_name, meta.family_name].filter(Boolean).join(' ') || 'unknown')}`,
+      `Email: ${user.email ?? 'unknown'}`,
+      `Method: Google`,
+      `User id: ${user.id}`,
+    ])
+  }
   revalidatePath('/', 'layout')
   // Redirect to the projects page after successful Google Sign-In
   redirect('/projects');

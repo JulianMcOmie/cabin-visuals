@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../src/utils/supabase/server' // Updated path
+import { notifyOwner } from '../../../../src/notifications/ownerNotify'
 
 export async function completeSignup(formData: FormData) {
   const supabase = await createClient();
@@ -50,7 +51,7 @@ export async function completeSignup(formData: FormData) {
   // --- End Validation ---
 
   console.log(`Attempting supabase.auth.signUp for ${email} with names: ${firstName} ${lastName}`);
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -74,6 +75,18 @@ export async function completeSignup(formData: FormData) {
     params.set('message', errorMessage);
     // Redirect back to set-password path with error
     return redirect(`/signup/set-password?${params.toString()}`);
+  }
+
+  // Owner ping (never throws). Guarded on identities: signUp with an email that
+  // already has an account "succeeds" but returns an identity-less stub user -
+  // only a real new signup carries an identity.
+  if (data.user && (data.user.identities?.length ?? 0) > 0) {
+    await notifyOwner('🎉 New Cabin Visuals signup', [
+      `Name: ${firstName} ${lastName}`,
+      `Email: ${email}`,
+      `Method: email/password`,
+      `User id: ${data.user.id}`,
+    ])
   }
 
   // On successful signup initiation, redirect to login with a confirmation message

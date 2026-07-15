@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { getStripe } from '@/utils/stripe'
 import { syncSubscriptionRow } from '@/billing/syncSubscription'
+import { notifyOwner } from '@/notifications/ownerNotify'
 
 // Stripe → DB, the durable path: renewals, cancellations, payment failures all
 // land here long after the user closed the tab. Signature-verified against the
@@ -37,6 +38,18 @@ export async function POST(request: NextRequest) {
             typeof session.subscription === 'string' ? session.subscription : session.subscription.id,
           )
           await syncSubscriptionRow(sub, session.metadata?.user_id ?? undefined)
+          // Owner ping - after the row is written, and guaranteed not to throw,
+          // so a mail hiccup can never 500 this handler into a Stripe retry.
+          const amount = session.amount_total != null
+            ? `$${(session.amount_total / 100).toFixed(2)} ${(session.currency ?? 'usd').toUpperCase()}`
+            : 'unknown amount'
+          await notifyOwner('💸 New Cabin Visuals subscriber', [
+            `Email: ${session.customer_details?.email ?? 'unknown'}`,
+            `Name: ${session.customer_details?.name ?? 'unknown'}`,
+            `Amount: ${amount}`,
+            `User id: ${session.metadata?.user_id ?? 'unknown'}`,
+            `Stripe customer: ${typeof session.customer === 'string' ? session.customer : session.customer?.id ?? 'unknown'}`,
+          ])
         }
         break
       }
