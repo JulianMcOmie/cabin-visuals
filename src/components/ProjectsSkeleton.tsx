@@ -14,7 +14,8 @@ export function ProjectsSkeleton() {
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
           <Link href="/" className="flex select-none items-center gap-2.5">
-            <CabinLogo className="h-[30px] w-auto" />
+            {/* Smoking while the list loads - the skeleton IS a loading state. */}
+            <CabinLogo className="cabin-logo-loading h-[30px] w-auto" />
             <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
           </Link>
           <nav className="flex items-center gap-5">

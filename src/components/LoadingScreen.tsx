@@ -1,13 +1,12 @@
-'use client'
-
-import { useFormStatus } from 'react-dom'
 import { CabinLogo } from './CabinLogo'
 
 /**
  * The transition screen: full-viewport page background with the cabin logo
- * puffing smoke (its idle animation, minus the hover gate). Shown wherever a
- * click starts a wait the UI would otherwise sit static through - auth form
- * submissions, editor ↔ projects navigations, route-level loading states.
+ * puffing smoke. The cabin-logo-loading class uses negative animation delays,
+ * so the smoke is mid-billow on the first painted frame - it never appears
+ * static and then starts. Used by route-level loading states (app/editor);
+ * pages with their own on-screen logo (auth shell, projects skeleton) animate
+ * that logo in place instead of covering the page.
  */
 export function LoadingScreen() {
   return (
@@ -17,11 +16,4 @@ export function LoadingScreen() {
       </div>
     </div>
   )
-}
-
-/** Drop inside a <form action={serverAction}>: covers the screen while the
- *  action runs (and through its redirect - navigation unmounts the form). */
-export function FormPendingScreen() {
-  const { pending } = useFormStatus()
-  return pending ? <LoadingScreen /> : null
 }

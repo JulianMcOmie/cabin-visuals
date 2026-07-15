@@ -8,7 +8,6 @@ import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';
-import { LoadingScreen, FormPendingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -33,8 +32,10 @@ function SignupPageContent() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Covers the screen while the Google server action authenticates + redirects.
+  // Smokes the logo while the Google server action authenticates + redirects.
   const [googleBusy, setGoogleBusy] = useState(false);
+  // Same, from email-form submit until navigation (or the error effect resets it).
+  const [formBusy, setFormBusy] = useState(false);
   // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
   // once the script is actually available (it usually loads after mount).
   const [gsiReady, setGsiReady] = useState(false);
@@ -69,6 +70,8 @@ function SignupPageContent() {
   useEffect(() => {
     const message = searchParams.get('message');
     if (message) setErrorMessage(message);
+    // A validation redirect brings us back with ?message - stop the smoke.
+    if (message) setFormBusy(false);
   }, [searchParams]);
 
   // Stash any anonymous work on arrival: covers the Google path and the
@@ -101,12 +104,12 @@ function SignupPageContent() {
   }, [pathname, gsiReady]);
 
   return (
-    <AuthShell footnote="Anonymous work carries over when you sign up">
+    <AuthShell footnote="Anonymous work carries over when you sign up" loading={googleBusy || formBusy}>
       <AuthTitle title="Sign up" sub="Make music you can see." />
 
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
-      <form action={initiateSignup} onSubmit={() => track('signup_started')} className="flex flex-col gap-[14px]">
+      <form action={initiateSignup} onSubmit={() => { track('signup_started'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
         <div className="flex gap-3">
           <div className="flex-1">
             <label htmlFor="firstName" className={`mb-[6px] block ${authLabelClass}`}>First name</label>
@@ -124,9 +127,7 @@ function SignupPageContent() {
         <button type="submit" className={`mt-1 ${authSubmitClass}`}>
           Continue
         </button>
-        <FormPendingScreen />
       </form>
-      {googleBusy && <LoadingScreen />}
 
       <OrDivider />
 

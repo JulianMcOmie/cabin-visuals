@@ -22,12 +22,14 @@ export const authSubmitClass =
 export const authLinkClass =
   'cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]';
 
-/** Full-page centered column: logo above the card, optional microcopy below. */
-export function AuthShell({ children, footnote }: { children: ReactNode; footnote?: string }) {
+/** Full-page centered column: logo above the card, optional microcopy below.
+ *  `loading` sets the page's own logo smoking (the busy indicator for form
+ *  submissions and OAuth waits - no separate transition page). */
+export function AuthShell({ children, footnote, loading }: { children: ReactNode; footnote?: string; loading?: boolean }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-page)] px-6 py-10 font-sans text-[var(--text)]">
       <Link href="/" className="mb-7 flex cursor-pointer select-none flex-col items-center" aria-label="Cabin Visuals home">
-        <CabinLogo className="h-14 w-auto" />
+        <CabinLogo className={`h-14 w-auto ${loading ? 'cabin-logo-loading' : ''}`} />
       </Link>
       <Appear className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
         {children}

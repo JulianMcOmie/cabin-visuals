@@ -415,10 +415,12 @@ body.drag-moving * {
 }
 
 /* Loading/transition screens: the logo smokes continuously (no hover needed),
-   puffs staggered a half-cycle apart so the smoke reads as rhythmic. */
+   puffs staggered a half-cycle apart so the smoke reads as rhythmic. NEGATIVE
+   delays start each puff mid-cycle, so the smoke is already billowing on the
+   first painted frame - never a static logo that begins animating later. */
 .cabin-logo-loading .puff-1 {
-  animation: cabin-billow 1.5s ease-out infinite;
+  animation: cabin-billow 1.5s ease-out -0.375s infinite;
 }
 .cabin-logo-loading .puff-2 {
-  animation: cabin-billow 1.5s ease-out 0.75s infinite;
+  animation: cabin-billow 1.5s ease-out -1.125s infinite;
 }

@@ -6,7 +6,6 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
-import { LoadingScreen, FormPendingScreen } from '../../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -40,6 +39,9 @@ function SetPasswordFormInternal() {
   const [anonUid, setAnonUid] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
   const [convertedEmail, setConvertedEmail] = useState<string | null>(null);
+  // Smokes the shell logo from submit until the redirect unmounts the page
+  // (or a validation redirect brings back ?message, which resets it).
+  const [formBusy, setFormBusy] = useState(false);
 
   const email = searchParams.get('email');
   const firstName = searchParams.get('firstName');
@@ -52,6 +54,12 @@ function SetPasswordFormInternal() {
     });
     return () => { mounted = false; };
   }, []);
+
+  // A server-action validation failure redirects back here with ?message -
+  // the URL change is the signal the wait is over.
+  useEffect(() => {
+    if (searchParams.get('message')) setFormBusy(false);
+  }, [searchParams]);
 
   const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -134,7 +142,7 @@ function SetPasswordFormInternal() {
   }
 
   return (
-    <AuthShell>
+    <AuthShell loading={converting || formBusy}>
       <AuthTitle title="Sign up" sub={<>Setting a password for <span className="text-[var(--text-2)]">{email}</span>.</>} />
 
       {anonUid && (
@@ -144,7 +152,7 @@ function SetPasswordFormInternal() {
 
       <form
         action={anonUid ? undefined : completeSignup}
-        onSubmit={anonUid ? handleConvert : undefined}
+        onSubmit={anonUid ? handleConvert : () => setFormBusy(true)}
         className="flex flex-col gap-[14px]"
       >
         <input type="hidden" name="email" value={email || ''} />
@@ -174,11 +182,7 @@ function SetPasswordFormInternal() {
         ) : (
           <SubmitButton />
         )}
-        {/* Covers the wait while signup runs + redirects (server-action path). */}
-        <FormPendingScreen />
       </form>
-      {/* The anon-conversion path submits client-side; same cover. */}
-      {converting && <LoadingScreen />}
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
         <Link href="/signup" className={authLinkClass}>&lsaquo; Back</Link>

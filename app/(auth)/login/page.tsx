@@ -6,7 +6,6 @@ import { handleSignInWithGoogle, login } from './actions';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { stashAnonWork } from '../../../src/persistence/carryover';
-import { LoadingScreen, FormPendingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -32,6 +31,9 @@ function LoginPageContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // True from password-form submit until the action's redirect unmounts the
+  // page (or an error redirect brings back searchParams, which resets it).
+  const [formBusy, setFormBusy] = useState(false);
   // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
   // once the script is actually available (it usually loads after mount).
   const [gsiReady, setGsiReady] = useState(false);
@@ -75,6 +77,8 @@ function LoginPageContent() {
     if (msg) setMessage(msg);
     if (errMsg && !isLoading) setError(errMsg);
     else if (!errMsg) setError(null);
+    // A failed login redirects back here with ?error - stop the logo smoking.
+    if (errMsg) setFormBusy(false);
 
     window.handleGoogleSignInCallback = handleGoogleSignInCallback;
 
@@ -103,13 +107,13 @@ function LoginPageContent() {
 
 
   return (
-    <AuthShell footnote="Anonymous work carries over when you sign in">
+    <AuthShell footnote="Anonymous work carries over when you sign in" loading={isLoading || formBusy}>
       <AuthTitle title="Sign in" sub="Your projects are waiting." />
 
       {message && <AuthBanner kind="success">{message}</AuthBanner>}
       {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
-      <form action={login} className="flex flex-col gap-[14px]">
+      <form action={login} onSubmit={() => setFormBusy(true)} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
@@ -127,10 +131,7 @@ function LoginPageContent() {
         <button type="submit" className={`mt-1 ${authSubmitClass}`}>
           Sign in
         </button>
-        {/* Covers the wait while the server action authenticates + redirects. */}
-        <FormPendingScreen />
       </form>
-      {isLoading && <LoadingScreen />}
 
       <OrDivider />
 
