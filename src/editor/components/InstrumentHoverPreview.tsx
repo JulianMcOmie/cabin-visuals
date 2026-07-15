@@ -33,10 +33,10 @@ const BEATS_PER_SEC = PREVIEW_BPM / 60
 const LOOP_BEATS = 16
 const START_OFFSET_BEATS = 4
 
-/** One note per beat, cycling the given pitches. */
-function makeLoopNotes(pitches: number[], durationBeats: number): ResolvedNote[] {
-  return Array.from({ length: LOOP_BEATS }, (_, i) => ({
-    beat: i,
+/** A note every `strideBeats`, cycling the given pitches. */
+function makeLoopNotes(pitches: number[], durationBeats: number, strideBeats = 1): ResolvedNote[] {
+  return Array.from({ length: Math.floor(LOOP_BEATS / strideBeats) }, (_, i) => ({
+    beat: i * strideBeats,
     blockStartBeat: 0,
     blockEndBeat: 1e9,
     pitch: pitches[i % pitches.length],
@@ -132,14 +132,22 @@ function ObjectPreview({ instrumentId }: { instrumentId: string }) {
 // ── Mover/splitter preview: a cube through the resolved chain ───────────────
 
 // Movers speak the signed-basis vocabulary (motionBasis.ts): 60/61 = ±X,
-// 62/63 = ±Y, 64/65 = ±Z, and they move only WHILE a note is held. Full-beat
-// durations back to back = an axis note is always held, so the cube is in
-// motion from the first frame - no dead pitches, no hold gaps. 66 (Return)
-// is deliberately absent: it damps everything to the origin.
-const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 1)
+// 62/63 = ±Y, 64/65 = ±Z. A held beat then a beat of rest, so each mover's
+// CHARACTER shows: bursts kick and settle, constant movers run while held and
+// freeze in the gap, oscillators swing and rest. 66 (Return) is deliberately
+// absent: it damps everything to the origin.
+const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 1, 2)
 
 const MAX_COPIES = 24
 const CUBE_BASE_COLOR = new Color('#35a7e6')
+
+// Movers get an OFF-ORIGIN cube: at the origin with an identity seed, rotate
+// (transform × R) and orbit (R × transform) produce the same matrix, so they
+// previewed identically. Offset, self-rotation spins in place while an orbit
+// visibly circles the origin marker. Splitters keep the identity seed - their
+// several copies are the point, and the offset would just push the arrangement
+// off-frame.
+const MOVER_BASE_OFFSET = 1.3
 
 function MoverPreview({ moverId }: { moverId: string }) {
   const def = getMoverOrSplitterDefinition(moverId)
@@ -148,11 +156,14 @@ function MoverPreview({ moverId }: { moverId: string }) {
     if (!def) return null
     return def.resolve({ settings: mergeDefinitionSettings(def, undefined), notes: MOVER_NOTES })
   }, [def])
+  const offsetSeed = def?.kind === 'mover'
 
   useFrame((root) => {
     if (!chain) return
     const beat = previewBeat(root.clock.elapsedTime)
-    const copies: VisualCopy[] = chain.apply(identityVisualCopy(), { beat, index: 0, count: 1 })
+    const seed = identityVisualCopy()
+    if (offsetSeed) seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
+    const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
     const meshes = meshesRef.current
     for (let i = 0; i < meshes.length; i++) {
       const mesh = meshes[i]
@@ -172,6 +183,13 @@ function MoverPreview({ moverId }: { moverId: string }) {
   if (!chain) return null
   return (
     <>
+      {/* Static origin marker: the fixed point orbits circle around. */}
+      {offsetSeed && (
+        <mesh>
+          <boxGeometry args={[0.14, 0.14, 0.14]} />
+          <meshBasicMaterial color="#3a3a42" toneMapped={false} />
+        </mesh>
+      )}
       {Array.from({ length: MAX_COPIES }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
