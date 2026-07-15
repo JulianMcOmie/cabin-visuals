@@ -384,3 +384,31 @@ body.drag-moving * {
 .timeline-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Console-styled native range inputs (piano-roll zoom, video scrubber):
+   square muted thumb on a thin track, matching ParamSlider's look. */
+.slider-square {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: var(--border);
+  outline: none;
+}
+.slider-square::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 9px;
+  height: 9px;
+  background: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  cursor: pointer;
+}
+.slider-square::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  background: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  cursor: pointer;
+}

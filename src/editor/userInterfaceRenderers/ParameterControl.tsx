@@ -4,7 +4,9 @@ import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
-/** One param row: label | 3px accent slider | mono value - 100px / 1fr / 44px. */
+/** One param row: label | 3px slider | mono value - 100px / 1fr / 44px.
+ *  Console-styled: square thumb, muted grey fill (accent blue was too loud for
+ *  a wall of params - the value column and focus states carry the hierarchy). */
 export function ParamSlider({
   label, value, min, max, step, onChange,
 }: {
@@ -43,14 +45,14 @@ export function ParamSlider({
       <div
         ref={trackRef}
         onPointerDown={onPointerDown}
-        className="relative h-[3px] bg-[var(--border)] rounded-full cursor-pointer select-none"
+        className="relative h-[3px] bg-[var(--border)] cursor-pointer select-none"
       >
         <div
-          className="absolute left-0 top-0 h-full rounded-full bg-[var(--accent)]"
+          className="absolute left-0 top-0 h-full bg-[var(--text-muted)]"
           style={{ width: `${pct}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-[9px] h-[9px] rounded-full bg-[var(--text)]"
+          className="absolute top-1/2 -translate-y-1/2 w-[9px] h-[9px] bg-[var(--text-2)] border border-[var(--border-strong)]"
           style={{ left: `calc(${pct}% - 4px)` }}
         />
       </div>
@@ -91,10 +93,10 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
         <div className="flex justify-end">
           <button
             onClick={() => onNum(on ? 0 : 1)}
-            className={`w-8 h-4 rounded-full relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'}`}
+            className={`w-8 h-4 relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--text-muted)]' : 'bg-[var(--border)]'}`}
             aria-label={param.label}
           >
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-[var(--text)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+            <span className={`absolute top-0.5 w-3 h-3 bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
           </button>
         </div>
       </div>

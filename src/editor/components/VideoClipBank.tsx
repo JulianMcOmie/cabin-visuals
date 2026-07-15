@@ -270,7 +270,7 @@ function MomentPickerModal({
           value={Math.min(t, duration)}
           onChange={(e) => seek(Number(e.target.value))}
           disabled={!ready}
-          className="mt-2 w-full"
+          className="slider-square mt-2 w-full"
         />
 
         <div className="mt-1.5 flex items-center gap-2">

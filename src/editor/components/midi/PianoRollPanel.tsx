@@ -354,7 +354,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             max={200}
             value={midiPixelsPerBeat}
             onChange={(e) => setMidiPixelsPerBeat(Number(e.target.value))}
-            className="w-14 h-1 accent-indigo-500 cursor-pointer"
+            className="slider-square w-14 cursor-pointer"
           />
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
@@ -366,7 +366,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             step={0.1}
             value={midiRowScale}
             onChange={(e) => setMidiRowScale(Number(e.target.value))}
-            className="w-14 h-1 accent-indigo-500 cursor-pointer"
+            className="slider-square w-14 cursor-pointer"
           />
         </div>
 
