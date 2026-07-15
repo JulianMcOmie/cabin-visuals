@@ -44,6 +44,7 @@ body {
   /* Accent - THE blue */
   --accent: #35a7e6;
   --accent-hover: #6fc0ee;
+  --accent-muted: #3f7ca6; /* dampened accent: slider fills and other quiet-active surfaces */
   --on-accent: #0a0a0c; /* dark text on accent buttons */
   --warn: #d0a04c;
 
@@ -399,7 +400,7 @@ body.drag-moving * {
   appearance: none;
   width: 9px;
   height: 9px;
-  background: var(--text-2);
+  background: var(--accent-muted);
   border: 1px solid var(--border-strong);
   border-radius: 0;
   cursor: pointer;
@@ -407,7 +408,7 @@ body.drag-moving * {
 .slider-square::-moz-range-thumb {
   width: 9px;
   height: 9px;
-  background: var(--text-2);
+  background: var(--accent-muted);
   border: 1px solid var(--border-strong);
   border-radius: 0;
   cursor: pointer;

@@ -5,8 +5,8 @@ import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 /** One param row: label | 3px slider | mono value - 100px / 1fr / 44px.
- *  Console-styled: square thumb, muted grey fill (accent blue was too loud for
- *  a wall of params - the value column and focus states carry the hierarchy). */
+ *  Console-styled: square thumb, dampened-blue fill (full accent blue was too
+ *  loud for a wall of params; --accent-muted keeps the hue without the shout). */
 export function ParamSlider({
   label, value, min, max, step, onChange,
 }: {
@@ -48,7 +48,7 @@ export function ParamSlider({
         className="relative h-[3px] bg-[var(--border)] cursor-pointer select-none"
       >
         <div
-          className="absolute left-0 top-0 h-full bg-[var(--text-muted)]"
+          className="absolute left-0 top-0 h-full bg-[var(--accent-muted)]"
           style={{ width: `${pct}%` }}
         />
         <div
@@ -93,7 +93,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
         <div className="flex justify-end">
           <button
             onClick={() => onNum(on ? 0 : 1)}
-            className={`w-8 h-4 relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--text-muted)]' : 'bg-[var(--border)]'}`}
+            className={`w-8 h-4 relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
             aria-label={param.label}
           >
             <span className={`absolute top-0.5 w-3 h-3 bg-[var(--text-2)] transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
