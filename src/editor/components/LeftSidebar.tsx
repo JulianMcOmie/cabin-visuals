@@ -8,7 +8,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { canPreview, InstrumentPreviewPopup } from './InstrumentHoverPreview'
+import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 
 /** What dragging an item creates. */
 export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
@@ -248,20 +248,20 @@ const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
   const [infoOpen, setInfoOpen] = useState(false)
-  // Hover preview: after a short dwell on a row, pop a live preview beside it.
-  const [preview, setPreview] = useState<{ item: InstrumentItem; anchor: { left: number; top: number } } | null>(null)
+  // Hover preview: after a short dwell on a row, aim the shared preview layer
+  // (one warm canvas for the whole sidebar - see InstrumentPreviewLayer).
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enterRow = (e: React.MouseEvent, item: InstrumentItem) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     if (previewTimer.current) clearTimeout(previewTimer.current)
     previewTimer.current = setTimeout(
-      () => setPreview({ item, anchor: { left: rect.right, top: rect.top } }),
+      () => setInstrumentPreview({ item, anchor: { left: rect.right, top: rect.top } }),
       100,
     )
   }
   const leaveRow = () => {
     if (previewTimer.current) clearTimeout(previewTimer.current)
-    setPreview(null)
+    setInstrumentPreview(null)
   }
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   // Show the info popup after a short hover dwell; hide immediately on leave.
@@ -324,7 +324,6 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               <span className="text-xs text-[var(--text-2)] truncate">{item.name}</span>
             </div>
           ))}
-          {preview && <InstrumentPreviewPopup item={preview.item} anchor={preview.anchor} />}
         </div>
       )}
     </div>
@@ -354,6 +353,8 @@ export function LeftSidebar() {
 
   return (
     <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)] overflow-hidden">
+      {/* One warm preview canvas for all sections' hover popups. */}
+      <InstrumentPreviewLayer />
       <div className="h-8 flex-shrink-0 flex items-center px-3 border-b border-[var(--border)] text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">
         LIBRARY
       </div>

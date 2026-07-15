@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
@@ -180,26 +180,48 @@ function MoverPreview({ moverId }: { moverId: string }) {
   )
 }
 
-// ── The popup ────────────────────────────────────────────────────────────────
+// ── The popup layer ──────────────────────────────────────────────────────────
+//
+// ONE persistent popup with ONE always-mounted <Canvas>, shared by every row of
+// every section. Mounting a fresh Canvas per hover paid WebGL context creation
+// + first shader compile on every popup (~seconds in dev) - the box appeared,
+// then sat dark before anything moved. Keeping the context warm makes a hover
+// paint moving content on its next frame. While no row is hovered the layer is
+// hidden and the frameloop is 'never', so the idle cost is one dormant context.
 
-export function InstrumentPreviewPopup({ item, anchor }: { item: InstrumentItem; anchor: { left: number; top: number } }) {
-  // Visual only - no popup at all for instruments with nothing to render
-  // (their rows keep the native title tooltip instead).
-  if (!canPreview(item)) return null
-  // Keep the popup on-screen for rows near the bottom of the viewport.
-  const top = Math.max(8, Math.min(anchor.top - 12, (typeof window !== 'undefined' ? window.innerHeight : 800) - 148))
+type PreviewTarget = { item: InstrumentItem; anchor: { left: number; top: number } }
+
+let currentPreview: PreviewTarget | null = null
+const previewListeners = new Set<() => void>()
+
+export function setInstrumentPreview(target: PreviewTarget | null): void {
+  currentPreview = target && canPreview(target.item) ? target : null
+  previewListeners.forEach((l) => l())
+}
+
+function subscribePreview(l: () => void): () => void {
+  previewListeners.add(l)
+  return () => previewListeners.delete(l)
+}
+
+/** Mounted once in the sidebar. */
+export function InstrumentPreviewLayer() {
+  const preview = useSyncExternalStore(subscribePreview, () => currentPreview, () => null)
+  const top = preview
+    ? Math.max(8, Math.min(preview.anchor.top - 12, window.innerHeight - 148))
+    : -9999
   return (
     <div
       className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
-      style={{ left: anchor.left + 8, top }}
+      style={preview ? { left: preview.anchor.left + 8, top } : { left: -9999, top, visibility: 'hidden' }}
     >
-      <Canvas dpr={1} frameloop="always" camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
+      <Canvas dpr={1} frameloop={preview ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
         <color attach="background" args={['#09090b']} />
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
-        {item.kind === 'object'
-          ? <ObjectPreview instrumentId={item.id} />
-          : <MoverPreview moverId={item.id} />}
+        {preview && (preview.item.kind === 'object'
+          ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} />
+          : <MoverPreview key={preview.item.id} moverId={preview.item.id} />)}
       </Canvas>
     </div>
   )
