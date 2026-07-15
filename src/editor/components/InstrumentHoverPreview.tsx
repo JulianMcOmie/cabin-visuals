@@ -33,16 +33,15 @@ const BEATS_PER_SEC = PREVIEW_BPM / 60
 const LOOP_BEATS = 16
 const START_OFFSET_BEATS = 4
 
-/** One note per beat, cycling a mid-range pitch arc so pitch-mapped
- *  instruments (spawn height, lane position) visibly vary. */
-function makeLoopNotes(pitches: number[]): ResolvedNote[] {
+/** One note per beat, cycling the given pitches. */
+function makeLoopNotes(pitches: number[], durationBeats: number): ResolvedNote[] {
   return Array.from({ length: LOOP_BEATS }, (_, i) => ({
     beat: i,
     blockStartBeat: 0,
     blockEndBeat: 1e9,
     pitch: pitches[i % pitches.length],
     velocity: 100,
-    durationBeats: 0.5,
+    durationBeats,
   }))
 }
 
@@ -65,7 +64,7 @@ export function canPreview(item: InstrumentItem): boolean {
 const PREVIEW_TRACK_ID = '__instrument-preview__'
 
 // A gentle arc through the middle of most instruments' pitch ranges.
-const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64])
+const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 
 function makePreviewState(instrumentId: string): ObjectState {
   const def = getInstrument(instrumentId)
@@ -132,9 +131,12 @@ function ObjectPreview({ instrumentId }: { instrumentId: string }) {
 
 // ── Mover/splitter preview: a cube through the resolved chain ───────────────
 
-// One note per beat across the common trigger/gate pitches so ballistic lanes
-// fire and gate rows toggle, looping like the object pattern.
-const MOVER_NOTES = makeLoopNotes([72, 67, 64, 60])
+// Movers speak the signed-basis vocabulary (motionBasis.ts): 60/61 = ±X,
+// 62/63 = ±Y, 64/65 = ±Z, and they move only WHILE a note is held. Full-beat
+// durations back to back = an axis note is always held, so the cube is in
+// motion from the first frame - no dead pitches, no hold gaps. 66 (Return)
+// is deliberately absent: it damps everything to the origin.
+const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 1)
 
 const MAX_COPIES = 24
 const CUBE_BASE_COLOR = new Color('#35a7e6')
