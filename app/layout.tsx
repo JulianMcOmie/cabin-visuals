@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { AnalyticsGate } from "../src/analytics/AnalyticsGate";
+import { AnalyticsIdentify } from "../src/analytics/AnalyticsIdentify";
 import "./globals.css";
 
 // Console design system: IBM Plex Sans for UI, IBM Plex Mono for numerics,
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body>
         {children}
         <AnalyticsGate />
+        <AnalyticsIdentify />
       </body>
     </html>
   );

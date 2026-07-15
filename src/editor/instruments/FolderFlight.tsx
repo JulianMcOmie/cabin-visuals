@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react'
-import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, DoubleSide } from 'three'
+import { Group, Mesh, PlaneGeometry, MeshBasicMaterial, CanvasTexture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, DoubleSide } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
@@ -10,8 +10,12 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // playhead is a static frame and scrubbing in either direction is exact. Meshes are
 // pooled. The folder icon is drawn procedurally to a canvas texture (no asset needed).
 
-const PITCH_MIN = 60 // C4
-const PITCH_MAX = 71 // B4
+// Full piano-roll span (C1–C7) so the editor shows every row and each note
+// pitch maps to a distinct spawn height - higher notes launch higher. Matches
+// generateRows()'s default range, which is what the editor falls back to when
+// an instrument declares no midiRows vocabulary.
+const PITCH_MIN = 24 // C1
+const PITCH_MAX = 96 // C7
 const MAX_SPRITES = 512
 
 // ── Canvas rounded-rect helper (no native roundRect dependency) ──
@@ -38,7 +42,7 @@ let _folderTexture: CanvasTexture | null = null
 function getFolderTexture(): CanvasTexture {
   if (_folderTexture) return _folderTexture
 
-  const size = 128
+  const size = 256 // power-of-two, high enough that a close-up folder stays crisp
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
@@ -76,8 +80,14 @@ function getFolderTexture(): CanvasTexture {
   ctx.restore()
 
   _folderTexture = new CanvasTexture(canvas)
-  _folderTexture.minFilter = LinearFilter
+  // Colour map must declare sRGB or the gold renders muddy/dark (matches Photo,
+  // Video, and the spike, which all set this). Mipmaps + anisotropy keep folders
+  // crisp as they minify into depth instead of aliasing into a pixelated shimmer.
+  _folderTexture.colorSpace = SRGBColorSpace
   _folderTexture.magFilter = LinearFilter
+  _folderTexture.minFilter = LinearMipmapLinearFilter
+  _folderTexture.generateMipmaps = true
+  _folderTexture.anisotropy = 8
   return _folderTexture
 }
 
@@ -88,7 +98,7 @@ const PARAMS: ParamDef[] = [
   { key: 'iconScale', label: 'Icon Scale', min: 0.1, max: 5, step: 0.1, default: 2 },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 1 },
   { key: 'maxDepth', label: 'Max Depth', min: 10, max: 200, step: 5, default: 50 },
-  { key: 'ySpread', label: 'Y Spread', min: 0, max: 10, step: 0.5, default: 4 },
+  { key: 'ySpread', label: 'Y Spread', min: 0, max: 100, step: 0.5, default: 4 },
   { key: 'drift', label: 'Drift', min: 0, max: 3, step: 0.1, default: 0.5 },
   { key: 'tumble', label: 'Tumble', min: 0, max: 5, step: 0.1, default: 1 },
 ]
@@ -116,6 +126,10 @@ function FolderFlightVisual({ trackId }: { trackId: string }) {
       opacity: 1,
       side: DoubleSide,
       depthWrite: false,
+      // Discard the texture's fully-transparent border so it can't render as a
+      // faint dark quad behind the folder (the "black square" artifact). Kept
+      // low so the folder's soft anti-aliased edges still blend.
+      alphaTest: 0.05,
       toneMapped: false,
     })
     const mesh = new Mesh(geo, mat)
@@ -206,14 +220,8 @@ export const folderFlightInstrument: ObjectInstrumentDef = {
   kind: 'object',
   userInterfaceRenderer: 'parameters',
   params: PARAMS,
-  midiRows: [
-    { pitch: 71, label: 'Launch folder · top' },
-    { pitch: 69, label: 'Launch folder · high' },
-    { pitch: 67, label: 'Launch folder · above middle' },
-    { pitch: 65, label: 'Launch folder · middle' },
-    { pitch: 64, label: 'Launch folder · below middle' },
-    { pitch: 62, label: 'Launch folder · low' },
-    { pitch: 60, label: 'Launch folder · bottom' },
-  ],
+  // No midiRows: a folder's height is its pitch, so the editor shows the full
+  // piano roll (every row a different launch height) rather than a short
+  // labelled vocabulary.
   component: FolderFlightVisual,
 }
