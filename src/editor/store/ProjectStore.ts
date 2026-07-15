@@ -216,6 +216,9 @@ function insertTrackTreeIntoState(
   return { tracks, rootTrackIds }
 }
 
+/** Editor viewport aspect pin - a project-level display setting. */
+export type ViewAspect = 'fill' | '16:9' | '9:16'
+
 export interface ProjectState {
   scenes: Record<string, Scene>
   /** Main first, followed by visual scenes in tab order. */
@@ -234,6 +237,10 @@ export interface ProjectState {
   bpm: number
   beatsPerBar: number
   totalBars: number
+  /** The editor viewport's pinned aspect ('fill' = fill the panel). A project
+   *  setting: persisted with the document, and 16:9/9:16 seeds the export
+   *  dialog's default aspect. */
+  viewAspect: ViewAspect
   setActiveScene: (sceneId: string) => void
   addScene: () => string
   renameScene: (sceneId: string, name: string) => void
@@ -321,6 +328,7 @@ export interface ProjectState {
   reorderEffect: (trackId: string, instanceId: string, direction: -1 | 1) => void
   setBpm: (bpm: number) => void
   setTotalBars: (bars: number) => void
+  setViewAspect: (aspect: ViewAspect) => void
 }
 
 function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
@@ -400,6 +408,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   bpm: 120,
   beatsPerBar: 4,
   totalBars: 32,
+  viewAspect: 'fill',
 
   setActiveScene: (sceneId) => rawSet((s) => {
     if (!s.scenes[sceneId] || sceneId === s.activeSceneId) return s
@@ -1444,5 +1453,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   // Blocks past the new end are left alone (the timeline just ends sooner);
   // the transport clamps the playhead to the project length on its own.
   setTotalBars: (bars) => set({ totalBars: Math.max(MIN_TOTAL_BARS, Math.min(MAX_TOTAL_BARS, Math.round(bars))) }),
+
+  setViewAspect: (aspect) => set({ viewAspect: aspect }),
   })
 })

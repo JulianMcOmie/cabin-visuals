@@ -3,6 +3,7 @@ import type { AudioClip } from '../editor/store/AudioStore'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { PhotoClip } from '../editor/store/PhotoStore'
 import type { LoopRegion } from '../editor/core/loopRegion'
+import type { ViewAspect } from '../editor/store/ProjectStore'
 
 /**
  * The serialized project - the shape of the `projects.data` blob. A thin
@@ -48,6 +49,9 @@ export interface ProjectDocument {
   videoClips?: Record<string, VideoClip>
   photoClips?: Record<string, PhotoClip>
   loopRegion?: LoopRegion | null
+  /** Editor viewport aspect pin. Additive within v9 - absent in older saves,
+   *  defaulted to 'fill' on hydrate. No schema bump: purely additive. */
+  viewAspect?: ViewAspect
 }
 
 /** A fresh, valid document - matches the stores' initial state. */
@@ -71,5 +75,6 @@ export function emptyDocument(): ProjectDocument {
     videoClips: {},
     photoClips: {},
     loopRegion: null,
+    viewAspect: 'fill',
   }
 }

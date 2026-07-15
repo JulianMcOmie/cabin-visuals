@@ -8,7 +8,7 @@ import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkl
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
-import { useProjectStore } from './store/ProjectStore'
+import { useProjectStore, type ViewAspect } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
@@ -89,13 +89,14 @@ function Scene() {
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
 // previews what an export at that aspect will compose like.
 
-type ViewAspect = 'fill' | '16:9' | '9:16'
 const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
 function VisualPanel() {
   const panelRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [aspect, setAspect] = useState<ViewAspect>('fill')
+  // A project setting (persisted in the document, seeds the export default).
+  const aspect = useProjectStore((s) => s.viewAspect)
+  const setAspect = useProjectStore((s) => s.setViewAspect)
   // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
   // can't contain-fit an aspect-ratio box against both dimensions).
   const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)

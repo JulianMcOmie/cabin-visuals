@@ -53,26 +53,34 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
   // trusted from storage - it's derived from the plan, here and again at start.
   const base = defaultSettings(defaultFileName())
   base.rangeToBar = Math.max(1, useProjectStore.getState().totalBars)
+  let merged = base
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return isPro ? { ...base, watermark: false } : clampToFreeTier(base)
-    const saved = JSON.parse(raw) as Partial<ExportSettings>
-    const merged = sanitizeRange({ ...base, ...saved, fileName: base.fileName })
-    // Pre-aspect saves (or hand-edited storage) may not sit on a known tier of
-    // the saved aspect - snap to the 1080p tier rather than exporting an odd size.
-    if (merged.aspect !== '16:9' && merged.aspect !== '9:16') merged.aspect = '16:9'
-    const tiers = resolutionsFor(merged.aspect)
-    if (!tiers.some((r) => r.width === merged.width && r.height === merged.height)) {
-      const tier = tiers.find((r) => r.label === '1080p') ?? tiers[0]
-      merged.width = tier.width
-      merged.height = tier.height
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<ExportSettings>
+      merged = sanitizeRange({ ...base, ...saved, fileName: base.fileName })
     }
-    merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
-    merged.watermark = !isPro
-    return isPro ? merged : clampToFreeTier(merged)
-  } catch {
-    return isPro ? { ...base, watermark: false } : clampToFreeTier(base)
+  } catch { /* corrupt storage - fall through to defaults */ }
+
+  if (merged.aspect !== '16:9' && merged.aspect !== '9:16') merged.aspect = '16:9'
+  // The project's viewport pin is the stronger signal than last time's export:
+  // a project edited at 9:16 defaults to a 9:16 export ('fill' defers).
+  const viewAspect = useProjectStore.getState().viewAspect
+  if (viewAspect === '16:9' || viewAspect === '9:16') merged.aspect = viewAspect
+
+  // Snap to a known tier of the chosen aspect, keeping the quality tier (long
+  // edge) when the aspect changed out from under a remembered resolution.
+  const tiers = resolutionsFor(merged.aspect)
+  if (!tiers.some((r) => r.width === merged.width && r.height === merged.height)) {
+    const longEdge = Math.max(merged.width, merged.height)
+    const tier = tiers.find((r) => Math.max(r.width, r.height) === longEdge)
+      ?? tiers.find((r) => r.label === '1080p') ?? tiers[0]
+    merged.width = tier.width
+    merged.height = tier.height
   }
+  merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
+  merged.watermark = !isPro
+  return isPro ? merged : clampToFreeTier(merged)
 }
 
 /**
