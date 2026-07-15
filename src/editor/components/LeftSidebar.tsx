@@ -8,6 +8,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
+import { InstrumentPreviewPopup } from './InstrumentHoverPreview'
 
 /** What dragging an item creates. */
 export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
@@ -247,6 +248,22 @@ const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
   const [open, setOpen] = useState(true)
   const [infoOpen, setInfoOpen] = useState(false)
+  // Hover preview: after a short dwell on a row, pop a live preview beside it.
+  const [preview, setPreview] = useState<{ item: InstrumentItem; anchor: { left: number; top: number } } | null>(null)
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const enterRow = (e: React.MouseEvent, item: InstrumentItem) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    previewTimer.current = setTimeout(
+      () => setPreview({ item, anchor: { left: rect.right, top: rect.top } }),
+      350,
+    )
+  }
+  const leaveRow = () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    setPreview(null)
+  }
+  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   // Show the info popup after a short hover dwell; hide immediately on leave.
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openAfterDelay = () => {
@@ -294,9 +311,10 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
             <div
               key={item.id}
               data-instrument-id={item.id}
-              onPointerDown={(e) => onItemPointerDown(e, item)}
+              onPointerDown={(e) => { leaveRow(); onItemPointerDown(e, item) }}
               onDoubleClick={() => onItemDoubleClick(item)}
-              title={item.description}
+              onMouseEnter={(e) => enterRow(e, item)}
+              onMouseLeave={leaveRow}
               className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
             >
               <span className="flex-shrink-0 flex items-center justify-center w-3.5">
@@ -305,6 +323,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               <span className="text-xs text-[var(--text-2)] truncate">{item.name}</span>
             </div>
           ))}
+          {preview && <InstrumentPreviewPopup item={preview.item} anchor={preview.anchor} />}
         </div>
       )}
     </div>

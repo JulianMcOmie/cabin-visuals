@@ -334,9 +334,22 @@ export function computeAtBeat(beat: number) {
   }
 }
 
+// Preview objects (instrument-browser hover popups): synthetic states
+// registered by a preview canvas's driver, resolved through the same
+// getObjectState pull instruments already use - so an instrument component
+// mounts unchanged in a popup <Canvas> under a reserved preview trackId.
+// Keyed and consulted FIRST so a preview can never collide with (or be
+// shadowed by) a real track id.
+const previewStates = new Map<string, ObjectState>()
+
+export function setPreviewObjectState(trackId: string, state: ObjectState | null): void {
+  if (state) previewStates.set(trackId, state)
+  else previewStates.delete(trackId)
+}
+
 /** Pull API for the renderer. */
 export function getObjectState(trackId: string): ObjectState | undefined {
-  return activeTrackIds.has(trackId) ? states.get(trackId) : undefined
+  return previewStates.get(trackId) ?? (activeTrackIds.has(trackId) ? states.get(trackId) : undefined)
 }
 
 /** Ordered final-frame layers. Multiple director tracks already concatenate here;
