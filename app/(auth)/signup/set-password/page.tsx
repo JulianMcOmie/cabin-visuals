@@ -6,6 +6,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
+import { LoadingScreen, FormPendingScreen } from '../../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -173,7 +174,11 @@ function SetPasswordFormInternal() {
         ) : (
           <SubmitButton />
         )}
+        {/* Covers the wait while signup runs + redirects (server-action path). */}
+        <FormPendingScreen />
       </form>
+      {/* The anon-conversion path submits client-side; same cover. */}
+      {converting && <LoadingScreen />}
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
         <Link href="/signup" className={authLinkClass}>&lsaquo; Back</Link>

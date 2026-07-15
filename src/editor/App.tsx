@@ -9,6 +9,7 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
+import { LoadingScreen } from '../components/LoadingScreen'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
@@ -291,11 +292,16 @@ function Header() {
   const { user, loading: authLoading, isAnonymous } = useAuth()
   // "Has an account" - anonymous sessions are signed in for persistence only.
   const permanent = !authLoading && !!user && !isAnonymous
+  // Show the transition screen the moment Projects is clicked - the navigation
+  // (RSC fetch + projects page load) can take seconds; unmounting clears it.
+  const [leaving, setLeaving] = useState(false)
 
   return (
     <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-panel)] relative">
+      {leaving && <LoadingScreen />}
       <Link
         href="/projects"
+        onClick={() => setLeaving(true)}
         className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] transition-colors"
       >
         <ChevronLeft size={13} />

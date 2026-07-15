@@ -8,6 +8,7 @@ import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';
+import { LoadingScreen, FormPendingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -32,6 +33,8 @@ function SignupPageContent() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Covers the screen while the Google server action authenticates + redirects.
+  const [googleBusy, setGoogleBusy] = useState(false);
   // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
   // once the script is actually available (it usually loads after mount).
   const [gsiReady, setGsiReady] = useState(false);
@@ -39,6 +42,7 @@ function SignupPageContent() {
   async function handleGoogleSignInCallback(response: any) {
     console.log("Google Sign-In CredentialResponse (Signup Page):", response);
     if (response.credential) {
+      setGoogleBusy(true);
       try {
         // Google sign-in replaces any anonymous session - stash its work so
         // the projects page can carry it into the resulting account.
@@ -53,6 +57,7 @@ function SignupPageContent() {
         }
         console.error("Error calling handleSignInWithGoogle server action:", error);
         setErrorMessage('Google sign-in failed. Please try again.');
+        setGoogleBusy(false);
       }
     } else {
       console.error("Google Sign-In failed: No credential received.");
@@ -119,7 +124,9 @@ function SignupPageContent() {
         <button type="submit" className={`mt-1 ${authSubmitClass}`}>
           Continue
         </button>
+        <FormPendingScreen />
       </form>
+      {googleBusy && <LoadingScreen />}
 
       <OrDivider />
 

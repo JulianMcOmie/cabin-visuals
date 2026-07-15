@@ -413,3 +413,12 @@ body.drag-moving * {
   border-radius: 0;
   cursor: pointer;
 }
+
+/* Loading/transition screens: the logo smokes continuously (no hover needed),
+   puffs staggered a half-cycle apart so the smoke reads as rhythmic. */
+.cabin-logo-loading .puff-1 {
+  animation: cabin-billow 1.5s ease-out infinite;
+}
+.cabin-logo-loading .puff-2 {
+  animation: cabin-billow 1.5s ease-out 0.75s infinite;
+}

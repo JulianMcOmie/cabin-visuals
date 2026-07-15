@@ -6,6 +6,7 @@ import { handleSignInWithGoogle, login } from './actions';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { stashAnonWork } from '../../../src/persistence/carryover';
+import { LoadingScreen, FormPendingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -126,7 +127,10 @@ function LoginPageContent() {
         <button type="submit" className={`mt-1 ${authSubmitClass}`}>
           Sign in
         </button>
+        {/* Covers the wait while the server action authenticates + redirects. */}
+        <FormPendingScreen />
       </form>
+      {isLoading && <LoadingScreen />}
 
       <OrDivider />
 
