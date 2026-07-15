@@ -132,11 +132,12 @@ function ObjectPreview({ instrumentId }: { instrumentId: string }) {
 // ── Mover/splitter preview: a cube through the resolved chain ───────────────
 
 // Movers speak the signed-basis vocabulary (motionBasis.ts): 60/61 = ±X,
-// 62/63 = ±Y, 64/65 = ±Z. A held beat then a beat of rest, so each mover's
-// CHARACTER shows: bursts kick and settle, constant movers run while held and
-// freeze in the gap, oscillators swing and rest. 66 (Return) is deliberately
-// absent: it damps everything to the origin.
-const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 1, 2)
+// 62/63 = ±Y, 64/65 = ±Z. Notes every 2 beats, HELD for the full 2 beats:
+// burst movers react only to onsets (kick, ease out, rest until the next one),
+// while constant movers and oscillators accumulate over held time - always
+// held means genuinely constant motion, switching axis every 2 beats. 66
+// (Return) is deliberately absent: it damps everything to the origin.
+const MOVER_NOTES = makeLoopNotes([60, 62, 64, 61, 63, 65, 60, 63], 2, 2)
 
 const MAX_COPIES = 24
 const CUBE_BASE_COLOR = new Color('#35a7e6')
