@@ -73,7 +73,9 @@ const DIRECTOR_INSTRUMENTS = withKind('director', [
   { id: 'radialCut', name: 'Radial Cut', description: 'Partitions held scene rows into concentric rings from the center outward.', icon: <Sparkles size={12} className="text-cyan-400" /> },
 ])
 
-const OBJECT_INSTRUMENTS = withKind('object', [
+// Every object instrument, icons and all. Partitioned below into the curated
+// core list and the Extras back catalog - nothing is removed, only demoted.
+const ALL_OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: 'Cube', description: 'A cube that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -208,6 +210,13 @@ const OBJECT_INSTRUMENTS = withKind('object', [
   )},
 ])
 
+// The curated core: a few good shapes, kept deliberately short so the library
+// reads as intentional. Everything else lives in the collapsed Extras section
+// at the bottom - still available, out of the first impression.
+const CORE_OBJECT_IDS = new Set(['cube', 'circle', 'triangle', 'shapeFlight'])
+const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
+const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
+
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
@@ -245,8 +254,8 @@ const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions
     ),
   })))
 
-function Section({ title, description, items, onItemPointerDown, onItemDoubleClick }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void }) {
-  const [open, setOpen] = useState(true)
+function Section({ title, description, items, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
   const [infoOpen, setInfoOpen] = useState(false)
   // Hover preview: after a short dwell on a row, aim the shared preview layer
   // (one warm canvas for the whole sidebar - see InstrumentPreviewLayer).
@@ -393,6 +402,7 @@ export function LeftSidebar() {
                 the code stays until existing projects are migrated off ports. */}
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}
           </>
         )}
