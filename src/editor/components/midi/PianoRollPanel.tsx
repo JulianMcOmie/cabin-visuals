@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { X, Magnet } from 'lucide-react'
-import { useUIStore } from '../../store/UIStore'
+import { useUIStore, MIDI_ROW_HEIGHTS } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
@@ -177,8 +177,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const track = useProjectStore((s) => s.tracks[trackId])
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
-  const midiRowScale = useUIStore((s) => s.midiRowScale)
-  const setMidiRowScale = useUIStore((s) => s.setMidiRowScale)
+  const rowHeight = useUIStore((s) => s.midiRowHeight)
+  const setMidiRowHeight = useUIStore((s) => s.setMidiRowHeight)
 
   const [snapEnabled, setSnapEnabled] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -245,7 +245,6 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           : noteColor
             ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
             : generateRows(undefined)
-  const rowHeight = Math.round(28 * midiRowScale)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
   // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
@@ -359,13 +358,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
           <span className="text-[10px] text-zinc-600">V</span>
+          {/* Slider moves over the quantized ladder's indices, one rung per step. */}
           <input
             type="range"
-            min={0.5}
-            max={2}
-            step={0.1}
-            value={midiRowScale}
-            onChange={(e) => setMidiRowScale(Number(e.target.value))}
+            min={0}
+            max={MIDI_ROW_HEIGHTS.length - 1}
+            step={1}
+            value={MIDI_ROW_HEIGHTS.indexOf(rowHeight)}
+            onChange={(e) => setMidiRowHeight(MIDI_ROW_HEIGHTS[Number(e.target.value)])}
             className="slider-square w-14 cursor-pointer"
           />
         </div>

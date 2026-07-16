@@ -10,6 +10,7 @@ import { useProjectList } from '../../src/persistence/hooks/useProjectList'
 import { usePlan } from '../../src/billing/usePlan'
 import { ensureSession, anonSessionsEnabled } from '../../src/persistence/anonSession'
 import { takeCarryover } from '../../src/persistence/carryover'
+import { forgetLastProject } from '../../src/persistence/lastProject'
 import type { TemplateDef } from '../../src/templates'
 
 const FREE_PROJECT_LIMIT = 1
@@ -122,6 +123,8 @@ export default function ProjectsPage() {
   const handleDeleteProject = async (projectId: string) => {
     try {
       await deleteProject(projectId)
+      // Don't leave the landing page's "Continue creating" aimed at a dead row.
+      forgetLastProject(projectId)
     } catch {
       alert("Failed to delete project.")
     }

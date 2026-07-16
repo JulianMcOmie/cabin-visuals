@@ -5,6 +5,8 @@ import { hydrate } from '../../persistence/serialize'
 import { emptyDocument } from '../../persistence/types'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
 import { justAdopted } from '../../persistence/adoptionHandoff'
+import { rememberLastProject } from '../../persistence/lastProject'
+import { getSupabase } from '../../persistence/supabase'
 import { useHistoryStore } from '../store/HistoryStore'
 import { useUIStore } from '../store/UIStore'
 import { getTemplate } from '../../templates'
@@ -47,6 +49,14 @@ export function useProjectPersistence() {
   useEffect(() => {
     if (!projectId) return
 
+    // Remember the bind (per user) so the landing page's "Continue creating"
+    // can come straight back here. Fire-and-forget: navigation never waits on it.
+    const remember = () => {
+      void getSupabase().auth.getUser().then(({ data }) => {
+        if (data.user) rememberLastProject(data.user.id, projectId)
+      }).catch(() => {})
+    }
+
     // Anonymous adoption just seeded this row FROM the in-memory document -
     // memory is the source of truth, so keep it and only arm autosave. The
     // normal blank-slate → reload path would wipe and re-fill the stores with
@@ -55,6 +65,7 @@ export function useProjectPersistence() {
     const handoff = justAdopted(projectId)
     if (handoff) {
       useUIStore.getState().setProjectName(handoff.name)
+      remember()
       const stopAutosave = startAutosave(projectId)
       return () => {
         stopAutosave()
@@ -75,6 +86,7 @@ export function useProjectPersistence() {
       try {
         const { name, document } = await projectStorage.load(projectId)
         if (cancelled) return
+        remember()
         useUIStore.getState().setProjectName(name)
         hydrate(document)
         // The hydrate setState must not be undoable - Ctrl+Z right after open

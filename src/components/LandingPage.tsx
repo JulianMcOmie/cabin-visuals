@@ -8,6 +8,7 @@ import { CabinLogo } from "./CabinLogo"
 import { Appear, Reveal } from "./motionPresets"
 import { ProfileMenu } from "./ProfileMenu"
 import { useAuth } from "../persistence/hooks/useAuth"
+import { getLastProjectId } from "../persistence/lastProject"
 import { track } from "../analytics/analytics"
 
 export default function LandingPage() {
@@ -73,18 +74,22 @@ export default function LandingPage() {
               <span>Create insanely great visuals for music</span>
             </h1>
             <p className="m-0 max-w-[620px] text-[18px] leading-[1.55] text-[var(--text-3)]">
-              One-of-a-kind workstation for music-synced visuals
+              The best workstation for music-synced visuals
             </p>
           </Appear>
           <Appear delay={0.1} className="flex flex-col items-center gap-[18px]">
             <div className="flex items-center gap-3">
               {user ? (
-                // Show "Take me to my projects" if user is logged in
+                // Logged in: straight back into the last project they opened
+                // on this device; /projects only when there's nothing to resume.
                 <button
-                  onClick={() => router.push('/projects')}
+                  onClick={() => {
+                    const last = getLastProjectId(user.id)
+                    router.push(last ? `/editor?project=${last}` : '/projects')
+                  }}
                   className="inline-flex h-[46px] items-center justify-center rounded-md bg-[var(--accent)] px-7 text-[15px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
                 >
-                  Take me to my projects
+                  Continue creating
                 </button>
               ) : (
                 // Not logged in: drop them straight into the editor to play.
@@ -93,7 +98,7 @@ export default function LandingPage() {
                   onClick={() => track('try_it_out_clicked')}
                   className="inline-flex h-[46px] items-center justify-center rounded-md bg-[var(--accent)] px-7 text-[15px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
                 >
-                  Try it out
+                  Start creating
                 </Link>
               )}
               <button

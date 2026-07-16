@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
 import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 import { lighten } from '../../utils/colors'
@@ -152,7 +152,12 @@ export function MidiEditor({
     onHeaderClick: scrubTo,
   })
 
-  // Alt+scroll zoom (horizontal = pixelsPerBeat, vertical = rowScale)
+  // Alt+scroll zoom (horizontal = pixelsPerBeat, vertical = row height).
+  // Vertical is a step function over the MIDI_ROW_HEIGHTS ladder (like Logic):
+  // wheel travel accumulates and each ROW_ZOOM_WHEEL_STEP px of it moves one
+  // rung, rather than scaling continuously.
+  const ROW_ZOOM_WHEEL_STEP = 60
+  const rowZoomAccumRef = useRef(0)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -169,15 +174,36 @@ export function MidiEditor({
       }
 
       if (Math.abs(e.deltaY) > 2) {
-        const delta = -e.deltaY * 0.005
-        const current = useUIStore.getState().midiRowScale
-        useUIStore.getState().setMidiRowScale(current + delta)
+        // A direction flip discards leftover travel from the old direction.
+        const acc = rowZoomAccumRef.current
+        rowZoomAccumRef.current = (Math.sign(e.deltaY) !== Math.sign(acc) ? 0 : acc) + e.deltaY
+        while (Math.abs(rowZoomAccumRef.current) >= ROW_ZOOM_WHEEL_STEP) {
+          // Scroll up (negative deltaY) zooms in, matching the old behavior.
+          useUIStore.getState().stepMidiRowHeight(rowZoomAccumRef.current < 0 ? 1 : -1)
+          rowZoomAccumRef.current -= Math.sign(rowZoomAccumRef.current) * ROW_ZOOM_WHEEL_STEP
+        }
       }
     }
 
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
   }, [])
+
+  // When the row height steps, keep the row at the viewport's vertical center
+  // at the exact same y (Logic's behavior): the view grows/shrinks around the
+  // note you're looking at instead of drifting. Runs for any rowHeight change -
+  // wheel zoom and the toolbar's V slider alike. Layout effect so the scroll
+  // correction lands in the same frame as the resize (no visible jump).
+  const prevRowHeightRef = useRef(rowHeight)
+  useLayoutEffect(() => {
+    const prevH = prevRowHeightRef.current
+    prevRowHeightRef.current = rowHeight
+    const sc = containerRef.current
+    if (prevH === rowHeight || !sc) return
+    const centerRow = Math.floor((sc.scrollTop + sc.clientHeight / 2) / prevH)
+    const rowCenterViewportY = (centerRow + 0.5) * prevH - sc.scrollTop
+    sc.scrollTop = (centerRow + 0.5) * rowHeight - rowCenterViewportY
+  }, [rowHeight])
 
   // Canvas dimensions (the timeline spans initialTotalBeats, not just the block)
   const canvasWidth = initialTotalBeats * pixelsPerBeat + labelWidth + PLAYHEAD_TRIANGLE_HALF + CANVAS_RIGHT_PADDING
