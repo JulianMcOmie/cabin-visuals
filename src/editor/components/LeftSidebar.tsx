@@ -213,7 +213,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // The curated core: a few good shapes, kept deliberately short so the library
 // reads as intentional. Everything else lives in the collapsed Extras section
 // at the bottom - still available, out of the first impression.
-const CORE_OBJECT_IDS = new Set(['cube', 'circle', 'triangle', 'shapeFlight'])
+const CORE_OBJECT_IDS = new Set(['cube', 'circle', 'triangle', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
 
