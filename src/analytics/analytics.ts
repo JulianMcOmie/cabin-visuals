@@ -13,11 +13,36 @@ import { getPostHog } from './posthog'
  */
 
 export type AnalyticsEvent =
+  // Landing
   | 'try_it_out_clicked'
+  | 'continue_creating_clicked' // props: { destination: 'editor' | 'projects' }
+  | 'watch_demo_clicked'
+  // Header/nav + CTA links that navigate. props: { from, to }
+  | 'nav_clicked'
+  // Pricing
   | 'pricing_upgrade_clicked'
+  | 'pricing_start_creating_clicked' // props: { destination: 'editor' | 'projects' }
+  // Projects
+  | 'new_project_clicked'
+  | 'project_created' // props: { source: 'blank' | 'template' | 'carryover', template? }
+  | 'project_opened'
+  | 'project_deleted'
+  // Auth
+  | 'signup_started'
+  | 'signup_password_set'
+  | 'login_submitted'
+  | 'google_signin_submitted' // props: { page: 'login' | 'signup' }
+  | 'password_reset_requested'
+  | 'password_update_submitted'
+  | 'sign_out_clicked'
+  // Account / billing
+  | 'manage_billing_clicked'
+  // Editor
   | 'editor_upgrade_clicked'
   | 'export_clicked'
-  | 'signup_started'
+  | 'lyrics_clicked'
+  | 'lyrics_transcribe_clicked'
+  | 'lyrics_applied' // props: { source: 'transcription' | 'pasted', words }
   | 'tutorial_completed'
   | 'tutorial_skipped'
 

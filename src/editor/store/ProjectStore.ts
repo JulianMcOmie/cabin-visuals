@@ -317,6 +317,11 @@ export interface ProjectState {
    *  overruns. One set() so the whole import is a single undo step. Returns
    *  the new track ids in order. */
   importMidiTracks: (imported: ImportedMidiTrack[]) => string[]
+  /** Create a Text Display track whose block holds one "Next word" note per
+   *  lyric word (beats are project-absolute), with the words joined into the
+   *  track's text param. One set() = one undo step. Returns the track id, or
+   *  null when there are no words. */
+  addLyricTrack: (words: LyricWord[]) => string | null
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
   deleteAudioBlock: (trackId: string, blockId: string) => void
@@ -330,6 +335,16 @@ export interface ProjectState {
   setTotalBars: (bars: number) => void
   setViewAspect: (aspect: ViewAspect) => void
 }
+
+/** One lyric word placed on the project timeline (absolute beats). */
+export interface LyricWord {
+  word: string
+  startBeat: number
+  durationBeats: number
+}
+
+// Text Display's "advance to the next word" pitch (its PITCH_NEXT_WORD).
+const TEXT_NEXT_WORD_PITCH = 48
 
 function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
   const mainId = crypto.randomUUID()
@@ -1349,6 +1364,44 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks, rootTrackIds, totalBars }
     })
     return ids
+  },
+
+  addLyricTrack: (words) => {
+    if (words.length === 0) return null
+    const id = crypto.randomUUID()
+    set((s) => {
+      const lastBeat = Math.max(...words.map((w) => w.startBeat + w.durationBeats))
+      const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
+      const block: Block = {
+        id: crypto.randomUUID(),
+        startBar: 0,
+        durationBars,
+        loop: false,
+        notes: words.map((w) => ({
+          id: crypto.randomUUID(),
+          startBeat: w.startBeat,
+          durationBeats: w.durationBeats,
+          pitch: TEXT_NEXT_WORD_PITCH,
+          velocity: 100,
+        })),
+      }
+      const track: Track = {
+        id,
+        name: 'Lyrics',
+        type: 'base',
+        instrumentId: 'textDisplay',
+        color: OBJECT_TRACK_COLOR,
+        muted: false,
+        solo: false,
+        stringParams: { text: words.map((w) => w.word).join(' ') },
+        blocks: [block],
+        childIds: [],
+      }
+      // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
+      const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
+      return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [...s.rootTrackIds, id], totalBars }
+    })
+    return id
   },
 
   addAudioBlock: (trackId, block) =>

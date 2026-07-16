@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Captions } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -23,6 +23,7 @@ import { AudioBar } from './components/AudioBar'
 import { BpmControl } from './components/BpmControl'
 import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { ExportDialog } from './components/ExportDialog'
+import { LyricsDialog } from './components/LyricsDialog'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
@@ -249,7 +250,7 @@ function TemplateDemoChip() {
   return (
     <span className="text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
       Demo project - {' '}
-      <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
+      <Link href="/signup" onClick={() => track('nav_clicked', { from: 'editor-demo-chip', to: 'signup' })} className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
         sign up to save it
       </Link>
     </span>
@@ -282,6 +283,7 @@ function Header() {
 
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
+  const [lyricsOpen, setLyricsOpen] = useState(false)
   const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
   useEffect(() => {
     void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
@@ -377,6 +379,14 @@ function Header() {
           </button>
         )}
         <button
+          onClick={() => { track('lyrics_clicked'); setLyricsOpen(true) }}
+          title="Add a lyric track - transcribe the song or paste words"
+          className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
+        >
+          <Captions size={12} strokeWidth={2.5} />
+          Lyrics
+        </button>
+        <button
           onClick={() => { track('export_clicked'); setExportOpen(true) }}
           disabled={exportGate?.ok === false}
           title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
@@ -388,6 +398,7 @@ function Header() {
         <ProfileMenu size="sm" />
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+      {lyricsOpen && <LyricsDialog onClose={() => setLyricsOpen(false)} />}
     </div>
   )
 }
