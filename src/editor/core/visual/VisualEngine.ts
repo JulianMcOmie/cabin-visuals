@@ -29,6 +29,7 @@ let project: VisualProject | null = null
 let compositionLayers: CompositionLayer[] = []
 let activeTrackIds = new Set<string>()
 let mainCompositionOverride = false
+let mainPreviewEnabled = false
 let mountedRenderScenes = new Map<string, ThreeScene>()
 // Project bpm, mirrored on every setProject/syncParams - computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
@@ -170,7 +171,7 @@ function clampOpacity(v: number): number {
 
 function resolveComposition(beat: number): CompositionLayer[] {
   if (!project) return []
-  const selected = mainCompositionOverride
+  const selected = mainCompositionOverride || mainPreviewEnabled
     ? project.sceneOrder.map((id) => project!.scenes[id]).find((scene) => scene?.isMain)
     : project.scenes[project.activeSceneId]
   if (selected && !selected.isMain) {
@@ -360,6 +361,12 @@ export function getCompositionLayers(): CompositionLayer[] {
 
 export function setMainCompositionOverride(value: boolean) {
   mainCompositionOverride = value
+}
+
+/** Editor-only viewing preference. Kept separate from the export override so
+ * finishing an export restores whichever preview mode the user selected. */
+export function setMainPreviewEnabled(value: boolean) {
+  mainPreviewEnabled = value
 }
 
 /** Dev invariant plumbing: logical scenes live outside R3F's default root scene,

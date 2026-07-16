@@ -14,6 +14,7 @@ import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
+import { setMainPreviewEnabled } from './core/visual/VisualEngine'
 import { ProfileMenu } from '../components/ProfileMenu'
 import { track } from '../analytics/analytics'
 import { TutorialOverlay } from './components/TutorialOverlay'
@@ -62,7 +63,17 @@ function DevThreeHook() {
   return null
 }
 
-function Scene() {
+function PreviewModeSync({ main }: { main: boolean }) {
+  const invalidate = useThree((s) => s.invalidate)
+  useEffect(() => {
+    setMainPreviewEnabled(main)
+    invalidate()
+    return () => setMainPreviewEnabled(false)
+  }, [main, invalidate])
+  return null
+}
+
+function Scene({ previewMain }: { previewMain: boolean }) {
   // Paused → 'demand': the render loop idles instead of redrawing a static
   // frame 60×/s (heavy instruments were starving the editor UI even while
   // paused). RenderGovernor requests single frames when an input changes.
@@ -70,6 +81,7 @@ function Scene() {
   return (
     <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 1.2, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
+      <PreviewModeSync main={previewMain} />
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
@@ -94,6 +106,7 @@ const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 function VisualPanel() {
   const panelRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [previewMode, setPreviewMode] = useState<'current' | 'main'>('current')
   // A project setting (persisted in the document, seeds the export default).
   const aspect = useProjectStore((s) => s.viewAspect)
   const setAspect = useProjectStore((s) => s.setViewAspect)
@@ -153,11 +166,35 @@ function VisualPanel() {
         className={`absolute ${box ? 'border border-[var(--border-subtle)]' : 'inset-0'}`}
         style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
       >
-        <Scene />
+        <Scene previewMain={previewMode === 'main'} />
       </div>
       <BeatOverlay />
       <TutorialOverlay />
       <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
+        <div
+          role="group"
+          aria-label="Canvas preview"
+          className="flex items-center overflow-hidden rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)]"
+        >
+          {(['current', 'main'] as const).map((mode) => {
+            const active = previewMode === mode
+            return (
+              <button
+                key={mode}
+                onClick={() => setPreviewMode(mode)}
+                title={mode === 'current' ? 'View the scene currently being edited' : 'View the final Main composition'}
+                aria-pressed={active}
+                className={`h-6 px-2 text-[10px] font-medium transition-colors cursor-pointer ${
+                  active
+                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                    : 'text-[var(--text-3)] hover:text-[var(--text)]'
+                }`}
+              >
+                {mode === 'current' ? 'Current' : 'Main'}
+              </button>
+            )
+          })}
+        </div>
         <button
           onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
           title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"

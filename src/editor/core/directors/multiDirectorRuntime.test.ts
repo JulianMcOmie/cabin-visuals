@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ProjectState } from '../../store/ProjectStore'
 import type { Scene, Track } from '../../types'
-import { computeAtBeat, getCompositionLayers, setProject } from '../visual/VisualEngine'
+import { computeAtBeat, getCompositionLayers, setMainPreviewEnabled, setProject } from '../visual/VisualEngine'
 
 const director = (id: string): Track => ({
   id, name: id, type: 'director', instrumentId: '', directorId: 'sceneSwitcher',
@@ -70,4 +70,30 @@ test('an empty Radial Cut above an active director contributes nothing and revea
   } as unknown as ProjectState)
   computeAtBeat(0)
   assert.deepEqual(getCompositionLayers().map((layer) => layer.directorTrackId), ['base'])
+})
+
+test('Main preview stays composed while a visual scene remains selected for editing', () => {
+  const switcher = director('switcher')
+  const main: Scene = {
+    id: 'main', name: 'Main', isMain: true, backgroundColor: '#000000', backgroundTransparent: false,
+    tracks: { switcher }, rootTrackIds: ['switcher'],
+  }
+  const visual: Scene = {
+    id: 'visual', name: 'Scene 1', isMain: false, backgroundColor: '#000000', backgroundTransparent: false,
+    tracks: {}, rootTrackIds: [],
+  }
+  setProject({
+    scenes: { main, visual }, sceneOrder: ['main', 'visual'], activeSceneId: 'visual',
+    tracks: {}, rootTrackIds: [], audioTracks: {}, audioRootTrackIds: [],
+    bpm: 120, beatsPerBar: 4, totalBars: 8,
+  } as unknown as ProjectState)
+
+  setMainPreviewEnabled(false)
+  computeAtBeat(0)
+  assert.deepEqual(getCompositionLayers().map((layer) => layer.directorTrackId), ['__preview__'])
+
+  setMainPreviewEnabled(true)
+  computeAtBeat(0)
+  assert.deepEqual(getCompositionLayers().map((layer) => layer.directorTrackId), ['switcher'])
+  setMainPreviewEnabled(false)
 })

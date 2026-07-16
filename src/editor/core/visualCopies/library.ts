@@ -247,7 +247,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 export interface GridSettings {
   rows: number
   columns: number
-  /** Multiplier for the distance between cell centers; 1 preserves the unit grid. */
+  /** Distance between adjacent cell centers in the selected plane. */
   spacing: number
   /** 0 = XY, 1 = XZ, 2 = YZ. */
   plane: number
@@ -321,14 +321,11 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
     const cells = gridCellOrder(rows, columns, settings.indexing).map(([row, column]) => {
       const position: [number, number, number] = [0, 0, 0]
-      const scale: [number, number, number] = [1, 1, 1]
-      position[horizontalAxis] = ((column + 0.5) / columns - 0.5) * settings.spacing
-      position[verticalAxis] = (0.5 - (row + 0.5) / rows) * settings.spacing
-      scale[horizontalAxis] = 1 / columns
-      scale[verticalAxis] = 1 / rows
-      return new Matrix4()
-        .makeTranslation(position[0], position[1], position[2])
-        .multiply(new Matrix4().makeScale(scale[0], scale[1], scale[2]))
+      // Grid is a layout, not a fit-to-frame operation: adding rows/columns
+      // expands the occupied area while every copy retains the incoming size.
+      position[horizontalAxis] = (column - (columns - 1) / 2) * settings.spacing
+      position[verticalAxis] = ((rows - 1) / 2 - row) * settings.spacing
+      return new Matrix4().makeTranslation(position[0], position[1], position[2])
     })
     return {
       apply(visualCopy, { beat }) {
