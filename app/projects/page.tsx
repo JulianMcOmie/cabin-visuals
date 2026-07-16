@@ -11,6 +11,7 @@ import { usePlan } from '../../src/billing/usePlan'
 import { ensureSession, anonSessionsEnabled } from '../../src/persistence/anonSession'
 import { takeCarryover } from '../../src/persistence/carryover'
 import { forgetLastProject } from '../../src/persistence/lastProject'
+import { track } from '../../src/analytics/analytics'
 import type { TemplateDef } from '../../src/templates'
 
 const FREE_PROJECT_LIMIT = 1
@@ -72,6 +73,7 @@ export default function ProjectsPage() {
           if (!keep) return
         }
         const project = await createProject(`${carried.name} (carried over)`, carried.document)
+        track('project_created', { source: 'carryover' })
         router.push(`/editor?project=${project.id}`)
       } catch (err) {
         console.error('Could not save carried-over work:', err)
@@ -83,6 +85,7 @@ export default function ProjectsPage() {
     if (atFreeLimit) { promptUpgrade(); return }
     try {
       const project = await createProject(name)
+      track('project_created', { source: 'blank' })
       router.push(`/editor?project=${project.id}`)
     } catch {
       alert("Failed to create project.")
@@ -100,6 +103,7 @@ export default function ProjectsPage() {
       }
       try {
         const project = await createProject(template.name, structuredClone(template.document))
+        track('project_created', { source: 'template', template: template.id })
         router.push(`/editor?project=${project.id}`)
       } catch {
         router.push(`/editor?template=${template.id}`)
@@ -110,6 +114,7 @@ export default function ProjectsPage() {
     try {
       // Fresh deep copy per project - template documents are shared module state.
       const project = await createProject(template.name, structuredClone(template.document))
+      track('project_created', { source: 'template', template: template.id })
       router.push(`/editor?project=${project.id}`)
     } catch {
       alert("Failed to create project from template.")
@@ -117,12 +122,14 @@ export default function ProjectsPage() {
   }
 
   const handleSelectProject = (projectId: string) => {
+    track('project_opened')
     router.push(`/editor?project=${projectId}`)
   }
 
   const handleDeleteProject = async (projectId: string) => {
     try {
       await deleteProject(projectId)
+      track('project_deleted')
       // Don't leave the landing page's "Continue creating" aimed at a dead row.
       forgetLastProject(projectId)
     } catch {

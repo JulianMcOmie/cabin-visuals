@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { updatePassword } from './actions'
 import { createClient } from '../../../src/utils/supabase/client'
+import { track } from '../../../src/analytics/analytics'
 import Link from 'next/link';
 import {
   AuthShell,
@@ -55,6 +56,7 @@ function UpdatePasswordFormInternal() {
     if (password.length < 6) {
         setError('Password must be at least 6 characters long.'); return;
     }
+    track('password_update_submitted');
     setIsSubmitting(true); setMessage(null); setError(null);
 
     const result = await updatePassword(password);

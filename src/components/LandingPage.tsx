@@ -36,6 +36,7 @@ export default function LandingPage() {
           <nav className="flex items-center gap-2">
             <Link
               href="/pricing"
+              onClick={() => track('nav_clicked', { from: 'landing', to: 'pricing' })}
               className="px-3 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
             >
               Pricing
@@ -49,12 +50,14 @@ export default function LandingPage() {
               <>
                 <Link
                   href="/login"
+                  onClick={() => track('nav_clicked', { from: 'landing', to: 'login' })}
                   className="inline-flex h-8 items-center rounded-[5px] border border-[var(--border)] px-3.5 text-[13px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
                 >
                   Log in
                 </Link>
                 <Link
                   href="/signup"
+                  onClick={() => track('nav_clicked', { from: 'landing', to: 'signup' })}
                   className="inline-flex h-8 items-center rounded-[5px] bg-[var(--accent)] px-3.5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
                 >
                   Sign up
@@ -85,6 +88,7 @@ export default function LandingPage() {
                 <button
                   onClick={() => {
                     const last = getLastProjectId(user.id)
+                    track('continue_creating_clicked', { destination: last ? 'editor' : 'projects' })
                     router.push(last ? `/editor?project=${last}` : '/projects')
                   }}
                   className="inline-flex h-[46px] items-center justify-center rounded-md bg-[var(--accent)] px-7 text-[15px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
@@ -102,7 +106,7 @@ export default function LandingPage() {
                 </Link>
               )}
               <button
-                onClick={scrollToVideo}
+                onClick={() => { track('watch_demo_clicked'); scrollToVideo() }}
                 className="inline-flex h-[46px] items-center justify-center rounded-md border border-[var(--border)] px-6 text-[15px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
               >
                 Watch the demo

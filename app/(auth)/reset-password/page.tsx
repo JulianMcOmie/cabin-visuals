@@ -2,6 +2,7 @@
 
 import { requestPasswordReset } from './actions';
 import { useState } from 'react';
+import { track } from '../../../src/analytics/analytics';
 import Link from 'next/link';
 import {
   AuthShell,
@@ -19,6 +20,7 @@ export default function ResetPasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (formData: FormData) => {
+    track('password_reset_requested');
     setIsSubmitting(true);
     setMessage(null);
     setError(null);

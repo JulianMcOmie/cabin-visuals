@@ -7,6 +7,7 @@ import { CabinLogo } from '../../src/components/CabinLogo'
 import { ProfileMenu } from '../../src/components/ProfileMenu'
 import { usePlan, openBillingPortal } from '../../src/billing/usePlan'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
+import { track } from '../../src/analytics/analytics'
 
 // Account settings: the home for plan/billing. Console card style, same nav
 // skeleton as /pricing. Grows real settings later; today it answers "how do I
@@ -22,6 +23,7 @@ export default function AccountPage() {
 
   const manageBilling = () => {
     if (opening) return
+    track('manage_billing_clicked')
     setOpening(true)
     void openBillingPortal().catch(() => setOpening(false))
   }
@@ -52,6 +54,7 @@ export default function AccountPage() {
             </p>
             <Link
               href={isAnonymous ? '/signup' : '/login'}
+              onClick={() => track('nav_clicked', { from: 'account', to: isAnonymous ? 'signup' : 'login' })}
               className="mt-5 inline-flex h-[38px] items-center rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
             >
               {isAnonymous ? 'Create an account' : 'Sign in'}

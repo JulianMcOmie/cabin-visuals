@@ -6,6 +6,7 @@ import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
 import { getSupabase } from '../../../../src/persistence/supabase';
+import { track } from '../../../../src/analytics/analytics';
 import {
   AuthShell,
   AuthTitle,
@@ -152,7 +153,11 @@ function SetPasswordFormInternal() {
 
       <form
         action={anonUid ? undefined : completeSignup}
-        onSubmit={anonUid ? handleConvert : () => setFormBusy(true)}
+        onSubmit={(e) => {
+          track('signup_password_set', { mode: anonUid ? 'convert' : 'fresh' })
+          if (anonUid) void handleConvert(e)
+          else setFormBusy(true)
+        }}
         className="flex flex-col gap-[14px]"
       >
         <input type="hidden" name="email" value={email || ''} />

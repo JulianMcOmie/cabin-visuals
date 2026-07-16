@@ -43,6 +43,7 @@ function SignupPageContent() {
   async function handleGoogleSignInCallback(response: any) {
     console.log("Google Sign-In CredentialResponse (Signup Page):", response);
     if (response.credential) {
+      track('google_signin_submitted', { page: 'signup' });
       setGoogleBusy(true);
       try {
         // Google sign-in replaces any anonymous session - stash its work so

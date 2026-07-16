@@ -6,6 +6,7 @@ import { handleSignInWithGoogle, login } from './actions';
 import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { stashAnonWork } from '../../../src/persistence/carryover';
+import { track } from '../../../src/analytics/analytics';
 import {
   AuthShell,
   AuthTitle,
@@ -41,6 +42,7 @@ function LoginPageContent() {
   async function handleGoogleSignInCallback(response: any) {
     console.log("Google Sign-In CredentialResponse:", response);
     if (response.credential) {
+      track('google_signin_submitted', { page: 'login' });
       setIsLoading(true);
       setError(null);
       try {
@@ -113,7 +115,7 @@ function LoginPageContent() {
       {message && <AuthBanner kind="success">{message}</AuthBanner>}
       {error && <AuthBanner kind="error">{error}</AuthBanner>}
 
-      <form action={login} onSubmit={() => setFormBusy(true)} className="flex flex-col gap-[14px]">
+      <form action={login} onSubmit={() => { track('login_submitted'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />

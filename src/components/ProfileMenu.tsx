@@ -12,6 +12,7 @@ import {
 import { createClient } from '../utils/supabase/client'
 import { logout } from '../../app/(auth)/logout/actions'
 import { useAuth } from '../persistence/hooks/useAuth'
+import { track } from '../analytics/analytics'
 
 // The one profile avatar + menu, shared by every page's top-right corner.
 // Renders NOTHING for signed-out and anonymous sessions ("logged in" here
@@ -68,6 +69,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
 
   const handleLogout = async () => {
     if (isLoggingOut) return
+    track('sign_out_clicked')
     setIsLoggingOut(true)
     try {
       const supabase = createClient()

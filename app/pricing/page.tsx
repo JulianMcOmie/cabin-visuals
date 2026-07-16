@@ -63,11 +63,11 @@ export default function PricingPage() {
             <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
           </Link>
           <nav className="flex items-center gap-5 text-[13px]">
-            <Link href="/editor" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Editor</Link>
+            <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Editor</Link>
             {hasAccount ? (
-              <Link href="/projects" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Projects</Link>
+              <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Projects</Link>
             ) : (
-              <Link href="/login" className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Log in</Link>
+              <Link href="/login" onClick={() => track('nav_clicked', { from: 'pricing', to: 'login' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Log in</Link>
             )}
             <ProfileMenu />
           </nav>
@@ -100,6 +100,7 @@ export default function PricingPage() {
             </ul>
             <Link
               href={hasAccount ? '/projects' : '/editor'}
+              onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'editor' })}
               className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] border border-[var(--border)] text-[13px] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
             >
               {hasAccount ? 'Go to your projects' : 'Start creating'}
