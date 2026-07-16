@@ -317,10 +317,12 @@ export interface ProjectState {
    *  overruns. One set() so the whole import is a single undo step. Returns
    *  the new track ids in order. */
   importMidiTracks: (imported: ImportedMidiTrack[]) => string[]
-  /** Create a Text Display track whose block holds one "Next word" note per
-   *  lyric word (beats are project-absolute), with the words joined into the
-   *  track's text param. One set() = one undo step. Returns the track id, or
-   *  null when there are no words. */
+  /** Fill a Text Display track with lyrics: one "Next word" note per word
+   *  (beats are project-absolute), the words joined into the text param. A
+   *  root track named 'Lyrics' (the lyric templates ship one, styled) is
+   *  REFILLED in place - words swap, styling stays; otherwise a fresh track
+   *  is created. One set() = one undo step. Returns the track id, or null
+   *  when there are no words. */
   addLyricTrack: (words: LyricWord[]) => string | null
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
@@ -1368,8 +1370,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
   addLyricTrack: (words) => {
     if (words.length === 0) return null
-    const id = crypto.randomUUID()
+    let resultId: string | null = null
     set((s) => {
+      const text = words.map((w) => w.word).join(' ')
       const lastBeat = Math.max(...words.map((w) => w.startBeat + w.durationBeats))
       const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
       const block: Block = {
@@ -1385,6 +1388,28 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           velocity: 100,
         })),
       }
+      // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
+      const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
+
+      // A lyric-template project ships a styled root track named 'Lyrics' -
+      // refill it (words swap, styling stays) instead of stacking a second one.
+      const existingId = s.rootTrackIds.find((tid) => {
+        const t = s.tracks[tid]
+        return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
+      })
+      if (existingId) {
+        const existing = s.tracks[existingId]
+        resultId = existingId
+        const updated: Track = {
+          ...existing,
+          stringParams: { ...existing.stringParams, text },
+          blocks: [block],
+        }
+        return { tracks: { ...s.tracks, [existingId]: updated }, totalBars }
+      }
+
+      const id = crypto.randomUUID()
+      resultId = id
       const track: Track = {
         id,
         name: 'Lyrics',
@@ -1393,15 +1418,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         color: OBJECT_TRACK_COLOR,
         muted: false,
         solo: false,
-        stringParams: { text: words.map((w) => w.word).join(' ') },
+        stringParams: { text },
         blocks: [block],
         childIds: [],
       }
-      // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
-      const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
       return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [...s.rootTrackIds, id], totalBars }
     })
-    return id
+    return resultId
   },
 
   addAudioBlock: (trackId, block) =>

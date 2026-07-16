@@ -11,7 +11,9 @@ import SignUpButton from "./AuthButtons/SignUpButton"
 import { TEMPLATES, type TemplateDef } from "../templates"
 import { TemplatePreviewVideo } from "./TemplatePreviewVideo"
 import { TemplateSlideshowPreview } from "./TemplateSlideshowPreview"
+import { TemplateLyricPreview } from "./TemplateLyricPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
+import { track } from "../analytics/analytics"
 
 export interface ProjectMetadata {
   id: string
@@ -172,7 +174,7 @@ export default function ProjectsDisplay({
             <span className="font-mono text-xs text-[var(--text-muted)]">{projects.length}</span>
           </div>
           <button
-            onClick={() => setCreateStep('choice')}
+            onClick={() => { track('new_project_clicked'); setCreateStep('choice') }}
             className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
           >
             <Plus size={14} strokeWidth={2.5} />
@@ -222,7 +224,7 @@ export default function ProjectsDisplay({
             layout
             whileHover={{ scale: 1.012, transition: { duration: 0.06 } }}
             whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
-            onClick={() => setCreateStep('choice')}
+            onClick={() => { track('new_project_clicked'); setCreateStep('choice') }}
             className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)]"
           >
             <Plus size={18} />
@@ -404,7 +406,9 @@ function CreateProjectModal({
                   <div className="relative h-24 bg-[var(--bg-app)]">
                     {tpl.cardPreview === 'animatedSlideshow'
                       ? <TemplateSlideshowPreview />
-                      : <TemplatePreviewVideo id={tpl.id} />}
+                      : tpl.cardPreview === 'animatedLyric'
+                        ? <TemplateLyricPreview templateId={tpl.id} />
+                        : <TemplatePreviewVideo id={tpl.id} />}
                   </div>
                   <div className="p-3">
                     <h3 className="text-[13px] font-semibold text-[var(--text)] group-hover:text-white">{tpl.name}</h3>

@@ -13,11 +13,12 @@ export interface TemplateDef {
   description: string
   bpm: number
   /** How the gallery card previews this template. 'video' (default) plays a
-   *  captured clip of its real render; 'animatedSlideshow' uses a bespoke canvas
-   *  animation instead - for Slideshow, whose real render is blank until the user
-   *  adds photos, so there is nothing to capture. 'animatedSlideshow' templates
-   *  are skipped by the preview-capture script. */
-  cardPreview?: 'video' | 'animatedSlideshow'
+   *  captured clip of its real render; the 'animated*' values use bespoke
+   *  canvas animations instead - Slideshow's real render is blank until the
+   *  user adds photos, and the lyric templates read better as a live word-pop
+   *  than a canned capture. 'animated*' templates are skipped by the
+   *  preview-capture script. */
+  cardPreview?: 'video' | 'animatedSlideshow' | 'animatedLyric'
   document: ProjectDocument
 }
 
