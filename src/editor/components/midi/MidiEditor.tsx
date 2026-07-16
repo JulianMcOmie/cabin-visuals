@@ -189,21 +189,62 @@ export function MidiEditor({
     return () => container.removeEventListener('wheel', handleWheel)
   }, [])
 
-  // When the row height steps, keep the row at the viewport's vertical center
-  // at the exact same y (Logic's behavior): the view grows/shrinks around the
-  // note you're looking at instead of drifting. Runs for any rowHeight change -
-  // wheel zoom and the toolbar's V slider alike. Layout effect so the scroll
-  // correction lands in the same frame as the resize (no visible jump).
-  const prevRowHeightRef = useRef(rowHeight)
+  // When a zoom level changes, keep what's at the viewport's center anchored
+  // (Logic's behavior): the view grows/shrinks around what you're looking at
+  // instead of drifting. Vertically the row at center keeps its exact y;
+  // horizontally the beat at the center of the visible grid keeps its exact x.
+  // Runs for any change - wheel zoom and the toolbar's H/V sliders alike.
+  // Layout effect so the scroll correction lands in the same frame as the
+  // resize (no visible jump).
+  const prevZoomRef = useRef({ rowHeight, pixelsPerBeat })
   useLayoutEffect(() => {
-    const prevH = prevRowHeightRef.current
-    prevRowHeightRef.current = rowHeight
+    const prev = prevZoomRef.current
+    prevZoomRef.current = { rowHeight, pixelsPerBeat }
     const sc = containerRef.current
-    if (prevH === rowHeight || !sc) return
-    const centerRow = Math.floor((sc.scrollTop + sc.clientHeight / 2) / prevH)
-    const rowCenterViewportY = (centerRow + 0.5) * prevH - sc.scrollTop
-    sc.scrollTop = (centerRow + 0.5) * rowHeight - rowCenterViewportY
-  }, [rowHeight])
+    if (!sc) return
+    if (prev.rowHeight !== rowHeight) {
+      const centerRow = Math.floor((sc.scrollTop + sc.clientHeight / 2) / prev.rowHeight)
+      const rowCenterViewportY = (centerRow + 0.5) * prev.rowHeight - sc.scrollTop
+      sc.scrollTop = (centerRow + 0.5) * rowHeight - rowCenterViewportY
+    }
+    if (prev.pixelsPerBeat !== pixelsPerBeat) {
+      // Beat x in content space = gridLeft + beat * pixelsPerBeat; the default
+      // anchor is the center of the grid actually visible right of the sticky
+      // label column. But when notes are on screen, anchor the one most
+      // horizontally centered instead - zooming homes in on that note, not on
+      // empty grid. The anchored point is the note's span clamped to the
+      // center, so a note straddling the center pins exactly under it and the
+      // runner-up pins by its nearest edge. Runs after the vertical branch, so
+      // visibility checks use the corrected scrollTop and current rowHeight.
+      const gridLeft = labelWidth + PLAYHEAD_TRIANGLE_HALF
+      const viewportCenterX = labelWidth + (sc.clientWidth - labelWidth) / 2
+      const contentCenterX = sc.scrollLeft + viewportCenterX
+      let anchorContentX = contentCenterX
+      let anchorBeat = (contentCenterX - gridLeft) / prev.pixelsPerBeat
+
+      const viewLeft = sc.scrollLeft + labelWidth
+      const viewRight = sc.scrollLeft + sc.clientWidth
+      let bestDist = Infinity
+      for (const note of notes) {
+        const rowIndex = pitchToRowIndex(note.pitch)
+        if (rowIndex === -1) continue
+        const yTop = rowIndex * rowHeight
+        if (yTop + rowHeight < sc.scrollTop || yTop > sc.scrollTop + sc.clientHeight) continue
+        const xs = gridLeft + (blockStartBeat + note.startBeat) * prev.pixelsPerBeat
+        const xe = xs + note.durationBeats * prev.pixelsPerBeat
+        if (xe < viewLeft || xs > viewRight) continue
+        const dist = Math.max(xs - contentCenterX, contentCenterX - xe, 0)
+        if (dist < bestDist) {
+          bestDist = dist
+          anchorContentX = Math.max(xs, Math.min(xe, contentCenterX))
+          anchorBeat = (anchorContentX - gridLeft) / prev.pixelsPerBeat
+        }
+      }
+
+      const anchorViewportX = anchorContentX - sc.scrollLeft
+      sc.scrollLeft = gridLeft + anchorBeat * pixelsPerBeat - anchorViewportX
+    }
+  }, [rowHeight, pixelsPerBeat, labelWidth, notes, blockStartBeat, pitchToRowIndex])
 
   // Canvas dimensions (the timeline spans initialTotalBeats, not just the block)
   const canvasWidth = initialTotalBeats * pixelsPerBeat + labelWidth + PLAYHEAD_TRIANGLE_HALF + CANVAS_RIGHT_PADDING
