@@ -13,11 +13,10 @@ import { ANALYTICS_OPTOUT_KEY } from './AnalyticsGate'
  * browser has opted out via /analytics-optout - so every call site stays a
  * safe no-op without its own guards.
  *
- *   person_profiles: 'identified_only' - anonymous editor sessions (our
- *   sign-in-to-save flow creates a Supabase user for everyone) don't burn a
- *   person profile; only signed-in users we identify() become people. That is
- *   exactly the "usage per real user" view we're after, and it keeps us far
- *   under the free-tier event cap.
+ *   person_profiles: 'always' - every visitor becomes a person, so PostHog's
+ *   "active users" tracks real traffic (like Vercel's unique visitors) instead
+ *   of only the handful of signed-in users we identify(). Costs more of the
+ *   free-tier event cap than 'identified_only'; flip back if volume ever bites.
  */
 let instance: PostHog | null = null
 let tried = false
@@ -32,11 +31,16 @@ export function getPostHog(): PostHog | null {
   if (localStorage.getItem(ANALYTICS_OPTOUT_KEY)) return null
 
   posthog.init(key, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
-    person_profiles: 'identified_only',
-    capture_pageview: true,
-    // The editor is one long-lived SPA route; also count client-side
-    // navigations as pageviews so the funnel isn't just the first load.
+    // Same-origin proxy (rewrites in next.config.ts) so ad blockers that
+    // blacklist *.posthog.com don't eat the events; ui_host keeps toolbar
+    // and deep links pointed at the real PostHog UI.
+    api_host: '/ingest',
+    ui_host: 'https://us.posthog.com',
+    person_profiles: 'always',
+    // 'history_change' captures client-side route changes too (App Router
+    // navigations, e.g. landing -> /projects) - plain `true` only fires on
+    // full page loads.
+    capture_pageview: 'history_change',
     capture_pageleave: true,
   })
   instance = posthog

@@ -9,8 +9,8 @@ import { getPostHog } from './posthog'
  * person. Mounted once in the root layout beside <AnalyticsGate />.
  *
  * Only real accounts are identified - an anonymous sign-in-to-save session
- * (user.is_anonymous) stays a nameless device, matching person_profiles:
- * 'identified_only'. The moment such a session converts to a real account,
+ * (user.is_anonymous) stays a nameless device person (person_profiles:
+ * 'always'). The moment such a session converts to a real account,
  * onAuthStateChange updates useAuth and we identify() the same uuid, so the
  * pre-signup events already captured on this device stitch onto the new person.
  * On logout we reset() to start a fresh anonymous device id.
