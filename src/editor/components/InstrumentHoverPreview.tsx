@@ -10,6 +10,7 @@ import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
 import type { VisualCopy } from '../core/visualCopies/types'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
 import type { ObjectState, ResolvedNote } from '../core/visual/types'
+import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import type { InstrumentItem } from './LeftSidebar'
 
 /**
@@ -27,11 +28,12 @@ import type { InstrumentItem } from './LeftSidebar'
 
 const PREVIEW_BPM = 120
 const BEATS_PER_SEC = PREVIEW_BPM / 60
-// The pattern loops over this span; the driver starts a few beats IN so the
-// first rendered frame already has notes in the past - motion from frame one,
-// no dead ramp-up while the popup appears.
+// The pattern loops over this span; the driver starts a beat IN so the first
+// rendered frame already has a note in the past - motion from frame one, no
+// dead ramp-up while the popup appears. Exactly 1 so Text Display's word
+// cycle ((count-1) % words) opens on its FIRST word at hover.
 const LOOP_BEATS = 16
-const START_OFFSET_BEATS = 4
+const START_OFFSET_BEATS = 1
 
 /** A note every `strideBeats`, cycling the given pitches. */
 function makeLoopNotes(pitches: number[], durationBeats: number, strideBeats = 1): ResolvedNote[] {
@@ -49,12 +51,13 @@ function previewBeat(elapsedSec: number): number {
   return (elapsedSec * BEATS_PER_SEC + START_OFFSET_BEATS) % LOOP_BEATS
 }
 
-// Instruments whose idle render needs context a popup can't provide (uploads,
-// live audio, the scene camera, a scene to filter). Text-only popup for these.
-const NO_PREVIEW = new Set(['video', 'photo', 'oscilloscope', 'cameraControl', 'colorFilters'])
-
+// Instruments whose real render needs context a popup can't provide (uploads,
+// live audio, the scene camera, scenes to composite) get a bespoke canvas-2D
+// vignette instead (InstrumentPreview2D) - that covers the Main essentials and
+// every Director, so the whole library previews.
 export function canPreview(item: InstrumentItem): boolean {
-  if (item.kind === 'object') return !NO_PREVIEW.has(item.id) && !!getInstrument(item.id)
+  if (get2DPreview(item.id)) return true
+  if (item.kind === 'object') return !!getInstrument(item.id)
   if (item.kind === 'mover' || item.kind === 'splitter') return !!getMoverOrSplitterDefinition(item.id)
   return false
 }
@@ -66,6 +69,24 @@ const PREVIEW_TRACK_ID = '__instrument-preview__'
 // A gentle arc through the middle of most instruments' pitch ranges.
 const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 
+// Preview-only param overrides for instruments whose real defaults read poorly
+// in a popup: Text Display defaults to the single word HELLO, which hides its
+// whole point - advancing a word per note.
+const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
+  textDisplay: { text: 'hello awesome person' },
+}
+
+// Preview-only note overrides for instruments whose labeled vocabulary the
+// generic arc misses entirely. Text Display renders NOTHING without pitch 48
+// ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
+// black. Near-held word notes keep a word on screen while stepping it; and
+// the note COUNT must divide by the 3 preview words, or the loop's wrap
+// restarts the word cycle mid-sequence (hello twice in a row once per loop).
+// 12 notes over the 16 beats: divisible by 3, still an even musical stride.
+const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
+  textDisplay: makeLoopNotes([48], 1.2, 4 / 3),
+}
+
 function makePreviewState(instrumentId: string): ObjectState {
   const def = getInstrument(instrumentId)
   const params: Record<string, number> = {}
@@ -74,6 +95,7 @@ function makePreviewState(instrumentId: string): ObjectState {
     if (p.type === 'color' || p.type === 'string') stringParams[p.key] = p.default
     else if (typeof p.default === 'number') params[p.key] = p.default
   }
+  Object.assign(stringParams, PREVIEW_STRING_PARAMS[instrumentId])
   return {
     beat: 0,
     secPerBeat: 60 / PREVIEW_BPM,
@@ -85,7 +107,7 @@ function makePreviewState(instrumentId: string): ObjectState {
     opacity: 1,
     stringParams,
     abilityEvents: new Map(),
-    notes: OBJECT_NOTES,
+    notes: PREVIEW_NOTES[instrumentId] ?? OBJECT_NOTES,
     activeNotes: [],
   }
 }
@@ -231,19 +253,27 @@ export function InstrumentPreviewLayer() {
   const top = preview
     ? Math.max(8, Math.min(preview.anchor.top - 12, window.innerHeight - 148))
     : -9999
+  // Bespoke 2D vignettes bypass the R3F canvas entirely: the warm GL context
+  // stays mounted (frameloop 'never') under a cheap 2D canvas that mounts per
+  // hover - no context creation, so it's moving on its first frame too.
+  const draw2d = preview ? get2DPreview(preview.item.id) : undefined
   return (
     <div
       className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
       style={preview ? { left: preview.anchor.left + 8, top } : { left: -9999, top, visibility: 'hidden' }}
     >
-      <Canvas dpr={1} frameloop={preview ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
+      {/* dpr follows the device (clamped) - at dpr 1 a HiDPI screen renders the
+          popup half-res, which text previews show as blur. The canvas is tiny,
+          so the extra pixels cost nothing. */}
+      <Canvas dpr={[1, 2]} frameloop={preview && !draw2d ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
         <color attach="background" args={['#09090b']} />
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
-        {preview && (preview.item.kind === 'object'
+        {preview && !draw2d && (preview.item.kind === 'object'
           ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} />
           : <MoverPreview key={preview.item.id} moverId={preview.item.id} />)}
       </Canvas>
+      {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}
     </div>
   )
 }

@@ -62,6 +62,11 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 const TEXT_CANVAS_SIZE = 1024
+// Widest word canvas, as a multiple of its height. Within the cap, letters
+// keep one height and longer words simply get wider canvases (the mesh
+// stretches to match); past it - very long grouped phrases - the font shrinks
+// to fit, so nothing outgrows the frame.
+const MAX_TEXT_ASPECT = 3
 const TEXT_ALPHA_TEST = 0.001
 
 /**
@@ -173,26 +178,33 @@ function createTextCanvas(
 
   const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1
   const canvas = document.createElement('canvas')
-  canvas.width = TEXT_CANVAS_SIZE * dpr
-  canvas.height = TEXT_CANVAS_SIZE * dpr
   const ctx = canvas.getContext('2d')!
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.scale(dpr, dpr)
 
+  // Constant glyph height; the canvas WIDTH follows the text (the mesh
+  // stretches by the resulting aspect), so every word renders letters the
+  // same height - "awesome" comes out wider than "hello", not smaller.
   let fontSize = TEXT_CANVAS_SIZE * 0.35
   const fontStr = (size: number) => `900 ${size}px ${family}`
   ctx.font = fontStr(fontSize)
 
-  const maxWidth = TEXT_CANVAS_SIZE * 0.9
   const layoutText = entry.layoutText || entry.text
-  const measured = ctx.measureText(layoutText)
-  if (measured.width > maxWidth && measured.width > 0) {
-    fontSize *= maxWidth / measured.width
-    ctx.font = fontStr(fontSize)
+  // Stroke joins poke past the glyph box - pad for the configured stroke.
+  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize
+  const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
+  let measured = ctx.measureText(layoutText).width
+  if (measured > maxTextWidth && measured > 0) {
+    fontSize *= maxTextWidth / measured
+    measured = maxTextWidth
   }
+  const cssWidth = Math.max(64, Math.ceil(measured + pad * 2))
+
+  canvas.width = Math.round(cssWidth * dpr)
+  canvas.height = TEXT_CANVAS_SIZE * dpr
+  ctx.scale(dpr, dpr)
+  ctx.font = fontStr(fontSize) // resizing the canvas reset the context
 
   ctx.textBaseline = 'middle'
-  const cx = TEXT_CANVAS_SIZE / 2
+  const cx = cssWidth / 2
   const cy = TEXT_CANVAS_SIZE / 2
   const layoutWidth = ctx.measureText(layoutText).width
   const prefixWidth = entry.syllableCount > 1
@@ -226,6 +238,24 @@ function createTextCanvas(
   }
   canvasCache.set(key, canvas)
   return canvas
+}
+
+/** The texture's canvas width/height - the mesh's x-stretch, so the
+ *  constant-height glyphs keep their drawn proportions on screen. */
+function texAspect(tex: CanvasTexture): number {
+  const img = tex.image as { width?: number; height?: number } | undefined
+  return img && img.width && img.height ? img.width / img.height : 1
+}
+
+/** Swap a texture's backing canvas. Word canvases vary in WIDTH now, and the
+ *  GPU storage three allocates is fixed-size - a different-sized upload
+ *  silently no-ops, leaving the previous word's pixels on screen. Dispose
+ *  first when the size changed so the storage is reallocated. */
+function setTextureCanvas(tex: CanvasTexture, canvas: HTMLCanvasElement) {
+  const prev = tex.image as { width?: number; height?: number } | undefined
+  if (prev && (prev.width !== canvas.width || prev.height !== canvas.height)) tex.dispose()
+  tex.image = canvas
+  tex.needsUpdate = true
 }
 
 // Parse text into display entries. Whitespace separates words, !...! keeps a
@@ -511,8 +541,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${family}|${canvasColor}|${canvasStrokeColor}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      textureRef.current.image = createTextCanvas(currentEntry, strokeWidth, family, canvasColor, canvasStrokeColor)
-      textureRef.current.needsUpdate = true
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, family, canvasColor, canvasStrokeColor))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -549,8 +578,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${family}|${sprColor}|${sprStrokeColor}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          spr.texture.image = createTextCanvas(sprEntry, strokeWidth, family, sprColor, sprStrokeColor)
-          spr.texture.needsUpdate = true
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, family, sprColor, sprStrokeColor))
         }
         spr.mesh.position.set(
           vx * ageSec,
@@ -558,7 +586,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           -depth,
         )
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
-        spr.mesh.scale.setScalar(baseScale)
+        spr.mesh.scale.set(baseScale * texAspect(spr.texture), baseScale, 1)
         const fadeStart = flightMaxDepth * 0.7
         setAnimatedOpacity(spr.mat, depth > fadeStart
           ? textOpacity * Math.max(0, 1 - (depth - fadeStart) / (flightMaxDepth - fadeStart))
@@ -593,7 +621,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
     setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, textOpacity * releaseOpacity)
     const scale = baseScale * onsetScale * bassPopScale
-    meshRef.current.scale.set(scale, scale, 1)
+    meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
     meshRef.current.position.x = shakeX
     meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
 
@@ -624,13 +652,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tex = echoTexturesRef.current[tap]
       const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        tex.image = createTextCanvas(echoEntry, strokeWidth, family, canvasColor, canvasStrokeColor)
-        tex.needsUpdate = true
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, family, canvasColor, canvasStrokeColor))
         echoLastWordsRef.current[tap] = echoKey
       }
 
       const tapScale = baseScale * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
-      mesh.scale.set(tapScale, tapScale, 1)
+      mesh.scale.set(tapScale * texAspect(tex), tapScale, 1)
       mesh.position.x = pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0
       mesh.position.y = yOffsetAt(echoNote.beat) * viewport.height * heightAmount
       mesh.position.z = -0.01 * tapNum
