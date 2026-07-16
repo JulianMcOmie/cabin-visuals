@@ -2,7 +2,12 @@ import * as Tone from 'tone'
 import { useAudioStore } from '../store/AudioStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { beginSaveAudio, retryAudioUpload } from '../core/audio/audioSource'
+import { detectBeats } from '../core/audio/beatDetect'
 import { selectNewTrack } from './selection'
+
+// Below this the song has no dependable pulse (ambient, rubato) - leave the
+// project's tempo and the clip's start alone rather than guess.
+const BEAT_CONFIDENCE_MIN = 0.2
 
 /**
  * The one load pipeline for project audio: the track (and its block at bar 0)
@@ -43,10 +48,24 @@ export async function loadAudioTrack(file: File): Promise<void> {
     const ctx = Tone.getContext().rawContext as AudioContext
     const buffer = await ctx.decodeAudioData(await file.arrayBuffer())
     useAudioStore.getState().addClip({ ...clip, duration: buffer.duration })
+
+    // Match the project to the song: detect tempo + where the first beat
+    // lands, set the BPM, and trim the clip's in-point to that first beat so
+    // beat 0 of the grid IS the song's downbeat - no manual trimming. Low
+    // confidence (no steady pulse) leaves everything untouched. Note the
+    // store keeps integer BPM; genuinely fractional live tempos will drift.
+    const beats = detectBeats(buffer)
+    const confident = beats !== null && beats.confidence >= BEAT_CONFIDENCE_MIN
+    if (confident) useProjectStore.getState().setBpm(beats.bpm)
+
     const track = useProjectStore.getState().tracks[trackId]
     const blockId = track?.audioBlocks?.[0]?.id
     if (blockId) {
-      useProjectStore.getState().updateAudioBlock(trackId, blockId, { trimEnd: buffer.duration })
+      useProjectStore.getState().updateAudioBlock(trackId, blockId, {
+        trimEnd: buffer.duration,
+        // Sub-20ms offsets are inside the detector's own resolution - skip.
+        ...(confident && beats.firstBeatSec > 0.02 ? { trimStart: beats.firstBeatSec } : {}),
+      })
     }
   } catch (err) {
     console.warn('Could not decode audio for duration', err)
