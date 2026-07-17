@@ -428,6 +428,9 @@ export function VideoClipBank({ track }: { track: Track }) {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    // The editor-wide MediaFileDropLayer listens on window - a drop landing on
+    // this more-specific zone must not ALSO add tracks there.
+    e.stopPropagation()
     hoverDepthRef.current = 0
     setDropHover(false)
     if (pickerCore) return // modal open - drops belong to another flow

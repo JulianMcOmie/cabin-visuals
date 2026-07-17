@@ -90,6 +90,9 @@ export function PhotoBank({ track }: { track: Track }) {
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    // The editor-wide MediaFileDropLayer listens on window - a drop landing on
+    // this more-specific zone must not ALSO add tracks there.
+    e.stopPropagation()
     hoverDepthRef.current = 0
     setDropHover(false)
     const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))

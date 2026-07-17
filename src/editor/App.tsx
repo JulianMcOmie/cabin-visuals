@@ -24,6 +24,7 @@ import { BpmControl } from './components/BpmControl'
 import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { ExportDialog } from './components/ExportDialog'
 import { LyricsDialog } from './components/LyricsDialog'
+import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
 import { TimelineArea } from './components/timeline/TimelineArea'
@@ -418,6 +419,8 @@ export default function EditorApp() {
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
+      {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
+      <MediaFileDropLayer />
       <Header />
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
