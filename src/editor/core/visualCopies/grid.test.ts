@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { Matrix4 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import { gridCellOrder, gridSplitter, type GridSettings } from './library'
 import { resolveVisualCopies } from './resolveVisualCopies'
@@ -37,35 +38,50 @@ test('grid defaults to XY axes and English reading order', () => {
   const copies = resolveGrid()
   assert.equal(copies.length, 6)
   assert.deepEqual(rounded(copies.map(position)), [
-    [-0.3333333333, 0.25, 0],
-    [0, 0.25, 0],
-    [0.3333333333, 0.25, 0],
-    [-0.3333333333, -0.25, 0],
-    [0, -0.25, 0],
-    [0.3333333333, -0.25, 0],
+    [-1, 0.5, 0],
+    [0, 0.5, 0],
+    [1, 0.5, 0],
+    [-1, -0.5, 0],
+    [0, -0.5, 0],
+    [1, -0.5, 0],
   ])
-  for (const copy of copies) assert.deepEqual(scale(copy), [1 / 3, 0.5, 1])
+  for (const copy of copies) assert.deepEqual(scale(copy), [1, 1, 1])
 })
 
 test('grid can split across XZ or YZ', () => {
   const xz = resolveGrid({ rows: 2, columns: 2, plane: 1 })
-  assert.deepEqual(position(xz[0]), [-0.25, 0, 0.25])
-  assert.deepEqual(scale(xz[0]), [0.5, 1, 0.5])
+  assert.deepEqual(position(xz[0]), [-0.5, 0, 0.5])
+  assert.deepEqual(scale(xz[0]), [1, 1, 1])
 
   const yz = resolveGrid({ rows: 2, columns: 2, plane: 2 })
-  assert.deepEqual(position(yz[0]), [0, -0.25, 0.25])
-  assert.deepEqual(scale(yz[0]), [1, 0.5, 0.5])
+  assert.deepEqual(position(yz[0]), [0, -0.5, 0.5])
+  assert.deepEqual(scale(yz[0]), [1, 1, 1])
 })
 
-test('grid spacing changes cell-center distance without changing copy size', () => {
+test('grid spacing changes cell-center distance while every copy stays full size', () => {
   const copies = resolveGrid({ rows: 2, columns: 2, spacing: 2 })
   assert.deepEqual(copies.map(position), [
-    [-0.5, 0.5, 0],
-    [0.5, 0.5, 0],
-    [-0.5, -0.5, 0],
-    [0.5, -0.5, 0],
+    [-1, 1, 0],
+    [1, 1, 0],
+    [-1, -1, 0],
+    [1, -1, 0],
   ])
-  for (const copy of copies) assert.deepEqual(scale(copy), [0.5, 0.5, 1])
+  for (const copy of copies) assert.deepEqual(scale(copy), [1, 1, 1])
+})
+
+test('grid preserves an incoming non-unit scale', () => {
+  const incomingScale = {
+    apply(copy: ReturnType<typeof resolveGrid>[number]) {
+      return [{
+        ...copy,
+        transform: copy.transform.clone().multiply(new Matrix4().makeScale(2, 3, 4)),
+        colorShift: { ...copy.colorShift },
+      }]
+    },
+  }
+  const grid = gridSplitter.resolve({ settings: settings({ rows: 2, columns: 2 }), notes: [] })
+  const copies = resolveVisualCopies([incomingScale, grid], 0)
+  for (const copy of copies) assert.deepEqual(scale(copy), [2, 3, 4])
 })
 
 test('grid MIDI rows disable cells only while their notes are held', () => {

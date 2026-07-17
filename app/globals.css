@@ -355,6 +355,18 @@ body.drag-moving * {
   pointer-events: none !important;
 }
 
+/* Landing page CTA hover glow: a soft accent halo that slowly breathes
+   (transform only - opacity stays owned by the hover transition) and a thin
+   conic highlight that sweeps around the button edge. */
+@keyframes landing-glow-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+@keyframes landing-glow-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 /* First-time tutorial (TutorialOverlay): the spotlight cutout's ring. */
 @keyframes tutorial-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(53, 167, 230, 0.5); }
