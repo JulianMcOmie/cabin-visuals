@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Magnet } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHTS } from '../../store/UIStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
@@ -266,11 +267,21 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     const targetIdx = pitchIdx === -1 ? Math.floor(rows.length / 2) : pitchIdx
     scrollContainer.scrollTop = Math.max(0, targetIdx * rowHeight - scrollContainer.clientHeight / 2)
 
-    // Horizontal: place the block start a one-bar lead-in from the left edge.
-    const blockStartPx =
-      useUIStore.getState().midiLabelWidth + PLAYHEAD_TRIANGLE_HALF + block.startBar * beatsPerBar * midiPixelsPerBeat
-    const leadInPx = beatsPerBar * midiPixelsPerBeat
-    scrollContainer.scrollLeft = Math.max(0, blockStartPx - leadInPx)
+    // Horizontal: when the playhead sits inside this block, open centered on
+    // it (you double-clicked mid-playback to edit what you're hearing);
+    // otherwise place the block start a one-bar lead-in from the left edge.
+    const gridLeft = useUIStore.getState().midiLabelWidth + PLAYHEAD_TRIANGLE_HALF
+    const currentBeat = useTimeStore.getState().currentBeat
+    const blockStartBeat = block.startBar * beatsPerBar
+    const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
+    if (currentBeat >= blockStartBeat && currentBeat < blockEndBeat) {
+      const playheadPx = gridLeft + currentBeat * midiPixelsPerBeat
+      scrollContainer.scrollLeft = Math.max(0, playheadPx - scrollContainer.clientWidth / 2)
+    } else {
+      const blockStartPx = gridLeft + blockStartBeat * midiPixelsPerBeat
+      const leadInPx = beatsPerBar * midiPixelsPerBeat
+      scrollContainer.scrollLeft = Math.max(0, blockStartPx - leadInPx)
+    }
 
     hasScrolledRef.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
