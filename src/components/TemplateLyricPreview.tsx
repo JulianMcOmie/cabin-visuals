@@ -12,10 +12,7 @@ import { useEffect, useRef } from 'react'
 const WORDS = ['WE', 'LIGHT', 'UP', 'THE', 'NIGHT', 'SKY']
 const STEP_SEC = 0.42
 const ACCENTS: Record<string, string> = {
-  lyricClassic: '#e4e4e7',
-  lyricNeon: '#22d3ee',
-  lyricFlight: '#a78bfa',
-  lyricRise: '#f472b6',
+  lyricVideo: '#e4e4e7',
 }
 
 function draw(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, accent: string) {
