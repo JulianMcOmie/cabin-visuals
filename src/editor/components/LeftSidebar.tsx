@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
@@ -11,6 +12,8 @@ import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES } from '../../templates'
 import { track as trackEvent } from '../../analytics/analytics'
+import { waitForSaved } from '../../persistence/autosave'
+import { LoadingScreen } from '../../components/LoadingScreen'
 
 /** What dragging an item creates. */
 export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
@@ -349,6 +352,11 @@ type LibraryTab = 'instruments' | 'effects' | 'templates'
 function TemplatesTab() {
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const applyTemplate = useProjectStore((s) => s.applyTemplate)
+  const router = useRouter()
+  const projectId = useSearchParams().get('project')
+  // Covers the editor while the applied template autosaves before handing
+  // off to /lyric-setup (which re-hydrates the project from its row).
+  const [leaving, setLeaving] = useState(false)
 
   if (activeIsMain) {
     return (
@@ -367,13 +375,21 @@ function TemplatesTab() {
     ui.setEditingBlock(null)
     ui.setSelectedTrackId(null)
     ui.setSelectedBlockIds(new Set())
-    // The Lyric Video template comes with its setup pipeline (song →
-    // transcribe → align) - open it right away.
-    if (tpl.id === 'lyricVideo') ui.setLyricSetupOpen(true)
+    // The Lyric Video template continues on its own setup route (song →
+    // transcribe → align) - after the applied tracks have saved, since that
+    // page re-hydrates the project from its row.
+    if (tpl.id === 'lyricVideo') {
+      setLeaving(true)
+      void (async () => {
+        if (projectId) await waitForSaved()
+        router.push(projectId ? `/lyric-setup?project=${projectId}` : '/lyric-setup')
+      })()
+    }
   }
 
   return (
     <div className="pt-1">
+      {leaving && <LoadingScreen />}
       <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
         Double-click a template to switch this project onto it. Your song stays.
       </p>

@@ -1,6 +1,7 @@
 import { doc, track, block, n, every, pulse } from './builder'
 import type { TemplateDef } from './library'
-import type { Note } from '../editor/types'
+import type { Note, Track } from '../editor/types'
+import { LYRIC_TEMPLATE_TRACKS } from './library-lyrics-tracks'
 
 // The lyric-video template: a styled Text Display track named 'Lyrics'
 // carrying placeholder words, ready for the real flow - create the project,
@@ -37,26 +38,96 @@ const words = lyricPattern()
 /** One phrase-start punch per 4-bar boundary. */
 const pops = pulse(BASS_POP, PHRASE, BEATS, { dur: 0.5 })
 
+// The burst family's authored pattern covers 16 bars, but a real song grows
+// the project far past that (transcription extends totalBars to fit the
+// words) - so each of those tracks collapses to ONE long looping block: the
+// authored pattern repeating until the last bar, wherever that ends up.
+// 512 = the project-length ceiling (MAX_TOTAL_BARS); blocks past the visible
+// end are tolerated, the timeline just ends sooner.
+const REPEAT_UNTIL_BARS = 512
+
+function repeatBlocksToEnd(t: Track): Track {
+  if (t.blocks.length === 0) return t
+  const beatsPerBar = 4
+  const start = Math.min(...t.blocks.map((b) => b.startBar))
+  // Already a single looping block (Visibility): keep its pattern window,
+  // just stretch the block to the ceiling.
+  if (t.blocks.length === 1 && t.blocks[0].loop) {
+    return { ...t, blocks: [{ ...t.blocks[0], durationBars: REPEAT_UNTIL_BARS - start }] }
+  }
+  // Several written-out blocks (Particle Burst, Burst): merge them into one
+  // block whose pattern window is their combined span, looping to the ceiling.
+  const end = Math.max(...t.blocks.map((b) => b.startBar + b.durationBars))
+  const notes = t.blocks.flatMap((b) =>
+    b.notes.map((n) => ({ ...n, startBeat: n.startBeat + (b.startBar - start) * beatsPerBar })),
+  )
+  return {
+    ...t,
+    blocks: [{
+      id: t.blocks[0].id,
+      startBar: start,
+      durationBars: REPEAT_UNTIL_BARS - start,
+      loop: true,
+      loopLengthBars: end - start,
+      notes,
+    }],
+  }
+}
+
+// The template document: the placeholder Lyrics track from the builder, plus
+// Julia's instrument stack (Oscilloscope + Particle Burst with its movers)
+// spliced verbatim into the content scene. Their authored uuids are unique
+// and both instantiation paths re-clone/remint ids, so verbatim is safe.
+function lyricVideoDocument() {
+  const document = doc({
+    bpm: 120,
+    totalBars: BARS,
+    tracks: [
+      // Settings extracted VERBATIM from Julia's project 2a617703… ("Save your
+      // tears lyric video") Lyrics track - only the words are placeholder
+      // (transcription replaces them, keeping this styling).
+      track({
+        name: 'Lyrics',
+        instrumentId: 'textDisplay',
+        color: '#e4e4e7',
+        params: {
+          hue: 0.49,
+          font: 2,
+          opacity: 0.05,
+          fontSize: 0.5,
+          colorMode: 0,
+          onsetBounce: 0,
+          strokeWidth: 0,
+          rainbowEnabled: 0,
+          releaseDuration: 0.4,
+          rainbowCycleLength: 64,
+        },
+        stringParams: { text: words.text, color: '#54b9bb', strokeColor: '#5c197b' },
+        blocks: [block(0, BARS, [...words.notes, ...pops])],
+      }),
+    ],
+  })
+  const sceneId = document.sceneOrder.find((id) => !document.scenes[id]?.isMain)!
+  const scene = document.scenes[sceneId]
+  // The Particle Burst family (the instrument + its mover children) repeats
+  // its pattern to the last bar; the Oscilloscope (blockless) rides as-is.
+  const burst = LYRIC_TEMPLATE_TRACKS.find((t) => t.instrumentId === 'particleBurst')
+  const burstFamily = new Set(burst ? [burst.id, ...burst.childIds] : [])
+  for (const t of LYRIC_TEMPLATE_TRACKS) {
+    const placed = burstFamily.has(t.id) ? repeatBlocksToEnd(t) : t
+    scene.tracks[placed.id] = placed
+    if (!placed.parentId) scene.rootTrackIds.push(placed.id)
+  }
+  return document
+}
+
 export const LYRIC_TEMPLATES: TemplateDef[] = [
   {
     id: 'lyricVideo',
     name: 'Lyric Video',
-    description: 'Big bold words on black, punching in time. Add your song, then Lyrics → Transcribe to drop in the real words.',
+    description: 'Big bold words on black over a live waveform and particle bursts. Add your song and the words write themselves.',
     bpm: 120,
     cardPreview: 'animatedLyric',
-    document: doc({
-      bpm: 120,
-      totalBars: BARS,
-      tracks: [
-        track({
-          name: 'Lyrics',
-          instrumentId: 'textDisplay',
-          color: '#e4e4e7',
-          params: { fontSize: 1.25, onsetBounce: 0.12, releaseDuration: 0.6, strokeWidth: 0 },
-          stringParams: { text: words.text },
-          blocks: [block(0, BARS, [...words.notes, ...pops])],
-        }),
-      ],
-    }),
+    document: lyricVideoDocument(),
   },
 ]

@@ -1,19 +1,24 @@
 import { CabinLogo } from './CabinLogo'
 
 /**
- * The transition screen: full-viewport page background with the cabin logo
- * puffing smoke. The cabin-logo-loading class uses negative animation delays,
- * so the smoke is mid-billow on the first painted frame - it never appears
- * static and then starts. Used by route-level loading states (app/editor);
- * pages with their own on-screen logo (auth shell, projects skeleton) animate
- * that logo in place instead of covering the page.
+ * THE loading cabin: one shape (the "Loading the studio…" screen's - h-24,
+ * default stroke) with the billowing smoke, reused by EVERY loading state -
+ * the studio shell, route transitions, the lyric setup pipeline. Per-screen
+ * text varies; the cabin never does.
+ */
+export function LoadingCabin() {
+  return <CabinLogo className="smoking h-24 w-auto" />
+}
+
+/**
+ * The transition screen: full-viewport page background with the one loading
+ * cabin. Used by route-level loading states (app/editor) and the projects
+ * page's instant create/open overlay.
  */
 export function LoadingScreen() {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[var(--bg-page)]">
-      <div className="w-16">
-        <CabinLogo className="cabin-logo-loading" strokeWidth={200} />
-      </div>
+      <LoadingCabin />
     </div>
   )
 }

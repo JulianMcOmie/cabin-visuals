@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight, Check } from 'lucide-react'
+import { useUIStore } from '../store/UIStore'
 
 export interface NestedMenuItem {
   id: string
@@ -88,16 +89,27 @@ export function NestedMenu({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Stand down editor surfaces with document/window-level pointer handling
+  // (panel-resize hit-testing) while the menu is up - the backdrop div can't
+  // block those, so without this the menu is hover/drag-throughable.
+  useEffect(() => {
+    useUIStore.getState().setModalOpen(true)
+    return () => useUIStore.getState().setModalOpen(false)
+  }, [])
+
   const visible = groups.filter((g) => g.items.length > 0)
 
   return (
     <>
       {/* Full-screen backdrop: an outside click closes the menu AND is swallowed -
           without it the closing click falls through to whatever sits beneath
-          (panel toggles, note draws, marquees). */}
+          (panel toggles, note draws, marquees). Pointer events are swallowed
+          too: element gestures listen on pointerdown, and letting it bubble
+          past the backdrop re-opens the hole the backdrop exists to close. */}
       <div
         className="fixed inset-0 z-50"
         onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }}
+        onPointerDown={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.preventDefault()}
       />
     <div

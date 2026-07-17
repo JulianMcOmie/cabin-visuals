@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'r
 import Link from 'next/link'
 import { Music } from 'lucide-react'
 import { CabinLogo } from '../../components/CabinLogo'
+import { LoadingCabin } from '../../components/LoadingScreen'
 import { SiteHeader } from '../../components/SiteHeader'
 import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
@@ -246,7 +247,8 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
       <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
         {/* The thin card framing the whole flow. */}
         <div className="flex w-full max-w-[460px] flex-col items-center gap-7 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-8 py-10">
-          <CabinLogo className={`h-24 w-auto ${working ? 'smoking' : ''}`} />
+          {/* THE loading cabin while working; the same shape, still, otherwise. */}
+          {working ? <LoadingCabin /> : <CabinLogo className="h-24 w-auto" />}
 
           {phase.kind === 'pick' ? (
             <>

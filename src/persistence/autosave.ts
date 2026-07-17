@@ -19,6 +19,20 @@ export const useSaveStatus = create<{ status: SaveStatus }>(() => ({ status: 'id
 // that "it saved" is never in doubt.
 const DEBOUNCE_MS = 1000
 
+/** Resolve once autosave has the document durably written - for handoffs
+ *  where the NEXT page re-hydrates from the row (e.g. lyric setup → editor)
+ *  and must not race the debounce. Waits out one debounce window first (the
+ *  status still reads 'saved' from before the edit until the flush starts),
+ *  then polls; gives up after maxMs rather than stranding the caller. */
+export async function waitForSaved(maxMs = 15000): Promise<void> {
+  await new Promise((r) => setTimeout(r, DEBOUNCE_MS + 200))
+  const deadline = Date.now() + maxMs
+  while (Date.now() < deadline) {
+    if (useSaveStatus.getState().status === 'saved') return
+    await new Promise((r) => setTimeout(r, 150))
+  }
+}
+
 /**
  * Arm autosave for a project. Call strictly AFTER hydrate so the load itself
  * doesn't fire a redundant save. Returns a stop() that unsubscribes and runs

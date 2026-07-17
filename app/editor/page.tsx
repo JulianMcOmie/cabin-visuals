@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import dynamic from 'next/dynamic'
-import { CabinLogo } from '@/components/CabinLogo'
+import { LoadingCabin } from '@/components/LoadingScreen'
 
 // The editor bundle is heavy (three.js + the instrument library), so the gap
 // between navigation and first paint is real - fill it with a dark shell
@@ -11,7 +11,7 @@ import { CabinLogo } from '@/components/CabinLogo'
 function EditorLoadingShell() {
   return (
     <div className="w-screen h-screen flex flex-col items-center justify-center gap-4 bg-[var(--bg-app)]">
-      <CabinLogo className="h-24 w-auto animate-pulse" />
+      <LoadingCabin />
       <p className="text-sm text-[var(--text-muted)] select-none">Loading the studio…</p>
     </div>
   )

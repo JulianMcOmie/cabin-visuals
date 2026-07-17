@@ -17,9 +17,10 @@ import type { TemplateDef } from '../../src/templates'
 
 const FREE_PROJECT_LIMIT = 1
 
-// The Lyric Video template opens straight into its setup pipeline (drop a
-// song → transcribe → align) instead of a silent editor.
-const lyricSetupParam = (templateId: string) => (templateId === 'lyricVideo' ? '&lyricSetup=1' : '')
+// The Lyric Video template opens its setup pipeline (its own /lyric-setup
+// route: drop a song → transcribe → align) instead of a silent editor.
+const projectDestination = (templateId: string, projectId: string) =>
+  templateId === 'lyricVideo' ? `/lyric-setup?project=${projectId}` : `/editor?project=${projectId}`
 
 
 interface ProfileData {
@@ -118,7 +119,7 @@ export default function ProjectsPage() {
       try {
         const project = await createProject(template.name, structuredClone(template.document))
         track('project_created', { source: 'template', template: template.id })
-        router.push(`/editor?project=${project.id}${lyricSetupParam(template.id)}`)
+        router.push(projectDestination(template.id, project.id))
       } catch {
         router.push(`/editor?template=${template.id}`)
       }
@@ -130,7 +131,7 @@ export default function ProjectsPage() {
       // Fresh deep copy per project - template documents are shared module state.
       const project = await createProject(template.name, structuredClone(template.document))
       track('project_created', { source: 'template', template: template.id })
-      router.push(`/editor?project=${project.id}${lyricSetupParam(template.id)}`)
+      router.push(projectDestination(template.id, project.id))
     } catch {
       setCreating(false)
       alert("Failed to create project from template.")

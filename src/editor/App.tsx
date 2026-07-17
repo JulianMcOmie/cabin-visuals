@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
 import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
@@ -24,7 +24,6 @@ import { AudioBar } from './components/AudioBar'
 import { BpmControl } from './components/BpmControl'
 import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { ExportDialog } from './components/ExportDialog'
-import { LyricSetupScreen } from './components/LyricSetupScreen'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
@@ -443,38 +442,6 @@ export default function EditorApp() {
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
   const modalOpen = useUIStore((s) => s.modalOpen)
-
-  // ?lyricSetup=1 (the projects page appends it when creating from the Lyric
-  // Video template) opens the song → transcribe → align pipeline, then drops
-  // out of the URL so a refresh doesn't replay it.
-  const lyricSetupOpen = useUIStore((s) => s.lyricSetupOpen)
-  const search = useSearchParams()
-  const router = useRouter()
-  const lyricSetupParam = search.get('lyricSetup')
-  const projectParam = search.get('project')
-  useEffect(() => {
-    if (!lyricSetupParam) return
-    useUIStore.getState().setLyricSetupOpen(true)
-    router.replace(projectParam ? `/editor?project=${projectParam}` : '/editor')
-  }, [lyricSetupParam, projectParam, router])
-  // The setup screen replaces the editor until the project document has
-  // hydrated (projectName is set on load) - dropping a song into half-loaded
-  // stores would let the hydrate wipe it.
-  const projectName = useUIStore((s) => s.projectName)
-  const projectLoading = !!(projectParam || lyricSetupParam) && projectName === null
-
-  // The Lyric Video pipeline is an intermediate PAGE styled like the site
-  // (landing-page top bar), shown instead of the editor until the lyrics are
-  // in or the user skips. The persistence hooks above stay live so the
-  // pipeline writes into the real project.
-  if (lyricSetupOpen) {
-    return (
-      <LyricSetupScreen
-        projectLoading={projectLoading}
-        onClose={() => useUIStore.getState().setLyricSetupOpen(false)}
-      />
-    )
-  }
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
