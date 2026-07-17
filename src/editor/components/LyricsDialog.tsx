@@ -34,12 +34,17 @@ function sanitizeWord(raw: string): string {
   return raw.replace(/[\s|!]+/g, '')
 }
 
-/** Sung seconds -> project-beat words, mapped through the audio placement. */
+/** Sung seconds -> project-beat words, mapped through the audio placement.
+ *  `trustEnds` decides where a word's note ends: forced alignment returns
+ *  dependable end times, so aligned words end when they're sung (no lingering);
+ *  Whisper's end times are noise on sung vocals, so transcription holds each
+ *  word until the next one's onset instead. */
 function placeTranscription(
   words: TranscribedWord[],
   audio: { startBar: number; trimStart: number },
   bpm: number,
   beatsPerBar: number,
+  trustEnds: boolean,
 ): LyricWord[] {
   const secPerBeat = 60 / bpm
   const blockStartBeat = audio.startBar * beatsPerBar
@@ -50,11 +55,10 @@ function placeTranscription(
     if (!word) continue
     const startBeat = blockStartBeat + (w.start - audio.trimStart) / secPerBeat
     if (startBeat < 0) continue // sung before the clip's in-point
-    // Whisper's end times are noise on sung vocals - ignore them. Each word
-    // holds until the next word's onset (the lyric-video convention); the
-    // last word gets a two-beat tail.
     const next = words[i + 1]
-    const endSec = next ? next.start : w.start + 2 * secPerBeat
+    const endSec = trustEnds
+      ? Math.min(w.end, next?.start ?? Infinity) // never across the next onset
+      : next ? next.start : w.start + 2 * secPerBeat
     const durationBeats = Math.max(0.15, (endSec - w.start) / secPerBeat)
     placed.push({ word, startBeat, durationBeats })
   }
@@ -158,7 +162,7 @@ export function LyricsDialog({ onClose }: { onClose: () => void }) {
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`)
       if (!data.words?.length) throw new Error('No words came back for the song.')
       const { bpm, beatsPerBar } = useProjectStore.getState()
-      apply(placeTranscription(data.words, audioBlock, bpm, beatsPerBar), source)
+      apply(placeTranscription(data.words, audioBlock, bpm, beatsPerBar, source === 'aligned'), source)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
