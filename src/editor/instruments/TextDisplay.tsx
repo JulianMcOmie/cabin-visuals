@@ -298,12 +298,12 @@ const PARAMS: ParamDef[] = [
     ],
   },
   {
-    key: 'colorMode', label: 'Text Color', type: 'select', default: 0, options: [
+    key: 'colorMode', label: 'Color Mode', type: 'select', default: 0, options: [
       { value: 0, label: 'Custom' },
       { value: 1, label: 'Invert Behind' },
     ],
   },
-  { key: 'color', label: 'Custom Color', type: 'color', default: '#ffffff' },
+  { key: 'color', label: 'Text Color', type: 'color', default: '#ffffff' },
   { key: 'strokeColor', label: 'Stroke Color', type: 'color', default: '#000000' },
   { key: 'fontSize', label: 'Font Size', min: 0.1, max: 5, step: 0.1, default: 1 },
   { key: 'strokeWidth', label: 'Stroke Width', min: 0, max: 0.2, step: 0.01, default: 0.05 },
