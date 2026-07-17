@@ -5,7 +5,8 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
+import type { ProjectDocument } from '../../persistence/types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -324,6 +325,11 @@ export interface ProjectState {
    *  is created. One set() = one undo step. Returns the track id, or null
    *  when there are no words. */
   addLyricTrack: (words: LyricWord[]) => string | null
+  /** Switch the active scene onto a template: its visual tracks replace the
+   *  scene's (audio tracks stay, and with a song present the song's BPM wins
+   *  over the template's). Every id is reminted, so re-applying can never
+   *  collide. One set() = one undo step. */
+  applyTemplate: (templateDoc: ProjectDocument) => void
   addAudioBlock: (trackId: string, block: AudioBlock) => void
   updateAudioBlock: (trackId: string, blockId: string, updates: Partial<AudioBlock>) => void
   deleteAudioBlock: (trackId: string, blockId: string) => void
@@ -1425,6 +1431,48 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [...s.rootTrackIds, id], totalBars }
     })
     return resultId
+  },
+
+  applyTemplate: (templateDoc) => {
+    // The template's content lives in its non-main scene.
+    const srcSceneId = templateDoc.sceneOrder.find((id) => !templateDoc.scenes[id]?.isMain)
+    const src = srcSceneId ? templateDoc.scenes[srcSceneId] : undefined
+    if (!src) return
+
+    // Remint every id (template documents are shared module state, and the
+    // same template can be applied more than once).
+    const idMap = new Map<string, string>()
+    for (const id of Object.keys(src.tracks)) idMap.set(id, crypto.randomUUID())
+    const remapScope = (scope: Routing['scope']): Routing['scope'] =>
+      scope.kind === 'tag' ? scope : { ...scope, id: idMap.get(scope.id) ?? scope.id }
+    const cloned: Record<string, Track> = {}
+    for (const [oldId, t] of Object.entries(src.tracks)) {
+      const c = structuredClone(t)
+      c.id = idMap.get(oldId)!
+      if (c.parentId) c.parentId = idMap.get(c.parentId)
+      c.childIds = t.childIds.map((cid) => idMap.get(cid)).filter((x): x is string => !!x)
+      c.blocks = c.blocks.map((b) => ({
+        ...b,
+        id: crypto.randomUUID(),
+        notes: b.notes.map((n) => ({ ...n, id: crypto.randomUUID() })),
+      }))
+      if (c.targets) c.targets = c.targets.map((r) => ({ ...r, scope: remapScope(r.scope) }))
+      cloned[c.id] = c
+    }
+    const clonedRoots = src.rootTrackIds.map((id) => idMap.get(id)).filter((x): x is string => !!x)
+
+    set((s) => {
+      const audioIds = s.rootTrackIds.filter((id) => s.tracks[id]?.type === 'audio')
+      const kept: Record<string, Track> = {}
+      for (const id of audioIds) kept[id] = s.tracks[id]
+      const hasAudio = audioIds.length > 0
+      return {
+        tracks: { ...kept, ...cloned },
+        rootTrackIds: [...audioIds, ...clonedRoots],
+        bpm: hasAudio ? s.bpm : templateDoc.bpm,
+        totalBars: Math.max(s.totalBars, templateDoc.totalBars),
+      }
+    })
   },
 
   addAudioBlock: (trackId, block) =>

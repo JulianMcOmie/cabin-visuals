@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronRight, Plus, Sparkles, Info } from 'lucide-react'
+import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useUIStore } from '../store/UIStore'
@@ -9,6 +9,8 @@ import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { TEMPLATES } from '../../templates'
+import { track as trackEvent } from '../../analytics/analytics'
 
 /** What dragging an item creates. */
 export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
@@ -339,7 +341,55 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   )
 }
 
-type LibraryTab = 'instruments' | 'effects'
+type LibraryTab = 'instruments' | 'effects' | 'templates'
+
+// The Templates tab: double-click switches the current project onto that
+// template (visual tracks replaced, audio + its detected BPM kept). One undo
+// step, but still a big swap - confirm first.
+function TemplatesTab() {
+  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
+  const applyTemplate = useProjectStore((s) => s.applyTemplate)
+
+  if (activeIsMain) {
+    return (
+      <p className="px-3 pt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
+        Templates apply inside a visual scene - switch off Main to use one.
+      </p>
+    )
+  }
+
+  const apply = (tpl: (typeof TEMPLATES)[number]) => {
+    if (!window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
+    applyTemplate(tpl.document)
+    trackEvent('template_applied', { template: tpl.id })
+    // Anything pointing at the replaced tracks is stale now.
+    const ui = useUIStore.getState()
+    ui.setEditingBlock(null)
+    ui.setSelectedTrackId(null)
+    ui.setSelectedBlockIds(new Set())
+  }
+
+  return (
+    <div className="pt-1">
+      <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
+        Double-click a template to switch this project onto it. Your song stays.
+      </p>
+      {TEMPLATES.map((tpl) => (
+        <div
+          key={tpl.id}
+          onDoubleClick={() => apply(tpl)}
+          title={tpl.description}
+          className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+        >
+          <span className="flex-shrink-0 flex items-center justify-center w-3.5">
+            <LayoutTemplate size={12} className="text-[var(--text-3)]" />
+          </span>
+          <span className="text-xs text-[var(--text-2)] truncate">{tpl.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
@@ -380,13 +430,23 @@ export function LeftSidebar() {
         </button>
         <button
           onClick={() => setTab('effects')}
-          className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
+          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
             tab === 'effects'
               ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
               : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
           }`}
         >
           Effects
+        </button>
+        <button
+          onClick={() => setTab('templates')}
+          className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
+            tab === 'templates'
+              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+          }`}
+        >
+          Templates
         </button>
       </div>
 
@@ -406,6 +466,7 @@ export function LeftSidebar() {
             </>}
           </>
         )}
+        {tab === 'templates' && <TemplatesTab />}
         {tab === 'effects' && (
           <div className="pt-1">
             {PLUGIN_LIST.map((plugin) => (

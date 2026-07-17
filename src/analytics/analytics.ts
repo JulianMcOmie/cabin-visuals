@@ -43,6 +43,7 @@ export type AnalyticsEvent =
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
   | 'lyrics_applied' // props: { source: 'transcription' | 'pasted', words }
+  | 'template_applied' // props: { template } - switched onto a template from the editor library
   | 'tutorial_completed'
   | 'tutorial_skipped'
 
