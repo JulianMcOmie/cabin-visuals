@@ -174,8 +174,8 @@ const PARAMS: ParamDef[] = [
   { key: 'tint', label: 'Tint Hue', min: 0, max: 360, step: 1, default: DEFAULTS.tint },
   { key: 'bgColor', label: 'Background Color', type: 'color', default: DEFAULTS.bgColor },
   { key: 'ground', label: 'Ground Plane', type: 'boolean', default: DEFAULTS.ground },
-  { key: 'groundY', label: 'Ground Height', min: -50, max: 50, step: 0.5, default: DEFAULTS.groundY },
-  { key: 'groundColor', label: 'Ground Color', type: 'color', default: DEFAULTS.groundColor },
+  { key: 'groundY', label: 'Ground Height', min: -50, max: 50, step: 0.5, default: DEFAULTS.groundY, showIf: 'ground' },
+  { key: 'groundColor', label: 'Ground Color', type: 'color', default: DEFAULTS.groundColor, showIf: 'ground' },
 ]
 function StarsVisual({ trackId }: { trackId: string }) {
   const rootRef = useRef<THREE.Group>(null)

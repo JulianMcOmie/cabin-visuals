@@ -12,6 +12,11 @@ import type { UserInterfaceRendererId } from '../userInterfaceRenderers/ids'
 interface ParamBase {
   key: string
   label: string
+  /** Show this param only while another (numeric) param is "on": visible when
+   *  the track's value for `showIf` is >= 0.5. Booleans are 0/1, and counts
+   *  work too (e.g. delay params gated on `delayTaps` >= 1). The param keeps
+   *  its value while hidden - hiding is presentation only. */
+  showIf?: string
 }
 export interface NumberParamDef extends ParamBase {
   type?: 'number'

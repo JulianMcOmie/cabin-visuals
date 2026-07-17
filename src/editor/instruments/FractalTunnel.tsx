@@ -272,9 +272,9 @@ const PARAMS: ParamDef[] = [
   { key: 'glowIntensity', label: 'Glow', min: 0, max: 1, step: 0.1, default: 0.9 },
   { key: 'bgColor', label: 'Background Color', type: 'color', default: '#050508' },
   { key: 'colorPulse', label: 'Color Pulse', type: 'boolean', default: 0 },
-  { key: 'pulseSpeed', label: 'Pulse Speed', min: 50, max: 500, step: 10, default: 200 },
-  { key: 'pulseBandWidth', label: 'Band Width', min: 10, max: 100, step: 5, default: 40 },
-  { key: 'pulseFadeDuration', label: 'Fade Duration', min: 0.5, max: 5, step: 0.1, default: 2.0 },
+  { key: 'pulseSpeed', label: 'Pulse Speed', min: 50, max: 500, step: 10, default: 200, showIf: 'colorPulse' },
+  { key: 'pulseBandWidth', label: 'Band Width', min: 10, max: 100, step: 5, default: 40, showIf: 'colorPulse' },
+  { key: 'pulseFadeDuration', label: 'Fade Duration', min: 0.5, max: 5, step: 0.1, default: 2.0, showIf: 'colorPulse' },
 ]
 function FractalTunnelVisual({ trackId }: { trackId: string }) {
   const { viewport } = useThree()

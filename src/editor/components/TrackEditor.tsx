@@ -652,7 +652,15 @@ export function TrackEditor() {
                   const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
                   const onTop = track.onTop ?? def?.defaultOnTop ?? false
                   const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
-                  const userInterfaceParameters: UserInterfaceParameter[] = def?.params.map((parameter) => {
+                  // Params gated behind a toggle (showIf) only appear while
+                  // that toggle is on - a flight-speed slider means nothing
+                  // with flight mode off.
+                  const numericValue = (key: string) =>
+                    track.params?.[key] ?? Number(def?.params.find((p) => p.key === key)?.default ?? 0)
+                  const visibleParameters = def?.params.filter(
+                    (p) => !p.showIf || numericValue(p.showIf) >= 0.5,
+                  )
+                  const userInterfaceParameters: UserInterfaceParameter[] = visibleParameters?.map((parameter) => {
                     const stringParameter = isStringParam(parameter)
                     return {
                       definition: parameter,
