@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { AnimatePresence, motion, MotionConfig } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CabinLogo } from "./CabinLogo"
+import { SiteHeader } from "./SiteHeader"
 import { Appear, Reveal } from "./motionPresets"
 import { ProfileMenu } from "./ProfileMenu"
 import { useAuth } from "../persistence/hooks/useAuth"
@@ -60,47 +61,39 @@ export default function LandingPage() {
   return (
     <MotionConfig reducedMotion="user">
     <div className="flex min-h-screen flex-col bg-[var(--bg-page)] text-[var(--text)] font-sans">
-      {/* Nav - 64px, hairline border */}
-      <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2.5 select-none cursor-pointer">
-            <CabinLogo className="h-[30px] w-auto" />
-            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
-          </Link>
-          <nav className="flex items-center gap-2">
+      {/* Nav - 64px, hairline border (shared SiteHeader) */}
+      <SiteHeader>
+        <Link
+          href="/pricing"
+          onClick={() => track('nav_clicked', { from: 'landing', to: 'pricing' })}
+          className="px-3 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+        >
+          Pricing
+        </Link>
+        {user && !user.is_anonymous ? (
+          // Real account: the shared profile menu (anonymous sessions get
+          // the sign-in affordances instead).
+          <ProfileMenu />
+        ) : (
+          // Show login/signup buttons if not logged in
+          <>
             <Link
-              href="/pricing"
-              onClick={() => track('nav_clicked', { from: 'landing', to: 'pricing' })}
-              className="px-3 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+              href="/login"
+              onClick={() => track('nav_clicked', { from: 'landing', to: 'login' })}
+              className="inline-flex h-8 items-center rounded-[5px] border border-[var(--border)] px-3.5 text-[13px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
             >
-              Pricing
+              Log in
             </Link>
-            {user && !user.is_anonymous ? (
-              // Real account: the shared profile menu (anonymous sessions get
-              // the sign-in affordances instead).
-              <ProfileMenu />
-            ) : (
-              // Show login/signup buttons if not logged in
-              <>
-                <Link
-                  href="/login"
-                  onClick={() => track('nav_clicked', { from: 'landing', to: 'login' })}
-                  className="inline-flex h-8 items-center rounded-[5px] border border-[var(--border)] px-3.5 text-[13px] font-medium text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  onClick={() => track('nav_clicked', { from: 'landing', to: 'signup' })}
-                  className="inline-flex h-8 items-center rounded-[5px] bg-[var(--accent)] px-3.5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+            <Link
+              href="/signup"
+              onClick={() => track('nav_clicked', { from: 'landing', to: 'signup' })}
+              className="inline-flex h-8 items-center rounded-[5px] bg-[var(--accent)] px-3.5 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] cursor-pointer"
+            >
+              Sign up
+            </Link>
+          </>
+        )}
+      </SiteHeader>
 
       <main className="flex-1">
         {/* Hero */}

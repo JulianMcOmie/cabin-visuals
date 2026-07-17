@@ -306,12 +306,20 @@ body {
   transform-origin: center;
 }
 .cabin-logo:hover .puff {
-  animation: 
+  animation:
     cabin-billow-initial-hover 0.75s ease-out 0s forwards,
     cabin-billow 1.5s ease-out 0.75s infinite;
 }
 .cabin-logo:hover .puff-2 {
-  animation: 
+  animation:
+    cabin-billow-initial-hover 0.75s ease-out 0s forwards,
+    cabin-billow 1.5s ease-out 0.75s infinite;
+}
+
+/* Same billow as hover, forced by class - the lyric setup page runs it while
+   transcribing/aligning. Additive only: the hover rules above are untouched. */
+.cabin-logo.smoking .puff {
+  animation:
     cabin-billow-initial-hover 0.75s ease-out 0s forwards,
     cabin-billow 1.5s ease-out 0.75s infinite;
 }
@@ -365,6 +373,13 @@ body.drag-moving * {
 @keyframes landing-glow-spin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Lyric setup page: the indeterminate progress bar's sweeping segment
+   (transcribing/aligning have no real progress signal). */
+@keyframes lyric-progress-sweep {
+  0%   { left: -33%; }
+  100% { left: 100%; }
 }
 
 /* First-time tutorial (TutorialOverlay): the spotlight cutout's ring. */

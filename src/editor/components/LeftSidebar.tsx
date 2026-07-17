@@ -367,6 +367,9 @@ function TemplatesTab() {
     ui.setEditingBlock(null)
     ui.setSelectedTrackId(null)
     ui.setSelectedBlockIds(new Set())
+    // The Lyric Video template comes with its setup pipeline (song →
+    // transcribe → align) - open it right away.
+    if (tpl.id === 'lyricVideo') ui.setLyricSetupOpen(true)
   }
 
   return (

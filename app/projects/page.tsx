@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ProjectsDisplay from '../../src/components/ProjectsDisplay'
 import { ProjectsSkeleton } from '../../src/components/ProjectsSkeleton'
+import { LoadingScreen } from '../../src/components/LoadingScreen'
 import { createClient } from '../../src/utils/supabase/client'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
 import { useProjectList } from '../../src/persistence/hooks/useProjectList'
@@ -15,6 +16,11 @@ import { track } from '../../src/analytics/analytics'
 import type { TemplateDef } from '../../src/templates'
 
 const FREE_PROJECT_LIMIT = 1
+
+// The Lyric Video template opens straight into its setup pipeline (drop a
+// song → transcribe → align) instead of a silent editor.
+const lyricSetupParam = (templateId: string) => (templateId === 'lyricVideo' ? '&lyricSetup=1' : '')
+
 
 interface ProfileData {
   first_name: string | null
@@ -81,13 +87,20 @@ export default function ProjectsPage() {
     })()
   }, [authLoading, projectsLoading, user, isAnonymous, plan.loading, plan.isPro, projects.length, createProject, router])
 
+  // Flipped synchronously in the click handlers so the overlay is on screen
+  // BEFORE any network work - never reset on success (navigation replaces the
+  // page; clearing it early would flash the grid back).
+  const [creating, setCreating] = useState(false)
+
   const handleCreateProject = async (name: string) => {
     if (atFreeLimit) { promptUpgrade(); return }
+    setCreating(true)
     try {
       const project = await createProject(name)
       track('project_created', { source: 'blank' })
       router.push(`/editor?project=${project.id}`)
     } catch {
+      setCreating(false)
       alert("Failed to create project.")
     }
   }
@@ -96,6 +109,7 @@ export default function ProjectsPage() {
     // Signed out: try the anonymous rails (a real saved project); fall back to
     // the in-memory ?template demo when no session can be created.
     if (!user) {
+      setCreating(true)
       const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
       if (!sessionUser) {
         router.push(`/editor?template=${template.id}`)
@@ -104,25 +118,28 @@ export default function ProjectsPage() {
       try {
         const project = await createProject(template.name, structuredClone(template.document))
         track('project_created', { source: 'template', template: template.id })
-        router.push(`/editor?project=${project.id}`)
+        router.push(`/editor?project=${project.id}${lyricSetupParam(template.id)}`)
       } catch {
         router.push(`/editor?template=${template.id}`)
       }
       return
     }
     if (atFreeLimit) { promptUpgrade(); return }
+    setCreating(true)
     try {
       // Fresh deep copy per project - template documents are shared module state.
       const project = await createProject(template.name, structuredClone(template.document))
       track('project_created', { source: 'template', template: template.id })
-      router.push(`/editor?project=${project.id}`)
+      router.push(`/editor?project=${project.id}${lyricSetupParam(template.id)}`)
     } catch {
+      setCreating(false)
       alert("Failed to create project from template.")
     }
   }
 
   const handleSelectProject = (projectId: string) => {
     track('project_opened')
+    setCreating(true)
     router.push(`/editor?project=${projectId}`)
   }
 
@@ -144,14 +161,20 @@ export default function ProjectsPage() {
   }
 
   return (
-    <ProjectsDisplay
-      projects={projects}
-      user={user}
-      profile={profile}
-      onCreateProject={handleCreateProject}
-      onSelectProject={handleSelectProject}
-      onDeleteProject={handleDeleteProject}
-      onCreateFromTemplate={handleCreateFromTemplate}
-    />
+    <>
+      {/* Covers the page the INSTANT a create/open is clicked - the project
+          write and navigation happen behind the same smoking-cabin screen the
+          route transition shows, so the grid never visibly reshuffles. */}
+      {creating && <LoadingScreen />}
+      <ProjectsDisplay
+        projects={projects}
+        user={user}
+        profile={profile}
+        onCreateProject={handleCreateProject}
+        onSelectProject={handleSelectProject}
+        onDeleteProject={handleDeleteProject}
+        onCreateFromTemplate={handleCreateFromTemplate}
+      />
+    </>
   )
 }

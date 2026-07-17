@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
     form.append('file', blob, fileName)
     form.append('model_id', 'scribe_v2')
     form.append('timestamps_granularity', 'word')
+    // No "(singing)" / "(applause)" annotations - lyrics want words only.
+    form.append('tag_audio_events', 'false')
 
     const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',

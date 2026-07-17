@@ -90,6 +90,12 @@ interface UIState {
   // e.g. react-resizable-panels' hit-testing - must check this and stand down.
   modalOpen: boolean
   setModalOpen: (v: boolean) => void
+
+  // The Lyric Video template's setup pipeline (song → transcribe → align).
+  // Opened by ?lyricSetup=1 (projects page hands off here) and by applying
+  // the lyric template from the library's Templates tab.
+  lyricSetupOpen: boolean
+  setLyricSetupOpen: (v: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -164,4 +170,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   modalOpen: false,
   setModalOpen: (v) => set({ modalOpen: v }),
+
+  lyricSetupOpen: false,
+  setLyricSetupOpen: (v) => set({ lyricSetupOpen: v }),
 }));
