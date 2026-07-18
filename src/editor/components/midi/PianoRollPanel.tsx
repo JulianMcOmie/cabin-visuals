@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Magnet } from 'lucide-react'
+import { X, Magnet, Waves, Dices } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHTS } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
@@ -193,6 +193,8 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
+  const noise = useProjectStore((s) => s.tracks[trackId]?.noise)
+  const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
 
   // Value lanes show 13 value-labelled rows (pitch → param/input value) with the
   // target name in the frozen corner; toggle lanes show exactly On/Off; trigger
@@ -340,17 +342,65 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         {automation && (
           <>
             <div className="w-px h-4 bg-zinc-800" />
-            <span className="text-[10px] text-zinc-600" title="Interpolation between keyframes">Interp</span>
-            <select
-              value={interpolation}
-              onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
-              title="Interpolation between value keyframes"
-              className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
+            {/* Noise mode: notes gate seeded random bursts around their value
+                instead of keyframing. Seed is fixed per take (pure function
+                of the beat - scrub/export replay the same wobble); the dice
+                re-roll a new one. */}
+            <button
+              onClick={() => setTrackNoise(trackId, noise
+                ? undefined
+                : { rate: 4, smoothness: 0.5, range: 0.5, seed: Math.floor(Math.random() * 1e9) })}
+              title={noise ? 'Noise bursts ON - notes gate random wobble around their value' : 'Noise bursts OFF - notes are value keyframes'}
+              className={`flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                noise ? 'bg-indigo-600/30 text-indigo-300' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+              }`}
             >
-              {INTERP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              <Waves size={10} />
+              Noise
+            </button>
+            {noise ? (
+              <>
+                <div className="flex items-center gap-1" title="Wiggles per beat">
+                  <span className="text-[10px] text-zinc-600">Rate</span>
+                  <input type="range" min={0.5} max={16} step={0.5} value={noise.rate}
+                    onChange={(e) => setTrackNoise(trackId, { ...noise, rate: Number(e.target.value) })}
+                    className="slider-square w-10 cursor-pointer" />
+                </div>
+                <div className="flex items-center gap-1" title="0 = stepped chaos, 1 = smooth wandering">
+                  <span className="text-[10px] text-zinc-600">Smooth</span>
+                  <input type="range" min={0} max={1} step={0.05} value={noise.smoothness}
+                    onChange={(e) => setTrackNoise(trackId, { ...noise, smoothness: Number(e.target.value) })}
+                    className="slider-square w-10 cursor-pointer" />
+                </div>
+                <div className="flex items-center gap-1" title="Deviation around the note's value (fraction of the param range)">
+                  <span className="text-[10px] text-zinc-600">Range</span>
+                  <input type="range" min={0} max={1} step={0.05} value={noise.range}
+                    onChange={(e) => setTrackNoise(trackId, { ...noise, range: Number(e.target.value) })}
+                    className="slider-square w-10 cursor-pointer" />
+                </div>
+                <button
+                  onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
+                  title="Re-roll the noise (new random take; each take replays identically)"
+                  className="flex items-center justify-center w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                >
+                  <Dices size={11} />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] text-zinc-600" title="Interpolation between keyframes">Interp</span>
+                <select
+                  value={interpolation}
+                  onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
+                  title="Interpolation between value keyframes"
+                  className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
+                >
+                  {INTERP_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </>
+            )}
           </>
         )}
 

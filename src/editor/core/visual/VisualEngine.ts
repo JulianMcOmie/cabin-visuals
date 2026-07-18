@@ -1,7 +1,7 @@
 import { Matrix4, type Scene as ThreeScene } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
-import { sampleLane } from './automation'
+import { sampleLane, sampleNoiseLane } from './automation'
 import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, localTransformToSV } from './stateVector'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
@@ -227,7 +227,13 @@ export function computeAtBeat(beat: number) {
     if (obj.automations.length) {
       params = { ...obj.params }
       for (const auto of obj.automations) {
-        if (auto.keyframes.length) params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
+        if (auto.noise && auto.gates?.length) {
+          // Noise lane: inert (NaN) outside its gates, wobbling inside them.
+          const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
+          if (!Number.isNaN(v)) params[auto.param] = v
+        } else if (auto.keyframes.length) {
+          params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
+        }
       }
     }
     // Envelope lanes overlay next - documented merge order: base ← automation ←

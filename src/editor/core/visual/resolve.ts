@@ -11,7 +11,7 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractKeyframes } from './automation'
+import { extractKeyframes, extractNoiseGates } from './automation'
 import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
@@ -73,6 +73,19 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
     if (!param) continue
     const pdef = def.params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
+    // Noise mode: the notes become burst gates instead of keyframes.
+    if (child.noise) {
+      out.push({
+        param,
+        mode: 'linear',
+        keyframes: [],
+        noise: child.noise,
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        min: pdef.min,
+        max: pdef.max,
+      })
+      continue
+    }
     out.push({
       param,
       mode: child.interpolation ?? 'linear',

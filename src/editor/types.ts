@@ -125,6 +125,10 @@ export interface Track {
   /** Set ONLY on the transcribed Lyrics track: sung-seconds word timing that
    *  its note beats are re-derived from on BPM changes. */
   lyricTiming?: LyricTimingWord[]
+  /** Automation tracks only: flips the lane into noise mode - notes gate
+   *  seeded random bursts around their pitch-value instead of keyframing.
+   *  (See core/visual/automation.ts NoiseConfig.) */
+  noise?: { rate: number; smoothness: number; range: number; seed: number }
   color: string
   muted: boolean
   solo: boolean

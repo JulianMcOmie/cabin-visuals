@@ -23,6 +23,85 @@ export function extractKeyframes(
   }))
 }
 
+// ── Noise mode ───────────────────────────────────────────────────────────────
+// An automation track flipped to noise mode stops being a keyframe lane: its
+// notes become GATES - while a note is held, the param wanders randomly
+// around the note's pitch-value; between notes the lane is inert. Seeded and
+// sampled as a pure function of the beat, so pause/scrub/export all replay
+// the exact same wobble (the pause invariant applies to noise too).
+
+/** Track-level noise settings (stored on the automation track). */
+export interface NoiseConfig {
+  /** Wiggles per beat. */
+  rate: number
+  /** 0 = stepped chaos (hold each value), 1 = smooth wandering. */
+  smoothness: number
+  /** Deviation around the note's value, as a fraction of the param's range. */
+  range: number
+  /** Fixed at authoring time; re-roll for a new take. */
+  seed: number
+}
+
+/** One noise burst: a held note's window and its pitch-mapped center value. */
+export interface NoiseGate {
+  beat: number
+  endBeat: number
+  center: number
+  /** Velocity scaling (0..1) of the burst's deviation. */
+  amp: number
+}
+
+/** Flatten a noise-mode track's blocks into burst gates. */
+export function extractNoiseGates(
+  blocks: Block[],
+  beatsPerBar: number,
+  paramMin: number,
+  paramMax: number,
+  totalBars?: number,
+): NoiseGate[] {
+  return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
+    beat: note.beat,
+    endBeat: note.beat + note.durationBeats,
+    center: pitchToValue(note.pitch, paramMin, paramMax),
+    amp: Math.max(0, Math.min(1, (note.velocity ?? 100) / 127)),
+  }))
+}
+
+/** Deterministic integer hash → [-1, 1]. */
+function noiseHash(i: number, seed: number): number {
+  let h = (Math.imul(i | 0, 374761393) + Math.imul(seed | 0, 668265263)) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  return (((h ^ (h >>> 16)) >>> 0) / 4294967296) * 2 - 1
+}
+
+/** Sample a noise lane at `beat`: NaN outside every gate (lane inert), else
+ *  the gate's center value plus seeded value-noise scaled by range and the
+ *  note's velocity, clamped to the param range. */
+export function sampleNoiseLane(
+  cfg: NoiseConfig,
+  gates: NoiseGate[],
+  beat: number,
+  paramMin: number,
+  paramMax: number,
+): number {
+  let gate: NoiseGate | undefined
+  for (const g of gates) {
+    if (beat >= g.beat && beat < g.endBeat) { gate = g; break }
+  }
+  if (!gate) return NaN
+  const t = beat * Math.max(0.01, cfg.rate)
+  const i = Math.floor(t)
+  const a = noiseHash(i, cfg.seed)
+  const b = noiseHash(i + 1, cfg.seed)
+  const u = t - i
+  const s = Math.max(0, Math.min(1, cfg.smoothness))
+  // smoothness blends hold-the-sample (stepped chaos) toward smoothstepped
+  // travel between samples (smooth wandering).
+  const n = a + (b - a) * (s * (u * u * (3 - 2 * u)))
+  const value = gate.center + n * (paramMax - paramMin) * cfg.range * gate.amp * 0.5
+  return Math.max(paramMin, Math.min(paramMax, value))
+}
+
 /** Ease a normalized 0..1 fraction per the interpolation mode. */
 function ease(t: number, mode: InterpolationMode): number {
   switch (mode) {

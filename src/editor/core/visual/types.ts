@@ -5,7 +5,7 @@
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
 import type { AdsrEnvelope, InterpolationMode, PhotoPad, VideoPad } from '../../types'
-import type { AutomationKeyframe } from './automation'
+import type { AutomationKeyframe, NoiseConfig, NoiseGate } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
 export interface StateVector {
@@ -21,11 +21,18 @@ export interface StateVector {
 }
 
 /** A resolved automation lane: keyframes (pitch→value, absolute beats) driving one of
- *  the object's params, interpolated per `mode`. Sampled per frame in computeAtBeat. */
+ *  the object's params, interpolated per `mode`. Sampled per frame in computeAtBeat.
+ *  Noise-mode lanes carry `noise` + `gates` instead of meaningful keyframes: while a
+ *  gate (held note) covers the beat, the param wanders around the note's value. */
 export interface ResolvedAutomation {
   param: string
   mode: InterpolationMode
   keyframes: AutomationKeyframe[]
+  noise?: NoiseConfig
+  gates?: NoiseGate[]
+  /** Param range for noise scaling (from the instrument's param def). */
+  min?: number
+  max?: number
 }
 
 /** A resolved automation lane targeting one effect instance's setting (or its

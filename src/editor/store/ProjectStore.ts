@@ -301,6 +301,8 @@ export interface ProjectState {
   setEnvelopeTarget: (trackId: string, value: number) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
+  /** Set (or clear, with undefined) an automation track's noise mode. */
+  setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
@@ -1260,6 +1262,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
+    }),
+
+  setTrackNoise: (trackId, noise) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise } } }
     }),
 
   setTrackTargets: (trackId, targets) =>
