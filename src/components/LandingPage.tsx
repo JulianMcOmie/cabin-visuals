@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion, MotionConfig } from "framer-motion"
@@ -48,6 +48,28 @@ export default function LandingPage() {
   // Track slide direction alongside the index so the carousel can animate
   // toward the side the user actually navigated.
   const [[activeVideo, direction], setVideoState] = useState<[number, number]>([0, 0])
+  // A play can't be observed inside the cross-origin YouTube iframe, but
+  // clicking INTO it blurs the window with the iframe focused - the only
+  // signal that someone actually engaged the demo (bounce analysis needs it;
+  // watching alone fires no events and would count as a bounce otherwise).
+  const activeVideoRef = useRef(activeVideo)
+  activeVideoRef.current = activeVideo
+  const engagedRef = useRef(false)
+  useEffect(() => {
+    const onBlur = () => {
+      if (engagedRef.current) return
+      if (document.activeElement instanceof HTMLIFrameElement) {
+        engagedRef.current = true
+        track('demo_video_engaged', { video: DEMO_VIDEOS[activeVideoRef.current].id })
+      }
+    }
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [])
+  const switchVideo = (index: number, dir: number, method: 'arrow' | 'dot' | 'thumb') => {
+    track('demo_video_switched', { method, video: DEMO_VIDEOS[index].id })
+    setVideoState([index, dir])
+  }
   const previousVideoIndex = (activeVideo - 1 + DEMO_VIDEOS.length) % DEMO_VIDEOS.length
   const nextVideoIndex = (activeVideo + 1) % DEMO_VIDEOS.length
   const previousVideo = DEMO_VIDEOS[previousVideoIndex]
@@ -144,7 +166,7 @@ export default function LandingPage() {
             <div className="group/carousel relative grid grid-cols-[minmax(0,0.26fr)_minmax(0,1fr)_minmax(0,0.26fr)] items-center gap-3 sm:gap-5 lg:gap-7">
               <button
                 type="button"
-                onClick={() => setVideoState([previousVideoIndex, -1])}
+                onClick={() => switchVideo(previousVideoIndex, -1, 'thumb')}
                 aria-label={`Show previous video: ${previousVideo.title}`}
                 className="group relative aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer"
               >
@@ -187,7 +209,7 @@ export default function LandingPage() {
 
               <button
                 type="button"
-                onClick={() => setVideoState([nextVideoIndex, 1])}
+                onClick={() => switchVideo(nextVideoIndex, 1, 'thumb')}
                 aria-label={`Show next video: ${nextVideo.title}`}
                 className="group relative aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer"
               >
@@ -208,7 +230,7 @@ export default function LandingPage() {
 
               <button
                 type="button"
-                onClick={() => setVideoState([previousVideoIndex, -1])}
+                onClick={() => switchVideo(previousVideoIndex, -1, 'arrow')}
                 aria-label="Previous demo video"
                 className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md opacity-0 transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:left-3 sm:h-10 sm:w-10 cursor-pointer"
               >
@@ -216,7 +238,7 @@ export default function LandingPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setVideoState([nextVideoIndex, 1])}
+                onClick={() => switchVideo(nextVideoIndex, 1, 'arrow')}
                 aria-label="Next demo video"
                 className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md opacity-0 transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:right-3 sm:h-10 sm:w-10 cursor-pointer"
               >
@@ -228,7 +250,7 @@ export default function LandingPage() {
                 <button
                   key={video.id}
                   type="button"
-                  onClick={() => setVideoState([index, index > activeVideo ? 1 : -1])}
+                  onClick={() => switchVideo(index, index > activeVideo ? 1 : -1, 'dot')}
                   aria-label={`Show demo video ${index + 1}`}
                   aria-pressed={activeVideo === index}
                   className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${

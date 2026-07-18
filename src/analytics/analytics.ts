@@ -17,6 +17,8 @@ export type AnalyticsEvent =
   | 'try_it_out_clicked'
   | 'continue_creating_clicked' // props: { destination: 'editor' | 'projects' }
   | 'watch_demo_clicked'
+  | 'demo_video_engaged' // props: { video } - clicked into the demo iframe (cross-origin, so this is the only play signal)
+  | 'demo_video_switched' // props: { method: 'arrow' | 'dot' | 'thumb', video }
   // Header/nav + CTA links that navigate. props: { from, to }
   | 'nav_clicked'
   // Pricing
