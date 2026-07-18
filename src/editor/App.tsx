@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -266,17 +266,29 @@ function EditableProjectName() {
     )
   }
 
+  const startRename = () => {
+    setDraft(projectName ?? 'Untitled Project')
+    setEditing(true)
+  }
+  // Same hover-pencil affordance as track rename in the Track Editor:
+  // present when you look, absent when you don't.
   return (
-    <span
-      onDoubleClick={() => {
-        setDraft(projectName ?? 'Untitled Project')
-        setEditing(true)
-      }}
+    <div
+      onDoubleClick={startRename}
       title="Double-click to rename"
-      className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px] cursor-text select-none"
+      className="group flex items-center gap-1.5 min-w-0 cursor-text select-none"
     >
-      {projectName ?? 'Untitled Project'}
-    </span>
+      <span className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px]">
+        {projectName ?? 'Untitled Project'}
+      </span>
+      <button
+        onClick={startRename}
+        aria-label="Rename project"
+        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
+      >
+        <Pencil size={10} />
+      </button>
+    </div>
   )
 }
 
