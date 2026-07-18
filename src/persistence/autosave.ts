@@ -36,6 +36,9 @@ let lastCaptureAt = 0
 function captureThumbnail(): string | undefined {
   const now = Date.now()
   if (now - lastCaptureAt < CAPTURE_EVERY_MS) return lastThumb
+  // Never touch the driver mid-playback - the capture is one paused frame or
+  // nothing.
+  if (useTimeStore.getState().isPlaying) return lastThumb
   const driver = getFrameDriver()
   if (!driver) return lastThumb
   try {
@@ -47,16 +50,22 @@ function captureThumbnail(): string | undefined {
     out.width = THUMB_W
     out.height = THUMB_H
     const ctx = out.getContext('2d')
-    if (!ctx || src.width === 0 || src.height === 0) return lastThumb
-    // Cover-crop the (any-aspect) canvas into 16:9.
-    const scale = Math.max(THUMB_W / src.width, THUMB_H / src.height)
-    const w = src.width * scale
-    const h = src.height * scale
-    ctx.drawImage(src, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h)
-    lastThumb = out.toDataURL('image/jpeg', 0.6)
-    lastCaptureAt = now
+    if (ctx && src.width > 0 && src.height > 0) {
+      // Cover-crop the (any-aspect) canvas into 16:9.
+      const scale = Math.max(THUMB_W / src.width, THUMB_H / src.height)
+      const w = src.width * scale
+      const h = src.height * scale
+      ctx.drawImage(src, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h)
+      lastThumb = out.toDataURL('image/jpeg', 0.6)
+      lastCaptureAt = now
+    }
   } catch {
     /* tainted/lost context - keep whatever we had */
+  } finally {
+    // renderFrame pins a beat override on the live canvas; EVERY caller must
+    // unpin. Missing this froze the editor's visuals from the first autosave
+    // until something else unpinned - the "nothing plays" bug.
+    try { driver.unpin() } catch { /* driver unmounted mid-save */ }
   }
   return lastThumb
 }
