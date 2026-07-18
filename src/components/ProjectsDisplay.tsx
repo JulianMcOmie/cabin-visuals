@@ -82,6 +82,9 @@ interface ProjectsDisplayProps {
   onSelectProject: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
   onCreateFromTemplate: (template: TemplateDef) => void
+  /** Gate for opening the create flow: return false (after notifying, e.g.
+   *  the free-plan limit prompt) to block it right at the click. */
+  onGateCreate: () => boolean
 }
 
 export default function ProjectsDisplay({
@@ -91,7 +94,15 @@ export default function ProjectsDisplay({
   onSelectProject,
   onDeleteProject,
   onCreateFromTemplate,
+  onGateCreate,
 }: ProjectsDisplayProps) {
+  // The free-plan limit fires the moment "New project" is clicked - not after
+  // the user has already picked a template and typed a name.
+  const openCreate = () => {
+    if (!onGateCreate()) return
+    track('new_project_clicked')
+    setCreateStep('choice')
+  }
   // The create flow: closed, the Empty/Template choice, the name entry, or the
   // template catalog.
   const [createStep, setCreateStep] = useState<null | 'choice' | 'name' | 'catalog'>(null)
@@ -174,7 +185,7 @@ export default function ProjectsDisplay({
             <span className="font-mono text-xs text-[var(--text-muted)]">{projects.length}</span>
           </div>
           <button
-            onClick={() => { track('new_project_clicked'); setCreateStep('choice') }}
+            onClick={openCreate}
             className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
           >
             <Plus size={14} strokeWidth={2.5} />
@@ -224,7 +235,7 @@ export default function ProjectsDisplay({
             layout
             whileHover={{ scale: 1.012, transition: { duration: 0.06 } }}
             whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
-            onClick={() => { track('new_project_clicked'); setCreateStep('choice') }}
+            onClick={openCreate}
             className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)]"
           >
             <Plus size={18} />
