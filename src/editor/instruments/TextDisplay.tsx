@@ -670,7 +670,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
   return (
     <group ref={groupRef}>
-      <mesh ref={meshRef}>
+      {/* Hidden until the frame callback has real state: the initial texture
+          is a warm-up placeholder ('HELLO'), and before the engine computes
+          this track's state nothing runs to replace it - a fresh, paused
+          editor would otherwise show the placeholder until first play. */}
+      <mesh ref={meshRef} visible={false}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial
           map={textureRef.current}
