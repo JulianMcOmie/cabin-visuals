@@ -1,13 +1,19 @@
-import type { LyricWord } from '../store/ProjectStore'
-
 // Timed words (seconds into the song) -> lyric notes (project beats). Shared
-// by the lyric-template setup pipeline; the seconds come from the
-// transcription/alignment routes (/api/transcribe, /api/align).
+// by the lyric-template setup pipeline AND ProjectStore's BPM rescale: the
+// transcribed Lyrics track keeps its word timing in SECONDS as the source of
+// truth, and beats are re-derived through this whenever the BPM changes.
 
 export interface TranscribedWord {
   word: string
   start: number
   end: number
+}
+
+/** One lyric word placed on the project timeline (absolute beats). */
+export interface LyricWord {
+  word: string
+  startBeat: number
+  durationBeats: number
 }
 
 // Text Display's parser treats whitespace as the word separator and gives

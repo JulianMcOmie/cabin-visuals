@@ -5,6 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
+import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 
@@ -322,9 +323,11 @@ export interface ProjectState {
    *  (beats are project-absolute), the words joined into the text param. A
    *  root track named 'Lyrics' (the lyric templates ship one, styled) is
    *  REFILLED in place - words swap, styling stays; otherwise a fresh track
-   *  is created. One set() = one undo step. Returns the track id, or null
-   *  when there are no words. */
-  addLyricTrack: (words: LyricWord[]) => string | null
+   *  is created. Pass the aligner's sung-seconds `timing` so the track keeps
+   *  seconds as its source of truth (setBpm re-derives the beats from it).
+   *  One set() = one undo step. Returns the track id, or null when there are
+   *  no words. */
+  addLyricTrack: (words: LyricWord[], timing?: TranscribedWord[]) => string | null
   /** Switch the active scene onto a template: its visual tracks replace the
    *  scene's (audio tracks stay, and with a song present the song's BPM wins
    *  over the template's). Every id is reminted, so re-applying can never
@@ -344,12 +347,7 @@ export interface ProjectState {
   setViewAspect: (aspect: ViewAspect) => void
 }
 
-/** One lyric word placed on the project timeline (absolute beats). */
-export interface LyricWord {
-  word: string
-  startBeat: number
-  durationBeats: number
-}
+export type { LyricWord, TranscribedWord } from '../utils/lyricPlacement'
 
 // Text Display's "advance to the next word" pitch (its PITCH_NEXT_WORD).
 const TEXT_NEXT_WORD_PITCH = 48
@@ -1374,7 +1372,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return ids
   },
 
-  addLyricTrack: (words) => {
+  addLyricTrack: (words, timing) => {
     if (words.length === 0) return null
     let resultId: string | null = null
     set((s) => {
@@ -1409,6 +1407,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const updated: Track = {
           ...existing,
           stringParams: { ...existing.stringParams, text },
+          lyricTiming: timing ?? existing.lyricTiming,
           blocks: [block],
         }
         return { tracks: { ...s.tracks, [existingId]: updated }, totalBars }
@@ -1425,6 +1424,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         muted: false,
         solo: false,
         stringParams: { text },
+        lyricTiming: timing,
         blocks: [block],
         childIds: [],
       }
@@ -1572,7 +1572,45 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, effects } } }
     }),
 
-  setBpm: (bpm) => set({ bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm))) }),
+  setBpm: (bpm) =>
+    set((s) => {
+      const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm)))
+      if (next === s.bpm) return s
+      // The transcribed Lyrics track's truth is SECONDS (lyricTiming); its
+      // beats are derived. Re-derive them at the new tempo so a BPM
+      // correction never moves words off their sung time. Only tracks
+      // carrying lyricTiming rescale - everything else keeps its beats.
+      let audioBlock: { startBar: number; trimStart: number } | undefined
+      for (const id of s.rootTrackIds) {
+        const t = s.tracks[id]
+        if (t?.type === 'audio' && t.audioBlocks?.length) { audioBlock = t.audioBlocks[0]; break }
+      }
+      let tracks = s.tracks
+      let totalBars = s.totalBars
+      for (const [id, t] of Object.entries(s.tracks)) {
+        if (!t.lyricTiming?.length || t.blocks.length === 0) continue
+        const words = placeTranscription(t.lyricTiming, audioBlock ?? { startBar: 0, trimStart: 0 }, next, s.beatsPerBar, true)
+        if (words.length === 0) continue
+        const lastBeat = Math.max(...words.map((w) => w.startBeat + w.durationBeats))
+        const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
+        const block: Block = {
+          ...t.blocks[0],
+          startBar: 0,
+          durationBars,
+          notes: words.map((w) => ({
+            id: crypto.randomUUID(),
+            startBeat: w.startBeat,
+            durationBeats: w.durationBeats,
+            pitch: TEXT_NEXT_WORD_PITCH,
+            velocity: 100,
+          })),
+        }
+        if (tracks === s.tracks) tracks = { ...s.tracks }
+        tracks[id] = { ...t, blocks: [block] }
+        totalBars = Math.max(totalBars, durationBars)
+      }
+      return tracks === s.tracks ? { bpm: next } : { bpm: next, tracks, totalBars }
+    }),
 
   // Blocks past the new end are left alone (the timeline just ends sooner);
   // the transport clamps the playhead to the project length on its own.

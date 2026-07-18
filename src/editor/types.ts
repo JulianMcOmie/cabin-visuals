@@ -1,3 +1,13 @@
+/** The transcribed Lyrics track's word timing in SECONDS - the source of
+ *  truth for that one track. Its note beats are DERIVED from this (through
+ *  the audio block's trim + the current BPM) and re-derived whenever the BPM
+ *  changes, so a tempo correction never moves words off their sung time. */
+export interface LyricTimingWord {
+  word: string
+  start: number
+  end: number
+}
+
 export interface Note {
   id: string
   startBeat: number
@@ -112,6 +122,9 @@ export interface Track {
   /** String-valued instrument params (color / string types), kept apart from the numeric
    *  `params` so the engine's numeric paths stay untouched. */
   stringParams?: Record<string, string>
+  /** Set ONLY on the transcribed Lyrics track: sung-seconds word timing that
+   *  its note beats are re-derived from on BPM changes. */
+  lyricTiming?: LyricTimingWord[]
   color: string
   muted: boolean
   solo: boolean

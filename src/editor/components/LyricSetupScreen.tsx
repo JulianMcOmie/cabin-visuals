@@ -147,7 +147,9 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
       const placedBlock = firstAudioBlock() ?? block
       const { bpm, beatsPerBar } = useProjectStore.getState()
       const words = placeTranscription(aligned.words, placedBlock, bpm, beatsPerBar, true)
-      const id = useProjectStore.getState().addLyricTrack(words)
+      // The aligner's seconds ride along as the track's source of truth, so
+      // a later BPM correction re-derives the beats instead of moving words.
+      const id = useProjectStore.getState().addLyricTrack(words, aligned.words)
       if (!id) throw new Error('No usable words found in the song.')
       useUIStore.getState().setSelectedTrackId(id)
       track('lyrics_applied', { source: 'aligned', words: words.length })
