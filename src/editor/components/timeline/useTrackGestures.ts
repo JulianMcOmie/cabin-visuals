@@ -6,7 +6,7 @@ import { LOOP_CURSOR, lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
-import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, pruneSelectionAfterTrackDelete } from '../../utils/selection'
+import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks } from '../../utils/selection'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
 
@@ -554,12 +554,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           useProjectStore.getState().deleteBlocks(selectedBlockIds)
           setSelectedBlockIds(new Set())
         } else {
-          const trackId = useUIStore.getState().selectedTrackId
-          if (trackId) {
+          const ui = useUIStore.getState()
+          if (ui.selectedTrackId || ui.selectedTrackIds.size > 0) {
             e.preventDefault()
-            useProjectStore.getState().deleteTrack(trackId)
-            // The whole subtree is gone - drop selected blocks that died with it.
-            pruneSelectionAfterTrackDelete()
+            // Deletes the whole selection group (ctrl-click multi included).
+            deleteSelectedTracks()
           }
         }
       } else if (e.key === 'Escape') {

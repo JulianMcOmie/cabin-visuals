@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { FileMusic, Plus } from 'lucide-react'
+import { FileMusic, Plus, Trash2 } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -15,7 +15,7 @@ import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
 import { flattenVisualRows } from './trackTree'
-import { deselectTrack, selectNewTrack } from '../../utils/selection'
+import { deselectTrack, selectNewTrack, deleteSelectedTracks } from '../../utils/selection'
 import { importMidiFiles } from '../MediaFileDropLayer'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
@@ -31,6 +31,7 @@ export function TimelineArea() {
   const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
+  const hasTrackSelection = useUIStore((s) => !!s.selectedTrackId || s.selectedTrackIds.size > 0)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const timelineWidthPx = totalBars * barWidthPx
@@ -237,6 +238,14 @@ export function TimelineArea() {
                 title={activeIsMain ? 'MIDI import is available inside visual scenes' : 'Import MIDI file'}
               >
                 <FileMusic size={11} />
+              </button>
+              <button
+                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[#d68383] hover:bg-[var(--border)] disabled:opacity-35 disabled:cursor-default transition-colors cursor-pointer"
+                onClick={deleteSelectedTracks}
+                disabled={!hasTrackSelection}
+                title="Delete selected tracks (ctrl-click labels to select several)"
+              >
+                <Trash2 size={11} />
               </button>
               <input
                 ref={midiInputRef}

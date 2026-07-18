@@ -7,7 +7,7 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
-import { selectTrack, shouldSuppressTrackSelect } from '../../utils/selection'
+import { selectTrack, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
@@ -51,6 +51,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
+  const inMultiSelection = useUIStore((s) => s.selectedTrackIds.has(track.id))
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
@@ -66,7 +67,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     if (renaming) renameRef.current?.select()
   }, [renaming])
 
-  const isSelected = selectedTrackId === track.id
+  const isSelected = selectedTrackId === track.id || inMultiSelection
   const hasChildren = track.childIds.length > 0
   const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
   // Automation, envelope and ability sub-rows render darker than their object; mover
@@ -94,11 +95,13 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       }`}
     >
       <div
-        onClick={() => {
+        onClick={(e) => {
           // Track selection is the LABEL's job - the lane (timeline grid) never
           // selects or deselects a track. A drag that started here (nest/copy)
           // must not hijack the selection when its trailing click lands.
           if (shouldSuppressTrackSelect()) return
+          // Ctrl/cmd-click builds a multi-selection (bulk delete).
+          if (e.ctrlKey || e.metaKey) { toggleTrackInSelection(track.id); return }
           // No toggle: clicking the selected track keeps it selected. Foreign
           // selected blocks are pruned; this track's stay (utils/selection).
           selectTrack(track.id)

@@ -18,6 +18,11 @@ interface UIState {
   selectedTrackId: string | null;
   setSelectedTrackId: (id: string | null) => void;
 
+  // Multi-selection of tracks (ctrl/cmd-click), primarily for bulk delete.
+  // setSelectedTrackId collapses it - any single-select resets the group.
+  selectedTrackIds: Set<string>
+  setSelectedTrackIds: (ids: Set<string>) => void
+
   // Parent tracks collapsed in the timeline (their descendant rows are hidden). Pure
   // view state - collapsed tracks still resolve and render in the 3D scene.
   collapsedTrackIds: Set<string>
@@ -95,7 +100,11 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   selectedTrackId: null,
 
-  setSelectedTrackId: (id) => set({ selectedTrackId: id }),
+  setSelectedTrackId: (id) =>
+    set({ selectedTrackId: id, selectedTrackIds: id ? new Set([id]) : new Set() }),
+
+  selectedTrackIds: new Set(),
+  setSelectedTrackIds: (ids) => set({ selectedTrackIds: ids }),
 
   collapsedTrackIds: new Set(),
   setTrackCollapsed: (id, collapsed) =>

@@ -57,6 +57,40 @@ export function pruneSelectionAfterTrackDelete() {
   if (kept.size !== ui.selectedBlockIds.size) ui.setSelectedBlockIds(kept)
 }
 
+/** Ctrl/cmd-click: toggle a track in the multi-selection. The primary follows
+ *  the toggle (added track becomes primary; removing the primary hands it to
+ *  any remaining member). */
+export function toggleTrackInSelection(trackId: string) {
+  const ui = useUIStore.getState()
+  const next = new Set(ui.selectedTrackIds)
+  if (ui.selectedTrackId) next.add(ui.selectedTrackId)
+  let primary: string | null = ui.selectedTrackId
+  if (next.has(trackId)) {
+    next.delete(trackId)
+    if (primary === trackId) primary = next.values().next().value ?? null
+  } else {
+    next.add(trackId)
+    primary = trackId
+  }
+  // Direct setState: setSelectedTrackId deliberately collapses the group.
+  useUIStore.setState({ selectedTrackId: primary, selectedTrackIds: next })
+}
+
+/** Delete every selected track (the ctrl-click group ∪ the primary) - fired
+ *  in one synchronous burst, so history collapses it into one undo step. */
+export function deleteSelectedTracks() {
+  const ui = useUIStore.getState()
+  const ids = new Set(ui.selectedTrackIds)
+  if (ui.selectedTrackId) ids.add(ui.selectedTrackId)
+  if (ids.size === 0) return
+  const store = useProjectStore.getState()
+  // An id already deleted as part of an earlier selection member's subtree
+  // just no-ops (deleteTrack guards on a live track).
+  for (const id of ids) store.deleteTrack(id)
+  pruneSelectionAfterTrackDelete()
+  useUIStore.setState({ selectedTrackIds: new Set() })
+}
+
 /** A newly added track/instrument becomes THE selection; all blocks deselect. */
 export function selectNewTrack(trackId: string) {
   const ui = useUIStore.getState()
