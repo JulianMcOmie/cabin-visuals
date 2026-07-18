@@ -27,6 +27,9 @@ export function TimelineArea() {
   const totalBars = useProjectStore((s) => s.totalBars)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
+  const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
+  const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
+  const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -260,6 +263,33 @@ export function TimelineArea() {
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
+        {/* Zoom sliders, same pattern as the MIDI editor's toolbar pair -
+            floated over the lanes' top-right so the (narrow, resizable)
+            label-column corner doesn't have to fit them. */}
+        <div className="absolute right-3 top-1 z-40 flex items-center gap-2.5 rounded bg-[var(--bg-panel)]/85 px-2 py-1">
+          <div className="flex items-center gap-1.5" title="Horizontal zoom">
+            <span className="text-[10px] text-zinc-600">H</span>
+            <input
+              type="range"
+              min={2}
+              max={100}
+              value={pixelsPerBeat}
+              onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
+              className="slider-square w-14 cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center gap-1.5" title="Vertical zoom">
+            <span className="text-[10px] text-zinc-600">V</span>
+            <input
+              type="range"
+              min={28}
+              max={200}
+              value={tracksRowHeight}
+              onChange={(e) => setTracksRowHeight(Number(e.target.value))}
+              className="slider-square w-14 cursor-pointer"
+            />
+          </div>
+        </div>
         {libraryDragging && (
           <div
             className={`pointer-events-none absolute top-0 bottom-0 left-0 z-30 flex items-center justify-center border border-dashed transition-colors ${
