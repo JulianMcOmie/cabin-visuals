@@ -22,6 +22,9 @@ export interface ProjectPreviewRow {
 /** A real mini-timeline of the project (derived from its document, not a hash),
  *  so a card shows the actual arrangement. Empty rows array = nothing drawn yet. */
 export interface ProjectPreview {
+  /** A real captured frame of the project (small JPEG data URL), when the
+   *  editor has saved one - the card shows this over the row sketch. */
+  image?: string
   rows: ProjectPreviewRow[]
 }
 
@@ -119,7 +122,12 @@ export async function list(): Promise<ProjectSummary[]> {
     id: r.id,
     name: r.name,
     updatedAt: r.updated_at,
-    preview: documentToPreview(r.data),
+    preview: {
+      ...documentToPreview(r.data),
+      image: typeof (r.data as { thumbnail?: unknown })?.thumbnail === 'string'
+        ? (r.data as { thumbnail: string }).thumbnail
+        : undefined,
+    },
   }))
 }
 

@@ -37,6 +37,11 @@ const formatLastEdited = (iso: string): string => {
 // project length (derived server-side in projectStorage.documentToPreview). An
 // empty project (no blocks yet) shows a muted hint instead of fake rows.
 function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
+  // A real captured frame beats the row sketch whenever the project has one.
+  if (preview?.image) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={preview.image} alt="" className="h-full w-full rounded object-cover" />
+  }
   const rows = preview?.rows ?? []
   if (rows.length === 0) {
     return (

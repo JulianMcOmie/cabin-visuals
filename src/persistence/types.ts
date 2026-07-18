@@ -52,6 +52,9 @@ export interface ProjectDocument {
   /** Editor viewport aspect pin. Additive within v9 - absent in older saves,
    *  defaulted to 'fill' on hydrate. No schema bump: purely additive. */
   viewAspect?: ViewAspect
+  /** Small captured frame (JPEG data URL) for the projects-page card. Written
+   *  by autosave when the editor's canvas is available; absent otherwise. */
+  thumbnail?: string
 }
 
 /** A fresh, valid document - matches the stores' initial state. */

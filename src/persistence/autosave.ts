@@ -4,6 +4,7 @@ import { useAudioStore } from '../editor/store/AudioStore'
 import { useTimeStore } from '../editor/store/TimeStore'
 import { serialize } from './serialize'
 import * as projectStorage from './projectStorage'
+import { getFrameDriver } from '../editor/core/export/frameDriver'
 
 // The autosave loop: a debounced store subscription that mirrors the document
 // to Supabase - the same mechanism HistoryStore uses (subscribe + burst
@@ -18,6 +19,47 @@ export const useSaveStatus = create<{ status: SaveStatus }>(() => ({ status: 'id
 // ~1s idle: long enough to collapse an edit burst into one write, short enough
 // that "it saved" is never in doubt.
 const DEBOUNCE_MS = 1000
+
+// ── Project thumbnail ────────────────────────────────────────────────────────
+// A real captured frame rides along in the saved document so the projects
+// page shows the project, not a track sketch. Captured from the editor's
+// canvas at most every CAPTURE_EVERY_MS; when the canvas isn't mounted (the
+// lyric setup page), the last capture from this session is reused so a save
+// can't wipe it.
+
+const CAPTURE_EVERY_MS = 30_000
+const THUMB_W = 320
+const THUMB_H = 180
+let lastThumb: string | undefined
+let lastCaptureAt = 0
+
+function captureThumbnail(): string | undefined {
+  const now = Date.now()
+  if (now - lastCaptureAt < CAPTURE_EVERY_MS) return lastThumb
+  const driver = getFrameDriver()
+  if (!driver) return lastThumb
+  try {
+    // Render the current beat first: the WebGL buffer isn't preserved between
+    // frames, so a stale canvas reads back black (same move as ExportDialog).
+    driver.renderFrame(useTimeStore.getState().currentBeat, 0)
+    const src = driver.getCanvas()
+    const out = document.createElement('canvas')
+    out.width = THUMB_W
+    out.height = THUMB_H
+    const ctx = out.getContext('2d')
+    if (!ctx || src.width === 0 || src.height === 0) return lastThumb
+    // Cover-crop the (any-aspect) canvas into 16:9.
+    const scale = Math.max(THUMB_W / src.width, THUMB_H / src.height)
+    const w = src.width * scale
+    const h = src.height * scale
+    ctx.drawImage(src, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h)
+    lastThumb = out.toDataURL('image/jpeg', 0.6)
+    lastCaptureAt = now
+  } catch {
+    /* tainted/lost context - keep whatever we had */
+  }
+  return lastThumb
+}
 
 /** Resolve once autosave has the document durably written - for handoffs
  *  where the NEXT page re-hydrates from the row (e.g. lyric setup → editor)
@@ -57,7 +99,8 @@ export function startAutosave(projectId: string): () => void {
     inFlight = true
     useSaveStatus.setState({ status: 'saving' })
     try {
-      await projectStorage.save(projectId, serialize())
+      const thumbnail = captureThumbnail()
+      await projectStorage.save(projectId, { ...serialize(), ...(thumbnail ? { thumbnail } : {}) })
       if (!dirty) useSaveStatus.setState({ status: 'saved' })
     } catch (err) {
       // Network/RLS failure: the doc stays dirty and retries; memory is intact.
