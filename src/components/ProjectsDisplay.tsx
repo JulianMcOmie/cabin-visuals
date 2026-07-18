@@ -87,9 +87,9 @@ interface ProjectsDisplayProps {
   onSelectProject: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
   onCreateFromTemplate: (template: TemplateDef) => void
-  /** Gate for opening the create flow: return false (after notifying, e.g.
-   *  the free-plan limit prompt) to block it right at the click. */
-  onGateCreate: () => boolean
+  /** Free-plan limit reached: the create buttons grey out and explain
+   *  themselves on hover instead of opening the create flow. */
+  createBlocked: boolean
 }
 
 export default function ProjectsDisplay({
@@ -99,15 +99,24 @@ export default function ProjectsDisplay({
   onSelectProject,
   onDeleteProject,
   onCreateFromTemplate,
-  onGateCreate,
+  createBlocked,
 }: ProjectsDisplayProps) {
-  // The free-plan limit fires the moment "New project" is clicked - not after
-  // the user has already picked a template and typed a name.
   const openCreate = () => {
-    if (!onGateCreate()) return
+    if (createBlocked) return
     track('new_project_clicked')
     setCreateStep('choice')
   }
+  // The hover explanation for a greyed-out create button - clickable Upgrade
+  // link inside, so the dead end has an exit.
+  const limitHint = (
+    <div className="absolute right-0 top-full z-40 mt-1.5 hidden w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50 group-hover:block">
+      The free plan includes 1 project.{' '}
+      <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
+        Upgrade to Pro
+      </Link>{' '}
+      for unlimited projects.
+    </div>
+  )
   // The create flow: closed, the Empty/Template choice, the name entry, or the
   // template catalog.
   const [createStep, setCreateStep] = useState<null | 'choice' | 'name' | 'catalog'>(null)
@@ -189,13 +198,17 @@ export default function ProjectsDisplay({
             <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
             <span className="font-mono text-xs text-[var(--text-muted)]">{projects.length}</span>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)]"
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            New project
-          </button>
+          <div className="group relative">
+            <button
+              onClick={openCreate}
+              disabled={createBlocked}
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              New project
+            </button>
+            {createBlocked && limitHint}
+          </div>
         </div>
 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
@@ -236,16 +249,20 @@ export default function ProjectsDisplay({
           ))}
           </AnimatePresence>
 
-          <motion.button
-            layout
-            whileHover={{ scale: 1.012, transition: { duration: 0.06 } }}
-            whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
-            onClick={openCreate}
-            className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)]"
-          >
-            <Plus size={18} />
-            <span className="text-xs">Empty or from a template</span>
-          </motion.button>
+          <div className="group relative">
+            <motion.button
+              layout
+              whileHover={createBlocked ? undefined : { scale: 1.012, transition: { duration: 0.06 } }}
+              whileTap={createBlocked ? undefined : { scale: 0.99, transition: { duration: 0.06 } }}
+              onClick={openCreate}
+              disabled={createBlocked}
+              className="flex min-h-[168px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] bg-transparent text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-3)] disabled:cursor-default disabled:opacity-40 disabled:hover:border-[var(--border)] disabled:hover:text-[var(--text-muted)]"
+            >
+              <Plus size={18} />
+              <span className="text-xs">Empty or from a template</span>
+            </motion.button>
+            {createBlocked && limitHint}
+          </div>
         </div>
       </main>
     </div>

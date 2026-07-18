@@ -175,10 +175,7 @@ export default function ProjectsPage() {
         onSelectProject={handleSelectProject}
         onDeleteProject={handleDeleteProject}
         onCreateFromTemplate={handleCreateFromTemplate}
-        onGateCreate={() => {
-          if (atFreeLimit) { promptUpgrade(); return false }
-          return true
-        }}
+        createBlocked={atFreeLimit}
       />
     </>
   )
