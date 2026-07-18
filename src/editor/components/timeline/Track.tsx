@@ -8,6 +8,8 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
 import { selectTrack, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
+import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
+import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 
@@ -68,6 +70,33 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   }, [renaming])
 
   const isSelected = selectedTrackId === track.id || inMultiSelection
+
+  // Hovering the label plays the row's element in the shared preview popup
+  // (the same warm canvas the library uses) - objects run their instrument,
+  // mover/splitter rows run their motion chain on the stand-in cube.
+  const previewItem: InstrumentItem | null =
+    track.type === 'base' && track.instrumentId
+      ? { id: track.instrumentId, name: track.name, description: '', icon: null, kind: 'object' }
+      : track.type === 'mover' && track.moverId
+        ? { id: track.moverId, name: track.name, description: '', icon: null, kind: 'mover' }
+        : track.type === 'splitter' && track.splitterId
+          ? { id: track.splitterId, name: track.name, description: '', icon: null, kind: 'splitter' }
+          : null
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const enterLabel = (e: ReactMouseEvent) => {
+    if (!previewItem || !canPreview(previewItem)) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    previewTimer.current = setTimeout(
+      () => setInstrumentPreview({ item: previewItem, anchor: { left: rect.right, top: rect.top } }),
+      150,
+    )
+  }
+  const leaveLabel = () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    setInstrumentPreview(null)
+  }
+  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
   const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
   // Automation, envelope and ability sub-rows render darker than their object; mover
@@ -106,7 +135,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           // selected blocks are pruned; this track's stay (utils/selection).
           selectTrack(track.id)
         }}
+        onMouseEnter={enterLabel}
+        onMouseLeave={leaveLabel}
         onPointerDownCapture={(e) => {
+          leaveLabel()
           if (e.button !== 0) return
           // The M/S buttons are not drag handles; neither is the rename input.
           if ((e.target as HTMLElement).closest('button, input')) return
