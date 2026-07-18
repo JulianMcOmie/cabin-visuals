@@ -75,11 +75,17 @@ export default function PricingPage() {
       </header>
 
       <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
-        <Appear className="mt-16 mb-12 text-center">
-          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Make music you can see</h1>
+        <Appear className="mt-16 mb-3 text-center">
+          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Start free. Go Pro when you publish.</h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
-            Start free. Upgrade when you want your exports clean and full-res.
+            The whole editor - every instrument, template, and the lyric pipeline - is free.
+            Pro is for the export: clean, full-res, unlimited projects.
           </p>
+        </Appear>
+        <Appear delay={0.05} className="mb-12 text-center">
+          <span className="font-mono text-[12px] text-[var(--text-muted)]">
+            No account needed to try it - the editor opens in your browser
+          </span>
         </Appear>
 
         <div className="mx-auto grid max-w-[760px] gap-5 md:grid-cols-2">
@@ -98,10 +104,16 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
+            {/* Cold visitors get the accent path INTO the product; people
+                with accounts already know it - their accent lives on Pro. */}
             <Link
               href={hasAccount ? '/projects' : '/editor'}
               onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'editor' })}
-              className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] border border-[var(--border)] text-[13px] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
+              className={`mt-7 flex h-[38px] items-center justify-center rounded-[5px] text-[13px] transition-colors cursor-pointer ${
+                hasAccount
+                  ? 'border border-[var(--border)] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
+                  : 'bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
+              }`}
             >
               {hasAccount ? 'Go to your projects' : 'Start creating'}
             </Link>
@@ -134,7 +146,11 @@ export default function PricingPage() {
               <button
                 onClick={handleUpgrade}
                 disabled={opening}
-                className="mt-7 flex h-[38px] items-center justify-center gap-2 rounded-[5px] border-0 bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:hover:bg-[var(--accent)] cursor-pointer"
+                className={`mt-7 flex h-[38px] items-center justify-center gap-2 rounded-[5px] text-[13px] transition-colors disabled:opacity-60 cursor-pointer ${
+                  hasAccount
+                    ? 'border-0 bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:hover:bg-[var(--accent)]'
+                    : 'border border-[rgba(53,167,230,0.5)] bg-transparent font-semibold text-[var(--accent)] hover:bg-[rgba(53,167,230,0.08)]'
+                }`}
               >
                 {opening ? (
                   <>
@@ -149,9 +165,21 @@ export default function PricingPage() {
           </Appear>
         </div>
 
-        <p className="mt-9 text-center text-[12px] text-[var(--text-muted)]">
-          Cancel anytime from the billing portal, your projects stay yours either way.
-        </p>
+        {/* The questions price-checkers bounce on, answered where they stand. */}
+        <Appear delay={0.15} className="mx-auto mt-14 max-w-[640px]">
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              ['Is free actually usable?', 'Yes - the full editor, every instrument and template, 720p exports with a small watermark.'],
+              ['Can I cancel anytime?', 'Anytime, from the billing portal. Your projects stay yours on either plan.'],
+              ['What am I paying for?', 'Publishing: watermark-free 1080p exports, unlimited projects, unlimited video storage.'],
+            ].map(([q, a]) => (
+              <div key={q} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4">
+                <h3 className="m-0 text-[12px] font-semibold text-[var(--text)]">{q}</h3>
+                <p className="m-0 mt-1.5 text-[12px] leading-relaxed text-[var(--text-3)]">{a}</p>
+              </div>
+            ))}
+          </div>
+        </Appear>
       </main>
     </div>
     </MotionConfig>
