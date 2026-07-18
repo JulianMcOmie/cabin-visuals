@@ -330,15 +330,12 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               onMouseEnter={(e) => enterRow(e, item)}
               onMouseLeave={leaveRow}
               title={canPreview(item) ? undefined : item.description}
-              className="flex items-center gap-2.5 px-3 py-[7px] cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+              className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
             >
-              <span className="flex-shrink-0 flex items-center justify-center w-4">
+              <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                 {item.icon}
               </span>
-              <span className="min-w-0 flex flex-col">
-                <span className="text-xs text-[var(--text-2)] truncate leading-[1.3]">{item.name}</span>
-                <span className="text-[10px] text-[var(--text-muted)] truncate leading-[1.35]">{item.description}</span>
-              </span>
+              <span className="text-xs text-[var(--text-2)] truncate">{item.name}</span>
             </div>
           ))}
         </div>
