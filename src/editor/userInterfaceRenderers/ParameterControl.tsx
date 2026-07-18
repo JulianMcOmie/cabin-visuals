@@ -70,7 +70,9 @@ export function ParamToggle({ on, onChange, label }: { on: boolean; onChange: (o
   return (
     <button
       onClick={() => onChange(!on)}
-      className={`w-8 h-4 rounded-[3px] relative transition-colors flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
+      // active:scale = the press itself answers instantly, before any state
+      // lands - the anti-rage-click affordance shared by every toggle.
+      className={`w-8 h-4 rounded-[3px] relative transition-all active:scale-90 flex-shrink-0 cursor-pointer ${on ? 'bg-[var(--accent-muted)]' : 'bg-[var(--border)]'}`}
       role="switch"
       aria-checked={on}
       aria-label={label}
@@ -125,7 +127,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
             type="color"
             value={strValue ?? param.default}
             onChange={(e) => onStr?.(e.target.value)}
-            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0"
+            className="w-8 h-5 rounded bg-transparent border border-[var(--border)] cursor-pointer flex-shrink-0 transition-transform active:scale-95"
           />
         </div>
       </div>

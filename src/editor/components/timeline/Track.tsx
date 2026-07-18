@@ -180,7 +180,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onPointerEnter={() => {
               if (msPaint?.kind === 'mute' && track.muted !== msPaint.value) toggleMute(track.id)
             }}
-            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-colors cursor-pointer ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.muted
                 ? 'bg-[var(--warn)] text-[#0a0a0c]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
@@ -197,7 +197,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             onPointerEnter={() => {
               if (msPaint?.kind === 'solo' && track.solo !== msPaint.value) toggleSolo(track.id)
             }}
-            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-colors cursor-pointer ${
+            className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.solo
                 ? 'bg-[var(--accent)] text-[#0a0a0c]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'

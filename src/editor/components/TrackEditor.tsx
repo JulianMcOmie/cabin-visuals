@@ -276,7 +276,7 @@ function EffectItem({
         <div className="flex items-center gap-1.5 min-w-0">
           <button
             onClick={onToggle}
-            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center cursor-pointer ${
+            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center cursor-pointer transition-all active:scale-75 ${
               inst.enabled ? 'bg-[var(--accent)] border-[var(--accent)]' : 'border-[var(--border-strong)]'
             }`}
             aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
