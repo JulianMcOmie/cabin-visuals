@@ -93,7 +93,10 @@ function lyricVideoDocument() {
         params: {
           hue: 0.49,
           font: 2,
-          opacity: 0.05,
+          // The source project had opacity 0.05 - an experiment leftover that
+          // made template lyrics invisible. Full opacity here; the rest of
+          // the extracted styling stands.
+          opacity: 1,
           fontSize: 0.5,
           colorMode: 0,
           onsetBounce: 0,
