@@ -32,6 +32,39 @@ export function isExportSupported(): Promise<ExportSupport> {
   return (cached ??= probe())
 }
 
+/**
+ * Encode ONE tiny real frame and confirm the chunk metadata carries a
+ * decoderConfig with a `description` (the avcC record). isConfigSupported
+ * alone is not a sufficient gate: Firefox answers "supported" for H.264 but
+ * its encoder never attaches that metadata, and mp4-muxer builds the file
+ * header from it - so a whole export would render, encode, and then die at
+ * finalize with a null decoderConfig. Better to spend one 128px frame here
+ * and disable the button with the honest reason up front.
+ */
+async function encodesUsableMetadata(): Promise<boolean> {
+  let meta: EncodedVideoChunkMetadata | undefined
+  const encoder = new VideoEncoder({
+    output: (_chunk, m) => { meta ??= m },
+    error: () => { /* flush() rejects; the catch below answers false */ },
+  })
+  try {
+    encoder.configure({ codec: 'avc1.64002a', width: 128, height: 128, framerate: 30, bitrate: 1_000_000 })
+    const canvas = new OffscreenCanvas(128, 128)
+    canvas.getContext('2d')?.fillRect(0, 0, 1, 1) // a context so VideoFrame has pixels to read
+    const frame = new VideoFrame(canvas, { timestamp: 0, duration: 33_333 })
+    encoder.encode(frame, { keyFrame: true })
+    frame.close()
+    await encoder.flush()
+    return !!meta?.decoderConfig?.description
+  } catch {
+    return false
+  } finally {
+    try {
+      if (encoder.state !== 'closed') encoder.close()
+    } catch { /* already closed */ }
+  }
+}
+
 async function probe(): Promise<ExportSupport> {
   if (typeof VideoEncoder === 'undefined') {
     return { ok: false, audioOk: false, reason: 'Video export requires Chrome (WebCodecs).' }
@@ -40,6 +73,9 @@ async function probe(): Promise<ExportSupport> {
     const video = await VideoEncoder.isConfigSupported(VIDEO_CONFIG)
     if (!video.supported) {
       return { ok: false, audioOk: false, reason: 'No H.264 encoder available in this browser.' }
+    }
+    if (!(await encodesUsableMetadata())) {
+      return { ok: false, audioOk: false, reason: 'Video export requires Chrome (WebCodecs).' }
     }
     const audioOk =
       typeof AudioEncoder !== 'undefined' &&
