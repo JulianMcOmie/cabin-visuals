@@ -13,6 +13,9 @@ import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES } from '../../templates'
+import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
+import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
+import { TemplateLyricPreview } from '../../components/TemplateLyricPreview'
 import { track as trackEvent } from '../../analytics/analytics'
 import { waitForSaved } from '../../persistence/autosave'
 import { LoadingScreen } from '../../components/LoadingScreen'
@@ -462,17 +465,27 @@ function TemplatesTab() {
       <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
         Double-click a template to switch this project onto it. Your song stays.
       </p>
+      {/* Same preview treatment as the projects-page template gallery, sized
+          for the sidebar: one card per template, its real render (or bespoke
+          animation) looping above the name. */}
       {TEMPLATES.map((tpl) => (
         <div
           key={tpl.id}
           onDoubleClick={() => apply(tpl)}
           title={tpl.description}
-          className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+          className="mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-app)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
         >
-          <span className="flex-shrink-0 flex items-center justify-center w-3.5">
-            <LayoutTemplate size={12} className="text-[var(--text-3)]" />
-          </span>
-          <span className="text-xs text-[var(--text-2)] truncate">{tpl.name}</span>
+          <div className="relative h-20 bg-[var(--bg-app)]">
+            {tpl.cardPreview === 'animatedSlideshow'
+              ? <TemplateSlideshowPreview />
+              : tpl.cardPreview === 'animatedLyric'
+                ? <TemplateLyricPreview templateId={tpl.id} />
+                : <TemplatePreviewVideo id={tpl.id} />}
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-1.5">
+            <LayoutTemplate size={11} className="flex-shrink-0 text-[var(--text-3)]" />
+            <span className="text-xs text-[var(--text-2)] truncate">{tpl.name}</span>
+          </div>
         </div>
       ))}
     </div>
