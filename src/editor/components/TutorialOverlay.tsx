@@ -40,12 +40,12 @@ const ACTIVE_KEY = 'cabin:tutorial:pulse-cube:active'
  */
 
 const STEP_TEXTS: ReactNode[] = [
-  <>Drag the <b className="text-[var(--text)]">Cube</b> into the track list</>,
+  <>Drag the <b className="text-[var(--text)]">3D Shape</b> into the track list</>,
   <><b className="text-[var(--text)]">Right-click</b> this lane to draw a block</>,
   <><b className="text-[var(--text)]">Double-click</b> the block to open it</>,
   <><b className="text-[var(--text)]">Right-click</b> between the purple lines to draw a few notes</>,
   <>Close the MIDI editor when you&apos;re done</>,
-  <>Press <b className="text-[var(--text)]">play</b> - the cube pulses with every note</>,
+  <>Press <b className="text-[var(--text)]">play</b> - the shape pulses with every note</>,
 ]
 
 const PAD = 6 // spotlight breathing room around the target

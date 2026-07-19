@@ -113,7 +113,11 @@ export default function ProjectsDisplay({
   // has a way out.
   const isAnonymous = !!user?.is_anonymous
   const limitHint = (
-    <div className="absolute right-0 top-full z-40 mt-1.5 hidden w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50 group-hover:block">
+    // The offset is PADDING on a hidden wrapper, not a margin - the pointer
+    // crossing from the button to the popup never leaves the hover group, so
+    // the popup stays put long enough to click the link inside.
+    <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
+      <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
       {isAnonymous ? (
         <>
           Guest sessions hold 1 project.{' '}
@@ -131,6 +135,7 @@ export default function ProjectsDisplay({
           for unlimited projects.
         </>
       )}
+      </div>
     </div>
   )
   // The create flow: closed, the Empty/Template choice, the name entry, or the
