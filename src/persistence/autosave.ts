@@ -51,8 +51,12 @@ function captureThumbnail(): string | undefined {
     out.height = THUMB_H
     const ctx = out.getContext('2d')
     if (ctx && src.width > 0 && src.height > 0) {
-      // Cover-crop the (any-aspect) canvas into 16:9.
-      const scale = Math.max(THUMB_W / src.width, THUMB_H / src.height)
+      // Letterbox the (any-aspect) canvas into 16:9 on black - a 9:16 project
+      // keeps its shape with bars at the sides, which doubles as a reminder of
+      // the project's aspect ratio on the card.
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, THUMB_W, THUMB_H)
+      const scale = Math.min(THUMB_W / src.width, THUMB_H / src.height)
       const w = src.width * scale
       const h = src.height * scale
       ctx.drawImage(src, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h)

@@ -104,7 +104,17 @@ export default function ProjectsPage() {
   const [creating, setCreating] = useState(false)
 
   const handleCreateProject = async (name: string) => {
-    if (atFreeLimit) { promptUpgrade(); return }
+    // Signed out: spin up the anonymous rails first (same as the template
+    // path) - createProject throws "Not signed in" without a session. Fall
+    // back to the in-memory editor when no session can be created.
+    if (!user) {
+      setCreating(true)
+      const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
+      if (!sessionUser) {
+        router.push('/editor')
+        return
+      }
+    } else if (atFreeLimit) { promptUpgrade(); return }
     setCreating(true)
     try {
       const project = await createProject(name)

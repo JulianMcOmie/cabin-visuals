@@ -38,9 +38,11 @@ const formatLastEdited = (iso: string): string => {
 // empty project (no blocks yet) shows a muted hint instead of fake rows.
 function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
   // A real captured frame beats the row sketch whenever the project has one.
+  // It spans the full container, letterboxed on black when the aspect ratio
+  // differs - the bars double as a reminder of the project's aspect ratio.
   if (preview?.image) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={preview.image} alt="" className="h-full w-full rounded object-cover" />
+    return <img src={preview.image} alt="" className="h-full w-full bg-black object-contain" />
   }
   const rows = preview?.rows ?? []
   if (rows.length === 0) {
@@ -51,7 +53,7 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
     )
   }
   return (
-    <div className="flex h-full flex-col justify-center gap-1.5">
+    <div className="flex h-full flex-col justify-center gap-1.5 px-3 py-2.5">
       {rows.map((row, ri) => (
         <div key={ri} className="relative h-3.5">
           {row.blocks.map((b, bi) => (
@@ -241,7 +243,7 @@ export default function ProjectsDisplay({
               className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
             >
               <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
-                <div className="absolute inset-x-3 inset-y-2.5">
+                <div className="absolute inset-0">
                   <ProjectThumbnail preview={project.preview} />
                 </div>
                 <button
