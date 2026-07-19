@@ -6,9 +6,11 @@ import { ParamControl, ParamSlider } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 // Bespoke settings for the Camera instrument, laid out like a rig readout:
-// position and rotation as draggable mono-numeric axis cells (drag vertically,
-// double-click to reset), lens and aim below, then the note-response section.
-// Purely presentational - every value flows through the passed parameters.
+// a top-down stage pad (drag the camera glyph across the X/Z floor plan; an
+// aim line points at the origin when the rig is aimed), then position and
+// rotation as draggable mono-numeric axis cells (drag vertically, double-click
+// to reset), lens and aim below, then the note-response section. Purely
+// presentational - every value flows through the passed parameters.
 
 function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -16,6 +18,119 @@ function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
 
 function numberOf(bound: UserInterfaceParameter | undefined, fallback = 0): number {
   return typeof bound?.value === 'number' ? bound.value : fallback
+}
+
+const clampValue = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+function snapTo(raw: number, min: number, max: number, step: number) {
+  return clampValue(min + Math.round((raw - min) / step) * step, min, max)
+}
+
+/** Top-down floor plan of the rig: drag the camera glyph to set X (across) and
+ *  Z (toward/away from the stage); up on the pad is -Z, into the scene. */
+function StagePad({ x, z, aimAtOrigin, panDegrees }: {
+  x: UserInterfaceParameter
+  z: UserInterfaceParameter
+  aimAtOrigin: boolean
+  panDegrees: number
+}) {
+  const padRef = useRef<HTMLDivElement>(null)
+  const xDefinition = x.definition
+  const zDefinition = z.definition
+  if (!isNumberParam(xDefinition) || !isNumberParam(zDefinition)) return null
+  if (typeof x.value !== 'number' || typeof z.value !== 'number') return null
+
+  const toPercent = (value: number, min: number, max: number) => ((value - min) / (max - min)) * 100
+  const camX = toPercent(x.value, xDefinition.min, xDefinition.max)
+  const camZ = toPercent(z.value, zDefinition.min, zDefinition.max) // top of the pad = min Z (deep stage)
+  const originX = toPercent(0, xDefinition.min, xDefinition.max)
+  const originZ = toPercent(0, zDefinition.min, zDefinition.max)
+  const originVisible = originX >= 0 && originX <= 100 && originZ >= 0 && originZ <= 100
+
+  // The lens points at the origin when aimed; otherwise it follows pan (0° = -Z, up the pad).
+  const headingDegrees = aimAtOrigin && originVisible
+    ? (Math.atan2(originZ - camZ, originX - camX) * 180) / Math.PI
+    : -90 - panDegrees
+
+  const setFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = padRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const nx = clampValue((event.clientX - rect.left) / rect.width, 0, 1)
+    const nz = clampValue((event.clientY - rect.top) / rect.height, 0, 1)
+    x.setValue(snapTo(xDefinition.min + nx * (xDefinition.max - xDefinition.min), xDefinition.min, xDefinition.max, xDefinition.step))
+    z.setValue(snapTo(zDefinition.min + nz * (zDefinition.max - zDefinition.min), zDefinition.min, zDefinition.max, zDefinition.step))
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
+    event.preventDefault()
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const direction = event.key === 'ArrowRight' ? 1 : -1
+      x.setValue(snapTo((x.value as number) + direction * xDefinition.step, xDefinition.min, xDefinition.max, xDefinition.step))
+    } else {
+      const direction = event.key === 'ArrowUp' ? -1 : 1 // up the pad = -Z
+      z.setValue(snapTo((z.value as number) + direction * zDefinition.step, zDefinition.min, zDefinition.max, zDefinition.step))
+    }
+  }
+
+  return (
+    <div
+      ref={padRef}
+      data-testid="camera-stage-pad"
+      role="slider"
+      tabIndex={0}
+      aria-label="Camera X and Z position"
+      aria-valuemin={xDefinition.min}
+      aria-valuemax={xDefinition.max}
+      aria-valuenow={x.value}
+      aria-valuetext={`X ${x.value.toFixed(1)}, Z ${z.value.toFixed(1)}`}
+      title="Top view · drag to move X/Z · double-click to reset · arrow keys nudge"
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.currentTarget.setPointerCapture(event.pointerId)
+        setFromPointer(event)
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromPointer(event)
+      }}
+      onPointerUp={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+      }}
+      onDoubleClick={() => { x.setValue(xDefinition.default); z.setValue(zDefinition.default) }}
+      onKeyDown={onKeyDown}
+      className="relative h-[92px] cursor-crosshair touch-none select-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] outline-none transition-colors hover:border-[var(--border-strong)] focus-visible:border-[var(--accent)]"
+    >
+      {/* Faint floor grid, quartered through the origin. */}
+      {originX >= 0 && originX <= 100 && <span className="pointer-events-none absolute top-0 h-full w-px bg-[var(--border-subtle)]" style={{ left: `${originX}%` }} />}
+      {originZ >= 0 && originZ <= 100 && <span className="pointer-events-none absolute left-0 h-px w-full bg-[var(--border-subtle)]" style={{ top: `${originZ}%` }} />}
+      {aimAtOrigin && originVisible && (
+        <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+          <line
+            x1={camX} y1={camZ} x2={originX} y2={originZ}
+            stroke="var(--accent-muted)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      )}
+      {/* The origin: the spot everything plays around. */}
+      {originVisible && (
+        <span
+          className="pointer-events-none absolute h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--text-muted)]"
+          style={{ left: `${originX}%`, top: `${originZ}%` }}
+        />
+      )}
+      {/* The camera glyph: a body with a lens nub, turned toward its heading. */}
+      <span
+        className="pointer-events-none absolute flex items-center"
+        style={{ left: `${camX}%`, top: `${camZ}%`, transform: `translate(-50%, -50%) rotate(${headingDegrees.toFixed(1)}deg)` }}
+      >
+        <span className="h-[10px] w-[10px] rounded-[2px] border border-[var(--border-strong)] bg-[var(--text-2)]" />
+        <span className="h-[4px] w-[4px] bg-[var(--accent)]" />
+      </span>
+      <span className="pointer-events-none absolute left-1.5 top-0.5 text-[8px] font-semibold tracking-[0.1em] text-[var(--text-muted)]">TOP</span>
+      <span className="pointer-events-none absolute bottom-0.5 left-1.5 font-mono text-[8px] text-[var(--text-muted)]">X {x.value.toFixed(1)}</span>
+      <span className="pointer-events-none absolute bottom-0.5 right-1.5 font-mono text-[8px] text-[var(--text-muted)]">Z {z.value.toFixed(1)}</span>
+    </div>
+  )
 }
 
 /** One axis of the rig: a mono numeric cell, dragged vertically to adjust. */
@@ -125,8 +240,30 @@ export const CameraControlUserInterfaceRenderer: UserInterfaceRendererDefinition
   ])
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
+  const posX = findParam(parameters, 'posX')
+  const posZ = findParam(parameters, 'posZ')
+  const stageReady = [posX, posZ].every(
+    (bound) => bound && isNumberParam(bound.definition) && typeof bound.value === 'number',
+  )
+
   return (
     <section data-testid="camera-control-user-interface" className="mb-3">
+      {/* --- The stage: where the rig stands on the floor plan --- */}
+      {stageReady && (
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">STAGE</span>
+            <span className="text-[8px] text-[var(--text-muted)]">top view · drag moves X/Z</span>
+          </div>
+          <StagePad
+            x={posX!}
+            z={posZ!}
+            aimAtOrigin={lookAtOrigin}
+            panDegrees={numberOf(findParam(parameters, 'rotY'))}
+          />
+        </div>
+      )}
+
       {/* --- The rig readout --- */}
       <RigSection label="POSITION">
         <AxisCell bound={findParam(parameters, 'posX')} axis="X" />

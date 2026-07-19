@@ -17,7 +17,7 @@ import type { VisualCopy } from './types'
 
 const DEG_TO_RAD = Math.PI / 180
 
-const ROTATION_EASINGS: { label: string; ease: (t: number) => number }[] = [
+export const ROTATION_EASINGS: { label: string; ease: (t: number) => number }[] = [
   { label: 'Expo', ease: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)) },
   { label: 'Cubic', ease: (t) => 1 - Math.pow(1 - t, 3) },
   { label: 'Quad', ease: (t) => 1 - (1 - t) * (1 - t) },

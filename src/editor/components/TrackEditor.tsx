@@ -15,7 +15,9 @@ import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { isNumberParam, isStringParam } from '../instruments/types'
-import { getUserInterfaceRenderer, ParamControl, ParamSlider, ParamToggle, type UserInterfaceParameter } from '../userInterfaceRenderers'
+import { getUserInterfaceRenderer, ParamControl, ParamToggle, type UserInterfaceParameter } from '../userInterfaceRenderers'
+import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
+import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
@@ -270,6 +272,7 @@ function EffectItem({
   onSetSetting: (key: string, value: number) => void
 }) {
   const [collapsed, setCollapsed] = useState(false)
+  const BespokeEffect = getEffectUserInterface(plugin.id)
   return (
     <div className="mb-5">
       <div className="flex items-center justify-between mb-2">
@@ -316,7 +319,18 @@ function EffectItem({
           </button>
         </div>
       </div>
-      {!collapsed && plugin.params.map((p) => (
+      {!collapsed && (BespokeEffect ? (
+        <BespokeEffect
+          targetId={inst.id}
+          parameters={plugin.params
+            .filter((p) => typeof p.default === 'number')
+            .map((p) => ({
+              definition: p,
+              value: inst.settings[p.key] ?? (p.default as number),
+              setValue: (v: number | string) => { if (typeof v === 'number') onSetSetting(p.key, v) },
+            }))}
+        />
+      ) : plugin.params.map((p) => (
         <ParamControl
           key={p.key}
           param={p}
@@ -324,7 +338,7 @@ function EffectItem({
           strValue={undefined}
           onNum={(v) => onSetSetting(p.key, v)}
         />
-      ))}
+      )))}
     </div>
   )
 }
@@ -476,18 +490,35 @@ export function TrackEditor() {
                     ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
                     : undefined
                   if (newMoverDef) {
+                    // Bespoke definition UIs plug in exactly like object ones:
+                    // params come bound as UserInterfaceParameters; anything
+                    // unregistered keeps the plain control list.
+                    const BespokeMover = getMoverUserInterface(newMoverDef.id)
+                    const moverParameters: UserInterfaceParameter[] = newMoverDef.params
+                      .filter((p) => typeof p.default === 'number')
+                      .map((p) => ({
+                        definition: p,
+                        value: track.inputValues?.[p.key] ?? (p.default as number),
+                        setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
+                      }))
                     return (
                       <>
-                        <p className="text-[11px] text-zinc-500 mb-3">{newMoverDef.kind === 'splitter' ? 'Splitter:' : 'Mover:'}</p>
-                        {newMoverDef.params.map((p) => (
-                          <ParamControl
-                            key={p.key}
-                            param={p}
-                            numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
-                            strValue={undefined}
-                            onNum={(v) => setMoverInput(track.id, p.key, v)}
-                          />
-                        ))}
+                        {BespokeMover ? (
+                          <BespokeMover targetId={track.id} parameters={moverParameters} />
+                        ) : (
+                          <>
+                            <p className="text-[11px] text-zinc-500 mb-3">{newMoverDef.kind === 'splitter' ? 'Splitter:' : 'Mover:'}</p>
+                            {newMoverDef.params.map((p) => (
+                              <ParamControl
+                                key={p.key}
+                                param={p}
+                                numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
+                                strValue={undefined}
+                                onNum={(v) => setMoverInput(track.id, p.key, v)}
+                              />
+                            ))}
+                          </>
+                        )}
                         {!track.parentId && <MoverTargets track={track} />}
                       </>
                     )
@@ -518,62 +549,18 @@ export function TrackEditor() {
                     }
                     const adsr = { ...DEFAULT_ADSR, ...track.adsr }
                     return (
-                      <>
-                        <p className="text-[11px] text-zinc-500 mb-1">Envelope → {targetLabel}</p>
-                        <p className="text-[10px] text-[var(--text-muted)] mb-3">
-                          Notes on this lane gate the envelope. Pitch is ignored; velocity scales the peak.
-                        </p>
-                        <ParamSlider
-                          label="Attack (beats)"
-                          value={adsr.attackBeats}
-                          min={0}
-                          max={4}
-                          step={0.01}
-                          onChange={(attackBeats) => setEnvelopeAdsr(track.id, { ...adsr, attackBeats })}
-                        />
-                        <ParamSlider
-                          label="Decay (beats)"
-                          value={adsr.decayBeats}
-                          min={0}
-                          max={8}
-                          step={0.01}
-                          onChange={(decayBeats) => setEnvelopeAdsr(track.id, { ...adsr, decayBeats })}
-                        />
-                        <ParamSlider
-                          label="Sustain"
-                          value={adsr.sustainLevel}
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          onChange={(sustainLevel) => setEnvelopeAdsr(track.id, { ...adsr, sustainLevel })}
-                        />
-                        <ParamSlider
-                          label="Release (beats)"
-                          value={adsr.releaseBeats}
-                          min={0}
-                          max={8}
-                          step={0.01}
-                          onChange={(releaseBeats) => setEnvelopeAdsr(track.id, { ...adsr, releaseBeats })}
-                        />
-                        <ParamSlider
-                          label="Depth"
-                          value={track.envDepth ?? 1}
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          onChange={(v) => setEnvelopeDepth(track.id, v)}
-                        />
-                        {!isOpacity && bounds && (
-                          <ParamSlider
-                            label="Peak value"
-                            value={track.envTarget ?? bounds.max}
-                            min={bounds.min}
-                            max={bounds.max}
-                            step={bounds.step}
-                            onChange={(v) => setEnvelopeTarget(track.id, v)}
-                          />
-                        )}
-                      </>
+                      <EnvelopeUserInterface
+                        targetLabel={targetLabel}
+                        isOpacity={isOpacity}
+                        adsr={adsr}
+                        depth={track.envDepth ?? 1}
+                        peak={!isOpacity && bounds
+                          ? { value: track.envTarget ?? bounds.max, min: bounds.min, max: bounds.max, step: bounds.step }
+                          : null}
+                        onAdsr={(next) => setEnvelopeAdsr(track.id, next)}
+                        onDepth={(v) => setEnvelopeDepth(track.id, v)}
+                        onPeak={(v) => setEnvelopeTarget(track.id, v)}
+                      />
                     )
                   }
 
