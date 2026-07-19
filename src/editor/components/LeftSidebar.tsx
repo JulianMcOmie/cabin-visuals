@@ -83,7 +83,7 @@ const DIRECTOR_INSTRUMENTS = withKind('director', [
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
-  { id: 'cube', name: 'Polygon', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <circle cx="6" cy="5" r="2.5" fill="#facc15" />
@@ -214,7 +214,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // The curated core: a few good shapes, kept deliberately short so the library
 // reads as intentional. Everything else lives in the collapsed Extras section
 // at the bottom - still available, out of the first impression.
-// Circle and Triangle left the library outright - Polygon's geometry picker
+// Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
 const CORE_OBJECT_IDS = new Set(['cube', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))

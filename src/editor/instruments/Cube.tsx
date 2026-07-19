@@ -16,7 +16,7 @@ const DEFAULT_BASE_COLOR = DEFAULT_FUNDAMENTAL_COLOR
 // The cube's definition lives next to its visual - schema and component can't drift.
 export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
-  name: 'Polygon',
+  name: '3D Shape',
   kind: 'object',
   userInterfaceRenderer: 'cube',
   params: [
