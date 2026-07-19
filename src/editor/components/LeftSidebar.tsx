@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate } from 'lucide-react'
+import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
+import { useLoopBlockDrag } from './useLoopBlockDrag'
+import { LOOP_PATTERNS } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
@@ -344,7 +346,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   )
 }
 
-type LibraryTab = 'instruments' | 'effects' | 'templates'
+type LibraryTab = 'instruments' | 'effects' | 'loops' | 'templates'
 
 // The Templates tab: double-click switches the current project onto that
 // template (visual tracks replaced, audio + its detected BPM kept). One undo
@@ -414,6 +416,7 @@ export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startEffectDrag, ghostRef: effectGhostRef, ghostName: effectGhostName } = useEffectDrag()
+  const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
@@ -458,6 +461,16 @@ export function LeftSidebar() {
           Effects
         </button>
         <button
+          onClick={() => setTab('loops')}
+          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
+            tab === 'loops'
+              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+          }`}
+        >
+          Loops
+        </button>
+        <button
           onClick={() => setTab('templates')}
           className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
             tab === 'templates'
@@ -484,6 +497,26 @@ export function LeftSidebar() {
             <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}
           </>
+        )}
+        {tab === 'loops' && (
+          <div className="pt-1">
+            <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
+              Drag a loop onto a track - it lands as a repeating MIDI block at that bar.
+            </p>
+            {LOOP_PATTERNS.map((pattern) => (
+              <div
+                key={pattern.id}
+                onPointerDown={(e) => startLoopBlockDrag(e, pattern)}
+                title={pattern.description}
+                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+              >
+                <span className="flex-shrink-0 flex items-center justify-center w-3.5">
+                  <Repeat size={12} className="text-emerald-400" />
+                </span>
+                <span className="text-xs text-[var(--text-2)] truncate">{pattern.name}</span>
+              </div>
+            ))}
+          </div>
         )}
         {tab === 'templates' && <TemplatesTab />}
         {tab === 'effects' && (
@@ -518,6 +551,18 @@ export function LeftSidebar() {
         >
           {droppable && <Plus size={13} className="text-[var(--accent)]" strokeWidth={2.5} />}
           {ghostName}
+        </div>
+      )}
+
+      {/* Ghost while dragging a loop pattern onto a track lane. */}
+      {loopGhostName && (
+        <div
+          ref={loopGhostRef}
+          className="fixed z-[120] pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
+          style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
+        >
+          <Repeat size={12} className="text-emerald-400" />
+          {loopGhostName}
         </div>
       )}
 
