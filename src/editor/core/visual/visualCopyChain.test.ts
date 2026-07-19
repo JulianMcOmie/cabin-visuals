@@ -221,6 +221,80 @@ test('duplicate routes from one global entry to the same object are deduplicated
   assert.equal(obj.moverAndSplitterChain.length, 1)
 })
 
+test('a mover nested under a non-instrument track routes globally through its targets', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube' }),
+    track({ id: 'group', childIds: ['gm'] }), // plain group track - no instrument
+    track({
+      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'group', inputValues: { distance: 3 },
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+  ], ['cube', 'group'])
+  const obj = objectByTrackId(p, 'cube')
+  assert.equal(obj.moverAndSplitterChain.length, 1)
+  log.length = 0
+  resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  assert.deepEqual(log, ['lift(3)'])
+})
+
+test('nested globals append in depth-first order after root globals', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube' }),
+    track({
+      id: 'bm', type: 'mover', moverId: 'test.chainLift', childIds: ['gm'], inputValues: { distance: 1 },
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+    track({
+      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'bm', inputValues: { distance: 3 },
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+  ], ['cube', 'bm'])
+  const obj = objectByTrackId(p, 'cube')
+  log.length = 0
+  resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  assert.deepEqual(log, ['lift(1)', 'lift(3)'])
+})
+
+test('a mover with a parent instrument stays local even when it has targets', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['lm'] }),
+    track({ id: 'other', instrumentId: 'cube' }),
+    track({
+      id: 'lm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube',
+      targets: [{ port: '', scope: { kind: 'track', id: 'other' }, amount: 1 }],
+    }),
+  ], ['cube', 'other'])
+  assert.equal(objectByTrackId(p, 'cube').moverAndSplitterChain.length, 1)
+  assert.equal(objectByTrackId(p, 'other').moverAndSplitterChain.length, 0)
+})
+
+test('a nested global mover without targets affects nothing', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube' }),
+    track({ id: 'group', childIds: ['gm'] }),
+    track({ id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'group' }),
+  ], ['cube', 'group'])
+  assert.equal(objectByTrackId(p, 'cube').moverAndSplitterChain.length, 0)
+})
+
+test('prior copy count includes nested globals that precede the track', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube' }),
+    track({
+      id: 'g', type: 'splitter', splitterId: 'test.chainSplit',
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+    track({ id: 'group', childIds: ['gm'] }),
+    track({
+      id: 'gm', type: 'mover', moverId: 'visibility', parentId: 'group',
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+  ], ['cube', 'g', 'group'])
+  // The nested global 'gm' is preceded by the root global splitter, so its
+  // MIDI lane addresses two copies.
+  assert.equal(getPriorVisualCopyCount('gm', p), 2)
+})
+
 test('every instrument track exposes a chain; empty chains yield one identity copy', () => {
   const p = snapshot([track({ id: 'cube', instrumentId: 'cube' })], ['cube'])
   const obj = objectByTrackId(p, 'cube')

@@ -17,7 +17,11 @@ import {
 import { translationOscillatorMover } from './translationOscillator'
 import { calmHueRotateColorizer } from './hueColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
+import { waveTerrainMover } from './waveTerrain'
+import { BURST_EASINGS } from './burstEasings'
 import { parametricPatternSplitter } from './parametricPattern'
+import { polyhedronSplitter } from './polyhedron'
+import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
@@ -60,23 +64,7 @@ export interface BurstSettings {
   distance: number
 }
 
-/** Ease-out curves, indexed by the `easing` select value. All map 0→0, 1→1;
- *  elastic and back deliberately overshoot en route. */
-export const BURST_EASINGS: { label: string; ease: (t: number) => number }[] = [
-  { label: 'Expo', ease: (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)) },
-  { label: 'Cubic', ease: (t) => 1 - Math.pow(1 - t, 3) },
-  { label: 'Quad', ease: (t) => 1 - (1 - t) * (1 - t) },
-  {
-    label: 'Elastic',
-    ease: (t) =>
-      t <= 0 ? 0 : t >= 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1,
-  },
-  {
-    label: 'Back',
-    ease: (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2),
-  },
-  { label: 'Linear', ease: (t) => t },
-]
+export { BURST_EASINGS }
 
 /**
  * The summed offset of every burst launched at or before `beat`. Each note
@@ -165,33 +153,6 @@ export interface RadialSettings {
 const RADIAL_MAX_COPIES = 32
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
-
-const SPLITTER_TOP_PITCH = 127
-const MIDI_PITCH_COUNT = 128
-
-function splitterMidiRows(count: number, singular: string, plural: string): MidiRowDef[] {
-  const rowCount = Math.min(MIDI_PITCH_COUNT, count)
-  return Array.from({ length: rowCount }, (_, rowIndex) => {
-    const first = Math.floor((rowIndex * count) / rowCount) + 1
-    const last = Math.floor(((rowIndex + 1) * count) / rowCount)
-    const label = first === last ? `Disable ${singular} ${first}` : `Disable ${plural} ${first}–${last}`
-    return { pitch: SPLITTER_TOP_PITCH - rowIndex, label }
-  })
-}
-
-function noteDisablesSplitterSlot(
-  notes: readonly ResolvedNote[],
-  beat: number,
-  slot: number,
-  slotCount: number,
-): boolean {
-  const rowCount = Math.min(MIDI_PITCH_COUNT, slotCount)
-  const rowIndex = Math.min(rowCount - 1, Math.floor((slot * rowCount) / slotCount))
-  const pitch = SPLITTER_TOP_PITCH - rowIndex
-  return notes.some((note) =>
-    note.pitch === pitch && beat >= note.beat && beat < note.beat + (note.durationBeats || 0.05),
-  )
-}
 
 export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
@@ -462,9 +423,11 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   constantOrbitMover,
   translationOscillatorMover,
   forceFieldPushMover,
+  waveTerrainMover,
   visibilityMover,
   calmHueRotateColorizer,
   radialSplitter,
   gridSplitter,
+  polyhedronSplitter,
   parametricPatternSplitter,
 ]

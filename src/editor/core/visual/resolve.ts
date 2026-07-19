@@ -254,6 +254,17 @@ function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOr
   return chain
 }
 
+/** True when this mover/splitter resolves as a LOCAL chain entry of its parent
+ *  instrument (see resolveMoverAndSplitterChain) - i.e. its parent is a valid
+ *  instrument track. Everything else (root level, nested under a plain group
+ *  track or another mover, or under an instrument the registry no longer knows)
+ *  is a mover "without a parent instrument": it routes globally through its
+ *  `targets`, appended to the end of each target object's chain. */
+function isLocalChainChild(track: Track, p: ProjectSnapshot): boolean {
+  const parent = track.parentId ? p.tracks[track.parentId] : undefined
+  return !!parent && !!getInstrument(parent.instrumentId)
+}
+
 function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
   return (track.targets ?? []).some(({ scope }) => {
     if (scope.kind === 'track') return scope.id === object.id
@@ -271,13 +282,17 @@ function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapsho
  * editor metadata only: it evaluates the same enabled prefix as resolveProject,
  * so an index-aware definition can expose exactly the rows it can address. A
  * top-level entry may target objects with different prefix counts; one MIDI lane
- * must serve all of them, so its row set uses the largest target count. */
+ * must serve all of them, so its row set uses the largest target count. Global
+ * entries (movers without a parent instrument) apply in depth-first tree order. */
 export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): number {
   const target = p.tracks[trackId]
   if (!target) return 1
 
-  if (target.parentId) {
-    const parent = p.tracks[target.parentId]
+  // A local chain child counts the entries above it within its parent
+  // instrument's chain; a global entry (no parent instrument) counts each
+  // target's local chain plus every preceding global that hits it.
+  if (isLocalChainChild(target, p)) {
+    const parent = p.tracks[target.parentId!]
     if (!parent) return 1
     const candidates = (parent.childIds ?? [])
       .map((id) => p.tracks[id])
@@ -300,12 +315,13 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   let largestCount = 1
   for (const object of targetObjects) {
     const prefix = resolveMoverAndSplitterChain(object, p)
-    for (const rootId of p.rootTrackIds) {
-      if (rootId === trackId) break
-      const global = p.tracks[rootId]
+    for (const globalId of flattenTree(p)) {
+      if (globalId === trackId) break
+      const global = p.tracks[globalId]
       if (
         !global || global.muted ||
         !getMoverOrSplitterDefinition(moverOrSplitterId(global)) ||
+        isLocalChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
       const resolved = resolveMoverOrSplitterTrack(global, p)
@@ -398,13 +414,16 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
-  // Top-level movers and splitters are global: they target existing objects by
-  // track/tag/subtree and append to moverAndSplitterChain - after every object's
-  // local children, in exact rootTrackIds order. Duplicate routes from one entry
-  // to the same target object are deduplicated. Muted entries are skipped.
-  for (const trackId of p.rootTrackIds) {
+  // Movers and splitters WITHOUT a parent instrument are global: they target
+  // existing objects by track/tag/subtree and append to moverAndSplitterChain -
+  // after every object's local children, in depth-first tree order (roots first,
+  // so root-level entries keep their historical rootTrackIds order). Duplicate
+  // routes from one entry to the same target object are deduplicated. Muted
+  // entries are skipped; entries with no targets affect nothing.
+  for (const trackId of flattenTree(p)) {
     const track = p.tracks[trackId]
     if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
+    if (isLocalChainChild(track, p)) continue
     const resolved = resolveMoverOrSplitterTrack(track, p)
     if (!resolved) continue
     const seenTargets = new Set<string>()

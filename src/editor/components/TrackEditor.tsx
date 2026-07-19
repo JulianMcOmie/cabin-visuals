@@ -525,7 +525,13 @@ export function TrackEditor() {
                             ))}
                           </>
                         )}
-                        {!track.parentId && <MoverTargets track={track} />}
+                        {/* Movers without a parent instrument route globally
+                            through their targets (appended to each target's
+                            chain); movers under an instrument are local chain
+                            entries and have no targets. */}
+                        {(!track.parentId || !getInstrument(tracks[track.parentId]?.instrumentId)) && (
+                          <MoverTargets track={track} />
+                        )}
                       </>
                     )
                   }
