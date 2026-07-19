@@ -18,11 +18,13 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   PMREMGenerator,
+  NoToneMapping,
   Vector2,
   type Texture,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
+import { BloomEffect } from 'postprocessing'
 import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
@@ -122,37 +124,12 @@ void main() {
   gl_FragColor = vec4(mix(color, clamp(filtered, 0.0, hdrScale), amount), source.a);
 }`
 
-const BLOOM_FRAGMENT = `
-uniform sampler2D tDiffuse;
-uniform vec2 resolution;
-uniform vec2 direction;
-uniform float extract;
-varying vec2 vUv;
-
-vec3 sampleBloom(vec2 uv) {
-  vec3 color = texture2D(tDiffuse, uv).rgb;
-  if (extract > 0.5) {
-    float brightness = max(color.r, max(color.g, color.b));
-    color *= smoothstep(0.9, 1.65, brightness);
-  }
-  return color;
-}
-
-void main() {
-  vec2 stepUv = direction / resolution;
-  vec3 color = sampleBloom(vUv) * 0.227027;
-  color += sampleBloom(vUv + stepUv * 1.384615) * 0.316216;
-  color += sampleBloom(vUv - stepUv * 1.384615) * 0.316216;
-  color += sampleBloom(vUv + stepUv * 3.230769) * 0.070270;
-  color += sampleBloom(vUv - stepUv * 3.230769) * 0.070270;
-  gl_FragColor = vec4(color, 1.0);
-}`
-
 const FINAL_GRADE_FRAGMENT = `
 uniform sampler2D tScene;
 uniform sampler2D tBloom;
 uniform vec2 resolution;
 uniform float time;
+uniform float bloomIntensity;
 varying vec2 vUv;
 
 float hash(vec2 p) {
@@ -196,7 +173,7 @@ vec3 fxaa(vec2 uv) {
 
 void main() {
   vec4 source = texture2D(tScene, vUv);
-  vec3 color = fxaa(vUv) + texture2D(tBloom, vUv).rgb * 0.48;
+  vec3 color = fxaa(vUv) + texture2D(tBloom, vUv).rgb * bloomIntensity;
 
   float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
   color = mix(vec3(luma), color, 1.08);
@@ -397,31 +374,27 @@ export function VisualScene() {
     filterScene.add(filterMesh)
     const hdrOptions = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
     const compositeTarget = new WebGLRenderTarget(1, 1, hdrOptions)
-    const bloomTargets: [WebGLRenderTarget, WebGLRenderTarget] = [
-      new WebGLRenderTarget(1, 1, hdrOptions),
-      new WebGLRenderTarget(1, 1, hdrOptions),
-    ]
-    const bloomMaterial = new ShaderMaterial({
-      vertexShader: COLOR_FILTER_VERTEX,
-      fragmentShader: BLOOM_FRAGMENT,
-      uniforms: {
-        tDiffuse: { value: null as Texture | null },
-        resolution: { value: new Vector2(1, 1) },
-        direction: { value: new Vector2(1, 0) },
-        extract: { value: 1 },
-      },
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
+    // Production mip-chain bloom from `postprocessing`. It extracts luminance
+    // from the half-float scene buffer, then combines seven progressively wider
+    // levels. HDR emitters create a tight core and long, smooth falloff without
+    // geometry shells or hand-authored blur planes.
+    const bloomEffect = new BloomEffect({
+      luminanceThreshold: 1.15,
+      luminanceSmoothing: 0.08,
+      mipmapBlur: true,
+      radius: 0.72,
+      levels: 7,
     })
+    bloomEffect.initialize(gl, true, HalfFloatType)
     const finalMaterial = new ShaderMaterial({
       vertexShader: COLOR_FILTER_VERTEX,
       fragmentShader: FINAL_GRADE_FRAGMENT,
       uniforms: {
         tScene: { value: compositeTarget.texture },
-        tBloom: { value: bloomTargets[1].texture },
+        tBloom: { value: bloomEffect.texture },
         resolution: { value: new Vector2(1, 1) },
         time: { value: 0 },
+        bloomIntensity: { value: 0.9 },
       },
       depthTest: false,
       depthWrite: false,
@@ -429,9 +402,9 @@ export function VisualScene() {
     return {
       scene, invertScene, cam, meshes, invertMeshes,
       filterScene, filterCam, filterMesh, filterMaterial,
-      compositeTarget, bloomTargets, bloomMaterial, finalMaterial,
+      compositeTarget, bloomEffect, finalMaterial,
     }
-  }, [])
+  }, [gl])
 
   useEffect(() => {
     for (const runtime of mounted.values()) {
@@ -441,11 +414,8 @@ export function VisualScene() {
     }
     const width = Math.max(1, size.width)
     const height = Math.max(1, size.height)
-    const bloomWidth = Math.max(1, Math.ceil(width / 2))
-    const bloomHeight = Math.max(1, Math.ceil(height / 2))
     compositor.compositeTarget.setSize(width, height)
-    compositor.bloomTargets.forEach((target) => target.setSize(bloomWidth, bloomHeight))
-    compositor.bloomMaterial.uniforms.resolution.value.set(bloomWidth, bloomHeight)
+    compositor.bloomEffect.setSize(width, height)
     compositor.finalMaterial.uniforms.resolution.value.set(width, height)
   }, [compositor, mounted, size.width, size.height])
 
@@ -488,10 +458,9 @@ export function VisualScene() {
     }
     compositor.filterMesh.geometry.dispose()
     compositor.filterMaterial.dispose()
-    compositor.bloomMaterial.dispose()
+    compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
-    compositor.bloomTargets.forEach((target) => target.dispose())
   }, [compositor])
 
   const colorFilterTrackIds = useMemo(() => {
@@ -521,7 +490,11 @@ export function VisualScene() {
   useFrame(() => {
     const previous = gl.getRenderTarget()
     const previousAutoClear = gl.autoClear
+    const previousToneMapping = gl.toneMapping
     gl.autoClear = false
+    // Preserve scene-linear values above 1.0 through every offscreen pass.
+    // Tone mapping happens once, in the final grade after bloom is composed.
+    gl.toneMapping = NoToneMapping
     try {
       const layers = getCompositionLayers()
       const requested = new Set(layers.map((layer) => layer.sceneId))
@@ -618,27 +591,14 @@ export function VisualScene() {
       gl.clear(true, true, true)
       gl.render(compositor.scene, compositor.cam)
 
-      // A compact HDR post chain: thresholded half-resolution bloom followed by
-      // one final grade. It stays inside this compositor so scene switching,
-      // partitions, filters, preview and export all receive the exact same look.
-      compositor.filterMesh.material = compositor.bloomMaterial
-      compositor.bloomMaterial.uniforms.tDiffuse.value = compositor.compositeTarget.texture
-      compositor.bloomMaterial.uniforms.direction.value.set(1, 0)
-      compositor.bloomMaterial.uniforms.extract.value = 1
-      gl.setRenderTarget(compositor.bloomTargets[0])
-      gl.setClearColor(0x000000, 0)
-      gl.clear(true, true, true)
-      gl.render(compositor.filterScene, compositor.filterCam)
-
-      compositor.bloomMaterial.uniforms.tDiffuse.value = compositor.bloomTargets[0].texture
-      compositor.bloomMaterial.uniforms.direction.value.set(0, 1)
-      compositor.bloomMaterial.uniforms.extract.value = 0
-      gl.setRenderTarget(compositor.bloomTargets[1])
-      gl.clear(true, true, true)
-      gl.render(compositor.filterScene, compositor.filterCam)
+      // Luminance-thresholded, multi-resolution bloom consumes the completed
+      // scene composite, so preview, directors, partitions and export all match.
+      compositor.bloomEffect.update(gl, compositor.compositeTarget, 0)
 
       compositor.filterMesh.material = compositor.finalMaterial
+      compositor.finalMaterial.uniforms.tBloom.value = compositor.bloomEffect.texture
       compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
+      gl.toneMapping = previousToneMapping
       gl.setRenderTarget(previous)
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
@@ -689,6 +649,7 @@ export function VisualScene() {
       gl.render(compositor.invertScene, compositor.cam)
     } finally {
       gl.setRenderTarget(previous)
+      gl.toneMapping = previousToneMapping
       gl.autoClear = previousAutoClear
     }
   }, 100)

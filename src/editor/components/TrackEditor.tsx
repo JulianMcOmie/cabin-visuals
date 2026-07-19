@@ -507,7 +507,13 @@ export function TrackEditor() {
                           <BespokeMover targetId={track.id} parameters={moverParameters} />
                         ) : (
                           <>
-                            <p className="text-[11px] text-zinc-500 mb-3">{newMoverDef.kind === 'splitter' ? 'Splitter:' : 'Mover:'}</p>
+                            <p className="text-[11px] text-zinc-500 mb-3">{
+                              newMoverDef.kind === 'splitter'
+                                ? 'Splitter:'
+                                : newMoverDef.kind === 'colorizer'
+                                  ? 'Colorizer:'
+                                  : 'Mover:'
+                            }</p>
                             {newMoverDef.params.map((p) => (
                               <ParamControl
                                 key={p.key}

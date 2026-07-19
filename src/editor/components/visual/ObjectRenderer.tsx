@@ -1,11 +1,11 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
-import { applyMaterialHueShift } from '../../core/visual/animatedColor'
+import { InstrumentCopyContext } from '../../core/visual/instrumentColor'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -57,6 +57,12 @@ export function ObjectRenderer({
   )
 
   const isFullFrame = !!def?.fullFrame
+  const instrumentCopyContext = useMemo(() => ({
+    visualCopyIndex,
+    colorParams: (def?.params ?? []).flatMap((param) => param.type === 'color'
+      ? [{ key: param.key, defaultColor: param.default }]
+      : []),
+  }), [def, visualCopyIndex])
   // NOTE: the per-track "In front" switch is applied a level up - VisualScene
   // mounts on-top tracks into a second, depth-cleared render pass (drei Hud).
 
@@ -64,21 +70,12 @@ export function ObjectRenderer({
     const g = groupRef.current
     if (!g) return
     const state = getObjectState(trackId)
-    // This occurrence's copy: transform composes with placement, opacity
-    // multiplies, color shift adds. A missing copy (pre-first-resolve) renders
-    // as identity so the single-object path never flickers.
+    // This occurrence's copy: transform composes with placement and opacity
+    // multiplies. Color shifts are applied earlier, to the instrument's own
+    // declared color params by useInstrumentFrame.
     const visualCopy = getVisualCopy(trackId, visualCopyIndex)
     g.visible = !!state && !state.blackedOut
     if (state) applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
-    // This copy's color shift, applied as one tint to every material.
-    if (state) {
-      applyMaterialHueShift(
-        g,
-        visualCopy?.colorShift.hue ?? 0,
-        visualCopy?.colorShift.saturation ?? 0,
-        visualCopy?.colorShift.lightness ?? 0,
-      )
-    }
     if (isFullFrame) {
       // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
       // occurrence's VisualCopy transform applies inside screen space, so an
@@ -98,13 +95,18 @@ export function ObjectRenderer({
 
   if (!def) return null
   const Component = def.component
+  const instrument = (
+    <InstrumentCopyContext.Provider value={instrumentCopyContext}>
+      <Component trackId={trackId} />
+    </InstrumentCopyContext.Provider>
+  )
 
   // Full-frame instruments (viewport-filling planes) skip the placement transform and
   // the transform effect chain; shaders may still post-process them.
   if (isFullFrame) {
     // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
     // scene (this group's useFrame) already composes the copy transform.
-    const frame = <group ref={groupRef}><Component trackId={trackId} /></group>
+    const frame = <group ref={groupRef}>{instrument}</group>
     return shaderInstances.length > 0
       ? <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{frame}</ShaderWrapper>
       : frame
@@ -112,7 +114,7 @@ export function ObjectRenderer({
 
   const content = (
     <TransformWrapper trackId={trackId} plugins={plugins}>
-      <Component trackId={trackId} />
+      {instrument}
     </TransformWrapper>
   )
 

@@ -18,7 +18,7 @@ import { waitForSaved } from '../../persistence/autosave'
 import { LoadingScreen } from '../../components/LoadingScreen'
 
 /** What dragging an item creates. */
-export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'director'
+export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director'
 
 export interface InstrumentItem {
   id: string
@@ -84,6 +84,12 @@ const DIRECTOR_INSTRUMENTS = withKind('director', [
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'laserSphere', name: 'Laser Sphere', description: 'A white-hot neon orb with HDR bloom and colored scene light.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="4.5" fill="#22d3ee" fillOpacity="0.18" stroke="#67e8f9" strokeWidth="0.8" />
+      <circle cx="6" cy="6" r="2.2" fill="#cffafe" />
+    </svg>
+  )},
   { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <circle cx="6" cy="5" r="2.5" fill="#facc15" />
@@ -216,7 +222,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
 
@@ -253,6 +259,24 @@ const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions
         <path d="M6 4.6 V1.5" />
         <path d="M7.2 6.8 L9.9 8.3" />
         <path d="M4.8 6.8 L2.1 8.3" />
+      </svg>
+    ),
+  })))
+
+const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitions()
+  .filter((d) => d.kind === 'colorizer')
+  .map((d) => ({
+    id: d.id,
+    name: d.label,
+    description: d.id === 'calmHueRotate'
+      ? 'Turns hue calmly with signed MIDI, optionally spreading the amount across splitter-copy indices.'
+      : `Changes its object's color with the ${d.label} colorizer.`,
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" strokeWidth="1.2" strokeLinecap="round">
+        <path d="M6 1 A5 5 0 0 1 11 6" stroke="#22d3ee" />
+        <path d="M11 6 A5 5 0 0 1 6 11" stroke="#a78bfa" />
+        <path d="M6 11 A5 5 0 0 1 1 6" stroke="#f472b6" />
+        <path d="M1 6 A5 5 0 0 1 6 1" stroke="#facc15" />
       </svg>
     ),
   })))
@@ -466,7 +490,7 @@ export function LeftSidebar() {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
     if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
-    else if (item.kind === 'mover' || item.kind === 'splitter') setTrackMover(selectedTrackId, item.id, item.name)
+    else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
@@ -531,6 +555,7 @@ export function LeftSidebar() {
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
             <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Colorizer" description="A Colorizer changes an object's material color in the ordered mover/splitter chain, driven by its own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}

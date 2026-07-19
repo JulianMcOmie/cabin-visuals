@@ -39,6 +39,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const params = (def?.params ?? []).filter(isNumberParam)
   const newDefs = def ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
+  const colorizers = newDefs.filter((d) => d.kind === 'colorizer')
   const splitters = newDefs.filter((d) => d.kind === 'splitter')
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
@@ -102,6 +103,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       items: movers.map((d) => ({ id: d.id, label: d.label })),
     },
     {
+      key: 'colorizer',
+      label: 'Add colorizer track',
+      items: colorizers.map((d) => ({ id: d.id, label: d.label })),
+    },
+    {
       key: 'splitter',
       label: 'Add splitter track',
       items: splitters.map((d) => ({ id: d.id, label: d.label })),
@@ -146,6 +152,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'splitter') {
       const d = splitters.find((m) => m.id === itemId)
+      if (d) addMoverTrack(trackId, d.id, d.label)
+    } else if (groupKey === 'colorizer') {
+      const d = colorizers.find((c) => c.id === itemId)
       if (d) addMoverTrack(trackId, d.id, d.label)
     } else if (groupKey === 'automation') {
       const p = params.find((pp) => pp.key === itemId)

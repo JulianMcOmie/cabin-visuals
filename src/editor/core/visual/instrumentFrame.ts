@@ -1,6 +1,8 @@
-import { useRef } from 'react'
+import { useContext, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { getObjectState } from './VisualEngine'
+import { Color } from 'three'
+import { getObjectState, getVisualCopy } from './VisualEngine'
+import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
 import type { ObjectState } from './types'
 
 /**
@@ -28,8 +30,12 @@ import type { ObjectState } from './types'
  * Skipped while the object isn't resolved yet.
  */
 export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void) {
+  const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
   const buf = useRef<unknown[]>([]).current
+  const shiftedStringParams = useRef<Record<string, string>>({}).current
+  const shiftedState = useRef<ObjectState | null>(null)
+  const scratchColor = useRef(new Color()).current
   useFrame((root) => {
     const state = getObjectState(trackId)
     if (!state) {
@@ -37,6 +43,12 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       buf.length = 0
       return
     }
+    const visualCopy = copyContext
+      ? getVisualCopy(trackId, copyContext.visualCopyIndex)
+      : undefined
+    const hueShift = visualCopy?.colorShift.hue ?? 0
+    const saturationShift = visualCopy?.colorShift.saturation ?? 0
+    const lightnessShift = visualCopy?.colorShift.lightness ?? 0
     let i = 0
     let dirty = false
     const put = (v: unknown) => {
@@ -56,6 +68,11 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     // Stable references per resolve - a structural re-resolve replaces them.
     put(state.notes)
     put(state.stringParams)
+    // Copy color is an instrument input: MIDI-driven shifts must invalidate an
+    // otherwise static instrument even though the base stringParams are stable.
+    put(hueShift)
+    put(saturationShift)
+    put(lightnessShift)
     put(state.abilityEvents)
     put(state.videoPads)
     put(state.photoPads)
@@ -74,7 +91,28 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       buf.length = i
       dirty = true
     }
-    if (dirty) cb(state)
+    if (dirty) {
+      const colorShiftActive = copyContext && copyContext.colorParams.length > 0 &&
+        Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001
+      if (!colorShiftActive) {
+        cb(state)
+        return
+      }
+      applyColorShiftToInstrumentParams(
+        state.stringParams,
+        copyContext.colorParams,
+        hueShift,
+        saturationShift,
+        lightnessShift,
+        shiftedStringParams,
+        scratchColor,
+      )
+      const nextState = shiftedState.current ?? { ...state, stringParams: shiftedStringParams }
+      Object.assign(nextState, state)
+      nextState.stringParams = shiftedStringParams
+      shiftedState.current = nextState
+      cb(nextState)
+    }
   })
 }
 

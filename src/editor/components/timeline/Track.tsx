@@ -8,6 +8,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
 import { selectTrack, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
+import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
 import { flattenBlocks } from '../../core/visual/noteFlatten'
 import type { InstrumentItem } from '../LeftSidebar'
@@ -75,12 +76,21 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   // Hovering the label plays the row's element in the shared preview popup
   // (the same warm canvas the library uses) - objects run their instrument,
-  // mover/splitter rows run their motion chain on the stand-in cube.
+  // mover/splitter/colorizer rows run their chain on the stand-in cube.
+  const moverDefinition = track.type === 'mover'
+    ? getMoverOrSplitterDefinition(track.moverId)
+    : undefined
   const previewItem: InstrumentItem | null =
     track.type === 'base' && track.instrumentId
       ? { id: track.instrumentId, name: track.name, description: '', icon: null, kind: 'object' }
       : track.type === 'mover' && track.moverId
-        ? { id: track.moverId, name: track.name, description: '', icon: null, kind: 'mover' }
+        ? {
+            id: track.moverId,
+            name: track.name,
+            description: '',
+            icon: null,
+            kind: moverDefinition?.kind === 'colorizer' ? 'colorizer' : 'mover',
+          }
         : track.type === 'splitter' && track.splitterId
           ? { id: track.splitterId, name: track.name, description: '', icon: null, kind: 'splitter' }
           : null

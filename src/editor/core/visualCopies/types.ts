@@ -35,9 +35,11 @@ export interface VisualCopy {
   /** Multiplied into the object's existing rendered opacity (0..1). */
   opacity: number
   /**
-   * Added to the object's existing color shift. Units match three.js
-   * `Color.offsetHSL`: hue is a normalized turn (1 = full wheel), saturation
-   * and lightness are additive offsets.
+   * Added to the object's instrument-declared color parameters before the
+   * instrument renders. Units match three.js `Color.offsetHSL`: hue is a
+   * normalized turn (1 = full wheel), saturation and lightness are additive
+   * offsets. This deliberately does not tint final materials: instruments keep
+   * ownership of emissive, lighting, shader, and HDR color calculations.
    */
   colorShift: {
     hue: number

@@ -6,16 +6,16 @@ import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR } from '../utils/trackColors'
+import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR, COLORIZER_TRACK_COLOR } from '../utils/trackColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'director' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' }
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // Movers and splitters resolve through the MoverOrSplitter registry; ignore
   // ids the registry doesn't know.
-  const isMover = item.kind === 'mover' && hasMoverOrSplitterDefinition(item.id)
+  const isMover = (item.kind === 'mover' || item.kind === 'colorizer') && hasMoverOrSplitterDefinition(item.id)
   const isSplitter = item.kind === 'splitter' && hasMoverOrSplitterDefinition(item.id)
   const isDirector = item.kind === 'director'
   const state = useProjectStore.getState()
@@ -30,7 +30,11 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
     directorId: isDirector ? item.id : undefined,
     sceneBindings: isDirector ? visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })) : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
-    color: item.kind === 'object' ? OBJECT_TRACK_COLOR : MOVER_TRACK_COLOR,
+    color: item.kind === 'object'
+      ? OBJECT_TRACK_COLOR
+      : item.kind === 'colorizer'
+        ? COLORIZER_TRACK_COLOR
+        : MOVER_TRACK_COLOR,
     muted: false,
     solo: false,
     blocks: [],

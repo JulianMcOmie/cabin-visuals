@@ -33,7 +33,9 @@ import type { MoverOrSplitter } from './types'
 export interface MoverOrSplitterDefinition<Settings> {
   id: string
   label: string
-  kind: 'mover' | 'splitter'
+  /** Colorizers share the mover storage field, but get their own library and UI
+   *  category because they alter appearance rather than spatial transforms. */
+  kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */

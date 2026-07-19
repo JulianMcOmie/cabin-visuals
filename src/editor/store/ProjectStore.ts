@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import { MOVER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/trackColors'
+import { MOVER_TRACK_COLOR, COLORIZER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
@@ -1075,7 +1075,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             inputValues: {},
             params: {},
             stringParams: {},
-            color: MOVER_TRACK_COLOR,
+            color: def.kind === 'colorizer' ? COLORIZER_TRACK_COLOR : MOVER_TRACK_COLOR,
             name,
           },
         },
@@ -1128,7 +1128,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         moverId: isSplitter ? undefined : moverId,
         splitterId: isSplitter ? moverId : undefined,
         inputValues: {},
-        color: MOVER_TRACK_COLOR,
+        color: def.kind === 'colorizer' ? COLORIZER_TRACK_COLOR : MOVER_TRACK_COLOR,
         muted: false,
         solo: false,
         blocks: [],

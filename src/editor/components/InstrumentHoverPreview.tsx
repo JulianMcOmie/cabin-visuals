@@ -80,7 +80,7 @@ function previewBeatNow(elapsedSec: number, sync?: boolean): number {
 export function canPreview(item: InstrumentItem): boolean {
   if (get2DPreview(item.id)) return true
   if (item.kind === 'object') return !!getInstrument(item.id)
-  if (item.kind === 'mover' || item.kind === 'splitter') return !!getMoverOrSplitterDefinition(item.id)
+  if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') return !!getMoverOrSplitterDefinition(item.id)
   return false
 }
 
