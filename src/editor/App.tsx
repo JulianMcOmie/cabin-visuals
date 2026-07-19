@@ -435,15 +435,20 @@ function Header() {
             PRO
           </button>
         )}
-        <button
-          onClick={() => { track('export_clicked'); setExportOpen(true) }}
-          disabled={exportGate?.ok === false}
-          title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
-          className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
-        >
-          <Upload size={11} strokeWidth={2.5} />
-          Export
-        </button>
+        {/* The gate reason must live on a WRAPPER: disabled buttons swallow
+            mouse events in Firefox - the very browser the gate fires on - so a
+            title on the button itself never shows there. */}
+        <span title={exportGate?.ok === false ? exportGate.reason : undefined} className="inline-flex">
+          <button
+            onClick={() => { track('export_clicked'); setExportOpen(true) }}
+            disabled={exportGate?.ok === false}
+            title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
+            className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
+          >
+            <Upload size={11} strokeWidth={2.5} />
+            Export
+          </button>
+        </span>
         <ProfileMenu size="sm" />
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
