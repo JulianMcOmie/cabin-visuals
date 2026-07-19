@@ -435,20 +435,31 @@ function Header() {
             PRO
           </button>
         )}
-        {/* The gate reason must live on a WRAPPER: disabled buttons swallow
-            mouse events in Firefox - the very browser the gate fires on - so a
-            title on the button itself never shows there. */}
-        <span title={exportGate?.ok === false ? exportGate.reason : undefined} className="inline-flex">
+        {/* Gated Export explains itself like the projects page's blocked
+            "New project" button: an instant CSS group-hover panel, not a
+            native title - titles never fire over disabled buttons in Firefox
+            (the very browser the gate fires on), and the panel appears with
+            no tooltip dwell. */}
+        <div className="group relative">
           <button
             onClick={() => { track('export_clicked'); setExportOpen(true) }}
             disabled={exportGate?.ok === false}
-            title={exportGate?.ok === false ? exportGate.reason : 'Export the project as an MP4'}
+            title={exportGate?.ok === false ? undefined : 'Export the project as an MP4'}
             className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
           >
             <Upload size={11} strokeWidth={2.5} />
             Export
           </button>
-        </span>
+          {exportGate?.ok === false && (
+            // Padding on a hidden wrapper (not a margin) so the pointer can
+            // cross from the button into the panel without leaving the group.
+            <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
+              <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
+                {exportGate.reason ?? 'Video export is not available in this browser.'}
+              </div>
+            </div>
+          )}
+        </div>
         <ProfileMenu size="sm" />
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
