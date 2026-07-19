@@ -85,6 +85,13 @@ interface UIState {
   libraryDragging: boolean
   setLibraryDragging: (v: boolean) => void
 
+  // Live state of a loop-pattern drag from the library: non-null lights the
+  // lane region as the drop zone, and `target` is the row/bar under the
+  // cursor - Track.tsx draws the would-be block there so the drag literally
+  // turns into a MIDI block over a lane.
+  loopDrag: { name: string; durationBars: number; target: { trackId: string; bar: number } | null } | null
+  setLoopDrag: (v: UIState['loopDrag']) => void
+
   // The open project's row name (set at load) - display-only editor chrome, e.g.
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
@@ -167,6 +174,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   libraryDragging: false,
   setLibraryDragging: (v) => set({ libraryDragging: v }),
+
+  loopDrag: null,
+  setLoopDrag: (v) => set({ loopDrag: v }),
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),

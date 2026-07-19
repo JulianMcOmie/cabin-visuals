@@ -54,6 +54,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const inMultiSelection = useUIStore((s) => s.selectedTrackIds.has(track.id))
+  const loopDragHere = useUIStore((s) => (s.loopDrag?.target?.trackId === track.id ? s.loopDrag : null))
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const setTrackCollapsed = useUIStore((s) => s.setTrackCollapsed)
@@ -278,6 +279,16 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 onBlockPointerDown={onBlockPointerDown}
               />
             ))}
+        {/* A loop drag hovering this lane "becomes" its MIDI block: the
+            would-be block, drawn where release will land it. */}
+        {loopDragHere && (
+          <div
+            className="pointer-events-none absolute inset-y-[3px] z-10 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[rgba(53,167,230,0.2)]"
+            style={{ left: loopDragHere.target!.bar * barWidthPx, width: loopDragHere.durationBars * barWidthPx }}
+          >
+            <span className="truncate px-1.5 font-mono text-[10px] text-[var(--accent)]">{loopDragHere.name}</span>
+          </div>
+        )}
       </div>
     </div>
   )

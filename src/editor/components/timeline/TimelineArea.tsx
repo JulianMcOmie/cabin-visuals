@@ -32,6 +32,7 @@ export function TimelineArea() {
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const hasTrackSelection = useUIStore((s) => !!s.selectedTrackId || s.selectedTrackIds.size > 0)
+  const loopDragging = useUIStore((s) => !!s.loopDrag)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const timelineWidthPx = totalBars * barWidthPx
@@ -299,6 +300,14 @@ export function TimelineArea() {
             />
           </div>
         </div>
+        {/* A loop drag lights the LANES as its drop zone - the mirror of the
+            label-column glow an instrument drag gets. */}
+        {loopDragging && (
+          <div
+            className="pointer-events-none absolute inset-y-1 right-1 z-30 rounded border border-dashed border-[rgba(53,167,230,0.5)] bg-[var(--accent)]/5"
+            style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
+          />
+        )}
         {libraryDragging && (
           <div
             className={`pointer-events-none absolute top-0 bottom-0 left-0 z-30 flex items-center justify-center border border-dashed transition-colors ${

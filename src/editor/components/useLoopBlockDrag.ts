@@ -76,6 +76,16 @@ export function useLoopBlockDrag() {
       lastX = ev.clientX
       lastY = ev.clientY
       moveGhost(ev.clientX, ev.clientY)
+
+      // Over a lane the cursor ghost stands down and the drag "becomes" a
+      // MIDI block: the target row draws the would-be block at that bar.
+      const target = laneTarget(ev.clientX, ev.clientY)
+      if (ghostRef.current) ghostRef.current.style.display = target ? 'none' : ''
+      useUIStore.getState().setLoopDrag({
+        name: pattern.name,
+        durationBars: pattern.bars * 4,
+        target: target ? { trackId: target.track.id, bar: target.bar } : null,
+      })
     }
 
     const onUp = () => {
@@ -83,6 +93,7 @@ export function useLoopBlockDrag() {
       if (!started) return
       unlockCursor()
       setGhostName(null)
+      useUIStore.getState().setLoopDrag(null)
       const target = laneTarget(lastX, lastY)
       if (!target) return
       const { beatsPerBar } = useProjectStore.getState()
@@ -96,12 +107,12 @@ export function useLoopBlockDrag() {
         loopLengthBars: pattern.bars,
         notes: pattern.notes
           .filter(([b]) => b < pattern.bars * beatsPerBar)
-          .map(([b, dur]) => ({
+          .map(([b, dur, vel]) => ({
             id: crypto.randomUUID(),
             startBeat: b,
             durationBeats: dur,
             pitch,
-            velocity: 100,
+            velocity: vel ?? 100,
           })),
       }
       useProjectStore.getState().addBlock(target.track.id, block)
