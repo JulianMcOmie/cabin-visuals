@@ -498,6 +498,24 @@ export function LeftSidebar() {
   const { startEffectDrag, ghostRef: effectGhostRef, ghostName: effectGhostName } = useEffectDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
   const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
+  // Effects hover previews ride the instruments' popup machinery: the plugin
+  // becomes a pseudo library item, and its vignette is registered under the
+  // plugin id in InstrumentPreview2D (same dwell as Section's enterRow).
+  const effectPreviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const enterEffectRow = (e: React.MouseEvent, plugin: (typeof PLUGIN_LIST)[number]) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current)
+    const item: InstrumentItem = { id: plugin.id, name: plugin.name, description: '', icon: null, kind: 'modulator' }
+    effectPreviewTimer.current = setTimeout(
+      () => setInstrumentPreview({ item, anchor: { left: rect.right, top: rect.top } }),
+      100,
+    )
+  }
+  const leaveEffectRow = () => {
+    if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current)
+    setInstrumentPreview(null)
+  }
+  useEffect(() => () => { if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current) }, [])
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
@@ -612,7 +630,9 @@ export function LeftSidebar() {
             {PLUGIN_LIST.map((plugin) => (
               <div
                 key={plugin.id}
-                onPointerDown={(e) => startEffectDrag(e, plugin)}
+                onPointerDown={(e) => { leaveEffectRow(); startEffectDrag(e, plugin) }}
+                onMouseEnter={(e) => enterEffectRow(e, plugin)}
+                onMouseLeave={leaveEffectRow}
                 title={`Drag ${plugin.name} onto a track's Effects panel`}
                 className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
               >

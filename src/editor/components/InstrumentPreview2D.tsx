@@ -323,6 +323,177 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   }
 }
 
+// ── Effect vignettes ─────────────────────────────────────────────────────────
+//
+// The library's Effects tab previews through the same popup. Each vignette
+// shows a stand-in subject with ONLY that effect applied - transforms move a
+// glowing chip (the same move as MoverPreview's cube), shader effects distort
+// the landscape - all on the shared 120bpm clock. Registered under the plugin
+// ids from src/editor/effects, which collide with no instrument or mover id.
+
+const CHIP_BLUE = '#35a7e6'
+
+/** The transforms' stand-in object: a glowing rounded square centered at
+ *  (0,0) - callers position it with canvas transforms. */
+function drawChip(ctx: CanvasRenderingContext2D, size: number, alpha = 1) {
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = CHIP_BLUE
+  ctx.shadowColor = CHIP_BLUE
+  ctx.shadowBlur = 12
+  ctx.beginPath()
+  ctx.roundRect(-size / 2, -size / 2, size, size, size * 0.18)
+  ctx.fill()
+  ctx.restore()
+}
+
+/** Dashed outline of the chip's untouched footprint - the "without the effect"
+ *  ghost every transform vignette contrasts against. */
+function drawChipGhost(ctx: CanvasRenderingContext2D, size: number) {
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)'
+  ctx.lineWidth = 1
+  ctx.setLineDash([3, 3])
+  ctx.beginPath()
+  ctx.roundRect(-size / 2, -size / 2, size, size, size * 0.18)
+  ctx.stroke()
+  ctx.restore()
+}
+
+const drawScaleFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  ctx.fillStyle = '#0b0b0e'
+  ctx.fillRect(0, 0, w, h)
+  const size = Math.min(w, h) * 0.42
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  drawChipGhost(ctx, size)
+  ctx.scale(1 + 0.4 * pulseAt(beat, 1, 3), 1 + 0.4 * pulseAt(beat, 1, 3))
+  drawChip(ctx, size)
+  ctx.restore()
+}
+
+const drawRotateFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  ctx.fillStyle = '#0b0b0e'
+  ctx.fillRect(0, 0, w, h)
+  const size = Math.min(w, h) * 0.42
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  drawChipGhost(ctx, size)
+  ctx.rotate(t * 1.4 + 0.5 * pulseAt(beat, 1, 3))
+  drawChip(ctx, size)
+  // A notch so the spin reads even mid-rotation.
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'
+  ctx.beginPath()
+  ctx.arc(size * 0.28, -size * 0.28, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+const drawOffsetFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  ctx.fillStyle = '#0b0b0e'
+  ctx.fillRect(0, 0, w, h)
+  const size = Math.min(w, h) * 0.4
+  // Every 2 beats the chip slides from home to a side (alternating), so the
+  // ghost-at-home / solid-away contrast is on screen most of the time.
+  const side = Math.floor(beat / 2) % 2 === 0 ? 1 : -1
+  const dist = w * 0.16 * (1 - pulseAt(beat, 2, 5))
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  drawChipGhost(ctx, size)
+  ctx.translate(side * dist, 0)
+  drawChip(ctx, size)
+  ctx.restore()
+}
+
+// Pixelate re-renders the landscape through a low-res scratch canvas; created
+// once - only one popup ever draws at a time.
+let pixelateScratch: HTMLCanvasElement | null = null
+
+const drawPixelateFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  // Chunky on the beat, refining as it decays - pixelation as a hit.
+  const block = 2 + 12 * pulseAt(beat, 2, 2.5)
+  if (!pixelateScratch) pixelateScratch = document.createElement('canvas')
+  const scratch = pixelateScratch
+  const sw = Math.max(2, Math.round(w / block))
+  const sh = Math.max(2, Math.round(h / block))
+  scratch.width = sw
+  scratch.height = sh
+  const sctx = scratch.getContext('2d')
+  if (!sctx) return
+  drawLandscape(sctx, 0, 0, sw, sh, 0)
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(scratch, 0, 0, sw, sh, 0, 0, w, h)
+  ctx.imageSmoothingEnabled = true
+}
+
+const drawKaleidoscopeFx: Draw2D = (ctx, w, h, t) => {
+  const wedges = 8
+  const step = (Math.PI * 2) / wedges
+  const radius = Math.hypot(w, h)
+  ctx.fillStyle = '#0b0b0e'
+  ctx.fillRect(0, 0, w, h)
+  for (let i = 0; i < wedges; i++) {
+    ctx.save()
+    ctx.translate(w / 2, h / 2)
+    ctx.rotate(i * step)
+    if (i % 2 === 1) ctx.scale(1, -1) // mirror alternate wedges - the kaleidoscope tell
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.arc(0, 0, radius, -step / 2, step / 2)
+    ctx.closePath()
+    ctx.clip()
+    ctx.rotate(t * 0.25)
+    drawLandscape(ctx, -w * 0.55, -h * 0.55, w * 1.1, h * 1.1, 2)
+    ctx.restore()
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.46, 0, Math.PI * 2)
+  ctx.stroke()
+}
+
+const drawChromaticFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const d = 1.5 + 6 * pulseAt(beat, 1, 3)
+  ctx.fillStyle = '#050507'
+  ctx.fillRect(0, 0, w, h)
+  // Classic RGB split: red and cyan copies fringe out of a white subject.
+  const subject = (color: string, dx: number) => {
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(w / 2 + dx, h * 0.44, Math.min(w, h) * 0.2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillRect(w * 0.3 + dx, h * 0.74, w * 0.4, 5)
+  }
+  ctx.globalCompositeOperation = 'lighter'
+  subject('#ff2b2b', -d)
+  subject('#22e0ff', d)
+  subject('#ffffff', 0)
+  ctx.globalCompositeOperation = 'source-over'
+}
+
+const drawOpacityFx: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  // Transparency checker so "fading" reads as opacity, not brightness.
+  ctx.fillStyle = '#101014'
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#1a1a20'
+  const cell = 10
+  for (let y = 0; y < h; y += cell) {
+    for (let x = (y / cell) % 2 === 0 ? 0 : cell; x < w; x += cell * 2) {
+      ctx.fillRect(x, y, cell, cell)
+    }
+  }
+  ctx.globalAlpha = 0.08 + 0.92 * pulseAt(beat, 2, 2)
+  drawLandscape(ctx, w * 0.14, h * 0.14, w * 0.72, h * 0.72, 3)
+  ctx.globalAlpha = 1
+}
+
 // ── Registry + host component ────────────────────────────────────────────────
 
 const PREVIEWS_2D: Record<string, Draw2D> = {
@@ -334,6 +505,14 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
   radialCut: drawRadialCut,
+  // Effect plugins (the library's Effects tab).
+  scale: drawScaleFx,
+  rotate: drawRotateFx,
+  offset: drawOffsetFx,
+  pixelate: drawPixelateFx,
+  kaleidoscope: drawKaleidoscopeFx,
+  chromaticAberration: drawChromaticFx,
+  opacity: drawOpacityFx,
 }
 
 export function get2DPreview(id: string): Draw2D | undefined {
