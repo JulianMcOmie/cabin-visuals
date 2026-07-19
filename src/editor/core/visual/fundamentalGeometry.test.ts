@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { FUNDAMENTAL_GEOMETRIES, normalizeFundamentalGeometry } from '../../instruments/FundamentalGeometry'
 
-test('the geometry instrument exposes the five Platonic solids', () => {
+test('the geometry instrument exposes the five Platonic solids plus the sphere', () => {
   assert.deepEqual(FUNDAMENTAL_GEOMETRIES.map(({ id }) => id), [
     'cube',
     'tetrahedron',
     'octahedron',
     'dodecahedron',
     'icosahedron',
+    'sphere',
   ])
 })
 
