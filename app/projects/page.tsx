@@ -187,8 +187,10 @@ export default function ProjectsPage() {
     <>
       {/* Covers the page the INSTANT a create/open is clicked - the project
           write and navigation happen behind the same smoking-cabin screen the
-          route transition shows, so the grid never visibly reshuffles. */}
-      {creating && <LoadingScreen />}
+          route transition shows, so the grid never visibly reshuffles. Every
+          `creating` path lands in the editor, so it carries the studio label
+          from the first frame. */}
+      {creating && <LoadingScreen label="Loading the studio…" />}
       <ProjectsDisplay
         projects={projects}
         user={user}
