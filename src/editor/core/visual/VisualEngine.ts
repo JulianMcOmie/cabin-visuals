@@ -320,7 +320,7 @@ export function computeAtBeat(beat: number) {
     // fixed at resolve time; a definition that varies its count with the beat
     // violates its contract, so clamp back to structure rather than let the
     // renderer's occurrence list silently disagree with React's.
-    const copies = resolveVisualCopies(obj.moverAndSplitterChain, beat)
+    const copies = resolveVisualCopies(obj.moverAndSplitterChain, beat, world)
     const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
     if (copies.length !== structuralCount) {
       if (!copyCountWarned.has(obj.trackId)) {

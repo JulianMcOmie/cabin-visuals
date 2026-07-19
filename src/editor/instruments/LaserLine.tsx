@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Color, type Mesh, type PointLight, type ShaderMaterial } from 'three'
+import { Color, DoubleSide, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
@@ -7,37 +7,36 @@ import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
 const DEFAULT_COLOR = '#25dfff'
 const WHITE = new Color(1, 1, 1)
 
-const LASER_VERTEX_SHADER = `
-varying float vFacing;
+const LASER_LINE_VERTEX_SHADER = `
+varying vec2 vUv;
 
 void main() {
-  vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-  vec3 viewNormal = normalize(normalMatrix * normal);
-  vec3 viewDirection = normalize(-viewPosition.xyz);
-  vFacing = clamp(dot(viewNormal, viewDirection), 0.0, 1.0);
-  gl_Position = projectionMatrix * viewPosition;
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`
 
-const LASER_FRAGMENT_SHADER = `
+const LASER_LINE_FRAGMENT_SHADER = `
 uniform vec3 coreColor;
 uniform vec3 rimColor;
-varying float vFacing;
+varying vec2 vUv;
 
 void main() {
-  // The center can stay below bloom threshold while the grazing-angle rim
-  // remains HDR. The real mip-chain bloom turns that rim energy into the halo.
-  float rim = pow(clamp(1.0 - vFacing, 0.0, 1.0), 1.7);
-  float bloomCarrier = smoothstep(0.04, 0.88, rim);
+  // Keep the middle of the emitter legible and colored while putting the HDR
+  // energy at its narrow edges. The scene bloom turns only that energy into
+  // the surrounding halo; the instrument itself remains one crisp line.
+  float edgeDistance = abs(vUv.y - 0.5) * 2.0;
+  float bloomCarrier = smoothstep(0.18, 0.94, edgeDistance);
   gl_FragColor = vec4(mix(coreColor, rimColor, bloomCarrier), 1.0);
 }`
 
-export const laserSphereInstrument: ObjectInstrumentDef = {
-  id: 'laserSphere',
-  name: 'Laser Sphere',
+export const laserLineInstrument: ObjectInstrumentDef = {
+  id: 'laserLine',
+  name: 'Laser Line',
   kind: 'object',
   userInterfaceRenderer: 'parameters',
   params: [
-    { key: 'size', label: 'Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
+    { key: 'length', label: 'Length', min: 0.25, max: 12, step: 0.05, default: 4 },
+    { key: 'thickness', label: 'Thickness', min: 0.01, max: 0.5, step: 0.01, default: 0.06 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },
     { key: 'whiteCore', label: 'White-hot core', min: 0, max: 1, step: 0.01, default: DEFAULT_WHITE_CORE },
@@ -54,23 +53,26 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
     { pitch: 44, label: 'Flare · gentle' },
     { pitch: 36, label: 'Flare · faint' },
   ],
-  localTransform: ({ params, energy }) => ({
-    position: [
-      params.x ?? paramDefault(laserSphereInstrument, 'x'),
-      params.y ?? paramDefault(laserSphereInstrument, 'y'),
-      params.z ?? paramDefault(laserSphereInstrument, 'z'),
-    ],
-    scale: (params.size ?? paramDefault(laserSphereInstrument, 'size')) / 1.6 * (1 + energy * 0.22),
-  }),
-  component: LaserSphere,
+  localTransform: ({ params, energy }) => {
+    const pulse = 1 + energy * 0.22
+    return {
+      position: [
+        params.x ?? paramDefault(laserLineInstrument, 'x'),
+        params.y ?? paramDefault(laserLineInstrument, 'y'),
+        params.z ?? paramDefault(laserLineInstrument, 'z'),
+      ],
+      scale: [
+        (params.length ?? paramDefault(laserLineInstrument, 'length')) / 4 * pulse,
+        (params.thickness ?? paramDefault(laserLineInstrument, 'thickness')) / 0.06 * pulse,
+        1,
+      ],
+    }
+  },
+  component: LaserLine,
 }
 
-/**
- * One sphere and one real point light. The material emits scene-linear HDR
- * color above 1.0; the compositor's luminance threshold and mip-chain bloom do
- * all halo generation. There are deliberately no glow shells or blurred cards.
- */
-export function LaserSphere({ trackId }: { trackId: string }) {
+/** A single shader emitter whose HDR edges feed the shared scene bloom. */
+export function LaserLine({ trackId }: { trackId: string }) {
   const meshRef = useRef<Mesh>(null)
   const lightRef = useRef<PointLight>(null)
   const baseColor = useRef(new Color())
@@ -82,9 +84,9 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     const light = lightRef.current
     if (!mesh || !light) return
 
-    const glow = state.params.glow ?? paramDefault(laserSphereInstrument, 'glow')
-    const whiteCore = state.params.whiteCore ?? paramDefault(laserSphereInstrument, 'whiteCore')
-    const sceneLight = state.params.light ?? paramDefault(laserSphereInstrument, 'light')
+    const glow = state.params.glow ?? paramDefault(laserLineInstrument, 'glow')
+    const whiteCore = state.params.whiteCore ?? paramDefault(laserLineInstrument, 'whiteCore')
+    const sceneLight = state.params.light ?? paramDefault(laserLineInstrument, 'light')
     const flare = 1 + state.energy * 1.65
 
     baseColor.current.set(state.stringParams.color || DEFAULT_COLOR)
@@ -95,6 +97,7 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     rimColor.current.copy(baseColor.current)
       .lerp(WHITE, 0.13 + state.energy * 0.1)
       .multiplyScalar(glow * flare)
+
     const material = mesh.material as ShaderMaterial
     ;(material.uniforms.coreColor.value as Color).copy(coreColor.current)
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current)
@@ -106,15 +109,16 @@ export function LaserSphere({ trackId }: { trackId: string }) {
   return (
     <>
       <mesh ref={meshRef}>
-        <sphereGeometry args={[0.9, 64, 48]} />
+        <planeGeometry args={[4, 0.06]} />
         <shaderMaterial
-          key="laser-sphere-rim-v1"
-          vertexShader={LASER_VERTEX_SHADER}
-          fragmentShader={LASER_FRAGMENT_SHADER}
+          key="laser-line-edge-v1"
+          vertexShader={LASER_LINE_VERTEX_SHADER}
+          fragmentShader={LASER_LINE_FRAGMENT_SHADER}
           uniforms={{
             coreColor: { value: new Color(DEFAULT_COLOR) },
             rimColor: { value: new Color(DEFAULT_COLOR).multiplyScalar(5.5) },
           }}
+          side={DoubleSide}
           toneMapped={false}
         />
       </mesh>

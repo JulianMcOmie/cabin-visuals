@@ -16,6 +16,8 @@ import {
 } from './rotationMovers'
 import { translationOscillatorMover } from './translationOscillator'
 import { calmHueRotateColorizer } from './hueColorizer'
+import { forceFieldPushMover } from './forceFieldPush'
+import { parametricPatternSplitter } from './parametricPattern'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
@@ -459,8 +461,10 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   constantRotateMover,
   constantOrbitMover,
   translationOscillatorMover,
+  forceFieldPushMover,
   visibilityMover,
   calmHueRotateColorizer,
   radialSplitter,
   gridSplitter,
+  parametricPatternSplitter,
 ]

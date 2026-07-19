@@ -90,6 +90,12 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="2.2" fill="#cffafe" />
     </svg>
   )},
+  { id: 'laserLine', name: 'Laser Line', description: 'A thin neon beam with a colored core and HDR edge bloom.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M1 6 H11" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" opacity="0.2" />
+      <path d="M1 6 H11" stroke="#cffafe" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )},
   { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
       <circle cx="6" cy="5" r="2.5" fill="#facc15" />
@@ -222,7 +228,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
 

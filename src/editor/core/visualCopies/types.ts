@@ -55,6 +55,13 @@ export interface MoverOrSplitterContext {
   beat: number
   index: number
   count: number
+  /**
+   * The object's placement before this VisualCopy transform is applied. Runtime
+   * evaluation supplies it so world-space movers can react to the actual object
+   * position; direct/test evaluation may omit it and gets an identity placement.
+   * Treat it as immutable.
+   */
+  placementTransform?: Matrix4
 }
 
 /**

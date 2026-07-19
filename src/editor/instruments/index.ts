@@ -33,6 +33,7 @@ import { photoInstrument } from './Photo'
 import { oscilloscopeInstrument } from './Oscilloscope'
 import { colorFiltersInstrument } from './ColorFilters'
 import { laserSphereInstrument } from './LaserSphere'
+import { laserLineInstrument } from './LaserLine'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -70,6 +71,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [oscilloscopeInstrument.id]: oscilloscopeInstrument,
   [colorFiltersInstrument.id]: colorFiltersInstrument,
   [laserSphereInstrument.id]: laserSphereInstrument,
+  [laserLineInstrument.id]: laserLineInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

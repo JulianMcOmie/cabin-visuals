@@ -1,3 +1,4 @@
+import type { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
 import type { MoverOrSplitter, VisualCopy } from './types'
 
@@ -27,6 +28,7 @@ export const MAX_VISUAL_COPIES = 1024
 export function resolveVisualCopies(
   moverAndSplitterChain: MoverOrSplitter[],
   beat: number,
+  placementTransform?: Matrix4,
 ): VisualCopy[] {
   let visualCopies = [identityVisualCopy()]
 
@@ -39,6 +41,7 @@ export function resolveVisualCopies(
         beat,
         index,
         count,
+        ...(placementTransform ? { placementTransform } : {}),
       }),
     )
 
