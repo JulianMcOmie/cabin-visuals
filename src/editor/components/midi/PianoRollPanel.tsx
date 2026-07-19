@@ -134,7 +134,16 @@ export function PianoRollPanel() {
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else {
-      const pdef = parent ? getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam) : undefined
+      // Param automation: the range comes from the parent's instrument def, or
+      // from the parent's mover/splitter definition when automating a mover.
+      const moverDef = parent?.type === 'mover'
+        ? getMoverOrSplitterDefinition(parent.moverId)
+        : parent?.type === 'splitter'
+          ? getMoverOrSplitterDefinition(parent.splitterId)
+          : undefined
+      const pdef = parent
+        ? (getInstrument(parent.instrumentId)?.params ?? moverDef?.params)?.find((p) => p.key === track.targetParam)
+        : undefined
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }

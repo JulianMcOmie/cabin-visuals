@@ -295,6 +295,67 @@ test('prior copy count includes nested globals that precede the track', () => {
   assert.equal(getPriorVisualCopyCount('gm', p), 2)
 })
 
+const AUTOMATION_LANE: Partial<Track> & { id: string } = {
+  id: 'a', type: 'automation', parentId: 'm', targetParam: 'distance', interpolation: 'linear',
+  blocks: [{
+    id: 'b1', startBar: 0, durationBars: 4, loop: false,
+    notes: [
+      { id: 'n1', startBeat: 0, pitch: 36, durationBeats: 1, velocity: 100 }, // distance 0
+      { id: 'n2', startBeat: 8, pitch: 84, durationBeats: 1, velocity: 100 }, // distance 10
+    ],
+  }],
+}
+
+function liftYAt(p: ProjectSnapshot, trackId: string, beat: number): number {
+  const obj = objectByTrackId(p, trackId)
+  return resolveVisualCopies(obj.moverAndSplitterChain, beat)[0].transform.elements[13]
+}
+
+test('automation children drive a local mover param per beat', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['m'] }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube', childIds: ['a'], inputValues: { distance: 1 } }),
+    track({ ...AUTOMATION_LANE }),
+  ], ['cube'])
+  assert.equal(liftYAt(p, 'cube', 0), 0, 'first keyframe')
+  assert.equal(liftYAt(p, 'cube', 4), 5, 'linear midpoint')
+  assert.equal(liftYAt(p, 'cube', 8), 10, 'last keyframe')
+  assert.equal(liftYAt(p, 'cube', 99), 10, 'endpoint holds')
+})
+
+test('automated mover evaluation is pure when scrubbing', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['m'] }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube', childIds: ['a'] }),
+    track({ ...AUTOMATION_LANE }),
+  ], ['cube'])
+  const first = liftYAt(p, 'cube', 4)
+  liftYAt(p, 'cube', 0)
+  liftYAt(p, 'cube', 8)
+  assert.equal(liftYAt(p, 'cube', 4), first)
+})
+
+test('muted automation children leave the mover at its stored settings', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['m'] }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube', childIds: ['a'], inputValues: { distance: 1 } }),
+    track({ ...AUTOMATION_LANE, muted: true }),
+  ], ['cube'])
+  assert.equal(liftYAt(p, 'cube', 4), 1)
+})
+
+test('global movers honor their automation children', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube' }),
+    track({
+      id: 'gm', type: 'mover', moverId: 'test.chainLift', childIds: ['a'],
+      targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
+    }),
+    track({ ...AUTOMATION_LANE, parentId: 'gm' }),
+  ], ['cube', 'gm'])
+  assert.equal(liftYAt(p, 'cube', 8), 10)
+})
+
 test('every instrument track exposes a chain; empty chains yield one identity copy', () => {
   const p = snapshot([track({ id: 'cube', instrumentId: 'cube' })], ['cube'])
   const obj = objectByTrackId(p, 'cube')

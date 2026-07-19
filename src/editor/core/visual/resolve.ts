@@ -11,8 +11,8 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractKeyframes, extractNoiseGates } from './automation'
-import { isNumberParam, type ObjectInstrumentDef } from '../../instruments/types'
+import { extractKeyframes, extractNoiseGates, sampleLane, sampleNoiseLane } from './automation'
+import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import type { MoverOrSplitter } from '../visualCopies/types'
@@ -53,14 +53,15 @@ function flattenTrackNotes(track: Track, p: ProjectSnapshot): ResolvedNote[] {
   return flattenTrackNotesRaw(track, p.beatsPerBar, p.totalBars)
 }
 
-/** Gather an object track's `automation` child tracks into resolved keyframe lanes.
- *  Each maps one of the object's params (its note pitch → the param's [min,max]); the
- *  engine samples them per frame. Children with no target param or an unknown param are
- *  skipped. Muted automation children are ignored (a quick disable). */
-function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
+/** Gather a track's `automation` child tracks into resolved keyframe lanes over
+ *  the given params (an instrument def's for object tracks, a MoverOrSplitter
+ *  def's for mover/splitter tracks). Each lane maps one param (its note pitch →
+ *  the param's [min,max]); the engine samples them per frame. Children with no
+ *  target param or an unknown param are skipped. Muted automation children are
+ *  ignored (a quick disable); solo pools per parent. */
+function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
-  if (!def) return out
-  // Per-object solo among this track's automation children.
+  // Per-parent solo pool among this track's automation children.
   const anyAutoSolo = (track.childIds ?? []).some((cid) => {
     const c = p.tracks[cid]
     return !!c && !c.instrumentId && c.type === 'automation' && !!c.solo
@@ -71,7 +72,7 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
     if (child.muted || (anyAutoSolo && !child.solo)) continue
     const param = child.targetParam
     if (!param) continue
-    const pdef = def.params.find((pd) => pd.key === param)
+    const pdef = params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
     // Noise mode: the notes become burst gates instead of keyframes.
     if (child.noise) {
@@ -93,6 +94,27 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
     })
   }
   return out
+}
+
+/** Gather an object track's `automation` child tracks into resolved keyframe lanes. */
+function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
+  return def ? resolveAutomationLanes(track, def.params, p) : []
+}
+
+/** Sample one beat of every automation lane into a settings/params overlay.
+ *  Mirrors computeAtBeat's merge: noise lanes are inert (skipped) outside
+ *  their gates; keyframe lanes hold their endpoints outside the range. */
+function sampleAutomationLanes(lanes: ResolvedAutomation[], beat: number): Record<string, number> {
+  const values: Record<string, number> = {}
+  for (const lane of lanes) {
+    if (lane.noise && lane.gates?.length) {
+      const v = sampleNoiseLane(lane.noise, lane.gates, beat, lane.min ?? 0, lane.max ?? 1)
+      if (!Number.isNaN(v)) values[lane.param] = v
+    } else if (lane.keyframes.length) {
+      values[lane.param] = sampleLane(lane.keyframes, beat, lane.mode)
+    }
+  }
+  return values
 }
 
 /** Gather automation children whose target is fx-namespaced (`fx:<instanceId>:<key>`)
@@ -229,12 +251,29 @@ function moverOrSplitterId(track: Track): string | undefined {
 /** Resolve one mover/splitter track through the registry: merge the
  *  definition's numeric param defaults with the track's stored inputValues,
  *  flatten its notes, and let the definition close over both. Returns null for
- *  unknown ids. */
+ *  unknown ids. Automation children overlay their params per beat: the resolved
+ *  closure re-resolves with the beat-sampled settings, memoized per beat. The
+ *  memo is a cache, not playback state - re-resolving at a repeated beat yields
+ *  the identical closure, so scrub == playback == export still holds. */
 function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
   if (!def) return null
   const settings = mergeDefinitionSettings(def, track.inputValues)
-  return def.resolve({ settings, notes: flattenTrackNotes(track, p) })
+  const notes = flattenTrackNotes(track, p)
+  const resolved = def.resolve({ settings, notes })
+  const automation = resolveAutomationLanes(track, def.params, p)
+  if (automation.length === 0) return resolved
+  let cachedBeat = Number.NaN
+  let cached = resolved
+  return {
+    apply(visualCopy, context) {
+      if (context.beat !== cachedBeat) {
+        cachedBeat = context.beat
+        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat) }, notes })
+      }
+      return cached.apply(visualCopy, context)
+    },
+  }
 }
 
 /** Collect an object track's mover and splitter children together, in exact

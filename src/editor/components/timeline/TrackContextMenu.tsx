@@ -1,7 +1,7 @@
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
-import { listMoverOrSplitterDefinitions } from '../../core/visualCopies/registry'
+import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
@@ -34,9 +34,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
 
   if (!track) return null
   const def = getInstrument(track.instrumentId)
+  // Mover/splitter tracks have no instrument, but their definition has numeric
+  // params of its own - automation children target those the exact same way.
+  const moverDef = getMoverOrSplitterDefinition(
+    track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
+  )
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number).
-  const params = (def?.params ?? []).filter(isNumberParam)
+  const params = (def?.params ?? moverDef?.params ?? []).filter(isNumberParam)
   const newDefs = def ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
   const colorizers = newDefs.filter((d) => d.kind === 'colorizer')
