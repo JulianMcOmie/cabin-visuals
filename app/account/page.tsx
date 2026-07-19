@@ -79,7 +79,7 @@ export default function AccountPage() {
                       ? ''
                       : plan.isPro
                         ? 'Full HD 1080p exports, unlimited projects.'
-                        : '720p exports, 1 project.'}
+                        : '720p exports, 5 projects.'}
                   </div>
                 </div>
                 {!plan.loading && (plan.isPro ? (

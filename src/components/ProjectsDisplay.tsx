@@ -106,15 +106,29 @@ export default function ProjectsDisplay({
     track('new_project_clicked')
     setCreateStep('choice')
   }
-  // The hover explanation for a greyed-out create button - clickable Upgrade
-  // link inside, so the dead end has an exit.
+  // The hover explanation for a greyed-out create button - a clickable exit
+  // inside (sign up for guests, upgrade for free accounts), so the dead end
+  // has a way out.
+  const isAnonymous = !!user?.is_anonymous
   const limitHint = (
     <div className="absolute right-0 top-full z-40 mt-1.5 hidden w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50 group-hover:block">
-      The free plan includes 1 project.{' '}
-      <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
-        Upgrade to Pro
-      </Link>{' '}
-      for unlimited projects.
+      {isAnonymous ? (
+        <>
+          Guest sessions hold 1 project.{' '}
+          <Link href="/signup" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
+            Sign up
+          </Link>{' '}
+          to get 5 free projects.
+        </>
+      ) : (
+        <>
+          The free plan includes 5 projects.{' '}
+          <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
+            Upgrade to Pro
+          </Link>{' '}
+          for unlimited projects.
+        </>
+      )}
     </div>
   )
   // The create flow: closed, the Empty/Template choice, the name entry, or the

@@ -14,7 +14,7 @@ import { Appear } from '../../src/components/motionPresets'
 const FREE_FEATURES = [
   'The full editor - every instrument and template',
   '720p video export',
-  '1 saved project',
+  '5 saved projects',
   '1 GB video storage',
   'Free AI lyric transcription',
 ]

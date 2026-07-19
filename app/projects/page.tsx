@@ -15,7 +15,9 @@ import { forgetLastProject } from '../../src/persistence/lastProject'
 import { track } from '../../src/analytics/analytics'
 import type { TemplateDef } from '../../src/templates'
 
-const FREE_PROJECT_LIMIT = 1
+const FREE_PROJECT_LIMIT = 5
+// Anonymous sessions hold a single project - signing up (free) is the way to 5.
+const ANON_PROJECT_LIMIT = 1
 
 // The Lyric Video template opens its setup pipeline (its own /lyric-setup
 // route: drop a song → transcribe → align) instead of a silent editor.
@@ -35,11 +37,19 @@ export default function ProjectsPage() {
   const plan = usePlan()
   const [profile, setProfile] = useState<ProfileData | null>(null)
 
-  // Free tier: one project. Client-side gate (like the export watermark) - the
-  // point is a clear upgrade moment, not tamper-proofing.
-  const atFreeLimit = !plan.loading && !plan.isPro && projects.length >= FREE_PROJECT_LIMIT
+  // Free tier: five projects (one while anonymous). Client-side gate (like the
+  // export resolution cap) - the point is a clear upgrade moment, not
+  // tamper-proofing.
+  const projectLimit = isAnonymous ? ANON_PROJECT_LIMIT : FREE_PROJECT_LIMIT
+  const atFreeLimit = !plan.loading && !plan.isPro && projects.length >= projectLimit
   const promptUpgrade = () => {
-    if (window.confirm(`The free plan includes ${FREE_PROJECT_LIMIT} project. Upgrade to Pro for unlimited projects?`)) {
+    if (isAnonymous) {
+      if (window.confirm(`Guest sessions hold ${ANON_PROJECT_LIMIT} project. Sign up to get ${FREE_PROJECT_LIMIT} free projects?`)) {
+        router.push('/signup')
+      }
+      return
+    }
+    if (window.confirm(`The free plan includes ${FREE_PROJECT_LIMIT} projects. Upgrade to Pro for unlimited projects?`)) {
       router.push('/pricing')
     }
   }
@@ -75,7 +85,7 @@ export default function ProjectsPage() {
       try {
         if (!plan.loading && !plan.isPro && projects.length >= FREE_PROJECT_LIMIT) {
           const keep = window.confirm(
-            'You have work carried over from before you logged in, but the free plan includes 1 project. Save it anyway?',
+            `You have work carried over from before you logged in, but the free plan includes ${FREE_PROJECT_LIMIT} projects. Save it anyway?`,
           )
           if (!keep) return
         }
