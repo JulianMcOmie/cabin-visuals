@@ -1404,6 +1404,36 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
       const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
 
+      // The song's end in bars (audio blocks' spans at the current tempo) -
+      // the template's repeat-to-the-ceiling loop blocks get trimmed to
+      // max(lyrics end, audio end), so visuals stop when the music does
+      // instead of looping forever into empty timeline.
+      const secPerBeat = 60 / s.bpm
+      let audioEndBars = 0
+      for (const tid of s.rootTrackIds) {
+        const at = s.tracks[tid]
+        if (at?.type !== 'audio') continue
+        for (const ab of at.audioBlocks ?? []) {
+          const beats = Math.max(0, ab.trimEnd - ab.trimStart) / secPerBeat
+          audioEndBars = Math.max(audioEndBars, ab.startBar + Math.ceil(beats / s.beatsPerBar))
+        }
+      }
+      const endBars = Math.max(durationBars, audioEndBars)
+      const trimmedTracks: Record<string, Track> = {}
+      for (const [tid, t] of Object.entries(s.tracks)) {
+        const needsTrim = t.blocks.some((b) => b.loop && b.startBar + b.durationBars > endBars)
+        trimmedTracks[tid] = needsTrim
+          ? {
+              ...t,
+              blocks: t.blocks.map((b) =>
+                b.loop && b.startBar + b.durationBars > endBars
+                  ? { ...b, durationBars: Math.max(1, endBars - b.startBar) }
+                  : b,
+              ),
+            }
+          : t
+      }
+
       // A lyric-template project ships a styled root track named 'Lyrics' -
       // refill it (words swap, styling stays) instead of stacking a second one.
       const existingId = s.rootTrackIds.find((tid) => {
@@ -1419,7 +1449,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           lyricTiming: timing ?? existing.lyricTiming,
           blocks: [block],
         }
-        return { tracks: { ...s.tracks, [existingId]: updated }, totalBars }
+        return { tracks: { ...trimmedTracks, [existingId]: updated }, totalBars }
       }
 
       const id = crypto.randomUUID()
@@ -1437,7 +1467,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         blocks: [block],
         childIds: [],
       }
-      return { tracks: { ...s.tracks, [id]: track }, rootTrackIds: [...s.rootTrackIds, id], totalBars }
+      return { tracks: { ...trimmedTracks, [id]: track }, rootTrackIds: [...s.rootTrackIds, id], totalBars }
     })
     return resultId
   },
