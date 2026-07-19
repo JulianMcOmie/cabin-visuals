@@ -13,18 +13,18 @@ import { Appear } from '../../src/components/motionPresets'
 
 const FREE_FEATURES = [
   'The full editor - every instrument and template',
-  '720p video export with a small watermark',
+  '720p video export',
   '1 saved project',
-  '50 MB per video, 1 GB total video storage',
-  'Try templates instantly, no account needed',
+  '1 GB video storage',
+  'Free AI lyric transcription',
 ]
 
 const PRO_FEATURES = [
-  'Watermark-free video export',
-  'Full HD 1080p export quality',
+  'The full editor - every instrument and template',
+  '4k video export',
   'Unlimited projects',
-  '250 MB per video, unlimited video storage',
-  'Support an independent visual music tool',
+  'Unlimited video storage',
+  'Support some random guy you don\'t know',
 ]
 
 export default function PricingPage() {
@@ -76,15 +76,14 @@ export default function PricingPage() {
 
       <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
         <Appear className="mt-16 mb-3 text-center">
-          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Start free. Go Pro when you publish.</h1>
+          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Seriously, just use it for free (it's great).</h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
-            The whole editor - every instrument, template, and the lyric pipeline - is free.
-            Pro is for the export: clean, full-res, unlimited projects.
+            The whole editor - the instruments, templates, and AI lyric videos - is free.
+            Pro is for the person who wants to use it seriously and professionally.
           </p>
         </Appear>
         <Appear delay={0.05} className="mb-12 text-center">
           <span className="font-mono text-[12px] text-[var(--text-muted)]">
-            No account needed to try it - the editor opens in your browser
           </span>
         </Appear>
 
@@ -92,7 +91,7 @@ export default function PricingPage() {
           {/* Free */}
           <Appear delay={0.05} className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
             <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">FREE</span>
-            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">Everything you need to start creating.</p>
+            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">Pretty dang good, more than enough for most people.</p>
             <div className="mt-[18px] flex items-baseline gap-1">
               <span className="text-[36px] font-bold text-[var(--text)]">$0</span>
             </div>
@@ -125,7 +124,7 @@ export default function PricingPage() {
               PRO
             </span>
             <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--accent)]">PRO</span>
-            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">For visuals you publish.</p>
+            <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">If you want to dedicate yourself to the craft.</p>
             <div className="mt-[18px] flex items-baseline gap-1.5">
               <span className="text-[36px] font-bold text-[var(--text)]">$9</span>
               <span className="font-mono text-[13px] text-[var(--text-muted)]">/ month</span>
@@ -164,22 +163,6 @@ export default function PricingPage() {
             )}
           </Appear>
         </div>
-
-        {/* The questions price-checkers bounce on, answered where they stand. */}
-        <Appear delay={0.15} className="mx-auto mt-14 max-w-[640px]">
-          <div className="grid gap-4 md:grid-cols-3">
-            {[
-              ['Is free actually usable?', 'Yes - the full editor, every instrument and template, 720p exports with a small watermark.'],
-              ['Can I cancel anytime?', 'Anytime, from the billing portal. Your projects stay yours on either plan.'],
-              ['What am I paying for?', 'Publishing: watermark-free 1080p exports, unlimited projects, unlimited video storage.'],
-            ].map(([q, a]) => (
-              <div key={q} className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)] p-4">
-                <h3 className="m-0 text-[12px] font-semibold text-[var(--text)]">{q}</h3>
-                <p className="m-0 mt-1.5 text-[12px] leading-relaxed text-[var(--text-3)]">{a}</p>
-              </div>
-            ))}
-          </div>
-        </Appear>
       </main>
     </div>
     </MotionConfig>
