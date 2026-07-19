@@ -2,15 +2,25 @@
 
 import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
+import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
+import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../core/visualCopies/types'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
+import { resolveProject, type ProjectSnapshot } from '../core/visual/resolve'
+import { evaluatePulse } from '../core/visual/energy'
+import { sampleLane, sampleNoiseLane } from '../core/visual/automation'
+import { evaluateAdsrGain } from '../core/visual/adsr'
+import { composeMatrix, localTransformToSV } from '../core/visual/stateVector'
+import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
+import { applyMaterialHueShift } from '../core/visual/animatedColor'
+import { flattenTrackNotes as flattenProjectTrackNotes } from '../core/visual/noteFlatten'
+import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
-import type { ObjectState, ResolvedNote } from '../core/visual/types'
+import type { ObjectState, ResolvedNote, ResolvedObject } from '../core/visual/types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import type { InstrumentItem } from './LeftSidebar'
 
@@ -249,6 +259,272 @@ function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; 
   )
 }
 
+// ── Project-accurate track-row previews ─────────────────────────────────────
+//
+// Timeline rows preview the REAL project, not the library demos: the row's
+// object renders with its stored params, its own notes, and its full mover and
+// splitter chain applied - "the final visual, but just this element". Hovering
+// a mover/splitter row previews the object it actually moves, twice: a faint
+// ghost of the chain WITHOUT this track next to the solid chain WITH it, so
+// the row shows exactly what adding it does. Everything routes through the
+// same resolveProject the engine uses, so settings, notes, automation and
+// envelopes all match the canvas.
+
+const PROJECT_PREVIEW_TRACK_ID = '__project-track-preview__'
+// Copy cap: a 32-copy splitter would mount 32 full instrument components in a
+// tiny popup; the first 8 tell the story.
+const MAX_PROJECT_OCCURRENCES = 8
+const GHOST_OPACITY = 0.16
+
+interface ProjectPreviewData {
+  /** The object to draw, with its full chain (for mover rows: chain WITH the mover). */
+  object: ResolvedObject
+  /** Mover rows only: the same object resolved with the hovered track muted. */
+  ghostObject?: ResolvedObject
+  copyCount: number
+  ghostCount: number
+  /** Paused-loop window start (beats): a bar boundary near the first relevant note. */
+  loopStart: number
+  bpm: number
+  beatsPerBar: number
+}
+
+function firstNoteBeat(notes: readonly ResolvedNote[]): number | null {
+  let min: number | null = null
+  for (const n of notes) if (min === null || n.beat < min) min = n.beat
+  return min
+}
+
+/** Resolve the hovered track row against the live project. Returns null when
+ *  there is nothing project-accurate to show (unknown track, mover with no
+ *  target object yet) - the caller falls back to the generic library preview. */
+function buildProjectPreview(projectTrackId: string): ProjectPreviewData | null {
+  const s = useProjectStore.getState()
+  const track = s.tracks[projectTrackId]
+  if (!track) return null
+  const snapshot: ProjectSnapshot = {
+    tracks: s.tracks,
+    rootTrackIds: s.rootTrackIds,
+    bpm: s.bpm,
+    beatsPerBar: s.beatsPerBar,
+    totalBars: s.totalBars,
+  }
+  const graph = resolveProject(snapshot)
+  const alignToBar = (beat: number | null) =>
+    beat === null ? 0 : Math.floor(beat / s.beatsPerBar) * s.beatsPerBar
+
+  if (track.instrumentId) {
+    const object = graph.objects.find((o) => o.trackId === projectTrackId)
+    if (!object || get2DPreview(object.instrumentId)) return null
+    return {
+      object,
+      copyCount: Math.min(MAX_PROJECT_OCCURRENCES, resolveVisualCopies(object.moverAndSplitterChain, 0).length),
+      ghostCount: 0,
+      loopStart: alignToBar(firstNoteBeat(object.notes)),
+      bpm: s.bpm,
+      beatsPerBar: s.beatsPerBar,
+    }
+  }
+
+  if (track.type !== 'mover' && track.type !== 'splitter') return null
+
+  // The object this mover/splitter acts on: its parent object for chain
+  // children, else the first routed target that resolves to an object.
+  let targetId: string | undefined
+  if (track.parentId && s.tracks[track.parentId]?.instrumentId) {
+    targetId = track.parentId
+  } else {
+    outer: for (const routing of track.targets ?? []) {
+      const scope = routing.scope
+      if (scope.kind === 'track') {
+        if (graph.objects.some((o) => o.trackId === scope.id)) { targetId = scope.id; break }
+      } else if (scope.kind === 'tag') {
+        for (const o of graph.objects) {
+          if (o.tags.includes(scope.tag)) { targetId = o.trackId; break outer }
+        }
+      } else {
+        for (const o of graph.objects) {
+          let current: (typeof s.tracks)[string] | undefined = s.tracks[o.trackId]
+          while (current) {
+            if (current.id === scope.id) { targetId = o.trackId; break outer }
+            current = current.parentId ? s.tracks[current.parentId] : undefined
+          }
+        }
+      }
+    }
+  }
+  if (!targetId) return null
+  const object = graph.objects.find((o) => o.trackId === targetId)
+  if (!object || get2DPreview(object.instrumentId)) return null
+
+  // "Gone": the exact same project with just this track muted - resolve drops
+  // muted entries from the chain, so the ghost is the world without the mover.
+  const withoutGraph = resolveProject({
+    ...snapshot,
+    tracks: { ...snapshot.tracks, [projectTrackId]: { ...track, muted: true } },
+  })
+  const ghostObject = withoutGraph.objects.find((o) => o.trackId === targetId)
+  const trackFirstNote = firstNoteBeat(flattenProjectTrackNotes(track, s.beatsPerBar, s.totalBars))
+  return {
+    object,
+    ghostObject,
+    copyCount: Math.min(MAX_PROJECT_OCCURRENCES, resolveVisualCopies(object.moverAndSplitterChain, 0).length),
+    ghostCount: ghostObject
+      ? Math.min(MAX_PROJECT_OCCURRENCES, resolveVisualCopies(ghostObject.moverAndSplitterChain, 0).length)
+      : 0,
+    loopStart: alignToBar(trackFirstNote ?? firstNoteBeat(object.notes)),
+    bpm: s.bpm,
+    beatsPerBar: s.beatsPerBar,
+  }
+}
+
+/** Per-frame data every occurrence group reads; written once by the driver. */
+interface ProjectFrame {
+  world: Matrix4
+  opacity: number
+  copies: VisualCopy[]
+  ghostCopies: VisualCopy[]
+}
+
+/** One object's ObjectState at a beat - the popup's stand-in for computeAtBeat:
+ *  energy, automation lanes, envelope lanes and the local transform all follow
+ *  the engine's merge order; only the parent world (soloed preview centers the
+ *  object) and fx overrides are omitted. */
+function computeProjectState(
+  obj: ResolvedObject,
+  beat: number,
+  bpm: number,
+  beatsPerBar: number,
+  world: Matrix4,
+): ObjectState {
+  const energy = obj.notes.length > 0 ? evaluatePulse(obj.notes, beat) : 0
+  let params = obj.params
+  if (obj.automations.length) {
+    params = { ...obj.params }
+    for (const auto of obj.automations) {
+      if (auto.noise && auto.gates?.length) {
+        const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
+        if (!Number.isNaN(v)) params[auto.param] = v
+      } else if (auto.keyframes.length) {
+        params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
+      }
+    }
+  }
+  let opacityGate = 1
+  for (const env of obj.envelopes) {
+    if (env.notes.length === 0) continue
+    const gain = evaluateAdsrGain(env.notes, beat, env.adsr)
+    if (env.kind === 'opacity') {
+      opacityGate *= 1 - env.depth + env.depth * gain
+    } else if (env.kind === 'param' && env.param !== undefined) {
+      if (params === obj.params) params = { ...obj.params }
+      const base = params[env.param] ?? env.paramDefault ?? 0
+      params[env.param] = base + (env.envTarget - base) * (gain * env.depth)
+    }
+  }
+  const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
+  localTransformToSV(local, obj.scratchBase)
+  composeMatrix(obj.scratchBase, world)
+  const opacity = Math.max(0, Math.min(1, obj.scratchBase.opacity * opacityGate))
+  const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
+  return {
+    beat,
+    secPerBeat: 60 / bpm,
+    beatsPerBar,
+    params,
+    energy,
+    videoPads: obj.videoPads,
+    photoPads: obj.photoPads,
+    world,
+    opacity,
+    blackedOut: false,
+    stringParams: obj.stringParams,
+    abilityEvents: obj.abilityEvents,
+    notes: obj.notes,
+    activeNotes,
+  }
+}
+
+/** Runs before every occurrence (mount order): advances the beat, registers the
+ *  shared ObjectState, and evaluates both chains for this frame. */
+function ProjectPreviewDriver({ data, sync, frame }: { data: ProjectPreviewData; sync?: boolean; frame: ProjectFrame }) {
+  useFrame((root) => {
+    const t = useTimeStore.getState()
+    const beat = sync && t.isPlaying
+      ? t.currentBeat
+      : data.loopStart + previewBeat(root.clock.elapsedTime)
+    const state = computeProjectState(data.object, beat, data.bpm, data.beatsPerBar, frame.world)
+    frame.opacity = state.opacity
+    setPreviewObjectState(PROJECT_PREVIEW_TRACK_ID, state)
+    frame.copies = resolveVisualCopies(data.object.moverAndSplitterChain, beat)
+    frame.ghostCopies = data.ghostObject
+      ? resolveVisualCopies(data.ghostObject.moverAndSplitterChain, beat)
+      : []
+  })
+  useEffect(() => () => setPreviewObjectState(PROJECT_PREVIEW_TRACK_ID, null), [])
+  return null
+}
+
+const _occurrenceMatrix = new Matrix4()
+
+/** One rendered copy of the object - the popup's ObjectRenderer: placement =
+ *  local world × this occurrence's copy transform, opacity/color from the copy
+ *  (ghosts additionally faded to read as "without"). */
+function ProjectOccurrence({
+  component: Component,
+  index,
+  ghost,
+  frame,
+}: {
+  component: NonNullable<ReturnType<typeof getInstrument>>['component']
+  index: number
+  ghost: boolean
+  frame: ProjectFrame
+}) {
+  const groupRef = useRef<Group>(null)
+  useFrame(() => {
+    const g = groupRef.current
+    if (!g) return
+    const copy = (ghost ? frame.ghostCopies : frame.copies)[index]
+    g.visible = !!copy
+    if (!copy) return
+    _occurrenceMatrix.multiplyMatrices(frame.world, copy.transform)
+    _occurrenceMatrix.decompose(g.position, g.quaternion, g.scale)
+    applyMaterialOpacity(g, frame.opacity * copy.opacity * (ghost ? GHOST_OPACITY : 1))
+    applyMaterialHueShift(g, copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+  })
+  return (
+    <group ref={groupRef}>
+      <Suspense fallback={null}>
+        <Component trackId={PROJECT_PREVIEW_TRACK_ID} />
+      </Suspense>
+    </group>
+  )
+}
+
+function ProjectTrackPreview({ data, sync }: { data: ProjectPreviewData; sync?: boolean }) {
+  // Keyed by the hover data on purpose: a fresh frame per hover so a stale
+  // world matrix from the previous row can never bleed into the first paint.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const frame = useMemo<ProjectFrame>(
+    () => ({ world: new Matrix4(), opacity: 1, copies: [], ghostCopies: [] }),
+    [data],
+  )
+  const def = getInstrument(data.object.instrumentId)
+  if (!def) return null
+  return (
+    <>
+      <ProjectPreviewDriver data={data} sync={sync} frame={frame} />
+      {Array.from({ length: data.ghostCount }, (_, i) => (
+        <ProjectOccurrence key={`ghost-${i}`} component={def.component} index={i} ghost frame={frame} />
+      ))}
+      {Array.from({ length: data.copyCount }, (_, i) => (
+        <ProjectOccurrence key={i} component={def.component} index={i} ghost={false} frame={frame} />
+      ))}
+    </>
+  )
+}
+
 // ── The popup layer ──────────────────────────────────────────────────────────
 //
 // ONE persistent popup with ONE always-mounted <Canvas>, shared by every row of
@@ -266,6 +542,9 @@ type PreviewTarget = {
   sync?: boolean
   /** Mover/splitter rows: the track's stored settings. */
   inputValues?: Record<string, number>
+  /** Timeline rows: preview the real project track (settings, notes, chain) -
+   *  falls back to the generic preview when it can't resolve to an object. */
+  projectTrackId?: string
 }
 
 let currentPreview: PreviewTarget | null = null
@@ -291,6 +570,12 @@ export function InstrumentPreviewLayer() {
   // stays mounted (frameloop 'never') under a cheap 2D canvas that mounts per
   // hover - no context creation, so it's moving on its first frame too.
   const draw2d = preview ? get2DPreview(preview.item.id) : undefined
+  // Timeline rows resolve against the live project (memo per hover - resolve
+  // is cheap at project scale, but not per-frame cheap).
+  const projectData = useMemo(
+    () => (preview?.projectTrackId ? buildProjectPreview(preview.projectTrackId) : null),
+    [preview],
+  )
   return (
     <div
       className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
@@ -303,9 +588,11 @@ export function InstrumentPreviewLayer() {
         <color attach="background" args={['#09090b']} />
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
-        {preview && !draw2d && (preview.item.kind === 'object'
-          ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
-          : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
+        {preview && !draw2d && (projectData
+          ? <ProjectTrackPreview key={preview.projectTrackId} data={projectData} sync={preview.sync} />
+          : preview.item.kind === 'object'
+            ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
+            : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
       </Canvas>
       {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}
     </div>

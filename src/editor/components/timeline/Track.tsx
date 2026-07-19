@@ -90,8 +90,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     if (previewTimer.current) clearTimeout(previewTimer.current)
     previewTimer.current = setTimeout(() => {
-      // The row's REAL notes drive the preview, and while the transport plays
-      // the popup follows the song - the preview is the music, not a demo.
+      // The row previews the REAL project element (its settings, notes, and
+      // mover chain - see buildProjectPreview); while the transport plays the
+      // popup follows the song. The notes/inputValues ride along only as the
+      // fallback when the row can't resolve to an object (e.g. an unrouted
+      // mover), which drops to the generic library preview.
       const { beatsPerBar, totalBars } = useProjectStore.getState()
       const notes = flattenBlocks(track.blocks, beatsPerBar, totalBars)
       setInstrumentPreview({
@@ -100,6 +103,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         notes,
         sync: true,
         inputValues: track.inputValues,
+        projectTrackId: track.id,
       })
     }, 150)
   }
