@@ -120,9 +120,10 @@ export default function ProjectsPage() {
       const project = await createProject(name)
       track('project_created', { source: 'blank' })
       router.push(`/editor?project=${project.id}`)
-    } catch {
+    } catch (err) {
+      console.error('Project create failed:', err)
       setCreating(false)
-      alert("Failed to create project.")
+      alert(`Failed to create project${err instanceof Error ? `: ${err.message}` : '.'}`)
     }
   }
 
@@ -152,9 +153,10 @@ export default function ProjectsPage() {
       const project = await createProject(template.name, structuredClone(template.document))
       track('project_created', { source: 'template', template: template.id })
       router.push(projectDestination(template.id, project.id))
-    } catch {
+    } catch (err) {
+      console.error('Project create from template failed:', err)
       setCreating(false)
-      alert("Failed to create project from template.")
+      alert(`Failed to create project from template${err instanceof Error ? `: ${err.message}` : '.'}`)
     }
   }
 
