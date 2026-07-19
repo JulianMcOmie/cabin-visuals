@@ -101,15 +101,16 @@ export function defaultSettings(fileName: string): ExportSettings {
     includeAudio: true,
     videoBitrate: defaultBitrate(1920, 60),
     fileName,
-    watermark: true,
+    watermark: false,
     rangeMode: 'whole',
     rangeFromBar: 1,
     rangeToBar: 1,
   }
 }
 
-/** The free-tier ceiling: 720p, watermarked. Applied to settings at dialog-open
- *  AND at export-start, so a stale localStorage 1080p can't leak through. */
+/** The free-tier ceiling: 720p (no watermark - resolution is the only gate).
+ *  Applied to settings at dialog-open AND at export-start, so a stale
+ *  localStorage 1080p can't leak through. */
 export function clampToFreeTier(s: ExportSettings): ExportSettings {
   const portrait = s.aspect === '9:16'
   return {
@@ -117,7 +118,7 @@ export function clampToFreeTier(s: ExportSettings): ExportSettings {
     width: portrait ? 720 : 1280,
     height: portrait ? 1280 : 720,
     videoBitrate: defaultBitrate(1280, s.fps),
-    watermark: true,
+    watermark: false,
   }
 }
 

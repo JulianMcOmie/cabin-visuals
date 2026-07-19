@@ -410,7 +410,7 @@ function Header() {
           <Link
             href="/pricing"
             onClick={() => track('editor_upgrade_clicked')}
-            title="Cabin Visuals Pro - watermark-free 1080p exports, $9/mo"
+            title="Cabin Visuals Pro - full HD 1080p exports, $9/mo"
             className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
           >
             <Sparkles size={11} strokeWidth={2.5} />

@@ -79,7 +79,8 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
     merged.height = tier.height
   }
   merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
-  merged.watermark = !isPro
+  // No watermark on any tier - resolution is the free plan's only export gate.
+  merged.watermark = false
   return isPro ? merged : clampToFreeTier(merged)
 }
 
@@ -336,7 +337,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
 
             {!isPro && (
               <p className="text-[11px] text-[var(--text-muted)] leading-snug">
-                Free exports are 720p with a small watermark.{' '}
+                Free exports are 720p.{' '}
                 {/* New tab: mid-export (possibly unsaved demo work) shouldn't be navigated away. */}
                 <a
                   href="/pricing"

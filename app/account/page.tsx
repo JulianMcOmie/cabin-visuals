@@ -78,8 +78,8 @@ export default function AccountPage() {
                     {plan.loading
                       ? ''
                       : plan.isPro
-                        ? 'Watermark-free 1080p exports, unlimited projects.'
-                        : '720p watermarked exports, 1 project.'}
+                        ? 'Full HD 1080p exports, unlimited projects.'
+                        : '720p exports, 1 project.'}
                   </div>
                 </div>
                 {!plan.loading && (plan.isPro ? (
