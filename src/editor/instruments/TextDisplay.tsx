@@ -703,6 +703,7 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
     { pitch: 60, label: 'Word height · bottom' },
   ],
   component: TextDisplayVisual,
-  fullFrame: true,
+  // NOT fullFrame: the text lives in world space so movers (and the camera)
+  // can act on it - it is deliberately not pinned to the viewport.
   defaultOnTop: true,
 }
