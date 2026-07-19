@@ -9,6 +9,7 @@ export const FUNDAMENTAL_GEOMETRIES = [
   { id: 'octahedron', label: 'Octahedron', shortLabel: 'OCTA' },
   { id: 'dodecahedron', label: 'Dodecahedron', shortLabel: 'DODECA' },
   { id: 'icosahedron', label: 'Icosahedron', shortLabel: 'ICOSA' },
+  { id: 'sphere', label: 'Sphere', shortLabel: 'SPHERE' },
 ] as const
 
 export type FundamentalGeometryId = (typeof FUNDAMENTAL_GEOMETRIES)[number]['id']
@@ -31,6 +32,7 @@ function Geometry({ geometry }: { geometry: FundamentalGeometryId }) {
     case 'octahedron': return <octahedronGeometry args={[SOLID_RADIUS, 0]} />
     case 'dodecahedron': return <dodecahedronGeometry args={[SOLID_RADIUS, 0]} />
     case 'icosahedron': return <icosahedronGeometry args={[SOLID_RADIUS, 0]} />
+    case 'sphere': return <sphereGeometry args={[SOLID_RADIUS, 32, 16]} />
     default: return <boxGeometry args={[1.6, 1.6, 1.6]} />
   }
 }

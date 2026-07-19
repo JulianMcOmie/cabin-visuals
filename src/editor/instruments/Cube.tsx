@@ -16,7 +16,7 @@ const DEFAULT_BASE_COLOR = DEFAULT_FUNDAMENTAL_COLOR
 // The cube's definition lives next to its visual - schema and component can't drift.
 export const cubeInstrument: ObjectInstrumentDef = {
   id: 'cube',
-  name: 'Cube',
+  name: 'Polygon',
   kind: 'object',
   userInterfaceRenderer: 'cube',
   params: [
@@ -77,6 +77,7 @@ export function Cube({ trackId }: { trackId: string }) {
     octahedron: null,
     dodecahedron: null,
     icosahedron: null,
+    sphere: null,
   })
   const fragRefs = useRef<(Mesh | null)[]>([])
 
