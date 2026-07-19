@@ -6,7 +6,7 @@ import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate, Repeat } from 'luci
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
-import { LOOP_PATTERNS } from './loops'
+import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
@@ -348,6 +348,47 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
 
 type LibraryTab = 'instruments' | 'effects' | 'loops' | 'templates'
 
+/** Hover popup for a loop row: the pattern as a mini piano roll - one lane
+ *  per used row, notes as bars (velocity = brightness), beat gridlines. */
+function LoopPatternPopup({ pattern, left, top }: { pattern: LoopPattern; left: number; top: number }) {
+  const beats = pattern.bars * 4
+  const rowCount = Math.max(1, ...pattern.notes.map(([, , , row]) => (row ?? 0) + 1))
+  const height = Math.max(44, Math.min(96, rowCount * 22))
+  const clampedTop = Math.max(8, Math.min(top - 8, window.innerHeight - height - 40))
+  return (
+    <div
+      className="pointer-events-none fixed z-[90] w-[228px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] p-2 shadow-xl shadow-black/60"
+      style={{ left, top: clampedTop }}
+    >
+      <div
+        className="relative w-full overflow-hidden rounded-[3px] bg-[#101013]"
+        style={{
+          height,
+          backgroundImage: `repeating-linear-gradient(to right, rgba(255,255,255,0.09) 0 1px, transparent 1px ${100 / beats}%)`,
+        }}
+      >
+        {pattern.notes.map(([b, dur, vel, row], i) => (
+          <div
+            key={i}
+            className="absolute rounded-[2px] bg-[var(--accent)]"
+            style={{
+              left: `${(b / beats) * 100}%`,
+              width: `max(3px, ${(dur / beats) * 100}%)`,
+              top: `${((row ?? 0) / rowCount) * 100 + 1.5}%`,
+              height: `${100 / rowCount - 8}%`,
+              opacity: 0.35 + ((vel ?? 100) / 127) * 0.65,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-1.5 flex items-baseline justify-between">
+        <span className="font-mono text-[10px] text-[var(--text-3)]">{pattern.name}</span>
+        <span className="font-mono text-[9px] text-[var(--text-muted)]">{pattern.bars} bar{pattern.bars !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  )
+}
+
 // The Templates tab: double-click switches the current project onto that
 // template (visual tracks replaced, audio + its detected BPM kept). One undo
 // step, but still a big swap - confirm first.
@@ -417,6 +458,7 @@ export function LeftSidebar() {
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startEffectDrag, ghostRef: effectGhostRef, ghostName: effectGhostName } = useEffectDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
+  const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
@@ -506,7 +548,12 @@ export function LeftSidebar() {
             {LOOP_PATTERNS.map((pattern) => (
               <div
                 key={pattern.id}
-                onPointerDown={(e) => startLoopBlockDrag(e, pattern)}
+                onPointerDown={(e) => { setLoopHover(null); startLoopBlockDrag(e, pattern) }}
+                onMouseEnter={(e) => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  setLoopHover({ pattern, left: rect.right + 8, top: rect.top })
+                }}
+                onMouseLeave={() => setLoopHover(null)}
                 title={pattern.description}
                 className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
               >
@@ -516,6 +563,7 @@ export function LeftSidebar() {
                 <span className="text-xs text-[var(--text-2)] truncate">{pattern.name}</span>
               </div>
             ))}
+            {loopHover && <LoopPatternPopup pattern={loopHover.pattern} left={loopHover.left} top={loopHover.top} />}
           </div>
         )}
         {tab === 'templates' && <TemplatesTab />}
