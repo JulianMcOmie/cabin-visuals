@@ -26,6 +26,14 @@ const BLOCK_SPLIT_EPSILON_BEATS = 0.000001
 
 type IdFactory = () => string
 
+export interface BlockSplit {
+  /** All replacement regions in timeline order. */
+  blocks: Block[]
+  left: Block
+  /** The replacement region whose left edge is the split beat. */
+  right: Block
+}
+
 function splitNotePart(note: Note, startBeat: number, endBeat: number, shiftBeat: number, id: string | IdFactory): Note | null {
   const noteStart = note.startBeat
   const noteEnd = note.startBeat + note.durationBeats
@@ -45,7 +53,7 @@ export function splitBlockAtBeat(
   splitBeat: number,
   beatsPerBar: number,
   makeId: IdFactory = () => crypto.randomUUID(),
-): { left: Block; right: Block } | null {
+): BlockSplit | null {
   const blockStartBeat = block.startBar * beatsPerBar
   const blockDurationBeats = block.durationBars * beatsPerBar
   const blockEndBeat = blockStartBeat + blockDurationBeats
@@ -71,27 +79,73 @@ export function splitBlockAtBeat(
   }
 
   if (block.loop) {
-    // Both halves keep looping. The right half starts mid-stream, so each note
-    // shifts by the split offset modulo the loop length - the phase its repeats
-    // had before the cut, kept inside the pattern window [0, loop length).
-    // The loop length is pinned explicitly on both halves because the right
-    // half's re-phased notes could infer a different one.
     const loopBeats = loopLengthBeats(block, beatsPerBar)
     const loopLengthBars = loopBeats / beatsPerBar
-    return {
-      left: { ...left, loopLengthBars },
-      right: {
+    const leftLoop = { ...left, loopLengthBars }
+    const rawPhase = splitOffsetBeats % loopBeats
+    const phase = rawPhase < 0 ? rawPhase + loopBeats : rawPhase
+    const onSeam = phase <= BLOCK_SPLIT_EPSILON_BEATS
+      || loopBeats - phase <= BLOCK_SPLIT_EPSILON_BEATS
+
+    // A cut on an existing seam starts a fresh, phase-zero copy of the source
+    // pattern. This is deliberately not a re-phased pattern: its first region
+    // is the base loop and any remaining duration is made from its repeats.
+    if (onSeam) {
+      const seamRight: Block = {
         ...right,
         loopLengthBars,
-        notes: block.notes.map((note) => {
-          const rem = (note.startBeat - splitOffsetBeats) % loopBeats
-          return {
-            ...note,
-            id: makeId(),
-            startBeat: rem < 0 ? rem + loopBeats : rem,
-          }
-        }),
-      },
+        notes: block.notes.map((note) => ({ ...note, id: makeId() })),
+      }
+      return { blocks: [leftLoop, seamRight], left: leftLoop, right: seamRight }
+    }
+
+    // Between seams, preserve the incomplete occurrence as a literal MIDI
+    // region from the playhead to the next original seam. A new phase-zero
+    // loop can then begin at that seam without changing the pattern heard on
+    // the timeline. When the block ends before the seam, only the remainder is
+    // needed, so this naturally produces two rather than three non-empty parts.
+    const nextSeamOffset = splitOffsetBeats + (loopBeats - phase)
+    const remainderEndOffset = Math.min(nextSeamOffset, blockDurationBeats)
+    const remainderNotes: Note[] = []
+    for (const occurrence of tileLoopNotes(block.notes, loopBeats, blockDurationBeats)) {
+      const occurrenceEnd = occurrence.startBeat + occurrence.durationBeats
+      const clippedStart = Math.max(splitOffsetBeats, occurrence.startBeat)
+      const clippedEnd = Math.min(remainderEndOffset, occurrenceEnd)
+      if (clippedEnd - clippedStart <= BLOCK_SPLIT_EPSILON_BEATS) continue
+      remainderNotes.push({
+        ...occurrence.note,
+        id: makeId(),
+        startBeat: clippedStart - splitOffsetBeats,
+        durationBeats: clippedEnd - clippedStart,
+      })
+    }
+    remainderNotes.sort((a, b) => a.startBeat - b.startBeat)
+
+    const remainder: Block = {
+      ...right,
+      durationBars: (remainderEndOffset - splitOffsetBeats) / beatsPerBar,
+      loop: false,
+      loopLengthBars: undefined,
+      notes: remainderNotes,
+    }
+    const blocks = [leftLoop, remainder]
+
+    if (nextSeamOffset < blockDurationBeats - BLOCK_SPLIT_EPSILON_BEATS) {
+      const resumedLoop: Block = {
+        ...block,
+        id: makeId(),
+        startBar: (blockStartBeat + nextSeamOffset) / beatsPerBar,
+        durationBars: (blockDurationBeats - nextSeamOffset) / beatsPerBar,
+        loopLengthBars,
+        notes: block.notes.map((note) => ({ ...note, id: makeId() })),
+      }
+      blocks.push(resumedLoop)
+    }
+
+    return {
+      blocks,
+      left: leftLoop,
+      right: remainder,
     }
   }
 
@@ -105,10 +159,9 @@ export function splitBlockAtBeat(
     if (rightPart) rightNotes.push(rightPart)
   }
 
-  return {
-    left: { ...left, notes: leftNotes },
-    right: { ...right, notes: rightNotes },
-  }
+  const plainLeft = { ...left, notes: leftNotes }
+  const plainRight = { ...right, notes: rightNotes }
+  return { blocks: [plainLeft, plainRight], left: plainLeft, right: plainRight }
 }
 
 export interface TrackTreeSnapshot {
@@ -698,49 +751,14 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             continue
           }
 
-          const blockStartBeat = block.startBar * beatsPerBar
-          const blockEndBeat = blockStartBeat + block.durationBars * beatsPerBar
-          if (beat <= blockStartBeat || beat >= blockEndBeat) {
+          const split = splitBlockAtBeat(block, beat, beatsPerBar)
+          if (!split) {
             blocks.push(block)
             continue
           }
 
-          const splitBeat = beat - blockStartBeat
-          const leftNotes: Note[] = []
-          const rightNotes: Note[] = []
-
-          for (const note of block.notes) {
-            const noteStart = note.startBeat
-            const noteEnd = note.startBeat + note.durationBeats
-
-            if (noteEnd <= splitBeat) {
-              leftNotes.push(note)
-            } else if (noteStart >= splitBeat) {
-              rightNotes.push({ ...note, startBeat: note.startBeat - splitBeat })
-            } else {
-              leftNotes.push({ ...note, durationBeats: splitBeat - note.startBeat })
-              rightNotes.push({
-                ...note,
-                id: crypto.randomUUID(),
-                startBeat: 0,
-                durationBeats: noteEnd - splitBeat,
-              })
-            }
-          }
-
-          const rightBlock: Block = {
-            ...block,
-            id: crypto.randomUUID(),
-            startBar: beat / beatsPerBar,
-            durationBars: (blockEndBeat - beat) / beatsPerBar,
-            notes: rightNotes,
-          }
-
-          blocks.push(
-            { ...block, durationBars: splitBeat / beatsPerBar, notes: leftNotes },
-            rightBlock,
-          )
-          splitBlockIds.add(rightBlock.id)
+          blocks.push(...split.blocks)
+          splitBlockIds.add(split.right.id)
           trackChanged = true
           changed = true
         }
