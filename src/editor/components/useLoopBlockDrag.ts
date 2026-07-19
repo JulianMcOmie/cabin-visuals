@@ -5,15 +5,36 @@ import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewBlock } from '../utils/selection'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { getInstrument } from '../instruments'
+import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Block, Track } from '../types'
 import type { LoopPattern } from './loops'
 
-/** The pitch a dropped loop speaks on this track: the instrument's emphasized
- *  midi row, else its first row, else C4 (movers' signed-basis 60 included). */
-function pitchFor(track: Track): number {
-  const rows = track.type === 'base' ? getInstrument(track.instrumentId)?.midiRows : undefined
-  return rows?.find((r) => r.emphasized)?.pitch ?? rows?.[0]?.pitch ?? 60
+/** The target's midi-row pitches, top row first - the vocabulary a dropped
+ *  loop's relative rows map onto. Empty = a full-piano instrument. */
+function rowPitchesFor(track: Track): number[] {
+  if (track.type === 'base') {
+    return getInstrument(track.instrumentId)?.midiRows?.map((r) => r.pitch) ?? []
+  }
+  if (track.type === 'mover' || track.type === 'splitter') {
+    const def = getMoverOrSplitterDefinition((track.type === 'splitter' ? track.splitterId : track.moverId) ?? '')
+    const rows = def?.midiRows?.(mergeDefinitionSettings(def, track.inputValues), { priorCount: 0 })
+    return rows?.map((r) => r.pitch) ?? []
+  }
+  return []
+}
+
+// Where a full-piano instrument's "top row" sits (C5, descending per row).
+const FULL_ROLL_TOP = 72
+
+/** Map a pattern's relative row (0 = top) onto the vocabulary. Rows past the
+ *  bottom keep descending BELOW the instrument's lowest row - the editor
+ *  surfaces those pitches as extra ghost rows under the vocabulary. */
+function pitchForRow(rowPitches: number[], row: number): number {
+  if (rowPitches.length === 0) return Math.max(0, FULL_ROLL_TOP - row)
+  if (row < rowPitches.length) return rowPitches[row]
+  return Math.max(0, Math.min(...rowPitches) - (row - rowPitches.length + 1))
 }
 
 /**
@@ -97,7 +118,7 @@ export function useLoopBlockDrag() {
       const target = laneTarget(lastX, lastY)
       if (!target) return
       const { beatsPerBar } = useProjectStore.getState()
-      const pitch = pitchFor(target.track)
+      const rowPitches = rowPitchesFor(target.track)
       const block: Block = {
         id: crypto.randomUUID(),
         startBar: target.bar,
@@ -107,11 +128,11 @@ export function useLoopBlockDrag() {
         loopLengthBars: pattern.bars,
         notes: pattern.notes
           .filter(([b]) => b < pattern.bars * beatsPerBar)
-          .map(([b, dur, vel]) => ({
+          .map(([b, dur, vel, row]) => ({
             id: crypto.randomUUID(),
             startBeat: b,
             durationBeats: dur,
-            pitch,
+            pitch: pitchForRow(rowPitches, row ?? 0),
             velocity: vel ?? 100,
           })),
       }
