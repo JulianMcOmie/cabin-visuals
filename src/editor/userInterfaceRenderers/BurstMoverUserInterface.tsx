@@ -161,7 +161,10 @@ function CurvePreview({
       className="relative border-y border-white/[0.07]"
       style={{ background: 'radial-gradient(circle at 24% 20%, rgba(245,166,35,0.10), rgba(7,9,14,0.97) 62%), linear-gradient(150deg, #12100a, #07090e)' }}
     >
-      <svg viewBox={`0 0 ${CURVE_W} ${CURVE_H}`} className="block h-auto w-full" role="img" aria-label={`${label} burst curve preview`}>
+      {/* Cap at the designed width: the inspector panel is resizable, and an
+          uncapped w-full scales the whole drawing (axis text included) with
+          it - out of scale with every other instrument's fixed-size visual. */}
+      <svg viewBox={`0 0 ${CURVE_W} ${CURVE_H}`} className="mx-auto block h-auto w-full max-w-[260px]" role="img" aria-label={`${label} burst curve preview`}>
         {/* landing line (eased value 1) and launch line (0) */}
         <line x1={CURVE_PAD_X} x2={CURVE_W - CURVE_PAD_X} y1={toY(1)} y2={toY(1)} stroke="rgba(255,255,255,0.16)" strokeDasharray="3 4" strokeWidth="1" />
         <line x1={CURVE_PAD_X} x2={CURVE_W - CURVE_PAD_X} y1={toY(0)} y2={toY(0)} stroke="rgba(255,255,255,0.09)" strokeWidth="1" />
@@ -294,7 +297,7 @@ function AxisPad({ axes }: { axes: [UserInterfaceParameter, UserInterfaceParamet
       ref={svgRef}
       data-testid="burst-axis-pad"
       viewBox={`0 0 ${PAD_W} ${PAD_H}`}
-      className="block h-auto w-full touch-none rounded-md border border-white/10 bg-[#090c13] shadow-[inset_0_0_20px_rgba(0,0,0,.58)]"
+      className="mx-auto block h-auto w-full max-w-[260px] touch-none rounded-md border border-white/10 bg-[#090c13] shadow-[inset_0_0_20px_rgba(0,0,0,.58)]"
       role="group"
       aria-label="Burst per-axis distances"
     >
