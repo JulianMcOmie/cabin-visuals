@@ -76,7 +76,7 @@ export default function PricingPage() {
 
       <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
         <Appear className="mt-16 mb-3 text-center">
-          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Seriously, just use it for free (it's great).</h1>
+          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Seriously, just use it for free (it&apos;s great).</h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
             The whole editor - the instruments, templates, and AI lyric videos - is free.
             Pro is for the person who wants to use it seriously and professionally.
