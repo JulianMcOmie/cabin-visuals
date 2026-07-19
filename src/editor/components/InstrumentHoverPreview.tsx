@@ -9,6 +9,7 @@ import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
 import type { VisualCopy } from '../core/visualCopies/types'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
+import { useTimeStore } from '../store/TimeStore'
 import type { ObjectState, ResolvedNote } from '../core/visual/types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import type { InstrumentItem } from './LeftSidebar'
@@ -49,6 +50,17 @@ function makeLoopNotes(pitches: number[], durationBeats: number, strideBeats = 1
 
 function previewBeat(elapsedSec: number): number {
   return (elapsedSec * BEATS_PER_SEC + START_OFFSET_BEATS) % LOOP_BEATS
+}
+
+/** Track-row previews sync to the song: while the transport plays, the popup
+ *  follows the project beat (the preview IS the music); paused or for plain
+ *  library rows, the private 120bpm loop clock runs instead. */
+function previewBeatNow(elapsedSec: number, sync?: boolean): number {
+  if (sync) {
+    const t = useTimeStore.getState()
+    if (t.isPlaying) return t.currentBeat
+  }
+  return previewBeat(elapsedSec)
 }
 
 // Instruments whose real render needs context a popup can't provide (uploads,
@@ -116,10 +128,15 @@ function makePreviewState(instrumentId: string): ObjectState {
  *  so the state is registered and ticked ahead of the instrument's read.
  *  Recomputes activeNotes and the decaying energy pulse each frame - the
  *  preview's stand-in for what computeAtBeat derives on the main canvas. */
-function ObjectPreviewDriver({ instrumentId }: { instrumentId: string }) {
-  const state = useMemo(() => makePreviewState(instrumentId), [instrumentId])
+function ObjectPreviewDriver({ instrumentId, notes, sync }: { instrumentId: string; notes?: ResolvedNote[]; sync?: boolean }) {
+  const state = useMemo(() => {
+    const s = makePreviewState(instrumentId)
+    // Track rows preview their OWN notes rather than the canned arc.
+    if (notes && notes.length > 0) s.notes = notes
+    return s
+  }, [instrumentId, notes])
   useFrame((root) => {
-    const beat = previewBeat(root.clock.elapsedTime)
+    const beat = previewBeatNow(root.clock.elapsedTime, sync)
     state.beat = beat
     state.activeNotes.length = 0
     let lastOnset = -Infinity
@@ -137,13 +154,13 @@ function ObjectPreviewDriver({ instrumentId }: { instrumentId: string }) {
   return null
 }
 
-function ObjectPreview({ instrumentId }: { instrumentId: string }) {
+function ObjectPreview({ instrumentId, notes, sync }: { instrumentId: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const def = getInstrument(instrumentId)
   if (!def) return null
   const Comp = def.component
   return (
     <>
-      <ObjectPreviewDriver instrumentId={instrumentId} />
+      <ObjectPreviewDriver instrumentId={instrumentId} notes={notes} sync={sync} />
       <Suspense fallback={null}>
         <Comp trackId={PREVIEW_TRACK_ID} />
       </Suspense>
@@ -172,18 +189,21 @@ const CUBE_BASE_COLOR = new Color('#35a7e6')
 // off-frame.
 const MOVER_BASE_OFFSET = 1.3
 
-function MoverPreview({ moverId }: { moverId: string }) {
+function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
   const def = getMoverOrSplitterDefinition(moverId)
   const meshesRef = useRef<Mesh[]>([])
   const chain = useMemo(() => {
     if (!def) return null
-    return def.resolve({ settings: mergeDefinitionSettings(def, undefined), notes: MOVER_NOTES })
-  }, [def])
+    return def.resolve({
+      settings: mergeDefinitionSettings(def, inputValues),
+      notes: notes && notes.length > 0 ? notes : MOVER_NOTES,
+    })
+  }, [def, notes, inputValues])
   const offsetSeed = def?.kind === 'mover'
 
   useFrame((root) => {
     if (!chain) return
-    const beat = previewBeat(root.clock.elapsedTime)
+    const beat = previewBeatNow(root.clock.elapsedTime, sync)
     const seed = identityVisualCopy()
     if (offsetSeed) seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
     const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
@@ -213,6 +233,12 @@ function MoverPreview({ moverId }: { moverId: string }) {
           <meshBasicMaterial color="#3a3a42" toneMapped={false} />
         </mesh>
       )}
+      {/* The "gone" ghost: the object exactly where it would sit WITHOUT this
+          mover/splitter - the solid copies show what adding it does. */}
+      <mesh position={offsetSeed ? [MOVER_BASE_OFFSET, 0, 0] : [0, 0, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
+      </mesh>
       {Array.from({ length: MAX_COPIES }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
@@ -232,7 +258,15 @@ function MoverPreview({ moverId }: { moverId: string }) {
 // paint moving content on its next frame. While no row is hovered the layer is
 // hidden and the frameloop is 'never', so the idle cost is one dormant context.
 
-type PreviewTarget = { item: InstrumentItem; anchor: { left: number; top: number } }
+type PreviewTarget = {
+  item: InstrumentItem
+  anchor: { left: number; top: number }
+  /** Track-row previews: the row's real notes + follow-the-transport sync. */
+  notes?: ResolvedNote[]
+  sync?: boolean
+  /** Mover/splitter rows: the track's stored settings. */
+  inputValues?: Record<string, number>
+}
 
 let currentPreview: PreviewTarget | null = null
 const previewListeners = new Set<() => void>()
@@ -270,8 +304,8 @@ export function InstrumentPreviewLayer() {
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
         {preview && !draw2d && (preview.item.kind === 'object'
-          ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} />
-          : <MoverPreview key={preview.item.id} moverId={preview.item.id} />)}
+          ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
+          : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
       </Canvas>
       {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}
     </div>

@@ -9,6 +9,7 @@ import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
 import { selectTrack, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
+import { flattenBlocks } from '../../core/visual/noteFlatten'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
@@ -88,10 +89,19 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     if (!previewItem || !canPreview(previewItem)) return
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     if (previewTimer.current) clearTimeout(previewTimer.current)
-    previewTimer.current = setTimeout(
-      () => setInstrumentPreview({ item: previewItem, anchor: { left: rect.right, top: rect.top } }),
-      150,
-    )
+    previewTimer.current = setTimeout(() => {
+      // The row's REAL notes drive the preview, and while the transport plays
+      // the popup follows the song - the preview is the music, not a demo.
+      const { beatsPerBar, totalBars } = useProjectStore.getState()
+      const notes = flattenBlocks(track.blocks, beatsPerBar, totalBars)
+      setInstrumentPreview({
+        item: previewItem,
+        anchor: { left: rect.right, top: rect.top },
+        notes,
+        sync: true,
+        inputValues: track.inputValues,
+      })
+    }, 150)
   }
   const leaveLabel = () => {
     if (previewTimer.current) clearTimeout(previewTimer.current)
