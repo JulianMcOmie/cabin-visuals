@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil } from 'lucide-react'
+import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -342,13 +342,22 @@ function Header() {
   // "Has an account" - anonymous sessions are signed in for persistence only.
   const permanent = !authLoading && !!user && !isAnonymous
 
+  // Leaving the editor can hang on this heavy page for a beat or two before
+  // Next paints the projects route, so the button must acknowledge the click
+  // itself: a press contraction, then a spinner in the chevron's spot until
+  // navigation unmounts us. Skip the spinner for open-in-new-tab clicks.
+  const [leavingToProjects, setLeavingToProjects] = useState(false)
+
   return (
     <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-panel)] relative">
       <Link
         href="/projects"
-        className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] transition-colors"
+        onClick={(e) => {
+          if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setLeavingToProjects(true)
+        }}
+        className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] active:scale-[0.94] transition-[color,transform] cursor-pointer"
       >
-        <ChevronLeft size={13} />
+        {leavingToProjects ? <Loader2 size={13} className="animate-spin" /> : <ChevronLeft size={13} />}
         Projects
       </Link>
       <div className="w-px h-4 bg-[var(--border)] flex-shrink-0" />
