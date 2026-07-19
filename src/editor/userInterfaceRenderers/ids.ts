@@ -1,1 +1,1 @@
-export type UserInterfaceRendererId = 'parameters' | 'video' | 'photo'
+export type UserInterfaceRendererId = 'parameters' | 'video' | 'photo' | 'cube'
