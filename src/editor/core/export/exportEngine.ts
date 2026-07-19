@@ -9,7 +9,7 @@ import { makeTimebase, type BeatRange, type ExportSettings, type ExportTimebase 
 import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer } from './mux'
 import { createVideoEncodeSession, exportEncoderConfig } from './videoEncode'
-import { encoderProvidesMp4Metadata } from './support'
+import { encoderProducesMuxableChunks } from './support'
 import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
 
@@ -117,12 +117,12 @@ export async function runExport(
   if (!driver) throw new Error('Export driver is not mounted')
 
   // Fail BEFORE the render, not at mux-finalize: browsers can pick a different
-  // encoder per resolution (Firefox: software at small sizes provides the avcC
-  // metadata mp4-muxer needs, hardware at real sizes does not), so the only
-  // trustworthy check is one probe frame at the exact chosen config.
-  if (!(await encoderProvidesMp4Metadata(exportEncoderConfig(settings)))) {
+  // encoder per resolution, so the only trustworthy check is a probe encode at
+  // the exact chosen config (see encoderProducesMuxableChunks for what
+  // "muxable" requires and how Firefox's encoders fall short of it).
+  if (!(await encoderProducesMuxableChunks(exportEncoderConfig(settings)))) {
     throw new Error(
-      "this browser's video encoder doesn't provide the codec data MP4 files need. Please export in Chrome.",
+      "this browser's video encoder doesn't produce the chunk data MP4 files need. Please export in Chrome.",
     )
   }
 

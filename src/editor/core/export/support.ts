@@ -33,31 +33,51 @@ export function isExportSupported(): Promise<ExportSupport> {
 }
 
 /**
- * Encode ONE real frame at the GIVEN config and confirm the chunk metadata
- * carries a decoderConfig with a `description` (the avcC record). Neither
- * isConfigSupported nor a token small-frame encode is a sufficient gate:
- * Firefox answers "supported" for H.264, and its SOFTWARE encoder (used at
- * tiny sizes) even provides the metadata - but the hardware encoder it picks
- * at real output sizes does not, and mp4-muxer builds the file header from
- * it, so the export dies at finalize with a null decoderConfig. The check is
- * only trustworthy at the exact config that will actually encode, which is
- * why runExport re-runs it with the chosen settings before rendering.
+ * Encode a few real frames at the GIVEN config and confirm the encoder's
+ * output satisfies what mp4-muxer actually requires of a track:
+ *
+ *  1. Chunk metadata carrying a decoderConfig with a `description` (the avcC
+ *     record the MP4 header is built from), and
+ *  2. a FIRST chunk with timestamp 0 - the muxer hard-rejects a non-zero
+ *     first DTS, and because that first chunk is also the one carrying the
+ *     decoderConfig, a single rejection cascades into "decoderConfig is null"
+ *     at finalize (the error users actually see).
+ *
+ * isConfigSupported alone answers neither question: Firefox reports H.264 as
+ * supported, then (per config/encoder class) omits the metadata or stamps the
+ * first chunk one frame-duration late. The probe is only trustworthy at the
+ * exact config that will actually encode - browsers pick different encoders
+ * per resolution - which is why runExport re-runs it with the chosen settings
+ * before rendering. Kept to what the muxer provably needs; the durable fix
+ * for non-Chrome browsers is a muxer that tolerates their output (mediabunny).
  */
-export async function encoderProvidesMp4Metadata(config: VideoEncoderConfig): Promise<boolean> {
+export async function encoderProducesMuxableChunks(config: VideoEncoderConfig): Promise<boolean> {
   let meta: EncodedVideoChunkMetadata | undefined
+  let firstTimestamp: number | null = null
   const encoder = new VideoEncoder({
-    output: (_chunk, m) => { meta ??= m },
+    output: (chunk, m) => {
+      meta ??= m
+      firstTimestamp ??= chunk.timestamp
+    },
     error: () => { /* flush() rejects; the catch below answers false */ },
   })
   try {
     encoder.configure(config)
     const canvas = new OffscreenCanvas(config.width, config.height)
     canvas.getContext('2d')?.fillRect(0, 0, 1, 1) // a context so VideoFrame has pixels to read
-    const frame = new VideoFrame(canvas, { timestamp: 0, duration: 33_333 })
-    encoder.encode(frame, { keyFrame: true })
-    frame.close()
+    // Three frames, timestamped exactly like the real session (i/fps), so
+    // reordering or off-by-one-frame stamping shows up here and not mid-export.
+    const fps = config.framerate ?? 30
+    for (let i = 0; i < 3; i++) {
+      const frame = new VideoFrame(canvas, {
+        timestamp: Math.round((i * 1e6) / fps),
+        duration: Math.round(1e6 / fps),
+      })
+      encoder.encode(frame, { keyFrame: i === 0 })
+      frame.close()
+    }
     await encoder.flush()
-    return !!meta?.decoderConfig?.description
+    return !!meta?.decoderConfig?.description && firstTimestamp === 0
   } catch {
     return false
   } finally {
@@ -78,7 +98,7 @@ async function probe(): Promise<ExportSupport> {
     }
     // Probe at the default export shape (1080p60, quality mode) so the gate
     // exercises the same encoder class a real export will engage.
-    if (!(await encoderProvidesMp4Metadata({ ...VIDEO_CONFIG, latencyMode: 'quality' }))) {
+    if (!(await encoderProducesMuxableChunks({ ...VIDEO_CONFIG, latencyMode: 'quality' }))) {
       return { ok: false, audioOk: false, reason: 'Video export requires Chrome (WebCodecs).' }
     }
     const audioOk =
