@@ -691,7 +691,7 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   id: 'textDisplay',
   name: 'Text Display',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'textDisplay',
   params: PARAMS,
   midiRows: [
     { pitch: PITCH_NEXT_WORD, label: 'Next word', color: '#facc15', emphasized: true },

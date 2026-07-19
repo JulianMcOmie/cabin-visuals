@@ -18,7 +18,8 @@ const boxGeo = new BoxGeometry(1, 1, 1)
 interface Pooled { mesh: Mesh; mat: MeshBasicMaterial; active: boolean }
 
 // Six PICO-8-ish palettes; palette index = (pitch % 12) % 6.
-const PALETTES: string[][] = [
+// Exported for the settings UI's palette reference strip (presentation only).
+export const PALETTES: string[][] = [
   ['#ff004d', '#ff77a8', '#ffccaa', '#fff1e8'],
   ['#ffa300', '#ffec27', '#ff6c24', '#fff1e8'],
   ['#00e436', '#a8e72e', '#eaffd0', '#008751'],
@@ -140,7 +141,7 @@ export const pixelBlastInstrument: ObjectInstrumentDef = {
   id: 'pixelBlast',
   name: 'Pixel Blast',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'pixelBlast',
   params: PARAMS,
   // Pitch class = X column (0 far left … 11 far right), octave = Y band
   // (higher octave explodes higher). Velocity = blast size + particle count.

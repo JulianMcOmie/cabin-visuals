@@ -58,7 +58,7 @@ export const colorFiltersInstrument: ObjectInstrumentDef = {
   name: 'Color Filters',
   kind: 'object',
   params: PARAMS,
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'colorFilters',
   midiRows: COLOR_FILTER_ROWS,
   component: ColorFiltersVisual,
 }

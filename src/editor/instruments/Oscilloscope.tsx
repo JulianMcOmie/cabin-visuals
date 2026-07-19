@@ -95,7 +95,7 @@ export const oscilloscopeInstrument: ObjectInstrumentDef = {
   id: 'oscilloscope',
   name: 'Oscilloscope',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'oscilloscope',
   params: PARAMS,
   component: OscilloscopeVisual,
   fullFrame: true,

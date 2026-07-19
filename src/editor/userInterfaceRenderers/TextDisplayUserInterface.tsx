@@ -1,0 +1,249 @@
+'use client'
+
+import type { ReactNode } from 'react'
+import { isNumberParam } from '../instruments/types'
+import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
+import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+
+// Bespoke settings for the Text Display instrument: the lyric sheet front and
+// center, fonts as specimen buttons, then the animation controls grouped the
+// way you think about them (Type / Color / Motion / Echo / Flight). Gated
+// params (showIf) never reach this component - each group renders whatever of
+// its members are present, so headers stay honest when a toggle is off.
+
+function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
+  return parameters.find((candidate) => candidate.definition.key === key)
+}
+
+function numberOf(bound: UserInterfaceParameter | undefined, fallback = 0): number {
+  return typeof bound?.value === 'number' ? bound.value : fallback
+}
+
+/** Preview families for the font select's option values - presentation-only
+ *  mirrors of the instrument's internal FONT_STACKS. */
+const FONT_PREVIEWS: Record<number, { family: string; short: string }> = {
+  0: { family: '"Arial Black", Impact, sans-serif', short: 'IMPACT' },
+  1: { family: 'Georgia, "Times New Roman", serif', short: 'SERIF' },
+  2: { family: '"Courier New", monospace', short: 'MONO' },
+  3: { family: 'Arial, Helvetica, sans-serif', short: 'SANS' },
+}
+
+function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center justify-between">
+      <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">{children}</span>
+      {right}
+    </div>
+  )
+}
+
+/** A numeric param as the shared console slider; renders nothing if the param
+ *  is absent (hidden by showIf) or not numeric. */
+function BoundSlider({ bound }: { bound: UserInterfaceParameter | undefined }) {
+  if (!bound) return null
+  const definition = bound.definition
+  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
+  return (
+    <ParamSlider
+      label={definition.label}
+      value={bound.value}
+      min={definition.min}
+      max={definition.max}
+      step={definition.step}
+      onChange={bound.setValue}
+    />
+  )
+}
+
+/** A boolean param as a labelled toggle row. */
+function BoundToggleRow({ bound }: { bound: UserInterfaceParameter | undefined }) {
+  if (!bound || typeof bound.value !== 'number') return null
+  const on = bound.value >= 0.5
+  return (
+    <div className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
+      <span className="truncate text-[11px] text-[var(--text-3)]" title={bound.definition.label}>{bound.definition.label}</span>
+      <div className="flex justify-end">
+        <ParamToggle on={on} onChange={(v) => bound.setValue(v ? 1 : 0)} label={bound.definition.label} />
+      </div>
+    </div>
+  )
+}
+
+function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | undefined; label: string; dimmed: boolean }) {
+  if (!bound || typeof bound.value !== 'string') return null
+  return (
+    <label className={`flex cursor-pointer items-center gap-2 transition-opacity ${dimmed ? 'opacity-35' : ''}`}>
+      <span
+        className="relative h-6 w-10 flex-shrink-0 overflow-hidden rounded border border-[var(--border-strong)]"
+        style={{ background: bound.value }}
+      >
+        <input
+          type="color"
+          aria-label={bound.definition.label}
+          value={bound.value}
+          onChange={(event) => bound.setValue(event.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </span>
+      <span className="text-[10px] text-[var(--text-3)]">{label}</span>
+    </label>
+  )
+}
+
+export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+  const text = findParam(parameters, 'text')
+  const font = findParam(parameters, 'font')
+  const colorMode = findParam(parameters, 'colorMode')
+  const fontIndex = Math.round(numberOf(font))
+  const invertBehind = numberOf(colorMode) >= 0.5
+
+  const placed = new Set([
+    'text', 'font', 'fontSize', 'strokeWidth', 'opacity',
+    'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
+    'onsetBounce', 'releaseDuration', 'heightAmount',
+    'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
+    'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
+  ])
+  const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
+
+  return (
+    <section data-testid="text-display-user-interface" className="mb-3">
+      {/* --- The lyric sheet: the reason this track exists --- */}
+      <SectionLabel>TEXT</SectionLabel>
+      {text && typeof text.value === 'string' && (
+        <>
+          <textarea
+            value={text.value}
+            onChange={(event) => text.setValue(event.target.value)}
+            rows={5}
+            spellCheck={false}
+            aria-label="Words to display, in order"
+            placeholder="Type the words, in order…"
+            style={{ fontFamily: FONT_PREVIEWS[fontIndex]?.family }}
+            className="min-h-[96px] w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-app)] px-2.5 py-2 text-[13px] leading-snug text-[var(--text)] outline-none focus:border-[var(--accent)]"
+          />
+          <p className="mb-3 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
+            space = next word · <span className="font-mono">|syl|la|bles|</span> · <span className="font-mono">!kept together!</span>
+          </p>
+        </>
+      )}
+
+      {/* --- Type: font specimens + the glyph sliders --- */}
+      {font && font.definition.type === 'select' && (
+        <div className="mb-2 grid grid-cols-4 gap-1">
+          {font.definition.options.map((option) => {
+            const preview = FONT_PREVIEWS[option.value]
+            const active = fontIndex === option.value
+            return (
+              <button
+                key={option.value}
+                onClick={() => font.setValue(option.value)}
+                aria-pressed={active}
+                title={option.label}
+                className={`flex flex-col items-center gap-0.5 rounded border py-1.5 transition-colors cursor-pointer ${active
+                  ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                  : 'border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+              >
+                <span className="text-[15px] leading-none" style={{ fontFamily: preview?.family }}>Ag</span>
+                <span className="text-[7px] font-semibold tracking-[0.08em]">{preview?.short ?? option.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <BoundSlider bound={findParam(parameters, 'fontSize')} />
+      <BoundSlider bound={findParam(parameters, 'strokeWidth')} />
+      <BoundSlider bound={findParam(parameters, 'opacity')} />
+
+      {/* --- Color --- */}
+      <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
+        <SectionLabel>COLOR</SectionLabel>
+        {colorMode && colorMode.definition.type === 'select' && (
+          <div className="mb-2.5 flex rounded border border-[var(--border)] p-0.5">
+            {colorMode.definition.options.map((option) => {
+              const active = Math.round(numberOf(colorMode)) === option.value
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => colorMode.setValue(option.value)}
+                  aria-pressed={active}
+                  className={`flex-1 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                    ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+        <div className="mb-3 flex items-center gap-5" title={invertBehind ? 'Colors are ignored while inverting what is behind the text' : undefined}>
+          <ColorWell bound={findParam(parameters, 'color')} label="Text" dimmed={invertBehind} />
+          <ColorWell bound={findParam(parameters, 'strokeColor')} label="Stroke" dimmed={invertBehind} />
+        </div>
+        <BoundSlider bound={findParam(parameters, 'hue')} />
+        <BoundToggleRow bound={findParam(parameters, 'rainbowEnabled')} />
+        <BoundSlider bound={findParam(parameters, 'rainbowCycleLength')} />
+      </div>
+
+      {/* --- Motion --- */}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        <SectionLabel>MOTION</SectionLabel>
+        <BoundSlider bound={findParam(parameters, 'onsetBounce')} />
+        <BoundSlider bound={findParam(parameters, 'releaseDuration')} />
+        <BoundSlider bound={findParam(parameters, 'heightAmount')} />
+      </div>
+
+      {/* --- Echo (delay taps) - children appear once taps >= 1 --- */}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        <SectionLabel>ECHO</SectionLabel>
+        <BoundSlider bound={findParam(parameters, 'delayTaps')} />
+        <BoundSlider bound={findParam(parameters, 'delayTime')} />
+        <BoundSlider bound={findParam(parameters, 'delayScaleFalloff')} />
+        <BoundSlider bound={findParam(parameters, 'delayOpacityFalloff')} />
+        <BoundToggleRow bound={findParam(parameters, 'pingPongEnabled')} />
+        <BoundSlider bound={findParam(parameters, 'pingPongWidth')} />
+      </div>
+
+      {/* --- Flight - the toggle lives in the header, sliders appear with it --- */}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        {(() => {
+          const flight = findParam(parameters, 'flightEnabled')
+          return (
+            <SectionLabel
+              right={flight && typeof flight.value === 'number'
+                ? <ParamToggle on={flight.value >= 0.5} onChange={(v) => flight.setValue(v ? 1 : 0)} label="Flight mode" />
+                : undefined}
+            >
+              FLIGHT
+            </SectionLabel>
+          )
+        })()}
+        <BoundSlider bound={findParam(parameters, 'flightSpeed')} />
+        <BoundSlider bound={findParam(parameters, 'flightMaxDepth')} />
+        <BoundSlider bound={findParam(parameters, 'flightDrift')} />
+        <BoundSlider bound={findParam(parameters, 'flightTumble')} />
+        <BoundSlider bound={findParam(parameters, 'flightSubdivRate')} />
+      </div>
+
+      {/* Anything the layout does not know about still gets a control. */}
+      {leftovers.length > 0 && (
+        <div className="border-t border-[var(--border-subtle)] pt-3">
+          {leftovers.map((bound) => {
+            const numeric = typeof bound.value === 'number'
+            return (
+              <ParamControl
+                key={bound.definition.key}
+                param={bound.definition}
+                numValue={numeric ? (bound.value as number) : undefined}
+                strValue={numeric ? undefined : (bound.value as string)}
+                onNum={bound.setValue}
+                onStr={bound.setValue}
+              />
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}

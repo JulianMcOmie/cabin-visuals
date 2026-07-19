@@ -190,7 +190,7 @@ export const scoreTickerInstrument: ObjectInstrumentDef = {
   id: 'scoreTicker',
   name: 'Score Ticker',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'scoreTicker',
   params: PARAMS,
   // Each note adds round(pitch × velocity × multiplier) points, ticking in
   // slot-machine style. Hard hits (velocity ≥ 1UP threshold) also flash 1UP.

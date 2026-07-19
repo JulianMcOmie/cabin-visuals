@@ -666,7 +666,7 @@ export const starsInstrument: ObjectInstrumentDef = {
   id: 'stars',
   name: 'Stars',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'stars',
   params: PARAMS,
   midiRows: [
     { pitch: PITCH_WARP_FWD, label: 'Warp forward (hold)', emphasized: true },

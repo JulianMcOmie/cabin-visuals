@@ -218,7 +218,7 @@ export const folderFlightInstrument: ObjectInstrumentDef = {
   id: 'folderFlight',
   name: 'Folder Flight',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'folderFlight',
   params: PARAMS,
   // No midiRows: a folder's height is its pitch, so the editor shows the full
   // piano roll (every row a different launch height) rather than a short

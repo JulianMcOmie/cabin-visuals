@@ -104,7 +104,7 @@ export const hexagonDotsInstrument: ObjectInstrumentDef = {
   id: 'hexagonDots',
   name: 'Hexagon Dots',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'hexagonDots',
   params: PARAMS,
   // Every note spawns one ring regardless of pitch (color cycles per note; velocity sets
   // dot size), so the vocabulary is a single trigger row.

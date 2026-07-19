@@ -410,7 +410,7 @@ export const metronomeBallsInstrument: ObjectInstrumentDef = {
   id: 'metronomeBalls',
   name: 'Metronome Balls',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'metronomeBalls',
   params: PARAMS,
   midiRows: [
     { pitch: PITCH_FG, label: 'Evolve pattern · foreground', emphasized: true },

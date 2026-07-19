@@ -8,7 +8,7 @@ export const pointLightInstrument: ObjectInstrumentDef = {
   id: 'pointLight',
   name: 'Point Light',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'pointLight',
   params: [
     { key: 'color', label: 'Color', type: 'color', default: '#ffd28a' },
     { key: 'intensity', label: 'Intensity', min: 0, max: 80, step: 0.5, default: 12 },

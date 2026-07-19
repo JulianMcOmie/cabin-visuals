@@ -222,7 +222,7 @@ export const paddleBounceInstrument: ObjectInstrumentDef = {
   id: 'paddleBounce',
   name: 'Paddle Bounce',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'paddleBounce',
   params: PARAMS,
   // Every note smashes the rally (speed burst). Pitch 36..84 maps to arc height;
   // pitch % 3 sets hops per crossing (0→1 clean hop, 1→2, 2→3). Velocity = trail.

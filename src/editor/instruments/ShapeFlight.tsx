@@ -424,7 +424,7 @@ export const shapeFlightInstrument: ObjectInstrumentDef = {
   id: 'shapeFlight',
   name: 'Shape Flight',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'shapeFlight',
   params: PARAMS,
   midiRows: [
     { pitch: 64, label: 'Stream shape · 19 points (intricate)' },

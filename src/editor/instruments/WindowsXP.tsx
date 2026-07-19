@@ -1138,7 +1138,7 @@ export const windowsXpInstrument: ObjectInstrumentDef = {
   id: 'windowsXp',
   name: 'Windows XP',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
+  userInterfaceRenderer: 'windowsXp',
   params: PARAMS,
   midiRows: [
     { pitch: 72, label: 'Screen shake', emphasized: true },
