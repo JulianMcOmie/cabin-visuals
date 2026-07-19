@@ -18,6 +18,19 @@ export interface VideoEncodeSession {
   dispose(): void
 }
 
+/** The exact encoder config a session will run - exported so runExport can
+ *  probe THIS config (not a stand-in) before spending minutes rendering. */
+export function exportEncoderConfig(settings: ExportSettings): VideoEncoderConfig {
+  return {
+    codec: videoCodec(Math.max(settings.width, settings.height), settings.fps),
+    width: settings.width,
+    height: settings.height,
+    framerate: settings.fps,
+    bitrate: settings.videoBitrate,
+    latencyMode: 'quality',
+  }
+}
+
 export function createVideoEncodeSession(
   settings: ExportSettings,
   writer: Mp4Writer,
@@ -28,14 +41,7 @@ export function createVideoEncodeSession(
     output: (chunk, meta) => writer.addVideoChunk(chunk, meta),
     error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
   })
-  encoder.configure({
-    codec: videoCodec(Math.max(settings.width, settings.height), settings.fps),
-    width: settings.width,
-    height: settings.height,
-    framerate: settings.fps,
-    bitrate: settings.videoBitrate,
-    latencyMode: 'quality',
-  })
+  encoder.configure(exportEncoderConfig(settings))
 
   const dequeue = () =>
     new Promise<void>((resolve) => encoder.addEventListener('dequeue', () => resolve(), { once: true }))

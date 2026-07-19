@@ -8,7 +8,8 @@ import type { Track } from '../../types'
 import { makeTimebase, type BeatRange, type ExportSettings, type ExportTimebase } from './types'
 import { getFrameDriver, type FrameDriver } from './frameDriver'
 import { Mp4Writer } from './mux'
-import { createVideoEncodeSession } from './videoEncode'
+import { createVideoEncodeSession, exportEncoderConfig } from './videoEncode'
+import { encoderProvidesMp4Metadata } from './support'
 import { renderAudioTrack, encodeAudioIntoWriter } from './audioRender'
 import { createWatermarkCompositor } from './watermark'
 
@@ -114,6 +115,16 @@ export async function runExport(
 ): Promise<ExportResult> {
   const driver = getFrameDriver()
   if (!driver) throw new Error('Export driver is not mounted')
+
+  // Fail BEFORE the render, not at mux-finalize: browsers can pick a different
+  // encoder per resolution (Firefox: software at small sizes provides the avcC
+  // metadata mp4-muxer needs, hardware at real sizes does not), so the only
+  // trustworthy check is one probe frame at the exact chosen config.
+  if (!(await encoderProvidesMp4Metadata(exportEncoderConfig(settings)))) {
+    throw new Error(
+      "this browser's video encoder doesn't provide the codec data MP4 files need. Please export in Chrome.",
+    )
+  }
 
   const timebase = makeTimebase(project.bpm, project.beatsPerBar, project.totalBars, settings.fps, project.range)
 

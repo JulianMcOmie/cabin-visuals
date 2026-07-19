@@ -33,23 +33,25 @@ export function isExportSupported(): Promise<ExportSupport> {
 }
 
 /**
- * Encode ONE tiny real frame and confirm the chunk metadata carries a
- * decoderConfig with a `description` (the avcC record). isConfigSupported
- * alone is not a sufficient gate: Firefox answers "supported" for H.264 but
- * its encoder never attaches that metadata, and mp4-muxer builds the file
- * header from it - so a whole export would render, encode, and then die at
- * finalize with a null decoderConfig. Better to spend one 128px frame here
- * and disable the button with the honest reason up front.
+ * Encode ONE real frame at the GIVEN config and confirm the chunk metadata
+ * carries a decoderConfig with a `description` (the avcC record). Neither
+ * isConfigSupported nor a token small-frame encode is a sufficient gate:
+ * Firefox answers "supported" for H.264, and its SOFTWARE encoder (used at
+ * tiny sizes) even provides the metadata - but the hardware encoder it picks
+ * at real output sizes does not, and mp4-muxer builds the file header from
+ * it, so the export dies at finalize with a null decoderConfig. The check is
+ * only trustworthy at the exact config that will actually encode, which is
+ * why runExport re-runs it with the chosen settings before rendering.
  */
-async function encodesUsableMetadata(): Promise<boolean> {
+export async function encoderProvidesMp4Metadata(config: VideoEncoderConfig): Promise<boolean> {
   let meta: EncodedVideoChunkMetadata | undefined
   const encoder = new VideoEncoder({
     output: (_chunk, m) => { meta ??= m },
     error: () => { /* flush() rejects; the catch below answers false */ },
   })
   try {
-    encoder.configure({ codec: 'avc1.64002a', width: 128, height: 128, framerate: 30, bitrate: 1_000_000 })
-    const canvas = new OffscreenCanvas(128, 128)
+    encoder.configure(config)
+    const canvas = new OffscreenCanvas(config.width, config.height)
     canvas.getContext('2d')?.fillRect(0, 0, 1, 1) // a context so VideoFrame has pixels to read
     const frame = new VideoFrame(canvas, { timestamp: 0, duration: 33_333 })
     encoder.encode(frame, { keyFrame: true })
@@ -74,7 +76,9 @@ async function probe(): Promise<ExportSupport> {
     if (!video.supported) {
       return { ok: false, audioOk: false, reason: 'No H.264 encoder available in this browser.' }
     }
-    if (!(await encodesUsableMetadata())) {
+    // Probe at the default export shape (1080p60, quality mode) so the gate
+    // exercises the same encoder class a real export will engage.
+    if (!(await encoderProvidesMp4Metadata({ ...VIDEO_CONFIG, latencyMode: 'quality' }))) {
       return { ok: false, audioOk: false, reason: 'Video export requires Chrome (WebCodecs).' }
     }
     const audioOk =
