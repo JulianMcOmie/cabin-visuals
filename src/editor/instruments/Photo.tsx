@@ -281,7 +281,7 @@ function PhotoComponent({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
-    if (!mesh) return
+    if (!mesh) return false
     const pads = state.photoPads ?? []
 
     // Warm the whole bank the first time this track renders (and again if its

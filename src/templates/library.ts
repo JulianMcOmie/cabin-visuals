@@ -1,10 +1,10 @@
-import { doc, track, block, n, pulse, arp, hits, every } from './builder'
+import { doc, track, block, every, hits } from './builder'
 import type { ProjectDocument } from '../persistence/types'
 
 // The template library. Each template is a complete v2 project document tuned
-// around each instrument's actual pitch vocabulary (Stars 48=warp/57=pulse,
-// WindowsXP 36-59=window-spawn melody, DotField 36-47=bass shake, etc.) - not
-// arbitrary notes. All patterns are written out in full (no loop: true blocks).
+// around each instrument's actual pitch vocabulary (DotField 36-47=bass shake,
+// ShapeFlight ~52-64 spawns, CameraControl 36=punch/38=shake) - not arbitrary
+// notes. All patterns are written out in full (no loop: true blocks).
 // One full-frame instrument per template at most; positioned objects layer on top.
 
 export interface TemplateDef {
@@ -24,44 +24,6 @@ export interface TemplateDef {
 
 const BARS = 16
 const BEATS = BARS * 4
-
-// ------------------------------------------------------------- Retro Desktop
-// Windows XP nostalgia: windows spawn to a melody, file icons rain while
-// folders fly past, the screen shakes at the phrase turnarounds.
-const retroDesktop: TemplateDef = {
-  id: 'retro-desktop',
-  name: 'Retro Desktop',
-  description: 'XP nostalgia - windows pop to the melody, folders fly, the screen shakes.',
-  bpm: 120,
-  document: doc({
-    bpm: 120,
-    totalBars: BARS,
-    tracks: [
-      track({
-        name: 'Desktop',
-        instrumentId: 'windowsXp',
-        color: '#38bdf8',
-        params: { driftSpeed: 600, springAnim: 1, spawnX: 0.6 },
-        blocks: [block(0, BARS, [
-          n(0, 26, 0.25, 100), // wallpaper tint
-          ...every(16, BEATS, hits([ // window-spawn melody (36-59 range)
-            [0, 48, 0.5], [2, 52, 0.5], [4, 55, 0.5], [6, 52, 0.5],
-            [8, 57, 0.5], [10, 55, 0.5], [12, 52, 0.5], [14, 48, 0.5],
-          ])),
-          ...every(16, BEATS, hits([[4, 64, 3], [12, 67, 3]])), // held icon rains
-          n(30, 72, 0.25, 120), n(62, 72, 0.25, 120),           // screen shake
-        ])],
-      }),
-      track({
-        name: 'Folder Flight',
-        instrumentId: 'folderFlight',
-        color: '#f7d774',
-        params: { speed: 22, iconScale: 1.6, ySpread: 5, tumble: 1.5 },
-        blocks: [block(0, BARS, arp([60, 62, 64, 65, 67, 69, 71, 69], 1, BEATS, { vel: 100 }))],
-      }),
-    ],
-  }),
-}
 
 // ------------------------------------------------------------------ Hyperspeed
 // 172 BPM DnB: dot field shaking on a held-note bassline, spirograph shapes
@@ -107,54 +69,6 @@ const hyperspeed: TemplateDef = {
   }),
 }
 
-// --------------------------------------------------------------- Minimal Pulse
-// Stripped-back techno: metronome ball patterns nudged by the kick, and a
-// single cube that shatters on the off-beats via its ability lane.
-const minimalPulse: TemplateDef = {
-  id: 'minimal-pulse',
-  name: 'Minimal Pulse',
-  description: 'Stripped techno - metronome geometry and one cube that shatters on cue.',
-  bpm: 120,
-  document: doc({
-    bpm: 120,
-    totalBars: BARS,
-    tracks: [
-      track({
-        name: 'Metronome',
-        instrumentId: 'metronomeBalls',
-        color: '#94a3b8',
-        params: { balls: 28, speed: 2.2, dotSize: 2.2 },
-        blocks: [block(0, BARS, [
-          n(0, 60, 0.25, 100),                            // midnight palette
-          ...pulse(48, 4, BEATS, { vel: 100, dur: 0.2 }),  // fg pattern nudge
-          ...pulse(50, 8, BEATS, { offset: 4, vel: 90, dur: 0.2 }), // bg flower nudge
-          n(32, 56, 0.25, 110),                            // invert swap
-        ])],
-      }),
-      track({
-        name: 'Cube',
-        instrumentId: 'cube',
-        color: '#6366f1',
-        params: { baseSize: 2, spinSpeed: 0.8 },
-        stringParams: { baseColor: '#57afdb' },
-        blocks: [block(0, BARS, [])],
-        children: [
-          {
-            name: 'Shatter',
-            instrumentId: '',
-            type: 'ability',
-            abilityKey: 'shatter',
-            color: '#f472b6',
-            blocks: [block(0, BARS, pulse(60, 4, BEATS, { offset: 2, vel: 115, dur: 0.5 }))],
-          },
-        ],
-      }),
-    ],
-  }),
-}
-
 export const TEMPLATES: TemplateDef[] = [
   hyperspeed,
-  retroDesktop,
-  minimalPulse,
 ]

@@ -296,6 +296,10 @@ export interface ProjectState {
    *  setting: persisted with the document, and 16:9/9:16 seeds the export
    *  dialog's default aspect. */
   viewAspect: ViewAspect
+  /** The template (or lyric style) this project is currently on - the id of
+   *  the last template document created-from or applied, so the Templates tab
+   *  can mark the current one. Null for scratch projects and older saves. */
+  appliedTemplateId: string | null
   setActiveScene: (sceneId: string) => void
   addScene: () => string
   renameScene: (sceneId: string, name: string) => void
@@ -485,6 +489,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   beatsPerBar: 4,
   totalBars: 32,
   viewAspect: 'fill',
+  appliedTemplateId: null,
 
   setActiveScene: (sceneId) => rawSet((s) => {
     if (!s.scenes[sceneId] || sceneId === s.activeSceneId) return s
@@ -1528,6 +1533,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         rootTrackIds: [...audioIds, ...clonedRoots],
         bpm: hasAudio ? s.bpm : templateDoc.bpm,
         totalBars: Math.max(s.totalBars, templateDoc.totalBars),
+        appliedTemplateId: templateDoc.appliedTemplateId ?? null,
       }
     })
   },

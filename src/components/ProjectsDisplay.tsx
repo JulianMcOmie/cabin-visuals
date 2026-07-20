@@ -457,7 +457,9 @@ function CreateProjectModal({
                       preview, so a gradient here only leaked its colour past the
                       clipped corners/edges (the "pink/green corners"). Dark base
                       instead - any subpixel gap now reads as the card, not a hue. */}
-                  <div className="relative h-24 bg-[var(--bg-app)]">
+                  {/* True 16:9 box: capture clips are 640×360, so they fit
+                      exactly - never stretched, never cropped. */}
+                  <div className="relative aspect-video bg-[var(--bg-app)]">
                     {tpl.cardPreview === 'animatedSlideshow'
                       ? <TemplateSlideshowPreview />
                       : tpl.cardPreview === 'animatedLyric'

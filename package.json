@@ -8,6 +8,7 @@
     "start": "next start",
     "test:visual": "node --import tsx --test src/editor/core/visual/*.test.ts src/editor/core/visualCopies/*.test.ts src/editor/core/directors/*.test.ts src/editor/core/photo/*.test.ts src/editor/store/scenes.test.ts src/persistence/*.test.ts",
     "lint": "next lint",
+    "previews": "node scripts/generate-previews.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

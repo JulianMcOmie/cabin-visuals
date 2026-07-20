@@ -102,7 +102,7 @@ function PaddleBounceVisual({ trackId }: { trackId: string }) {
     const top = topRef.current
     const bot = botRef.current
     const net = netRef.current
-    if (!group || !ball || !left || !right || !top || !bot || !net) return
+    if (!group || !ball || !left || !right || !top || !bot || !net) return false
 
     // No block at this beat = nothing on screen (blocks are the on-region).
     const inBlock = beatInBlock(state)

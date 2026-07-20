@@ -954,7 +954,7 @@ function WindowsXPVisual({ trackId }: { trackId: string }) {
   }, [])
 
   useInstrumentFrame(trackId, (state) => {
-    if (!canvasRef.current || !textureRef.current || !meshRef.current) return
+    if (!canvasRef.current || !textureRef.current || !meshRef.current) return false
 
     const ctx = canvasRef.current.getContext('2d')!
     const params = state.params

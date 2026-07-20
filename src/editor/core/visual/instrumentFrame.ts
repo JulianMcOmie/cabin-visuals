@@ -28,8 +28,16 @@ import type { ObjectState } from './types'
  * Runs after VisualBeatSync's computeAtBeat (r3f calls useFrame subscribers in
  * mount order, and VisualBeatSync mounts first), so state is always this frame's.
  * Skipped while the object isn't resolved yet.
+ *
+ * A callback that cannot apply the frame yet (refs not attached, canvas not
+ * ready) must return `false` instead of silently bailing: the signature was
+ * already committed by then, so a silent bail would eat the change - the
+ * object then renders stale defaults until the NEXT input change, and a
+ * paused project may never deliver one (the Laser Sphere "params do nothing
+ * until remount" bug). Returning `false` resets the signature so the frame
+ * retries until the callback can actually run.
  */
-export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void) {
+export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => void | false) {
   const copyContext = useContext(InstrumentCopyContext)
   // Signature buffer, reused across frames (write-and-compare, no allocation).
   const buf = useRef<unknown[]>([]).current
@@ -95,7 +103,8 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       const colorShiftActive = copyContext && copyContext.colorParams.length > 0 &&
         Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001
       if (!colorShiftActive) {
-        cb(state)
+        // Couldn't apply yet: drop the committed signature so next frame retries.
+        if (cb(state) === false) buf.length = 0
         return
       }
       applyColorShiftToInstrumentParams(
@@ -111,7 +120,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       Object.assign(nextState, state)
       nextState.stringParams = shiftedStringParams
       shiftedState.current = nextState
-      cb(nextState)
+      if (cb(nextState) === false) buf.length = 0
     }
   })
 }

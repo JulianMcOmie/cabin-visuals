@@ -296,7 +296,7 @@ function ParticleBurstVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
-    if (!mesh) return
+    if (!mesh) return false
 
     const par = state.params
     const burstType = BURST_TYPES[Math.round(par.burstType ?? 0)] ?? 'sphere'

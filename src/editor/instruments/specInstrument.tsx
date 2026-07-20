@@ -60,7 +60,7 @@ function SpecRenderer({ trackId, primitive, appearance, paramDefaults, colorPara
 }) {
   const meshRef = useRef<Mesh>(null)
   useInstrumentFrame(trackId, (state) => {
-    if (!meshRef.current) return
+    if (!meshRef.current) return false
     const mat = meshRef.current.material as MeshPhysicalMaterial
     // Overlay the track's explicit params over the instrument's defaults, so an
     // unset param reads its default (not 0) - a fresh track has no params yet.

@@ -210,7 +210,7 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const geo = geoRef.current
-    if (!geo) return
+    if (!geo) return false
     const notes = state.notes
     if (!notes.length) { geo.setDrawRange(0, 0); return }
 
@@ -393,7 +393,7 @@ function ShapeFlightVisual({ trackId }: { trackId: string }) {
     const colAttr = geo.getAttribute('color') as BufferAttribute
     const otherAttr = geo.getAttribute('aOther') as BufferAttribute
     const sideAttr = geo.getAttribute('aSide') as BufferAttribute
-    if (!posAttr || !colAttr || !otherAttr || !sideAttr) return
+    if (!posAttr || !colAttr || !otherAttr || !sideAttr) return false
     posAttr.needsUpdate = true
     colAttr.needsUpdate = true
     otherAttr.needsUpdate = true

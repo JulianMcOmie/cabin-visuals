@@ -368,7 +368,7 @@ function EmojiDisplayVisual({ trackId }: { trackId: string }) {
   }, [ready])
 
   useInstrumentFrame(trackId, (state) => {
-    if (!groupRef.current) return
+    if (!groupRef.current) return false
 
     const p = state.params
     const emojisStr = state.stringParams.emojis ?? DEFAULT_EMOJIS

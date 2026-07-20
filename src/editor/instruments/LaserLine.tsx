@@ -82,7 +82,7 @@ export function LaserLine({ trackId }: { trackId: string }) {
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     const light = lightRef.current
-    if (!mesh || !light) return
+    if (!mesh || !light) return false
 
     const glow = state.params.glow ?? paramDefault(laserLineInstrument, 'glow')
     const whiteCore = state.params.whiteCore ?? paramDefault(laserLineInstrument, 'whiteCore')

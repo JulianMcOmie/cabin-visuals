@@ -54,7 +54,7 @@ function HexagonDotsVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
-    if (!group) return
+    if (!group) return false
     const dotSpeed = state.params.dotSpeed ?? 4
     const dotSize = state.params.dotSize ?? 0.15
     const camZ = camera.position.z

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronRight, Plus, Sparkles, Info, LayoutTemplate, Repeat } from 'lucide-react'
+import { Check, ChevronRight, Plus, Sparkles, Info, LayoutTemplate, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useEffectDrag } from './useEffectDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
@@ -424,6 +424,8 @@ function LoopPatternPopup({ pattern, left, top }: { pattern: LoopPattern; left: 
 function TemplatesTab() {
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const applyTemplate = useProjectStore((s) => s.applyTemplate)
+  // Which template this project is on - marks the current card.
+  const appliedTemplateId = useProjectStore((s) => s.appliedTemplateId)
   const router = useRouter()
   const projectId = useSearchParams().get('project')
   // Covers the editor while the applied template autosaves before handing
@@ -469,25 +471,47 @@ function TemplatesTab() {
           for the sidebar: one card per template, its real render (or bespoke
           animation) looping above the name. */}
       {TEMPLATES.map((tpl) => (
-        <div
-          key={tpl.id}
-          onDoubleClick={() => apply(tpl)}
-          title={tpl.description}
-          className="mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-app)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
-        >
-          <div className="relative h-20 bg-[var(--bg-app)]">
-            {tpl.cardPreview === 'animatedSlideshow'
-              ? <TemplateSlideshowPreview />
-              : tpl.cardPreview === 'animatedLyric'
-                ? <TemplateLyricPreview templateId={tpl.id} />
-                : <TemplatePreviewVideo id={tpl.id} />}
-          </div>
-          <div className="flex items-center gap-1.5 px-2 py-1.5">
-            <LayoutTemplate size={11} className="flex-shrink-0 text-[var(--text-3)]" />
-            <span className="text-xs text-[var(--text-2)] truncate">{tpl.name}</span>
-          </div>
-        </div>
+        <TemplateCard key={tpl.id} tpl={tpl} onApply={() => apply(tpl)} selected={tpl.id === appliedTemplateId} />
       ))}
+    </div>
+  )
+}
+
+function TemplateCard({ tpl, onApply, selected = false }: {
+  tpl: (typeof TEMPLATES)[number]
+  onApply: () => void
+  /** This is the template the project is currently on. */
+  selected?: boolean
+}) {
+  return (
+    <div
+      onDoubleClick={onApply}
+      title={tpl.description}
+      className={`mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
+        selected
+          ? 'border-[var(--accent)]'
+          : 'border-[var(--border)] hover:border-[rgba(53,167,230,0.6)]'
+      }`}
+    >
+      {/* True 16:9 box: capture clips are 640×360, so they fit exactly -
+          never stretched, never cropped. */}
+      <div className="relative aspect-video bg-[var(--bg-app)]">
+        {tpl.cardPreview === 'animatedSlideshow'
+          ? <TemplateSlideshowPreview />
+          : tpl.cardPreview === 'animatedLyric'
+            ? <TemplateLyricPreview templateId={tpl.id} />
+            : <TemplatePreviewVideo id={tpl.id} />}
+      </div>
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+        <LayoutTemplate size={11} className="flex-shrink-0 text-[var(--text-3)]" />
+        <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{tpl.name}</span>
+        {selected && (
+          <span className="flex flex-shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--accent)]">
+            <Check size={10} strokeWidth={3} />
+            Current
+          </span>
+        )}
+      </div>
     </div>
   )
 }

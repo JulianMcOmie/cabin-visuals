@@ -44,9 +44,9 @@ function OscilloscopeVisual({ trackId }: { trackId: string }) {
     const canvas = canvasRef.current
     const texture = textureRef.current
     const mesh = meshRef.current
-    if (!canvas || !texture || !mesh) return
+    if (!canvas || !texture || !mesh) return false
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return false
 
     const width = canvas.width
     const height = canvas.height

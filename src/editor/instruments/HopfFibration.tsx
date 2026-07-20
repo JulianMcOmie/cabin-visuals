@@ -303,7 +303,7 @@ function HopfFibrationVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
-    if (!group) return
+    if (!group) return false
 
     // ── Read settings ──
     const par = state.params

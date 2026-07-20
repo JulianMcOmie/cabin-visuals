@@ -1,4 +1,4 @@
-import { DEFAULT_SCENE_BACKGROUND, type Block, type Note, type Track, type TrackType, type Routing } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Block, type EffectInstance, type InterpolationMode, type Note, type Track, type TrackType, type Routing } from '../editor/types'
 import type { ProjectDocument } from '../persistence/types'
 
 // Authoring helpers for template documents. Templates are plain v2 project
@@ -75,7 +75,30 @@ export interface TrackSpec {
   targets?: Routing[]
   /** For type 'ability': which parent-instrument ability lane this drives. */
   abilityKey?: string
+  /** For type 'mover'/'splitter': the MoverOrSplitterDefinition id + params. */
+  moverId?: string
+  splitterId?: string
+  inputValues?: Record<string, number>
+  /** For type 'automation': the parent param (or fx:<id>:<key>) it drives. */
+  targetParam?: string
+  interpolation?: InterpolationMode
+  /** Automation noise mode: notes become gates around their pitch-value. */
+  noise?: Track['noise']
+  /** Visual effect plugins on this track (build with the fx() helper). */
+  effects?: EffectInstance[]
   children?: TrackSpec[]
+}
+
+/** An effect instance with a readable unique id - keep the returned value if
+ *  an automation child needs to address it via fxTarget(). */
+export function fx(pluginId: string, settings: Record<string, number>, enabled = true): EffectInstance {
+  return { id: nid('fx'), pluginId, enabled, settings }
+}
+
+/** The automation targetParam addressing one fx() instance's setting (same
+ *  namespacing as src/editor/effects/automation.ts). */
+export function fxTarget(instance: EffectInstance, key: string): string {
+  return `fx:${instance.id}:${key}`
 }
 
 /** A track with editor-default fields filled in; children become child tracks. */
@@ -95,6 +118,13 @@ export function track(spec: TrackSpec): Track & { __children?: Track[] } {
   if (spec.stringParams) t.stringParams = spec.stringParams
   if (spec.targets) t.targets = spec.targets
   if (spec.abilityKey) t.abilityKey = spec.abilityKey
+  if (spec.moverId) t.moverId = spec.moverId
+  if (spec.splitterId) t.splitterId = spec.splitterId
+  if (spec.inputValues) t.inputValues = spec.inputValues
+  if (spec.targetParam) t.targetParam = spec.targetParam
+  if (spec.interpolation) t.interpolation = spec.interpolation
+  if (spec.noise) t.noise = spec.noise
+  if (spec.effects) t.effects = spec.effects
   if (spec.children) t.__children = spec.children.map((c) => track(c))
   return t
 }

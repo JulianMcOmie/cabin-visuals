@@ -204,7 +204,7 @@ function CircleGridVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
-    if (!mesh) return
+    if (!mesh) return false
     const p = state.params
 
     // Derive noteOnCount purely: onsets at or before the playhead (Tyler's engine tracked this itself).

@@ -95,7 +95,7 @@ function PixelInvadersVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const imesh = imeshRef.current
-    if (!imesh) return
+    if (!imesh) return false
     // No block at this beat = nothing on screen (blocks are the on-region).
     const inBlock = beatInBlock(state)
     if (groupRef.current) groupRef.current.visible = inBlock

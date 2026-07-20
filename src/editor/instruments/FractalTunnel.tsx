@@ -322,10 +322,10 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     const canvas = canvasRef.current
     const texture = textureRef.current
     const mesh = meshRef.current
-    if (!canvas || !texture || !mesh) return
+    if (!canvas || !texture || !mesh) return false
 
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return false
 
     // Time source: the playhead beat (seconds-tuned motion uses beat * secPerBeat).
     const elapsed = state.beat * state.secPerBeat

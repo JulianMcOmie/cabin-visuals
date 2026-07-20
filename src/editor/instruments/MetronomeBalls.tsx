@@ -315,7 +315,7 @@ function MetronomeBallsVisual({ trackId }: { trackId: string }) {
   }
 
   useInstrumentFrame(trackId, (state) => {
-    if (!groupRef.current) return
+    if (!groupRef.current) return false
     const p = state.params
 
     const balls = Math.floor(p.balls ?? 24)

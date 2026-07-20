@@ -98,7 +98,7 @@ function VideoComponent({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
-    if (!mesh) return
+    if (!mesh) return false
     const pads = state.videoPads ?? []
     const loop = (state.params.loop ?? paramDefault(videoInstrument, 'loop')) > 0
     const active = state.blackedOut ? null : activeVideoAt(state.notes, state.beat, VIDEO_BASE_PITCH, pads.length)

@@ -82,10 +82,10 @@ export function Cube({ trackId }: { trackId: string }) {
   const fragRefs = useRef<(Mesh | null)[]>([])
 
   useInstrumentFrame(trackId, (state) => {
-    if (!spinRef.current) return
+    if (!spinRef.current) return false
     const geometry = normalizeFundamentalGeometry(state.stringParams.geometry)
     const mesh = meshRefs.current[geometry]
-    if (!mesh) return
+    if (!mesh) return false
     for (const option of FUNDAMENTAL_GEOMETRIES) {
       const candidate = meshRefs.current[option.id]
       if (candidate) candidate.visible = option.id === geometry

@@ -64,7 +64,7 @@ function PixelBlastVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
-    if (!group) return
+    if (!group) return false
     const p = state.params
     const life = p.life ?? 0.9
     const px = p.pixelSize ?? 0.12

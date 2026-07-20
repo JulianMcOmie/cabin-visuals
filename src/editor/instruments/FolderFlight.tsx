@@ -141,7 +141,7 @@ function FolderFlightVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
-    if (!group) return
+    if (!group) return false
 
     const p = state.params
     const speed = p.speed ?? 15

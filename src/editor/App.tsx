@@ -27,6 +27,7 @@ import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
+import { PreviewCaptureButton } from './components/PreviewCaptureButton'
 import { TimelineArea } from './components/timeline/TimelineArea'
 import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
@@ -415,6 +416,7 @@ function Header() {
       </div>
 
       <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+        {process.env.NODE_ENV === 'development' && <PreviewCaptureButton />}
         <a
           href="https://discord.gg/ZrbQMFwCsb"
           target="_blank"

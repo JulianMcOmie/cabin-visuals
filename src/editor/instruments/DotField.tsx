@@ -317,7 +317,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const root = rootRef.current
-    if (!root) return
+    if (!root) return false
 
     const p = state.params
 
@@ -345,7 +345,7 @@ function DotFieldVisual({ trackId }: { trackId: string }) {
 
     const f = fieldRef.current
     const geom = geomRef.current
-    if (!f || !geom) return
+    if (!f || !geom) return false
 
     const n = f.count
     const R = f.radius

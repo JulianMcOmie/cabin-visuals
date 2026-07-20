@@ -326,7 +326,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const root = rootRef.current
-    if (!root) return
+    if (!root) return false
 
     // Read settings
     const p = state.params
@@ -351,7 +351,7 @@ function StarsVisual({ trackId }: { trackId: string }) {
 
     const geom = geomRef.current
     const mat = matRef.current
-    if (!geom || !mat) return
+    if (!geom || !mat) return false
 
     const n = starCount
     const secPerBeat = state.secPerBeat

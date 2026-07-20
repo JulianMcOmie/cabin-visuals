@@ -53,7 +53,7 @@ function IcosahedronBurstVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     const group = groupRef.current
-    if (!group) return
+    if (!group) return false
     const notes = state.notes
     const p = state.params
     const startSize = p.startSize ?? 0.15

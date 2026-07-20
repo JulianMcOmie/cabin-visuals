@@ -413,7 +413,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   }
 
   useInstrumentFrame(trackId, (state) => {
-    if (!textureRef.current || !meshRef.current || !groupRef.current) return
+    if (!textureRef.current || !meshRef.current || !groupRef.current) return false
 
     const p = state.params
     const text = state.stringParams.text ?? 'HELLO'

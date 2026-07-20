@@ -52,6 +52,11 @@ export interface ProjectDocument {
   /** Editor viewport aspect pin. Additive within v9 - absent in older saves,
    *  defaulted to 'fill' on hydrate. No schema bump: purely additive. */
   viewAspect?: ViewAspect
+  /** The template (or lyric style) the project is currently on, so the editor's
+   *  Templates tab can mark it. Template documents carry their own id here and
+   *  it rides through create-from-template verbatim; applyTemplate re-stamps
+   *  it. Additive within v9 - absent means unknown/scratch. */
+  appliedTemplateId?: string | null
   /** Small captured frame (JPEG data URL) for the projects-page card. Written
    *  by autosave when the editor's canvas is available; absent otherwise. */
   thumbnail?: string

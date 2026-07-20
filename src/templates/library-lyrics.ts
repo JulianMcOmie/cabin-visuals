@@ -10,8 +10,8 @@ import { LYRIC_TEMPLATE_TRACKS } from './library-lyrics-tracks'
 // (addLyricTrack refills a root track named 'Lyrics' instead of stacking a
 // second one).
 
-const NEXT_WORD = 48 // Text Display's "advance to the next word" pitch
-const BASS_POP = 47 // punch + shake accent
+export const NEXT_WORD = 48 // Text Display's "advance to the next word" pitch
+export const BASS_POP = 47 // punch + shake accent
 
 const BARS = 16
 const BEATS = BARS * 4
@@ -25,7 +25,9 @@ const LINES: WordHit[] = [
   ['every', 8], ['heart', 9], ['beats', 10], ['louder', 11], ['right', 12, 1.8], ['now', 14, 1.8],
 ]
 
-function lyricPattern(): { text: string; notes: Note[] } {
+/** The placeholder words + word-advance notes shared by every lyric template.
+ *  Fresh note ids per call, so each template document owns its notes. */
+export function lyricPattern(): { text: string; notes: Note[] } {
   const pattern = LINES.map(([, beat, dur]) => n(beat, NEXT_WORD, dur ?? 0.9))
   return {
     text: LINES.map(([word]) => word).join(' '),
