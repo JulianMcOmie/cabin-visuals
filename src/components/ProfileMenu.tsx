@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LogOut, ExternalLink, Settings } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,13 +118,6 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
         >
           <Settings className="mr-2 h-4 w-4" />
           <span>Account settings</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="flex cursor-pointer items-center text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-          onSelect={() => window.open('https://discord.gg/WhKZbH8nnV', '_blank')}
-        >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          <span>Discord Community</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-[var(--border)]" />
         <DropdownMenuItem
