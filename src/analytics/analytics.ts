@@ -41,6 +41,7 @@ export type AnalyticsEvent =
   | 'manage_billing_clicked'
   // Editor
   | 'editor_upgrade_clicked'
+  | 'editor_discord_clicked'
   | 'export_clicked'
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
