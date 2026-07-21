@@ -254,6 +254,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'scoreTicker', name: 'Score Ticker', description: 'A giant pixel score that ticks up as notes play.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/><rect x="4.8" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/><rect x="8.6" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/></svg>
   )},
+  { id: 'wormhole', name: 'Wormhole', description: 'A flight down an endless noise-warped tunnel of points - each note lurches you forward.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5" fill="none" stroke="#22d3ee" strokeWidth="0.7" strokeOpacity="0.35" />
+      <circle cx="6" cy="6" r="3.2" fill="none" stroke="#22d3ee" strokeWidth="0.8" strokeOpacity="0.65" />
+      <circle cx="6" cy="6" r="1.5" fill="none" stroke="#a78bfa" strokeWidth="0.9" />
+      <circle cx="6" cy="6" r="0.5" fill="#f0abfc" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library

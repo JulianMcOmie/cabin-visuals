@@ -17,7 +17,8 @@ import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { setMainPreviewEnabled } from './core/visual/VisualEngine'
 import { ProfileMenu } from '../components/ProfileMenu'
 import { track } from '../analytics/analytics'
-import { TutorialOverlay } from './components/TutorialOverlay'
+// Tutorial is disabled in the UI - see the commented mount below.
+// import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { AudioBar } from './components/AudioBar'
@@ -172,7 +173,14 @@ function VisualPanel() {
         <Scene previewMain={previewMode === 'main'} />
       </div>
       <BeatOverlay />
-      <TutorialOverlay />
+      {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
+          Re-enable by uncommenting this and its import at the top of the file -
+          nothing else was removed. Unmounted rather than early-returned on
+          purpose: its eligibility effect stamps localStorage the first time it
+          runs, so a mounted-but-hidden tutorial would quietly burn the
+          "first open" flag on every browser and never show again when you
+          turn it back on. */}
+      {/* <TutorialOverlay /> */}
       <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
         <div
           role="group"

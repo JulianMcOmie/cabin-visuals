@@ -14,15 +14,11 @@ import { takeCarryover } from '../../src/persistence/carryover'
 import { forgetLastProject } from '../../src/persistence/lastProject'
 import { track } from '../../src/analytics/analytics'
 import type { TemplateDef } from '../../src/templates'
+import { projectDestination } from '../../src/templates/destination'
 
 const FREE_PROJECT_LIMIT = 5
 // Anonymous sessions hold a single project - signing up (free) is the way to 5.
 const ANON_PROJECT_LIMIT = 1
-
-// The Lyric Video template opens its setup pipeline (its own /lyric-setup
-// route: drop a song → transcribe → align) instead of a silent editor.
-const projectDestination = (templateId: string, projectId: string) =>
-  templateId === 'lyricVideo' ? `/lyric-setup?project=${projectId}` : `/editor?project=${projectId}`
 
 
 interface ProfileData {

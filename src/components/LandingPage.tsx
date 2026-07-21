@@ -174,10 +174,12 @@ export default function LandingPage() {
                 </button>
               </CtaGlow>
             ) : (
-              // Not logged in: drop them straight into the editor to play.
+              // Not logged in: pick a template first (/start), which creates a
+              // real project on an anonymous session - the Lyric Video pipeline
+              // needs one to upload the song at all.
               <CtaGlow>
                 <Link
-                  href="/editor"
+                  href="/start"
                   onClick={() => track('try_it_out_clicked')}
                   className={CTA_CLASSES}
                 >

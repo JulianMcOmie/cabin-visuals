@@ -65,7 +65,14 @@ const hyperspeed: TemplateDef = {
         name: 'Shape Runs',
         instrumentId: 'shapeFlight',
         color: '#f43f5e',
-        params: { shapeMode: 0, speed: 32, spawnRate: 14, farZ: 60, baseHue: 0.55, hueStep: 0.1, glowAmount: 2, shapeSize: 0.5 },
+        // glowAmount multiplies each shape's colour and ShapeFlight blends
+        // ADDITIVELY, so >1 stacks past white wherever shapes overlap - at this
+        // spawnRate that washed the whole frame out. 1 keeps the glow without
+        // clipping.
+        // spawnRate is copies-per-beat, and every copy adds light on top of the
+        // last, so density reads as brightness here as much as glow does.
+        // Back to the instrument's default 8.
+        params: { shapeMode: 0, speed: 32, spawnRate: 8, farZ: 60, baseHue: 0.55, hueStep: 0.1, glowAmount: 1, shapeSize: 0.5 },
         blocks: [block(0, BARS, every(4, BEATS, hits([
           [0, 57, 0.25, 110], [0.25, 60, 0.25, 90], [0.5, 64, 0.25, 100], [1, 52, 0.25, 95],
           [2, 57, 0.25, 110], [2.5, 62, 0.25, 90], [3, 55, 0.25, 95], [3.5, 59, 0.25, 100],
