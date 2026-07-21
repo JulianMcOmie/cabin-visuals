@@ -480,11 +480,7 @@ function TemplatesTab() {
   }
 
   const apply = (tpl: (typeof TEMPLATES)[number]) => {
-    // Restyling a lyric project is a safe swap - the song AND the transcribed
-    // words carry across, and it is one undo step - so trying looks on is
-    // frictionless, like picking a filter. Switching a project onto a whole
-    // different template is the destructive one, and still asks.
-    if (!isLyricProject && !window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
+    if (!window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
     // Transcribed already? applyTemplate carries the Lyrics track's words over
     // (styling from the template), so the setup flow would be redundant.
     const before = useProjectStore.getState()
@@ -516,7 +512,7 @@ function TemplatesTab() {
       {leaving && <LoadingScreen />}
       <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
         {isLyricProject
-          ? 'Click a style to restyle this lyric video. Your song and words stay.'
+          ? 'Double-click a style to restyle this lyric video. Your song and words stay.'
           : 'Double-click a template to switch this project onto it. Your song stays.'}
       </p>
       {/* Same preview treatment as the projects-page template gallery, sized
@@ -528,7 +524,6 @@ function TemplatesTab() {
           tpl={tpl}
           label={isLyricProject ? tpl.styleName ?? tpl.name : tpl.name}
           onApply={() => apply(tpl)}
-          instant={isLyricProject}
           selected={tpl.id === appliedTemplateId}
         />
       ))}
@@ -536,31 +531,23 @@ function TemplatesTab() {
   )
 }
 
-function TemplateCard({ tpl, onApply, selected = false, label, instant = false }: {
+// Double-click to apply, template or lyric style alike: this is the EDITOR, so
+// the project already has work in it that the swap replaces. The single-click
+// picker belongs to the one moment where that is not true - the style step at
+// the end of lyric setup, where there is nothing yet to lose.
+function TemplateCard({ tpl, onApply, selected = false, label }: {
   tpl: (typeof TEMPLATES)[number]
   onApply: () => void
   /** This is the template the project is currently on. */
   selected?: boolean
   /** Overrides the displayed name (lyric projects show style names). */
   label?: string
-  /** Apply on a single click instead of a double click. For lyric styles,
-   *  where switching is a safe, undoable restyle rather than a swap that
-   *  discards work. */
-  instant?: boolean
 }) {
   return (
     <div
-      onClick={instant ? onApply : undefined}
-      onDoubleClick={instant ? undefined : onApply}
-      role={instant ? 'button' : undefined}
-      tabIndex={instant ? 0 : undefined}
-      onKeyDown={instant
-        ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onApply() } }
-        : undefined}
+      onDoubleClick={onApply}
       title={tpl.description}
-      className={`mx-2 mb-2 select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
-        instant ? 'cursor-pointer' : 'cursor-default'
-      } ${
+      className={`mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
         selected
           ? 'border-[var(--accent)]'
           : 'border-[var(--border)] hover:border-[rgba(53,167,230,0.6)]'
