@@ -25,6 +25,15 @@ import type { Group, Material, ShaderMaterial } from 'three'
 // shader's own alpha as the base. LineMaterial (the NeonPolar/HopfFibration fat
 // lines) forwards `material.opacity` to its own uniform via a property
 // accessor, so it stays on the standard path.
+//
+// The wrap mutates material state that R3F also owns when the material is
+// JSX-declared (LaserSphere/LaserLine): any re-render of the instrument
+// component re-applies the inline `uniforms={{...}}` prop, REPLACING
+// material.uniforms wholesale (is.equ compares objects by reference). The
+// injected gate uniform then vanishes - the program samples it as 0 and the
+// mesh turns invisible in every condition. applyShaderMaterialOpacity
+// therefore re-injects the uniform whenever the uniforms object changes and
+// forces one recompile, which also rebinds the program to the live object.
 
 export const BASE_OPACITY_KEY = '__cabinBaseOpacity'
 export const FORCE_TRANSPARENT_KEY = '__cabinForceTransparent'
@@ -33,6 +42,9 @@ export const FORCE_TRANSPARENT_KEY = '__cabinForceTransparent'
 export const GATE_OPACITY_UNIFORM = '__cabinGateOpacity'
 const SHADER_WRAPPED_KEY = '__cabinShaderOpacityWrapped'
 const AUTHORED_TRANSPARENT_KEY = '__cabinAuthoredTransparent'
+/** The uniforms object the gate was injected into - R3F prop re-application
+ *  replaces material.uniforms, so identity changes mean re-inject. */
+const BOUND_UNIFORMS_KEY = '__cabinGateUniforms'
 
 /** Instrument-side per-frame opacity write: sets the material's opacity AND its
  *  recorded base so the wrapper's mover pass multiplies rather than overwrites. */
@@ -67,18 +79,28 @@ function wrapShaderMaterial(material: ShaderMaterial): boolean {
   material.uniforms = material.uniforms ?? {}
   material.uniforms[GATE_OPACITY_UNIFORM] = { value: 1 }
   material.userData[SHADER_WRAPPED_KEY] = true
+  material.userData[BOUND_UNIFORMS_KEY] = material.uniforms
   material.needsUpdate = true
   return true
 }
 
 /** Gate a raw ShaderMaterial through its wrap uniform, preserving the authored
  *  transparency (particle fades, glow falloffs) the standard path would have
- *  stomped off at a fully-open gate. */
+ *  stomped off at a fully-open gate. Self-heals R3F's JSX prop re-application:
+ *  a re-render of a JSX-declared material replaces material.uniforms, dropping
+ *  the injected gate (the program then samples 0 = invisible, or the write
+ *  throws on the missing entry). Re-inject and recompile once per replacement. */
 function applyShaderMaterialOpacity(material: ShaderMaterial, resolvedOpacity: number): void {
   if (typeof material.userData[AUTHORED_TRANSPARENT_KEY] !== 'boolean') {
     material.userData[AUTHORED_TRANSPARENT_KEY] = material.transparent
   }
-  material.uniforms[GATE_OPACITY_UNIFORM].value = resolvedOpacity
+  const uniforms = material.uniforms ?? (material.uniforms = {})
+  if (material.userData[BOUND_UNIFORMS_KEY] !== uniforms || !uniforms[GATE_OPACITY_UNIFORM]) {
+    uniforms[GATE_OPACITY_UNIFORM] = { value: 1 }
+    material.userData[BOUND_UNIFORMS_KEY] = uniforms
+    material.needsUpdate = true
+  }
+  uniforms[GATE_OPACITY_UNIFORM].value = resolvedOpacity
   material.transparent = (material.userData[AUTHORED_TRANSPARENT_KEY] as boolean)
     || material.userData[FORCE_TRANSPARENT_KEY] === true
     || resolvedOpacity < 0.999
@@ -93,9 +115,21 @@ export function applyMaterialOpacity(root: Group, opacity: number): void {
     if (!maybeMesh.material) return
     const materials = Array.isArray(maybeMesh.material) ? maybeMesh.material : [maybeMesh.material]
     for (const material of materials) {
-      if (isRawShaderMaterial(material) && wrapShaderMaterial(material)) {
-        applyShaderMaterialOpacity(material, resolvedOpacity)
-        continue
+      if (isRawShaderMaterial(material)) {
+        // If R3F re-applied props, the fragmentShader prop may also have been
+        // refreshed to the unwrapped source (HMR): drop the stale wrap flag so
+        // the material re-wraps instead of skipping on a stale flag.
+        if (
+          material.userData[SHADER_WRAPPED_KEY] === true &&
+          material.userData[BOUND_UNIFORMS_KEY] !== material.uniforms &&
+          !material.fragmentShader.includes(GATE_OPACITY_UNIFORM)
+        ) {
+          material.userData[SHADER_WRAPPED_KEY] = false
+        }
+        if (wrapShaderMaterial(material)) {
+          applyShaderMaterialOpacity(material, resolvedOpacity)
+          continue
+        }
       }
       const baseOpacity = typeof material.userData[BASE_OPACITY_KEY] === 'number'
         ? material.userData[BASE_OPACITY_KEY] as number

@@ -94,3 +94,52 @@ test('standard materials are untouched by the shader path', () => {
   assert.equal(mat.opacity, 0.5)
   assert.equal('fragmentShader' in mat, false)
 })
+
+// The LaserSphere regression: its material is JSX-declared with an inline
+// `uniforms={{...}}` prop, so any React re-render of the instrument REPLACES
+// material.uniforms wholesale. The injected gate uniform vanished with the old
+// object - the program sampled 0 and the mesh went invisible in every
+// condition. The wrapper must re-inject the gate and force a rebind.
+test('survives R3F replacing material.uniforms (the LaserSphere case)', () => {
+  const { mat, g } = shaderObject('void main(){ gl_FragColor = vec4(1.0); }')
+  applyMaterialOpacity(g, 1)
+  assert.equal(mat.uniforms[GATE_OPACITY_UNIFORM].value, 1)
+
+  // React re-render: the inline uniforms prop is a fresh object reference, so
+  // R3F assigns it outright - the gate uniform disappears with the old one.
+  mat.uniforms = { coreColor: { value: 1 } } as unknown as ShaderMaterial['uniforms']
+  assert.ok(!(GATE_OPACITY_UNIFORM in mat.uniforms), 'gate uniform gone with the replaced object')
+
+  const version = mat.version
+  applyMaterialOpacity(g, 0.5)
+  assert.equal(mat.uniforms[GATE_OPACITY_UNIFORM]?.value, 0.5, 'gate re-injected with the live value')
+  assert.ok(mat.version > version, 'one recompile rebinds the program to the live uniforms object')
+
+  // Stable again afterwards: no repeated recompiles while the object stays put.
+  const healed = mat.version
+  applyMaterialOpacity(g, 0.75)
+  assert.equal(mat.version, healed)
+  assert.equal(mat.uniforms[GATE_OPACITY_UNIFORM].value, 0.75)
+})
+
+test('a uniforms replacement never double-wraps the shader', () => {
+  const { mat, g } = shaderObject('void main(){ gl_FragColor = vec4(1.0); }')
+  applyMaterialOpacity(g, 1)
+  mat.uniforms = {} as unknown as ShaderMaterial['uniforms']
+  applyMaterialOpacity(g, 1)
+  const multiplies = mat.fragmentShader.match(new RegExp(`gl_FragColor\\.a \\*= ${GATE_OPACITY_UNIFORM};`, 'g'))
+  assert.equal(multiplies?.length, 1)
+})
+
+test('re-wraps if the fragment shader is reset to the unwrapped source', () => {
+  const original = 'void main(){ gl_FragColor = vec4(1.0); }'
+  const { mat, g } = shaderObject(original)
+  applyMaterialOpacity(g, 1)
+  // HMR / prop re-application reverts the shader string AND the uniforms.
+  mat.fragmentShader = original
+  mat.uniforms = {} as unknown as ShaderMaterial['uniforms']
+  applyMaterialOpacity(g, 0.5)
+  const multiplies = mat.fragmentShader.match(new RegExp(`gl_FragColor\\.a \\*= ${GATE_OPACITY_UNIFORM};`, 'g'))
+  assert.equal(multiplies?.length, 1, 'wrapped exactly once')
+  assert.equal(mat.uniforms[GATE_OPACITY_UNIFORM]?.value, 0.5)
+})
