@@ -67,8 +67,11 @@ two quads, or the compositor applies the overlay pass.
 - **Dust & scratches:** sparse white specks (1–4px) and occasional hair-line streaks, 0.2–1s
   lifetimes, drifting; density param. A rare full-height vertical scratch reads as authentic.
 - **Vignette:** strong radial darkening from ~55% radius outward, corners near-black.
-- **Barrel warp:** subtle CRT-style bulge (~2–3% distortion) applied to the composited frame —
-  frame edges visibly bow.
+- **Barrel warp:** subtle CRT-style bulge applied to the composited frame — frame edges visibly
+  bow. ✅ Shipped 2026-07-20 with the shader port (`warp` param, default 0.2). The film layers
+  distort their own content, and — the part that makes it read on the COMPOSITE — the overlay
+  paints an opaque projector surround wherever the bowed frame ends, so the words are cropped by
+  the same curve. A true resample of the finished frame would still need a post pass.
 - **Flicker:** global luminance wobble ±3% at low frequency.
 - Faint graph-grid texture at very low opacity under the grain (visible in some reference shots).
 
@@ -94,26 +97,33 @@ vertical white bars along a center line, glowing, pulsing with the actual track 
 
 ## Performance model (why this template is affordable)
 
-Stacking three-plus full-frame canvas instruments is normally forbidden here (the library
-comment says "one full-frame instrument per template at most") because each one costs a
-full-canvas CPU rasterization AND a multi-megabyte texture upload per frame. Three rules make
-it viable — keep them if you add layers:
+Stacking several full-frame instruments is normally forbidden here (the library comment says
+"one full-frame instrument per template at most") because a full-frame CANVAS instrument costs a
+whole-canvas CPU rasterization AND a multi-megabyte texture upload per frame. The template got
+there in two passes:
 
-1. **Film cadence quantization.** Every animated value in the film layers derives from
-   `filmFrame = floor(beat · secPerBeat · 24)`, never the raw beat. The look is a step function
-   (which is what film IS), and identical consecutive frames become detectable.
-2. **Repaint skip.** `useFullFrameCanvas`'s `unchanged(key, notes)` returns early when the key
-   and note list match the last painted frame — no rasterization, no upload. **The key must list
-   every param the paint reads**; a missing one means edits to it silently do nothing, since the
-   frame signature is already committed (same trap as the `useInstrumentFrame` `false` contract).
-3. **Half-resolution canvases + baked static layers.** Grain/dust/scribbles run at 512px tall
-   (a quarter of the pixels) with absolute sizes scaled by `h / 1024`, so the look is
-   resolution-independent. Film Card stays at 1024 because type needs the resolution. Vignettes
-   and the graph grid are baked once and blitted.
+**Film Stock + Film Grain are pure GPU.** Both are `ShaderMaterial` quads: grain, dust, hairs,
+scratches, flicker, vignette, grid and barrel warp are all evaluated per-pixel from ~18 scalar
+uniforms. A frame costs uniform writes and nothing else — no canvas, no upload — in preview and
+export alike. Pause invariance survives because the shaders are handed a QUANTIZED beat-time
+index (24fps) and hash it for every "random" value: same beat in, same pixels out.
 
-Still on the table if it's not fast enough: port Film Stock + Film Grain to a GLSL shader quad
-(grain/vignette/flicker as per-pixel work with beat as a uniform) — zero rasterization, zero
-uploads, and it would finally enable the deferred barrel warp.
+Two things a raw `ShaderMaterial` does NOT get for free, both wired explicitly here:
+- `Material.opacity` is ignored by a custom shader, so the value the opacity wrapper writes each
+  frame is read back and fed in as `uOpacity`. Without it, opacity movers and mute fades do nothing.
+- The film look is composited in **sRGB** (as the canvas version was) and converted once at the
+  end, because the scene renders into a linear HDR target. Author colors as raw sRGB components,
+  not `three.Color` (which converts to linear on construction).
+
+**Scribble + Film Card are still canvas**, and use `useFullFrameCanvas`:
+1. **Film cadence quantization** — animated values derive from `floor(beat · secPerBeat · 24)`.
+2. **Repaint skip** — `unchanged(key, notes)` returns early when nothing that affects the paint
+   moved. **The key must list every param the paint reads**; a missing one means edits to it
+   silently do nothing, since the frame signature is already committed (same trap as the
+   `useInstrumentFrame` `false` contract). Scribble collapses all its idle frames onto one key.
+3. **Half resolution + baked statics** — Scribble runs at 512px tall with absolute sizes scaled by
+   `h / 1024`. Film Card stays at 1024 because type does not survive downscaling. Vignettes are
+   baked once and blitted.
 
 ## Anti-rules (what breaks the aesthetic)
 
@@ -129,8 +139,9 @@ uploads, and it would finally enable the deferred barrel warp.
 1. **Film shader instrument** (new, bespoke): background + degradation overlay. Biggest cohesion
    win; test it over the EXISTING generic text first.
    ✅ Built 2026-07-20 as two instruments in [FilmStock.tsx](../src/editor/instruments/FilmStock.tsx):
-   `filmStock` (background, base scene) + `filmGrain` (on-top overlay). Barrel warp deferred
-   (needs a post pass, not a scene plane). Not yet visually verified.
+   `filmStock` (background, base scene) + `filmGrain` (on-top overlay). Started as canvas
+   instruments, then ported to GLSL shader quads the same day when the template proved too slow
+   to play or export — which also delivered the barrel warp. See the performance section.
 2. **TextDisplay additions** ([TextDisplay.tsx](../src/editor/instruments/TextDisplay.tsx)): one
    Google-font load (the locked template font), scatter-accumulate placement mode, glow via
    canvas shadowBlur, per-word jitter. Canvas-texture pipeline stays as-is.

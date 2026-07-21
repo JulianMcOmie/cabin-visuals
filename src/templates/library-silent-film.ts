@@ -89,7 +89,8 @@ function silentFilmDocument() {
         name: 'Film Grain',
         instrumentId: 'filmGrain',
         color: '#8a8590',
-        params: { grain: 0.35, dust: 0.3, flicker: 0.35, vignette: 0.55 },
+        // Warp matches Film Stock's so the two bowed frame edges coincide.
+        params: { grain: 0.35, dust: 0.3, flicker: 0.35, vignette: 0.55, warp: 0.2 },
         // 16-bar loop: a dust burst every 4 bars, one flicker pop per cycle.
         blocks: [loopBlock(16, [
           ...pulse(60, 16, 64, { dur: 0.25, vel: 55, offset: 8 }), // dust bursts
@@ -100,7 +101,7 @@ function silentFilmDocument() {
         name: 'Film Stock',
         instrumentId: 'filmStock',
         color: '#3d3742',
-        params: { grain: 0.55, dust: 0.5, scratch: 0.5, grid: 0.25, flicker: 0.35, vignette: 0.65 },
+        params: { grain: 0.55, dust: 0.5, scratch: 0.5, grid: 0.25, flicker: 0.35, vignette: 0.65, warp: 0.2 },
         // 16-bar loop: burn flashes each half, one scratch streak per cycle.
         blocks: [loopBlock(16, [
           ...pulse(60, 32, 64, { dur: 0.5, vel: 70 }), // burn flashes
