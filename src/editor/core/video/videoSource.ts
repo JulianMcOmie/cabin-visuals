@@ -1,5 +1,5 @@
 import { BlobSource, UrlSource, type Source } from 'mediabunny'
-import { mintVideoPath, uploadVideoTo, getVideoUrl, deleteVideo } from '../../../persistence/videoStorage'
+import { mintVideoPath, uploadVideoTo, getVideoUrl } from '../../../persistence/videoStorage'
 
 // Ref-based access to video bytes, mirroring core/audio/audioSource.ts: with a
 // project row the bytes live in the project-videos bucket and the ref is the
@@ -56,12 +56,8 @@ export async function getVideoSource(ref: string): Promise<Source> {
   return new UrlSource(await getVideoUrl(ref))
 }
 
-/** Drop the bytes for a ref, locally and (for uploaded clips) in the bucket. */
+/** Drop this session's local hold on a ref. Bucket bytes are deliberately left
+ *  alone - see core/audio/audioSource.ts removeAudio for the reasoning. */
 export function removeVideo(ref: string): void {
   memFiles.delete(ref)
-  // A path-shaped ref means bytes in the bucket too. Fire-and-forget: the doc
-  // drops the descriptor either way; a stray orphan object is harmless.
-  if (ref.includes('/')) {
-    void deleteVideo(ref).catch((err) => console.error('Failed to delete video bytes', err))
-  }
 }

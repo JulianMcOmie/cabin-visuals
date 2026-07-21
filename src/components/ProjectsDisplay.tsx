@@ -2,7 +2,13 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
-import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft } from "lucide-react"
+import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, MoreHorizontal, Copy, Trash2 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu"
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
@@ -88,6 +94,9 @@ interface ProjectsDisplayProps {
   onCreateProject: (name: string) => void
   onSelectProject: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
+  /** Duplicate into a new project (shallow - shares clip paths, see
+   *  projectStorage.duplicate). */
+  onDuplicateProject: (projectId: string) => void
   onCreateFromTemplate: (template: TemplateDef) => void
   /** Free-plan limit reached: the create buttons grey out and explain
    *  themselves on hover instead of opening the create flow. */
@@ -100,6 +109,7 @@ export default function ProjectsDisplay({
   onCreateProject,
   onSelectProject,
   onDeleteProject,
+  onDuplicateProject,
   onCreateFromTemplate,
   createBlocked,
 }: ProjectsDisplayProps) {
@@ -144,6 +154,29 @@ export default function ProjectsDisplay({
   // The project pending an in-UI delete confirmation, with the click position
   // to anchor the popover near (null = no popover).
   const [deleteTarget, setDeleteTarget] = useState<{ project: ProjectMetadata; x: number; y: number } | null>(null)
+  // Where the last-opened card menu sits, so the delete confirmation can anchor
+  // near it. One ref is enough - only one menu can be open at a time.
+  const menuAnchor = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  // Which card is showing its hover state. Tracked by hand rather than with
+  // whileHover because the action menu is portaled to <body>: hovering it
+  // leaves the card's DOM, so the card would sink back while you read its own
+  // menu. Both the card and the menu panel report into this, so the lift
+  // follows the pointer across the portal - and still drops the moment the
+  // pointer leaves both, even with the menu open.
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  // Crossing the few pixels between the trigger and the menu panel leaves both
+  // for an instant. Deferring the un-hover bridges that gap; it's short enough
+  // to read as continuous, not as lag.
+  const hoverLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const holdHover = (id: string) => {
+    if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
+    setHoveredId(id)
+  }
+  const releaseHover = () => {
+    if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
+    hoverLeaveTimer.current = setTimeout(() => setHoveredId(null), 60)
+  }
+  useEffect(() => () => { if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current) }, [])
   // Set the instant a create begins: the new card gets prepended and starts its
   // entrance right before we navigate to the editor, and that half-played slide
   // reads as a glitch. While navigating, new cards skip the entrance.
@@ -235,36 +268,90 @@ export default function ProjectsDisplay({
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           <AnimatePresence mode="popLayout" initial={false}>
           {projects.map((project) => (
+            // Two elements on purpose. The outer one owns entrance/exit/layout
+            // AND the hover response, because it spans the card plus its action
+            // menu - hover on the inner card alone made the card visibly shrink
+            // back the moment you reached for its own three-dot button.
+            // The inner one owns the press, and the menu is its SIBLING, so
+            // clicking the menu can't press the card. That separation is
+            // structural on purpose: intercepting pointerdown to achieve it
+            // also blocks Radix's trigger, since React delegates listeners from
+            // the root, so anything early enough to beat Framer breaks the menu.
             <motion.div
               key={project.id}
               layout
               initial={navigating ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
+              animate={{ opacity: 1, y: 0, scale: hoveredId === project.id ? 1.012 : 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              whileHover={{ scale: 1.012, transition: { duration: 0.06 } }}
-              whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
-              onClick={() => onSelectProject(project.id)}
-              className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
+              // Scale keeps the snappy hover timing; everything else animates
+              // at the card's normal rate.
+              transition={{ duration: 0.16, ease: 'easeOut', scale: { duration: 0.06 } }}
+              onPointerEnter={() => holdHover(project.id)}
+              onPointerLeave={releaseHover}
+              className="relative"
             >
-              <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
-                <div className="absolute inset-0">
-                  <ProjectThumbnail preview={project.preview} />
+              <motion.div
+                whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
+                onClick={() => onSelectProject(project.id)}
+                className={`cursor-pointer overflow-hidden rounded-lg border bg-[var(--bg-panel)] transition-colors ${
+                  hoveredId === project.id ? 'border-[rgba(53,167,230,0.6)]' : 'border-[var(--border)]'
+                }`}
+              >
+                <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
+                  <div className="absolute inset-0">
+                    <ProjectThumbnail preview={project.preview} />
+                  </div>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ project, x: e.clientX, y: e.clientY }) }}
-                  aria-label="Delete project"
-                  title="Delete project"
-                  className="absolute right-2 top-2 flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border border-[var(--border)] bg-[rgba(14,14,17,0.8)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[#d68383]"
-                >
-                  <X size={11} />
-                </button>
-              </div>
-              <div className="flex items-baseline justify-between gap-3 px-3.5 pb-[13px] pt-3">
-                <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
-                <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
-                  {formatLastEdited(project.updatedAt)}
-                </span>
+                <div className="flex items-baseline justify-between gap-3 px-3.5 pb-[13px] pt-3">
+                  <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
+                  <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
+                    {formatLastEdited(project.updatedAt)}
+                  </span>
+                </div>
+              </motion.div>
+
+              <div className="absolute right-2 top-2 z-10">
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger
+                    aria-label="Project actions"
+                    title="Project actions"
+                    // The delete confirmation anchors to a click point, so
+                    // remember where this trigger sits before the menu opens.
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect()
+                      menuAnchor.current = { x: r.left, y: r.bottom }
+                    }}
+                    className="flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border border-[var(--border)] bg-[rgba(14,14,17,0.8)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]"
+                  >
+                    <MoreHorizontal size={12} />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    // Portaled out of the card, so it has to report hover back
+                    // in or the card sinks while you're using its own menu.
+                    onPointerEnter={() => holdHover(project.id)}
+                    onPointerLeave={releaseHover}
+                    className="rounded-md border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-2)] shadow-none"
+                  >
+                    <DropdownMenuItem
+                      // A copy is a new project, so the free-plan cap applies
+                      // to it exactly as it does to the New project button.
+                      disabled={createBlocked}
+                      className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
+                      onSelect={() => onDuplicateProject(project.id)}
+                    >
+                      <Copy size={13} />
+                      {createBlocked ? 'Copy project (limit reached)' : 'Copy project'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[#d68383]"
+                      onSelect={() => setDeleteTarget({ project, ...menuAnchor.current })}
+                    >
+                      <Trash2 size={13} />
+                      Delete project
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </motion.div>
           ))}

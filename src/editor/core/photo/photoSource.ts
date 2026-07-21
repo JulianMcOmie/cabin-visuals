@@ -1,4 +1,4 @@
-import { mintPhotoPath, uploadPhotoTo, getPhotoUrl, deletePhoto } from '../../../persistence/photoStorage'
+import { mintPhotoPath, uploadPhotoTo, getPhotoUrl } from '../../../persistence/photoStorage'
 
 // Ref-based access to photo bytes, mirroring core/video/videoSource.ts: with a
 // project row the bytes live in the project-photos bucket and the ref is the
@@ -63,17 +63,13 @@ export async function getPhotoPlayableUrl(ref: string): Promise<string> {
   return getPhotoUrl(ref)
 }
 
-/** Drop the bytes for a ref, locally and (for uploaded photos) in the bucket. */
+/** Drop this session's local hold on a ref. Bucket bytes are deliberately left
+ *  alone - see core/audio/audioSource.ts removeAudio for the reasoning. */
 export function removePhoto(ref: string): void {
   memFiles.delete(ref)
   const url = objectUrls.get(ref)
   if (url) {
     URL.revokeObjectURL(url)
     objectUrls.delete(ref)
-  }
-  // A path-shaped ref means bytes in the bucket too. Fire-and-forget: the doc
-  // drops the descriptor either way; a stray orphan object is harmless.
-  if (ref.includes('/')) {
-    void deletePhoto(ref).catch((err) => console.error('Failed to delete photo bytes', err))
   }
 }

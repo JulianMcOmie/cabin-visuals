@@ -33,7 +33,7 @@ interface ProfileData {
 export default function ProjectsPage() {
   const router = useRouter()
   const { user, loading: authLoading, isAnonymous } = useAuth()
-  const { projects, loading: projectsLoading, createProject, deleteProject } = useProjectList(!!user)
+  const { projects, loading: projectsLoading, createProject, duplicateProject, deleteProject } = useProjectList(!!user)
   const plan = usePlan()
   const [profile, setProfile] = useState<ProfileData | null>(null)
 
@@ -166,6 +166,19 @@ export default function ProjectsPage() {
     router.push(`/editor?project=${projectId}`)
   }
 
+  const handleDuplicateProject = async (projectId: string) => {
+    // A copy is a new project, so it has to respect the free-plan cap the same
+    // way the create buttons do - otherwise Copy is a hole straight through it.
+    if (atFreeLimit) return
+    try {
+      await duplicateProject(projectId)
+      track('project_duplicated')
+    } catch (err) {
+      console.error('Project copy failed:', err)
+      alert(`Failed to copy project${err instanceof Error ? `: ${err.message}` : '.'}`)
+    }
+  }
+
   const handleDeleteProject = async (projectId: string) => {
     try {
       await deleteProject(projectId)
@@ -198,6 +211,7 @@ export default function ProjectsPage() {
         onCreateProject={handleCreateProject}
         onSelectProject={handleSelectProject}
         onDeleteProject={handleDeleteProject}
+        onDuplicateProject={handleDuplicateProject}
         onCreateFromTemplate={handleCreateFromTemplate}
         createBlocked={atFreeLimit}
       />

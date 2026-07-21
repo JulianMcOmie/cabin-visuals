@@ -237,6 +237,26 @@ export async function rename(id: string, name: string): Promise<void> {
   if (!data.length) throw new Error(`Project ${id} not found (or not yours)`)
 }
 
+/**
+ * Duplicate a project into a new row of the caller's own.
+ *
+ * A SHALLOW copy: the document is cloned verbatim, so both projects reference
+ * the same clip paths in Storage rather than duplicating bytes (a deep copy
+ * would re-upload every megabyte for what is usually a throwaway experiment).
+ * That sharing is only safe because releasing a clip no longer deletes its
+ * bucket bytes - see core/audio/audioSource.ts removeAudio. Don't reintroduce
+ * inline byte deletion without making this a deep copy first.
+ *
+ * The thumbnail is dropped: it's a stale frame of the source project, and the
+ * copy will capture its own on first save.
+ */
+export async function duplicate(id: string): Promise<ProjectSummary> {
+  const { name, document } = await load(id)
+  const { thumbnail: _thumbnail, ...doc } = document
+  void _thumbnail
+  return create(`${name} copy`, doc)
+}
+
 /** Delete a project row (the document goes with it). */
 export async function remove(id: string): Promise<void> {
   const { error } = await getSupabase().from('projects').delete().eq('id', id)

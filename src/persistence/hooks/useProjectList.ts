@@ -51,11 +51,20 @@ export function useProjectList(enabled: boolean) {
     return project
   }, [])
 
+  const duplicateProject = useCallback(async (id: string) => {
+    const copy = await projectStorage.duplicate(id)
+    // Prepended like a create: the copy is the newest-edited project, which is
+    // also where the list's sort would put it on a reload.
+    cachedList = [copy, ...(cachedList ?? [])]
+    setProjects((prev) => [copy, ...prev])
+    return copy
+  }, [])
+
   const deleteProject = useCallback(async (id: string) => {
     await projectStorage.remove(id)
     cachedList = (cachedList ?? []).filter((p) => p.id !== id)
     setProjects((prev) => prev.filter((p) => p.id !== id))
   }, [])
 
-  return { projects, loading, createProject, deleteProject }
+  return { projects, loading, createProject, duplicateProject, deleteProject }
 }

@@ -45,7 +45,7 @@ export function ConflictDialog() {
     setBusy('fork')
     setError(null)
     try {
-      const name = `${projectName?.trim() || 'Untitled'} (this tab's copy)`
+      const name = `${projectName?.trim() || 'Untitled'} copy`
       const copy = await projectStorage.create(name, serialize())
       router.replace(`/editor?project=${copy.id}`)
     } catch (err) {

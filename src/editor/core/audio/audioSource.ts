@@ -7,7 +7,7 @@
 // upstream (the store descriptor, the playback engine, the UI) changes - they
 // only ever deal in refs resolved through getPlayableUrl().
 
-import { mintAudioPath, uploadAudioTo, getAudioUrl, deleteAudio } from '../../../persistence/audioStorage'
+import { mintAudioPath, uploadAudioTo, getAudioUrl } from '../../../persistence/audioStorage'
 
 const mem = new Map<string, string>() // ref -> object URL (this session's cache)
 // Local bytes behind refs whose upload hasn't succeeded yet - retry fuel.
@@ -58,7 +58,8 @@ export async function getPlayableUrl(ref: string): Promise<string> {
   return getAudioUrl(ref)
 }
 
-/** Drop the bytes for a ref, locally and (for uploaded clips) in the bucket. */
+/** Drop this session's local hold on a ref. Bucket bytes are deliberately left
+ *  alone - see the note below. */
 export function removeAudio(ref: string): void {
   const url = mem.get(ref)
   if (url) {
@@ -66,9 +67,11 @@ export function removeAudio(ref: string): void {
     mem.delete(ref)
   }
   localFiles.delete(ref)
-  // A path-shaped ref means bytes in the bucket too. Fire-and-forget: the doc
-  // drops the descriptor either way; a stray orphan object is harmless.
-  if (ref.includes('/')) {
-    void deleteAudio(ref).catch((err) => console.error('Failed to delete audio bytes', err))
-  }
+  // Bucket bytes are NOT deleted here, on purpose. Copying a project shares
+  // clip paths between the copy and the original, so a path is no longer owned
+  // by exactly one project - deleting the bytes when one project drops the
+  // descriptor would silently strip the audio out of the other. Orphaned
+  // objects are reclaimed by a sweep that derives live refs from every project
+  // AND every revision snapshot; they are never reclaimed inline.
+  // (projectStorage.remove already leaks a whole project's media the same way.)
 }

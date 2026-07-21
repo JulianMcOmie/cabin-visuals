@@ -29,6 +29,7 @@ export type AnalyticsEvent =
   | 'project_created' // props: { source: 'blank' | 'template' | 'carryover', template? }
   | 'project_opened'
   | 'project_deleted'
+  | 'project_duplicated'
   // Auth
   | 'signup_started'
   | 'signup_password_set'
