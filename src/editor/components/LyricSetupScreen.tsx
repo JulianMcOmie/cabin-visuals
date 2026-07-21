@@ -65,9 +65,9 @@ async function postWords(endpoint: string, payload: Record<string, unknown>): Pr
 }
 
 /** Progress bar: determinate with a value, indeterminate sweep without. */
-function ProgressBar({ value }: { value?: number }) {
+function ProgressBar({ value, className = 'w-64' }: { value?: number; className?: string }) {
   return (
-    <div className="relative h-1.5 w-64 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+    <div className={`relative h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)] ${className}`}>
       {value !== undefined ? (
         <div
           className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)] transition-[width] duration-200"
@@ -82,6 +82,8 @@ function ProgressBar({ value }: { value?: number }) {
 
 export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => void; projectLoading: boolean }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' })
+  /** The style the user just clicked, held so the card can show it landed. */
+  const [chosen, setChosen] = useState<string | null>(null)
   const runningRef = useRef(false)
   const closedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -179,14 +181,24 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
   const working = phase.kind === 'uploading' || phase.kind === 'transcribing' || phase.kind === 'aligning'
 
   /** Apply the chosen look and hand off to the editor. The project is already
-   *  on the bare template, so "Minimal" is simply a no-op choice. */
+   *  on the bare template, so "Minimal" is simply a no-op choice.
+   *
+   *  Applying is not instant - the document is cloned and re-minted, then the
+   *  autosave has to land before the editor (which re-hydrates from the row)
+   *  can take over - so the pick is ACKNOWLEDGED first and the work deferred a
+   *  beat. Without that the card absorbed the click silently and the screen sat
+   *  there looking broken until the route changed. */
   const chooseStyle = (id: string) => {
-    const style = LYRIC_STYLES.find((s) => s.id === id)
-    if (style) {
-      useProjectStore.getState().applyTemplate(style.document)
-      track('lyric_style_chosen', { style: id })
-    }
-    onClose()
+    if (chosen) return // one pick; the rest of the grid is inert from here
+    setChosen(id)
+    setTimeout(() => {
+      const style = LYRIC_STYLES.find((s) => s.id === id)
+      if (style) {
+        useProjectStore.getState().applyTemplate(style.document)
+        track('lyric_style_chosen', { style: id })
+      }
+      onClose()
+    }, 0)
   }
 
   // Files can arrive before the project document has hydrated - the pick UI
@@ -275,24 +287,45 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
               Your words are timed to the song. Choose a style - you can change it any time.
             </p>
             <div className="grid gap-4 sm:grid-cols-3">
-              {LYRIC_STYLES.map((style) => (
-                <button
-                  key={style.id}
-                  onClick={() => chooseStyle(style.id)}
-                  title={style.description}
-                  className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left transition-colors hover:border-[var(--accent)]"
-                >
-                  <div className="relative aspect-video bg-[var(--bg-app)]">
-                    <TemplateLyricPreview templateId={style.id} />
-                  </div>
-                  <div className="p-3">
-                    <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">
-                      {style.styleName ?? style.name}
-                    </h3>
-                    <p className="mt-1 mb-0 text-xs leading-snug text-[var(--text-muted)]">{style.description}</p>
-                  </div>
-                </button>
-              ))}
+              {LYRIC_STYLES.map((style) => {
+                const picked = chosen === style.id
+                return (
+                  <button
+                    key={style.id}
+                    onClick={() => chooseStyle(style.id)}
+                    disabled={!!chosen}
+                    aria-busy={picked}
+                    title={style.description}
+                    className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
+                      picked
+                        // The click landed: this card lifts and takes the accent
+                        // while the others step back, so the choice is legible
+                        // for the second or two before the editor appears.
+                        ? 'scale-[1.03] border-[var(--accent)] ring-2 ring-[var(--accent)] cursor-default'
+                        : chosen
+                          ? 'border-[var(--border)] opacity-40 cursor-default'
+                          : 'cursor-pointer border-[var(--border)] hover:border-[var(--accent)]'
+                    }`}
+                  >
+                    <div className="relative aspect-video bg-[var(--bg-app)]">
+                      <TemplateLyricPreview templateId={style.id} />
+                    </div>
+                    <div className="p-3">
+                      <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">
+                        {style.styleName ?? style.name}
+                      </h3>
+                      {picked ? (
+                        <div className="mt-2 flex flex-col gap-1.5">
+                          <span className="text-xs font-semibold text-[var(--accent)]">Applying…</span>
+                          <ProgressBar className="w-full" />
+                        </div>
+                      ) : (
+                        <p className="mt-1 mb-0 text-xs leading-snug text-[var(--text-muted)]">{style.description}</p>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
