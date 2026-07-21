@@ -212,6 +212,36 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'crtScanlines', name: 'CRT Scanlines', description: "A retro CRT that flashes in each note's pitch color.", icon: (
     <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="2" width="10" height="8" rx="2" fill="none" stroke="#3aff8c" strokeWidth="1"/><line x1="3" y1="4.5" x2="9" y2="4.5" stroke="#3aff8c" strokeWidth="0.7" opacity="0.8"/><line x1="3" y1="6" x2="9" y2="6" stroke="#3aff8c" strokeWidth="0.7" opacity="0.5"/><line x1="3" y1="7.5" x2="9" y2="7.5" stroke="#3aff8c" strokeWidth="0.7" opacity="0.3"/></svg>
   )},
+  { id: 'filmStock', name: 'Film Stock', description: 'A degraded-film background - grain, dust, flicker and vignette; notes fire burn flashes and scratches.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="1" width="10" height="10" rx="1" fill="#1a171b" stroke="#8a8590" strokeWidth="0.8" />
+      <rect x="2.2" y="2.2" width="1" height="1" fill="#8a8590" /><rect x="8.8" y="2.2" width="1" height="1" fill="#8a8590" />
+      <rect x="2.2" y="8.8" width="1" height="1" fill="#8a8590" /><rect x="8.8" y="8.8" width="1" height="1" fill="#8a8590" />
+      <circle cx="5" cy="5.5" r="0.5" fill="#e8e4da" /><circle cx="7.5" cy="7" r="0.35" fill="#e8e4da" opacity="0.7" />
+      <path d="M6.5 3 L6.2 4.6" stroke="#e8e4da" strokeWidth="0.4" opacity="0.6" />
+    </svg>
+  )},
+  { id: 'filmGrain', name: 'Film Grain', description: 'An on-top film-wear overlay - grain, dust and vignette degrade everything beneath it.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="1" width="10" height="10" rx="1" fill="none" stroke="#8a8590" strokeWidth="0.8" strokeDasharray="2 1.2" />
+      <g fill="#e8e4da">
+        <circle cx="3.5" cy="4" r="0.5" /><circle cx="8" cy="3" r="0.4" /><circle cx="6" cy="6.5" r="0.55" />
+        <circle cx="4" cy="8.5" r="0.4" /><circle cx="8.5" cy="8" r="0.5" /><circle cx="9.5" cy="5.5" r="0.3" />
+      </g>
+    </svg>
+  )},
+  { id: 'scribble', name: 'Scribble', description: 'Glowing hand-drawn pen strokes - notes draw swooshes, loops, and flourishes.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M1 8 Q4 11 6.5 8.5 Q9 6 7 5 Q5 4 6.5 2.5 Q8 1 11 3" fill="none" stroke="#87dcfb" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  )},
+  { id: 'filmCard', name: 'Film Card', description: 'Vintage intro/outro title cards - a paper playlist page or a glowing title over a waveform.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="2" width="10" height="8" rx="0.8" fill="#b5d9cc" stroke="#303820" strokeWidth="0.7" />
+      <rect x="2.5" y="4.8" width="7" height="2.4" fill="none" stroke="#303820" strokeWidth="0.6" />
+      <line x1="3.2" y1="6" x2="8.8" y2="6" stroke="#303820" strokeWidth="0.9" />
+    </svg>
+  )},
   { id: 'paddleBounce', name: 'Paddle Bounce', description: 'A Pong rally crossing once per beat - notes smash the ball faster.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="4" width="1.4" height="4" fill="#22d3ee"/><rect x="9.6" y="4" width="1.4" height="4" fill="#22d3ee"/><rect x="5" y="5" width="2" height="2" fill="#ffffff"/><rect x="3.6" y="6.4" width="1" height="1" fill="#ffffff" opacity="0.4"/></svg>
   )},
@@ -442,6 +472,13 @@ function TemplatesTab() {
 
   const apply = (tpl: (typeof TEMPLATES)[number]) => {
     if (!window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
+    // Transcribed already? applyTemplate carries the Lyrics track's words over
+    // (styling from the template), so the setup flow would be redundant.
+    const before = useProjectStore.getState()
+    const alreadyTranscribed = before.rootTrackIds.some((id) => {
+      const t = before.tracks[id]
+      return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics' && !!t.lyricTiming
+    })
     applyTemplate(tpl.document)
     trackEvent('template_applied', { template: tpl.id })
     // Anything pointing at the replaced tracks is stale now.
@@ -449,10 +486,10 @@ function TemplatesTab() {
     ui.setEditingBlock(null)
     ui.setSelectedTrackId(null)
     ui.setSelectedBlockIds(new Set())
-    // The Lyric Video template continues on its own setup route (song →
-    // transcribe → align) - after the applied tracks have saved, since that
-    // page re-hydrates the project from its row.
-    if (tpl.id === 'lyricVideo') {
+    // Lyric templates continue on their setup route (song → transcribe →
+    // align) - after the applied tracks have saved, since that page
+    // re-hydrates the project from its row.
+    if (tpl.lyricFlow && !alreadyTranscribed) {
       setLeaving(true)
       void (async () => {
         if (projectId) await waitForSaved()

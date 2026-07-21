@@ -1528,6 +1528,63 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const kept: Record<string, Track> = {}
       for (const id of audioIds) kept[id] = s.tracks[id]
       const hasAudio = audioIds.length > 0
+
+      // Lyric carry-over: when BOTH the project and the template ship a root
+      // 'Lyrics' Text Display track (the lyric-template contract), switching
+      // templates keeps the project's words - the template's styling wins,
+      // but the transcribed text, word notes, and timing survive the swap.
+      const findLyrics = (tracks: Record<string, Track>, roots: string[]) =>
+        roots.find((id) => {
+          const t = tracks[id]
+          return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
+        })
+      const existingLyricsId = findLyrics(s.tracks, s.rootTrackIds)
+      const templateLyricsId = findLyrics(cloned, clonedRoots)
+      if (existingLyricsId && templateLyricsId) {
+        const existing = s.tracks[existingLyricsId]
+        const tplLyrics = cloned[templateLyricsId]
+        cloned[templateLyricsId] = {
+          ...tplLyrics,
+          stringParams: {
+            ...tplLyrics.stringParams,
+            text: existing.stringParams?.text ?? tplLyrics.stringParams?.text ?? '',
+          },
+          blocks: existing.blocks.length > 0 ? existing.blocks : tplLyrics.blocks,
+          ...(existing.lyricTiming ? { lyricTiming: existing.lyricTiming } : {}),
+        }
+      }
+
+      // With a song present, the template's repeat-to-the-ceiling loop blocks
+      // trim to the song's end - the same rule transcription applies - so a
+      // post-transcription template switch doesn't reintroduce ambience that
+      // runs forever past the music. Without audio the ceiling stays: a later
+      // transcription does the trimming (blocks never re-grow).
+      if (hasAudio) {
+        const secPerBeat = 60 / s.bpm
+        let endBars = 0
+        for (const id of audioIds) {
+          for (const ab of s.tracks[id].audioBlocks ?? []) {
+            const beats = Math.max(0, ab.trimEnd - ab.trimStart) / secPerBeat
+            endBars = Math.max(endBars, ab.startBar + Math.ceil(beats / s.beatsPerBar))
+          }
+        }
+        if (templateLyricsId) {
+          for (const b of cloned[templateLyricsId].blocks) {
+            endBars = Math.max(endBars, b.startBar + b.durationBars)
+          }
+        }
+        if (endBars > 0) {
+          for (const t of Object.values(cloned)) {
+            if (!t.blocks.some((b) => b.loop && b.startBar + b.durationBars > endBars)) continue
+            t.blocks = t.blocks.map((b) =>
+              b.loop && b.startBar + b.durationBars > endBars
+                ? { ...b, durationBars: Math.max(1, endBars - b.startBar) }
+                : b,
+            )
+          }
+        }
+      }
+
       return {
         tracks: { ...kept, ...cloned },
         rootTrackIds: [...audioIds, ...clonedRoots],

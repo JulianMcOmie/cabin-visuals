@@ -19,6 +19,7 @@ import {
   type Material,
 } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { ensureFont } from '../core/visual/fonts'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
 import type { ResolvedNote } from '../core/visual/types'
@@ -40,12 +41,20 @@ const PITCH_HEIGHT_MAX = 72 // C5
 const PITCH_HEIGHT_CENTER = 66 // F#4 = no offset
 const MAX_DELAY_TAPS = 8
 
-// System font stacks - no Google Fonts. Index maps to a stack via SelectParam options.
-const FONT_STACKS = [
-  '"Arial Black", Impact, sans-serif',
-  'Georgia, "Times New Roman", serif',
-  '"Courier New", monospace',
-  'Arial, Helvetica, sans-serif',
+// Font stacks. 0-3 are system stacks; the rest are self-hosted template faces
+// (core/visual/fonts.ts) - the frame callback gates on `load` being ready and
+// retries, so a word canvas is never baked with the fallback family. `weight`
+// matters: IM Fell ships only 400, and asking canvas for 900 would synthesize
+// a fake bold that ruins the old-press look.
+interface FontDef { css: string; weight: number; load?: string }
+const FONT_STACKS: FontDef[] = [
+  { css: '"Arial Black", Impact, sans-serif', weight: 900 },
+  { css: 'Georgia, "Times New Roman", serif', weight: 900 },
+  { css: '"Courier New", monospace', weight: 900 },
+  { css: 'Arial, Helvetica, sans-serif', weight: 900 },
+  { css: '"IM Fell English SC", Georgia, serif', weight: 400, load: 'IM Fell English SC' },
+  { css: '"IM Fell English", Georgia, serif', weight: 400, load: 'IM Fell English' },
+  { css: '"Playfair Display", Georgia, serif', weight: 900, load: 'Playfair Display' },
 ]
 const fontStack = (i: number) => FONT_STACKS[Math.max(0, Math.min(FONT_STACKS.length - 1, Math.round(i)))]
 
@@ -167,12 +176,13 @@ const CANVAS_CACHE_MAX = 64
 function createTextCanvas(
   word: TextEntry | string,
   strokeWidth: number,
-  family: string,
+  font: FontDef,
   color: string,
   strokeColor: string,
+  glow = 0,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
-  const key = `${entry.cacheKey}|${strokeWidth}|${family}|${color}|${strokeColor}`
+  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -184,12 +194,12 @@ function createTextCanvas(
   // stretches by the resulting aspect), so every word renders letters the
   // same height - "awesome" comes out wider than "hello", not smaller.
   let fontSize = TEXT_CANVAS_SIZE * 0.35
-  const fontStr = (size: number) => `900 ${size}px ${family}`
+  const fontStr = (size: number) => `${font.weight} ${size}px ${font.css}`
   ctx.font = fontStr(fontSize)
 
   const layoutText = entry.layoutText || entry.text
-  // Stroke joins poke past the glyph box - pad for the configured stroke.
-  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize
+  // Stroke joins and glow halos poke past the glyph box - pad for both.
+  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize + glow * fontSize * 0.35
   const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
   let measured = ctx.measureText(layoutText).width
   if (measured > maxTextWidth && measured > 0) {
@@ -230,6 +240,17 @@ function createTextCanvas(
     ctx.strokeText(entry.text, drawX, cy)
   }
   ctx.fillStyle = color
+  if (glow > 0) {
+    // Projected-light bloom: a wide soft halo, then a tight inner glow, in the
+    // text's own color. The plain fill after clears the shadow and lays the
+    // bright core on top.
+    ctx.shadowColor = color
+    ctx.shadowBlur = glow * fontSize * 0.22
+    ctx.fillText(entry.text, drawX, cy)
+    ctx.shadowBlur = glow * fontSize * 0.07
+    ctx.fillText(entry.text, drawX, cy)
+    ctx.shadowBlur = 0
+  }
   ctx.fillText(entry.text, drawX, cy)
 
   if (canvasCache.size >= CANVAS_CACHE_MAX) {
@@ -286,6 +307,7 @@ interface FlightPooled {
 }
 
 const MAX_FLIGHT_SPRITES = 128
+const MAX_SCATTER_WORDS = 16
 
 const PARAMS: ParamDef[] = [
   { key: 'text', label: 'Text', type: 'string', default: 'HELLO', multiline: true },
@@ -295,8 +317,21 @@ const PARAMS: ParamDef[] = [
       { value: 1, label: 'Serif' },
       { value: 2, label: 'Monospace' },
       { value: 3, label: 'Sans-serif' },
+      { value: 4, label: 'Old Press Caps (IM Fell SC)' },
+      { value: 5, label: 'Old Press (IM Fell)' },
+      { value: 6, label: 'Didone (Playfair)' },
     ],
   },
+  {
+    key: 'layoutMode', label: 'Layout', type: 'select', default: 0, options: [
+      { value: 0, label: 'Center' },
+      { value: 1, label: 'Scatter' },
+    ],
+  },
+  { key: 'phraseGap', label: 'Phrase Gap (beats)', min: 0.5, max: 8, step: 0.5, default: 2, showIf: 'layoutMode' },
+  { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6, showIf: 'layoutMode' },
+  { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0 },
+  { key: 'jitter', label: 'Word Jitter', min: 0, max: 1, step: 0.05, default: 0 },
   {
     key: 'colorMode', label: 'Color Mode', type: 'select', default: 0, options: [
       { value: 0, label: 'Custom' },
@@ -346,6 +381,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   // Flight mode mesh pool.
   const flightPoolRef = useRef<FlightPooled[]>([])
 
+  // Scatter layout mesh pool - one mesh per visible phrase word.
+  const scatterPoolRef = useRef<FlightPooled[]>([])
+
   const { viewport } = useThree()
   const [ready, setReady] = useState(false)
 
@@ -385,6 +423,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         spr.mesh.geometry.dispose()
       }
       flightPoolRef.current = []
+      for (const spr of scatterPoolRef.current) {
+        spr.texture.dispose()
+        spr.mat.dispose()
+        spr.mesh.geometry.dispose()
+      }
+      scatterPoolRef.current = []
     }
   }, [])
 
@@ -396,8 +440,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     return () => { for (const mesh of echoMeshesRef.current) g.remove(mesh) }
   }, [ready])
 
-  function acquireFlightSprite(group: Group): FlightPooled {
-    for (const spr of flightPoolRef.current) {
+  function acquirePooled(pool: FlightPooled[], group: Group): FlightPooled {
+    for (const spr of pool) {
       if (!spr.active) { spr.active = true; spr.mesh.visible = true; return spr }
     }
     const texture = new CanvasTexture(createTextCanvas('', 0.05, fontStack(0), '#ffffff', '#000000'))
@@ -408,16 +452,20 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const mesh = new Mesh(new PlaneGeometry(1, 1), mat)
     group.add(mesh)
     const entry: FlightPooled = { mesh, texture, mat, key: '', active: true }
-    flightPoolRef.current.push(entry)
+    pool.push(entry)
     return entry
   }
+  const acquireFlightSprite = (group: Group) => acquirePooled(flightPoolRef.current, group)
 
   useInstrumentFrame(trackId, (state) => {
     if (!textureRef.current || !meshRef.current || !groupRef.current) return false
 
     const p = state.params
     const text = state.stringParams.text ?? 'HELLO'
-    const family = fontStack(p.font ?? 0)
+    const font = fontStack(p.font ?? 0)
+    // A template face that hasn't finished loading yet: retry next frame
+    // rather than baking fallback-family canvases into the cache.
+    if (font.load && !ensureFont(font.load)) return false
     const color = state.stringParams.color || '#ffffff'
     const invertBehind = (p.colorMode ?? 0) >= 0.5
     const strokeColor = state.stringParams.strokeColor || ''
@@ -441,6 +489,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const flightSubdivRate = p.flightSubdivRate ?? 8
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
+    const scatterMode = (p.layoutMode ?? 0) >= 0.5
+    const phraseGap = p.phraseGap ?? 2
+    const scatterSpread = p.scatterSpread ?? 0.6
+    const glow = p.glow ?? 0
+    const jitter = p.jitter ?? 0
     // Hue Shift rotates whatever color is about to draw (authored or rainbow).
     // Quantized to 1/120th turns so an automated lane reuses a bounded set of
     // cached word canvases instead of minting one per sampled float.
@@ -479,6 +532,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) {
+        spr.active = false
+        spr.mesh.visible = false
+      }
+      for (const spr of scatterPoolRef.current) {
         spr.active = false
         spr.mesh.visible = false
       }
@@ -537,11 +594,103 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     for (const mesh of echoMeshesRef.current) configureTextMaterial(mesh.material as MeshBasicMaterial, invertInThisPass)
     for (const spr of flightPoolRef.current) configureTextMaterial(spr.mat, invertInThisPass)
 
+    // --- Scatter layout ---
+    // The phrase accumulates as a loose collage: each word lands at a seeded
+    // scattered anchor (position, tilt, size all keyed to its word index, so a
+    // scrub reproduces the exact arrangement), earlier phrase words stay dimmed,
+    // and a gap of `phraseGap` beats between word onsets hard-clears the canvas
+    // by starting a new phrase. Echo taps and flight mode are Center-layout
+    // features and stay dormant here.
+    if (scatterMode) {
+      meshRef.current.visible = false
+      setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
+      for (const mesh of echoMeshesRef.current) mesh.visible = false
+      for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
+      // Phrase start: the most recent onset gap of phraseGap beats or more.
+      let phraseStart = 0
+      for (let k = wordCount - 1; k >= 1; k--) {
+        if (nextWordNotes[k].beat - nextWordNotes[k - 1].beat >= phraseGap) { phraseStart = k; break }
+      }
+      phraseStart = Math.max(phraseStart, wordCount - MAX_SCATTER_WORDS)
+
+      let releaseOpacity = 1
+      if (!isNoteHeld && lastWordNote) {
+        const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
+        releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
+      }
+
+      const onsetAge = lastWordNote ? (currentBeat - lastWordNote.beat) * secPerBeat : 1
+      const bassPopAge = lastBassNote ? (currentBeat - lastBassNote.beat) * secPerBeat : 1
+      const bassPopDecay = Math.max(0, 1 - bassPopAge / 0.25)
+      const bassPopScale = 1 + 0.25 * bassPopDecay * bassPopDecay
+
+      for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+      if (releaseOpacity > 0) {
+        const placedAnchors: [number, number][] = []
+        for (let i = phraseStart; i < wordCount; i++) {
+          const entry = entries[i % entries.length]
+          const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
+          configureTextMaterial(spr.mat, invertInThisPass)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
+          if (sprKey !== spr.key) {
+            spr.key = sprKey
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
+          }
+
+          const s = i * 131
+          const newest = i === wordCount - 1
+
+          // Seeded anchor with collision retries: take the first candidate far
+          // enough from the phrase's recent words (still deterministic - the
+          // attempt sequence is fixed per word index), so stacked overlapping
+          // words are rare instead of common.
+          let nx = 0
+          let ny = 0
+          for (let attempt = 0; attempt < 6; attempt++) {
+            nx = seededRand(s + 5 + attempt * 17) - 0.5
+            ny = seededRand(s + 6 + attempt * 17) - 0.5
+            let clear = true
+            for (let k = Math.max(0, placedAnchors.length - 3); k < placedAnchors.length; k++) {
+              const dx = nx - placedAnchors[k][0]
+              // Words are wide: vertical separation clears an overlap sooner
+              // than horizontal, so weight dy up.
+              const dy = (ny - placedAnchors[k][1]) * 1.6
+              if (dx * dx + dy * dy < 0.32 * 0.32) { clear = false; break }
+            }
+            if (clear) break
+          }
+          placedAnchors.push([nx, ny])
+          const rot = (seededRand(s + 7) - 0.5) * 2 * (0.03 + jitter * 0.12)
+          const sizeJ = 1 + (seededRand(s + 8) - 0.5) * 2 * jitter * 0.18
+          // Newest word pops on: overshoot scale plus a 2-frame brightness
+          // flicker, both closed-form from the onset age.
+          const onsetT = newest ? Math.min(onsetAge / 0.12, 1) : 1
+          const popScale = (1 + onsetBounce * 2 * (1 - onsetT)) * (newest ? bassPopScale : 1)
+          const flickerK = newest && onsetAge < 0.1
+            ? 0.7 + 0.3 * (Math.floor(onsetAge * 30) % 2)
+            : 1
+
+          const scale = baseScale * 0.55 * sizeJ * popScale
+          spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
+          spr.mesh.position.set(
+            nx * viewport.width * scatterSpread,
+            ny * viewport.height * scatterSpread * 0.8,
+            -0.0005 * (wordCount - i),
+          )
+          spr.mesh.rotation.set(0, 0, rot)
+          setAnimatedOpacity(spr.mat, (newest ? 1 : 0.78) * flickerK * releaseOpacity * textOpacity)
+        }
+      }
+      return
+    }
+    for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
     // Re-render main texture when the word or styling changes.
-    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${family}|${canvasColor}|${canvasStrokeColor}`
+    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, family, canvasColor, canvasStrokeColor))
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -575,10 +724,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const spr = acquireFlightSprite(groupRef.current)
         configureTextMaterial(spr.mat, invertInThisPass)
         const sprStrokeColor = invertBehind ? '#ffffff' : strokeColor
-        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${family}|${sprColor}|${sprStrokeColor}`
+        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, family, sprColor, sprStrokeColor))
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow))
         }
         spr.mesh.position.set(
           vx * ageSec,
@@ -620,10 +769,16 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const shakeY = Math.cos(bassPopAge * shakeFreq * Math.PI * 2 * 0.7) * shakeAmount * viewport.height
 
     setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, textOpacity * releaseOpacity)
-    const scale = baseScale * onsetScale * bassPopScale
+    // Word jitter: hand-set-type imperfection, seeded per word index so a
+    // scrub lands on the identical tilt/size/baseline for each word.
+    const wordIdx = wordCount - 1
+    const jitterSize = 1 + (seededRand(wordIdx * 131 + 8) - 0.5) * 2 * jitter * 0.18
+    const scale = baseScale * onsetScale * bassPopScale * jitterSize
     meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
+    meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
     meshRef.current.position.x = shakeX
     meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
+      + (seededRand(wordIdx * 131 + 9) - 0.5) * 2 * jitter * viewport.height * 0.04
 
     // --- Delay taps ---
     for (let tap = 0; tap < MAX_DELAY_TAPS; tap++) {
@@ -652,7 +807,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tex = echoTexturesRef.current[tap]
       const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, family, canvasColor, canvasStrokeColor))
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
         echoLastWordsRef.current[tap] = echoKey
       }
 

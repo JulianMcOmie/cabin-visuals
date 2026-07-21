@@ -1,6 +1,7 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
@@ -21,11 +22,14 @@ function numberOf(bound: UserInterfaceParameter | undefined, fallback = 0): numb
 
 /** Preview families for the font select's option values - presentation-only
  *  mirrors of the instrument's internal FONT_STACKS. */
-const FONT_PREVIEWS: Record<number, { family: string; short: string }> = {
+const FONT_PREVIEWS: Record<number, { family: string; short: string; load?: string }> = {
   0: { family: '"Arial Black", Impact, sans-serif', short: 'IMPACT' },
   1: { family: 'Georgia, "Times New Roman", serif', short: 'SERIF' },
   2: { family: '"Courier New", monospace', short: 'MONO' },
   3: { family: 'Arial, Helvetica, sans-serif', short: 'SANS' },
+  4: { family: '"IM Fell English SC", Georgia, serif', short: 'FELL SC', load: 'IM Fell English SC' },
+  5: { family: '"IM Fell English", Georgia, serif', short: 'FELL', load: 'IM Fell English' },
+  6: { family: '"Playfair Display", Georgia, serif', short: 'DIDONE', load: 'Playfair Display' },
 }
 
 function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
@@ -91,6 +95,13 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
 }
 
 export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+  // The template faces are lazy-loaded; kick them off so the specimen buttons
+  // (and the lyric-sheet preview) render in the real face, not the fallback.
+  useEffect(() => {
+    for (const preview of Object.values(FONT_PREVIEWS)) {
+      if (preview.load) ensureFont(preview.load)
+    }
+  }, [])
   const text = findParam(parameters, 'text')
   const font = findParam(parameters, 'font')
   const colorMode = findParam(parameters, 'colorMode')

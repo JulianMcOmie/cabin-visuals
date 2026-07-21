@@ -133,6 +133,7 @@ export const LYRIC_TEMPLATES: TemplateDef[] = [
     description: 'Big bold words on black over a live waveform and particle bursts. Add your song and the words write themselves.',
     bpm: 120,
     cardPreview: 'animatedLyric',
+    lyricFlow: true,
     document: lyricVideoDocument(),
   },
 ]

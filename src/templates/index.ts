@@ -6,10 +6,11 @@ export { type TemplateDef } from './library'
 import { TEMPLATES as VOL1, type TemplateDef } from './library'
 import { slideshow } from './library-slideshow'
 import { LYRIC_TEMPLATES } from './library-lyrics'
+import { silentFilm } from './library-silent-film'
 
 // Lyric videos lead (the product's current wedge), then Slideshow - the two
 // "bring your own material" starting points - then the showcase volume.
-export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, slideshow, ...VOL1]
+export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, slideshow, ...VOL1]
 
 // Every template document carries its own id, so a project created from (or
 // switched onto) it remembers which template it is on - the editor's Templates

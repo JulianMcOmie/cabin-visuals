@@ -19,6 +19,10 @@ export interface TemplateDef {
    *  than a canned capture. 'animated*' templates are skipped by the
    *  preview-capture script. */
   cardPreview?: 'video' | 'animatedSlideshow' | 'animatedLyric'
+  /** A lyric template: ships a root 'Lyrics' Text Display track (the refill /
+   *  carry-over contract), and applying it to a not-yet-transcribed project
+   *  continues into the lyric setup flow (song → transcribe → align). */
+  lyricFlow?: boolean
   document: ProjectDocument
 }
 
