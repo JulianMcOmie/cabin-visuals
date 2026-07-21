@@ -11,10 +11,12 @@ import { getFrameDriver } from '../editor/core/export/frameDriver'
 // window), aimed at a row instead of an undo stack. Pure observation: nothing
 // in the edit path changes, and a failed save never touches memory.
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
 
-/** The one React-visible surface of autosave - feeds the header status chip. */
-export const useSaveStatus = create<{ status: SaveStatus }>(() => ({ status: 'idle' }))
+/** The one React-visible surface of autosave - feeds the header status chip,
+ *  and (on 'conflict') the blocking banner that asks the user which version
+ *  wins. `conflictProjectId` is set only while status is 'conflict'. */
+export const useSaveStatus = create<{ status: SaveStatus; conflictProjectId?: string }>(() => ({ status: 'idle' }))
 
 // ~1s idle: long enough to collapse an edit burst into one write, short enough
 // that "it saved" is never in doubt.
@@ -83,7 +85,10 @@ export async function waitForSaved(maxMs = 15000): Promise<void> {
   await new Promise((r) => setTimeout(r, DEBOUNCE_MS + 200))
   const deadline = Date.now() + maxMs
   while (Date.now() < deadline) {
-    if (useSaveStatus.getState().status === 'saved') return
+    const { status } = useSaveStatus.getState()
+    // 'conflict' is terminal - waiting the full timeout out would just stall
+    // the handoff for 15s before proceeding anyway.
+    if (status === 'saved' || status === 'conflict') return
     await new Promise((r) => setTimeout(r, 150))
   }
 }
@@ -92,30 +97,49 @@ export async function waitForSaved(maxMs = 15000): Promise<void> {
  * Arm autosave for a project. Call strictly AFTER hydrate so the load itself
  * doesn't fire a redundant save. Returns a stop() that unsubscribes and runs
  * a final flush.
+ *
+ * `initialRev` is the rev this tab loaded (projectStorage.load) - every save is
+ * conditional on the row still being there, and each success advances it. If
+ * another tab saves in between, the write is refused and this loop parks in a
+ * terminal conflict state rather than overwriting their work.
  */
-export function startAutosave(projectId: string): () => void {
+export function startAutosave(projectId: string, initialRev: number): () => void {
   let dirty = false
   let inFlight = false // non-overlapping: one write in the air at a time
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  let rev = initialRev
+  // Terminal: once the row has moved on under us, nothing this loop holds is
+  // safe to write. Only the user (via the conflict banner) can resolve it.
+  let conflicted = false
 
   const schedule = () => {
-    if (stopped) return
+    if (stopped || conflicted) return
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => void flush(), DEBOUNCE_MS)
   }
 
   const flush = async () => {
     if (timer) { clearTimeout(timer); timer = null }
-    if (!dirty || inFlight) return
+    if (!dirty || inFlight || conflicted) return
     dirty = false
     inFlight = true
     useSaveStatus.setState({ status: 'saving' })
     try {
       const thumbnail = captureThumbnail()
-      await projectStorage.save(projectId, { ...serialize(), ...(thumbnail ? { thumbnail } : {}) })
+      rev = await projectStorage.save(projectId, { ...serialize(), ...(thumbnail ? { thumbnail } : {}) }, rev)
       if (!dirty) useSaveStatus.setState({ status: 'saved' })
     } catch (err) {
+      if (err instanceof projectStorage.ProjectConflictError) {
+        // Someone else saved this project since we loaded it. Do NOT retry -
+        // a retry with a refreshed rev is precisely the silent overwrite this
+        // whole mechanism exists to stop. Park, keep memory untouched, and let
+        // the banner offer the user reload-or-fork.
+        conflicted = true
+        dirty = false
+        useSaveStatus.setState({ status: 'conflict', conflictProjectId: projectId })
+        return
+      }
       // Network/RLS failure: the doc stays dirty and retries; memory is intact.
       console.error('Autosave failed', err)
       dirty = true
@@ -126,7 +150,13 @@ export function startAutosave(projectId: string): () => void {
     }
   }
 
-  const markDirty = () => { dirty = true; schedule() }
+  const markDirty = () => {
+    // Edits during a conflict stay in memory (and are still forkable) - they
+    // just can't be written to a row that isn't ours to write anymore.
+    if (conflicted) return
+    dirty = true
+    schedule()
+  }
 
   // Reference diff - the stores are immutable, so !== is an exact change test.
   const unsubProject = useProjectStore.subscribe((state, prev) => {
@@ -147,7 +177,7 @@ export function startAutosave(projectId: string): () => void {
   document.addEventListener('visibilitychange', onVisibility)
   window.addEventListener('beforeunload', onBeforeUnload)
 
-  useSaveStatus.setState({ status: 'saved' }) // in sync at arm time (just hydrated)
+  useSaveStatus.setState({ status: 'saved', conflictProjectId: undefined }) // in sync at arm time (just hydrated)
 
   return () => {
     stopped = true
@@ -157,7 +187,7 @@ export function startAutosave(projectId: string): () => void {
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('beforeunload', onBeforeUnload)
     if (timer) { clearTimeout(timer); timer = null }
-    void flush()
-    useSaveStatus.setState({ status: 'idle' })
+    void flush() // no-ops when conflicted
+    useSaveStatus.setState({ status: 'idle', conflictProjectId: undefined })
   }
 }

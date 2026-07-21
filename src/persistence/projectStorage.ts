@@ -32,7 +32,20 @@ export interface ProjectSummary {
   id: string
   name: string
   updatedAt: string
+  /** The row's concurrency counter (see `save`). */
+  rev: number
   preview?: ProjectPreview
+}
+
+/** A save was refused because the row moved on since this tab loaded it -
+ *  another tab or device saved in between. Distinct from every other failure
+ *  because it must NOT be retried: retrying is exactly the overwrite the rev
+ *  check exists to prevent. Callers stop autosaving and ask the user. */
+export class ProjectConflictError extends Error {
+  constructor(readonly projectId: string) {
+    super(`Project ${projectId} was changed somewhere else`)
+    this.name = 'ProjectConflictError'
+  }
 }
 
 const MAX_PREVIEW_ROWS = 6
@@ -115,13 +128,14 @@ function documentToPreview(doc: unknown): ProjectPreview {
 export async function list(): Promise<ProjectSummary[]> {
   const { data, error } = await getSupabase()
     .from('projects')
-    .select('id, name, updated_at, data')
+    .select('id, name, updated_at, rev, data')
     .order('updated_at', { ascending: false })
   if (error) throw error
   return data.map((r) => ({
     id: r.id,
     name: r.name,
     updatedAt: r.updated_at,
+    rev: r.rev,
     preview: {
       ...documentToPreview(r.data),
       image: typeof (r.data as { thumbnail?: unknown })?.thumbnail === 'string'
@@ -131,32 +145,58 @@ export async function list(): Promise<ProjectSummary[]> {
   }))
 }
 
-/** Load one project's document, upgraded to the current shape. */
-export async function load(id: string): Promise<{ name: string; document: ProjectDocument }> {
+/** Load one project's document, upgraded to the current shape. The `rev` comes
+ *  back with it: whoever holds the document must hand it to `save` to prove the
+ *  row hasn't moved on underneath them. */
+export async function load(id: string): Promise<{ name: string; document: ProjectDocument; rev: number }> {
   const { data, error } = await getSupabase()
     .from('projects')
-    .select('name, data')
+    .select('name, data, rev')
     .eq('id', id)
     .single()
   if (error) throw error
-  return { name: data.name, document: upgradeDocument(data.data) }
+  return { name: data.name, document: upgradeDocument(data.data), rev: data.rev }
 }
 
-/** Mirror the document to its row (blob + projected columns, one write). */
-export async function save(id: string, doc: ProjectDocument): Promise<void> {
-  const { data, error } = await getSupabase()
+/**
+ * Mirror the document to its row (blob + projected columns, one write),
+ * but ONLY if the row is still at `expectedRev` - the rev this caller loaded.
+ * Returns the new rev to carry into the next save.
+ *
+ * This is the fix for the two-tab data-loss bug. A save used to be an
+ * unconditional "make the row look like my copy", so a tab sitting on an hour
+ * old document would happily flatten an hour of newer work from another tab.
+ * The `.eq('rev', …)` makes the check and the write one atomic statement in
+ * Postgres, so a stale tab is refused rather than served last-write-wins.
+ */
+export async function save(id: string, doc: ProjectDocument, expectedRev: number): Promise<number> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
     .from('projects')
     .update({
       data: doc,
       schema_version: doc.schemaVersion,
+      rev: expectedRev + 1,
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .select('id')
+    .eq('rev', expectedRev)
+    .select('rev')
   if (error) throw error
-  // RLS filters a non-owned/missing row to zero rows with no error - surface
-  // that as a failure instead of silently dropping the save.
-  if (!data.length) throw new Error(`Project ${id} not found (or not yours)`)
+  if (data.length) return data[0].rev
+
+  // Zero rows means one of two very different things, and the caller must tell
+  // them apart: a stale rev (recoverable - ask the user) or a missing/non-owned
+  // row that RLS filtered out with no error (a real failure). Re-read to see
+  // which; the row either exists for us or it doesn't.
+  const { data: current, error: probeError } = await supabase
+    .from('projects')
+    .select('rev')
+    .eq('id', id)
+    .maybeSingle()
+  if (probeError) throw probeError
+  if (!current) throw new Error(`Project ${id} not found (or not yours)`)
+  throw new ProjectConflictError(id)
 }
 
 /** Create a project - empty by default, or seeded from a document (templates). */
@@ -174,14 +214,19 @@ export async function create(name: string, document?: ProjectDocument): Promise<
       data: doc,
       schema_version: doc.schemaVersion,
     })
-    .select('id, name, updated_at')
+    .select('id, name, updated_at, rev')
     .single()
   if (error) throw error
-  return { id: data.id, name: data.name, updatedAt: data.updated_at }
+  return { id: data.id, name: data.name, updatedAt: data.updated_at, rev: data.rev }
 }
 
 /** Rename a project. The name is a spine column, not part of the document, so
- *  autosave never touches it - this is the one write path for it. */
+ *  autosave never touches it - this is the one write path for it.
+ *
+ *  Deliberately does NOT bump `rev`: rev tracks the document, and a rename in
+ *  one tab shouldn't strand every other tab on a stale rev over a field they
+ *  don't even hold. (The revision trigger skips it for the same reason - the
+ *  document is unchanged, so there's nothing to snapshot.) */
 export async function rename(id: string, name: string): Promise<void> {
   const { data, error } = await getSupabase()
     .from('projects')

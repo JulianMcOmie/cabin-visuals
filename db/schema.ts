@@ -18,6 +18,13 @@ export const projects = pgTable(
     // Its shape is versioned by schemaVersion inside the blob, not by migrations.
     data: jsonb('data').notNull().default(EMPTY_PROJECT_DOCUMENT),
     schemaVersion: integer('schema_version').notNull().default(1),
+    // Optimistic-concurrency counter, bumped by every document save. A tab
+    // remembers the rev it loaded and writes with `WHERE rev = <that>`, so a
+    // tab holding a stale copy is refused instead of silently overwriting the
+    // newer one (the two-tab data-loss bug). Document saves only - `rename`
+    // deliberately leaves it alone, or renaming in one tab would strand every
+    // other tab on a stale rev for no reason.
+    rev: integer('rev').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

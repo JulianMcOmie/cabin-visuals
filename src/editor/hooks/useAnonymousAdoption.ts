@@ -47,7 +47,7 @@ export function useAnonymousAdoption() {
           const project = await projectStorage.create(name, serialize())
           // The row was seeded from the document already in memory - tell the
           // rebind to keep it (no blank slate, no reload) and just arm autosave.
-          markAdopted(project.id, project.name)
+          markAdopted(project.id, project.name, project.rev)
           router.replace(`/editor?project=${project.id}`)
         } catch (err) {
           console.error('Adoption failed (staying in-memory):', err)

@@ -15,15 +15,17 @@
 
 const WINDOW_MS = 10_000
 
-let adopted: { id: string; name: string; at: number } | null = null
+let adopted: { id: string; name: string; rev: number; at: number } | null = null
 
-/** Adoption calls this right before rebinding the URL to the new row. */
-export function markAdopted(id: string, name: string): void {
-  adopted = { id, name, at: Date.now() }
+/** Adoption calls this right before rebinding the URL to the new row. `rev` is
+ *  the freshly created row's concurrency counter - the bind arms autosave
+ *  without a load, so this is the only place it can come from. */
+export function markAdopted(id: string, name: string, rev: number): void {
+  adopted = { id, name, rev, at: Date.now() }
 }
 
 /** Does `id` refer to a row just seeded from the current in-memory document? */
-export function justAdopted(id: string): { name: string } | null {
+export function justAdopted(id: string): { name: string; rev: number } | null {
   if (!adopted || adopted.id !== id || Date.now() - adopted.at > WINDOW_MS) return null
-  return { name: adopted.name }
+  return { name: adopted.name, rev: adopted.rev }
 }

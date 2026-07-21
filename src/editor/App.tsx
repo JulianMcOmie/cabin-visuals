@@ -36,6 +36,7 @@ import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
+import { ConflictDialog } from './components/ConflictDialog'
 import * as projectStorage from '../persistence/projectStorage'
 import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
@@ -311,11 +312,18 @@ function TemplateDemoChip() {
 function SaveStatusChip() {
   const status = useSaveStatus((s) => s.status)
   if (status === 'idle') return null
-  const label = status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save failed'
+  const label =
+    status === 'saving' ? 'Saving…'
+    : status === 'saved' ? 'Saved'
+    // Paused, not broken - the dialog over the top explains it.
+    : status === 'conflict' ? 'Paused - changed elsewhere'
+    : 'Save failed'
   return (
     <span
       className={`text-[11px] select-none whitespace-nowrap ${
-        status === 'error' ? 'text-red-400' : 'text-[var(--text-muted)]'
+        status === 'error' ? 'text-red-400'
+        : status === 'conflict' ? 'text-[var(--warn)]'
+        : 'text-[var(--text-muted)]'
       }`}
     >
       {label}
@@ -493,12 +501,17 @@ export default function EditorApp() {
   const { topFrac, containerRef, startResize } = useVerticalSplit()
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
-  const modalOpen = useUIStore((s) => s.modalOpen)
+  // The conflict dialog counts: it's blocking, and it rides on autosave state
+  // rather than the modal flag, so it's OR'd in here instead of writing to the
+  // store (nothing else should have to coordinate with it).
+  const conflicted = useSaveStatus((s) => s.status === 'conflict')
+  const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
       <MediaFileDropLayer />
+      <ConflictDialog />
       <Header />
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>

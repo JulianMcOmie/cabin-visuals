@@ -66,7 +66,10 @@ export function useProjectPersistence() {
     if (handoff) {
       useUIStore.getState().setProjectName(handoff.name)
       remember()
-      const stopAutosave = startAutosave(projectId)
+      // The row was inserted moments ago and nothing has saved over it, so its
+      // rev is whatever create() reported - carried through the handoff rather
+      // than assumed, since assuming is how stale-rev bugs start.
+      const stopAutosave = startAutosave(projectId, handoff.rev)
       return () => {
         stopAutosave()
         useUIStore.getState().setProjectName(null)
@@ -84,7 +87,7 @@ export function useProjectPersistence() {
 
     ;(async () => {
       try {
-        const { name, document } = await projectStorage.load(projectId)
+        const { name, document, rev } = await projectStorage.load(projectId)
         if (cancelled) return
         remember()
         useUIStore.getState().setProjectName(name)
@@ -92,7 +95,7 @@ export function useProjectPersistence() {
         // The hydrate setState must not be undoable - Ctrl+Z right after open
         // would otherwise restore an empty project.
         useHistoryStore.getState().reset()
-        stop = startAutosave(projectId)
+        stop = startAutosave(projectId, rev)
       } catch (err) {
         console.error('Failed to load project', err)
         if (!cancelled) useSaveStatus.setState({ status: 'error' })

@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "test:visual": "node --import tsx --test src/editor/core/visual/*.test.ts src/editor/core/visualCopies/*.test.ts src/editor/core/directors/*.test.ts src/editor/core/photo/*.test.ts src/editor/store/*.test.ts src/persistence/*.test.ts",
+    "test:visual": "node --import tsx --test --experimental-test-module-mocks src/editor/core/visual/*.test.ts src/editor/core/visualCopies/*.test.ts src/editor/core/directors/*.test.ts src/editor/core/photo/*.test.ts src/editor/store/*.test.ts src/persistence/*.test.ts",
     "lint": "next lint",
     "previews": "node scripts/generate-previews.mjs",
     "db:generate": "drizzle-kit generate",
