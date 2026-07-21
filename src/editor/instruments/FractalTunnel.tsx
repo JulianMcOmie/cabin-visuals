@@ -1,17 +1,39 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Mesh, CanvasTexture, LinearFilter, MeshBasicMaterial } from 'three'
+import { AdditiveBlending, Color, Group, Vector2, Vector3, type IUniform, type Mesh, type MeshBasicMaterial } from 'three'
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
 // Ported from Excellent DAW. A hypnotic fractal-flower tunnel: a recursive branching
 // "flower" is drawn twice (near + far), connected by tunnel lines, projected with a
-// simple perspective onto a 2D canvas that's mapped to a full-frame plane. The spiral,
-// spread and hue slowly oscillate over musical beats; new notes bump the hue (or spawn
-// colour-inversion pulse rings). Drawing math is Tyler's verbatim; only the state reads
-// are rewired: engine getTrackState → getObjectState, and all motion derives from
-// `state.beat` - hue bumps and pulse rings are computed from `state.notes` each frame
-// (note-onset ages, not a spawned list), so scrub == playback.
+// simple perspective. The spiral, spread and hue slowly oscillate over musical beats;
+// new notes bump the hue (or spawn colour-inversion pulse rings). Drawing math is
+// Tyler's verbatim; state reads are rewired to the engine, and all motion derives
+// from `state.beat` - hue bumps and pulse rings are computed from `state.notes` each
+// frame (note-onset ages, not a spawned list), so scrub == playback.
+//
+// RENDERING IS GPU LINE GEOMETRY, not a canvas. The flower is ~1,500 line segments;
+// stroking those on a 2D canvas with shadowBlur (and uploading the result as a
+// multi-megabyte texture every frame) made this the most expensive instrument in the
+// engine, and Color Pulse doubled it by rendering a second, inverted offscreen copy.
+// Now the same projected segments are packed into instanced line buffers - one draw
+// per generation, because that is the granularity at which line WIDTH changes - and
+// the GPU rasterizes them. A fragment shader would be the wrong tool here: this is
+// explicit geometry, and per-pixel distance to 1,500 segments is far more work than
+// simply drawing them.
+//
+// Deliberate differences from the canvas original, all in service of speed:
+//  - Glow is a second, wider, dimmer pass per generation (the neon core+glow pattern
+//    HopfFibration uses) instead of canvas shadowBlur.
+//  - Segments blend ADDITIVELY, so per-segment alpha is baked into its colour.
+//    Over the near-black backdrop this matches; where branches overlap it reads
+//    slightly hotter, which suits the neon look.
+//  - Color Pulse rings are a hue rotation applied per-fragment inside the ring
+//    bands (injected into the line shader) rather than a composited second render.
 
 interface Point3D {
   x: number
@@ -47,6 +69,16 @@ const CONFIG = {
   baseLength: 80,
   oscSpeed: 1,
 }
+
+// The projection still happens against a virtual 1024-tall frame, exactly as the
+// canvas version did, so the artwork's proportions are untouched; the result is
+// then mapped into the plane's world units.
+const VIRTUAL_H = 1024
+const MAX_GENERATIONS = 5
+const MAX_RINGS = 6
+// Safety rail the canvas version lacked: symmetry 12 x 5 branches x 5 generations
+// is ~187k segments, which used to simply hang the tab.
+const MAX_SEGMENTS = 24000
 
 function project(
   x: number, y: number, z: number,
@@ -127,136 +159,133 @@ function getEndpoints(branches: Branch[], maxGen: number): Point3D[] {
   return endpoints
 }
 
-function renderTunnelLines(
-  ctx: CanvasRenderingContext2D,
-  frontEndpoints: Point3D[],
-  backEndpoints: Point3D[],
-  centerX: number, centerY: number,
-  focalLength: number, opacity: number, glowIntensity: number
-) {
-  const count = Math.min(frontEndpoints.length, backEndpoints.length)
-  for (let i = 0; i < count; i++) {
-    const back = backEndpoints[i]
-    const front = frontEndpoints[i]
+// ────────────────────────────────────────────
+// Pulse rings, injected into the line shader
+// ────────────────────────────────────────────
 
-    ctx.beginPath()
-    const segments = 30
-    let started = false
+// Each ring is (radius, halfBandWidth, opacity) in device pixels from frame centre.
+// Inside a band the fragment's hue rotates half a turn - the same "inverted colour"
+// the canvas version got by compositing a second, hue-shifted render.
+const RING_UNIFORM_DECL = `
+uniform vec3 uRings[${MAX_RINGS}];
+uniform vec2 uRingCenter;
 
-    for (let s = 0; s <= segments; s++) {
-      const t = s / segments
-      const x = back.x + (front.x - back.x) * t
-      const y = back.y + (front.y - back.y) * t
-      const z = back.z + (front.z - back.z) * t
+vec3 cabinHueRotate(vec3 color, float turns) {
+  vec3 axis = normalize(vec3(1.0));
+  float angle = turns * 6.28318530718;
+  return color * cos(angle)
+    + cross(axis, color) * sin(angle)
+    + axis * dot(axis, color) * (1.0 - cos(angle));
+}
+`
 
-      const projected = project(x, y, z, centerX, centerY, focalLength)
-      if (!projected) continue
+const RING_SNIPPET = `
+{
+  float ringD = distance(gl_FragCoord.xy, uRingCenter);
+  float ringMix = 0.0;
+  for (int ri = 0; ri < ${MAX_RINGS}; ri++) {
+    vec3 ring = uRings[ri];
+    if (ring.z <= 0.0) continue;
+    if (abs(ringD - ring.x) < ring.y) ringMix = max(ringMix, ring.z);
+  }
+  if (ringMix > 0.0) {
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, cabinHueRotate(gl_FragColor.rgb, 0.5), ringMix);
+  }
+}
+`
 
-      if (!started) {
-        ctx.moveTo(projected.x, projected.y)
-        started = true
-      } else {
-        ctx.lineTo(projected.x, projected.y)
-      }
+interface RingUniforms {
+  uRings: IUniform<Vector3[]>
+  uRingCenter: IUniform<Vector2>
+}
+
+/** One additive line pass: a batch of segments sharing a width. Buffers are
+ *  allocated with headroom and rewritten in place; `setPositions` mints a fresh
+ *  GPU buffer on every call, which across 13 passes at 60fps is exactly the
+ *  per-frame churn this port exists to remove. */
+interface LinePass {
+  line: LineSegments2
+  geometry: LineSegmentsGeometry
+  material: LineMaterial
+  positions: Float32Array
+  colors: Float32Array
+  capacity: number
+}
+
+function createPass(parent: Group, resolution: Vector2, rings: RingUniforms, renderOrder: number): LinePass {
+  const geometry = new LineSegmentsGeometry()
+  const material = new LineMaterial({
+    color: 0xffffff,
+    linewidth: 1,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    resolution,
+    worldUnits: false,
+  })
+  material.blending = AdditiveBlending
+  // These blend additively and must stay in the transparent queue; without the
+  // flag the opacity wrapper clears `transparent` whenever opacity is 1.
+  material.userData[FORCE_TRANSPARENT_KEY] = true
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uRings = rings.uRings
+    shader.uniforms.uRingCenter = rings.uRingCenter
+    shader.fragmentShader = RING_UNIFORM_DECL + shader.fragmentShader.replace(
+      '#include <tonemapping_fragment>',
+      RING_SNIPPET + '\n#include <tonemapping_fragment>',
+    )
+  }
+  // REQUIRED, not cosmetic: without it three would consider these materials
+  // identical to any other stock LineMaterial (same shader source, same
+  // defines) and hand them a cached program compiled WITHOUT the ring
+  // injection - or hand HopfFibration's lines a program that has it.
+  material.customProgramCacheKey = () => 'fractal-tunnel-rings-v1'
+  const line = new LineSegments2(geometry, material)
+  line.frustumCulled = false // bounds change every frame; culling would just cost
+  line.renderOrder = renderOrder
+  line.visible = false
+  parent.add(line)
+  return { line, geometry, material, positions: new Float32Array(0), colors: new Float32Array(0), capacity: 0 }
+}
+
+/** Mark an interleaved attribute's backing buffer dirty. Returns false when the
+ *  geometry isn't laid out as expected, so the caller can fall back. */
+function touchAttribute(geometry: LineSegmentsGeometry, name: string): boolean {
+  const attribute = geometry.getAttribute(name) as { data?: { needsUpdate: boolean } } | undefined
+  if (!attribute?.data) return false
+  attribute.data.needsUpdate = true
+  return true
+}
+
+/** Upload a pass's segments, or hide it when it has none. */
+function commitPass(pass: LinePass, positions: number[], colors: number[], width: number) {
+  const segments = positions.length / 6
+  if (segments === 0) {
+    pass.line.visible = false
+    return
+  }
+  if (segments > pass.capacity) {
+    // Grow with headroom so an oscillating segment count doesn't reallocate
+    // every frame, then hand the new arrays to three once.
+    pass.capacity = Math.ceil(segments * 1.5)
+    pass.positions = new Float32Array(pass.capacity * 6)
+    pass.colors = new Float32Array(pass.capacity * 6)
+    pass.positions.set(positions)
+    pass.colors.set(colors)
+    pass.geometry.setPositions(pass.positions)
+    pass.geometry.setColors(pass.colors)
+  } else {
+    pass.positions.set(positions)
+    pass.colors.set(colors)
+    if (!touchAttribute(pass.geometry, 'instanceStart') || !touchAttribute(pass.geometry, 'instanceColorStart')) {
+      pass.geometry.setPositions(pass.positions)
+      pass.geometry.setColors(pass.colors)
     }
-
-    const hue = ((front.hue + back.hue) / 2) * 360
-    ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${opacity})`
-    ctx.lineWidth = 1
-    ctx.shadowColor = `hsla(${hue}, 80%, 60%, ${glowIntensity * 0.5})`
-    ctx.shadowBlur = 8
-    ctx.stroke()
   }
-}
-
-function renderBranches(
-  ctx: CanvasRenderingContext2D,
-  branches: Branch[],
-  centerX: number, centerY: number,
-  focalLength: number, lineWidth: number, glowIntensity: number,
-  hueOffset: number = 0
-) {
-  branches.sort((a, b) => a.generation - b.generation)
-
-  branches.forEach(branch => {
-    ctx.beginPath()
-    let started = false
-
-    branch.points.forEach(point => {
-      const projected = project(point.x, point.y, point.z, centerX, centerY, focalLength)
-      if (!projected) return
-
-      if (!started) {
-        ctx.moveTo(projected.x, projected.y)
-        started = true
-      } else {
-        ctx.lineTo(projected.x, projected.y)
-      }
-    })
-
-    const alpha = Math.max(0.2, 1 - branch.generation * 0.15)
-    const lightness = 50 + branch.generation * 5
-    const saturation = 90 - branch.generation * 5
-    const width = lineWidth * Math.pow(0.7, branch.generation)
-    const hue = ((branch.hue + hueOffset) % 1) * 360
-
-    ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`
-    ctx.lineWidth = width
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, ${glowIntensity})`
-    ctx.shadowBlur = 10 + branch.generation * 2
-    ctx.stroke()
-  })
-}
-
-function compositePulseRings(
-  ctx: CanvasRenderingContext2D,
-  invertedCanvas: HTMLCanvasElement,
-  centerX: number, centerY: number,
-  pulses: { radius: number; bandWidth: number; opacity: number }[]
-) {
-  if (pulses.length === 0) return
-
-  for (const pulse of pulses) {
-    ctx.save()
-
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, pulse.radius, 0, Math.PI * 2)
-    ctx.arc(centerX, centerY, Math.max(0, pulse.radius - pulse.bandWidth), 0, Math.PI * 2, true)
-    ctx.closePath()
-    ctx.clip()
-
-    ctx.globalAlpha = pulse.opacity
-    ctx.drawImage(invertedCanvas, 0, 0)
-
-    ctx.restore()
-  }
-}
-
-function renderEndpointDots(
-  ctx: CanvasRenderingContext2D,
-  branches: Branch[],
-  maxGen: number,
-  centerX: number, centerY: number,
-  focalLength: number, elapsed: number
-) {
-  const pulse = 0.5 + 0.5 * Math.sin(elapsed * Math.PI * 3)
-
-  branches.filter(b => b.generation === maxGen - 1).forEach(branch => {
-    const lastPoint = branch.points[branch.points.length - 1]
-    const projected = project(lastPoint.x, lastPoint.y, lastPoint.z, centerX, centerY, focalLength)
-    if (!projected) return
-
-    const dotRadius = Math.max(1, (2 + pulse * 1.5) * projected.scale * 0.8)
-
-    ctx.beginPath()
-    ctx.arc(projected.x, projected.y, dotRadius, 0, Math.PI * 2)
-    ctx.fillStyle = `hsla(${branch.hue * 360}, 100%, 70%, 0.9)`
-    ctx.shadowColor = `hsla(${branch.hue * 360}, 100%, 70%, 1)`
-    ctx.shadowBlur = 15
-    ctx.fill()
-  })
+  // Draw only the segments actually written; the tail of the buffer is stale.
+  pass.geometry.instanceCount = segments
+  pass.material.linewidth = Math.max(0.5, width)
+  pass.line.visible = true
 }
 
 const PARAMS: ParamDef[] = [
@@ -276,56 +305,62 @@ const PARAMS: ParamDef[] = [
   { key: 'pulseBandWidth', label: 'Band Width', min: 10, max: 100, step: 5, default: 40, showIf: 'colorPulse' },
   { key: 'pulseFadeDuration', label: 'Fade Duration', min: 0.5, max: 5, step: 0.1, default: 2.0, showIf: 'colorPulse' },
 ]
-function FractalTunnelVisual({ trackId }: { trackId: string }) {
-  const { viewport } = useThree()
-  const meshRef = useRef<Mesh>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const offscreenNormalRef = useRef<HTMLCanvasElement | null>(null)
-  const offscreenInvertedRef = useRef<HTMLCanvasElement | null>(null)
-  const textureRef = useRef<CanvasTexture | null>(null)
 
-  // The backing canvases match the visual window's ASPECT (height fixed, width
-  // follows), so the tunnel genuinely fills the frame at any window size with no
-  // squash - the drawing is projection-based and spreads into whatever canvas it
-  // gets. Quantized so live resizes only recreate on meaningful aspect changes.
-  const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
-  const texH = 1024
-  const texW = Math.max(256, Math.min(2048, Math.round((texH * aspect) / 64) * 64))
+function FractalTunnelVisual({ trackId }: { trackId: string }) {
+  const { viewport, size } = useThree()
+  const groupRef = useRef<Group>(null)
+  const bgRef = useRef<Mesh>(null)
+  const passesRef = useRef<{ core: LinePass[]; glow: LinePass[]; tunnel: LinePass; tunnelGlow: LinePass; dots: LinePass } | null>(null)
+  const scratchColor = useRef(new Color()).current
+
+  const resolution = useMemo(() => new Vector2(1, 1), [])
+  const rings = useMemo<RingUniforms>(() => ({
+    uRings: { value: Array.from({ length: MAX_RINGS }, () => new Vector3()) },
+    uRingCenter: { value: new Vector2() },
+  }), [])
+
+  // Reused scratch buffers - one per pass - so a frame allocates nothing beyond
+  // the branch tree itself.
+  const buffers = useMemo(() => ({
+    corePos: Array.from({ length: MAX_GENERATIONS }, () => [] as number[]),
+    coreCol: Array.from({ length: MAX_GENERATIONS }, () => [] as number[]),
+    glowPos: Array.from({ length: MAX_GENERATIONS }, () => [] as number[]),
+    glowCol: Array.from({ length: MAX_GENERATIONS }, () => [] as number[]),
+    tunnelPos: [] as number[],
+    tunnelCol: [] as number[],
+    tunnelGlowCol: [] as number[],
+    dotPos: [] as number[],
+    dotCol: [] as number[],
+  }), [])
 
   useEffect(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = texW
-    canvas.height = texH
-    canvasRef.current = canvas
-
-    const offscreenNormal = document.createElement('canvas')
-    offscreenNormal.width = texW
-    offscreenNormal.height = texH
-    offscreenNormalRef.current = offscreenNormal
-
-    const offscreenInverted = document.createElement('canvas')
-    offscreenInverted.width = texW
-    offscreenInverted.height = texH
-    offscreenInvertedRef.current = offscreenInverted
-
-    const texture = new CanvasTexture(canvas)
-    texture.minFilter = LinearFilter
-    texture.magFilter = LinearFilter
-    textureRef.current = texture
-
+    const group = groupRef.current
+    if (!group) return
+    // Glow passes first so the cores draw over them.
+    const glow = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, resolution, rings, i))
+    const tunnelGlow = createPass(group, resolution, rings, MAX_GENERATIONS)
+    const tunnel = createPass(group, resolution, rings, MAX_GENERATIONS + 1)
+    const core = Array.from({ length: MAX_GENERATIONS }, (_, i) => createPass(group, resolution, rings, MAX_GENERATIONS + 2 + i))
+    const dots = createPass(group, resolution, rings, MAX_GENERATIONS * 2 + 3)
+    passesRef.current = { core, glow, tunnel, tunnelGlow, dots }
     return () => {
-      texture.dispose()
+      for (const pass of [...core, ...glow, tunnel, tunnelGlow, dots]) {
+        group.remove(pass.line)
+        pass.geometry.dispose()
+        pass.material.dispose()
+      }
+      passesRef.current = null
     }
-  }, [texW])
+  }, [resolution, rings])
 
   useInstrumentFrame(trackId, (state) => {
-    const canvas = canvasRef.current
-    const texture = textureRef.current
-    const mesh = meshRef.current
-    if (!canvas || !texture || !mesh) return false
+    const passes = passesRef.current
+    const bg = bgRef.current
+    if (!passes || !bg) return false
 
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return false
+    const p = state.params
+    const sp = state.stringParams
+    ;(bg.material as MeshBasicMaterial).color.set(sp.bgColor ?? '#050508')
 
     // Time source: the playhead beat (seconds-tuned motion uses beat * secPerBeat).
     const elapsed = state.beat * state.secPerBeat
@@ -335,19 +370,15 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
     // detection: hue bumps and pulse rings derive from these each frame.
     const pastNotes = state.notes.filter((n) => n.beat <= state.beat)
 
-    const p = state.params
-    const sp = state.stringParams
     const colorPulse = (p.colorPulse ?? 0) >= 0.5
     const pulseSpeed = p.pulseSpeed ?? 200
     const pulseBandWidth = p.pulseBandWidth ?? 40
     const pulseFadeDuration = p.pulseFadeDuration ?? 2.0
-
     const hueOffset = colorPulse ? 0 : (pastNotes.length * 30) % 360
 
-    // Read settings from params
     const symmetry = p.symmetry ?? 6
     const branchCount = p.branchCount ?? 3
-    const generations = p.generations ?? 3
+    const generations = Math.min(MAX_GENERATIONS, p.generations ?? 3)
     const spiralAmount = p.spiralAmount ?? 0.9
     const lengthDecay = p.lengthDecay ?? 0.8
     const spreadAngle = p.spreadAngle ?? 1.6
@@ -367,101 +398,182 @@ function FractalTunnelVisual({ trackId }: { trackId: string }) {
       baseHue: (baseHue + beat / 64 + hueOffset / 360) % 1,
     }
 
-    const activePulses: { radius: number; bandWidth: number; opacity: number }[] = []
-    if (colorPulse) {
-      for (const note of pastNotes) {
-        const age = (state.beat - note.beat) * state.secPerBeat
-        const radius = age * pulseSpeed
-        const opacity = Math.max(0, 1 - age / pulseFadeDuration)
-
-        if (opacity <= 0) continue
-
-        activePulses.push({ radius, bandWidth: pulseBandWidth, opacity })
-      }
-    }
-
-    const frontBranches = generateBranches(
-      CONFIG.baseLength, CONFIG.frontFlowerZ, 1, params, 1
-    )
-    const backBranches = generateBranches(
-      CONFIG.baseLength, CONFIG.backFlowerZ, CONFIG.backFlowerScale, params, 1
-    )
-
+    const frontBranches = generateBranches(CONFIG.baseLength, CONFIG.frontFlowerZ, 1, params, 1)
+    const backBranches = generateBranches(CONFIG.baseLength, CONFIG.backFlowerZ, CONFIG.backFlowerScale, params, 1)
     const frontEndpoints = getEndpoints(frontBranches, generations)
     const backEndpoints = getEndpoints(backBranches, generations)
 
-    const centerX = canvas.width / 2
-    const centerY = canvas.height / 2
+    // Virtual frame, then the map into plane world units. Both flowers project
+    // against the same virtual canvas the original drew into.
+    const aspect = viewport.height > 0 ? viewport.width / viewport.height : 1
+    const virtualW = VIRTUAL_H * aspect
+    const centerX = virtualW / 2
+    const centerY = VIRTUAL_H / 2
+    const toLocalX = (px: number) => (px / virtualW - 0.5) * viewport.width
+    const toLocalY = (py: number) => -(py / VIRTUAL_H - 0.5) * viewport.height
 
-    const offscreenNormal = offscreenNormalRef.current
-    const offscreenInverted = offscreenInvertedRef.current
-    const normalCtx = offscreenNormal?.getContext('2d')
-    const invertedCtx = offscreenInverted?.getContext('2d')
+    for (let g = 0; g < MAX_GENERATIONS; g++) {
+      buffers.corePos[g].length = 0
+      buffers.coreCol[g].length = 0
+      buffers.glowPos[g].length = 0
+      buffers.glowCol[g].length = 0
+    }
+    buffers.tunnelPos.length = 0
+    buffers.tunnelCol.length = 0
+    buffers.tunnelGlowCol.length = 0
+    buffers.dotPos.length = 0
+    buffers.dotCol.length = 0
 
-    const hasPulses = activePulses.length > 0
+    let segmentBudget = MAX_SEGMENTS
 
-    if (hasPulses && offscreenNormal && offscreenInverted && normalCtx && invertedCtx) {
-      normalCtx.clearRect(0, 0, offscreenNormal.width, offscreenNormal.height)
-      renderTunnelLines(normalCtx, frontEndpoints, backEndpoints, centerX, centerY,
-        CONFIG.focalLength, CONFIG.tunnelLineOpacity, glowIntensity)
-      renderBranches(normalCtx, backBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity, 0)
-      renderBranches(normalCtx, frontBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity, 0)
-      renderEndpointDots(normalCtx, frontBranches, generations, centerX, centerY,
-        CONFIG.focalLength, elapsed)
-      normalCtx.shadowBlur = 0
+    // ---- Branch polylines, bucketed by generation (that is where width changes).
+    const packBranches = (branches: Branch[]) => {
+      for (const branch of branches) {
+        const gen = Math.min(MAX_GENERATIONS - 1, branch.generation)
+        // Same per-generation styling the canvas version used, with alpha folded
+        // into the colour because these blend additively.
+        const alpha = Math.max(0.2, 1 - branch.generation * 0.15)
+        const lightness = (50 + branch.generation * 5) / 100
+        const saturation = (90 - branch.generation * 5) / 100
+        scratchColor.setHSL((branch.hue % 1 + 1) % 1, saturation, lightness)
+        const cr = scratchColor.r * alpha
+        const cg = scratchColor.g * alpha
+        const cb = scratchColor.b * alpha
+        const gr = cr * glowIntensity * 0.3
+        const gg = cg * glowIntensity * 0.3
+        const gb = cb * glowIntensity * 0.3
 
-      invertedCtx.clearRect(0, 0, offscreenInverted.width, offscreenInverted.height)
-      renderTunnelLines(invertedCtx, frontEndpoints, backEndpoints, centerX, centerY,
-        CONFIG.focalLength, CONFIG.tunnelLineOpacity, glowIntensity)
-      renderBranches(invertedCtx, backBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity, 0.5)
-      renderBranches(invertedCtx, frontBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity, 0.5)
-      renderEndpointDots(invertedCtx, frontBranches, generations, centerX, centerY,
-        CONFIG.focalLength, elapsed)
-      invertedCtx.shadowBlur = 0
+        const pos = buffers.corePos[gen]
+        const col = buffers.coreCol[gen]
+        const gpos = buffers.glowPos[gen]
+        const gcol = buffers.glowCol[gen]
 
-      ctx.fillStyle = sp.bgColor ?? '#050508'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(offscreenNormal, 0, 0)
+        let prev: { x: number; y: number } | null = null
+        for (const point of branch.points) {
+          const projected = project(point.x, point.y, point.z, centerX, centerY, CONFIG.focalLength)
+          if (!projected) { prev = null; continue }
+          const x = toLocalX(projected.x)
+          const y = toLocalY(projected.y)
+          if (prev && segmentBudget > 0) {
+            segmentBudget--
+            pos.push(prev.x, prev.y, 0, x, y, 0)
+            col.push(cr, cg, cb, cr, cg, cb)
+            if (glowIntensity > 0) {
+              gpos.push(prev.x, prev.y, 0, x, y, 0)
+              gcol.push(gr, gg, gb, gr, gg, gb)
+            }
+          }
+          prev = { x, y }
+        }
+      }
+    }
+    packBranches(backBranches)
+    packBranches(frontBranches)
 
-      compositePulseRings(ctx, offscreenInverted, centerX, centerY, activePulses)
-    } else {
-      ctx.fillStyle = sp.bgColor ?? '#050508'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      renderTunnelLines(ctx, frontEndpoints, backEndpoints, centerX, centerY,
-        CONFIG.focalLength, CONFIG.tunnelLineOpacity, glowIntensity)
-      renderBranches(ctx, backBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity)
-      renderBranches(ctx, frontBranches, centerX, centerY,
-        CONFIG.focalLength, lineWidth, glowIntensity)
-      renderEndpointDots(ctx, frontBranches, generations, centerX, centerY,
-        CONFIG.focalLength, elapsed)
-
-      ctx.shadowBlur = 0
+    // ---- Tunnel lines: the back flower's endpoints reaching to the front's.
+    const tunnelCount = Math.min(frontEndpoints.length, backEndpoints.length)
+    for (let i = 0; i < tunnelCount; i++) {
+      const back = backEndpoints[i]
+      const front = frontEndpoints[i]
+      scratchColor.setHSL(((((front.hue + back.hue) / 2) % 1) + 1) % 1, 0.8, 0.6)
+      const cr = scratchColor.r * CONFIG.tunnelLineOpacity
+      const cg = scratchColor.g * CONFIG.tunnelLineOpacity
+      const cb = scratchColor.b * CONFIG.tunnelLineOpacity
+      // Glow strength lives in the colour, not material.opacity - the
+      // opacity-mover pass owns that and would overwrite it every frame.
+      const gr = cr * glowIntensity * 0.35
+      const gg = cg * glowIntensity * 0.35
+      const gb = cb * glowIntensity * 0.35
+      const segments = 30
+      let prev: { x: number; y: number } | null = null
+      for (let s = 0; s <= segments; s++) {
+        const t = s / segments
+        const projected = project(
+          back.x + (front.x - back.x) * t,
+          back.y + (front.y - back.y) * t,
+          back.z + (front.z - back.z) * t,
+          centerX, centerY, CONFIG.focalLength,
+        )
+        if (!projected) { prev = null; continue }
+        const x = toLocalX(projected.x)
+        const y = toLocalY(projected.y)
+        if (prev && segmentBudget > 0) {
+          segmentBudget--
+          buffers.tunnelPos.push(prev.x, prev.y, 0, x, y, 0)
+          buffers.tunnelCol.push(cr, cg, cb, cr, cg, cb)
+          buffers.tunnelGlowCol.push(gr, gg, gb, gr, gg, gb)
+        }
+        prev = { x, y }
+      }
     }
 
-    texture.needsUpdate = true
+    // ---- Endpoint dots. A near-zero-length segment renders as a round cap, so
+    //      the dots ride the same instanced-line machinery as everything else.
+    const dotPulse = 0.5 + 0.5 * Math.sin(elapsed * Math.PI * 3)
+    for (const branch of frontBranches) {
+      if (branch.generation !== generations - 1) continue
+      const last = branch.points[branch.points.length - 1]
+      const projected = project(last.x, last.y, last.z, centerX, centerY, CONFIG.focalLength)
+      if (!projected || segmentBudget <= 0) continue
+      segmentBudget--
+      scratchColor.setHSL((branch.hue % 1 + 1) % 1, 1, 0.7)
+      const x = toLocalX(projected.x)
+      const y = toLocalY(projected.y)
+      const nudge = viewport.height * 0.0001
+      buffers.dotPos.push(x, y, 0, x + nudge, y, 0)
+      buffers.dotCol.push(
+        scratchColor.r * 0.9, scratchColor.g * 0.9, scratchColor.b * 0.9,
+        scratchColor.r * 0.9, scratchColor.g * 0.9, scratchColor.b * 0.9,
+      )
+    }
 
-    const material = mesh.material as MeshBasicMaterial
-    if (material.map !== texture) {
-      material.map = texture // (re)bound after an aspect-change recreation too
-      material.needsUpdate = true
+    // ---- Upload. Widths are authored against the 1024-tall virtual frame, so
+    //      they scale to whatever the framebuffer actually is.
+    const deviceH = Math.max(1, size.height * viewport.dpr)
+    resolution.set(Math.max(1, size.width * viewport.dpr), deviceH)
+    const pxScale = deviceH / VIRTUAL_H
+
+    for (let g = 0; g < MAX_GENERATIONS; g++) {
+      const width = lineWidth * Math.pow(0.7, g) * pxScale
+      commitPass(passes.core[g], buffers.corePos[g], buffers.coreCol[g], width)
+      // The glow pass stands in for shadowBlur: wider, dimmer, drawn underneath.
+      commitPass(passes.glow[g], buffers.glowPos[g], buffers.glowCol[g], width + (10 + g * 2) * pxScale)
+    }
+    commitPass(passes.tunnel, buffers.tunnelPos, buffers.tunnelCol, 1 * pxScale)
+    commitPass(passes.tunnelGlow, buffers.tunnelPos, buffers.tunnelGlowCol, 8 * pxScale)
+    const dotRadius = (2 + dotPulse * 1.5) * 2 * pxScale
+    commitPass(passes.dots, buffers.dotPos, buffers.dotCol, Math.max(1, dotRadius))
+
+    // ---- Pulse rings: expanding annuli that rotate the hue of whatever they
+    //      cross, replacing the original's second inverted render.
+    const ringValues = rings.uRings.value
+    for (const ring of ringValues) ring.set(0, 0, 0)
+    rings.uRingCenter.value.set(resolution.x / 2, resolution.y / 2)
+    if (colorPulse) {
+      let ringIndex = 0
+      // Newest first, so the freshest rings win the fixed-size uniform slots.
+      for (let i = pastNotes.length - 1; i >= 0 && ringIndex < MAX_RINGS; i--) {
+        const age = (state.beat - pastNotes[i].beat) * state.secPerBeat
+        const opacity = 1 - age / pulseFadeDuration
+        if (opacity <= 0) continue
+        ringValues[ringIndex++].set(
+          age * pulseSpeed * pxScale,
+          (pulseBandWidth * 0.5) * pxScale,
+          opacity,
+        )
+      }
     }
   })
 
-  // The plane IS the viewport (slight overscan): aspect matches the texture, so
-  // the tunnel fills the whole frame undistorted at any window size, and resizes
-  // with it. It sits at the full-frame group's origin - the distance `viewport`
-  // is measured at.
+  // The backdrop plane sits just behind the lines; the lines themselves live at
+  // the full-frame group's origin - the distance `viewport` is measured at.
   return (
-    <mesh ref={meshRef}>
-      <planeGeometry args={[viewport.width * 1.02, viewport.height * 1.02]} />
-      <meshBasicMaterial transparent opacity={1} depthWrite={false} />
-    </mesh>
+    <group ref={groupRef}>
+      <mesh ref={bgRef} position={[0, 0, -0.01]}>
+        <planeGeometry args={[viewport.width * 1.02, viewport.height * 1.02]} />
+        <meshBasicMaterial color="#050508" depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
   )
 }
 
