@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
 import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, MoreHorizontal, Copy, Trash2 } from "lucide-react"
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
@@ -157,26 +157,6 @@ export default function ProjectsDisplay({
   // Where the last-opened card menu sits, so the delete confirmation can anchor
   // near it. One ref is enough - only one menu can be open at a time.
   const menuAnchor = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
-  // Which card is showing its hover state. Tracked by hand rather than with
-  // whileHover because the action menu is portaled to <body>: hovering it
-  // leaves the card's DOM, so the card would sink back while you read its own
-  // menu. Both the card and the menu panel report into this, so the lift
-  // follows the pointer across the portal - and still drops the moment the
-  // pointer leaves both, even with the menu open.
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
-  // Crossing the few pixels between the trigger and the menu panel leaves both
-  // for an instant. Deferring the un-hover bridges that gap; it's short enough
-  // to read as continuous, not as lag.
-  const hoverLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const holdHover = (id: string) => {
-    if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
-    setHoveredId(id)
-  }
-  const releaseHover = () => {
-    if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
-    hoverLeaveTimer.current = setTimeout(() => setHoveredId(null), 60)
-  }
-  useEffect(() => () => { if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current) }, [])
   // Set the instant a create begins: the new card gets prepended and starts its
   // entrance right before we navigate to the editor, and that half-played slide
   // reads as a glitch. While navigating, new cards skip the entrance.
@@ -269,33 +249,33 @@ export default function ProjectsDisplay({
           <AnimatePresence mode="popLayout" initial={false}>
           {projects.map((project) => (
             // Two elements on purpose. The outer one owns entrance/exit/layout
-            // AND the hover response, because it spans the card plus its action
-            // menu - hover on the inner card alone made the card visibly shrink
-            // back the moment you reached for its own three-dot button.
-            // The inner one owns the press, and the menu is its SIBLING, so
-            // clicking the menu can't press the card. That separation is
-            // structural on purpose: intercepting pointerdown to achieve it
-            // also blocks Radix's trigger, since React delegates listeners from
-            // the root, so anything early enough to beat Framer breaks the menu.
+            // and is the hover GROUP - it spans the card plus its action menu,
+            // so hovering the three dots or the open menu still counts as
+            // hovering the card. The inner one is what actually scales, and the
+            // menu is its SIBLING, so clicking the menu can't press the card
+            // (intercepting pointerdown to achieve that instead would also kill
+            // Radix's trigger, since React delegates listeners from the root).
             <motion.div
               key={project.id}
               layout
               initial={navigating ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0, scale: hoveredId === project.id ? 1.012 : 1 }}
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              // Scale keeps the snappy hover timing; everything else animates
-              // at the card's normal rate.
-              transition={{ duration: 0.16, ease: 'easeOut', scale: { duration: 0.06 } }}
-              onPointerEnter={() => holdHover(project.id)}
-              onPointerLeave={releaseHover}
-              className="relative"
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="group relative"
             >
-              <motion.div
-                whileTap={{ scale: 0.99, transition: { duration: 0.06 } }}
+              {/* Hover/press scaling is CSS on the INNER card, not motion on
+                  the wrapper. The menu is a child of the wrapper, so animating
+                  the wrapper's transform continuously re-measured the trigger
+                  and made Radix re-solve the panel's position mid-hover - the
+                  corner-to-corner flicker. Scaling only the inner card leaves
+                  the menu's ancestor still, so there is nothing to re-solve.
+                  CSS rather than Framer for both states: Framer writes an
+                  inline transform that would clobber the hover scale the moment
+                  a press ended. */}
+              <div
                 onClick={() => onSelectProject(project.id)}
-                className={`cursor-pointer overflow-hidden rounded-lg border bg-[var(--bg-panel)] transition-colors ${
-                  hoveredId === project.id ? 'border-[rgba(53,167,230,0.6)]' : 'border-[var(--border)]'
-                }`}
+                className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] transition-[transform,border-color] duration-75 ease-out group-hover:scale-[1.012] group-hover:border-[rgba(53,167,230,0.6)] active:scale-[0.99]"
               >
                 <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
                   <div className="absolute inset-0">
@@ -308,7 +288,7 @@ export default function ProjectsDisplay({
                     {formatLastEdited(project.updatedAt)}
                   </span>
                 </div>
-              </motion.div>
+              </div>
 
               <div className="absolute right-2 top-2 z-10">
                 <DropdownMenu modal={false}>
@@ -325,13 +305,22 @@ export default function ProjectsDisplay({
                   >
                     <MoreHorizontal size={12} />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
+                  {/* Rendered INLINE - deliberately not the shared
+                      DropdownMenuContent, which wraps itself in a Radix Portal.
+                      Portaling moves the panel out of the card's DOM, so the
+                      card stops counting as hovered the moment you touch its
+                      own menu. Keeping it a child means one plain whileHover on
+                      the wrapper covers card, trigger and panel alike. */}
+                  <DropdownMenuPrimitive.Content
                     align="end"
-                    // Portaled out of the card, so it has to report hover back
-                    // in or the card sinks while you're using its own menu.
-                    onPointerEnter={() => holdHover(project.id)}
-                    onPointerLeave={releaseHover}
-                    className="rounded-md border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-2)] shadow-none"
+                    sideOffset={4}
+                    // The card scales on hover, which changes the trigger's
+                    // measured rect; with collision detection on, Radix
+                    // re-solves during that animation and flips the panel
+                    // between corners. The card is small and the menu is two
+                    // items - just pin it below-right and let it be.
+                    avoidCollisions={false}
+                    className="z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-1 text-[var(--text-2)] data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                   >
                     <DropdownMenuItem
                       // A copy is a new project, so the free-plan cap applies
@@ -350,7 +339,7 @@ export default function ProjectsDisplay({
                       <Trash2 size={13} />
                       Delete project
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  </DropdownMenuPrimitive.Content>
                 </DropdownMenu>
               </div>
             </motion.div>
