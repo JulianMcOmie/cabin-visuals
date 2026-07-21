@@ -5,7 +5,7 @@ import { hydrate } from '../../persistence/serialize'
 import type { Track } from '../types'
 import { useProjectStore } from './ProjectStore'
 import { silentFilm } from '../../templates/library-silent-film'
-import { getTemplate } from '../../templates'
+import { getTemplate, GALLERY_TEMPLATES, LYRIC_STYLES } from '../../templates'
 
 // applyTemplate's lyric carry-over contract: switching lyric templates keeps
 // the project's transcribed words (text, word notes, timing) while adopting
@@ -118,4 +118,59 @@ test('the Lyric Video template participates in the same carry-over', () => {
   const lyrics = findLyrics()
   assert.equal(lyrics.stringParams?.text, 'real transcribed words')
   assert.equal(lyrics.lyricTiming?.[0]?.word, 'real')
+})
+
+test('the lyric styles are exactly the looks the setup flow offers', () => {
+  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm'])
+  for (const style of LYRIC_STYLES) {
+    assert.ok(style.styleName, `${style.id} needs a style name for the picker`)
+    // Every style must ship the contract the carry-over and refill depend on.
+    const scene = Object.values(style.document.scenes).find((s) => !s.isMain)
+    assert.ok(scene)
+    const lyrics = scene.rootTrackIds
+      .map((id) => scene.tracks[id])
+      .find((t) => t.instrumentId === 'textDisplay' && t.name === 'Lyrics')
+    assert.ok(lyrics, `${style.id} must ship a root track named 'Lyrics'`)
+  }
+})
+
+test('the gallery advertises one lyric entry, not every style', () => {
+  const lyricIds = GALLERY_TEMPLATES.filter((t) => t.lyricFlow).map((t) => t.id)
+  assert.deepEqual(lyricIds, ['lyricVideo'])
+  // The styles stay reachable, just not from the "start from a template" grid.
+  assert.equal(GALLERY_TEMPLATES.some((t) => t.id === 'silentFilm'), false)
+  assert.equal(GALLERY_TEMPLATES.some((t) => t.id === 'darkRed'), false)
+})
+
+test('the bare Lyric Video template really is bare', () => {
+  const lyricVideo = getTemplate('lyricVideo')
+  assert.ok(lyricVideo)
+  const scene = Object.values(lyricVideo.document.scenes).find((s) => !s.isMain)
+  assert.ok(scene)
+  assert.deepEqual(Object.values(scene.tracks).map((t) => t.name), ['Lyrics'])
+  assert.equal(scene.tracks[scene.rootTrackIds[0]].stringParams?.color, '#ffffff')
+})
+
+test('switching between lyric styles keeps the words and swaps the look', () => {
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  useProjectStore.getState().addTrack(transcribedLyrics())
+
+  // Silent Film, then change your mind and go to Dark Red.
+  useProjectStore.getState().applyTemplate(silentFilm.document)
+  assert.equal(findLyrics().params?.font, 4)
+
+  const darkRed = getTemplate('darkRed')
+  assert.ok(darkRed)
+  useProjectStore.getState().applyTemplate(darkRed.document)
+
+  const lyrics = findLyrics()
+  assert.equal(lyrics.stringParams?.text, 'real transcribed words')
+  assert.equal(lyrics.lyricTiming?.[0]?.word, 'real')
+  assert.equal(lyrics.params?.font, 2) // Dark Red's mono face, not Silent Film's
+  // Silent Film's film layers must not linger under the new style.
+  const s = useProjectStore.getState()
+  const names = s.rootTrackIds.map((id) => s.tracks[id].name)
+  assert.equal(names.includes('Film Stock'), false)
+  assert.equal(names.includes('Scribbles'), false)
 })

@@ -72,19 +72,11 @@ function silentFilmDocument() {
           n(124, 64, 1.5, 100), // S flourish
         ])],
       }),
-      track({
-        name: 'Intro Card',
-        instrumentId: 'filmCard',
-        color: '#b5d9cc',
-        params: { mode: 0 },
-        stringParams: {
-          title: 'ARTIST NAME',
-          listText: 'FOLLOW ME\nFOR MORE\nLYRIC VIDEOS',
-        },
-        // The note is the projector-pop flash AND the block's coverage bounds
-        // (a zero-note block renders nothing - beatInBlock).
-        blocks: [block(0, 2, [n(0, 60, 0.5, 60)])],
-      }),
+      // No title card. It used to open the video at bars 0-2, which was wrong
+      // twice over: every exported video began with the placeholder words
+      // "ARTIST NAME", and the gallery clip (bars 1-4) was half title card
+      // instead of the style it is selling. Add the Film Card instrument for an
+      // intro (bar 0) or a closing title (last bar, Card = Title Outro).
       track({
         name: 'Film Grain',
         instrumentId: 'filmGrain',
@@ -115,8 +107,11 @@ function silentFilmDocument() {
 export const silentFilm: TemplateDef = {
   id: 'silentFilm',
   name: 'Silent Film',
-  description: 'Words as degraded silent-movie title cards - grainy stock, vintage serif, glowing accents. Add your song and the words write themselves.',
+  styleName: 'Silent Film',
+  description: 'Words as degraded silent-movie title cards - grainy stock, vintage serif, glowing accents.',
   bpm: 120,
+  cardPreview: 'animatedLyric',
   lyricFlow: true,
+  hiddenFromGallery: true,
   document: silentFilmDocument(),
 }

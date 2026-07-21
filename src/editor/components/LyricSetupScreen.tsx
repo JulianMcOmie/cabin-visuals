@@ -14,6 +14,8 @@ import { getAudioUrl } from '../../persistence/audioStorage'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
 import { placeTranscription, type TranscribedWord } from '../utils/lyricPlacement'
 import { track } from '../../analytics/analytics'
+import { LYRIC_STYLES } from '../../templates'
+import { TemplateLyricPreview } from '../../components/TemplateLyricPreview'
 
 /**
  * The Lyric Video template's intermediate page: shown instead of the editor,
@@ -35,6 +37,10 @@ type Phase =
   | { kind: 'uploading'; progress: number }
   | { kind: 'transcribing' }
   | { kind: 'aligning' }
+  // The words are in and timed; the only thing left is what they should look
+  // like. Offered here rather than in the editor because this is the moment
+  // the user has a finished lyric video in mind and nothing else to decide.
+  | { kind: 'style' }
   | { kind: 'error'; message: string }
 
 function firstAudioBlock() {
@@ -153,7 +159,10 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
       if (!id) throw new Error('No usable words found in the song.')
       useUIStore.getState().setSelectedTrackId(id)
       track('lyrics_applied', { source: 'aligned', words: words.length })
-      if (!closedRef.current) onClose()
+      // Straight to the look. The words survive whichever style is chosen -
+      // applyTemplate carries a 'Lyrics' track across - so this is safe to ask
+      // after transcription rather than before.
+      setLivePhase({ kind: 'style' })
     } catch (err) {
       runningRef.current = false
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -165,10 +174,20 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
   // lands, and runningRef already makes run() single-shot.
   useEffect(() => {
     if (hasAudio && !projectLoading) void run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAudio, projectLoading])
 
   const working = phase.kind === 'uploading' || phase.kind === 'transcribing' || phase.kind === 'aligning'
+
+  /** Apply the chosen look and hand off to the editor. The project is already
+   *  on the bare template, so "Minimal" is simply a no-op choice. */
+  const chooseStyle = (id: string) => {
+    const style = LYRIC_STYLES.find((s) => s.id === id)
+    if (style) {
+      useProjectStore.getState().applyTemplate(style.document)
+      track('lyric_style_chosen', { style: id })
+    }
+    onClose()
+  }
 
   // Files can arrive before the project document has hydrated - the pick UI
   // shows immediately (no "loading" detour), and an early song just queues
@@ -246,6 +265,38 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
         </div>
       )}
 
+      {/* The style step needs room for a row of previews, so it breaks out of
+          the narrow card the rest of the flow lives in. */}
+      {phase.kind === 'style' ? (
+        <div className="flex flex-1 min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
+          <div className="w-full max-w-[760px]">
+            <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a look</h1>
+            <p className="mx-auto mt-2 mb-7 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
+              Your words are timed to the song. Choose a style - you can change it any time.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {LYRIC_STYLES.map((style) => (
+                <button
+                  key={style.id}
+                  onClick={() => chooseStyle(style.id)}
+                  title={style.description}
+                  className="group cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-app)] text-left transition-colors hover:border-[var(--accent)]"
+                >
+                  <div className="relative aspect-video bg-[var(--bg-app)]">
+                    <TemplateLyricPreview templateId={style.id} />
+                  </div>
+                  <div className="p-3">
+                    <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">
+                      {style.styleName ?? style.name}
+                    </h3>
+                    <p className="mt-1 mb-0 text-xs leading-snug text-[var(--text-muted)]">{style.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
         {/* The thin card framing the whole flow. */}
         <div className="flex w-full max-w-[460px] flex-col items-center gap-7 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-8 py-10">
@@ -313,6 +364,7 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
           ) : null}
         </div>
       </div>
+      )}
     </div>
   )
 }

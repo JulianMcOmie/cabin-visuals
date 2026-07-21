@@ -12,7 +12,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
-import { TEMPLATES } from '../../templates'
+import { TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
 import { TemplateLyricPreview } from '../../components/TemplateLyricPreview'
@@ -456,6 +456,15 @@ function TemplatesTab() {
   const applyTemplate = useProjectStore((s) => s.applyTemplate)
   // Which template this project is on - marks the current card.
   const appliedTemplateId = useProjectStore((s) => s.appliedTemplateId)
+  // A lyric project is offered lyric STYLES and nothing else - switching one
+  // onto Slideshow would throw the transcription away. Detected by the applied
+  // template, or by the Lyrics-track contract for projects that predate it.
+  const hasLyricsTrack = useProjectStore((s) => s.rootTrackIds.some((id) => {
+    const t = s.tracks[id]
+    return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
+  }))
+  const isLyricProject = isLyricTemplateId(appliedTemplateId) || hasLyricsTrack
+  const shown = isLyricProject ? LYRIC_STYLES : TEMPLATES
   const router = useRouter()
   const projectId = useSearchParams().get('project')
   // Covers the editor while the applied template autosaves before handing
@@ -471,7 +480,11 @@ function TemplatesTab() {
   }
 
   const apply = (tpl: (typeof TEMPLATES)[number]) => {
-    if (!window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
+    // Restyling a lyric project is a safe swap - the song AND the transcribed
+    // words carry across, and it is one undo step - so trying looks on is
+    // frictionless, like picking a filter. Switching a project onto a whole
+    // different template is the destructive one, and still asks.
+    if (!isLyricProject && !window.confirm(`Switch this project's tracks to “${tpl.name}”? Your song stays; the visual tracks are replaced (undoable).`)) return
     // Transcribed already? applyTemplate carries the Lyrics track's words over
     // (styling from the template), so the setup flow would be redundant.
     const before = useProjectStore.getState()
@@ -502,29 +515,52 @@ function TemplatesTab() {
     <div className="pt-1">
       {leaving && <LoadingScreen />}
       <p className="px-3 pt-2 pb-1 text-[10px] leading-relaxed text-[var(--text-muted)]">
-        Double-click a template to switch this project onto it. Your song stays.
+        {isLyricProject
+          ? 'Click a style to restyle this lyric video. Your song and words stay.'
+          : 'Double-click a template to switch this project onto it. Your song stays.'}
       </p>
       {/* Same preview treatment as the projects-page template gallery, sized
           for the sidebar: one card per template, its real render (or bespoke
           animation) looping above the name. */}
-      {TEMPLATES.map((tpl) => (
-        <TemplateCard key={tpl.id} tpl={tpl} onApply={() => apply(tpl)} selected={tpl.id === appliedTemplateId} />
+      {shown.map((tpl) => (
+        <TemplateCard
+          key={tpl.id}
+          tpl={tpl}
+          label={isLyricProject ? tpl.styleName ?? tpl.name : tpl.name}
+          onApply={() => apply(tpl)}
+          instant={isLyricProject}
+          selected={tpl.id === appliedTemplateId}
+        />
       ))}
     </div>
   )
 }
 
-function TemplateCard({ tpl, onApply, selected = false }: {
+function TemplateCard({ tpl, onApply, selected = false, label, instant = false }: {
   tpl: (typeof TEMPLATES)[number]
   onApply: () => void
   /** This is the template the project is currently on. */
   selected?: boolean
+  /** Overrides the displayed name (lyric projects show style names). */
+  label?: string
+  /** Apply on a single click instead of a double click. For lyric styles,
+   *  where switching is a safe, undoable restyle rather than a swap that
+   *  discards work. */
+  instant?: boolean
 }) {
   return (
     <div
-      onDoubleClick={onApply}
+      onClick={instant ? onApply : undefined}
+      onDoubleClick={instant ? undefined : onApply}
+      role={instant ? 'button' : undefined}
+      tabIndex={instant ? 0 : undefined}
+      onKeyDown={instant
+        ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onApply() } }
+        : undefined}
       title={tpl.description}
-      className={`mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
+      className={`mx-2 mb-2 select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
+        instant ? 'cursor-pointer' : 'cursor-default'
+      } ${
         selected
           ? 'border-[var(--accent)]'
           : 'border-[var(--border)] hover:border-[rgba(53,167,230,0.6)]'
@@ -541,7 +577,7 @@ function TemplateCard({ tpl, onApply, selected = false }: {
       </div>
       <div className="flex items-center gap-1.5 px-2 py-1.5">
         <LayoutTemplate size={11} className="flex-shrink-0 text-[var(--text-3)]" />
-        <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{tpl.name}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{label ?? tpl.name}</span>
         {selected && (
           <span className="flex flex-shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--accent)]">
             <Check size={10} strokeWidth={3} />

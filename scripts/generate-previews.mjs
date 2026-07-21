@@ -156,6 +156,10 @@ try {
       .upload(MANIFEST, Buffer.from(JSON.stringify(manifest, null, 2)), {
         upsert: true,
         contentType: 'application/json',
+        // The gallery reads this to version each clip's URL, so a cached
+        // manifest would keep serving people the PREVIOUS clip - the exact
+        // staleness the versioning exists to prevent.
+        cacheControl: '0',
       })
     if (error) console.log(`(manifest upload failed: ${error.message} - next run may recapture)`)
   }

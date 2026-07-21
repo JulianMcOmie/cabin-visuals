@@ -48,6 +48,7 @@ export type AnalyticsEvent =
   | 'lyrics_align_clicked'
   | 'lyrics_applied' // props: { source: 'transcription' | 'aligned' | 'pasted', words }
   | 'template_applied' // props: { template } - switched onto a template from the editor library
+  | 'lyric_style_chosen' // props: { style } - the look picked at the end of lyric setup
   | 'tutorial_completed'
   | 'tutorial_skipped'
 

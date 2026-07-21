@@ -85,6 +85,13 @@ two quads, or the compositor applies the overlay pass.
 
 ## Intro card (~2s)
 
+**NOT in the template** (2026-07-20) — the Film Card instrument exists, but no track ships with
+it. Pre-placing it at bar 0 meant every exported video opened with the placeholder words
+"ARTIST NAME", and the gallery clip (bars 1–4) was half title card rather than the style it
+advertises. Nowhere else works pre-placed either: a one-shot card belongs at the start or the
+end, and the end isn't knowable until transcription sets the song length. Add a Film Card track
+for an intro (bar 0) or a closing title (last bar, Card = Title Outro).
+
 Cold-cream graph paper (warped like the film frames), faint blurred artist names scrolling as a
 "playlist page" (FOLLOW ME / …), the featured artist name in a hand-drawn ink rectangle with an
 olive-yellow highlighter smear behind it. Serif caps, ink `#303820`, slightly blurred.

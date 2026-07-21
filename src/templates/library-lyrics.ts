@@ -3,12 +3,18 @@ import type { TemplateDef } from './library'
 import type { Note, Track } from '../editor/types'
 import { LYRIC_TEMPLATE_TRACKS } from './library-lyrics-tracks'
 
-// The lyric-video template: a styled Text Display track named 'Lyrics'
-// carrying placeholder words, ready for the real flow - create the project,
-// drop in a song (BPM + downbeat auto-match), open Lyrics → Transcribe, and
-// the transcription REPLACES this track's words while keeping its styling
+// The lyric-video templates. All of them ship a styled Text Display track named
+// 'Lyrics' carrying placeholder words, ready for the real flow: create the
+// project, drop in a song (BPM + downbeat auto-match), transcribe, then pick a
+// look. Transcription REPLACES that track's words while keeping its styling
 // (addLyricTrack refills a root track named 'Lyrics' instead of stacking a
-// second one).
+// second one), and switching between these styles carries the transcribed
+// words across (applyTemplate's lyric carry-over).
+//
+// 'Lyric Video' is deliberately BARE: white words on black and nothing else.
+// It is the honest starting point and the thing the gallery advertises; the
+// decorated looks (Dark Red here, Silent Film next door) are styles chosen
+// once there is a song to hear them against.
 
 export const NEXT_WORD = 48 // Text Display's "advance to the next word" pitch
 export const BASS_POP = 47 // punch + shake accent
@@ -34,11 +40,6 @@ export function lyricPattern(): { text: string; notes: Note[] } {
     notes: every(PHRASE, BEATS, pattern),
   }
 }
-
-const words = lyricPattern()
-
-/** One phrase-start punch per 4-bar boundary. */
-const pops = pulse(BASS_POP, PHRASE, BEATS, { dur: 0.5 })
 
 // The burst family's authored pattern covers 16 bars, but a real song grows
 // the project far past that (transcription extends totalBars to fit the
@@ -76,11 +77,42 @@ function repeatBlocksToEnd(t: Track): Track {
   }
 }
 
-// The template document: the placeholder Lyrics track from the builder, plus
-// Julia's instrument stack (Oscilloscope + Particle Burst with its movers)
-// spliced verbatim into the content scene. Their authored uuids are unique
-// and both instantiation paths re-clone/remint ids, so verbatim is safe.
-function lyricVideoDocument() {
+// ------------------------------------------------------------------ Bare bones
+// Nothing but the words: white, centred, popping on the beat, over black.
+function bareBonesDocument() {
+  const words = lyricPattern()
+  return doc({
+    bpm: 120,
+    totalBars: BARS,
+    tracks: [
+      track({
+        name: 'Lyrics',
+        instrumentId: 'textDisplay',
+        color: '#e4e4e7',
+        params: {
+          font: 0, // Impact / Arial Black - the classic lyric-video face
+          fontSize: 0.7,
+          opacity: 1,
+          colorMode: 0,
+          strokeWidth: 0,
+          onsetBounce: 0.08,
+          releaseDuration: 0.4,
+          rainbowEnabled: 0,
+        },
+        stringParams: { text: words.text, color: '#ffffff' },
+        blocks: [block(0, BARS, words.notes)],
+      }),
+    ],
+  })
+}
+
+// -------------------------------------------------------------------- Dark red
+// Julia's hand-tuned stack: the Lyrics track's hue shift lands the teal base
+// colour in deep red, over an Oscilloscope and the Particle Burst family.
+function darkRedDocument() {
+  const words = lyricPattern()
+  // One phrase-start punch per 4-bar boundary.
+  const pops = pulse(BASS_POP, PHRASE, BEATS, { dur: 0.5 })
   const document = doc({
     bpm: 120,
     totalBars: BARS,
@@ -130,10 +162,22 @@ export const LYRIC_TEMPLATES: TemplateDef[] = [
   {
     id: 'lyricVideo',
     name: 'Lyric Video',
-    description: 'Big bold words on black over a live waveform and particle bursts. Add your song and the words write themselves.',
+    styleName: 'Minimal',
+    description: 'Just the words - big, white, landing on the beat. Add your song and they write themselves.',
     bpm: 120,
     cardPreview: 'animatedLyric',
     lyricFlow: true,
-    document: lyricVideoDocument(),
+    document: bareBonesDocument(),
+  },
+  {
+    id: 'darkRed',
+    name: 'Dark Red',
+    styleName: 'Dark Red',
+    description: 'Deep red words over a live waveform and particle bursts.',
+    bpm: 120,
+    cardPreview: 'animatedLyric',
+    lyricFlow: true,
+    hiddenFromGallery: true,
+    document: darkRedDocument(),
   },
 ]

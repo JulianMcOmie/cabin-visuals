@@ -8,7 +8,7 @@ import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
-import { TEMPLATES, type TemplateDef } from "../templates"
+import { GALLERY_TEMPLATES, type TemplateDef } from "../templates"
 import { TemplatePreviewVideo } from "./TemplatePreviewVideo"
 import { TemplateSlideshowPreview } from "./TemplateSlideshowPreview"
 import { TemplateLyricPreview } from "./TemplateLyricPreview"
@@ -446,7 +446,7 @@ function CreateProjectModal({
               </button>
             </div>
             <div className="grid gap-4 overflow-y-auto p-5 sm:grid-cols-2 lg:grid-cols-3">
-              {TEMPLATES.map((tpl) => (
+              {GALLERY_TEMPLATES.map((tpl) => (
                 <button
                   key={tpl.id}
                   onClick={() => onPickTemplate(tpl)}
