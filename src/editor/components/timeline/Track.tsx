@@ -272,7 +272,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div
         data-track-lane={track.id}
         className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''}`}
-        style={{ width: timelineWidthPx }}
+        // A muted track's blocks fade so mute state reads from the MIDI side too.
+        style={{ width: timelineWidthPx, opacity: track.muted ? 0.4 : 1 }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),
         // but clicking their empty space still deselects blocks, like any lane.
         onPointerDown={track.type === 'audio'
