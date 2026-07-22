@@ -54,7 +54,7 @@ const STYLES: Record<string, CardStyle> = {
   lyricVideo: { accent: '#ffffff', bg: '#000000', font: 0 },
   darkRed: { accent: '#c02b2b', bg: '#0b0406', font: 2 },
   silentFilm: { accent: '#fdfbfe', bg: '#1a171b', font: 4, loadFont: 'IM Fell English SC' },
-  wormhole: { accent: '#6f719f', bg: '#03060a', font: 0, stroke: '#000000' },
+  wormhole: { accent: '#fe39a2', bg: '#03060a', font: 7, loadFont: 'Bebas Neue', stroke: '#000000' },
 }
 
 function draw(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, style: CardStyle) {

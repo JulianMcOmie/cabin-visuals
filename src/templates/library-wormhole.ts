@@ -10,17 +10,20 @@ import { lyricPattern } from './library-lyrics'
 // tuned by hand against the real song. Only the words are placeholder, since
 // transcription replaces them while keeping this styling.
 //
-// Four of the six tunnel params sit at their maximum - Flight Speed, Brightness,
-// Warp Scale and Ring Detail - which is the shape of the look: a fast, blown-out,
-// heavily warped tube at the densest lattice the instrument offers. Ring Detail
-// 192 is the expensive one (~74k points per tube, both tubes sharing the one
-// geometry); it is what makes the walls read as solid rather than speckled, so
-// drop it before dropping anything else if this ever needs to get cheaper.
+// Brightness, Warp Scale and Ring Detail are all pinned to their maximum: a
+// blown-out, heavily warped tube at the densest lattice the instrument offers.
+// Ring Detail 192 is the expensive one (~74k points per tube, both tubes sharing
+// the one geometry); it is what makes the walls read as solid rather than
+// speckled, so drop it before dropping anything else if this needs to get cheaper.
 //
-// The two that are NOT maxed carry the look: Tunnel Width 7.8 (near the top of
-// 0.5-8) puts the camera well inside a wide tube rather than threading a pipe,
-// and View Distance 67 of a possible 250 keeps the far end fading out, so the
-// motion reads as speed instead of a static starfield.
+// Flight Speed 40 was ALSO the maximum when this was tuned - the ceiling has since
+// been raised to 200, and 40 is simply where it was left rather than a considered
+// choice. Worth re-testing against the new range before treating it as final.
+//
+// The two deliberate mid-range values carry the look: Tunnel Width 7.8 (near the
+// top of 0.5-8) puts the camera well inside a wide tube rather than threading a
+// pipe, and View Distance 67 of a possible 250 keeps the far end fading out, so
+// the motion reads as speed instead of a static starfield.
 
 const BARS = 16
 // 512 = MAX_TOTAL_BARS, the project-length ceiling. The block is authored to it
@@ -51,25 +54,41 @@ function wormholeDocument() {
     bpm: 120,
     totalBars: BARS,
     tracks: [
-      // Minimal's Impact face, but NOT its plain white. A muted blue-grey with a
-      // black outline: white words wash out against a tunnel running at
-      // Brightness 3, and the stroke is what keeps them legible while the wall
-      // rushes past behind them.
+      // Hot pink Bebas Neue in FLIGHT mode - the words rush the camera and tumble
+      // as they go, so they travel with the tunnel instead of hanging in front of
+      // it. Condensed caps at full glow survive a wall running at Brightness 3
+      // where the earlier plain face did not, and the black stroke is what stops
+      // the pink dissolving into the cyan the moment the two overlap.
       track({
         name: 'Lyrics',
         instrumentId: 'textDisplay',
         color: '#e4e4e7',
         params: {
-          font: 0,
-          fontSize: 0.7,
+          font: 7, // Poster (Bebas Neue)
+          fontSize: 0.9,
           opacity: 1,
           colorMode: 0,
+          glow: 1,
           strokeWidth: 0.2,
           onsetBounce: 0.08,
           releaseDuration: 0.4,
           rainbowEnabled: 0,
+          flightEnabled: 1,
+          flightTumble: 5,
+          flightSubdivRate: 2,
+          // Backdrop is OFF (shape 0). The colour and opacity are carried anyway
+          // so switching the shape on lands on Julia's staged cyan rather than a
+          // default black slab.
+          backdropShape: 0,
+          backdropPad: 0,
+          backdropOpacity: 0.5,
         },
-        stringParams: { text: words.text, color: '#6f719f', strokeColor: '#000000' },
+        stringParams: {
+          text: words.text,
+          color: '#fe39a2',
+          strokeColor: '#000000',
+          backdropColor: '#02beed',
+        },
         blocks: [block(0, BARS, words.notes)],
       }),
       track({
