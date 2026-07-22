@@ -10,7 +10,8 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import { Muxer, ArrayBufferTarget, StreamTarget } from 'mp4-muxer'
+import { ChunkedBlobStore } from './mux'
 
 const FPS = 60
 const SAMPLE_RATE = 48_000
@@ -141,6 +142,43 @@ test('shipped stream: both tracks start at 0 with uniform sample durations and n
   assert.equal(sampleTime(video, 0), 0)
   assert.equal(sampleTime(video, FPS), 1)
   assert.equal(sampleTime(audio, 0), 0)
+})
+
+test('ChunkedBlobStore reproduces the reference muxer byte stream exactly', async () => {
+  // Feed the SAME chunk stream through mp4-muxer twice - once into a plain
+  // ArrayBufferTarget (the reference), once through Mp4Writer's streaming
+  // store with a tiny freeze size so the file crosses many frozen parts and
+  // the finalize-time mdat patch exercises the mutable head. Byte equality
+  // proves the store's append/rewrite/assembly logic loses nothing.
+  const build = (target: ArrayBufferTarget | StreamTarget) => {
+    const muxer = new Muxer({
+      target: target as ArrayBufferTarget,
+      video: { codec: 'avc', width: 1280, height: 720 },
+      audio: { codec: 'aac', sampleRate: SAMPLE_RATE, numberOfChannels: 2 },
+      // Mp4Writer's mode: sequential stream, moov at the end, mdat patched last.
+      fastStart: false,
+    })
+    const vBytes = new Uint8Array(4096)
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const meta = i === 0 ? { decoderConfig: { codec: 'avc1.64002a', description: new Uint8Array([1, 100, 0, 42, 255]) } } : undefined
+      muxer.addVideoChunkRaw(vBytes, i % (FPS * 2) === 0 ? 'key' : 'delta', Math.round((i * 1e6) / FPS), Math.round(1e6 / FPS), meta)
+    }
+    const aBytes = new Uint8Array(32)
+    for (let k = 0; k < AAC_COUNT; k++) {
+      muxer.addAudioChunkRaw(aBytes, 'key', Math.round(((k * AAC_FRAME) / SAMPLE_RATE) * 1e6), Math.round((AAC_FRAME / SAMPLE_RATE) * 1e6))
+    }
+    muxer.finalize()
+  }
+
+  const reference = new ArrayBufferTarget()
+  build(reference)
+
+  const store = new ChunkedBlobStore(64 * 1024) // tiny freeze size on purpose
+  build(new StreamTarget({ onData: (data, position) => store.write(data, position) }))
+
+  const streamed = new Uint8Array(await store.toBlob().arrayBuffer())
+  assert.equal(streamed.byteLength, reference.buffer.byteLength)
+  assert.deepEqual(streamed, new Uint8Array(reference.buffer))
 })
 
 test('regression guard: a PTS offset after frame 0 lands as a pure video-late shift', () => {
