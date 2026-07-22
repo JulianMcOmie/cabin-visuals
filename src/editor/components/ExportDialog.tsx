@@ -284,8 +284,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             </label>
             {settings.rateControl === 'quality' && (
               <p className="text-[11px] text-[var(--text-muted)] -mt-2 leading-snug">
-                Every frame gets the bits it needs — busy, grainy projects stop blocking up.
-                File size varies with content and can grow several times larger.
+                Can grow several times larger
               </p>
             )}
 

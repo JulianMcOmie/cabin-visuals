@@ -5,10 +5,14 @@ import { lyricPattern } from './library-lyrics'
 
 // The Wormhole style: words riding a point tunnel that lurches on every beat.
 //
-// Every value here is copied verbatim from Julia's project "wormhole template
-// reference" (561890ec-658f-498a-8c51-58e7bb93308f, Save Your Tears at 118bpm),
-// tuned by hand against the real song. Only the words are placeholder, since
+// Every value here is copied verbatim from one of Julia's real projects, tuned
+// by hand against an actual song. Only the words are placeholder, since
 // transcription replaces them while keeping this styling.
+//
+// Latest sync: "tame impala (carried over)" at 98bpm. Earlier syncs came from
+// "wormhole template reference" (Save Your Tears at 118bpm), which is where the
+// instrument settings below were dialled in - those carried across unchanged;
+// the automation lanes are what the Tame Impala pass re-cut.
 //
 // Brightness, Warp Scale and Ring Detail are all pinned to their maximum: a
 // blown-out, heavily warped tube at the densest lattice the instrument offers.
@@ -80,7 +84,11 @@ function wormholeDocument() {
           opacity: 1,
           colorMode: 0,
           glow: 1,
-          hue: 0,
+          // Hue Shift rotates whatever colour is about to draw. Rainbow is on
+          // below, so this offsets the whole cycle by ~245 degrees rather than
+          // tinting one fixed colour - it moves where the cycle starts, which is
+          // what changes the mood of a run of words.
+          hue: 0.68,
           // Glow clipped at the stroke edge rather than bleeding past it -
           // without this the halo washes into the tunnel wall wherever the two
           // overlap, which is the thing the black stroke exists to prevent.
@@ -103,7 +111,10 @@ function wormholeDocument() {
         },
         stringParams: {
           text: words.text,
-          color: '#fe39a2',
+          // Only shows if Rainbow is switched off - the cycle overrides it while
+          // it's on. Carried anyway so turning rainbow off lands on Julia's red
+          // rather than a default white.
+          color: '#ff0000',
           strokeColor: '#000000',
           backdropColor: '#02beed',
         },
@@ -118,11 +129,12 @@ function wormholeDocument() {
         // slide every word across the frame, which is the thing that behaviour
         // exists to prevent.
         //
-        // Pitches read through the automation scale (36-84 spanning the param's
-        // -1..1), so 52-68 around a 60 centre is ±0.33 of a half-frame. The
-        // reference widened these from the old 56-64 (±0.17) and lengthened the
-        // cycle from 14 bars to 16 with eight placements instead of seven, so
-        // the words wander further and the pattern lines up with the bar count.
+        // Placement steps every 4 beats - a new spot each bar, twice the rate of
+        // the size lane below, so a run of words moves around the frame more
+        // often than it changes size. Pitches read through the automation scale
+        // (36-84 spanning the param's -1..1), so 56-64 around a 60 centre is
+        // ±0.17 of a half-frame: nudges that keep words off dead centre without
+        // throwing them at the edges.
         children: [
           track({
             name: 'Position X',
@@ -132,8 +144,10 @@ function wormholeDocument() {
             targetParam: 'posX',
             interpolation: 'step',
             blocks: [loopBlock(16, [
-              n(0, 60, 8, 100), n(8, 56, 8, 100), n(16, 64, 8, 100), n(24, 68, 8, 100),
-              n(32, 56, 8, 100), n(40, 68, 8, 100), n(48, 64, 8, 100), n(56, 60, 8, 100),
+              n(0, 60, 4, 100), n(4, 56, 4, 100), n(8, 64, 4, 100), n(12, 60, 4, 100),
+              n(16, 56, 4, 100), n(20, 60, 4, 100), n(24, 64, 4, 100), n(28, 60, 4, 100),
+              n(32, 60, 4, 100), n(36, 64, 4, 100), n(40, 56, 4, 100), n(44, 64, 4, 100),
+              n(48, 56, 4, 100), n(52, 64, 4, 100), n(56, 60, 4, 100), n(60, 64, 4, 100),
             ])],
           }),
           track({
@@ -144,15 +158,17 @@ function wormholeDocument() {
             targetParam: 'posY',
             interpolation: 'step',
             blocks: [loopBlock(16, [
-              n(0, 60, 8, 100), n(8, 68, 8, 100), n(16, 64, 8, 100), n(24, 56, 8, 100),
-              n(32, 60, 8, 100), n(40, 52, 8, 100), n(48, 56, 8, 100), n(56, 60, 8, 100),
+              n(0, 60, 4, 100), n(4, 56, 4, 100), n(8, 64, 4, 100), n(12, 60, 4, 100),
+              n(16, 56, 4, 100), n(20, 60, 4, 100), n(24, 64, 4, 100), n(28, 60, 4, 100),
+              n(32, 60, 4, 100), n(36, 64, 4, 100), n(40, 56, 4, 100), n(44, 60, 4, 100),
+              n(48, 56, 4, 100), n(52, 60, 4, 100), n(56, 64, 4, 100), n(60, 60, 4, 100),
             ])],
           }),
-          // Word size on the same 16-bar cycle as placement, so a word's size and
-          // its spot on the frame change together. Step for the same reason:
-          // sizeMode above latches each word at its onset, and ramping would
-          // fight that. The quarter-beat offsets are deliberate - the size step
-          // lands just after the placement step rather than on top of it.
+          // Size steps every 8 beats, on the same grid as placement rather than
+          // offset off it - so when the size does change, it changes on a beat a
+          // word is also being re-placed on. Step for the same reason as the
+          // lanes above: sizeMode latches each word at its onset, and ramping
+          // would fight that.
           track({
             name: 'Font Size',
             instrumentId: '',
@@ -161,8 +177,8 @@ function wormholeDocument() {
             targetParam: 'fontSize',
             interpolation: 'step',
             blocks: [loopBlock(16, [
-              n(0, 48, 8, 100), n(8.25, 52, 8, 100), n(16.25, 48, 8, 100), n(24.25, 40, 8, 100),
-              n(32.25, 44, 8, 100), n(40.25, 40, 8, 100), n(48.25, 44, 8, 100), n(56.25, 48, 8, 100),
+              n(0, 48, 8, 100), n(8, 44, 8, 100), n(16, 40, 8, 100), n(24, 44, 8, 100),
+              n(32, 52, 8, 100), n(40, 44, 8, 100), n(48, 44, 8, 100), n(56, 48, 8, 100),
             ])],
           }),
         ],
@@ -180,8 +196,9 @@ function wormholeDocument() {
           colorSpread: 1,
           viewDistance: 67,
         },
-        // The tunnel's own colour. Green against the pink words is most of why
-        // the two read as separate layers rather than one glowing mass.
+        // The tunnel's own colour, fixed while the words cycle through the
+        // rainbow above it - that contrast is most of why the two read as
+        // separate layers rather than one glowing mass.
         stringParams: { color: '#8df03d' },
         blocks: [loopBlock(1, PULSE_PATTERN)],
       }),

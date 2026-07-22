@@ -58,6 +58,7 @@
   .b-hard    { color: var(--hard);    border-color: var(--hard); }
   .b-invest  { color: var(--invest);  border-color: var(--invest); }
   .b-already { color: var(--already); border-color: var(--already); }
+  .b-fixed   { color: #0a0a0c; background: var(--trivial); border-color: var(--trivial); }
   .b-want { color: var(--muted); border-color: var(--border); background: var(--panel-2); }
   .card p { margin: 10px 0 0; color: var(--text); }
   .card .why { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
@@ -113,32 +114,32 @@
 
 <div class="card">
   <div class="top"><h3>Zoom-relative snap for MIDI blocks</h3>
-    <div class="badges"><span class="badge b-want">Tyler: "actually ragebaiting"</span><span class="badge b-easy">Easy</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: "actually ragebaiting"</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
   <p>Snapping in <code>useMidiBlockGestures.ts</code> is hardcoded to whole beats regardless of zoom (<code>Math.round(px / pixelsPerBeat)</code>). Deriving the snap subdivision from <code>pixelsPerBeat</code> (coarser when zoomed out, finer when zoomed in) is a small, localized change.</p>
   <p class="why">Highest pain-to-effort ratio on the whole list. His most emphatic complaint, and it's roughly one function.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Muted tracks should dim their MIDI blocks</h3>
-    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-trivial">Trivial</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
   <p>Confirmed: <code>Block.tsx</code> never reads <code>track.muted</code> — the only mute indicator is the button color. The row already has an opacity mechanism (solo-dimming); extending it to the track's own muted state is a few lines.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>MIDI row titles left-aligned</h3>
-    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-trivial">Trivial</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
   <p>CSS text-alignment change in the piano-roll row labels.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Cmd+X cut for MIDI / tracks</h3>
-    <div class="badges"><span class="badge b-want">Tyler: mildly annoying</span><span class="badge b-easy">Easy</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: mildly annoying</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
   <p>Full copy/paste infrastructure already exists (<code>ClipboardStore</code> handles notes, blocks, and whole track trees; cmd+C/V/B/J are wired in <code>useNoteGestures</code> and <code>useTrackGestures</code>). Cut = the existing copy branch plus a delete.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Cmd+R repeat/duplicate blocks &amp; notes</h3>
-    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-easy">Easy</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
   <p>Same clipboard machinery: duplicate the selection offset by its own length (Logic's behavior). <code>preventDefault()</code> on keydown does suppress browser refresh when focus is in the page, so cmd+R is usable; worst case, pick cmd+D like Ableton.</p>
 </div>
 
@@ -146,48 +147,47 @@
 
 <div class="card">
   <div class="top"><h3>Automation curves "always linear"</h3>
-    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-invest">Investigate</span><span class="badge b-already">Math is correct</span></div></div>
-  <p>The interpolation in <code>automation.ts</code> genuinely branches on curve type — step returns the held value, exponential uses a real exponential ease, and the mode is plumbed end to end. The likely culprit: the curve-type <code>&lt;select&gt;</code> only appears in the piano-roll's value mode, so the stored <code>track.interpolation</code> may simply never get set.</p>
-  <p class="why">Probably a discoverability/UX fix (curve picker in the right-click menu), not an engine fix. Easy once diagnosed.</p>
+    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-fixed">✓ Addressed 2026-07-22</span></div></div>
+  <p>Verified end to end: every <code>sampleLane</code> call site passes the stored mode, and step/exponential math is correct — the engine was never the problem. The only picker was a tiny "Interp" dropdown in the piano-roll toolbar. The inspector now shows a proper AUTOMATION panel (target param + Curve select) whenever an automation track is selected — finishing wiring that was started but never rendered (<code>setTrackInterpolation</code> was subscribed in TrackEditor but unused).</p>
+  <p class="why">If Tyler still sees linear after picking Step in either place, that's a new repro worth capturing — the code path says it can't happen.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Laser sphere color doesn't update in real time</h3>
-    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-invest">Investigate</span></div></div>
-  <p>Surprising: <code>LaserSphere.tsx</code> reads the color param <em>every frame</em> and writes the shader uniforms and point light directly — real-time updates should work by construction. If they don't, the bug is upstream (the <code>stringParams</code> not reaching the frame state). Needs a repro; the fix is likely small once found.</p>
+    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-already">Likely already fixed — retest</span></div></div>
+  <p>Traced the whole path (color input → <code>setTrackStringParam</code> → <code>syncParams</code> → render invalidate → per-frame uniform write): every link is live, and the historical "Laser Sphere params do nothing until remount" bug is documented as fixed by the frame-retry convention in <code>instrumentFrame.ts</code>. Tyler's report almost certainly predates that fix. Needs a retest on the current build before any code changes.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Opt+drag child tracks between parents</h3>
-    <div class="badges"><span class="badge b-want">Tyler: quite annoying</span><span class="badge b-already">May already work</span></div></div>
+    <div class="badges"><span class="badge b-want">Tyler: quite annoying</span><span class="badge b-already">Tyler is on it</span></div></div>
   <p>Alt/option-drag duplication is implemented (<code>useTrackCopyDrag.ts</code> — ghost, sibling reflow, insert on drop). What's unverified is whether the copy-drag path accepts a <em>different parent</em> as the drop target the way plain re-nest drag does. Either it works and Tyler's build is stale, or cross-parent drop is a modest extension to the existing hook.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Can't select or drag multiple tracks</h3>
-    <div class="badges"><span class="badge b-want">Tyler: a bit annoying</span><span class="badge b-already">Partially exists</span></div></div>
-  <p>Multi-select exists: cmd/ctrl-click toggles tracks into <code>selectedTrackIds</code>, and group delete works. What's plausibly missing is group <em>move</em> (dragging the whole selection at once) and shift-click range select. Extending the existing drag hooks to operate on the selection set is a medium-small job.</p>
+    <div class="badges"><span class="badge b-want">Tyler: a bit annoying</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
+  <p>Shift-click now selects the visible range from the primary selection (Logic-style, anchor stays put); cmd/ctrl-click still toggles. Dragging any selected row moves the <em>whole selection</em> — committed through a new atomic <code>setTracksParent</code> store action (one undo step) that keeps group order correct even when members already sit around the drop point. A selected parent + its selected child move as one subtree.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Movers don't work at the global level</h3>
-    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-invest">Investigate</span></div></div>
-  <p>Top-level movers targeting other instruments are supported in <code>resolve.ts</code> (track / tag / subtree scopes). But the resolution is <strong>silent-fail</strong>: a bad target id, an empty tag, or no targets set at all just does nothing, with no feedback. Very likely Tyler's setup falls into one of those holes.</p>
-  <p class="why">Fix is probably part diagnosis, part UX: surface "this mover isn't targeting anything" instead of silence. Ties directly into his "dedicated way to select targets" wish below.</p>
+    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-fixed">✓ Warning shipped 2026-07-22</span></div></div>
+  <p>Top-level movers targeting other instruments are supported in <code>resolve.ts</code> (track / tag / subtree scopes), but resolution is silent-fail: no targets checked, or targets pointing at deleted tracks / unused tags, just do nothing. The Targets section of the inspector now says so out loud — "no targets checked" and "N targets no longer match anything" warnings. If Tyler still hits a case where checked, live targets do nothing, that's a new repro worth capturing.</p>
 </div>
 
 <h2>🛠 Real bugs — medium effort</h2>
 
 <div class="card">
   <div class="top"><h3>Visibility doesn't affect laser instruments</h3>
-    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-medium">Medium</span></div></div>
-  <p>Confirmed by the shaders: <code>LaserLine</code>/<code>LaserSphere</code> fragment shaders output hard <code>alpha = 1.0</code>, have no opacity uniform, and the material isn't transparent — so the visibility mover's opacity fade has nothing to grab onto. Fix = add an opacity uniform to both shaders and wire it into the same gating path other materials use, plus dim their point lights.</p>
+    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
+  <p>Was: both laser fragment shaders output hard <code>alpha = 1.0</code>, so the visibility mover's opacity fade had nothing to grab onto. Fixed with the house pattern FilmStock already used: a <code>uOpacity</code> uniform fed each frame from the wrapper-written <code>Material.opacity</code>, and the point light fades with it. At opacity 1 the output is bit-identical to before, so existing projects are untouched.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Adding/removing a scene makes objects stop rendering</h3>
-    <div class="badges"><span class="badge b-want">Tyler: very annoying</span><span class="badge b-medium">Medium</span></div></div>
-  <p>Found the mechanism: <code>VisualScene.tsx</code> keys the whole scene map on the sorted set of scene ids, so adding one scene disposes <em>every</em> scene's render targets and remounts all portals. Fix = incremental updates (create/dispose only the scene that changed). Fiddly Three.js resource-lifetime work, but well-scoped.</p>
+    <div class="badges"><span class="badge b-want">Tyler: very annoying</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
+  <p>Was: <code>VisualScene.tsx</code> keyed the whole scene map on the sorted set of scene ids, so adding one scene disposed <em>every</em> scene's render targets and remounted all portals. Now the map reconciles incrementally — surviving scenes keep their THREE.Scenes and GPU targets; only the added/removed scene's resources change, and disposal waits for the commit effect.</p>
 </div>
 
 <div class="card">
@@ -197,15 +197,16 @@
 </div>
 
 <div class="card">
-  <div class="top"><h3>Videos seem compressed</h3>
-    <div class="badges"><span class="badge b-want">Tyler: minor but long-term</span><span class="badge b-easy">Easy (partial)</span></div></div>
-  <p>Export uses fixed per-tier H.264 bitrates (12 Mbps at 1080p, 35–50 at 4K). Raising tiers and/or adding a quality knob is easy. The caveat: Instagram/TikTok re-encode everything, so the biggest lever is exporting at higher resolution/bitrate so their re-encode has more to work with — perfection isn't reachable on our side.</p>
+  <div class="top"><h3>Videos seem compressed (worse on busy projects)</h3>
+    <div class="badges"><span class="badge b-want">Tyler: minor but long-term</span><span class="badge b-fixed">✓ Addressed 2026-07-22</span></div></div>
+  <p><strong>Diagnosis:</strong> export bitrate was a fixed number per tier (12 Mbps at 1080p, 35–50 at 4K) regardless of content. Cabin Visuals frames are near-worst-case for a fixed-bitrate encoder — the final grade adds animated per-pixel grain to <em>every</em> frame, plus HDR bloom halos and particle fields — so busy projects blew the budget and got visibly quantized while simple ones fit and looked clean. That's exactly the "complicated projects look compressed at any resolution" symptom. (Export genuinely renders at target resolution, DPR 1 — resolution was never the issue.)</p>
+  <p><strong>Change:</strong> tiers raised to motion-heavy values — 1080p 12→20 Mbps, 720p 8→12, 4K 35/50→60/80. Files grow proportionally (~60–70%), and the platform re-encode gets a much cleaner source. Remaining ceiling is Instagram/TikTok's own re-encode, which we can't control — exporting 4K gives their encoder the most to work with.</p>
 </div>
 
 <div class="card">
   <div class="top"><h3>Camera not centered by default</h3>
-    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-easy">Easy code, needs a decision</span></div></div>
-  <p>Confirmed: default camera sits at <code>[0, 1.2, 5]</code> — slightly above center, which reads asymmetric when 16:9 content is cropped to 9:16. A 9:16 view mode already exists. The one-line fix (drop y to 0) changes the look of <em>every existing project</em>, so it needs a deliberate choice: change the default, or give 9:16 its own camera framing.</p>
+    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
+  <p>Julia decided: centered. Default camera is now <code>[0, 0, 5]</code>, and the Camera instrument's default Position Y matches (so adding one no longer jumps the view). Note this shifts the framing of <em>every existing project</em> down 1.2 units — expected and accepted.</p>
 </div>
 
 <h2>🎨 Design-flavored changes</h2>
@@ -224,8 +225,8 @@
 
 <div class="card">
   <div class="top"><h3>Change instrument type in place</h3>
-    <div class="badges"><span class="badge b-want">Tyler: nice to have</span><span class="badge b-already">Mostly exists</span></div></div>
-  <p><code>setTrackInstrument</code> already swaps the instrument while preserving children, MIDI, targets, and mute state — only params reset. If the store action isn't reachable from the UI where Tyler wants it (e.g. right-click on a placed track), that's a small menu addition. Preserving compatible param values across the swap is an incremental tweak.</p>
+    <div class="badges"><span class="badge b-want">Tyler: nice to have</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
+  <p>Right-click a placed object track → <strong>Change instrument</strong> — the full library list (Main + core + extras), current instrument checked. Children, MIDI, targets, tags and mute state survive the swap (<code>setTrackInstrument</code> already preserved them); params reset to the new instrument's defaults, which is intentional since param keys differ.</p>
 </div>
 
 <div class="card">
