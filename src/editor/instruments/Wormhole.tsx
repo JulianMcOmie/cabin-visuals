@@ -186,7 +186,11 @@ function buildTube(
 }
 
 const PARAMS: ParamDef[] = [
-  { key: 'speed', label: 'Flight Speed', min: 0, max: 40, step: 0.5, default: 12 },
+  // Ceiling raised from 40: the Wormhole template pins this to the top, which is
+  // a sign the range ran out before the look did. Nothing else needs to change -
+  // scroll position is a modulo of the tube's 400-unit cycle, so higher speeds
+  // wrap exactly as before rather than running off the end.
+  { key: 'speed', label: 'Flight Speed', min: 0, max: 200, step: 1, default: 12 },
   { key: 'spin', label: 'Spin', min: -2, max: 2, step: 0.05, default: 0.3 },
   { key: 'radius', label: 'Tunnel Width', min: 0.5, max: 8, step: 0.1, default: 3 },
   // World units, NOT fog density. This slider used to be the density itself, so
