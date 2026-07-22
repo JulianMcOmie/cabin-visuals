@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import {
   Mesh,
@@ -53,6 +53,12 @@ interface PartitionUniforms {
   index: { value: number }
   count: { value: number }
   aspect: { value: number }
+}
+
+function disposeMountedScene(runtime: MountedScene) {
+  runtime.target.dispose()
+  runtime.invertTarget.dispose()
+  runtime.filterTargets.forEach((target) => target.dispose())
 }
 
 function makeCompositorGeometry() {
@@ -321,9 +327,23 @@ export function VisualScene() {
     return target
   }, [gl])
   const sceneKey = [...new Set(objects.map((o) => o.sceneId))].sort().join(',')
+  // Incremental scene mounting: runtimes are keyed by scene id and REUSED when
+  // the scene set changes. Rebuilding the whole map on every add/remove would
+  // remount every scene's object portals and dispose their render targets
+  // mid-flight - the "adding a scene blanks unrelated scenes" bug. Creation
+  // happens in render (new ids only, so a discarded render can only leak, never
+  // break committed scenes); disposal of dropped runtimes waits for the commit
+  // effect below.
+  const prevMountedRef = useRef(new Map<string, MountedScene>())
   const mounted = useMemo(() => {
+    const prev = prevMountedRef.current
     const map = new Map<string, MountedScene>()
     for (const sceneId of sceneKey ? sceneKey.split(',') : []) {
+      const reused = prev.get(sceneId)
+      if (reused) {
+        map.set(sceneId, reused)
+        continue
+      }
       const options = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
       const maskOptions = { minFilter: LinearFilter, magFilter: LinearFilter }
       const width = Math.max(1, size.width)
@@ -439,13 +459,20 @@ export function VisualScene() {
     return () => setMountedRenderScenes(new Map())
   }, [mounted])
 
-  useEffect(() => () => {
-    for (const runtime of mounted.values()) {
-      runtime.target.dispose()
-      runtime.invertTarget.dispose()
-      runtime.filterTargets.forEach((target) => target.dispose())
+  // Commit the new mounted set and dispose ONLY the runtimes that fell out of
+  // it - surviving scenes keep their THREE.Scenes and GPU targets untouched.
+  useEffect(() => {
+    const prev = prevMountedRef.current
+    prevMountedRef.current = mounted
+    for (const [sceneId, runtime] of prev) {
+      if (mounted.get(sceneId) !== runtime) disposeMountedScene(runtime)
     }
   }, [mounted])
+
+  useEffect(() => () => {
+    for (const runtime of prevMountedRef.current.values()) disposeMountedScene(runtime)
+    prevMountedRef.current = new Map()
+  }, [])
 
   useEffect(() => () => {
     for (const mesh of compositor.meshes) {
