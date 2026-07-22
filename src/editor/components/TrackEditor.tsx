@@ -399,12 +399,29 @@ function MoverTargets({ track }: { track: Track }) {
     }
     setTrackTargets(track.id, next)
   }
+  // Target resolution is silent-fail in the engine (an unresolved routing is
+  // skipped, a mover with no targets affects nothing) - so say it out loud here
+  // instead of letting a global mover look broken.
+  const targets = track.targets ?? []
+  const deadTargets = targets.filter((r) =>
+    r.scope.kind === 'tag' ? !allTags.includes(r.scope.tag) : !tracks[r.scope.id])
   return (
     <div className="mb-4">
       <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
       {options.length === 0
         ? <p className="text-[11px] text-zinc-600">No objects to target</p>
         : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
+      {options.length > 0 && targets.length === 0 && (
+        <p className="text-[11px] text-[var(--warn)] mt-1.5">
+          No targets checked — a global mover affects nothing until it targets a track, branch, or #tag.
+        </p>
+      )}
+      {deadTargets.length > 0 && (
+        <p className="text-[11px] text-[var(--warn)] mt-1.5">
+          {deadTargets.length} checked target{deadTargets.length === 1 ? '' : 's'} no longer
+          match{deadTargets.length === 1 ? 'es' : ''} anything (deleted track or unused tag).
+        </p>
+      )}
     </div>
   )
 }
