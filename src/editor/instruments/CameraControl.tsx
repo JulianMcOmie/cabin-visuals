@@ -14,13 +14,14 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // with a smooth ease, so the camera reacts to the music. `energy`/`scale`/`hue` ports
 // and a look-mode select round it out.
 //
-// NOTE: our scene has no OrbitControls (Canvas uses a default camera at [0,1.2,5],
-// fov 55), so nothing else writes the camera each frame - this instrument owns it while
+// NOTE: our scene has no OrbitControls (Canvas uses a default camera at [0,0,5],
+// fov 55 - dead-centered so a 16:9 frame cropped to 9:16 stays symmetric), so
+// nothing else writes the camera each frame - this instrument owns it while
 // active. It's opt-in; if a user later adds orbit controls the two would conflict, which
 // is acceptable. Guarded against a non-perspective camera so it never crashes.
 
 const DEG = Math.PI / 180
-const DEFAULTS = { posX: 0, posY: 1.2, posZ: 5, rotX: 0, rotY: 0, rotZ: 0, fov: 55 }
+const DEFAULTS = { posX: 0, posY: 0, posZ: 5, rotX: 0, rotY: 0, rotZ: 0, fov: 55 }
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 // Smooth exponential-ish decay used for the note punch envelope (Tyler-style easing).
