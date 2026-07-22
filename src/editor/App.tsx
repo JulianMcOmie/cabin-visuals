@@ -469,37 +469,37 @@ function Header() {
             PRO
           </button>
         )}
-        {/* Gated Export explains itself like the projects page's blocked
-            "New project" button: an instant CSS group-hover panel, not a
-            native title - titles never fire over disabled buttons in Firefox
-            (the very browser the gate fires on), and the panel appears with
-            no tooltip dwell. Two gates share it: browser capability first
-            (signing in wouldn't help there), then account (export requires a
-            real sign-in; anonymous sessions don't count). */}
+        {/* Export explains itself like the projects page's blocked "New
+            project" button: an instant CSS group-hover panel, never a native
+            title - titles never fire over disabled buttons in Firefox (the
+            very browser the capability gate fires on), and the OS renders
+            them past the window's right edge. Two gates share the panel:
+            browser capability first (signing in wouldn't help there), then
+            account (export requires a real sign-in; anonymous sessions don't
+            count); ungated it is a plain description. */}
         <div className="group relative">
           <button
             onClick={() => { track('export_clicked'); setExportOpen(true) }}
             disabled={exportGate?.ok === false || !permanent}
-            title={exportGate?.ok === false || !permanent ? undefined : 'Export the project as an MP4'}
             className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
           >
             <Upload size={11} strokeWidth={2.5} />
             Export
           </button>
-          {(exportGate?.ok === false || (!authLoading && !permanent)) && (
-            // Padding on a hidden wrapper (not a margin) so the pointer can
-            // cross from the button into the panel without leaving the group.
-            <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
-              <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-                {exportGate?.ok === false
-                  ? exportGate.reason ?? 'Video export is not available in this browser.'
-                  : (
+          {/* Padding on a hidden wrapper (not a margin) so the pointer can
+              cross from the button into the panel without leaving the group. */}
+          <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
+            <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
+              {exportGate?.ok === false
+                ? exportGate.reason ?? 'Video export is not available in this browser.'
+                : !authLoading && !permanent
+                  ? (
                     <>
                       Video export needs a free account.{' '}
                       <Link
                         href="/signup"
                         onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'signup' })}
-                        className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
+                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
                       >
                         Sign up
                       </Link>
@@ -507,16 +507,16 @@ function Header() {
                       <Link
                         href="/login"
                         onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'login' })}
-                        className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
+                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
                       >
                         sign in
                       </Link>
                       {' '}to export your video.
                     </>
-                  )}
-              </div>
+                  )
+                  : 'Export the project as an MP4.'}
             </div>
-          )}
+          </div>
         </div>
         <ProfileMenu size="sm" />
       </div>
