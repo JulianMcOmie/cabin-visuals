@@ -157,9 +157,11 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     abortRef.current = controller
     const gesture = dragRef.current
     const t = gesture?.type
+    // Drawing (right-drag) keeps the plain cursor - the resize arrows are for
+    // edge-resizing an existing block only.
     lockCursor(gesture && 'loopArm' in gesture && gesture.loopArm
       ? LOOP_CURSOR
-      : t === 'resizing-left' || t === 'resizing-right' || t === 'drawing' ? 'ew-resize' : 'default')
+      : t === 'resizing-left' || t === 'resizing-right' ? 'ew-resize' : 'default')
 
     const handleMove = (e: PointerEvent) => {
       const d = dragRef.current
