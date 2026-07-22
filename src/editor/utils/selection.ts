@@ -1,5 +1,6 @@
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
+import { flattenVisualRows } from '../components/timeline/trackTree'
 
 // The timeline's selection transitions, centralized so the rules live in one
 // place instead of scattered set() calls:
@@ -74,6 +75,34 @@ export function toggleTrackInSelection(trackId: string) {
   }
   // Direct setState: setSelectedTrackId deliberately collapses the group.
   useUIStore.setState({ selectedTrackId: primary, selectedTrackIds: next })
+}
+
+/** Shift-click: select the visible range between the primary (anchor) and
+ *  `targetId`, both ends inclusive, in flattened visual-row order. The pinned
+ *  audio track never joins. The anchor stays primary, so successive
+ *  shift-clicks re-range from the same anchor (Logic-style). With no anchor,
+ *  a shift-click is a plain select. */
+export function selectTrackRange(targetId: string) {
+  const ui = useUIStore.getState()
+  const { tracks, rootTrackIds } = useProjectStore.getState()
+  const anchor = ui.selectedTrackId
+  if (!anchor || anchor === targetId || !tracks[anchor]) {
+    selectTrack(targetId)
+    return
+  }
+  const ids = flattenVisualRows(tracks, rootTrackIds, ui.collapsedTrackIds)
+    .filter((r) => r.kind === 'track')
+    .map((r) => r.id)
+  const a = ids.indexOf(anchor)
+  const b = ids.indexOf(targetId)
+  if (a < 0 || b < 0) {
+    selectTrack(targetId)
+    return
+  }
+  const [lo, hi] = a <= b ? [a, b] : [b, a]
+  const range = ids.slice(lo, hi + 1).filter((id) => tracks[id]?.type !== 'audio')
+  // Direct setState: setSelectedTrackId deliberately collapses the group.
+  useUIStore.setState({ selectedTrackId: anchor, selectedTrackIds: new Set(range) })
 }
 
 /** Delete every selected track (the ctrl-click group ∪ the primary) - fired

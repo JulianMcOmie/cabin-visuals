@@ -8,12 +8,20 @@ import { computeDropTarget } from './trackDrop'
 
 interface Session {
   activeId: string
+  /** Every track the drag moves, in visual order - the grabbed track alone, or
+   *  the whole multi-selection when the grabbed track belongs to it. */
+  activeIds: string[]
   rows: VisualRow[]
   subtree: Set<string>
   listTop: number
   rowHeight: number
   /** Resolved drop, applied on pointer-up. null = no valid target. */
   target: { parentId: string | null; index: number | undefined } | null
+}
+
+/** Track types that live only on their parent object - never re-parented. */
+function isPinnedChildType(type: string | undefined): boolean {
+  return type === 'automation' || type === 'ability' || type === 'envelope'
 }
 
 /**
@@ -34,16 +42,40 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     // Automation + envelope + ability tracks live only on their parent object - they
     // can't be re-parented or moved to the root. (A plain pointer-down still selects
     // the row.)
-    if (tracks[trackId].type === 'automation' || tracks[trackId].type === 'ability' || tracks[trackId].type === 'envelope') return
-    const rowHeight = useUIStore.getState().tracksRowHeight
-    const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
+    if (isPinnedChildType(tracks[trackId].type)) return
+    const ui = useUIStore.getState()
+    const rowHeight = ui.tracksRowHeight
+    const rows = flattenVisualRows(tracks, rootTrackIds, ui.collapsedTrackIds)
     if (rows.findIndex((r) => r.kind === 'track' && r.id === trackId) < 0) return
 
+    // Grabbing a row that belongs to the multi-selection drags the whole
+    // selection (in visual order); an unselected row always drags alone.
+    const selection = new Set(ui.selectedTrackIds)
+    if (ui.selectedTrackId) selection.add(ui.selectedTrackId)
+    const groupIds = selection.has(trackId)
+      ? rows
+          .filter((r) => r.kind === 'track' && selection.has(r.id))
+          .map((r) => r.id)
+          .filter((id) => tracks[id] && tracks[id].type !== 'audio' && !isPinnedChildType(tracks[id].type))
+      : [trackId]
+    // A member whose ancestor is also dragged rides along inside that subtree.
+    const groupSet = new Set(groupIds)
+    const activeIds = groupIds.filter((id) => {
+      for (let cur = tracks[id]?.parentId; cur != null; cur = tracks[cur]?.parentId) {
+        if (groupSet.has(cur)) return false
+      }
+      return true
+    })
+    if (activeIds.length === 0) return
+
     const scRect = sc.getBoundingClientRect()
+    const subtree = new Set<string>()
+    for (const id of activeIds) for (const sid of subtreeIds(tracks, id)) subtree.add(sid)
     const session: Session = {
       activeId: trackId,
+      activeIds,
       rows,
-      subtree: subtreeIds(tracks, trackId),
+      subtree,
       listTop: scRect.top - sc.scrollTop, // screen-y of content row 0's top
       rowHeight,
       target: null,
@@ -89,7 +121,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         useUIStore.getState().setTrackDrop(null)
       }
       if (started && s?.target) {
-        useProjectStore.getState().setTrackParent(s.activeId, s.target.parentId, s.target.index)
+        useProjectStore.getState().setTracksParent(s.activeIds, s.target.parentId, s.target.index)
         // Reveal the drop: expand the parent if it was collapsed.
         if (s.target.parentId) useUIStore.getState().setTrackCollapsed(s.target.parentId, false)
       }

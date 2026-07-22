@@ -330,6 +330,12 @@ export interface ProjectState {
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
    *  its new siblings (root list or the parent's childIds). No-op on a cycle. */
   setTrackParent: (trackId: string, parentId: string | null, index?: number) => void
+  /** Move several tracks at once to `parentId`, inserted contiguously at `index`.
+   *  `index` counts the siblings that REMAIN after every moved track is detached
+   *  (the drop-target convention). Order of `trackIds` is preserved; members whose
+   *  ancestor is also moving are skipped (the subtree rides along). One set() =
+   *  one undo step. */
+  setTracksParent: (trackIds: string[], parentId: string | null, index?: number) => void
   renameTrack: (trackId: string, name: string) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -980,6 +986,61 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const min = audioPinnedCount(tracks, rootTrackIds)
         const i = index == null ? rootTrackIds.length : Math.max(min, Math.min(rootTrackIds.length, index))
         rootTrackIds.splice(i, 0, trackId)
+      }
+      return { tracks, rootTrackIds }
+    }),
+
+  setTracksParent: (trackIds, parentId, index) =>
+    set((s) => {
+      // Same per-track guards as setTrackParent, applied member-wise.
+      const requested = trackIds.filter((id) => {
+        const child = s.tracks[id]
+        if (!child || child.type === 'audio' || id === parentId) return false
+        if (parentId != null && (!s.tracks[parentId] || s.tracks[parentId].type === 'audio')) return false
+        for (let cur: string | undefined = parentId ?? undefined; cur != null; cur = s.tracks[cur]?.parentId) {
+          if (cur === id) return false
+        }
+        return true
+      })
+      // A member whose ancestor also moves rides along inside that subtree.
+      const moving = new Set(requested)
+      const ids = requested.filter((id) => {
+        for (let cur = s.tracks[id]?.parentId; cur != null; cur = s.tracks[cur]?.parentId) {
+          if (moving.has(cur)) return false
+        }
+        return true
+      })
+      if (ids.length === 0) return s
+
+      const tracks = { ...s.tracks }
+      let rootTrackIds = [...s.rootTrackIds]
+      const movingSet = new Set(ids)
+
+      // Detach EVERY moved track first, so the insertion index means "among the
+      // remaining siblings" even when some members already live under the target
+      // parent ahead of the insertion point.
+      for (const id of ids) {
+        const child = tracks[id]
+        const oldParentId = child.parentId
+        if (oldParentId != null) {
+          const op = tracks[oldParentId]
+          if (op) tracks[oldParentId] = { ...op, childIds: op.childIds.filter((c) => !movingSet.has(c)) }
+        } else {
+          rootTrackIds = rootTrackIds.filter((rid) => !movingSet.has(rid))
+        }
+        tracks[id] = { ...child, parentId: parentId ?? undefined }
+      }
+
+      if (parentId != null) {
+        const np = tracks[parentId]
+        const childIds = np.childIds.filter((c) => !movingSet.has(c))
+        const i = index == null ? childIds.length : Math.max(0, Math.min(childIds.length, index))
+        childIds.splice(i, 0, ...ids)
+        tracks[parentId] = { ...np, childIds }
+      } else {
+        const min = audioPinnedCount(tracks, rootTrackIds)
+        const i = index == null ? rootTrackIds.length : Math.max(min, Math.min(rootTrackIds.length, index))
+        rootTrackIds.splice(i, 0, ...ids)
       }
       return { tracks, rootTrackIds }
     }),

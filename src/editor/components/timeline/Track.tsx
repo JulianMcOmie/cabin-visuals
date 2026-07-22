@@ -7,7 +7,7 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
-import { selectTrack, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
+import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
 import { flattenBlocks } from '../../core/visual/noteFlatten'
@@ -154,6 +154,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           // selects or deselects a track. A drag that started here (nest/copy)
           // must not hijack the selection when its trailing click lands.
           if (shouldSuppressTrackSelect()) return
+          // Shift-click selects the visible range from the primary selection.
+          if (e.shiftKey) { selectTrackRange(track.id); return }
           // Ctrl/cmd-click builds a multi-selection (bulk delete).
           if (e.ctrlKey || e.metaKey) { toggleTrackInSelection(track.id); return }
           // No toggle: clicking the selected track keeps it selected. Foreign
