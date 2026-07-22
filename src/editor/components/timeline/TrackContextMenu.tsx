@@ -6,7 +6,6 @@ import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
-import { SWAPPABLE_OBJECT_INSTRUMENTS } from '../LeftSidebar'
 import { useUIStore } from '../../store/UIStore'
 
 interface TrackContextMenuProps {
@@ -28,7 +27,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
   const addEnvelopeTrack = useProjectStore((s) => s.addEnvelopeTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
-  const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
   const scenes = useProjectStore((s) => s.scenes)
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
@@ -148,18 +146,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       label: 'Move to scene',
       items: moveDestinations.map((scene) => ({ id: scene.id, label: scene.name })),
     },
-    {
-      // Logic-style in-place swap: children, MIDI, targets and tags survive;
-      // params reset to the new instrument's defaults (setTrackInstrument).
-      key: 'change-instrument',
-      label: 'Change instrument',
-      items: def
-        ? SWAPPABLE_OBJECT_INSTRUMENTS.map((item) => {
-            const current = item.id === track.instrumentId
-            return { id: item.id, label: item.name, disabled: current, checked: current }
-          })
-        : [],
-    },
   ]
 
   const onPick = (groupKey: string, itemId: string) => {
@@ -187,9 +173,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     } else if (groupKey === 'move-scene') {
       moveTrackToScene(trackId, itemId)
       useUIStore.getState().setSelectedTrackId(null)
-    } else if (groupKey === 'change-instrument') {
-      const item = SWAPPABLE_OBJECT_INSTRUMENTS.find((i) => i.id === itemId)
-      if (item) setTrackInstrument(trackId, item.id, item.name)
     }
   }
 
