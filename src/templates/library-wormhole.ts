@@ -25,9 +25,10 @@ import { lyricPattern } from './library-lyrics'
 // View Distance 67 of a possible 250 keeps the far end fading out, so the motion
 // reads as speed instead of a static starfield.
 //
-// NOT captured here: the reference project is set to a 9:16 canvas. Templates
-// have no way to carry viewAspect - doc() does not take one and applyTemplate
-// does not set one - so applying this style leaves the project's aspect alone.
+// NOT captured here: the reference project's canvas aspect, whatever it happens
+// to be on (it has moved between 9:16 and fill across re-syncs). Templates have
+// no way to carry viewAspect - doc() does not take one and applyTemplate does
+// not set one - so applying this style always leaves the project's aspect alone.
 // See the note at the bottom of this file.
 
 const BARS = 16
@@ -179,41 +180,19 @@ function wormholeDocument() {
           colorSpread: 1,
           viewDistance: 67,
         },
+        // The tunnel's own colour. Green against the pink words is most of why
+        // the two read as separate layers rather than one glowing mass.
+        stringParams: { color: '#8df03d' },
         blocks: [loopBlock(1, PULSE_PATTERN)],
-        // Throws the tunnel around its own axes on a 4-bar cycle - two bursts on
-        // one pitch then two on the next, so the lurch alternates direction
-        // instead of repeating identically every bar like the pulse does.
-        children: [
-          track({
-            name: 'Orbit Burst',
-            instrumentId: '',
-            type: 'mover',
-            moverId: 'orbitBurst',
-            color: '#6366f1',
-            inputValues: {
-              angle: 1.8,
-              angleX: 16,
-              angleY: 165,
-              angleZ: 115,
-              sharpness: 1.05,
-              burstBeats: 2.5,
-            },
-            blocks: [loopBlock(4, [
-              n(1, 64, 0.25, 100), n(3, 64, 0.25, 100), n(5, 64, 0.25, 100), n(7, 64, 0.25, 100),
-              n(9, 65, 0.25, 100), n(11, 65, 0.25, 100), n(13, 65, 0.25, 100), n(15, 65, 0.25, 100),
-            ])],
-          }),
-        ],
       }),
     ],
   })
 }
 
-// The 9:16 gap, deliberately left open. Julia's reference project is vertical, and
-// this style was clearly composed for it - the offset effect lifting the words a
-// tenth of a frame only really makes sense with the tunnel's vanishing point below
-// them. But nothing in the template pipeline carries a canvas aspect: `doc()` emits
-// no viewAspect and `applyTemplate` never writes one, so a style cannot change it.
+// The canvas-aspect gap, deliberately left open. Nothing in the template pipeline
+// carries an aspect: `doc()` emits no viewAspect and `applyTemplate` never writes
+// one, so a style cannot change it. The reference has sat on both 9:16 and fill
+// at different points, and neither travelled with the style either way.
 //
 // Wiring it up is small (one optional field, honoured only when a template declares
 // it, so every existing template keeps today's behaviour) but the CONSEQUENCE is
