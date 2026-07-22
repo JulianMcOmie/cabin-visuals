@@ -593,6 +593,53 @@ export function TrackEditor() {
                     )
                   }
 
+                  // Automation child track → the curve used between its value
+                  // keyframes. The same picker lives in the MIDI editor's
+                  // toolbar; it is surfaced here too so the curve types are
+                  // discoverable without opening the lane.
+                  if (track.type === 'automation') {
+                    const parent = track.parentId ? tracks[track.parentId] : undefined
+                    const fx = track.targetParam ? parseFxTarget(track.targetParam) : null
+                    let targetLabel = track.targetParam ?? 'value'
+                    if (fx) {
+                      const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
+                      const plugin = inst ? getEffect(inst.pluginId) : undefined
+                      const pd = plugin?.params.find((p) => p.key === fx.key)
+                      if (pd) targetLabel = `${plugin?.name} · ${pd.label}`
+                    } else if (parent && track.targetParam) {
+                      const pdef = getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam)
+                        ?? (parent.type === 'mover' || parent.type === 'splitter'
+                          ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)
+                              ?.params.find((p) => p.key === track.targetParam)
+                          : undefined)
+                      if (pdef) targetLabel = pdef.label
+                    }
+                    return (
+                      <>
+                        <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">AUTOMATION</p>
+                        <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
+                          Drives <span className="text-[var(--text)]">{targetLabel}</span> from the lane&apos;s value keyframes.
+                        </p>
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
+                          <span className="text-[11px] text-[var(--text-3)]">Curve</span>
+                          <select
+                            value={track.interpolation ?? 'linear'}
+                            onChange={(e) => setTrackInterpolation(track.id, e.target.value as InterpolationMode)}
+                            className="h-6 px-1 rounded bg-[var(--bg-elevated)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
+                          >
+                            {INTERP_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
+                          Step holds each value until the next keyframe; the other curves glide between keyframes.
+                          Noise mode lives in the lane&apos;s MIDI editor toolbar.
+                        </p>
+                      </>
+                    )
+                  }
+
                   if (track.type === 'director') {
                     const director = getDirector(track.directorId)
                     const scenes = useProjectStore.getState().scenes
