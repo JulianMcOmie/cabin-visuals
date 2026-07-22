@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import * as projectStorage from '../../persistence/projectStorage'
 import { hydrate } from '../../persistence/serialize'
 import { emptyDocument } from '../../persistence/types'
 import { startAutosave, useSaveStatus } from '../../persistence/autosave'
 import { justAdopted } from '../../persistence/adoptionHandoff'
-import { rememberLastProject } from '../../persistence/lastProject'
+import { rememberLastProject, forgetLastProject } from '../../persistence/lastProject'
 import { getSupabase } from '../../persistence/supabase'
 import { useHistoryStore } from '../store/HistoryStore'
 import { useUIStore } from '../store/UIStore'
@@ -25,6 +25,7 @@ import { getTemplate } from '../../templates'
  * "every project opens the same data" bug.
  */
 export function useProjectPersistence() {
+  const router = useRouter()
   const search = useSearchParams()
   const projectId = search.get('project')
   const templateId = search.get('template')
@@ -97,8 +98,23 @@ export function useProjectPersistence() {
         useHistoryStore.getState().reset()
         stop = startAutosave(projectId, rev)
       } catch (err) {
+        if (cancelled) return
+        // The row is gone (deleted here, or on another device where this
+        // browser's pointer never heard about it). PGRST116 is PostgREST's
+        // "0 rows" from the .single() in load().
+        //
+        // Clearing the pointer is the important part: without it the landing
+        // page's "Continue creating" aims at the same dead row on EVERY click,
+        // so the failure repeats forever instead of once. Bouncing to /projects
+        // then leaves them somewhere they can actually act.
+        if ((err as { code?: string })?.code === 'PGRST116') {
+          console.warn(`Project ${projectId} no longer exists - clearing the pointer`)
+          forgetLastProject(projectId)
+          router.replace('/projects')
+          return
+        }
         console.error('Failed to load project', err)
-        if (!cancelled) useSaveStatus.setState({ status: 'error' })
+        useSaveStatus.setState({ status: 'load-failed' })
       }
     })()
 
@@ -107,5 +123,6 @@ export function useProjectPersistence() {
       stop?.()
       useUIStore.getState().setProjectName(null)
     }
-  }, [projectId])
+    // `router` is stable in the App Router, so listing it can't re-run the bind.
+  }, [projectId, router])
 }

@@ -11,7 +11,11 @@ import { getFrameDriver } from '../editor/core/export/frameDriver'
 // window), aimed at a row instead of an undo stack. Pure observation: nothing
 // in the edit path changes, and a failed save never touches memory.
 
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
+// 'error' is a failed SAVE; 'load-failed' is a project that never opened. They
+// read very differently to a user, and conflating them meant a load failure
+// showed "Save failed" - which sent Julia hunting through the save path for a
+// bug that was in the loading of a deleted row.
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'load-failed'
 
 /** The one React-visible surface of autosave - feeds the header status chip,
  *  and (on 'conflict') the blocking banner that asks the user which version

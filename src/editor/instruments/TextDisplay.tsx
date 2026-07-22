@@ -582,6 +582,16 @@ const PARAMS: ParamDef[] = [
       { value: 1, label: 'Per word (latched at onset)' },
     ],
   },
+  // The same split for Size, and only meaningful once Size is AUTOMATED. Unlike
+  // posMode this defaults to Live: Size has been automatable all along and has
+  // always resized every word at once, so per-word by default would quietly
+  // restyle existing projects.
+  {
+    key: 'sizeMode', label: 'Size Applies', type: 'select', default: 0, options: [
+      { value: 0, label: 'Live (resizes every word)' },
+      { value: 1, label: 'Per word (latched at onset)' },
+    ],
+  },
   { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0 },
   // Off = the halo bleeds outward past the stroke onto whatever is behind the
   // words (the original behaviour, kept as the default so no existing project
@@ -767,6 +777,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const invertBehind = (p.colorMode ?? 0) >= 0.5
     const strokeColor = state.stringParams.strokeColor || ''
     const fontSize = p.fontSize ?? 1
+    // Live by default: Size has always been automatable and has always resized
+    // every word on screen at once, so defaulting to per-word would silently
+    // restyle existing projects (same reasoning as glowContained).
+    const perWordSize = (p.sizeMode ?? 0) >= 0.5
     const strokeWidth = p.strokeWidth ?? 0.05
     const textOpacity = p.opacity ?? 1
     const releaseDuration = p.releaseDuration ?? 0.4
@@ -902,7 +916,13 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const canvasColor = invertBehind ? '#ffffff' : effectiveColor
     const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
 
-    const baseScale = Math.min(viewport.width, viewport.height) * 0.6 * fontSize
+    // Word size, either live or latched at the beat a word was placed - the same
+    // split posMode makes for placement. `sizeAt` is called with whichever beat
+    // owns the thing being drawn (this word's onset, an echo tap's note, a
+    // flight sprite's spawn), so with Size automated a word keeps the size it
+    // was born at instead of resizing under the next word's value.
+    const sizeAt = (b: number) => Math.min(viewport.width, viewport.height) * 0.6
+      * (perWordSize ? paramAtBeat(state, 'fontSize', b) : fontSize)
 
     const invertInThisPass = invertBehind && !renderingFinalInvertMask
     configureTextMaterial(meshRef.current.material as MeshBasicMaterial, invertInThisPass)
@@ -986,9 +1006,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
             ? 0.7 + 0.3 * (Math.floor(onsetAge * 30) % 2)
             : 1
 
-          const scale = baseScale * 0.55 * sizeJ * popScale
-          spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
+          // This word's own onset - both its latched size and its latched
+          // placement are sampled at it.
           const scatterBeat = nextWordNotes[i]?.beat ?? currentBeat
+          const scale = sizeAt(scatterBeat) * 0.55 * sizeJ * popScale
+          spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
           spr.mesh.position.set(
             nx * viewport.width * scatterSpread + placeX(scatterBeat),
             ny * viewport.height * scatterSpread * 0.8 + placeY(scatterBeat),
@@ -1059,7 +1081,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           -depth,
         )
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
-        spr.mesh.scale.set(baseScale * texAspect(spr.texture), baseScale, 1)
+        const sprScale = sizeAt(sprOnsetBeat)
+        spr.mesh.scale.set(sprScale * texAspect(spr.texture), sprScale, 1)
         const fadeStart = flightMaxDepth * 0.7
         setAnimatedOpacity(spr.mat, depth > fadeStart
           ? textOpacity * Math.max(0, 1 - (depth - fadeStart) / (flightMaxDepth - fadeStart))
@@ -1097,10 +1120,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // scrub lands on the identical tilt/size/baseline for each word.
     const wordIdx = wordCount - 1
     const jitterSize = 1 + (seededRand(wordIdx * 131 + 8) - 0.5) * 2 * jitter * 0.18
-    const scale = baseScale * onsetScale * bassPopScale * jitterSize
+    const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
+    const scale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
     meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
-    const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
     meshRef.current.position.x = shakeX + placeX(wordOnsetBeat)
     meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
       + placeY(wordOnsetBeat)
@@ -1137,7 +1160,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         echoLastWordsRef.current[tap] = echoKey
       }
 
-      const tapScale = baseScale * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
+      const tapScale = sizeAt(echoNote.beat) * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
       mesh.scale.set(tapScale * texAspect(tex), tapScale, 1)
       mesh.position.x = (pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0)
         + placeX(echoNote.beat)

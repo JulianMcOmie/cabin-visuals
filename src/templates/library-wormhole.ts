@@ -1,4 +1,4 @@
-import { doc, track, block, n, fx } from './builder'
+import { doc, track, block, n } from './builder'
 import type { TemplateDef } from './library'
 import type { Block, Note } from '../editor/types'
 import { lyricPattern } from './library-lyrics'
@@ -25,10 +25,10 @@ import { lyricPattern } from './library-lyrics'
 // View Distance 67 of a possible 250 keeps the far end fading out, so the motion
 // reads as speed instead of a static starfield.
 //
-// NOT captured here: the reference project is set to a 9:16 canvas. Templates have
-// no way to carry viewAspect - doc() does not take one and applyTemplate does not
-// set one - so applying this style leaves the project's aspect alone. See the note
-// at the bottom of this file.
+// NOT captured here: the reference project is set to a 9:16 canvas. Templates
+// have no way to carry viewAspect - doc() does not take one and applyTemplate
+// does not set one - so applying this style leaves the project's aspect alone.
+// See the note at the bottom of this file.
 
 const BARS = 16
 // 512 = MAX_TOTAL_BARS, the project-length ceiling. The block is authored to it
@@ -71,10 +71,19 @@ function wormholeDocument() {
         params: {
           font: 7, // Poster (Bebas Neue)
           fontSize: 0.9,
+          // Size latches per word, like placement does - a word that is still
+          // fading keeps the size it was born at while the next one is placed
+          // at a different one. Required for the Font Size lane below to read
+          // as varied word sizes rather than everything on screen pulsing.
+          sizeMode: 1,
           opacity: 1,
           colorMode: 0,
           glow: 1,
           hue: 0,
+          // Glow clipped at the stroke edge rather than bleeding past it -
+          // without this the halo washes into the tunnel wall wherever the two
+          // overlap, which is the thing the black stroke exists to prevent.
+          glowContained: 1,
           strokeWidth: 0.2,
           onsetBounce: 0.09,
           releaseDuration: 0.5,
@@ -97,9 +106,9 @@ function wormholeDocument() {
           strokeColor: '#000000',
           backdropColor: '#02beed',
         },
-        // Nudges the whole block up a tenth of the frame - at 9:16 the words sit
-        // slightly high so the tunnel's vanishing point reads underneath them.
-        effects: [fx('offset', { x: 0, y: -0.1, z: 0 })],
+        // No offset effect: the reference dropped the -0.1 y nudge that used to
+        // lift the words off centre. The placement lanes below do all the
+        // positioning now.
         blocks: [block(0, BARS, words.notes)],
         // The placement lanes. STEP interpolation, not linear: each word should
         // snap to its spot and stay there, and the instrument's per-word latching
@@ -109,8 +118,10 @@ function wormholeDocument() {
         // exists to prevent.
         //
         // Pitches read through the automation scale (36-84 spanning the param's
-        // -1..1), so 56/60/64 are only ±0.17 of a half-frame - small nudges that
-        // keep the words off dead centre, not big jumps.
+        // -1..1), so 52-68 around a 60 centre is ±0.33 of a half-frame. The
+        // reference widened these from the old 56-64 (±0.17) and lengthened the
+        // cycle from 14 bars to 16 with eight placements instead of seven, so
+        // the words wander further and the pattern lines up with the bar count.
         children: [
           track({
             name: 'Position X',
@@ -119,9 +130,9 @@ function wormholeDocument() {
             color: '#e4e4e7',
             targetParam: 'posX',
             interpolation: 'step',
-            blocks: [loopBlock(14, [
-              n(0, 60, 16, 100), n(8, 56, 16, 100), n(16, 64, 16, 100), n(24, 60, 16, 100),
-              n(32, 64, 16, 100), n(40, 56, 16, 100), n(48, 60, 16, 100),
+            blocks: [loopBlock(16, [
+              n(0, 60, 8, 100), n(8, 56, 8, 100), n(16, 64, 8, 100), n(24, 68, 8, 100),
+              n(32, 56, 8, 100), n(40, 68, 8, 100), n(48, 64, 8, 100), n(56, 60, 8, 100),
             ])],
           }),
           track({
@@ -131,9 +142,26 @@ function wormholeDocument() {
             color: '#e4e4e7',
             targetParam: 'posY',
             interpolation: 'step',
-            blocks: [loopBlock(14, [
-              n(0, 60, 16, 100), n(8, 64, 16, 100), n(16, 64, 16, 100), n(24, 60, 16, 100),
-              n(32, 56, 16, 100), n(40, 56, 16, 100), n(48, 60, 16, 100),
+            blocks: [loopBlock(16, [
+              n(0, 60, 8, 100), n(8, 68, 8, 100), n(16, 64, 8, 100), n(24, 56, 8, 100),
+              n(32, 60, 8, 100), n(40, 52, 8, 100), n(48, 56, 8, 100), n(56, 60, 8, 100),
+            ])],
+          }),
+          // Word size on the same 16-bar cycle as placement, so a word's size and
+          // its spot on the frame change together. Step for the same reason:
+          // sizeMode above latches each word at its onset, and ramping would
+          // fight that. The quarter-beat offsets are deliberate - the size step
+          // lands just after the placement step rather than on top of it.
+          track({
+            name: 'Font Size',
+            instrumentId: '',
+            type: 'automation',
+            color: '#e4e4e7',
+            targetParam: 'fontSize',
+            interpolation: 'step',
+            blocks: [loopBlock(16, [
+              n(0, 48, 8, 100), n(8.25, 52, 8, 100), n(16.25, 48, 8, 100), n(24.25, 40, 8, 100),
+              n(32.25, 44, 8, 100), n(40.25, 40, 8, 100), n(48.25, 44, 8, 100), n(56.25, 48, 8, 100),
             ])],
           }),
         ],
@@ -148,9 +176,34 @@ function wormholeDocument() {
           brightness: 3,
           noiseScale: 0.5,
           ringDetail: 192,
+          colorSpread: 1,
           viewDistance: 67,
         },
         blocks: [loopBlock(1, PULSE_PATTERN)],
+        // Throws the tunnel around its own axes on a 4-bar cycle - two bursts on
+        // one pitch then two on the next, so the lurch alternates direction
+        // instead of repeating identically every bar like the pulse does.
+        children: [
+          track({
+            name: 'Orbit Burst',
+            instrumentId: '',
+            type: 'mover',
+            moverId: 'orbitBurst',
+            color: '#6366f1',
+            inputValues: {
+              angle: 1.8,
+              angleX: 16,
+              angleY: 165,
+              angleZ: 115,
+              sharpness: 1.05,
+              burstBeats: 2.5,
+            },
+            blocks: [loopBlock(4, [
+              n(1, 64, 0.25, 100), n(3, 64, 0.25, 100), n(5, 64, 0.25, 100), n(7, 64, 0.25, 100),
+              n(9, 65, 0.25, 100), n(11, 65, 0.25, 100), n(13, 65, 0.25, 100), n(15, 65, 0.25, 100),
+            ])],
+          }),
+        ],
       }),
     ],
   })

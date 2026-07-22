@@ -117,7 +117,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const invertBehind = numberOf(colorMode) >= 0.5
 
   const placed = new Set([
-    'text', 'font', 'fontSize', 'strokeWidth', 'opacity',
+    'text', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
     'posX', 'posY', 'posMode',
     'onsetBounce', 'releaseDuration', 'heightAmount',
@@ -172,6 +172,21 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         </div>
       )}
       <BoundSlider bound={findParam(parameters, 'fontSize')} />
+      {(() => {
+        // Directly under the Size slider, for the same reason posMode sits under
+        // the placement sliders: it decides whether automating Size resizes every
+        // word live or latches each word at its onset.
+        const mode = findParam(parameters, 'sizeMode')
+        if (!mode || typeof mode.value !== 'number') return null
+        return (
+          <ParamControl
+            param={mode.definition}
+            numValue={mode.value}
+            strValue={undefined}
+            onNum={mode.setValue}
+          />
+        )
+      })()}
       <BoundSlider bound={findParam(parameters, 'strokeWidth')} />
       <BoundSlider bound={findParam(parameters, 'opacity')} />
 

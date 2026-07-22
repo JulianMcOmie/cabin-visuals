@@ -116,17 +116,24 @@ test('the Wormhole style ships a tunnel looping to the song end, not the ceiling
   const lyrics = s.rootTrackIds.map((id) => s.tracks[id]).find((t) => t.name === 'Lyrics')
   assert.ok(lyrics)
   const lanes = lyrics.childIds.map((id) => s.tracks[id])
-  assert.equal(lanes.length, 2, 'both placement lanes came across')
+  assert.equal(lanes.length, 3, 'all three lanes came across')
   for (const lane of lanes) {
     assert.equal(lane.type, 'automation')
     assert.equal(lane.parentId, lyrics.id, 'lane re-parented to the cloned Lyrics track')
-    // Step, not linear: ramping would slide a fading word across the frame,
-    // which is the whole thing per-word latching exists to avoid.
+    // Step, not linear: ramping would slide a fading word across the frame -
+    // and now resize it mid-fade too - which is the whole thing per-word
+    // latching exists to avoid.
     assert.equal(lane.interpolation, 'step')
   }
-  assert.deepEqual(lanes.map((l) => l.targetParam).sort(), ['posX', 'posY'])
-  // And the offset effect that lifts the words off centre.
-  assert.deepEqual(lyrics.effects?.map((e) => e.pluginId), ['offset'])
+  assert.deepEqual(lanes.map((l) => l.targetParam).sort(), ['fontSize', 'posX', 'posY'])
+  // The Font Size lane is pointless unless Size latches per word: Live mode would
+  // resize every word on screen together on each step, instead of each word
+  // keeping the size it was born at.
+  assert.equal(lyrics.params?.sizeMode, 1, 'Size latches per word')
+  // NO offset effect. It used to lift the words off centre; the reference dropped
+  // it and the placement lanes do the positioning. Asserted rather than deleted
+  // so re-adding an offset has to be a deliberate act.
+  assert.equal(lyrics.effects?.length ?? 0, 0, 'positioning is the lanes, not an offset effect')
 })
 
 test('shortening the audio pulls looping visuals back with it', () => {

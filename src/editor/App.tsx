@@ -325,11 +325,13 @@ function SaveStatusChip() {
     : status === 'saved' ? 'Saved'
     // Paused, not broken - the dialog over the top explains it.
     : status === 'conflict' ? 'Paused - changed elsewhere'
+    // The project never opened; nothing has been saved or lost.
+    : status === 'load-failed' ? "Couldn't open project"
     : 'Save failed'
   return (
     <span
       className={`text-[11px] select-none whitespace-nowrap ${
-        status === 'error' ? 'text-red-400'
+        status === 'error' || status === 'load-failed' ? 'text-red-400'
         : status === 'conflict' ? 'text-[var(--warn)]'
         : 'text-[var(--text-muted)]'
       }`}
