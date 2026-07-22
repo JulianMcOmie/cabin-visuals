@@ -49,6 +49,7 @@ export async function capturePreviewClip(): Promise<Blob | null> {
     fps: 30,
     includeAudio: false,
     videoBitrate: defaultBitrate(PREVIEW_WIDTH, 30),
+    rateControl: 'bitrate',
     fileName: 'preview',
     watermark: false,
     rangeMode: 'custom',

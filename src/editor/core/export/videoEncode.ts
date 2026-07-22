@@ -9,6 +9,12 @@ import type { Mp4Writer } from './mux'
  *  purpose: memory stays flat and cancel latency stays at a few frames. */
 const MAX_QUEUE = 2
 
+/** H.264 QP for constant-quality mode (0-51, lower = better). 21 is visually
+ *  clean on the grain/bloom/particle frames that macroblock at any fixed
+ *  bitrate, while keeping the in-memory MP4 buffer (mux.ts holds the whole
+ *  file until finalize) survivable on long grainy 4K exports. */
+const EXPORT_QUANTIZER = 21
+
 export interface VideoEncodeSession {
   /** Encode one canvas frame; resolves once the encoder queue has drained below the cap. */
   encodeFrame(canvas: HTMLCanvasElement, frameIndex: number, fps: number): Promise<void>
@@ -21,14 +27,25 @@ export interface VideoEncodeSession {
 /** The exact encoder config a session will run - exported so runExport can
  *  probe THIS config (not a stand-in) before spending minutes rendering. */
 export function exportEncoderConfig(settings: ExportSettings): VideoEncoderConfig {
-  return {
+  const base: VideoEncoderConfig = {
     codec: videoCodec(Math.max(settings.width, settings.height), settings.fps),
     width: settings.width,
     height: settings.height,
     framerate: settings.fps,
-    bitrate: settings.videoBitrate,
     latencyMode: 'quality',
   }
+  return settings.rateControl === 'quality'
+    ? { ...base, bitrateMode: 'quantizer' }
+    : { ...base, bitrate: settings.videoBitrate }
+}
+
+/** Per-frame encode options matching exportEncoderConfig: quantizer mode needs
+ *  the QP handed to every encode() call. Exported so the runExport probe can
+ *  encode exactly like the real session will. */
+export function exportEncodeOptions(settings: ExportSettings): VideoEncoderEncodeOptions | undefined {
+  return settings.rateControl === 'quality'
+    ? ({ avc: { quantizer: EXPORT_QUANTIZER } } as VideoEncoderEncodeOptions)
+    : undefined
 }
 
 export function createVideoEncodeSession(
@@ -42,6 +59,7 @@ export function createVideoEncodeSession(
     error: (e) => { error = e instanceof Error ? e : new Error(String(e)) },
   })
   encoder.configure(exportEncoderConfig(settings))
+  const encodeOptions = exportEncodeOptions(settings)
 
   const dequeue = () =>
     new Promise<void>((resolve) => encoder.addEventListener('dequeue', () => resolve(), { once: true }))
@@ -62,7 +80,7 @@ export function createVideoEncodeSession(
         duration: Math.round(1e6 / fps),
       })
       // Keyframe every 2 seconds of output: scrubbable, negligible size cost.
-      encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0 })
+      encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0, ...encodeOptions })
       frame.close()
       while (encoder.encodeQueueSize > MAX_QUEUE) await dequeue()
       if (error) throw error

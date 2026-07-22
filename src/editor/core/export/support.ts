@@ -51,7 +51,12 @@ export function isExportSupported(): Promise<ExportSupport> {
  * before rendering. Kept to what the muxer provably needs; the durable fix
  * for non-Chrome browsers is a muxer that tolerates their output (mediabunny).
  */
-export async function encoderProducesMuxableChunks(config: VideoEncoderConfig): Promise<boolean> {
+export async function encoderProducesMuxableChunks(
+  config: VideoEncoderConfig,
+  /** Per-frame options the real session will pass (e.g. the quantizer in
+   *  constant-quality mode) - the probe must encode exactly like it. */
+  encodeOptions?: VideoEncoderEncodeOptions,
+): Promise<boolean> {
   let meta: EncodedVideoChunkMetadata | undefined
   let firstTimestamp: number | null = null
   const encoder = new VideoEncoder({
@@ -73,7 +78,7 @@ export async function encoderProducesMuxableChunks(config: VideoEncoderConfig): 
         timestamp: Math.round((i * 1e6) / fps),
         duration: Math.round(1e6 / fps),
       })
-      encoder.encode(frame, { keyFrame: i === 0 })
+      encoder.encode(frame, { keyFrame: i === 0, ...encodeOptions })
       frame.close()
     }
     await encoder.flush()

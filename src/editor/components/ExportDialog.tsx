@@ -9,7 +9,7 @@ import { runExport } from '../core/export/exportEngine'
 import { downloadBlob } from '../core/export/mux'
 import { getFrameDriver } from '../core/export/frameDriver'
 import { isExportSupported } from '../core/export/support'
-import { clampToFreeTier, defaultBitrate, defaultSettings, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRangeMode, type ExportSettings } from '../core/export/types'
+import { clampToFreeTier, defaultBitrate, defaultSettings, resolveExportRange, resolutionsFor, type ExportAspect, type ExportRangeMode, type ExportRateControl, type ExportSettings } from '../core/export/types'
 
 const SETTINGS_KEY = 'cabin.exportSettings'
 
@@ -79,6 +79,9 @@ function loadSavedSettings(isPro: boolean): ExportSettings {
     merged.height = tier.height
   }
   merged.videoBitrate = defaultBitrate(Math.max(merged.width, merged.height), merged.fps)
+  // Settings saved before the rate-control option existed (or garbage) load as
+  // the standard bitrate mode.
+  if (merged.rateControl !== 'quality') merged.rateControl = 'bitrate'
   // No watermark on any tier - resolution is the free plan's only export gate.
   merged.watermark = false
   return isPro ? merged : clampToFreeTier(merged)
@@ -267,6 +270,24 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
                 <option value={30}>30 fps</option>
               </select>
             </label>
+
+            <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
+              Quality
+              <select
+                value={settings.rateControl}
+                onChange={(e) => setSettings((s) => ({ ...s, rateControl: e.target.value as ExportRateControl }))}
+                className="h-6 px-1.5 rounded bg-[var(--bg-app)] text-xs text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
+              >
+                <option value="bitrate">Standard (fixed bitrate)</option>
+                <option value="quality">Constant quality</option>
+              </select>
+            </label>
+            {settings.rateControl === 'quality' && (
+              <p className="text-[11px] text-[var(--text-muted)] -mt-2 leading-snug">
+                Every frame gets the bits it needs — busy, grainy projects stop blocking up.
+                File size varies with content and can grow several times larger.
+              </p>
+            )}
 
             <label className="flex items-center justify-between text-xs text-[var(--text-3)]">
               Range

@@ -7,6 +7,11 @@ export type ExportRangeMode = 'whole' | 'loop' | 'custom'
 /** Output orientation. '9:16' is the vertical TikTok/Reels/Shorts frame. */
 export type ExportAspect = '16:9' | '9:16'
 
+/** Rate control. 'bitrate' = fixed target (predictable size, but busy grainy
+ *  frames get starved and macroblock). 'quality' = constant-quality quantizer
+ *  mode: every frame gets the bits it needs and the size floats with content. */
+export type ExportRateControl = 'bitrate' | 'quality'
+
 /** A slice of the project in absolute beats, [startBeat, endBeat). */
 export interface BeatRange {
   startBeat: number
@@ -22,8 +27,10 @@ export interface ExportSettings {
   fps: 30 | 60
   /** Off = skip the offline audio render entirely; video-only MP4. */
   includeAudio: boolean
-  /** Video bitrate in bits/second. */
+  /** Video bitrate in bits/second (used when rateControl is 'bitrate'). */
   videoBitrate: number
+  /** Encoder rate control - see ExportRateControl. */
+  rateControl: ExportRateControl
   /** Without extension; the muxer writes `${fileName}.mp4`. */
   fileName: string
   /** Free tier: burn the "Made with Cabin Visuals" mark into every frame.
@@ -108,6 +115,7 @@ export function defaultSettings(fileName: string): ExportSettings {
     fps: 60,
     includeAudio: true,
     videoBitrate: defaultBitrate(1920, 60),
+    rateControl: 'bitrate',
     fileName,
     watermark: false,
     rangeMode: 'whole',
