@@ -1,4 +1,4 @@
-import { doc, track, block, n } from './builder'
+import { doc, track, block, n, fx } from './builder'
 import type { TemplateDef } from './library'
 import type { Block, Note } from '../editor/types'
 import { lyricPattern } from './library-lyrics'
@@ -16,14 +16,19 @@ import { lyricPattern } from './library-lyrics'
 // the one geometry); it is what makes the walls read as solid rather than
 // speckled, so drop it before dropping anything else if this needs to get cheaper.
 //
-// Flight Speed 40 was ALSO the maximum when this was tuned - the ceiling has since
-// been raised to 200, and 40 is simply where it was left rather than a considered
-// choice. Worth re-testing against the new range before treating it as final.
+// Flight Speed is 76, re-tuned against the raised 200 ceiling (it sat at the old
+// maximum of 40 until then) - so this one IS a considered value now, not a slider
+// that ran out of room.
 //
-// The two deliberate mid-range values carry the look: Tunnel Width 7.8 (near the
-// top of 0.5-8) puts the camera well inside a wide tube rather than threading a
-// pipe, and View Distance 67 of a possible 250 keeps the far end fading out, so
-// the motion reads as speed instead of a static starfield.
+// The other mid-range values carry the look: Tunnel Width 7.8 (near the top of
+// 0.5-8) puts the camera well inside a wide tube rather than threading a pipe, and
+// View Distance 67 of a possible 250 keeps the far end fading out, so the motion
+// reads as speed instead of a static starfield.
+//
+// NOT captured here: the reference project is set to a 9:16 canvas. Templates have
+// no way to carry viewAspect - doc() does not take one and applyTemplate does not
+// set one - so applying this style leaves the project's aspect alone. See the note
+// at the bottom of this file.
 
 const BARS = 16
 // 512 = MAX_TOTAL_BARS, the project-length ceiling. The block is authored to it
@@ -54,11 +59,11 @@ function wormholeDocument() {
     bpm: 120,
     totalBars: BARS,
     tracks: [
-      // Hot pink Bebas Neue in FLIGHT mode - the words rush the camera and tumble
-      // as they go, so they travel with the tunnel instead of hanging in front of
-      // it. Condensed caps at full glow survive a wall running at Brightness 3
-      // where the earlier plain face did not, and the black stroke is what stops
-      // the pink dissolving into the cyan the moment the two overlap.
+      // Rainbow-cycled Bebas Neue in FLIGHT mode - the words rush the camera and
+      // tumble as they go, so they travel with the tunnel instead of hanging in
+      // front of it. Condensed caps at full glow survive a wall running at
+      // Brightness 3, and the black stroke stops them dissolving into the tunnel
+      // wherever the two overlap.
       track({
         name: 'Lyrics',
         instrumentId: 'textDisplay',
@@ -69,12 +74,15 @@ function wormholeDocument() {
           opacity: 1,
           colorMode: 0,
           glow: 1,
+          hue: 0,
           strokeWidth: 0.2,
-          onsetBounce: 0.08,
-          releaseDuration: 0.4,
-          rainbowEnabled: 0,
+          onsetBounce: 0.09,
+          releaseDuration: 0.5,
+          rainbowEnabled: 1,
+          rainbowCycleLength: 64,
           flightEnabled: 1,
-          flightTumble: 5,
+          flightSpeed: 60,
+          flightTumble: 2.2,
           flightSubdivRate: 2,
           // Backdrop is OFF (shape 0). The colour and opacity are carried anyway
           // so switching the shape on lands on Julia's staged cyan rather than a
@@ -89,14 +97,53 @@ function wormholeDocument() {
           strokeColor: '#000000',
           backdropColor: '#02beed',
         },
+        // Nudges the whole block up a tenth of the frame - at 9:16 the words sit
+        // slightly high so the tunnel's vanishing point reads underneath them.
+        effects: [fx('offset', { x: 0, y: -0.1, z: 0 })],
         blocks: [block(0, BARS, words.notes)],
+        // The placement lanes. STEP interpolation, not linear: each word should
+        // snap to its spot and stay there, and the instrument's per-word latching
+        // (posMode 1, the default) is what holds a fading word in place while the
+        // next one is placed somewhere else. Ramping between them instead would
+        // slide every word across the frame, which is the thing that behaviour
+        // exists to prevent.
+        //
+        // Pitches read through the automation scale (36-84 spanning the param's
+        // -1..1), so 56/60/64 are only ±0.17 of a half-frame - small nudges that
+        // keep the words off dead centre, not big jumps.
+        children: [
+          track({
+            name: 'Position X',
+            instrumentId: '',
+            type: 'automation',
+            color: '#e4e4e7',
+            targetParam: 'posX',
+            interpolation: 'step',
+            blocks: [loopBlock(14, [
+              n(0, 60, 16, 100), n(8, 56, 16, 100), n(16, 64, 16, 100), n(24, 60, 16, 100),
+              n(32, 64, 16, 100), n(40, 56, 16, 100), n(48, 60, 16, 100),
+            ])],
+          }),
+          track({
+            name: 'Position Y',
+            instrumentId: '',
+            type: 'automation',
+            color: '#e4e4e7',
+            targetParam: 'posY',
+            interpolation: 'step',
+            blocks: [loopBlock(14, [
+              n(0, 60, 16, 100), n(8, 64, 16, 100), n(16, 64, 16, 100), n(24, 60, 16, 100),
+              n(32, 56, 16, 100), n(40, 56, 16, 100), n(48, 60, 16, 100),
+            ])],
+          }),
+        ],
       }),
       track({
         name: 'Wormhole',
         instrumentId: 'wormhole',
         color: '#22d3ee',
         params: {
-          speed: 40,
+          speed: 76,
           radius: 7.8,
           brightness: 3,
           noiseScale: 0.5,
@@ -109,6 +156,16 @@ function wormholeDocument() {
   })
 }
 
+// The 9:16 gap, deliberately left open. Julia's reference project is vertical, and
+// this style was clearly composed for it - the offset effect lifting the words a
+// tenth of a frame only really makes sense with the tunnel's vanishing point below
+// them. But nothing in the template pipeline carries a canvas aspect: `doc()` emits
+// no viewAspect and `applyTemplate` never writes one, so a style cannot change it.
+//
+// Wiring it up is small (one optional field, honoured only when a template declares
+// it, so every existing template keeps today's behaviour) but the CONSEQUENCE is
+// not: picking a style would silently reshape the user's canvas, which is a much
+// louder side effect than swapping colours and fonts. Left for Julia to call.
 export const wormhole: TemplateDef = {
   id: 'wormhole',
   name: 'Wormhole',

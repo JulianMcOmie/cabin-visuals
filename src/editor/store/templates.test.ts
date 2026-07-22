@@ -109,6 +109,24 @@ test('the Wormhole style ships a tunnel looping to the song end, not the ceiling
   assert.equal(b.startBar + b.durationBars, 40, 'trimmed to the song end, not 512')
   // Four on the floor alternating the top of the pulse ladder with the middle.
   assert.deepEqual(b.notes.map((n) => n.pitch), [67, 64, 67, 64])
+
+  // The placement lanes are CHILDREN of Lyrics, and applyTemplate remints every
+  // id including parentId/childIds - so this is really asserting that the
+  // re-parenting survived the clone, not just that the lanes exist.
+  const lyrics = s.rootTrackIds.map((id) => s.tracks[id]).find((t) => t.name === 'Lyrics')
+  assert.ok(lyrics)
+  const lanes = lyrics.childIds.map((id) => s.tracks[id])
+  assert.equal(lanes.length, 2, 'both placement lanes came across')
+  for (const lane of lanes) {
+    assert.equal(lane.type, 'automation')
+    assert.equal(lane.parentId, lyrics.id, 'lane re-parented to the cloned Lyrics track')
+    // Step, not linear: ramping would slide a fading word across the frame,
+    // which is the whole thing per-word latching exists to avoid.
+    assert.equal(lane.interpolation, 'step')
+  }
+  assert.deepEqual(lanes.map((l) => l.targetParam).sort(), ['posX', 'posY'])
+  // And the offset effect that lifts the words off centre.
+  assert.deepEqual(lyrics.effects?.map((e) => e.pluginId), ['offset'])
 })
 
 test('shortening the audio pulls looping visuals back with it', () => {
