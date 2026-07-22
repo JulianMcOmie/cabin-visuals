@@ -11,23 +11,18 @@ import {
   AuthShell,
   AuthTitle,
   AuthBanner,
+  AuthSubmit,
   authLabelClass,
   authInputClass,
-  authSubmitClass,
   authLinkClass,
 } from '../../auth-ui';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      className={`mt-1 ${authSubmitClass}`}
-      disabled={pending}
-      aria-disabled={pending}
-    >
-      {pending ? 'Creating account…' : 'Complete sign up'}
-    </button>
+    <AuthSubmit busy={pending} busyLabel="Creating account…">
+      Complete sign up
+    </AuthSubmit>
   );
 }
 
@@ -177,13 +172,9 @@ function SetPasswordFormInternal() {
         </div>
 
         {anonUid ? (
-          <button
-            type="submit"
-            disabled={converting}
-            className={`mt-1 ${authSubmitClass}`}
-          >
-            {converting ? 'Creating account…' : 'Complete sign up'}
-          </button>
+          // The in-place anonymous conversion runs on the client, so it has its
+          // own busy flag rather than useFormStatus.
+          <AuthSubmit busy={converting} busyLabel="Creating account…">Complete sign up</AuthSubmit>
         ) : (
           <SubmitButton />
         )}

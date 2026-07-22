@@ -193,7 +193,7 @@ test('the Lyric Video template participates in the same carry-over', () => {
 })
 
 test('the lyric styles are exactly the looks the setup flow offers', () => {
-  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm', 'wormhole'])
+  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm', 'wormhole', 'neonPsychedelic'])
   for (const style of LYRIC_STYLES) {
     assert.ok(style.styleName, `${style.id} needs a style name for the picker`)
     // Every style must ship the contract the carry-over and refill depend on.
@@ -204,6 +204,42 @@ test('the lyric styles are exactly the looks the setup flow offers', () => {
       .find((t) => t.instrumentId === 'textDisplay' && t.name === 'Lyrics')
     assert.ok(lyrics, `${style.id} must ship a root track named 'Lyrics'`)
   }
+})
+
+test('the Neon Psychedelic style ships its lanes, its latching and its kaleidoscope', () => {
+  const style = getTemplate('neonPsychedelic')
+  assert.ok(style)
+  const scene = Object.values(style.document.scenes).find((s) => !s.isMain)
+  assert.ok(scene)
+  const roots = scene.rootTrackIds.map((id) => scene.tracks[id])
+
+  const lyrics = roots.find((t) => t.name === 'Lyrics')
+  assert.ok(lyrics)
+  // Both latches on: without them the lanes below would move and resize every
+  // word on screen at once instead of per word.
+  assert.equal(lyrics.params?.sizeMode, 1, 'Size latches per word')
+  assert.equal(lyrics.params?.flightEnabled, 0, 'words hold still - the tunnel moves')
+  assert.equal(lyrics.params?.rainbowEnabled, 0, 'one fixed green, not a hue cycle')
+  assert.equal(lyrics.stringParams?.color, '#54e316')
+
+  const lanes = lyrics.childIds.map((id) => scene.tracks[id])
+  assert.deepEqual(
+    lanes.map((l) => l.targetParam).sort(),
+    ['fontSize', 'posX', 'posY'],
+    'all three automation lanes came across',
+  )
+  for (const lane of lanes) assert.equal(lane.interpolation, 'step', `${lane.name} steps, never ramps`)
+
+  const tunnel = roots.find((t) => t.instrumentId === 'wormhole')
+  assert.ok(tunnel)
+  // The pairing that IS the look - near-dark walls at the speed ceiling.
+  assert.equal(tunnel.params?.speed, 200)
+  assert.equal(tunnel.params?.brightness, 0.1)
+
+  const radial = tunnel.childIds.map((id) => scene.tracks[id]).find((t) => t.type === 'splitter')
+  assert.ok(radial, 'the kaleidoscope is a child of the tunnel')
+  assert.equal(radial.splitterId, 'radial')
+  assert.equal(radial.inputValues?.copies, 13)
 })
 
 test('the gallery advertises one lyric entry, not every style', () => {

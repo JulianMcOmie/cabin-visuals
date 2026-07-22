@@ -12,10 +12,10 @@ import {
   AuthShell,
   AuthTitle,
   AuthBanner,
+  AuthSubmit,
   OrDivider,
   authLabelClass,
   authInputClass,
-  authSubmitClass,
   authLinkClass,
 } from '../auth-ui';
 
@@ -125,9 +125,7 @@ function SignupPageContent() {
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
         </div>
-        <button type="submit" className={`mt-1 ${authSubmitClass}`}>
-          Continue
-        </button>
+        <AuthSubmit busy={formBusy} busyLabel="Checking…">Continue</AuthSubmit>
       </form>
 
       <OrDivider />

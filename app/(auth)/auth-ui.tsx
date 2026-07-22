@@ -6,6 +6,7 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 import { CabinLogo } from '../../src/components/CabinLogo';
 import { Appear } from '../../src/components/motionPresets';
 
@@ -21,6 +22,40 @@ export const authSubmitClass =
 
 export const authLinkClass =
   'cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]';
+
+/**
+ * The submit button for every auth form, with its own busy state.
+ *
+ * AuthShell already smokes the logo while a submission is in flight, but that
+ * sits above the card - people are looking at the button they just pressed, and
+ * a button that still says "Sign in" and still takes clicks reads as a frozen
+ * page. This says so where the click happened, and stops a second submission
+ * landing on top of the first.
+ *
+ * Purely presentational: `busy` is the caller's existing form-busy state, which
+ * stays true until the action's redirect unmounts the page.
+ */
+export function AuthSubmit({
+  busy,
+  busyLabel,
+  children,
+}: {
+  busy?: boolean;
+  busyLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={busy}
+      aria-busy={busy}
+      className={`mt-1 flex items-center justify-center gap-2 ${authSubmitClass}`}
+    >
+      {busy && <Loader2 size={14} className="animate-spin" aria-hidden />}
+      {busy ? busyLabel : children}
+    </button>
+  );
+}
 
 /** Full-page centered column: logo above the card, optional microcopy below.
  *  `loading` sets the page's own logo smoking (the busy indicator for form

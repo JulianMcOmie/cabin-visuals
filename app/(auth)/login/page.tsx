@@ -11,10 +11,10 @@ import {
   AuthShell,
   AuthTitle,
   AuthBanner,
+  AuthSubmit,
   OrDivider,
   authLabelClass,
   authInputClass,
-  authSubmitClass,
   authLinkClass,
 } from '../auth-ui';
 
@@ -130,9 +130,7 @@ function LoginPageContent() {
           <input id="password" name="password" type="password" required className={authInputClass} placeholder="••••••••" />
         </div>
 
-        <button type="submit" className={`mt-1 ${authSubmitClass}`}>
-          Sign in
-        </button>
+        <AuthSubmit busy={formBusy} busyLabel="Signing in…">Sign in</AuthSubmit>
       </form>
 
       <OrDivider />
