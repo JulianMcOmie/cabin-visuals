@@ -18,6 +18,9 @@ void main() {
 const LASER_LINE_FRAGMENT_SHADER = `
 uniform vec3 coreColor;
 uniform vec3 rimColor;
+// A raw ShaderMaterial ignores Material.opacity, so the value the opacity
+// wrapper writes each frame (visibility movers, fades) is fed back in here.
+uniform float uOpacity;
 varying vec2 vUv;
 
 void main() {
@@ -26,7 +29,7 @@ void main() {
   // the surrounding halo; the instrument itself remains one crisp line.
   float edgeDistance = abs(vUv.y - 0.5) * 2.0;
   float bloomCarrier = smoothstep(0.18, 0.94, edgeDistance);
-  gl_FragColor = vec4(mix(coreColor, rimColor, bloomCarrier), 1.0);
+  gl_FragColor = vec4(mix(coreColor, rimColor, bloomCarrier), uOpacity);
 }`
 
 export const laserLineInstrument: ObjectInstrumentDef = {
@@ -101,9 +104,13 @@ export function LaserLine({ trackId }: { trackId: string }) {
     const material = mesh.material as ShaderMaterial
     ;(material.uniforms.coreColor.value as Color).copy(coreColor.current)
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current)
+    // Ride the wrapper-written Material.opacity so the surface and the light
+    // it casts fade together.
+    const fade = material.opacity
+    material.uniforms.uOpacity.value = fade
 
     light.color.copy(baseColor.current)
-    light.intensity = sceneLight * flare
+    light.intensity = sceneLight * flare * fade
   })
 
   return (
@@ -111,12 +118,13 @@ export function LaserLine({ trackId }: { trackId: string }) {
       <mesh ref={meshRef}>
         <planeGeometry args={[4, 0.06]} />
         <shaderMaterial
-          key="laser-line-edge-v1"
+          key="laser-line-edge-v2"
           vertexShader={LASER_LINE_VERTEX_SHADER}
           fragmentShader={LASER_LINE_FRAGMENT_SHADER}
           uniforms={{
             coreColor: { value: new Color(DEFAULT_COLOR) },
             rimColor: { value: new Color(DEFAULT_COLOR).multiplyScalar(5.5) },
+            uOpacity: { value: 1 },
           }}
           side={DoubleSide}
           toneMapped={false}

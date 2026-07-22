@@ -21,6 +21,9 @@ void main() {
 const LASER_FRAGMENT_SHADER = `
 uniform vec3 coreColor;
 uniform vec3 rimColor;
+// A raw ShaderMaterial ignores Material.opacity, so the value the opacity
+// wrapper writes each frame (visibility movers, fades) is fed back in here.
+uniform float uOpacity;
 varying float vFacing;
 
 void main() {
@@ -28,7 +31,7 @@ void main() {
   // remains HDR. The real mip-chain bloom turns that rim energy into the halo.
   float rim = pow(clamp(1.0 - vFacing, 0.0, 1.0), 1.7);
   float bloomCarrier = smoothstep(0.04, 0.88, rim);
-  gl_FragColor = vec4(mix(coreColor, rimColor, bloomCarrier), 1.0);
+  gl_FragColor = vec4(mix(coreColor, rimColor, bloomCarrier), uOpacity);
 }`
 
 export const laserSphereInstrument: ObjectInstrumentDef = {
@@ -98,9 +101,13 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     const material = mesh.material as ShaderMaterial
     ;(material.uniforms.coreColor.value as Color).copy(coreColor.current)
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current)
+    // Ride the wrapper-written Material.opacity so the surface and the light
+    // it casts fade together.
+    const fade = material.opacity
+    material.uniforms.uOpacity.value = fade
 
     light.color.copy(baseColor.current)
-    light.intensity = sceneLight * flare
+    light.intensity = sceneLight * flare * fade
   })
 
   return (
@@ -108,12 +115,13 @@ export function LaserSphere({ trackId }: { trackId: string }) {
       <mesh ref={meshRef}>
         <sphereGeometry args={[0.9, 64, 48]} />
         <shaderMaterial
-          key="laser-sphere-rim-v1"
+          key="laser-sphere-rim-v2"
           vertexShader={LASER_VERTEX_SHADER}
           fragmentShader={LASER_FRAGMENT_SHADER}
           uniforms={{
             coreColor: { value: new Color(DEFAULT_COLOR) },
             rimColor: { value: new Color(DEFAULT_COLOR).multiplyScalar(5.5) },
+            uOpacity: { value: 1 },
           }}
           toneMapped={false}
         />
