@@ -119,6 +119,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const placed = new Set([
     'text', 'font', 'fontSize', 'strokeWidth', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
+    'posX', 'posY',
     'onsetBounce', 'releaseDuration', 'heightAmount',
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
@@ -203,6 +204,15 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <BoundSlider bound={findParam(parameters, 'hue')} />
         <BoundToggleRow bound={findParam(parameters, 'rainbowEnabled')} />
         <BoundSlider bound={findParam(parameters, 'rainbowCycleLength')} />
+      </div>
+
+      {/* --- Placement: where on the frame the words land. Right-click either
+              slider to automate it - that is how words get moved per line or
+              along a path, and the reason these are params not an effect. --- */}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        <SectionLabel>PLACEMENT</SectionLabel>
+        <BoundSlider bound={findParam(parameters, 'posX')} />
+        <BoundSlider bound={findParam(parameters, 'posY')} />
       </div>
 
       {/* --- Motion --- */}

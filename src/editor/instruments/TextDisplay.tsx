@@ -79,6 +79,7 @@ const fontStack = (i: number) => FONT_STACKS[Math.max(0, Math.min(FONT_STACKS.le
 const _billboardPos = new Vector3()
 const _billboardScale = new Vector3()
 const _billboardParent = new Quaternion()
+const _billboardFace = new Quaternion()
 
 function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s
@@ -507,6 +508,16 @@ const PARAMS: ParamDef[] = [
   },
   { key: 'phraseGap', label: 'Phrase Gap (beats)', min: 0.5, max: 8, step: 0.5, default: 2, showIf: 'layoutMode' },
   { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6, showIf: 'layoutMode' },
+  // Where the words sit, as a fraction of the frame from centre: -1/+1 reaches
+  // the edge. Screen-relative rather than world units, so it means the same
+  // thing at any aspect and survives export at a different resolution.
+  //
+  // These exist as PARAMS rather than leaving people to a transform effect
+  // because params are what the automation lanes target - a child automation
+  // track can move the words per word, per line, or along a path, which is the
+  // whole point. Automating an effect could only ever move the effect.
+  { key: 'posX', label: 'Position X', min: -1, max: 1, step: 0.02, default: 0 },
+  { key: 'posY', label: 'Position Y', min: -1, max: 1, step: 0.02, default: 0 },
   { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'jitter', label: 'Word Jitter', min: 0, max: 1, step: 0.05, default: 0 },
   {
@@ -653,11 +664,24 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // top of the camera facing (i.e. it spins the billboard in screen space)
     // instead of being silently discarded.
     state.world.decompose(_billboardPos, _billboardParent, _billboardScale)
-    groupRef.current.quaternion
-      .copy(_billboardParent)
-      .invert()
-      .multiply(camera.quaternion)
-      .multiply(_billboardParent)
+    // parentRotation⁻¹ * cameraRotation: the rotation that takes camera-space
+    // into this group's parent space. Both the facing and the offset below need
+    // it, so it is computed once.
+    _billboardFace.copy(_billboardParent).invert().multiply(camera.quaternion)
+    groupRef.current.quaternion.copy(_billboardFace).multiply(_billboardParent)
+
+    // Position X/Y move the words across the FRAME, so the offset is built in
+    // camera space and then rotated into the parent's. Setting group.position
+    // directly would drag the words along world axes instead, which the 13.5
+    // degree camera pitch turns into a diagonal - "up" would drift toward the
+    // viewer as well as up the screen.
+    groupRef.current.position
+      .set(
+        (state.params.posX ?? 0) * viewport.width * 0.5,
+        (state.params.posY ?? 0) * viewport.height * 0.5,
+        0,
+      )
+      .applyQuaternion(_billboardFace)
 
     const p = state.params
     const text = state.stringParams.text ?? 'HELLO'
