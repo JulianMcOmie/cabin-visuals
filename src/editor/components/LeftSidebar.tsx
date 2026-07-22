@@ -273,6 +273,11 @@ const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'laserLine', 'shapeFligh
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
 
+// Every instrument a placed object track can swap to (the track context menu's
+// "Change instrument" list) - the same items the library sections show, so the
+// two pickers can never drift apart.
+export const SWAPPABLE_OBJECT_INSTRUMENTS: InstrumentItem[] = [...MAIN_INSTRUMENTS, ...ALL_OBJECT_INSTRUMENTS]
+
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
