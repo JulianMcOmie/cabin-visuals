@@ -309,10 +309,11 @@ function createTextCanvas(
   strokeColor: string,
   glow = 0,
   backdrop: Backdrop = NO_BACKDROP,
+  glowContained = false,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
   const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}`
-    + `|${backdrop.shape}|${backdrop.color}|${backdrop.opacity}|${backdrop.pad}`
+    + `|${backdrop.shape}|${backdrop.color}|${backdrop.opacity}|${backdrop.pad}|${glowContained}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -401,12 +402,50 @@ function createTextCanvas(
     // Projected-light bloom: a wide soft halo, then a tight inner glow, in the
     // text's own color. The plain fill after clears the shadow and lays the
     // bright core on top.
-    ctx.shadowColor = color
-    ctx.shadowBlur = glow * fontSize * 0.22
-    ctx.fillText(entry.text, drawX, cy)
-    ctx.shadowBlur = glow * fontSize * 0.07
-    ctx.fillText(entry.text, drawX, cy)
-    ctx.shadowBlur = 0
+    const paintGlow = (target: CanvasRenderingContext2D) => {
+      target.fillStyle = color
+      target.shadowColor = color
+      target.shadowBlur = glow * fontSize * 0.22
+      target.fillText(entry.text, drawX, cy)
+      target.shadowBlur = glow * fontSize * 0.07
+      target.fillText(entry.text, drawX, cy)
+      target.shadowBlur = 0
+    }
+
+    if (!glowContained) {
+      paintGlow(ctx)
+    } else {
+      // Contained: the halo must not spill past the stroke's outer edge. Canvas
+      // has no way to clip to a text path (there is no ctx.textPath), so the
+      // glow is painted on its own layer and then masked with destination-in
+      // against the SAME glyph stroked at the same width - which keeps exactly
+      // the pixels the letter-plus-stroke silhouette covers and discards the
+      // bleed. With strokeWidth 0 the mask collapses to the letters themselves,
+      // so the glow stops at the glyph edge, which is the sensible reading of
+      // "contained" when there is no stroke to stop at.
+      const layer = document.createElement('canvas')
+      layer.width = canvas.width
+      layer.height = canvas.height
+      const lc = layer.getContext('2d')!
+      lc.scale(dpr, dpr)
+      lc.font = fontStr(fontSize)
+      lc.textBaseline = 'middle'
+      lc.textAlign = ctx.textAlign
+      paintGlow(lc)
+      lc.globalCompositeOperation = 'destination-in'
+      lc.fillStyle = '#ffffff'
+      lc.strokeStyle = '#ffffff'
+      if (strokeWidth > 0) {
+        lc.lineWidth = Math.max(1, strokeWidth * fontSize)
+        lc.lineJoin = 'round'
+        lc.strokeText(entry.text, drawX, cy)
+      }
+      lc.fillText(entry.text, drawX, cy)
+      lc.globalCompositeOperation = 'source-over'
+      // Drawn in CSS px - ctx is already dpr-scaled, and so was the layer.
+      ctx.drawImage(layer, 0, 0, cssWidth, TEXT_CANVAS_SIZE)
+      ctx.fillStyle = color
+    }
   }
   ctx.fillText(entry.text, drawX, cy)
 
@@ -530,6 +569,12 @@ const PARAMS: ParamDef[] = [
     ],
   },
   { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0 },
+  // Off = the halo bleeds outward past the stroke onto whatever is behind the
+  // words (the original behaviour, kept as the default so no existing project
+  // changes). On = it is clipped to the letter-plus-stroke silhouette, so the
+  // stroke becomes a hard outer limit for the glow instead of something the
+  // glow washes over.
+  { key: 'glowContained', label: 'Contain Glow to Stroke', type: 'boolean', default: 0 },
   { key: 'jitter', label: 'Word Jitter', min: 0, max: 1, step: 0.05, default: 0 },
   {
     key: 'colorMode', label: 'Color Mode', type: 'select', default: 0, options: [
@@ -740,6 +785,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const phraseGap = p.phraseGap ?? 2
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
+    const glowContained = (p.glowContained ?? 0) >= 0.5
     // Built once per frame and passed down; every word canvas (main, echo,
     // scatter, flight) bakes the same backdrop so they stay consistent.
     const backdrop: Backdrop = {
@@ -890,7 +936,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop, glowContained))
           }
 
           const s = i * 131
@@ -946,7 +992,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop, glowContained))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -991,7 +1037,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, backdrop))
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, backdrop, glowContained))
         }
         spr.mesh.position.set(
           vx * ageSec + placeX(sprOnsetBeat),
@@ -1073,7 +1119,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tex = echoTexturesRef.current[tap]
       const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop, glowContained))
         echoLastWordsRef.current[tap] = echoKey
       }
 
