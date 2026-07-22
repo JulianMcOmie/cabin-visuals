@@ -119,7 +119,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const placed = new Set([
     'text', 'font', 'fontSize', 'strokeWidth', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
-    'posX', 'posY',
+    'posX', 'posY', 'posMode',
     'onsetBounce', 'releaseDuration', 'heightAmount',
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
@@ -213,6 +213,21 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <SectionLabel>PLACEMENT</SectionLabel>
         <BoundSlider bound={findParam(parameters, 'posX')} />
         <BoundSlider bound={findParam(parameters, 'posY')} />
+        {(() => {
+          // Belongs directly under the two sliders it modifies - it decides whether
+          // they move every word live or latch per word, and reading it at the
+          // bottom of the panel with the generic leftovers gives no hint of that.
+          const mode = findParam(parameters, 'posMode')
+          if (!mode || typeof mode.value !== 'number') return null
+          return (
+            <ParamControl
+              param={mode.definition}
+              numValue={mode.value}
+              strValue={undefined}
+              onNum={mode.setValue}
+            />
+          )
+        })()}
       </div>
 
       {/* --- Motion --- */}

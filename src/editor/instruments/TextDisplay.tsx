@@ -423,24 +423,38 @@ function createTextCanvas(
       // bleed. With strokeWidth 0 the mask collapses to the letters themselves,
       // so the glow stops at the glyph edge, which is the sensible reading of
       // "contained" when there is no stroke to stop at.
-      const layer = document.createElement('canvas')
-      layer.width = canvas.width
-      layer.height = canvas.height
-      const lc = layer.getContext('2d')!
-      lc.scale(dpr, dpr)
-      lc.font = fontStr(fontSize)
-      lc.textBaseline = 'middle'
-      lc.textAlign = ctx.textAlign
+      const newLayer = () => {
+        const c = document.createElement('canvas')
+        c.width = canvas.width
+        c.height = canvas.height
+        const g = c.getContext('2d')!
+        g.scale(dpr, dpr)
+        g.font = fontStr(fontSize)
+        g.textBaseline = 'middle'
+        g.textAlign = ctx.textAlign
+        return [c, g] as const
+      }
+
+      // The mask is built on its OWN layer as a single union of stroke + fill,
+      // then intersected once. Doing it in place instead - strokeText with
+      // destination-in, then fillText with destination-in - looks equivalent and
+      // is not: each composite intersects with what survived the last one, so the
+      // second pass cuts the stroke band back down to where it overlaps the letter
+      // interior. Almost nothing survives, and the glow silently disappears.
+      const [maskCanvas, mc] = newLayer()
+      mc.fillStyle = '#ffffff'
+      mc.strokeStyle = '#ffffff'
+      if (strokeWidth > 0) {
+        mc.lineWidth = Math.max(1, strokeWidth * fontSize)
+        mc.lineJoin = 'round'
+        mc.strokeText(entry.text, drawX, cy)
+      }
+      mc.fillText(entry.text, drawX, cy)
+
+      const [layer, lc] = newLayer()
       paintGlow(lc)
       lc.globalCompositeOperation = 'destination-in'
-      lc.fillStyle = '#ffffff'
-      lc.strokeStyle = '#ffffff'
-      if (strokeWidth > 0) {
-        lc.lineWidth = Math.max(1, strokeWidth * fontSize)
-        lc.lineJoin = 'round'
-        lc.strokeText(entry.text, drawX, cy)
-      }
-      lc.fillText(entry.text, drawX, cy)
+      lc.drawImage(maskCanvas, 0, 0, cssWidth, TEXT_CANVAS_SIZE)
       lc.globalCompositeOperation = 'source-over'
       // Drawn in CSS px - ctx is already dpr-scaled, and so was the layer.
       ctx.drawImage(layer, 0, 0, cssWidth, TEXT_CANVAS_SIZE)
