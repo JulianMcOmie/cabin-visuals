@@ -1,8 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { downloadBlob } from '../core/export/mux'
+import { useEffect } from 'react'
 import { capturePreviewClip, PREVIEW_CAPTURE_VERSION } from '../core/export/previewCapture'
 import { TEMPLATES } from '../../templates'
 
@@ -20,10 +18,11 @@ function templateHash(document: unknown): string {
   return (h >>> 0).toString(16)
 }
 
-// DEV-ONLY. Two roles, both around capturePreviewClip():
-//  - a button that downloads a preview clip of the current template (manual use);
-//  - window hooks (__capturePreview / __templateIds) that the headless
-//    `npm run previews` script drives to regenerate + upload every clip at once.
+// DEV-ONLY. Renders nothing: it exists to install the window hooks
+// (__capturePreview / __templateIds) that the headless `npm run previews`
+// script drives to regenerate + upload every template clip at once. The
+// visible "Preview clip" header button it once carried was removed on
+// 2026-07-22; the hooks must stay mounted or the previews pipeline dies.
 // Only mounted in development (see App.tsx), so it never ships.
 
 declare global {
@@ -36,9 +35,6 @@ declare global {
 }
 
 export function PreviewCaptureButton() {
-  const [busy, setBusy] = useState(false)
-  const templateId = useSearchParams().get('template')
-
   // Expose the capture entry point + the template id list for the automation
   // script. Returns base64 so it crosses the Playwright bridge as a plain string.
   useEffect(() => {
@@ -65,27 +61,5 @@ export function PreviewCaptureButton() {
     }
   }, [])
 
-  const capture = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
-      const blob = await capturePreviewClip()
-      if (blob) downloadBlob(blob, `${templateId ?? 'preview'}.mp4`)
-    } catch (err) {
-      console.error('Preview capture failed', err)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <button
-      onClick={capture}
-      disabled={busy}
-      title="Dev: download a looping preview clip of this template"
-      className="h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] text-[11px] font-semibold hover:border-[var(--border-strong)] transition-colors cursor-pointer disabled:opacity-50"
-    >
-      {busy ? 'Capturing…' : 'Preview clip'}
-    </button>
-  )
+  return null
 }
