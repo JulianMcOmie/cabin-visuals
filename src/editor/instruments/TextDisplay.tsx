@@ -15,7 +15,9 @@ import {
   OneMinusDstColorFactor,
   OneMinusSrcAlphaFactor,
   PlaneGeometry,
+  Quaternion,
   SrcAlphaFactor,
+  Vector3,
   type Material,
 } from 'three'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
@@ -57,6 +59,11 @@ const FONT_STACKS: FontDef[] = [
   { css: '"Playfair Display", Georgia, serif', weight: 900, load: 'Playfair Display' },
 ]
 const fontStack = (i: number) => FONT_STACKS[Math.max(0, Math.min(FONT_STACKS.length - 1, Math.round(i)))]
+
+// Billboard scratch - decompose targets, reused so the frame allocates nothing.
+const _billboardPos = new Vector3()
+const _billboardScale = new Vector3()
+const _billboardParent = new Quaternion()
 
 function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s
@@ -384,7 +391,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   // Scatter layout mesh pool - one mesh per visible phrase word.
   const scatterPoolRef = useRef<FlightPooled[]>([])
 
-  const { viewport } = useThree()
+  const { viewport, camera } = useThree()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -459,6 +466,28 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
   useInstrumentFrame(trackId, (state) => {
     if (!textureRef.current || !meshRef.current || !groupRef.current) return false
+
+    // Face the camera. R3F's Canvas silently calls camera.lookAt(0,0,0) when no
+    // rotation is given, so the scene camera is pitched down atan(1.2/5) = 13.5
+    // degrees. Full-frame instruments never notice - screenAnchor copies the
+    // camera quaternion - but this instrument left fullFrame behind (c8c7c11,
+    // "Unpin the text instrument from the camera") and landed in world space at
+    // zero rotation, where that pitch keystones a flat plane: the top of a word
+    // projected ~14% larger than its bottom. That taper is what read as the text
+    // being tilted downward.
+    //
+    // Billboarding fixes the tilt without undoing c8c7c11 - the words still live
+    // at a world POSITION, so movers and the camera still carry them around; only
+    // their orientation is pinned. Conjugating by the parent's rotation rather
+    // than overwriting it keeps any authored/mover rotation, which now applies on
+    // top of the camera facing (i.e. it spins the billboard in screen space)
+    // instead of being silently discarded.
+    state.world.decompose(_billboardPos, _billboardParent, _billboardScale)
+    groupRef.current.quaternion
+      .copy(_billboardParent)
+      .invert()
+      .multiply(camera.quaternion)
+      .multiply(_billboardParent)
 
     const p = state.params
     const text = state.stringParams.text ?? 'HELLO'
