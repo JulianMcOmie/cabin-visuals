@@ -6,7 +6,7 @@ import { LOOP_CURSOR, lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
-import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks } from '../../utils/selection'
+import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import { snapStepBeats } from '../../utils/snapStep'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
@@ -472,6 +472,41 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           if (!tree) return
           e.preventDefault()
           useClipboardStore.getState().setClip({ kind: 'track', tree })
+        }
+        return
+      }
+
+      // Cut: same targets as copy, then delete what was copied.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'x' || e.key === 'X')) {
+        if (selectedBlockIds.size > 0) {
+          const store = useProjectStore.getState()
+          const picked: { trackId: string; block: Block }[] = []
+          for (const [tId, t] of Object.entries(store.tracks)) {
+            for (const b of t.blocks) if (selectedBlockIds.has(b.id)) picked.push({ trackId: tId, block: b })
+          }
+          if (picked.length === 0) return
+          e.preventDefault()
+          const base = Math.min(...picked.map((p) => p.block.startBar))
+          useClipboardStore.getState().setClip({
+            kind: 'blocks',
+            blocks: picked.map((p) => ({
+              sourceTrackId: p.trackId,
+              block: { ...p.block, startBar: p.block.startBar - base },
+            })),
+          })
+          store.deleteBlocks(selectedBlockIds)
+          setSelectedBlockIds(new Set())
+        } else {
+          const trackId = useUIStore.getState().selectedTrackId
+          const store = useProjectStore.getState()
+          // The audio track is pinned - not cuttable, same as not draggable.
+          if (!trackId || store.tracks[trackId]?.type === 'audio') return
+          const tree = snapshotTrackTree(trackId, store.tracks)
+          if (!tree) return
+          e.preventDefault()
+          useClipboardStore.getState().setClip({ kind: 'track', tree })
+          store.deleteTrack(trackId)
+          pruneSelectionAfterTrackDelete()
         }
         return
       }

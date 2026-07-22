@@ -531,6 +531,21 @@ export function useNoteGestures({
         return
       }
 
+      // Cut: copy the selected notes, then delete them.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'x' || e.key === 'X')) {
+        if (selectedNoteIds.size === 0) return
+        e.preventDefault()
+        const sel = notes.filter(n => selectedNoteIds.has(n.id))
+        const base = Math.min(...sel.map(n => n.startBeat))
+        useClipboardStore.getState().setClip({
+          kind: 'notes',
+          notes: sel.map(n => ({ ...n, startBeat: n.startBeat - base })),
+        })
+        onCommit(notes.filter(n => !selectedNoteIds.has(n.id)))
+        setSelectedNoteIds(new Set())
+        return
+      }
+
       if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
         const clip = useClipboardStore.getState().clip
         if (clip?.kind !== 'notes') return
