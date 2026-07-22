@@ -20,7 +20,7 @@ import {
   Vector3,
   type Material,
 } from 'three'
-import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
+import { useInstrumentFrame, seededRand, paramAtBeat } from '../core/visual/instrumentFrame'
 import { ensureFont } from '../core/visual/fonts'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
@@ -518,6 +518,17 @@ const PARAMS: ParamDef[] = [
   // whole point. Automating an effect could only ever move the effect.
   { key: 'posX', label: 'Position X', min: -1, max: 1, step: 0.02, default: 0 },
   { key: 'posY', label: 'Position Y', min: -1, max: 1, step: 0.02, default: 0 },
+  // Only matters once Position is AUTOMATED - with a static position the two
+  // modes are identical. "Per word" is the default because it is what lyrics
+  // almost always want: a word that is still fading should hold the placement it
+  // was born with, not slide across the frame chasing the live value while the
+  // next word is already being placed somewhere else.
+  {
+    key: 'posMode', label: 'Position Applies', type: 'select', default: 1, options: [
+      { value: 0, label: 'Live (moves every word)' },
+      { value: 1, label: 'Per word (latched at onset)' },
+    ],
+  },
   { key: 'glow', label: 'Glow', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'jitter', label: 'Word Jitter', min: 0, max: 1, step: 0.05, default: 0 },
   {
@@ -675,10 +686,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // directly would drag the words along world axes instead, which the 13.5
     // degree camera pitch turns into a diagonal - "up" would drift toward the
     // viewer as well as up the screen.
+    // In Live mode the whole group carries the offset, so everything on screen
+    // moves together. In Per-word mode the group stays put and each word carries
+    // its OWN offset, sampled at the beat it was placed (see placementAt below).
+    const livePlacement = (state.params.posMode ?? 1) < 0.5
     groupRef.current.position
       .set(
-        (state.params.posX ?? 0) * viewport.width * 0.5,
-        (state.params.posY ?? 0) * viewport.height * 0.5,
+        livePlacement ? (state.params.posX ?? 0) * viewport.width * 0.5 : 0,
+        livePlacement ? (state.params.posY ?? 0) * viewport.height * 0.5 : 0,
         0,
       )
       .applyQuaternion(_billboardFace)
@@ -697,6 +712,15 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const textOpacity = p.opacity ?? 1
     const releaseDuration = p.releaseDuration ?? 0.4
     const heightAmount = p.heightAmount ?? 0.35
+    // Placement latched at the beat a word was placed. With Position automated,
+    // this is what stops a word that is still fading from sliding across the frame
+    // to follow the live value while the next word is placed somewhere else.
+    // Returns 0,0 in Live mode - the group is already carrying the offset there.
+    const perWordPlacement = (p.posMode ?? 1) >= 0.5
+    const placeX = (b: number) => (perWordPlacement
+      ? paramAtBeat(state, 'posX', b) * viewport.width * 0.5 : 0)
+    const placeY = (b: number) => (perWordPlacement
+      ? paramAtBeat(state, 'posY', b) * viewport.height * 0.5 : 0)
     const onsetBounce = p.onsetBounce ?? 0.08
     const delayTaps = Math.round(p.delayTaps ?? 0)
     const delayTime = p.delayTime ?? 0.3
@@ -904,9 +928,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
           const scale = baseScale * 0.55 * sizeJ * popScale
           spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
+          const scatterBeat = nextWordNotes[i]?.beat ?? currentBeat
           spr.mesh.position.set(
-            nx * viewport.width * scatterSpread,
-            ny * viewport.height * scatterSpread * 0.8,
+            nx * viewport.width * scatterSpread + placeX(scatterBeat),
+            ny * viewport.height * scatterSpread * 0.8 + placeY(scatterBeat),
             -0.0005 * (wordCount - i),
           )
           spr.mesh.rotation.set(0, 0, rot)
@@ -961,8 +986,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, backdrop))
         }
         spr.mesh.position.set(
-          vx * ageSec,
-          yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec,
+          vx * ageSec + placeX(spawnBeat),
+          yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec + placeY(spawnBeat),
           -depth,
         )
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
@@ -1007,8 +1032,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const scale = baseScale * onsetScale * bassPopScale * jitterSize
     meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
-    meshRef.current.position.x = shakeX
+    const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
+    meshRef.current.position.x = shakeX + placeX(wordOnsetBeat)
     meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
+      + placeY(wordOnsetBeat)
       + (seededRand(wordIdx * 131 + 9) - 0.5) * 2 * jitter * viewport.height * 0.04
 
     // --- Delay taps ---
@@ -1044,8 +1071,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
       const tapScale = baseScale * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
       mesh.scale.set(tapScale * texAspect(tex), tapScale, 1)
-      mesh.position.x = pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0
-      mesh.position.y = yOffsetAt(echoNote.beat) * viewport.height * heightAmount
+      mesh.position.x = (pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0)
+        + placeX(echoNote.beat)
+      mesh.position.y = yOffsetAt(echoNote.beat) * viewport.height * heightAmount + placeY(echoNote.beat)
       mesh.position.z = -0.01 * tapNum
       setAnimatedOpacity(mesh.material as MeshBasicMaterial, Math.max(0.01, 1 - delayOpacityFalloff * tapNum) * textOpacity)
       mesh.visible = true

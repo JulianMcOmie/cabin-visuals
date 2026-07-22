@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Color } from 'three'
 import { getObjectState, getVisualCopy } from './VisualEngine'
 import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
+import { sampleLane, sampleNoiseLane } from './automation'
 import type { ObjectState } from './types'
 
 /**
@@ -132,6 +133,36 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
  * NOTHING - blocks are the instrument's on-screen region, like clips in a DAW.
  * (A block with zero notes contributes no bounds and therefore no coverage.)
  */
+/**
+ * What `param` was at some OTHER beat - normally the beat something spawned at.
+ *
+ * `state.params` answers "right now", which is wrong for anything that should
+ * LATCH: a word that fades out over two beats while its position is automated
+ * would slide around after being placed, because it keeps reading the live value.
+ * Sampling the lane at the spawn beat pins it instead, so a fading word stays put
+ * and only the next one moves.
+ *
+ * Safe for the pause invariant: sampleLane/sampleNoiseLane are pure functions of
+ * beat, so this is still a function of (beat, document) and scrub == playback.
+ *
+ * Does NOT reproduce envelope overlay (the base ← automation ← envelope merge
+ * stops at automation here). Envelopes are ADSR-gated around the CURRENT beat, so
+ * latching one to a past beat would be meaningless rather than merely incomplete.
+ */
+export function paramAtBeat(state: ObjectState, param: string, beat: number): number {
+  for (const auto of state.automations) {
+    if (auto.param !== param) continue
+    if (auto.noise && auto.gates?.length) {
+      const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
+      // NaN = outside every gate, i.e. the lane is inert; fall back to the base.
+      if (!Number.isNaN(v)) return v
+      break
+    }
+    if (auto.keyframes.length) return sampleLane(auto.keyframes, beat, auto.mode)
+  }
+  return state.baseParams[param] ?? state.params[param] ?? 0
+}
+
 export function beatInBlock(state: ObjectState): boolean {
   for (const n of state.notes) {
     if (state.beat >= n.blockStartBeat && state.beat < n.blockEndBeat) return true

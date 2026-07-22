@@ -313,6 +313,11 @@ export function computeAtBeat(beat: number) {
       abilityEvents: obj.abilityEvents,
       notes: obj.notes,
       activeNotes,
+      // The object's own lanes, by reference (no per-frame allocation). Handed to
+      // instruments so they can ask what a param was at some OTHER beat - see
+      // paramAtBeat. `params` above is still the answer for "right now".
+      automations: obj.automations,
+      baseParams: obj.params,
     })
 
     // Evaluate the new VisualCopy chain at this beat (pure function of beat +

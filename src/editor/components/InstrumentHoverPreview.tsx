@@ -123,6 +123,9 @@ function makePreviewState(instrumentId: string): ObjectState {
     secPerBeat: 60 / PREVIEW_BPM,
     beatsPerBar: 4,
     params,
+    // Hover previews have no automation lanes, so paramAtBeat just reads the base.
+    automations: [],
+    baseParams: params,
     energy: 0,
     blackedOut: false,
     world: new Matrix4(),
@@ -432,6 +435,8 @@ function computeProjectState(
     secPerBeat: 60 / bpm,
     beatsPerBar,
     params,
+    automations: [],
+    baseParams: params,
     energy,
     videoPads: obj.videoPads,
     photoPads: obj.photoPads,

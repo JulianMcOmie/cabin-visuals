@@ -172,6 +172,14 @@ export interface ObjectState {
   /** The object's full resolved note stream (absolute beats, pitch/velocity/duration),
    *  so a pitch-reactive instrument can read it. Static per resolve. */
   notes: ResolvedNote[]
+  /** The object's automation lanes, by reference. Only needed by instruments that
+   *  must know what a param was at a beat OTHER than this one - a value latched
+   *  when something spawned, say. Sampling is pure, so this does not weaken the
+   *  pause invariant. Read it through paramAtBeat rather than directly. */
+  automations: ResolvedAutomation[]
+  /** Params before automation/envelope overlay - paramAtBeat's fallback for a
+   *  param with no lane. */
+  baseParams: Record<string, number>
   /** The notes live at the current beat (`beat ∈ [note.beat, note.beat+duration)`),
    *  recomputed each frame - the analogue of Tyler's `activeNotes`. */
   activeNotes: ResolvedNote[]
