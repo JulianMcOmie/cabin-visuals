@@ -24,6 +24,14 @@ const FONTS = [
   '"IM Fell English SC", Georgia, serif',
   '"IM Fell English", Georgia, serif',
   '"Playfair Display", Georgia, serif',
+  '"Bebas Neue", "Arial Narrow", sans-serif',
+  'Righteous, "Arial Black", sans-serif',
+  '"Abril Fatface", Georgia, serif',
+  '"Comic Sans MS", "Chalkboard SE", cursive',
+  '"Brush Script MT", "Snell Roundhand", cursive',
+  '"Palatino Linotype", Palatino, "Book Antiqua", serif',
+  '"Times New Roman", Times, serif',
+  'Consolas, "Lucida Console", Menlo, monospace',
 ]
 
 interface CardStyle {

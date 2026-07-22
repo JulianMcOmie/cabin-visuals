@@ -30,6 +30,14 @@ const FONT_PREVIEWS: Record<number, { family: string; short: string; load?: stri
   4: { family: '"IM Fell English SC", Georgia, serif', short: 'FELL SC', load: 'IM Fell English SC' },
   5: { family: '"IM Fell English", Georgia, serif', short: 'FELL', load: 'IM Fell English' },
   6: { family: '"Playfair Display", Georgia, serif', short: 'DIDONE', load: 'Playfair Display' },
+  7: { family: '"Bebas Neue", "Arial Narrow", sans-serif', short: 'POSTER', load: 'Bebas Neue' },
+  8: { family: 'Righteous, "Arial Black", sans-serif', short: 'NEON', load: 'Righteous' },
+  9: { family: '"Abril Fatface", Georgia, serif', short: 'NOIR', load: 'Abril Fatface' },
+  10: { family: '"Comic Sans MS", "Chalkboard SE", cursive', short: 'COMIC' },
+  11: { family: '"Brush Script MT", "Snell Roundhand", cursive', short: 'SCRIPT' },
+  12: { family: '"Palatino Linotype", Palatino, "Book Antiqua", serif', short: 'PROPER' },
+  13: { family: '"Times New Roman", Times, serif', short: 'NEWS' },
+  14: { family: 'Consolas, "Lucida Console", Menlo, monospace', short: 'TERMINAL' },
 }
 
 function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {

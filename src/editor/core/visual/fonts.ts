@@ -20,6 +20,13 @@ const FONT_FILES: Record<string, FontFileDef[]> = {
     { file: 'im-fell-english-italic.woff2', style: 'italic' },
   ],
   'Playfair Display': [{ file: 'playfair-display.woff2', weight: '400 900' }],
+  // Already vendored in public/fonts since the first template pass, but never
+  // wired to a font stack until the library grew to 15. All three ship a single
+  // 400 weight - asking canvas for a heavier one synthesizes a fake bold, which
+  // is exactly what ruins Abril's hairline serifs.
+  'Bebas Neue': [{ file: 'BebasNeue-Regular.woff2' }],
+  Righteous: [{ file: 'Righteous-Regular.woff2' }],
+  'Abril Fatface': [{ file: 'AbrilFatface-Regular.woff2' }],
 }
 
 const loaded = new Set<string>()

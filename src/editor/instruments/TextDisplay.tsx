@@ -49,6 +49,10 @@ const MAX_DELAY_TAPS = 8
 // matters: IM Fell ships only 400, and asking canvas for 900 would synthesize
 // a fake bold that ruins the old-press look.
 interface FontDef { css: string; weight: number; load?: string }
+// Ordered so the list reads as a spread of MOODS rather than a pile of families:
+// the four workhorses first, then the self-hosted display faces, then the system
+// character faces. Indices are stored in projects, so new entries only ever go on
+// the END - reordering would silently restyle every existing lyric video.
 const FONT_STACKS: FontDef[] = [
   { css: '"Arial Black", Impact, sans-serif', weight: 900 },
   { css: 'Georgia, "Times New Roman", serif', weight: 900 },
@@ -57,6 +61,17 @@ const FONT_STACKS: FontDef[] = [
   { css: '"IM Fell English SC", Georgia, serif', weight: 400, load: 'IM Fell English SC' },
   { css: '"IM Fell English", Georgia, serif', weight: 400, load: 'IM Fell English' },
   { css: '"Playfair Display", Georgia, serif', weight: 900, load: 'Playfair Display' },
+  { css: '"Bebas Neue", "Arial Narrow", sans-serif', weight: 400, load: 'Bebas Neue' },
+  { css: 'Righteous, "Arial Black", sans-serif', weight: 400, load: 'Righteous' },
+  { css: '"Abril Fatface", Georgia, serif', weight: 400, load: 'Abril Fatface' },
+  // System character faces. No files to ship, but availability varies by OS, so
+  // each carries a fallback that keeps the MOOD rather than dropping to Arial:
+  // a script degrades to another script, a slab to another slab.
+  { css: '"Comic Sans MS", "Chalkboard SE", cursive', weight: 700 },
+  { css: '"Brush Script MT", "Snell Roundhand", cursive', weight: 400 },
+  { css: '"Palatino Linotype", Palatino, "Book Antiqua", serif', weight: 700 },
+  { css: '"Times New Roman", Times, serif', weight: 700 },
+  { css: 'Consolas, "Lucida Console", Menlo, monospace', weight: 700 },
 ]
 const fontStack = (i: number) => FONT_STACKS[Math.max(0, Math.min(FONT_STACKS.length - 1, Math.round(i)))]
 
@@ -327,6 +342,14 @@ const PARAMS: ParamDef[] = [
       { value: 4, label: 'Old Press Caps (IM Fell SC)' },
       { value: 5, label: 'Old Press (IM Fell)' },
       { value: 6, label: 'Didone (Playfair)' },
+      { value: 7, label: 'Poster (Bebas Neue)' },
+      { value: 8, label: 'Neon (Righteous)' },
+      { value: 9, label: 'Noir (Abril Fatface)' },
+      { value: 10, label: 'Nostalgic (Comic Sans)' },
+      { value: 11, label: 'Script (Brush)' },
+      { value: 12, label: 'Proper (Palatino)' },
+      { value: 13, label: 'Newsprint (Times)' },
+      { value: 14, label: 'Terminal (Consolas)' },
     ],
   },
   {
