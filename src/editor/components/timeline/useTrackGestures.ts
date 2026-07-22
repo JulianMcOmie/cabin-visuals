@@ -8,6 +8,7 @@ import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import { snapStepBeats } from '../../utils/snapStep'
+import { suppressNextContextMenu } from '../../utils/contextMenuGuard'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
 
@@ -285,6 +286,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     }
 
     const handleUp = () => {
+      // A right-button draw released outside the lane would otherwise open the
+      // browser context menu on whatever sits under the pointer.
+      if (dragRef.current?.type === 'drawing') suppressNextContextMenu()
       dragRef.current = null
       setMarqueeRect(null)
       unlockCursor()

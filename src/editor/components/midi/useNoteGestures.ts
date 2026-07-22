@@ -3,6 +3,7 @@ import type { Block, Note } from '../../types'
 import type { MidiRow } from './types'
 import { clientToGrid, xToBeat, yToRowIndex, beatToX, rowIndexToY } from './coords'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
+import { suppressNextContextMenu } from '../../utils/contextMenuGuard'
 import { useClipboardStore } from '../../store/ClipboardStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useUIStore } from '../../store/UIStore'
@@ -265,6 +266,9 @@ export function useNoteGestures({
 
     const handleUp = () => {
       const ds = dragStateRef.current
+      // A right-button note draw released outside the grid would otherwise open
+      // the browser context menu on whatever sits under the pointer.
+      if (ds.type === 'drawing') suppressNextContextMenu()
       // Commit the gesture as a single store write (one undo step). Drawing adds
       // the in-flight note; move/resize/alt-duplicate commit the pending result.
       // marquee selects only, so it leaves pendingCommitRef null and commits nothing.
