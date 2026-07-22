@@ -15,10 +15,10 @@ test('export resolutions include 4K UHD', () => {
 test('4K uses appropriate H.264 levels and bitrates', () => {
   assert.equal(videoCodec(3840, 30), 'avc1.640033')
   assert.equal(videoCodec(3840, 60), 'avc1.640034')
-  assert.equal(defaultBitrate(3840, 30), 35_000_000)
-  assert.equal(defaultBitrate(3840, 60), 50_000_000)
+  assert.equal(defaultBitrate(3840, 30), 60_000_000)
+  assert.equal(defaultBitrate(3840, 60), 80_000_000)
   assert.equal(videoCodec(1920, 60), 'avc1.64002a')
-  assert.equal(defaultBitrate(1920, 60), 12_000_000)
+  assert.equal(defaultBitrate(1920, 60), 20_000_000)
 })
 
 test('9:16 tiers are the 16:9 tiers rotated', () => {
@@ -33,7 +33,7 @@ test('9:16 tiers are the 16:9 tiers rotated', () => {
 test('portrait exports get the same tier codec/bitrate via the long edge', () => {
   // 1080×1920 is the same pixel rate as 1920×1080 - callers pass max(w, h).
   assert.equal(videoCodec(Math.max(1080, 1920), 60), videoCodec(1920, 60))
-  assert.equal(defaultBitrate(Math.max(1080, 1920), 60), 12_000_000)
+  assert.equal(defaultBitrate(Math.max(1080, 1920), 60), 20_000_000)
   assert.equal(videoCodec(Math.max(2160, 3840), 60), 'avc1.640034')
 })
 

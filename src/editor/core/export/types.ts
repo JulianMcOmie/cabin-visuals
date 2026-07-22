@@ -79,10 +79,18 @@ export function resolutionsFor(aspect: ExportAspect): { label: string; width: nu
 // so both key off the frame's LONG edge: 1080×1920 is the same tier as
 // 1920×1080. Callers pass max(width, height).
 
-/** Motion-friendly H.264 bitrates for each fixed output tier. */
+/** Motion-friendly H.264 bitrates for each fixed output tier.
+ *
+ *  Deliberately ABOVE platform re-encode recommendations: our frames are
+ *  near-worst-case for a fixed-bitrate encoder (full-frame animated grain in
+ *  the final grade, HDR bloom halos, particle fields), so busy projects were
+ *  visibly starved at the old tiers (12/35-50 Mbps) while simple ones looked
+ *  fine. Headroom costs file size, never quality; the platform re-encode gets
+ *  a cleaner source to work from. All values sit far inside the H.264 High
+ *  profile level ceilings picked by videoCodec below. */
 export function defaultBitrate(longEdge: number, fps: number): number {
-  if (longEdge >= 3840) return fps === 30 ? 35_000_000 : 50_000_000
-  const base = longEdge >= 1920 ? 12_000_000 : 8_000_000
+  if (longEdge >= 3840) return fps === 30 ? 60_000_000 : 80_000_000
+  const base = longEdge >= 1920 ? 20_000_000 : 12_000_000
   return fps === 30 ? Math.round(base * 0.75) : base
 }
 
