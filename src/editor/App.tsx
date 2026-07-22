@@ -8,6 +8,7 @@ import { Play, Square, SkipBack, Upload, ChevronLeft, Maximize, Minimize, Sparkl
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
+import { getPlaybackEngine } from './core/playback'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
@@ -508,6 +509,16 @@ function BottomArea() {
 export default function EditorApp() {
   useProjectPersistence()
   useAnonymousAdoption()
+  // Leaving the editor stops the transport. The playback engine and Tone's
+  // transport are module singletons that outlive this component, so unmounting
+  // does not silence them by itself - hitting Projects used to leave the song
+  // playing over a page with no transport controls to stop it. On the editor
+  // root rather than the Projects link so every exit is covered (back button,
+  // the lyric-setup handoff, a redirect out of a dead project).
+  useEffect(() => () => {
+    getPlaybackEngine().pause()
+    useTimeStore.getState().setIsPlaying(false)
+  }, [])
   const { topFrac, containerRef, startResize } = useVerticalSplit()
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
