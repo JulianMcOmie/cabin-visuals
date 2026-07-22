@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tyler's Wishes — Organized w/ Difficulty Estimates</title>
+<style>
+  :root {
+    --bg: #101014;
+    --panel: #17171d;
+    --panel-2: #1d1d25;
+    --text: #e8e8ec;
+    --muted: #9a9aa8;
+    --border: #2a2a34;
+    --accent: #7aa2ff;
+    --trivial: #3ecf8e;
+    --easy: #7ad07a;
+    --medium: #e6b84a;
+    --hard: #e0704a;
+    --invest: #b48ae0;
+    --already: #4ac2e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    padding: 40px 20px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 32px; font-size: 14px; }
+  h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--muted); margin: 44px 0 14px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .card .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .card h3 { margin: 0; font-size: 16px; font-weight: 600; flex: 1 1 auto; }
+  .badges { display: flex; gap: 6px; flex-shrink: 0; }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 2px 9px; border-radius: 99px; letter-spacing: 0.03em;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .b-trivial { color: var(--trivial); border-color: var(--trivial); }
+  .b-easy    { color: var(--easy);    border-color: var(--easy); }
+  .b-medium  { color: var(--medium);  border-color: var(--medium); }
+  .b-hard    { color: var(--hard);    border-color: var(--hard); }
+  .b-invest  { color: var(--invest);  border-color: var(--invest); }
+  .b-already { color: var(--already); border-color: var(--already); }
+  .b-want { color: var(--muted); border-color: var(--border); background: var(--panel-2); }
+  .card p { margin: 10px 0 0; color: var(--text); }
+  .card .why { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 5px; color: #c9d4ff;
+  }
+  .callout {
+    background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 14px 16px; margin: 18px 0 28px; font-size: 14px;
+  }
+  .callout strong { color: var(--accent); }
+  table.summary { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
+  table.summary th, table.summary td {
+    text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border);
+  }
+  table.summary th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+  table.summary td:last-child { white-space: nowrap; }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f7f9; --panel: #ffffff; --panel-2: #f0f0f4;
+      --text: #1c1c22; --muted: #63636f; --border: #dcdce4;
+      --trivial: #158a5a; --easy: #2f8f2f; --medium: #a37d10; --hard: #bf4d26; --invest: #7b4fb0; --already: #1a86a3;
+    }
+    code { color: #3b55b5; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Tyler's Wishes &amp; Annoyances</h1>
+<p class="sub">Organized July 21, 2026 · difficulty estimates are Claude's, based on reading the actual code, not just the descriptions.</p>
+
+<div class="legend">
+  <span class="badge b-trivial">Trivial — under an hour</span>
+  <span class="badge b-easy">Easy — an afternoon</span>
+  <span class="badge b-medium">Medium — a day or two</span>
+  <span class="badge b-hard">Hard — multi-day / architectural</span>
+  <span class="badge b-invest">Investigate first — diagnosis before estimate</span>
+  <span class="badge b-already">May already work</span>
+</div>
+
+<div class="callout">
+  <strong>Headline finding:</strong> at least four items on this list appear to already exist in the code
+  (alt-drag duplicate, multi-select tracks, in-place instrument swap, automation curve math). Either Tyler is on an
+  old build, the features have UX/discoverability problems, or there's a bug in the wiring rather than the feature.
+  Worth a quick session with Tyler on the latest build before scheduling any of those.
+</div>
+
+<h2>🚨 Fix first — high pain, low-to-medium cost</h2>
+
+<div class="card">
+  <div class="top"><h3>Zoom-relative snap for MIDI blocks</h3>
+    <div class="badges"><span class="badge b-want">Tyler: "actually ragebaiting"</span><span class="badge b-easy">Easy</span></div></div>
+  <p>Snapping in <code>useMidiBlockGestures.ts</code> is hardcoded to whole beats regardless of zoom (<code>Math.round(px / pixelsPerBeat)</code>). Deriving the snap subdivision from <code>pixelsPerBeat</code> (coarser when zoomed out, finer when zoomed in) is a small, localized change.</p>
+  <p class="why">Highest pain-to-effort ratio on the whole list. His most emphatic complaint, and it's roughly one function.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Muted tracks should dim their MIDI blocks</h3>
+    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-trivial">Trivial</span></div></div>
+  <p>Confirmed: <code>Block.tsx</code> never reads <code>track.muted</code> — the only mute indicator is the button color. The row already has an opacity mechanism (solo-dimming); extending it to the track's own muted state is a few lines.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>MIDI row titles left-aligned</h3>
+    <div class="badges"><span class="badge b-want">Tyler: minor</span><span class="badge b-trivial">Trivial</span></div></div>
+  <p>CSS text-alignment change in the piano-roll row labels.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Cmd+X cut for MIDI / tracks</h3>
+    <div class="badges"><span class="badge b-want">Tyler: mildly annoying</span><span class="badge b-easy">Easy</span></div></div>
+  <p>Full copy/paste infrastructure already exists (<code>ClipboardStore</code> handles notes, blocks, and whole track trees; cmd+C/V/B/J are wired in <code>useNoteGestures</code> and <code>useTrackGestures</code>). Cut = the existing copy branch plus a delete.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Cmd+R repeat/duplicate blocks &amp; notes</h3>
+    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-easy">Easy</span></div></div>
+  <p>Same clipboard machinery: duplicate the selection offset by its own length (Logic's behavior). <code>preventDefault()</code> on keydown does suppress browser refresh when focus is in the page, so cmd+R is usable; worst case, pick cmd+D like Ableton.</p>
+</div>
+
+<h2>🔍 Investigate first — the code says these <em>should</em> work</h2>
+
+<div class="card">
+  <div class="top"><h3>Automation curves "always linear"</h3>
+    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-invest">Investigate</span><span class="badge b-already">Math is correct</span></div></div>
+  <p>The interpolation in <code>automation.ts</code> genuinely branches on curve type — step returns the held value, exponential uses a real exponential ease, and the mode is plumbed end to end. The likely culprit: the curve-type <code>&lt;select&gt;</code> only appears in the piano-roll's value mode, so the stored <code>track.interpolation</code> may simply never get set.</p>
+  <p class="why">Probably a discoverability/UX fix (curve picker in the right-click menu), not an engine fix. Easy once diagnosed.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Laser sphere color doesn't update in real time</h3>
+    <div class="badges"><span class="badge b-want">Tyler: pretty annoying</span><span class="badge b-invest">Investigate</span></div></div>
+  <p>Surprising: <code>LaserSphere.tsx</code> reads the color param <em>every frame</em> and writes the shader uniforms and point light directly — real-time updates should work by construction. If they don't, the bug is upstream (the <code>stringParams</code> not reaching the frame state). Needs a repro; the fix is likely small once found.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Opt+drag child tracks between parents</h3>
+    <div class="badges"><span class="badge b-want">Tyler: quite annoying</span><span class="badge b-already">May already work</span></div></div>
+  <p>Alt/option-drag duplication is implemented (<code>useTrackCopyDrag.ts</code> — ghost, sibling reflow, insert on drop). What's unverified is whether the copy-drag path accepts a <em>different parent</em> as the drop target the way plain re-nest drag does. Either it works and Tyler's build is stale, or cross-parent drop is a modest extension to the existing hook.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Can't select or drag multiple tracks</h3>
+    <div class="badges"><span class="badge b-want">Tyler: a bit annoying</span><span class="badge b-already">Partially exists</span></div></div>
+  <p>Multi-select exists: cmd/ctrl-click toggles tracks into <code>selectedTrackIds</code>, and group delete works. What's plausibly missing is group <em>move</em> (dragging the whole selection at once) and shift-click range select. Extending the existing drag hooks to operate on the selection set is a medium-small job.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Movers don't work at the global level</h3>
+    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-invest">Investigate</span></div></div>
+  <p>Top-level movers targeting other instruments are supported in <code>resolve.ts</code> (track / tag / subtree scopes). But the resolution is <strong>silent-fail</strong>: a bad target id, an empty tag, or no targets set at all just does nothing, with no feedback. Very likely Tyler's setup falls into one of those holes.</p>
+  <p class="why">Fix is probably part diagnosis, part UX: surface "this mover isn't targeting anything" instead of silence. Ties directly into his "dedicated way to select targets" wish below.</p>
+</div>
+
+<h2>🛠 Real bugs — medium effort</h2>
+
+<div class="card">
+  <div class="top"><h3>Visibility doesn't affect laser instruments</h3>
+    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-medium">Medium</span></div></div>
+  <p>Confirmed by the shaders: <code>LaserLine</code>/<code>LaserSphere</code> fragment shaders output hard <code>alpha = 1.0</code>, have no opacity uniform, and the material isn't transparent — so the visibility mover's opacity fade has nothing to grab onto. Fix = add an opacity uniform to both shaders and wire it into the same gating path other materials use, plus dim their point lights.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Adding/removing a scene makes objects stop rendering</h3>
+    <div class="badges"><span class="badge b-want">Tyler: very annoying</span><span class="badge b-medium">Medium</span></div></div>
+  <p>Found the mechanism: <code>VisualScene.tsx</code> keys the whole scene map on the sorted set of scene ids, so adding one scene disposes <em>every</em> scene's render targets and remounts all portals. Fix = incremental updates (create/dispose only the scene that changed). Fiddly Three.js resource-lifetime work, but well-scoped.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Export audio out of sync</h3>
+    <div class="badges"><span class="badge b-want">Tyler: very annoying</span><span class="badge b-invest">Investigate</span><span class="badge b-medium">Medium once diagnosed</span></div></div>
+  <p>The pipeline's math is sound (video PTS and audio sample offsets both derive from the same clock), and a previous +44ms "AAC priming" compensation was removed because it made things worse. Remaining suspects: AAC encoder priming (2112 samples ≈ 44ms — i.e., the compensation may have had the right idea and the wrong sign or place), export-range anchoring, or player-dependent decoding. Needs a measured repro (export a click track, inspect the waveform against frames) before touching code.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Videos seem compressed</h3>
+    <div class="badges"><span class="badge b-want">Tyler: minor but long-term</span><span class="badge b-easy">Easy (partial)</span></div></div>
+  <p>Export uses fixed per-tier H.264 bitrates (12 Mbps at 1080p, 35–50 at 4K). Raising tiers and/or adding a quality knob is easy. The caveat: Instagram/TikTok re-encode everything, so the biggest lever is exporting at higher resolution/bitrate so their re-encode has more to work with — perfection isn't reachable on our side.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Camera not centered by default</h3>
+    <div class="badges"><span class="badge b-want">Tyler: kinda annoying</span><span class="badge b-easy">Easy code, needs a decision</span></div></div>
+  <p>Confirmed: default camera sits at <code>[0, 1.2, 5]</code> — slightly above center, which reads asymmetric when 16:9 content is cropped to 9:16. A 9:16 view mode already exists. The one-line fix (drop y to 0) changes the look of <em>every existing project</em>, so it needs a deliberate choice: change the default, or give 9:16 its own camera framing.</p>
+</div>
+
+<h2>🎨 Design-flavored changes</h2>
+
+<div class="card">
+  <div class="top"><h3>Size is applied after movers</h3>
+    <div class="badges"><span class="badge b-want">Tyler: very annoying</span><span class="badge b-medium">Medium + back-compat risk</span></div></div>
+  <p>Confirmed: size is baked into the object's world matrix, which multiplies the mover transform (<code>world × moverTransform</code>) — so size scales mover orbits/offsets too, acting as a global zoom rather than per-shape size. Fix = decouple scale from the placement matrix so it applies per-copy. The math is contained, but it <strong>changes how every existing project with sized + moved instruments looks</strong>, so it likely needs a per-track or per-project opt-in rather than a silent swap.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Better motion curves for movers</h3>
+    <div class="badges"><span class="badge b-want">Tyler: eh</span><span class="badge b-easy">Easy per mover</span></div></div>
+  <p>The pattern already exists: rotation movers and bursts have full easing tables (expo/cubic/elastic/back…) exposed as an <code>easing</code> param. Extending the same pattern to the remaining movers (position, force-field push, oscillators) is mechanical — an afternoon per batch of movers, no research needed.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Change instrument type in place</h3>
+    <div class="badges"><span class="badge b-want">Tyler: nice to have</span><span class="badge b-already">Mostly exists</span></div></div>
+  <p><code>setTrackInstrument</code> already swaps the instrument while preserving children, MIDI, targets, and mute state — only params reset. If the store action isn't reachable from the UI where Tyler wants it (e.g. right-click on a placed track), that's a small menu addition. Preserving compatible param values across the swap is an incremental tweak.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Dedicated way to select targets for movers</h3>
+    <div class="badges"><span class="badge b-want">Tyler: (blank)</span><span class="badge b-medium">Medium — needs a spec</span></div></div>
+  <p>The routing model (track / tag / subtree scopes) already exists; this wish is about a better picker UI. Tyler left the details empty, and the right design depends on fixing the silent-fail problem above. Recommend designing these two together.</p>
+</div>
+
+<h2>🏗 Big projects — schedule deliberately</h2>
+
+<div class="card">
+  <div class="top"><h3>Consolidated mover (all movers in one, 20–30 MIDI rows)</h3>
+    <div class="badges"><span class="badge b-want">Tyler: (blank)</span><span class="badge b-medium">Medium–Hard</span></div></div>
+  <p>The mover pipeline is well-factored (each mover is a pure <code>resolve()</code> definition), so composing them into one uber-definition is feasible. The hard part is product, not plumbing: 20–30 MIDI rows and a giant param surface on one track is a UX problem, and it partially duplicates what child-mover stacking already does. Worth a design conversation before building.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Live video preview per track</h3>
+    <div class="badges"><span class="badge b-want">Tyler: "kinda a lot"</span><span class="badge b-hard">Hard</span></div></div>
+  <p>The hover preview exists precisely because live previews are expensive — it keeps <em>one</em> warm WebGL canvas and only renders while hovered. N always-on live feeds (one per track, with effects applied) is a real rendering-budget and architecture project: shared render targets, low framerate/low-res scheduling, pausing off-screen rows. Very cool, genuinely 10×-professional-looking, and genuinely the most expensive item here.</p>
+  <p class="why">A cheaper 80% version: periodically-refreshed static thumbnails (every few seconds / on param change) instead of live feeds.</p>
+</div>
+
+<div class="card">
+  <div class="top"><h3>Faster project loading (local cache)</h3>
+    <div class="badges"><span class="badge b-want">Tyler: very minor</span><span class="badge b-hard">Hard, risky</span></div></div>
+  <p>Local cache with remote as source of truth collides with the revision/conflict system (rev + CAS snapshots) — a stale cache shown optimistically can paint state that then conflicts. Tyler himself flags it as low priority and bug-prone. Agree: park it. Cheaper wins first: measure what's actually slow (payload size? audio fetch? cold Supabase?) — might be a simple fix hiding under an assumed-hard one.</p>
+</div>
+
+<h2>💡 New idea — "3 laser orbs" instrument/template</h2>
+
+<div class="card">
+  <div class="top"><h3>Laser orb trio with MIDI-driven radius &amp; spin</h3>
+    <div class="badges"><span class="badge b-want">Tyler: "would be a great template"</span><span class="badge b-medium">Medium</span></div></div>
+  <p><strong>Tyler's spec:</strong> 3 laser orbs, each a different adjustable color, each with 2 radial splitters. MIDI notes select the radius per orb-per-splitter from 4 options (one of them 0/collapsed) — 3 orbs × 2 splitters × 4 radii = 24 notes. Radius changes trigger at note start and glide along an <em>exponential</em> curve from the previous radius to the new one. Additional MIDI notes control rotation per orb and per splitter — either 3 options (none / spin / reverse) or 5 (adding half- and full-speed in each direction). MIDI layout, extra splitters, and extra options are open to interpretation. Goal: makes his recent posted visuals easy to recreate; good tutorial-video candidate if the visual leads in the first 1–2 seconds.</p>
+  <p class="why">Every ingredient already exists: laser spheres, radial splitters, mover definitions with <code>midiRows</code>, and exponential easing curves. The real work is composition and layout — a bespoke instrument (or a template wiring existing pieces) with ~30+ labeled MIDI rows, plus the note-start-triggered exponential radius glide, which is a new interpolation behavior between successive notes on the same row group. Fits squarely into the abilities model (bespoke, instrument-intrinsic MIDI lanes). Estimate: a couple of days for a solid v1 — and unlike most of this list, it's <em>new content</em> that doubles as a template + tutorial, which aligns directly with the templates/marketing push.</p>
+</div>
+
+<h2>📋 Suggested order of attack</h2>
+<table class="summary">
+  <thead><tr><th>#</th><th>Item</th><th>Why this order</th><th>Estimate</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Zoom-relative snap</td><td>His angriest complaint, smallest fix</td><td>Easy</td></tr>
+    <tr><td>2</td><td>Mute dimming + left-aligned MIDI titles</td><td>Trivial polish, batch together</td><td>Trivial</td></tr>
+    <tr><td>3</td><td>Cmd+X cut, Cmd+R repeat</td><td>Rides existing clipboard infra</td><td>Easy</td></tr>
+    <tr><td>4</td><td>Session with Tyler on latest build</td><td>Verify the four "may already work" items before building anything</td><td>1 hour</td></tr>
+    <tr><td>5</td><td>Automation curve discoverability + global-mover silent-fail feedback</td><td>Both are likely UX bugs, not engine bugs</td><td>Easy–Medium</td></tr>
+    <tr><td>6</td><td>Laser opacity gating</td><td>Confirmed real bug, well-scoped shader work</td><td>Medium</td></tr>
+    <tr><td>7</td><td>Scene add/remove render-target disposal</td><td>Confirmed mechanism, contained fix</td><td>Medium</td></tr>
+    <tr><td>8</td><td>Export A/V sync repro + fix</td><td>Needs measurement first; high payoff</td><td>Investigate → Medium</td></tr>
+    <tr><td>9</td><td>Size-before-movers (opt-in)</td><td>Real design flaw, but back-compat needs care</td><td>Medium</td></tr>
+    <tr><td>10</td><td>Laser orb trio template</td><td>New content — doubles as template + tutorial video, feeds the templates push</td><td>Medium</td></tr>
+    <tr><td>11</td><td>Consolidated mover / per-track previews / load caching</td><td>Big projects — weigh against the Sept 15 mission</td><td>Hard</td></tr>
+  </tbody>
+</table>
+
+</div>
+</body>
+</html>
