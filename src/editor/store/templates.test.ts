@@ -91,6 +91,53 @@ test('the template ambience trims to the song end when audio is present', () => 
   }
 })
 
+test('the Wormhole style ships a tunnel looping to the song end, not the ceiling', () => {
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  useProjectStore.getState().addTrack(transcribedLyrics())
+
+  const wormholeStyle = getTemplate('wormhole')
+  assert.ok(wormholeStyle)
+  useProjectStore.getState().applyTemplate(wormholeStyle.document)
+
+  const s = useProjectStore.getState()
+  const tunnel = s.rootTrackIds.map((id) => s.tracks[id]).find((t) => t.instrumentId === 'wormhole')
+  assert.ok(tunnel, 'the style ships a Wormhole track')
+  const [b] = tunnel.blocks
+  assert.equal(b.loop, true)
+  assert.equal(b.loopLengthBars, 1, 'a one-bar pulse window')
+  assert.equal(b.startBar + b.durationBars, 40, 'trimmed to the song end, not 512')
+  // Four on the floor alternating the top of the pulse ladder with the middle.
+  assert.deepEqual(b.notes.map((n) => n.pitch), [67, 64, 67, 64])
+})
+
+test('shortening the audio pulls looping visuals back with it', () => {
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  useProjectStore.getState().addTrack(transcribedLyrics())
+  useProjectStore.getState().applyTemplate(silentFilm.document)
+
+  // A track added BY HAND after the template was applied: the two older trim
+  // sites (transcribe, apply) have both already fired, so nothing else would
+  // ever cut this back.
+  useProjectStore.getState().addTrack({
+    id: 'manual', name: 'Hand Added', type: 'base', instrumentId: 'wormhole',
+    color: '#fff', muted: false, solo: false, childIds: [],
+    blocks: [{ id: 'mb', startBar: 0, durationBars: 512, loop: true, loopLengthBars: 1, notes: [] }],
+  })
+
+  // Trim the song down to 20 bars (40s at 120bpm).
+  useProjectStore.getState().updateAudioBlock('aud', 'ab', { trimEnd: 40 })
+
+  const s = useProjectStore.getState()
+  const manual = s.tracks['manual']
+  assert.equal(manual.blocks[0].durationBars, 40, 'the hand-added loop follows the lyrics end')
+
+  // One-way: pushing the audio back out does NOT regrow it.
+  useProjectStore.getState().updateAudioBlock('aud', 'ab', { trimEnd: 80 })
+  assert.equal(useProjectStore.getState().tracks['manual'].blocks[0].durationBars, 40)
+})
+
 test('without an existing Lyrics track the template placeholder ships as-is', () => {
   hydrate(emptyDocument())
 
@@ -121,7 +168,7 @@ test('the Lyric Video template participates in the same carry-over', () => {
 })
 
 test('the lyric styles are exactly the looks the setup flow offers', () => {
-  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm'])
+  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm', 'wormhole'])
   for (const style of LYRIC_STYLES) {
     assert.ok(style.styleName, `${style.id} needs a style name for the picker`)
     // Every style must ship the contract the carry-over and refill depend on.

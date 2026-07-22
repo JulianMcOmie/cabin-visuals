@@ -7,10 +7,11 @@ import { TEMPLATES as VOL1, type TemplateDef } from './library'
 import { slideshow } from './library-slideshow'
 import { LYRIC_TEMPLATES } from './library-lyrics'
 import { silentFilm } from './library-silent-film'
+import { wormhole } from './library-wormhole'
 
 // Lyric videos lead (the product's current wedge), then Slideshow - the two
 // "bring your own material" starting points - then the showcase volume.
-export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, slideshow, ...VOL1]
+export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, wormhole, slideshow, ...VOL1]
 
 /** The looks a lyric project can wear, in offer order. These are ordinary
  *  templates that happen to share the Lyrics-track contract, so switching
