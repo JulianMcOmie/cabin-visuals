@@ -8,6 +8,7 @@ import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
+import { songEndBars, trimLoopsToSongEnd } from './songEnd'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -1427,35 +1428,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
       const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
 
-      // The song's end in bars (audio blocks' spans at the current tempo) -
-      // the template's repeat-to-the-ceiling loop blocks get trimmed to
-      // max(lyrics end, audio end), so visuals stop when the music does
-      // instead of looping forever into empty timeline.
-      const secPerBeat = 60 / s.bpm
-      let audioEndBars = 0
-      for (const tid of s.rootTrackIds) {
-        const at = s.tracks[tid]
-        if (at?.type !== 'audio') continue
-        for (const ab of at.audioBlocks ?? []) {
-          const beats = Math.max(0, ab.trimEnd - ab.trimStart) / secPerBeat
-          audioEndBars = Math.max(audioEndBars, ab.startBar + Math.ceil(beats / s.beatsPerBar))
-        }
-      }
-      const endBars = Math.max(durationBars, audioEndBars)
-      const trimmedTracks: Record<string, Track> = {}
-      for (const [tid, t] of Object.entries(s.tracks)) {
-        const needsTrim = t.blocks.some((b) => b.loop && b.startBar + b.durationBars > endBars)
-        trimmedTracks[tid] = needsTrim
-          ? {
-              ...t,
-              blocks: t.blocks.map((b) =>
-                b.loop && b.startBar + b.durationBars > endBars
-                  ? { ...b, durationBars: Math.max(1, endBars - b.startBar) }
-                  : b,
-              ),
-            }
-          : t
-      }
+      // The template's repeat-to-the-ceiling loop blocks trim to the song's end
+      // - max(lyrics end, audio end) - so visuals stop when the music does
+      // instead of looping forever into empty timeline. `durationBars` is the
+      // block being written on this very call, so it is passed explicitly
+      // rather than read back out of state.
+      const endBars = Math.max(durationBars, songEndBars(s))
+      const trimmedTracks = trimLoopsToSongEnd(s.tracks, endBars)
 
       // A lyric-template project ships a styled root track named 'Lyrics' -
       // refill it (words swap, styling stays) instead of stacking a second one.
@@ -1560,29 +1539,22 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // runs forever past the music. Without audio the ceiling stays: a later
       // transcription does the trimming (blocks never re-grow).
       if (hasAudio) {
-        const secPerBeat = 60 / s.bpm
-        let endBars = 0
-        for (const id of audioIds) {
-          for (const ab of s.tracks[id].audioBlocks ?? []) {
-            const beats = Math.max(0, ab.trimEnd - ab.trimStart) / secPerBeat
-            endBars = Math.max(endBars, ab.startBar + Math.ceil(beats / s.beatsPerBar))
-          }
-        }
+        // Song end is measured against the INCOMING document's Lyrics track (the
+        // carried-over words, set just above), not the outgoing project's, so a
+        // style switch trims to where the words actually land.
+        let endBars = songEndBars({
+          bpm: s.bpm,
+          beatsPerBar: s.beatsPerBar,
+          tracks: { ...kept, ...cloned },
+          rootTrackIds: [...audioIds, ...clonedRoots],
+        })
         if (templateLyricsId) {
           for (const b of cloned[templateLyricsId].blocks) {
             endBars = Math.max(endBars, b.startBar + b.durationBars)
           }
         }
-        if (endBars > 0) {
-          for (const t of Object.values(cloned)) {
-            if (!t.blocks.some((b) => b.loop && b.startBar + b.durationBars > endBars)) continue
-            t.blocks = t.blocks.map((b) =>
-              b.loop && b.startBar + b.durationBars > endBars
-                ? { ...b, durationBars: Math.max(1, endBars - b.startBar) }
-                : b,
-            )
-          }
-        }
+        const trimmed = trimLoopsToSongEnd(cloned, endBars)
+        for (const [id, t] of Object.entries(trimmed)) cloned[id] = t
       }
 
       return {
@@ -1611,15 +1583,25 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track?.audioBlocks) return s
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: {
-            ...track,
-            audioBlocks: track.audioBlocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
-          },
+      const tracks = {
+        ...s.tracks,
+        [trackId]: {
+          ...track,
+          audioBlocks: track.audioBlocks.map((b) => (b.id === blockId ? { ...b, ...updates } : b)),
         },
       }
+      // Moving the audio's span moves the song's end, so ceiling-length loop
+      // blocks follow it down. This is where a track added BY HAND after the
+      // template was applied finally gets trimmed - the other two trim sites
+      // only fire on transcribe and on template apply, so anything created
+      // between them used to keep the full 512 bars.
+      //
+      // One-way, matching the existing rule: dragging the audio shorter cuts the
+      // visuals, dragging it back out does not regrow them.
+      const spanChanged = updates.trimEnd !== undefined || updates.trimStart !== undefined
+        || updates.startBar !== undefined
+      if (!spanChanged) return { tracks }
+      return { tracks: trimLoopsToSongEnd(tracks, songEndBars({ ...s, tracks })) }
     }),
 
   deleteAudioBlock: (trackId, blockId) =>
