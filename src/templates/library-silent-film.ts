@@ -104,10 +104,14 @@ function silentFilmDocument() {
   })
 }
 
+// The id stays 'silentFilm' on purpose: it is written into every project that
+// has ever used this style (appliedTemplateId) and is the key the preview-card
+// palette and the preview clip in the storage bucket are filed under. Renaming
+// it would orphan all three. Only the label the user reads changes.
 export const silentFilm: TemplateDef = {
   id: 'silentFilm',
-  name: 'Silent Film',
-  styleName: 'Silent Film',
+  name: 'Vintage',
+  styleName: 'Vintage',
   description: 'Words as degraded silent-movie title cards - grainy stock, vintage serif, glowing accents.',
   bpm: 120,
   cardPreview: 'animatedLyric',
