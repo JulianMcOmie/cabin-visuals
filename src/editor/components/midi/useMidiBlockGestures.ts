@@ -2,6 +2,7 @@ import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'rea
 import { useProjectStore } from '../../store/ProjectStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
+import { snapStepBeats } from '../../utils/snapStep'
 import type { Block, Note } from '../../types'
 
 interface UseMidiBlockGesturesOptions {
@@ -38,7 +39,7 @@ interface DragState {
  * Drag the MIDI block's ruler "clip header" to move it, or its left/right edges to
  * resize - the single-block, horizontal-only analogue of useTrackGestures. Writes
  * continuously to ProjectStore (the block prop flows back from the store, so the
- * header and grid outline follow the drag live). Snaps to whole bars.
+ * header and grid outline follow the drag live). Snaps to the zoom-aware step.
  *
  * Notes are stored relative to the block start, so resizing the *left* edge would
  * otherwise drag the notes along with it. To keep notes anchored in absolute time,
@@ -93,8 +94,9 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
       const l = latest.current
       const maxBar = l.maxBeats / l.beatsPerBar
       const oneBeat = 1 / l.beatsPerBar
-      // Snap to beats, not whole bars.
-      const deltaBars = Math.round((ev.clientX - d.startClientX) / l.pixelsPerBeat) / l.beatsPerBar
+      // Zoom-aware snap: beats normally, whole bars when zoomed far out.
+      const stepBeats = snapStepBeats(l.pixelsPerBeat, l.beatsPerBar)
+      const deltaBars = Math.round((ev.clientX - d.startClientX) / l.pixelsPerBeat / stepBeats) * stepBeats / l.beatsPerBar
       const update = useProjectStore.getState().updateBlock
 
       if (d.mode === 'moving') {

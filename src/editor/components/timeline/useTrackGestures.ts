@@ -7,6 +7,7 @@ import { useClipboardStore } from '../../store/ClipboardStore'
 import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks } from '../../utils/selection'
+import { snapStepBeats } from '../../utils/snapStep'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
 
@@ -141,11 +142,13 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
   const abortRef = useRef<AbortController | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
-  // Snap a bar position to the nearest whole beat (move, resize, and the
-  // draw gesture's growing edge all come through here).
+  // Snap a bar position to the zoom-aware step (move, resize, and the draw
+  // gesture's growing edge all come through here): beats when zoomed in,
+  // whole bars when zoomed far out.
   const snapBar = (bar: number) => {
     const beatsPerBar = useProjectStore.getState().beatsPerBar
-    return Math.round(bar * beatsPerBar) / beatsPerBar
+    const stepBars = snapStepBeats(useUIStore.getState().tracksPixelsPerBeat, beatsPerBar) / beatsPerBar
+    return Math.round(bar / stepBars) * stepBars
   }
 
   const beginGestureTracking = useCallback(() => {
