@@ -195,6 +195,111 @@ function parsePipeAwareSegment(segment: string): TextEntry[] {
 const canvasCache = new Map<string, HTMLCanvasElement>()
 const CANVAS_CACHE_MAX = 64
 
+/** A shape drawn BEHIND the words, on the same canvas. Same canvas rather than a
+ *  second mesh on purpose: echoes, scatter and flight all clone the word texture,
+ *  so a backdrop baked into it follows them everywhere for free, and stays exactly
+ *  registered with the glyphs at any scale. */
+export interface Backdrop {
+  /** 0 none, 1 pill, 2 box, 3 blob, 4 ellipse, 5 tape. */
+  shape: number
+  color: string
+  opacity: number
+  /** Extra breathing room around the text, as a fraction of the font size. */
+  pad: number
+}
+const NO_BACKDROP: Backdrop = { shape: 0, color: '#000000', opacity: 1, pad: 0 }
+
+/** Stable per-word seed for the irregular shapes. Word LENGTH alone collides on
+ *  most of a lyric, which would hand half the song the same blob. */
+function textSeed(text: string): number {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0) / 4294967295
+}
+
+/** Half-extents of the backdrop around the text, in CSS px. THE single source of
+ *  truth: both the canvas sizing and the drawing read it, because they disagreed
+ *  once and wide words came out with their blob sliced off at the canvas edge.
+ *
+ *  Round shapes need a proportional allowance, not a flat one - an ellipse drawn
+ *  through a word's corners has to bulge wider the wider the word is, so the
+ *  extra grows with textWidth rather than sitting at a fixed number of pixels. */
+function backdropExtent(backdrop: Backdrop, textWidth: number, fontSize: number) {
+  const round = backdrop.shape === 3 || backdrop.shape === 4
+  const padX = fontSize * (0.28 + backdrop.pad) + (round ? textWidth * 0.1 : 0)
+  // 0.36 of the em box approximates half the cap height - using the full box
+  // leaves a visible band of dead space under short words.
+  const padY = fontSize * (0.20 + backdrop.pad * 0.8) + (round ? fontSize * 0.14 : 0)
+  return { halfW: textWidth / 2 + padX, halfH: fontSize * 0.36 + padY }
+}
+
+function drawBackdrop(
+  ctx: CanvasRenderingContext2D,
+  backdrop: Backdrop,
+  cx: number,
+  cy: number,
+  textWidth: number,
+  fontSize: number,
+  seed: number,
+) {
+  if (backdrop.shape < 1 || backdrop.opacity <= 0) return
+  const { halfW, halfH } = backdropExtent(backdrop, textWidth, fontSize)
+  ctx.save()
+  ctx.globalAlpha = backdrop.opacity
+  ctx.fillStyle = backdrop.color
+  ctx.beginPath()
+
+  switch (Math.round(backdrop.shape)) {
+    case 1: // pill - fully rounded ends
+      ctx.roundRect(cx - halfW, cy - halfH, halfW * 2, halfH * 2, halfH)
+      break
+    case 2: // box - a hint of a radius so it does not read as a UI panel
+      ctx.roundRect(cx - halfW, cy - halfH, halfW * 2, halfH * 2, halfH * 0.16)
+      break
+    case 3: { // blob - a closed curve through wobbled radii, seeded per word so
+      // each word keeps its OWN shape frame to frame instead of boiling
+      const points = 12
+      const pts: [number, number][] = []
+      for (let i = 0; i < points; i++) {
+        const a = (i / points) * Math.PI * 2
+        const wobble = 0.78 + seededRand(seed + i * 7.3) * 0.42
+        pts.push([cx + Math.cos(a) * halfW * wobble, cy + Math.sin(a) * halfH * wobble])
+      }
+      // Midpoint-to-midpoint quadratics keep the outline smooth and closed.
+      ctx.moveTo((pts[0][0] + pts[points - 1][0]) / 2, (pts[0][1] + pts[points - 1][1]) / 2)
+      for (let i = 0; i < points; i++) {
+        const cur = pts[i]
+        const next = pts[(i + 1) % points]
+        ctx.quadraticCurveTo(cur[0], cur[1], (cur[0] + next[0]) / 2, (cur[1] + next[1]) / 2)
+      }
+      break
+    }
+    case 4: // ellipse
+      ctx.ellipse(cx, cy, halfW, halfH, 0, 0, Math.PI * 2)
+      break
+    case 5: { // tape - a torn strip, tilted a little and ragged at both ends
+      const tilt = (seededRand(seed + 3.1) - 0.5) * 0.09
+      ctx.translate(cx, cy)
+      ctx.rotate(tilt)
+      const notch = halfH * 0.22
+      ctx.moveTo(-halfW, -halfH)
+      ctx.lineTo(halfW, -halfH + notch * (seededRand(seed + 1.7) - 0.5))
+      ctx.lineTo(halfW - notch, 0)
+      ctx.lineTo(halfW, halfH + notch * (seededRand(seed + 2.3) - 0.5))
+      ctx.lineTo(-halfW, halfH)
+      ctx.lineTo(-halfW + notch, 0)
+      ctx.closePath()
+      break
+    }
+  }
+
+  ctx.fill()
+  ctx.restore()
+}
+
 function createTextCanvas(
   word: TextEntry | string,
   strokeWidth: number,
@@ -202,9 +307,11 @@ function createTextCanvas(
   color: string,
   strokeColor: string,
   glow = 0,
+  backdrop: Backdrop = NO_BACKDROP,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
   const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}`
+    + `|${backdrop.shape}|${backdrop.color}|${backdrop.opacity}|${backdrop.pad}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -216,19 +323,42 @@ function createTextCanvas(
   // stretches by the resulting aspect), so every word renders letters the
   // same height - "awesome" comes out wider than "hello", not smaller.
   let fontSize = TEXT_CANVAS_SIZE * 0.35
+  // Canvas WIDTH grows with the word, but its HEIGHT is fixed - so unlike the
+  // stroke and glow, a tall backdrop cannot simply pad its way out and instead
+  // gets its top and bottom sliced off at the canvas edge. Shrink the glyphs
+  // until the shape fits: every word shares this fontSize, so they all shrink
+  // together and the constant-glyph-height rule still holds.
+  if (backdrop.shape >= 1) {
+    // halfH is fontSize * (0.36 + 0.20 + pad*0.8) plus the round-shape allowance,
+    // all linear in fontSize - so solve it for the half-canvas directly.
+    const round = backdrop.shape === 3 || backdrop.shape === 4
+    const perPx = 0.56 + backdrop.pad * 0.8 + (round ? 0.14 : 0)
+    fontSize = Math.min(fontSize, (TEXT_CANVAS_SIZE * 0.49) / perPx)
+  }
   const fontStr = (size: number) => `${font.weight} ${size}px ${font.css}`
   ctx.font = fontStr(fontSize)
 
   const layoutText = entry.layoutText || entry.text
   // Stroke joins and glow halos poke past the glyph box - pad for both.
   const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize + glow * fontSize * 0.35
-  const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
+  // A round backdrop also widens PROPORTIONALLY, so it eats into how much text
+  // can fit before the aspect cap; divide the budget rather than subtract from it.
+  const roundBackdrop = backdrop.shape === 3 || backdrop.shape === 4
+  const backdropFixed = backdrop.shape >= 1 ? fontSize * (0.28 + backdrop.pad) : 0
+  const maxTextWidth = (TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - (pad + backdropFixed) * 2)
+    / (roundBackdrop ? 1.2 : 1)
   let measured = ctx.measureText(layoutText).width
   if (measured > maxTextWidth && measured > 0) {
     fontSize *= maxTextWidth / measured
     measured = maxTextWidth
   }
-  const cssWidth = Math.max(64, Math.ceil(measured + pad * 2))
+  // Widen to whichever needs more room: the glyphs plus their halos, or the whole
+  // backdrop. Sizing from backdropExtent is what guarantees the shape never clips.
+  let cssWidth = Math.max(64, Math.ceil(measured + pad * 2))
+  if (backdrop.shape >= 1) {
+    const { halfW } = backdropExtent(backdrop, measured, fontSize)
+    cssWidth = Math.max(cssWidth, Math.ceil(halfW * 2 + TEXT_CANVAS_SIZE * 0.02))
+  }
 
   canvas.width = Math.round(cssWidth * dpr)
   canvas.height = TEXT_CANVAS_SIZE * dpr
@@ -246,6 +376,10 @@ function createTextCanvas(
     ? cx - layoutWidth / 2 + prefixWidth
     : cx
   ctx.textAlign = entry.syllableCount > 1 ? 'left' : 'center'
+
+  // Behind everything, including the stroke - the outline should sit on the
+  // backdrop, not be hidden by it.
+  drawBackdrop(ctx, backdrop, cx, cy, layoutWidth, fontSize, textSeed(entry.text) * 1000)
 
   if (strokeWidth > 0) {
     ctx.lineWidth = Math.max(1, strokeWidth * fontSize)
@@ -352,6 +486,19 @@ const PARAMS: ParamDef[] = [
       { value: 14, label: 'Terminal (Consolas)' },
     ],
   },
+  {
+    key: 'backdropShape', label: 'Backdrop', type: 'select', default: 0, options: [
+      { value: 0, label: 'None' },
+      { value: 1, label: 'Pill' },
+      { value: 2, label: 'Box' },
+      { value: 3, label: 'Blob' },
+      { value: 4, label: 'Ellipse' },
+      { value: 5, label: 'Tape' },
+    ],
+  },
+  { key: 'backdropColor', label: 'Backdrop Color', type: 'color', default: '#000000' },
+  { key: 'backdropPad', label: 'Backdrop Padding', min: 0, max: 1.5, step: 0.05, default: 0.2 },
+  { key: 'backdropOpacity', label: 'Backdrop Opacity', min: 0, max: 1, step: 0.05, default: 1 },
   {
     key: 'layoutMode', label: 'Layout', type: 'select', default: 0, options: [
       { value: 0, label: 'Center' },
@@ -545,6 +692,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const phraseGap = p.phraseGap ?? 2
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
+    // Built once per frame and passed down; every word canvas (main, echo,
+    // scatter, flight) bakes the same backdrop so they stay consistent.
+    const backdrop: Backdrop = {
+      shape: Math.round(p.backdropShape ?? 0),
+      color: state.stringParams.backdropColor || '#000000',
+      opacity: p.backdropOpacity ?? 1,
+      pad: p.backdropPad ?? 0.2,
+    }
     const jitter = p.jitter ?? 0
     // Hue Shift rotates whatever color is about to draw (authored or rainbow).
     // Quantized to 1/120th turns so an automated lane reuses a bounded set of
@@ -687,7 +842,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
           }
 
           const s = i * 131
@@ -742,7 +897,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -779,7 +934,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow))
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, backdrop))
         }
         spr.mesh.position.set(
           vx * ageSec,
@@ -859,7 +1014,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const tex = echoTexturesRef.current[tap]
       const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow))
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, backdrop))
         echoLastWordsRef.current[tap] = echoKey
       }
 
