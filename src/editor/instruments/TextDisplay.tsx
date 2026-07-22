@@ -967,7 +967,15 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const depth = flightSpeed * ageSec
         if (depth > flightMaxDepth) continue
 
-        const sprEntry = entries[(Math.max(1, wordCountAt(spawnBeat)) - 1) % entries.length] ?? entries[0]
+        const sprWordIdx = Math.max(1, wordCountAt(spawnBeat)) - 1
+        const sprEntry = entries[sprWordIdx % entries.length] ?? entries[0]
+        // Placement latches to the WORD's onset, not to this sprite's subdivision.
+        // A word held for two beats emits a sprite every subdiv, and latching each
+        // one to its own subdiv meant the trail split across a placement change:
+        // the copies emitted after the step jumped to the new spot while the older
+        // ones stayed behind. The trail belongs to one word, so it takes one
+        // placement - only the NEXT word moves.
+        const sprOnsetBeat = nextWordNotes[sprWordIdx]?.beat ?? spawnBeat
         const sprColor = invertBehind
           ? '#ffffff'
           : shiftHex(rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color)
@@ -986,8 +994,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, backdrop))
         }
         spr.mesh.position.set(
-          vx * ageSec + placeX(spawnBeat),
-          yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec + placeY(spawnBeat),
+          vx * ageSec + placeX(sprOnsetBeat),
+          yOffsetAt(spawnBeat) * viewport.height * heightAmount + vy * ageSec + placeY(sprOnsetBeat),
           -depth,
         )
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
