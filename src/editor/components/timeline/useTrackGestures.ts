@@ -511,6 +511,31 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         return
       }
 
+      // Repeat: clone the selected blocks immediately after themselves, offset by
+      // the selection's span (Logic-style). With nothing selected, Cmd/Ctrl+R
+      // stays the browser's refresh.
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) {
+        if (selectedBlockIds.size === 0) return
+        const store = useProjectStore.getState()
+        const picked: { trackId: string; block: Block }[] = []
+        for (const [tId, t] of Object.entries(store.tracks)) {
+          for (const b of t.blocks) if (selectedBlockIds.has(b.id)) picked.push({ trackId: tId, block: b })
+        }
+        if (picked.length === 0) return
+        e.preventDefault()
+        const start = Math.min(...picked.map((p) => p.block.startBar))
+        const end = Math.max(...picked.map((p) => p.block.startBar + p.block.durationBars))
+        const span = end - start
+        const clones: Block[] = []
+        for (const { trackId, block } of picked) {
+          const clone = cloneBlock({ ...block, startBar: block.startBar + span })
+          store.addBlock(trackId, clone)
+          clones.push(clone)
+        }
+        setSelectedBlockIds(new Set(clones.map((b) => b.id)))
+        return
+      }
+
       // Paste: dispatch on what was copied. Lands exactly at the playhead (no snap).
       if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
         const clip = useClipboardStore.getState().clip
