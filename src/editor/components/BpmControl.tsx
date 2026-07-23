@@ -21,7 +21,9 @@ export function BpmControl() {
   const lastDownRef = useRef(0)
 
   const commit = () => {
-    const n = parseInt(draft, 10)
+    // Decimals allowed: typing "106.4" means 106.4 (setBpm keeps two decimals).
+    // Dragging still steps whole BPM - precision is a typing gesture.
+    const n = parseFloat(draft)
     if (!Number.isNaN(n)) {
       useProjectStore.getState().setBpm(Math.max(MIN_BPM, Math.min(MAX_BPM, n)))
     }
@@ -76,7 +78,7 @@ export function BpmControl() {
         <input
           autoFocus
           type="text"
-          inputMode="numeric"
+          inputMode="decimal"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={(e) => e.target.select()}

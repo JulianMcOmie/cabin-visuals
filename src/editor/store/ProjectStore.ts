@@ -1751,7 +1751,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
   setBpm: (bpm) =>
     set((s) => {
-      const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm)))
+      // Two decimals, not integers: real songs sit off the grid ("My My Time
+      // Flies" is 106.4), and rounding here silently defeated both a typed
+      // fractional tempo and the detector's fractional estimate.
+      const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(bpm * 100) / 100))
       if (next === s.bpm) return s
       // The transcribed Lyrics track's truth is SECONDS (lyricTiming); its
       // beats are derived. Re-derive them at the new tempo so a BPM

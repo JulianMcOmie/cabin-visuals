@@ -144,10 +144,14 @@ export function detectBeats(buffer: AudioBuffer): BeatDetection | null {
   while (bpm < FOLD_MIN && bpm * 2 <= MAX_BPM) { bpm *= 2; period /= 2 }
   while (bpm > FOLD_MAX && bpm / 2 >= MIN_BPM) { bpm /= 2; period *= 2 }
 
-  // Snap to an integer BPM when we're within rounding noise of one - projects
-  // hold a single number and "120" beats "119.87" for everything downstream.
+  // Snap to an integer BPM only within rounding NOISE of one - after the
+  // multi-scale refinement the estimate is good to well under a tenth, so a
+  // wider window would eat genuinely fractional tempos (real songs sit off
+  // the grid: "My My Time Flies" is 106.4, which a 0.35 window kept - but
+  // 106.3 it would have flattened to 106). Projects hold decimals now, so
+  // "119.97" → 120 is the only job left for this snap.
   const rounded = Math.round(bpm)
-  if (Math.abs(bpm - rounded) < 0.35) bpm = rounded
+  if (Math.abs(bpm - rounded) < 0.1) bpm = rounded
   bpm = Math.round(bpm * 100) / 100
   period = (60 * fps) / bpm
 
