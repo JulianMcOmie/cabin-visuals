@@ -379,13 +379,6 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                 )
               })}
             </div>
-            {/* Style is optional: the project already sits on the bare Lyric
-                Video look, so skipping is a real choice, not a dead end. Only
-                once the words are IN, though - mid-pipeline the user waits -
-                and hidden once a card is picked (the flow is already leaving). */}
-            {!chosen && phase.kind === 'ready' && (
-              <EscapeButton label="Skip for now — keep the minimal look" onClick={onClose} />
-            )}
           </div>
         </div>
       ) : (
