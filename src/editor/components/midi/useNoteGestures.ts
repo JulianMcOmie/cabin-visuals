@@ -550,22 +550,9 @@ export function useNoteGestures({
         return
       }
 
-      // Repeat: duplicate the selected notes immediately after themselves, offset
-      // by the selection's span (Logic-style). With nothing selected, Cmd/Ctrl+R
-      // stays the browser's refresh.
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) {
-        if (selectedNoteIds.size === 0) return
-        e.preventDefault()
-        const sel = notes.filter(n => selectedNoteIds.has(n.id))
-        const start = Math.min(...sel.map(n => n.startBeat))
-        const end = Math.max(...sel.map(n => n.startBeat + n.durationBeats))
-        const span = end - start
-        if (span <= 0) return
-        const repeated = sel.map(n => ({ ...n, id: crypto.randomUUID(), startBeat: n.startBeat + span }))
-        onCommit([...notes, ...repeated])
-        setSelectedNoteIds(new Set(repeated.map(n => n.id)))
-        return
-      }
+      // Cmd/Ctrl+R is deliberately NOT bound (it used to be Logic-style Repeat):
+      // it is the browser's refresh, and hijacking it meant a reflexive reload
+      // with notes selected silently edited the project instead.
 
       if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V')) {
         const clip = useClipboardStore.getState().clip
