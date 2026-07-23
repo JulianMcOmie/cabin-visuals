@@ -180,8 +180,8 @@
 
 <div class="card">
   <div class="top"><h3>Visibility doesn't affect laser instruments</h3>
-    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
-  <p>Was: both laser fragment shaders output hard <code>alpha = 1.0</code>, so the visibility mover's opacity fade had nothing to grab onto. Fixed with the house pattern FilmStock already used: a <code>uOpacity</code> uniform fed each frame from the wrapper-written <code>Material.opacity</code>, and the point light fades with it. At opacity 1 the output is bit-identical to before, so existing projects are untouched.</p>
+    <div class="badges"><span class="badge b-want">Tyler: disappointing</span><span class="badge b-fixed">✓ Fixed &amp; verified 2026-07-22</span></div></div>
+  <p>Confirmed working by Julia. Took three passes — the shader fix was necessary but not sufficient, and the probe-driven hunt turned up <strong>two deeper bugs affecting every instrument</strong>: (1) a "hidden" object was still drawn at opacity 0 and kept writing depth, so its invisible silhouette carved holes out of anything behind it — fully faded objects are now un-rendered entirely; (2) shader-based instruments' opacity uniforms were written from a second site with its own timing — <code>applyMaterialOpacity</code> now syncs any material's declared <code>uOpacity</code> uniform itself, one write site, same frame as the render. Lasers (surface, bloom halo, and cast light), FilmStock, and preview ghosts all gate correctly now.</p>
 </div>
 
 <div class="card">
@@ -225,8 +225,8 @@
 
 <div class="card">
   <div class="top"><h3>Change instrument type in place</h3>
-    <div class="badges"><span class="badge b-want">Tyler: nice to have</span><span class="badge b-fixed">✓ Fixed 2026-07-22</span></div></div>
-  <p>Right-click a placed object track → <strong>Change instrument</strong> — the full library list (Main + core + extras), current instrument checked. Children, MIDI, targets, tags and mute state survive the swap (<code>setTrackInstrument</code> already preserved them); params reset to the new instrument's defaults, which is intentional since param keys differ.</p>
+    <div class="badges"><span class="badge b-want">Tyler: nice to have</span><span class="badge b-already">Already exists — tell Tyler</span></div></div>
+  <p><strong>This shipped long ago and nobody knew:</strong> select the placed track, then <strong>double-click any library row</strong> — the track converts in place, keeping its children/movers, MIDI, targets and mute (params reset to the new instrument's defaults). Cycling = double-click library rows one after another; the library's hover preview even shows each instrument before you commit. A right-click "Change instrument" menu was briefly added on 2026-07-22 and removed the same day as redundant. Remaining gap is discoverability only — nothing hints that double-click means "convert selected track".</p>
 </div>
 
 <div class="card">
