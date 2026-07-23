@@ -77,11 +77,15 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     // Stable references per resolve - a structural re-resolve replaces them.
     put(state.notes)
     put(state.stringParams)
-    // Copy color is an instrument input: MIDI-driven shifts must invalidate an
-    // otherwise static instrument even though the base stringParams are stable.
+    // Copy color and copy opacity are instrument inputs: MIDI-driven shifts and
+    // visibility fades must invalidate an otherwise static instrument (the
+    // lasers write copy opacity into a shader uniform) even though the base
+    // stringParams are stable - e.g. tweaking a visibility mover's ADSR while
+    // paused changes copy opacity at a frozen beat.
     put(hueShift)
     put(saturationShift)
     put(lightnessShift)
+    put(visualCopy?.opacity ?? 1)
     put(state.abilityEvents)
     put(state.videoPads)
     put(state.photoPads)

@@ -1,6 +1,8 @@
-import { useRef } from 'react'
+import { useContext, useRef } from 'react'
 import { Color, DoubleSide, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { getVisualCopy } from '../core/visual/VisualEngine'
+import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
 
@@ -81,6 +83,7 @@ export function LaserLine({ trackId }: { trackId: string }) {
   const baseColor = useRef(new Color())
   const coreColor = useRef(new Color())
   const rimColor = useRef(new Color())
+  const copyContext = useContext(InstrumentCopyContext)
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
@@ -104,9 +107,13 @@ export function LaserLine({ trackId }: { trackId: string }) {
     const material = mesh.material as ShaderMaterial
     ;(material.uniforms.coreColor.value as Color).copy(coreColor.current)
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current)
-    // Ride the wrapper-written Material.opacity so the surface and the light
-    // it casts fade together.
-    const fade = material.opacity
+    // Visibility/mover fades, computed from engine state THIS frame - the
+    // same product the placement wrapper writes into Material.opacity. Do NOT
+    // read Material.opacity instead: this callback runs before the wrapper's
+    // pass, so that value is one frame stale, and the paused editor renders
+    // exactly one frame per change - the staleness never converges.
+    const copyOpacity = copyContext ? getVisualCopy(trackId, copyContext.visualCopyIndex)?.opacity ?? 1 : 1
+    const fade = Math.max(0, Math.min(1, state.opacity * copyOpacity))
     material.uniforms.uOpacity.value = fade
 
     light.color.copy(baseColor.current)
