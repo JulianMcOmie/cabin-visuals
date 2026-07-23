@@ -1,4 +1,6 @@
-import { DEFAULT_SCENE_BACKGROUND, type Block, type EffectInstance, type InterpolationMode, type Note, type Track, type TrackType, type Routing } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type Block, type EffectInstance, type InterpolationMode, type Note, type Track, type TrackType, type Routing, type VideoPad } from '../editor/types'
+import type { VideoClip } from '../editor/store/VideoStore'
+import type { ViewAspect } from '../editor/store/ProjectStore'
 import type { ProjectDocument } from '../persistence/types'
 
 // Authoring helpers for template documents. Templates are plain v2 project
@@ -86,6 +88,10 @@ export interface TrackSpec {
   noise?: Track['noise']
   /** Visual effect plugins on this track (build with the fx() helper). */
   effects?: EffectInstance[]
+  /** For the Video instrument: the ordered pad bank. Template pads reference
+   *  PUBLIC APP ASSETS (refs starting with '/'), shipped in /public - the
+   *  matching source descriptors go in doc()'s videoClips. */
+  videoPads?: VideoPad[]
   children?: TrackSpec[]
 }
 
@@ -125,6 +131,7 @@ export function track(spec: TrackSpec): Track & { __children?: Track[] } {
   if (spec.interpolation) t.interpolation = spec.interpolation
   if (spec.noise) t.noise = spec.noise
   if (spec.effects) t.effects = spec.effects
+  if (spec.videoPads) t.videoPads = spec.videoPads
   if (spec.children) t.__children = spec.children.map((c) => track(c))
   return t
 }
@@ -135,6 +142,18 @@ export function doc(opts: {
   totalBars?: number
   beatsPerBar?: number
   tracks: Array<Track & { __children?: Track[] }>
+  /** Source catalog for any videoPads above (public-asset refs). */
+  videoClips?: Record<string, VideoClip>
+  /** Template-shipped audio tracks (public-asset refs, e.g. a voiceover and a
+   *  music bed). Land via hydrate on project creation; applyTemplate
+   *  deliberately keeps the project's own audio instead. `trimEnd` defaults to
+   *  the source duration - pass it to end the block before the file does. */
+  audio?: Array<{ name: string; ref: string; fileName: string; duration: number; trimEnd?: number }>
+  /** Canvas aspect the template is authored for (e.g. '9:16' for short-form).
+   *  Applied when a project is CREATED from the template (hydrate honors the
+   *  document field); applyTemplate deliberately never reshapes an existing
+   *  project's canvas. */
+  viewAspect?: ViewAspect
 }): ProjectDocument {
   const tracks: Record<string, Track> = {}
   const rootTrackIds: string[] = []
@@ -165,8 +184,32 @@ export function doc(opts: {
       [sceneId]: { id: sceneId, name: 'Scene 1', isMain: false, backgroundColor: DEFAULT_SCENE_BACKGROUND, backgroundTransparent: false, tracks, rootTrackIds },
     },
     sceneOrder: [mainId, sceneId],
-    audioTracks: {},
-    audioRootTrackIds: [],
-    audioClips: {},
+    ...(opts.audio?.length
+      ? (() => {
+          const audioTracks: ProjectDocument['audioTracks'] = {}
+          const audioRootTrackIds: string[] = []
+          const audioClips: ProjectDocument['audioClips'] = {}
+          for (const a of opts.audio) {
+            const audioId = nid('aud')
+            audioTracks[audioId] = {
+              id: audioId,
+              name: a.name,
+              type: 'audio' as const,
+              instrumentId: '',
+              color: '#ef4444',
+              muted: false,
+              solo: false,
+              blocks: [],
+              childIds: [],
+              audioBlocks: [{ id: nid('ab'), clipRef: a.ref, startBar: 0, trimStart: 0, trimEnd: a.trimEnd ?? a.duration }],
+            }
+            audioRootTrackIds.push(audioId)
+            audioClips[a.ref] = { ref: a.ref, fileName: a.fileName, duration: a.duration }
+          }
+          return { audioTracks, audioRootTrackIds, audioClips }
+        })()
+      : { audioTracks: {}, audioRootTrackIds: [], audioClips: {} }),
+    ...(opts.videoClips ? { videoClips: opts.videoClips } : {}),
+    ...(opts.viewAspect ? { viewAspect: opts.viewAspect } : {}),
   }
 }

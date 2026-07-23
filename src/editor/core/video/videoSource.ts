@@ -47,11 +47,20 @@ export function retryVideoUpload(ref: string, onProgress?: (fraction: number) =>
   return uploadVideoTo(ref, file, onProgress)
 }
 
-/** A mediabunny Source for a ref: the session File if we have it, else the
- *  bucket's signed URL (range-streamed, not fully downloaded). */
+/** A ref that is a PUBLIC APP ASSET (template placeholder clips under
+ *  /templates/...), not a bucket path. These ship with the app: no upload, no
+ *  signing, no per-user storage - the document just points at the asset. */
+export function isPublicAssetRef(ref: string): boolean {
+  return ref.startsWith('/')
+}
+
+/** A mediabunny Source for a ref: the session File if we have it, a public
+ *  app asset served as-is, else the bucket's signed URL (range-streamed,
+ *  not fully downloaded). */
 export async function getVideoSource(ref: string): Promise<Source> {
   const file = memFiles.get(ref)
   if (file) return new BlobSource(file)
+  if (isPublicAssetRef(ref)) return new UrlSource(new URL(ref, window.location.origin).href)
   // Hydrated clip: signed URLs expire, so resolve fresh per open.
   return new UrlSource(await getVideoUrl(ref))
 }

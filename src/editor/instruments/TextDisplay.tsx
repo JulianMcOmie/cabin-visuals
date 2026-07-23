@@ -214,9 +214,10 @@ function createTextCanvas(
   strokeColor: string,
   glow = 0,
   glowContained = false,
+  shadow = 0,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
-  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}`
+  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}|${shadow}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -232,8 +233,9 @@ function createTextCanvas(
   ctx.font = fontStr(fontSize)
 
   const layoutText = entry.layoutText || entry.text
-  // Stroke joins and glow halos poke past the glyph box - pad for both.
-  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize + glow * fontSize * 0.35
+  // Stroke joins, glow halos, and shadow blur poke past the glyph box - pad
+  // for all three.
+  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize + glow * fontSize * 0.35 + shadow * fontSize * 0.3
   const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
   let measured = ctx.measureText(layoutText).width
   if (measured > maxTextWidth && measured > 0) {
@@ -337,7 +339,20 @@ function createTextCanvas(
       ctx.fillStyle = color
     }
   }
+  // Soft drop shadow under the final fill - the short-form caption treatment
+  // (white bold word floating on footage). Distinct from glow: glow halos in
+  // the TEXT's color, shadow grounds it in black.
+  if (shadow > 0) {
+    ctx.shadowColor = 'rgba(0,0,0,0.85)'
+    ctx.shadowBlur = shadow * fontSize * 0.18
+    ctx.shadowOffsetY = shadow * fontSize * 0.07
+  }
   ctx.fillText(entry.text, drawX, cy)
+  if (shadow > 0) {
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
+  }
 
   if (canvasCache.size >= CANVAS_CACHE_MAX) {
     const firstKey = canvasCache.keys().next().value
@@ -473,6 +488,9 @@ const PARAMS: ParamDef[] = [
   { key: 'strokeColor', label: 'Stroke Color', type: 'color', default: '#000000' },
   { key: 'fontSize', label: 'Font Size', min: 0.1, max: 5, step: 0.1, default: 1 },
   { key: 'strokeWidth', label: 'Stroke Width', min: 0, max: 0.2, step: 0.01, default: 0.05 },
+  // Soft black drop shadow under the glyphs - the short-form caption look
+  // (white bold words floating over footage), where a stroke reads too hard.
+  { key: 'shadow', label: 'Shadow', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 1 },
   { key: 'releaseDuration', label: 'Release Fade', min: 0, max: 2, step: 0.05, default: 0.4 },
   { key: 'heightAmount', label: 'Height Amount', min: 0, max: 1, step: 0.05, default: 0.35 },
@@ -696,6 +714,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
     const glowContained = (p.glowContained ?? 0) >= 0.5
+    const shadow = p.shadow ?? 0
     const particleMode = (p.particleEnabled ?? 0) >= 0.5
     const jitter = p.jitter ?? 0
     // Hue Shift rotates whatever color is about to draw (authored or rainbow).
@@ -1021,10 +1040,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const entry = entries[i % entries.length]
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
           }
 
           const s = i * 131
@@ -1079,10 +1098,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
 
     // Re-render main texture when the word or styling changes.
-    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}`
+    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained))
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -1124,10 +1143,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const spr = acquireFlightSprite(groupRef.current)
         configureTextMaterial(spr.mat, invertInThisPass)
         const sprStrokeColor = invertBehind ? '#ffffff' : strokeColor
-        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}`
+        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}|${shadow}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, glowContained))
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, glowContained, shadow))
         }
         spr.mesh.position.set(
           vx * ageSec + placeX(sprOnsetBeat),
@@ -1208,9 +1227,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
       const echoEntry = entries[echoIdx % entries.length]
       const tex = echoTexturesRef.current[tap]
-      const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}`
+      const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}|${shadow}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained))
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
         echoLastWordsRef.current[tap] = echoKey
       }
 

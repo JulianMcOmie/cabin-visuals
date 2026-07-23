@@ -9,10 +9,11 @@ import { LYRIC_TEMPLATES } from './library-lyrics'
 import { silentFilm } from './library-silent-film'
 import { wormhole } from './library-wormhole'
 import { neonPsychedelic } from './library-neon-psychedelic'
+import { promoCuts } from './library-promo'
 
-// Lyric videos lead (the product's current wedge), then Slideshow - the two
+// Lyric videos lead (the product's current wedge), then the other
 // "bring your own material" starting points.
-export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, wormhole, neonPsychedelic, slideshow]
+export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, wormhole, neonPsychedelic, slideshow, promoCuts]
 
 /** The looks a lyric project can wear, in offer order. These are ordinary
  *  templates that happen to share the Lyrics-track contract, so switching
@@ -21,7 +22,11 @@ export const LYRIC_STYLES: TemplateDef[] = TEMPLATES.filter((t) => t.lyricFlow)
 
 /** Templates the projects page advertises. The lyric STYLES are excluded:
  *  you choose a look after transcription, not before there is a song. */
-export const GALLERY_TEMPLATES: TemplateDef[] = TEMPLATES.filter((t) => !t.hiddenFromGallery)
+export const GALLERY_TEMPLATES: TemplateDef[] = TEMPLATES.filter((t) => !t.hiddenFromGallery && !t.unlisted)
+
+/** Templates any listing surface may show (the editor's Templates tab).
+ *  Unlisted templates are reachable only by direct id. */
+export const LISTED_TEMPLATES: TemplateDef[] = TEMPLATES.filter((t) => !t.unlisted)
 
 /** Is this project on a lyric template? Such a project only ever wants lyric
  *  styles offered to it. Falls back to the Lyrics-track contract so a project

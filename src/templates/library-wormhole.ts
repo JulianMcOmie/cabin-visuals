@@ -43,10 +43,11 @@ import { lyricPattern } from './library-lyrics'
 // reads as speed instead of a static starfield.
 //
 // NOT captured here: the reference project's canvas aspect, whatever it happens
-// to be on (it has moved between 9:16 and fill across re-syncs). Templates have
-// no way to carry viewAspect - doc() does not take one and applyTemplate does
-// not set one - so applying this style always leaves the project's aspect alone.
-// See the note at the bottom of this file.
+// to be on (it has moved between 9:16 and fill across re-syncs). doc() CAN
+// carry viewAspect now (creation-only; see builder.ts), but this style
+// deliberately doesn't declare one - applying a style never reshapes the
+// project's canvas, and neither should starting from it until the reference
+// settles on an aspect. See the note at the bottom of this file.
 
 const BARS = 16
 // 512 = MAX_TOTAL_BARS, the project-length ceiling. The block is authored to it
@@ -234,15 +235,11 @@ function wormholeDocument() {
   })
 }
 
-// The canvas-aspect gap, deliberately left open. Nothing in the template pipeline
-// carries an aspect: `doc()` emits no viewAspect and `applyTemplate` never writes
-// one, so a style cannot change it. The reference has sat on both 9:16 and fill
-// at different points, and neither travelled with the style either way.
-//
-// Wiring it up is small (one optional field, honoured only when a template declares
-// it, so every existing template keeps today's behaviour) but the CONSEQUENCE is
-// not: picking a style would silently reshape the user's canvas, which is a much
-// louder side effect than swapping colours and fonts. Left for Julia to call.
+// The canvas-aspect gap, half-closed on 2026-07-23: `doc()` now takes an
+// optional viewAspect (Promo Cuts uses '9:16'), honoured only when a project
+// is CREATED from the template - `applyTemplate` still never writes one, so
+// picking a STYLE can never silently reshape the user's canvas. This template
+// declares none: the reference has sat on both 9:16 and fill across re-syncs.
 export const wormhole: TemplateDef = {
   id: 'wormhole',
   name: 'Wormhole',

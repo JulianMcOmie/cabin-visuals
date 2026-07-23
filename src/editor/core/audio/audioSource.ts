@@ -53,6 +53,9 @@ export async function retryAudioUpload(
 export async function getPlayableUrl(ref: string): Promise<string> {
   const cached = mem.get(ref)
   if (cached) return cached
+  // Public app asset (template-shipped audio like the promo voiceover, refs
+  // starting with '/'): served as-is, no bucket, no signing.
+  if (ref.startsWith('/')) return ref
   // Not in this session's cache - a hydrated project's clip. Signed URLs
   // expire, so they're resolved fresh per load rather than cached.
   return getAudioUrl(ref)

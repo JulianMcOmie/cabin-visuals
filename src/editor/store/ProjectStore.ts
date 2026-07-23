@@ -8,6 +8,7 @@ import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
+import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
 
 export const MIN_BPM = 20
@@ -1576,6 +1577,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       cloned[c.id] = c
     }
     const clonedRoots = src.rootTrackIds.map((id) => idMap.get(id)).filter((x): x is string => !!x)
+
+    // Template-shipped video sources (public-asset placeholder clips): merge
+    // them into the catalog so the incoming tracks' videoPads resolve. A new
+    // project created FROM a template gets these via hydrate(); this covers
+    // switching templates inside the editor. Merge, don't replace - the
+    // project's own uploaded clips must survive a template switch.
+    if (templateDoc.videoClips && Object.keys(templateDoc.videoClips).length > 0) {
+      useVideoStore.setState((v) => ({ videoClips: { ...templateDoc.videoClips, ...v.videoClips } }))
+    }
 
     set((s) => {
       const audioIds = s.rootTrackIds.filter((id) => s.tracks[id]?.type === 'audio')

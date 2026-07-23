@@ -12,7 +12,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
-import { TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
+import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
 import { TemplateLyricPreview } from '../../components/TemplateLyricPreview'
@@ -481,7 +481,7 @@ function TemplatesTab() {
     return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
   }))
   const isLyricProject = isLyricTemplateId(appliedTemplateId) || hasLyricsTrack
-  const shown = isLyricProject ? LYRIC_STYLES : TEMPLATES
+  const shown = isLyricProject ? LYRIC_STYLES : LISTED_TEMPLATES
   const router = useRouter()
   const projectId = useSearchParams().get('project')
   // Covers the editor while the applied template autosaves before handing

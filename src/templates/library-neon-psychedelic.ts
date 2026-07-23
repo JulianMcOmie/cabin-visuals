@@ -172,9 +172,9 @@ function neonPsychedelicDocument() {
   })
 }
 
-// Like the Wormhole style, the reference project is 9:16 and templates cannot
-// carry a canvas aspect (doc() emits no viewAspect and applyTemplate never
-// writes one), so applying this leaves the project's aspect alone.
+// Like the Wormhole style, the reference project is 9:16 but this declares no
+// viewAspect (doc() supports it, creation-only) - applying a style never
+// reshapes the project's canvas, so styles stay aspect-neutral.
 export const neonPsychedelic: TemplateDef = {
   id: 'neonPsychedelic',
   name: 'Neon Psychedelic',

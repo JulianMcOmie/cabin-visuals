@@ -32,5 +32,9 @@ export interface TemplateDef {
    *  styles live here: you pick a look AFTER there is a song to hear it
    *  against, so the gallery shows one lyric entry rather than three. */
   hiddenFromGallery?: boolean
+  /** Fully unlisted: shown in NO surface (gallery, editor Templates tab,
+   *  style grids) - reachable only by direct id (/editor?template=<id>).
+   *  For private/in-development templates. */
+  unlisted?: boolean
   document: ProjectDocument
 }

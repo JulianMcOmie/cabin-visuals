@@ -117,7 +117,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const invertBehind = numberOf(colorMode) >= 0.5
 
   const placed = new Set([
-    'text', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'opacity',
+    'text', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
     'posX', 'posY', 'posMode',
     'onsetBounce', 'releaseDuration', 'heightAmount',
@@ -190,6 +190,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         )
       })()}
       <BoundSlider bound={findParam(parameters, 'strokeWidth')} />
+      <BoundSlider bound={findParam(parameters, 'shadow')} />
       <BoundSlider bound={findParam(parameters, 'opacity')} />
 
       {/* --- Color --- */}
