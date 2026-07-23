@@ -76,6 +76,21 @@ export function ObjectRenderer({
     const visualCopy = getVisualCopy(trackId, visualCopyIndex)
     g.visible = !!state && !state.blackedOut
     if (state) applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
+    // TEMP diagnostic (dev only): `__fadeDebug` in the console shows what the
+    // placement wrapper applied per occurrence this frame - state opacity,
+    // copy opacity, and whether the copy lookup came back EMPTY (the ?? 1
+    // fallback silently un-fades everything). Remove once visibility on
+    // lasers is confirmed fixed.
+    if (process.env.NODE_ENV !== 'production') {
+      const w = window as unknown as { __fadeDebug?: Record<string, unknown> }
+      ;(w.__fadeDebug ??= {})[`${sceneId}:${trackId}:${visualCopyIndex}`] = {
+        stateOpacity: state?.opacity,
+        copyOpacity: visualCopy?.opacity,
+        copyMissing: !visualCopy,
+        stateMissing: !state,
+        blackedOut: state?.blackedOut ?? null,
+      }
+    }
     if (isFullFrame) {
       // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
       // occurrence's VisualCopy transform applies inside screen space, so an
