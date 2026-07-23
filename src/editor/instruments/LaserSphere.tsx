@@ -112,6 +112,13 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     const copyOpacity = copyContext ? getVisualCopy(trackId, copyContext.visualCopyIndex)?.opacity ?? 1 : 1
     const fade = Math.max(0, Math.min(1, state.opacity * copyOpacity))
     material.uniforms.uOpacity.value = fade
+    // TEMP diagnostic (dev only): read `__laserFade` in the console to see the
+    // fade each laser last computed - splits "engine never fades" from "shader
+    // ignores the fade" without guessing. Remove once visibility is confirmed.
+    if (process.env.NODE_ENV !== 'production') {
+      const w = window as unknown as { __laserFade?: Record<string, number> }
+      ;(w.__laserFade ??= {})[`${trackId}:${copyContext?.visualCopyIndex ?? 0}`] = fade
+    }
 
     light.color.copy(baseColor.current)
     light.intensity = sceneLight * flare * fade

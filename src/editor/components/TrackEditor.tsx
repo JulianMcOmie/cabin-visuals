@@ -617,15 +617,13 @@ export function TrackEditor() {
                     return (
                       <>
                         <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">AUTOMATION</p>
-                        <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
-                          Drives <span className="text-[var(--text)]">{targetLabel}</span> from the lane&apos;s value keyframes.
-                        </p>
+                        {/* Same row shape as ParamControl's select params. */}
                         <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
-                          <span className="text-[11px] text-[var(--text-3)]">Curve</span>
+                          <span className="text-[11px] text-[var(--text-3)] truncate" title="Curve">Curve</span>
                           <select
                             value={track.interpolation ?? 'linear'}
                             onChange={(e) => setTrackInterpolation(track.id, e.target.value as InterpolationMode)}
-                            className="h-6 px-1 rounded bg-[var(--bg-elevated)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
+                            className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
                           >
                             {INTERP_OPTIONS.map((o) => (
                               <option key={o.value} value={o.value}>{o.label}</option>
@@ -633,8 +631,7 @@ export function TrackEditor() {
                           </select>
                         </div>
                         <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-                          Step holds each value until the next keyframe; the other curves glide between keyframes.
-                          Noise mode lives in the lane&apos;s MIDI editor toolbar.
+                          Drives <span className="text-[var(--text-2)]">{targetLabel}</span>. Step holds each value; the other curves glide.
                         </p>
                       </>
                     )
