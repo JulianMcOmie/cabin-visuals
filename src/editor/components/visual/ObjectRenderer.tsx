@@ -74,8 +74,12 @@ export function ObjectRenderer({
     // multiplies. Color shifts are applied earlier, to the instrument's own
     // declared color params by useInstrumentFrame.
     const visualCopy = getVisualCopy(trackId, visualCopyIndex)
-    g.visible = !!state && !state.blackedOut
-    if (state) applyMaterialOpacity(g, state.opacity * (visualCopy?.opacity ?? 1))
+    const fade = state ? state.opacity * (visualCopy?.opacity ?? 1) : 0
+    // Fully hidden = fully absent. An opacity-0 mesh still writes depth, so a
+    // "hidden" object would otherwise carve its invisible silhouette out of
+    // anything drawn behind it (the visibility-mover ghost-wall artifact).
+    g.visible = !!state && !state.blackedOut && fade > 0.001
+    if (state) applyMaterialOpacity(g, fade)
     // TEMP diagnostic (dev only): `__fadeDebug` in the console shows what the
     // placement wrapper applied per occurrence this frame, plus what the
     // materials under it actually hold AFTER the apply and whether the group

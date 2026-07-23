@@ -28,7 +28,10 @@ function clampOpacity(v: number): number {
 }
 
 /** Wrapper-side pass: multiply the object's mover opacity onto every material's
- *  base opacity (authored, or the instrument's latest animated value). */
+ *  base opacity (authored, or the instrument's latest animated value). A raw
+ *  ShaderMaterial ignores Material.opacity, so any material declaring a
+ *  `uOpacity` uniform (the lasers, FilmStock) gets the same value written
+ *  there too - one write site, same frame as the render. */
 export function applyMaterialOpacity(root: Group, opacity: number): void {
   const resolvedOpacity = clampOpacity(opacity)
   root.traverse((obj) => {
@@ -44,6 +47,8 @@ export function applyMaterialOpacity(root: Group, opacity: number): void {
         || resolvedOpacity < 0.999
         || baseOpacity < 0.999
       material.opacity = clampOpacity(baseOpacity * resolvedOpacity)
+      const uniforms = (material as { uniforms?: Record<string, { value: unknown }> }).uniforms
+      if (uniforms?.uOpacity) uniforms.uOpacity.value = material.opacity
     }
   })
 }
