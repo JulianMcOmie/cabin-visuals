@@ -49,11 +49,12 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 const PITCH_BASS_POP = 47
 const PITCH_NEXT_WORD = 48
 // A near-subliminal insert: for ~2 frames the current word renders BLOWN UP
-// (letterform fragments filling the frame) then snaps back - the single-frame
-// giant-text flash that punctuates word transitions in fast lyric edits.
+// then snaps back - the single-frame giant-text flash that punctuates word
+// transitions in fast lyric edits. How big is the `zoomFlash` param: the
+// reference blows up to illegible letterform fragments (~6.5), the default
+// stays readable.
 const PITCH_ZOOM_FLASH = 46
 const ZOOM_FLASH_SECONDS = 0.09
-const ZOOM_FLASH_SCALE = 6.5
 const PITCH_HEIGHT_MIN = 60 // C4
 const PITCH_HEIGHT_MAX = 72 // C5
 const PITCH_HEIGHT_CENTER = 66 // F#4 = no offset
@@ -441,10 +442,20 @@ const PARAMS: ParamDef[] = [
     key: 'layoutMode', label: 'Layout', type: 'select', default: 0, options: [
       { value: 0, label: 'Center' },
       { value: 1, label: 'Scatter' },
+      // Words of the current phrase accumulate into centered stacked lines
+      // ("WHO" → "WHO YOU" → "WHO YOU / FOOLIN'?"), clearing at phrase gaps -
+      // the lyric-card grammar of fast monochrome edits.
+      { value: 2, label: 'Stack' },
     ],
   },
+  // Phrase Gap serves BOTH non-center layouts (it is the card/phrase cutter),
+  // so it gates on "any non-center"; the mode-specific knobs pin to their own
+  // mode - a Scatter Spread slider means nothing while the layout is Stack.
   { key: 'phraseGap', label: 'Phrase Gap (beats)', min: 0.5, max: 8, step: 0.5, default: 2, showIf: 'layoutMode' },
-  { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6, showIf: 'layoutMode' },
+  { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6, showIf: 'layoutMode=1' },
+  // Stack cards hold at most this many words before starting a fresh card -
+  // the reference never shows more than 3-4 at once.
+  { key: 'stackMaxWords', label: 'Stack Max Words', min: 1, max: 8, step: 1, default: 4, showIf: 'layoutMode=2' },
   // Where the words sit, as a fraction of the frame from centre: -1/+1 reaches
   // the edge. Screen-relative rather than world units, so it means the same
   // thing at any aspect and survives export at a different resolution.
@@ -498,9 +509,16 @@ const PARAMS: ParamDef[] = [
   // (white bold words floating over footage), where a stroke reads too hard.
   { key: 'shadow', label: 'Shadow', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.05, default: 1 },
-  { key: 'releaseDuration', label: 'Release Fade', min: 0, max: 2, step: 0.05, default: 0.4 },
+  // Words never fade on their own: each stays up until the next one replaces
+  // it (Release Fade only applies to the very end of the block). The classic
+  // lyric-video hold.
+  { key: 'sustain', label: 'Hold Until Next Word', type: 'boolean', default: 0 },
+  { key: 'releaseDuration', label: 'Release Fade', min: 0, max: 2, step: 0.05, default: 0.4, showIf: 'sustain=0' },
   { key: 'heightAmount', label: 'Height Amount', min: 0, max: 1, step: 0.05, default: 0.35 },
   { key: 'onsetBounce', label: 'Onset Bounce', min: 0, max: 0.5, step: 0.01, default: 0.08 },
+  // How far the pitch-46 Zoom flash blows the word up for its ~2 frames. 3
+  // keeps the word readable on screen; the reference's ~6.5 is pure fragments.
+  { key: 'zoomFlash', label: 'Zoom Flash Scale', min: 1.5, max: 8, step: 0.1, default: 3 },
   { key: 'delayTaps', label: 'Delay Taps', min: 0, max: MAX_DELAY_TAPS, step: 1, default: 0 },
   { key: 'delayTime', label: 'Delay Time', min: 0.05, max: 2, step: 0.05, default: 0.3, showIf: 'delayTaps' },
   { key: 'delayScaleFalloff', label: 'Delay Scale Falloff', min: 0, max: 0.5, step: 0.02, default: 0.15, showIf: 'delayTaps' },
@@ -690,6 +708,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const strokeWidth = p.strokeWidth ?? 0.05
     const textOpacity = p.opacity ?? 1
     const releaseDuration = p.releaseDuration ?? 0.4
+    // Hold Until Next Word: a word never releases on its own - it stays at
+    // full opacity until the next word note replaces it. There is always a
+    // current word once one has sounded, so "no release" is the whole
+    // implementation; block gating still ends everything with the block.
+    const sustainWords = (p.sustain ?? 0) >= 0.5
     const heightAmount = p.heightAmount ?? 0.35
     // Placement latched at the beat a word was placed. With Position automated,
     // this is what stops a word that is still fading from sliding across the frame
@@ -701,6 +724,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const placeY = (b: number) => (perWordPlacement
       ? paramAtBeat(state, 'posY', b) * viewport.height * 0.5 : 0)
     const onsetBounce = p.onsetBounce ?? 0.08
+    const zoomFlashScale = p.zoomFlash ?? 3
     const delayTaps = Math.round(p.delayTaps ?? 0)
     const delayTime = p.delayTime ?? 0.3
     const delayScaleFalloff = p.delayScaleFalloff ?? 0.15
@@ -715,7 +739,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const flightSubdivRate = p.flightSubdivRate ?? 8
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
-    const scatterMode = (p.layoutMode ?? 0) >= 0.5
+    const layoutModeValue = Math.round(p.layoutMode ?? 0)
+    const scatterMode = layoutModeValue === 1
+    const stackMode = layoutModeValue === 2
     const phraseGap = p.phraseGap ?? 2
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
@@ -1032,7 +1058,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       phraseStart = Math.max(phraseStart, wordCount - MAX_SCATTER_WORDS)
 
       let releaseOpacity = 1
-      if (!isNoteHeld && lastWordNote) {
+      if (!sustainWords && !isNoteHeld && lastWordNote) {
         const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
         releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
       }
@@ -1100,6 +1126,128 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           )
           spr.mesh.rotation.set(0, 0, rot)
           setAnimatedOpacity(spr.mat, (newest ? 1 : 0.78) * flickerK * releaseOpacity * textOpacity)
+        }
+      }
+      return
+    }
+
+    // --- Stack layout ---
+    // Words land on centered, stacked CARDS of at most stackMaxWords words:
+    // a new card starts at a phraseGap-sized silence or when the card is
+    // full. The layout is computed over the WHOLE card - future words
+    // included, straight from the note list - so every word's place is
+    // reserved before it is sung: words never re-flow to make room, each one
+    // just takes its spot ("WHO" appears where it will sit once "YOU" and
+    // "FOOLIN'?" have joined it). Pure function of (beat, notes): scrub ==
+    // playback. Echo taps and flight stay dormant, exactly like Scatter.
+    if (stackMode) {
+      meshRef.current.visible = false
+      setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
+      for (const mesh of echoMeshesRef.current) mesh.visible = false
+      for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
+      // Cut the FULL word stream (future included) into cards, then find the
+      // card holding the last sung word.
+      const maxWords = Math.max(1, Math.round(p.stackMaxWords ?? 4))
+      const allWordNotes = state.notes.filter((note) => note.pitch === PITCH_NEXT_WORD)
+      let cardStart = 0
+      let cardEnd = 0 // exclusive
+      {
+        let start = 0
+        for (let i = 1; i <= allWordNotes.length; i++) {
+          const boundary = i === allWordNotes.length
+            || allWordNotes[i].beat - allWordNotes[i - 1].beat >= phraseGap
+            || i - start >= maxWords
+          if (boundary) {
+            if (wordCount - 1 >= start && wordCount - 1 < i) { cardStart = start; cardEnd = i; break }
+            start = i
+          }
+        }
+      }
+
+      let releaseOpacity = 1
+      if (!sustainWords && !isNoteHeld && lastWordNote) {
+        const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
+        releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
+      }
+
+      const onsetAge = lastWordNote ? (currentBeat - lastWordNote.beat) * secPerBeat : 1
+      const onsetT = Math.min(onsetAge / 0.12, 1)
+      const popScale = 1 + onsetBounce * 2 * (1 - onsetT)
+
+      // Zoom flash blows the whole card up for its ~2-frame window.
+      const zoomAge = lastZoomNote ? (currentBeat - lastZoomNote.beat) * secPerBeat : Infinity
+      const zoomFlash = zoomAge < ZOOM_FLASH_SECONDS ? zoomFlashScale : 1
+
+      for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+      if (releaseOpacity > 0 && wordCount > 0 && cardEnd > cardStart) {
+        const phraseBeat = allWordNotes[cardStart].beat
+        // Cards run BIG - three or four words at most, so each word gets real
+        // presence (the reference's singles span nearly half the frame).
+        const wordScale = sizeAt(phraseBeat) * 0.72 * zoomFlash
+        const spaceW = wordScale * 0.26
+        const maxLineW = viewport.width * 0.88 * zoomFlash
+
+        // Sprites for EVERY card word; future words reserve their place but
+        // stay invisible until sung.
+        const sprites: { spr: FlightPooled; width: number; sung: boolean; newest: boolean }[] = []
+        for (let i = cardStart; i < cardEnd; i++) {
+          const entry = entries[i % entries.length]
+          const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
+          configureTextMaterial(spr.mat, invertInThisPass)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+          if (sprKey !== spr.key) {
+            spr.key = sprKey
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+          }
+          sprites.push({
+            spr,
+            width: wordScale * texAspect(spr.texture),
+            sung: allWordNotes[i].beat <= currentBeat,
+            newest: i === wordCount - 1,
+          })
+        }
+
+        // Greedy line wrap over the whole card.
+        const lines: { start: number; end: number; width: number }[] = []
+        let lineStart = 0
+        let lineWidth = 0
+        for (let i = 0; i < sprites.length; i++) {
+          const candidate = lineWidth + (lineWidth > 0 ? spaceW : 0) + sprites[i].width
+          if (lineWidth > 0 && candidate > maxLineW) {
+            lines.push({ start: lineStart, end: i, width: lineWidth })
+            lineStart = i
+            lineWidth = sprites[i].width
+          } else {
+            lineWidth = candidate
+          }
+        }
+        lines.push({ start: lineStart, end: sprites.length, width: lineWidth })
+
+        // Tight stack, like the reference's cards: lines sit close (cap-height
+        // spacing), the whole card centered on the placement point.
+        const lineGap = wordScale * 0.6
+        const cardX = placeX(phraseBeat)
+        const cardY = currentYOffset * viewport.height * heightAmount + placeY(phraseBeat)
+        for (let li = 0; li < lines.length; li++) {
+          const line = lines[li]
+          const y = cardY + ((lines.length - 1) / 2 - li) * lineGap
+          let x = cardX - line.width / 2
+          for (let i = line.start; i < line.end; i++) {
+            const { spr, width, sung, newest } = sprites[i]
+            if (!sung) {
+              // Its place is reserved by the layout; it just isn't lit yet.
+              spr.mesh.visible = false
+              x += width + spaceW
+              continue
+            }
+            const s = wordScale * (newest ? popScale : 1)
+            spr.mesh.scale.set(s * texAspect(spr.texture), s, 1)
+            spr.mesh.position.set(x + width / 2, y, -0.0004 * (sprites.length - i))
+            spr.mesh.rotation.set(0, 0, 0)
+            setAnimatedOpacity(spr.mat, releaseOpacity * textOpacity)
+            x += width + spaceW
+          }
         }
       }
       return
@@ -1174,7 +1322,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
     // --- Main mesh ---
     let releaseOpacity = 1
-    if (isNoteHeld) {
+    if (sustainWords || isNoteHeld) {
       releaseOpacity = 1
     } else if (lastWordNote) {
       const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
@@ -1203,11 +1351,10 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const wordIdx = wordCount - 1
     const jitterSize = 1 + (seededRand(wordIdx * 131 + 8) - 0.5) * 2 * jitter * 0.18
     const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
-    // Zoom flash: while its window is open the word renders BLOWN UP - the
-    // letterforms overflow the frame as giant fragments, then snap back. A
-    // hard switch, not a ramp: it reads as a subliminal insert.
+    // Zoom flash: while its window is open the word renders BLOWN UP, then
+    // snaps back. A hard switch, not a ramp: it reads as a subliminal insert.
     const zoomAge = lastZoomNote ? (currentBeat - lastZoomNote.beat) * secPerBeat : Infinity
-    const zoomFlash = zoomAge < ZOOM_FLASH_SECONDS ? ZOOM_FLASH_SCALE : 1
+    const zoomFlash = zoomAge < ZOOM_FLASH_SECONDS ? zoomFlashScale : 1
     const scale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize * zoomFlash
     meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12

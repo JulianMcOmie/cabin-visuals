@@ -5,7 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { placeTranscription, invertStrobeSpans, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
+import { placeTranscription, invertStrobeSpans, stackCardStarts, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
@@ -418,6 +418,8 @@ export type { LyricWord, TranscribedWord } from '../utils/lyricPlacement'
 
 // Text Display's "advance to the next word" pitch (its PITCH_NEXT_WORD).
 const TEXT_NEXT_WORD_PITCH = 48
+// Text Display's 1-frame giant-text insert (its PITCH_ZOOM_FLASH).
+const TEXT_ZOOM_FLASH_PITCH = 46
 // Color Filters' Invert row - the Monochrome style's polarity strobe.
 const INVERT_FILTER_PITCH = 72
 
@@ -1496,18 +1498,40 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const text = placed.map((w) => w.word).join(' ')
       const lastBeat = Math.max(...placed.map((w) => w.startBeat + w.durationBeats))
       const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
+      // Stack layouts (Monochrome) keep their 1-frame zoom flashes ON the
+      // Lyrics block, so the refill must re-derive them at the real words'
+      // card boundaries - otherwise transcription silently wipes the
+      // transition inserts along with the placeholder notes.
+      const existingTrack = existingId ? s.tracks[existingId] : undefined
+      const stackLayout = Math.round(existingTrack?.params?.layoutMode ?? 0) === 2
+      const flashNotes: Note[] = stackLayout
+        ? stackCardStarts(
+            placed,
+            existingTrack?.params?.phraseGap ?? 2,
+            Math.max(1, Math.round(existingTrack?.params?.stackMaxWords ?? 4)),
+          ).map((beat) => ({
+            id: crypto.randomUUID(),
+            startBeat: beat,
+            durationBeats: 0.1,
+            pitch: TEXT_ZOOM_FLASH_PITCH,
+            velocity: 100,
+          }))
+        : []
       const block: Block = {
         id: crypto.randomUUID(),
         startBar: 0,
         durationBars,
         loop: false,
-        notes: placed.map((w) => ({
-          id: crypto.randomUUID(),
-          startBeat: w.startBeat,
-          durationBeats: w.durationBeats,
-          pitch: TEXT_NEXT_WORD_PITCH,
-          velocity: 100,
-        })),
+        notes: [
+          ...placed.map((w) => ({
+            id: crypto.randomUUID(),
+            startBeat: w.startBeat,
+            durationBeats: w.durationBeats,
+            pitch: TEXT_NEXT_WORD_PITCH,
+            velocity: 100,
+          })),
+          ...flashNotes,
+        ],
       }
       // Grow (never shrink) the project if the lyrics overrun, like MIDI import.
       const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
@@ -1544,7 +1568,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
                 startBeat: span.startBeat,
                 durationBeats: span.durationBeats,
                 pitch: INVERT_FILTER_PITCH,
-                velocity: 127,
+                velocity: span.velocity,
               })),
             }],
           },
@@ -1671,6 +1695,40 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             ]
           }
         }
+        // Stack styles keep their 1-frame zoom flashes ON the Lyrics block:
+        // drop whatever flashes the previous style carried (they belonged to
+        // ITS card grid) and re-derive them at the incoming style's card
+        // boundaries from the carried words.
+        if (blocks.length > 0 && blocks[0].startBar === 0) {
+          const first = blocks[0]
+          const stripped = first.notes.filter((note) => note.pitch !== TEXT_ZOOM_FLASH_PITCH)
+          if (Math.round(tplLyrics.params?.layoutMode ?? 0) === 2) {
+            const carriedWords = stripped
+              .filter((note) => note.pitch === TEXT_NEXT_WORD_PITCH)
+              .map((note) => ({ startBeat: note.startBeat, durationBeats: note.durationBeats }))
+            const flashes = stackCardStarts(
+              carriedWords,
+              tplLyrics.params?.phraseGap ?? 2,
+              Math.max(1, Math.round(tplLyrics.params?.stackMaxWords ?? 4)),
+            )
+            blocks = [{
+              ...first,
+              notes: [
+                ...stripped,
+                ...flashes.map((beat) => ({
+                  id: crypto.randomUUID(),
+                  startBeat: beat,
+                  durationBeats: 0.1,
+                  pitch: TEXT_ZOOM_FLASH_PITCH,
+                  velocity: 100,
+                })),
+              ],
+            }, ...blocks.slice(1)]
+          } else if (stripped.length !== first.notes.length) {
+            blocks = [{ ...first, notes: stripped }, ...blocks.slice(1)]
+          }
+        }
+
         cloned[templateLyricsId] = {
           ...tplLyrics,
           stringParams: {
@@ -1708,7 +1766,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
                 startBeat: span.startBeat,
                 durationBeats: span.durationBeats,
                 pitch: INVERT_FILTER_PITCH,
-                velocity: 127,
+                velocity: span.velocity,
               })),
             }],
           }

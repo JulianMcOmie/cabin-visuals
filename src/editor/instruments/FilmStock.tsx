@@ -229,24 +229,30 @@ void main() {
 // reproduces "darken, then lighten": dst·(1-D)(1-B) + B.
 const GRAIN_FRAGMENT = FILM_COMMON + `
 uniform float uStatic;
+uniform float uStaticSize;
+uniform float uStaticStreak;
 
-// Analog STATIC: dense horizontal scratch-hatch strokes covering the frame -
-// hundreds of short gray-white dashes re-rolled every film frame (the TV-noise
-// burst of the Monochrome reference, distinct from film dust's specks).
+// Analog STATIC, matched against a zoomed reference frame: TV snow smeared
+// HORIZONTALLY - irregular clumps of gray-white noise stretched into ragged
+// streaks (not neat dashes), dense enough to cover roughly half the frame at
+// full burst, with visible horizontal banding. Two anisotropic noise octaves:
+// a fine clump layer and a longer-streak layer whose weight uStaticStreak
+// controls; uStaticSize scales the whole texture.
 float staticMarks(vec2 hc) {
   if (uStatic <= 0.0) return 0.0;
-  float rows = 92.0;
-  float cells = 5.0;
-  vec2 c = vec2(floor(hc.x * cells), floor(hc.y * rows));
-  vec2 l = vec2(fract(hc.x * cells), fract(hc.y * rows));
-  float present = hash21(c + vec2(uFrame * 23.7, uFrame * 5.3));
-  // Coverage scales with the burst: full static is a near-solid scribble.
-  if (present > uStatic * 0.85) return 0.0;
-  float x0 = hash21(c + vec2(uFrame * 3.1, 7.7)) * 0.7;
-  float len = 0.2 + hash21(c + vec2(uFrame * 9.3, 3.9)) * 0.8;
-  float inx = step(x0, l.x) * step(l.x, x0 + len);
-  float iny = smoothstep(0.52, 0.30, abs(l.y - 0.5));
-  return inx * iny * (0.2 + hash21(c + 1.1) * 0.55);
+  float sizeScale = max(0.25, uStaticSize);
+  // Fine clumps: cells much wider than tall = the horizontal smear.
+  vec2 p1 = vec2(hc.x * 30.0, hc.y * 190.0) / sizeScale;
+  float n1 = hash21(floor(p1) + vec2(uFrame * 13.7, uFrame * 7.1));
+  // Long streaks: the same rows, x-cells ~3x wider still.
+  vec2 p2 = vec2(hc.x * 9.0, hc.y * 190.0) / sizeScale;
+  float n2 = hash21(floor(p2) + vec2(uFrame * 5.3, uFrame * 3.9));
+  float n = max(n1 * (1.0 - uStaticStreak * 0.5), n2 * (0.55 + uStaticStreak * 0.45));
+  // Horizontal banding: whole rows dim in irregular bands.
+  float band = 0.6 + 0.4 * hash21(vec2(floor(hc.y * 34.0 / sizeScale), uFrame * 2.3));
+  float coverage = smoothstep(1.0 - uStatic * 0.55, 1.0, n);
+  float brightness = 0.18 + 0.72 * hash21(floor(p1) + vec2(uFrame * 3.3, 9.1));
+  return coverage * band * brightness;
 }
 
 void main() {
@@ -459,6 +465,8 @@ const GRAIN_PARAMS: ParamDef[] = [
   { key: 'dust', label: 'Dust', min: 0, max: 1, step: 0.05, default: 0.3 },
   // Constant analog-static level; the Static burst MIDI row adds on top.
   { key: 'static', label: 'Static', min: 0, max: 1, step: 0.05, default: 0 },
+  { key: 'staticSize', label: 'Static Size', min: 0.5, max: 3, step: 0.05, default: 1, showIf: 'static' },
+  { key: 'staticStreak', label: 'Static Streak Length', min: 0, max: 1, step: 0.05, default: 0.6, showIf: 'static' },
   { key: 'flicker', label: 'Flicker', min: 0, max: 1, step: 0.05, default: 0.35 },
   { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, default: 0.55 },
   { key: 'warp', label: 'Barrel Warp', min: 0, max: 1, step: 0.05, default: 0.2 },
@@ -467,7 +475,13 @@ const GRAIN_PARAMS: ParamDef[] = [
 function FilmGrainVisual({ trackId }: { trackId: string }) {
   const { viewport, size } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const uniforms = useMemo(() => ({ ...commonUniforms(), uDustSalt: { value: 137 }, uStatic: { value: 0 } }), [])
+  const uniforms = useMemo(() => ({
+    ...commonUniforms(),
+    uDustSalt: { value: 137 },
+    uStatic: { value: 0 },
+    uStaticSize: { value: 1 },
+    uStaticStreak: { value: 0.6 },
+  }), [])
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
@@ -509,6 +523,8 @@ function FilmGrainVisual({ trackId }: { trackId: string }) {
     u.uGrainSize.value = p.grainSize ?? 2
     u.uDust.value = Math.min(1, (p.dust ?? 0.3) + burst * 0.6)
     u.uStatic.value = Math.min(1, (p.static ?? 0) + staticEnv)
+    u.uStaticSize.value = p.staticSize ?? 1
+    u.uStaticStreak.value = p.staticStreak ?? 0.6
     u.uFlicker.value = Math.max(-0.9, Math.min(0.9, signedFlicker * flickerBoost))
     u.uVignette.value = p.vignette ?? 0.55
     u.uWarp.value = p.warp ?? 0.2

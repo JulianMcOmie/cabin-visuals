@@ -714,11 +714,19 @@ export function TrackEditor() {
                   const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
                   // Params gated behind a toggle (showIf) only appear while
                   // that toggle is on - a flight-speed slider means nothing
-                  // with flight mode off.
+                  // with flight mode off. 'key' alone means "key >= 0.5";
+                  // 'key=2' pins to one select value ("scatter spread" has no
+                  // business showing while the layout is Stack).
                   const numericValue = (key: string) =>
                     track.params?.[key] ?? Number(def?.params.find((p) => p.key === key)?.default ?? 0)
+                  const showIfSatisfied = (condition: string) => {
+                    const [key, expected] = condition.split('=')
+                    return expected !== undefined
+                      ? Math.round(numericValue(key)) === Number(expected)
+                      : numericValue(key) >= 0.5
+                  }
                   const visibleParameters = def?.params.filter(
-                    (p) => !p.showIf || numericValue(p.showIf) >= 0.5,
+                    (p) => !p.showIf || showIfSatisfied(p.showIf),
                   )
                   const userInterfaceParameters: UserInterfaceParameter[] = visibleParameters?.map((parameter) => {
                     const stringParameter = isStringParam(parameter)

@@ -120,7 +120,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
     'text', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
     'posX', 'posY', 'posMode',
-    'onsetBounce', 'releaseDuration', 'heightAmount',
+    'onsetBounce', 'zoomFlash', 'sustain', 'releaseDuration', 'heightAmount',
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
     'particleEnabled', 'particleCount', 'particleSize', 'particleGlow', 'particleOpaque', 'particleMorphBeats',
@@ -252,6 +252,8 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
       <div className="border-t border-[var(--border-subtle)] pt-3">
         <SectionLabel>MOTION</SectionLabel>
         <BoundSlider bound={findParam(parameters, 'onsetBounce')} />
+        <BoundSlider bound={findParam(parameters, 'zoomFlash')} />
+        <BoundToggleRow bound={findParam(parameters, 'sustain')} />
         <BoundSlider bound={findParam(parameters, 'releaseDuration')} />
         <BoundSlider bound={findParam(parameters, 'heightAmount')} />
       </div>

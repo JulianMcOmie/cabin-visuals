@@ -14,8 +14,10 @@ interface ParamBase {
   label: string
   /** Show this param only while another (numeric) param is "on": visible when
    *  the track's value for `showIf` is >= 0.5. Booleans are 0/1, and counts
-   *  work too (e.g. delay params gated on `delayTaps` >= 1). The param keeps
-   *  its value while hidden - hiding is presentation only. */
+   *  work too (e.g. delay params gated on `delayTaps` >= 1). 'key=2' pins to
+   *  ONE select value instead (e.g. `layoutMode=1` for a scatter-only
+   *  slider). The param keeps its value while hidden - hiding is
+   *  presentation only. */
   showIf?: string
 }
 export interface NumberParamDef extends ParamBase {

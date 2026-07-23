@@ -338,6 +338,13 @@ test('the Monochrome invert strobe follows the carried words, not a free clock',
     const inSecond = n.startBeat >= 20 && end <= 22.5
     assert.ok(inFirst || inSecond, `strobe span ${n.startBeat}-${end} stays inside a sung phrase`)
   }
+
+  // The 1-frame zoom flashes are re-derived at the carried words' card
+  // boundaries (the only boundary here is the big gap before beat 20) -
+  // applying the style must not leave the transition inserts behind.
+  const monoLyrics = findLyrics()
+  const flashes = monoLyrics.blocks[0].notes.filter((n) => n.pitch === 46)
+  assert.deepEqual(flashes.map((n) => n.startBeat), [20], 'one zoom flash, on the card boundary')
 })
 
 test('switching between lyric styles keeps the words and swaps the look', () => {
