@@ -104,9 +104,6 @@ export function LaserLine({ trackId }: { trackId: string }) {
       .lerp(WHITE, 0.13 + state.energy * 0.1)
       .multiplyScalar(glow * flare)
 
-    const material = mesh.material as ShaderMaterial
-    ;(material.uniforms.coreColor.value as Color).copy(coreColor.current)
-    ;(material.uniforms.rimColor.value as Color).copy(rimColor.current)
     // Visibility/mover fades, computed from engine state THIS frame - the
     // same product the placement wrapper writes into Material.opacity. Do NOT
     // read Material.opacity instead: this callback runs before the wrapper's
@@ -114,6 +111,15 @@ export function LaserLine({ trackId }: { trackId: string }) {
     // exactly one frame per change - the staleness never converges.
     const copyOpacity = copyContext ? getVisualCopy(trackId, copyContext.visualCopyIndex)?.opacity ?? 1 : 1
     const fade = Math.max(0, Math.min(1, state.opacity * copyOpacity))
+    const material = mesh.material as ShaderMaterial
+    // The fade scales the HDR COLORS too, not just alpha. Alpha alone reads as
+    // on/off: the edge energy runs several times over the bloom threshold
+    // (1.15), so a linear alpha ramp keeps the halo at full blaze until the
+    // last ~20% and then snaps. With color and alpha both scaled the emitted
+    // energy falls as fade², dropping out of bloom early - the glow dies WITH
+    // the envelope.
+    ;(material.uniforms.coreColor.value as Color).copy(coreColor.current).multiplyScalar(fade)
+    ;(material.uniforms.rimColor.value as Color).copy(rimColor.current).multiplyScalar(fade)
     material.uniforms.uOpacity.value = fade
 
     light.color.copy(baseColor.current)

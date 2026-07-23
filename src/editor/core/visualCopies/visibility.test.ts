@@ -92,7 +92,18 @@ test('visibility ADSR is adjustable and remains a pure function of beat', () => 
   assert.equal(evaluateVisibilityOpacity(notes, 0.75, 0, 1, settings), first)
 })
 
-test('visibility MIDI rows label indices or percentage groups', () => {
+test('the All mapping gates every copy from the single top row', () => {
+  const settings = { ...defaults, grouping: -1 }
+  const gates = [note(0, 127, 4)]
+  const opacities = Array.from({ length: 8 }, (_, index) =>
+    evaluateVisibilityOpacity(gates, 1, index, 8, settings),
+  )
+  assert.deepEqual(opacities, [1, 1, 1, 1, 1, 1, 1, 1])
+  // Any other pitch is not a row in this mapping and gates nothing.
+  assert.equal(evaluateVisibilityOpacity([note(0, 126, 4)], 1, 3, 8, settings), 0)
+})
+
+test('visibility MIDI rows label indices, count groups, or the single All row', () => {
   const indexRows = visibilityMover.midiRows!(defaults, { priorCount: 3 })
   assert.deepEqual(indexRows, [
     { pitch: 127, label: 'Index 1' },
@@ -100,5 +111,7 @@ test('visibility MIDI rows label indices or percentage groups', () => {
     { pitch: 125, label: 'Index 3' },
   ])
   const groupRows = visibilityMover.midiRows!({ ...defaults, grouping: 25 }, { priorCount: 8 })
-  assert.deepEqual(groupRows.map((row) => row.label), ['0–25%', '25–50%', '50–75%', '75–100%'])
+  assert.deepEqual(groupRows.map((row) => row.label), ['Group 1 of 4', 'Group 2 of 4', 'Group 3 of 4', 'Group 4 of 4'])
+  const allRows = visibilityMover.midiRows!({ ...defaults, grouping: -1 }, { priorCount: 8 })
+  assert.deepEqual(allRows, [{ pitch: 127, label: 'All copies' }])
 })

@@ -313,9 +313,13 @@ function GroupingControl({ bound }: { bound: UserInterfaceParameter }) {
   const grouping = typeof bound.value === 'number' ? bound.value : definition.default
 
   // Mirrors visibilityGroupCount / noteControlsVisibilityIndex for the strip.
-  const groupCount = grouping > 0 ? Math.min(STRIP_INDEX_COUNT, Math.ceil(100 / grouping)) : STRIP_INDEX_COUNT
+  const groupCount = grouping < 0
+    ? 1
+    : grouping > 0 ? Math.min(STRIP_INDEX_COUNT, Math.ceil(100 / grouping)) : STRIP_INDEX_COUNT
   const groupOfIndex = (index: number) =>
-    grouping <= 0 ? index : Math.min(groupCount - 1, Math.floor((index / STRIP_INDEX_COUNT) * groupCount))
+    grouping < 0
+      ? 0
+      : grouping === 0 ? index : Math.min(groupCount - 1, Math.floor((index / STRIP_INDEX_COUNT) * groupCount))
   const groupSizes = Array.from({ length: groupCount }, (_, group) =>
     Array.from({ length: STRIP_INDEX_COUNT }, (_, index) => index).filter((index) => groupOfIndex(index) === group).length,
   )
@@ -373,9 +377,11 @@ function GroupingControl({ bound }: { bound: UserInterfaceParameter }) {
         </p>
       )}
       <p className="mt-1 px-0.5 font-mono text-[7px] leading-tight text-white/22">
-        {grouping <= 0
-          ? `each copy gets its own row (${STRIP_INDEX_COUNT} copies shown)`
-          : `copies collapse into ${grouping}% groups - one row gates each group`}
+        {grouping < 0
+          ? 'one row gates every copy'
+          : grouping === 0
+            ? `each copy gets its own row (${STRIP_INDEX_COUNT} copies shown)`
+            : `copies collapse into ${groupCount} groups - one row gates each group`}
       </p>
     </div>
   )

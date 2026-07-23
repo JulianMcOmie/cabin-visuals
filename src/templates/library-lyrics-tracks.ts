@@ -612,7 +612,11 @@ export const LYRIC_TEMPLATE_TRACKS: Track[] = [
     "moverId": "visibility",
     "childIds": [],
     "parentId": "87a370a1-cc2d-4d9f-b0df-54f6cc4fd77c",
-    "inputValues": {},
+    "inputValues": {
+      "grouping": 0,
+      "attackBeats": 0,
+      "releaseBeats": 0.05
+    },
     "instrumentId": ""
   }
 ]

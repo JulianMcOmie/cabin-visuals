@@ -306,7 +306,9 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
 // ── Visibility ───────────────────────────────────────────────────────────────────
 
 export interface VisibilitySettings {
-  /** 0 = one note per index; other values are each group's percentage width. */
+  /** -1 = one row gates ALL copies (the default); 0 = one note per index;
+   *  positive = each group's percentage width (100/count for the count-based
+   *  options; legacy saves may carry 10/20 and keep working). */
   grouping: number
   attackBeats: number
   decayBeats: number
@@ -315,15 +317,19 @@ export interface VisibilitySettings {
 }
 
 const VISIBILITY_TOP_PITCH = 127
+// Musical groupings (Tyler's note: "10% isn't a very musical number"): whole /
+// each / halves / quarters / eighths, encoded as percent widths so legacy
+// percent values (10, 20) resolve through the same math.
 const VISIBILITY_GROUPING_OPTIONS = [
+  { value: -1, label: 'All' },
   { value: 0, label: 'Each index' },
-  { value: 10, label: '10% groups' },
-  { value: 20, label: '20% groups' },
-  { value: 25, label: '25% groups' },
-  { value: 50, label: '50% groups' },
+  { value: 50, label: '2 groups' },
+  { value: 25, label: '4 groups' },
+  { value: 12.5, label: '8 groups' },
 ]
 
 function visibilityGroupCount(grouping: number, priorCount: number): number {
+  if (grouping < 0) return 1
   return grouping > 0 ? Math.min(priorCount, Math.ceil(100 / grouping)) : priorCount
 }
 
@@ -331,19 +337,19 @@ function visibilityMidiRows(
   settings: VisibilitySettings,
   context: { priorCount: number } = { priorCount: 1 },
 ): MidiRowDef[] {
+  if (settings.grouping < 0) return [{ pitch: VISIBILITY_TOP_PITCH, label: 'All copies' }]
   const priorCount = Math.max(1, Math.min(128, Math.round(context.priorCount)))
   const groupCount = visibilityGroupCount(settings.grouping, priorCount)
   return Array.from({ length: groupCount }, (_, index) => {
-    if (settings.grouping <= 0) return { pitch: VISIBILITY_TOP_PITCH - index, label: `Index ${index + 1}` }
-    const start = Math.min(100, index * settings.grouping)
-    const end = Math.min(100, (index + 1) * settings.grouping)
-    return { pitch: VISIBILITY_TOP_PITCH - index, label: `${start}–${end}%` }
+    if (settings.grouping === 0) return { pitch: VISIBILITY_TOP_PITCH - index, label: `Index ${index + 1}` }
+    return { pitch: VISIBILITY_TOP_PITCH - index, label: `Group ${index + 1} of ${groupCount}` }
   })
 }
 
 function noteControlsVisibilityIndex(note: ResolvedNote, index: number, count: number, grouping: number): boolean {
   const noteIndex = VISIBILITY_TOP_PITCH - note.pitch
-  if (grouping <= 0) return noteIndex === index
+  if (grouping < 0) return noteIndex === 0 // the single 'All' row gates every copy
+  if (grouping === 0) return noteIndex === index
   const groupCount = visibilityGroupCount(grouping, count)
   const groupIndex = Math.min(groupCount - 1, Math.floor((index / Math.max(1, count)) * groupCount))
   return noteIndex === groupIndex
@@ -392,12 +398,17 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
       label: 'Note mapping',
       type: 'select',
       options: VISIBILITY_GROUPING_OPTIONS,
-      default: 0,
+      // 'All': one row, gates everything. The obvious first use is "blink this
+      // object with a note", which per-index mapping hid behind knowing to
+      // play exactly pitch 127.
+      default: -1,
     },
-    { key: 'attackBeats', label: 'Attack (beats)', min: 0, max: 8, step: 0.01, default: 0 },
+    // Defaults that FADE (Tyler: "it seems to be on/off always"): a soft snap
+    // in and a half-beat tail out, instead of the old hard gate (A0 R0.05).
+    { key: 'attackBeats', label: 'Attack (beats)', min: 0, max: 8, step: 0.01, default: 0.05 },
     { key: 'decayBeats', label: 'Decay (beats)', min: 0, max: 8, step: 0.01, default: 0 },
     { key: 'sustainLevel', label: 'Sustain', min: 0, max: 1, step: 0.01, default: 1 },
-    { key: 'releaseBeats', label: 'Release (beats)', min: 0, max: 8, step: 0.01, default: 0.05 },
+    { key: 'releaseBeats', label: 'Release (beats)', min: 0, max: 8, step: 0.01, default: 0.5 },
   ],
   midiRows: visibilityMidiRows,
   strictMidiRows: true,
