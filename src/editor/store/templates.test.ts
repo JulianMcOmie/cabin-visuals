@@ -259,6 +259,53 @@ test('the bare Lyric Video template really is bare', () => {
   assert.equal(scene.tracks[scene.rootTrackIds[0]].stringParams?.color, '#ffffff')
 })
 
+test('a particle-words style gets a dash lead-in when the song starts late', () => {
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  const late = transcribedLyrics()
+  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 48, velocity: 100 }]
+  useProjectStore.getState().addTrack(late)
+
+  const wormholeStyle = getTemplate('wormhole')
+  assert.ok(wormholeStyle)
+  useProjectStore.getState().applyTemplate(wormholeStyle.document)
+
+  // The cloud opens as a dash and streams into the first sung word.
+  let lyrics = findLyrics()
+  assert.equal(lyrics.stringParams?.text, '- real transcribed words')
+  let wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 48)
+  assert.equal(wordNotes.length, 2)
+  assert.equal(Math.min(...wordNotes.map((n) => n.startBeat)), 0)
+
+  // Idempotent: a re-apply sees the beat-0 note it added and does not stack.
+  useProjectStore.getState().applyTemplate(wormholeStyle.document)
+  lyrics = findLyrics()
+  assert.equal(lyrics.stringParams?.text, '- real transcribed words')
+  wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 48)
+  assert.equal(wordNotes.length, 2)
+})
+
+test('no dash lead-in when a word already opens the song, nor for plane-text styles', () => {
+  // First sung word already at beat 0: nothing to bridge.
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  useProjectStore.getState().addTrack(transcribedLyrics())
+  const wormholeStyle = getTemplate('wormhole')
+  assert.ok(wormholeStyle)
+  useProjectStore.getState().applyTemplate(wormholeStyle.document)
+  assert.equal(findLyrics().stringParams?.text, 'real transcribed words')
+
+  // Plane-text style with a late start: the dash is particle-words-only - a
+  // dash hanging on screen at t=0 is noise when words render as glyphs.
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  const late = transcribedLyrics()
+  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 48, velocity: 100 }]
+  useProjectStore.getState().addTrack(late)
+  useProjectStore.getState().applyTemplate(silentFilm.document)
+  assert.equal(findLyrics().stringParams?.text, 'real transcribed words')
+})
+
 test('switching between lyric styles keeps the words and swaps the look', () => {
   hydrate(emptyDocument())
   useProjectStore.getState().addTrack(audio())

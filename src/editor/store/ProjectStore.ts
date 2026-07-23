@@ -1597,13 +1597,44 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (existingLyricsId && templateLyricsId) {
         const existing = s.tracks[existingLyricsId]
         const tplLyrics = cloned[templateLyricsId]
+        let text = existing.stringParams?.text ?? tplLyrics.stringParams?.text ?? ''
+        let blocks = existing.blocks.length > 0 ? existing.blocks : tplLyrics.blocks
+        // Particle-words styles (wormhole) open on a "-" lead-in: a dash word
+        // noted at the very start, so the cloud idles as a dash and streams
+        // into the first sung word instead of holding the sphere through the
+        // intro. Added here as well as in addLyricTrack because the lyric-setup
+        // flow transcribes BEFORE the style is picked - at refill time there is
+        // no particle track yet, so the carry-across is where the two finally
+        // meet. Skipped when a word note ALREADY sits at the very start
+        // (which also makes it idempotent across re-applies).
+        if ((tplLyrics.params?.particleEnabled ?? 0) >= 0.5
+          && existing.blocks.length > 0 && blocks[0].startBar === 0) {
+          const first = blocks[0]
+          const firstWordBeat = first.notes.reduce(
+            (m, n) => (n.pitch === TEXT_NEXT_WORD_PITCH ? Math.min(m, n.startBeat) : m),
+            Infinity,
+          )
+          if (firstWordBeat > 0.5 && firstWordBeat !== Infinity) {
+            text = text ? `- ${text}` : '-'
+            blocks = [
+              {
+                ...first,
+                notes: [
+                  { id: crypto.randomUUID(), startBeat: 0, durationBeats: 0.25, pitch: TEXT_NEXT_WORD_PITCH, velocity: 100 },
+                  ...first.notes,
+                ],
+              },
+              ...blocks.slice(1),
+            ]
+          }
+        }
         cloned[templateLyricsId] = {
           ...tplLyrics,
           stringParams: {
             ...tplLyrics.stringParams,
-            text: existing.stringParams?.text ?? tplLyrics.stringParams?.text ?? '',
+            text,
           },
-          blocks: existing.blocks.length > 0 ? existing.blocks : tplLyrics.blocks,
+          blocks,
           ...(existing.lyricTiming ? { lyricTiming: existing.lyricTiming } : {}),
         }
       }
