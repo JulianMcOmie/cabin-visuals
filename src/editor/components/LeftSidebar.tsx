@@ -262,6 +262,15 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="0.5" fill="#f0abfc" />
     </svg>
   )},
+  { id: 'particleSphere', name: 'Particle Sphere', description: 'A shell of glowing dots wrapped on a sphere - notes poke and burst the shell apart, and it springs back.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+        const rad = (deg * Math.PI) / 180
+        return <circle key={deg} cx={6 + Math.cos(rad) * 4.2} cy={6 + Math.sin(rad) * 4.2} r="0.9" fill="#f9a66c" />
+      })}
+      <circle cx="6" cy="6" r="1.1" fill="none" stroke="#f9a66c" strokeWidth="0.7" strokeOpacity="0.5" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library

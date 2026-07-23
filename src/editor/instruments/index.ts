@@ -41,6 +41,7 @@ import { colorFiltersInstrument } from './ColorFilters'
 import { laserSphereInstrument } from './LaserSphere'
 import { laserLineInstrument } from './LaserLine'
 import { wormholeInstrument } from './Wormhole'
+import { particleSphereInstrument } from './ParticleSphere'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -84,6 +85,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [laserSphereInstrument.id]: laserSphereInstrument,
   [laserLineInstrument.id]: laserLineInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
+  [particleSphereInstrument.id]: particleSphereInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {
