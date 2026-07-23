@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'r
 import Link from 'next/link'
 import { Music } from 'lucide-react'
 import { CabinLogo } from '../../components/CabinLogo'
-import { LoadingCabin } from '../../components/LoadingScreen'
 import { SiteHeader } from '../../components/SiteHeader'
 import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
@@ -37,10 +36,10 @@ type Phase =
   | { kind: 'uploading'; progress: number }
   | { kind: 'transcribing' }
   | { kind: 'aligning' }
-  // The words are in and timed; the only thing left is what they should look
-  // like. Offered here rather than in the editor because this is the moment
-  // the user has a finished lyric video in mind and nothing else to decide.
-  | { kind: 'style' }
+  // The words are in and timed. The style grid is ALREADY on screen by now -
+  // it appears the moment the song lands, so the transcription wait doubles as
+  // browsing time - this phase just marks that a pick can apply immediately.
+  | { kind: 'ready' }
   | { kind: 'error'; message: string }
 
 function firstAudioBlock() {
@@ -161,10 +160,10 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
       if (!id) throw new Error('No usable words found in the song.')
       useUIStore.getState().setSelectedTrackId(id)
       track('lyrics_applied', { source: 'aligned', words: words.length })
-      // Straight to the look. The words survive whichever style is chosen -
-      // applyTemplate carries a 'Lyrics' track across - so this is safe to ask
-      // after transcription rather than before.
-      setLivePhase({ kind: 'style' })
+      // The words survive whichever style is chosen - applyTemplate carries a
+      // 'Lyrics' track across - so a style picked during the wait applies now
+      // (the effect below fires on this transition).
+      setLivePhase({ kind: 'ready' })
     } catch (err) {
       runningRef.current = false
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -179,11 +178,12 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
   }, [hasAudio, projectLoading])
 
   const working = phase.kind === 'uploading' || phase.kind === 'transcribing' || phase.kind === 'aligning'
+  // The style grid is on screen from the moment a song lands: the wait IS the
+  // browsing time. Deliberately no skip-out while working - the pipeline needs
+  // to finish for the project to make sense.
+  const onGrid = working || phase.kind === 'ready'
 
-  /** The quiet escape hatch every phase carries - no screen in this flow may
-   *  trap the user. Leaving mid-pipeline is safe: the async work runs against
-   *  the live module stores, so words still land (and autosave) after the
-   *  editor takes over. */
+  /** A quiet secondary action, visually subordinate to the main one. */
   const EscapeButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
     <button
       onClick={onClick}
@@ -193,26 +193,38 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
     </button>
   )
 
-  /** Apply the chosen look and hand off to the editor. The project is already
-   *  on the bare template, so "Minimal" is simply a no-op choice.
-   *
-   *  Applying is not instant - the document is cloned and re-minted, then the
-   *  autosave has to land before the editor (which re-hydrates from the row)
-   *  can take over - so the pick is ACKNOWLEDGED first and the work deferred a
-   *  beat. Without that the card absorbed the click silently and the screen sat
-   *  there looking broken until the route changed. */
+  /** A pick just records itself; applying waits for the words. While the
+   *  pipeline is still running the pick is freely CHANGEABLE - clicking
+   *  another card simply moves the selection. It only locks once applying
+   *  actually starts (words in + a pick standing). */
+  const applying = !!chosen && phase.kind === 'ready'
   const chooseStyle = (id: string) => {
-    if (chosen) return // one pick; the rest of the grid is inert from here
+    if (applying || appliedRef.current) return
     setChosen(id)
-    setTimeout(() => {
-      const style = LYRIC_STYLES.find((s) => s.id === id)
-      if (style) {
-        useProjectStore.getState().applyTemplate(style.document)
-        track('lyric_style_chosen', { style: id })
-      }
-      onClose()
-    }, 0)
   }
+
+  /** Apply the chosen look and hand off to the editor, once BOTH are true:
+   *  a style is picked and the words are in. Picking early just queues - the
+   *  card shows "Waiting for the words…" until the pipeline lands.
+   *
+   *  The project is already on the bare template, so "Minimal" is a no-op
+   *  choice. Applying is not instant (clone + re-mint + autosave before the
+   *  editor re-hydrates), so the pick is acknowledged by the render first and
+   *  the work happens in this post-paint effect - without that the card
+   *  absorbed the click silently and the screen sat there looking broken.
+   *  appliedRef guards the StrictMode double-fire. */
+  const appliedRef = useRef(false)
+  useEffect(() => {
+    if (!chosen || phase.kind !== 'ready' || appliedRef.current) return
+    appliedRef.current = true
+    const style = LYRIC_STYLES.find((s) => s.id === chosen)
+    if (style) {
+      useProjectStore.getState().applyTemplate(style.document)
+      track('lyric_style_chosen', { style: chosen })
+    }
+    onClose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen, phase.kind])
 
   // Files can arrive before the project document has hydrated - the pick UI
   // shows immediately (no "loading" detour), and an early song just queues
@@ -291,14 +303,36 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
       )}
 
       {/* The style step needs room for a row of previews, so it breaks out of
-          the narrow card the rest of the flow lives in. */}
-      {phase.kind === 'style' ? (
+          the narrow card the rest of the flow lives in. It is on screen from
+          the moment the song lands: picking a look is what the transcription
+          wait is FOR. */}
+      {onGrid ? (
         <div className="flex flex-1 min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
           <div className="w-full max-w-[760px]">
             <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a look</h1>
-            <p className="mx-auto mt-2 mb-7 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
-              Your words are timed to the song. Choose a style - you can change it any time.
+            <p className="mx-auto mt-2 mb-5 max-w-[440px] text-[13px] leading-relaxed text-[var(--text-3)]">
+              {phase.kind === 'ready'
+                ? 'Your words are timed to the song. Choose a style - you can change it any time.'
+                : 'Choose a style while your song is transcribed - you can change it any time.'}
             </p>
+            {/* The pipeline's live status, riding above the grid: the same
+                progress language the old wait card used, compacted. */}
+            <div className="mx-auto mb-7 flex h-10 flex-col items-center justify-center gap-2">
+              {phase.kind === 'ready' ? (
+                <p className="m-0 text-xs font-semibold text-[var(--accent)]">✓ Words timed to the song</p>
+              ) : (
+                <>
+                  <ProgressBar value={phase.kind === 'uploading' ? phase.progress : undefined} />
+                  <p className="m-0 text-xs text-[var(--text-muted)]">
+                    {phase.kind === 'uploading'
+                      ? 'Uploading song - syncing the beat grid'
+                      : phase.kind === 'transcribing'
+                        ? 'Transcribing - listening for the words'
+                        : 'Aligning - timing every word to where it’s sung'}
+                  </p>
+                </>
+              )}
+            </div>
             <div className="grid gap-4 sm:grid-cols-3">
               {LYRIC_STYLES.map((style) => {
                 const picked = chosen === style.id
@@ -306,16 +340,17 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                   <button
                     key={style.id}
                     onClick={() => chooseStyle(style.id)}
-                    disabled={!!chosen}
+                    disabled={applying}
                     aria-busy={picked}
                     title={style.description}
                     className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
                       picked
-                        // The click landed: this card lifts and takes the accent
-                        // while the others step back, so the choice is legible
-                        // for the second or two before the editor appears.
-                        ? 'scale-[1.03] border-[var(--accent)] ring-2 ring-[var(--accent)] cursor-default'
-                        : chosen
+                        // The click landed: this card lifts and takes the accent.
+                        // While the words are still coming the others stay live
+                        // (clicking one moves the pick); once applying starts
+                        // they step back and the grid is inert.
+                        ? `scale-[1.03] border-[var(--accent)] ring-2 ring-[var(--accent)] ${applying ? 'cursor-default' : 'cursor-pointer'}`
+                        : applying
                           ? 'border-[var(--border)] opacity-40 cursor-default'
                           : 'cursor-pointer border-[var(--border)] hover:border-[var(--accent)]'
                     }`}
@@ -329,7 +364,11 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                       </h3>
                       {picked ? (
                         <div className="mt-2 flex flex-col gap-1.5">
-                          <span className="text-xs font-semibold text-[var(--accent)]">Applying…</span>
+                          {/* Picked mid-pipeline: the choice is queued and applies
+                              itself the moment the words land. */}
+                          <span className="text-xs font-semibold text-[var(--accent)]">
+                            {phase.kind === 'ready' ? 'Applying…' : 'Waiting for the words…'}
+                          </span>
                           <ProgressBar className="w-full" />
                         </div>
                       ) : (
@@ -341,19 +380,20 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
               })}
             </div>
             {/* Style is optional: the project already sits on the bare Lyric
-                Video look, so skipping is a real choice, not a dead end. Hidden
-                once a card is picked - the flow is already leaving. */}
-            {!chosen && (
+                Video look, so skipping is a real choice, not a dead end. Only
+                once the words are IN, though - mid-pipeline the user waits -
+                and hidden once a card is picked (the flow is already leaving). */}
+            {!chosen && phase.kind === 'ready' && (
               <EscapeButton label="Skip for now — keep the minimal look" onClick={onClose} />
             )}
           </div>
         </div>
       ) : (
       <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
-        {/* The thin card framing the whole flow. */}
+        {/* The thin card framing the pick and error steps - the working phases
+            live on the style grid now, not in here. */}
         <div className="flex w-full max-w-[460px] flex-col items-center gap-7 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-8 py-10">
-          {/* THE loading cabin while working; the same shape, still, otherwise. */}
-          {working ? <LoadingCabin /> : <CabinLogo className="h-24 w-auto" />}
+          <CabinLogo className="h-24 w-auto" />
 
           {phase.kind === 'pick' ? (
             <>
@@ -391,27 +431,6 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                 ← Back to projects
               </Link>
             </>
-          ) : working ? (
-            <div className="flex flex-col items-center gap-3">
-              <p className="m-0 text-[15px] font-semibold">
-                {phase.kind === 'uploading'
-                  ? 'Uploading song…'
-                  : phase.kind === 'transcribing'
-                    ? 'Transcribing…'
-                    : 'Aligning words…'}
-              </p>
-              <ProgressBar value={phase.kind === 'uploading' ? phase.progress : undefined} />
-              <p className="m-0 text-xs text-[var(--text-muted)]">
-                {phase.kind === 'uploading'
-                  ? 'Syncing the beat grid to your song'
-                  : phase.kind === 'transcribing'
-                    ? 'Listening for the words'
-                    : 'Timing every word to where it’s sung'}
-              </p>
-              {/* Leaving is safe: the pipeline runs against the live stores, so
-                  the words still land (and autosave) after the editor opens. */}
-              <EscapeButton label="Skip waiting — open the editor" onClick={onClose} />
-            </div>
           ) : phase.kind === 'error' ? (
             <>
               <p className="mx-auto m-0 max-w-[380px] text-[13px] leading-relaxed text-[#d68383]">{phase.message}</p>
