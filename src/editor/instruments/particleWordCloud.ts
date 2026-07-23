@@ -235,17 +235,26 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
   //
   // Opaque mode sidesteps all of that: normal blending paints the dot OVER the
   // background, so it reads identically on black or on a bright layer behind
-  // it. No stacking sums either, so glow maps linearly - past ~0.05 the dot's
-  // own color crosses the 1.15 bloom threshold and grows a halo of its own.
+  // it. No stacking sums either, so glow maps linearly - the glow term pushes
+  // the dot's own color over the 1.15 bloom threshold for a per-dot halo.
+  //
+  // Both modes divide the glow term by the color's LUMINANCE: the bloom pass
+  // thresholds on luma, whose channel weights are wildly uneven (G .72, R .21,
+  // B .07) - unnormalized, blue/purple words bloom ~13x less than yellow at
+  // the same slider and their dim un-bloomed dots read as vanishing particles.
+  // Dividing makes the slider mean the same bloom energy at every hue; the
+  // floor keeps a near-black color from exploding the multiplier.
+  _baseColor.set(frame.color)
+  const luma = Math.max(0.05, 0.2126 * _baseColor.r + 0.7152 * _baseColor.g + 0.0722 * _baseColor.b)
   const g = frame.glow
   if (frame.opaque) {
     material.blending = NormalBlending
-    const lift = 1 + g * 4
+    const lift = 1 + (g * 4) / luma
     material.color.setRGB(lift, lift, lift)
   } else {
     const additive = g > 0.0005
     material.blending = additive ? AdditiveBlending : NormalBlending
-    const lift = additive ? g * g * g * g : 1
+    const lift = additive ? (g * g * g * g) / luma : 1
     material.color.setRGB(lift, lift, lift)
   }
 
