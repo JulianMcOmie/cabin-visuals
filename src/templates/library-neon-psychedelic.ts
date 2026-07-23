@@ -78,17 +78,11 @@ function neonPsychedelicDocument() {
           flightSpeed: 60,
           flightTumble: 2.2,
           flightSubdivRate: 2,
-          // Backdrop is OFF (shape 0). Colour and opacity are carried anyway so
-          // switching the shape on lands on Julia's staged cyan, not a black slab.
-          backdropShape: 0,
-          backdropPad: 0,
-          backdropOpacity: 0.5,
         },
         stringParams: {
           text: words.text,
           color: '#54e316',
           strokeColor: '#000000',
-          backdropColor: '#02beed',
         },
         blocks: [block(0, BARS, words.notes)],
         // Placement and size lanes, all STEP: each word snaps to its spot and

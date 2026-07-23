@@ -1470,15 +1470,35 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     if (words.length === 0) return null
     let resultId: string | null = null
     set((s) => {
-      const text = words.map((w) => w.word).join(' ')
-      const lastBeat = Math.max(...words.map((w) => w.startBeat + w.durationBeats))
+      // A lyric-template project ships a styled root track named 'Lyrics' -
+      // refill it (words swap, styling stays) instead of stacking a second one.
+      const existingId = s.rootTrackIds.find((tid) => {
+        const t = s.tracks[tid]
+        return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
+      })
+      // Particle-words tracks get a "-" lead-in: a dash word with a note at the
+      // very start, skipped when the song's first word already lands there.
+      // The cloud then idles as a dash and streams into the first sung word,
+      // instead of holding the idle sphere through the whole intro (extracted
+      // from "wormhole template glow"). Plane-text tracks skip it - a dash
+      // hanging on screen at t=0 is noise there. lyricTiming stays sung-words
+      // only, so a BPM rescale rebuilds notes without the dash - the same fate
+      // it would have when added by hand.
+      const particleWords = existingId
+        ? (s.tracks[existingId].params?.particleEnabled ?? 0) >= 0.5
+        : false
+      const placed = particleWords && words[0].startBeat > 0.5
+        ? [{ word: '-', startBeat: 0, durationBeats: 0.25 }, ...words]
+        : words
+      const text = placed.map((w) => w.word).join(' ')
+      const lastBeat = Math.max(...placed.map((w) => w.startBeat + w.durationBeats))
       const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
       const block: Block = {
         id: crypto.randomUUID(),
         startBar: 0,
         durationBars,
         loop: false,
-        notes: words.map((w) => ({
+        notes: placed.map((w) => ({
           id: crypto.randomUUID(),
           startBeat: w.startBeat,
           durationBeats: w.durationBeats,
@@ -1497,12 +1517,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const endBars = Math.max(durationBars, songEndBars(s))
       const trimmedTracks = trimLoopsToSongEnd(s.tracks, endBars)
 
-      // A lyric-template project ships a styled root track named 'Lyrics' -
-      // refill it (words swap, styling stays) instead of stacking a second one.
-      const existingId = s.rootTrackIds.find((tid) => {
-        const t = s.tracks[tid]
-        return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
-      })
       if (existingId) {
         const existing = s.tracks[existingId]
         resultId = existingId

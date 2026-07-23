@@ -22,7 +22,11 @@ import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 // the caller can derive morph progress purely from beat-distance to a note and
 // keep the pause invariant: scrub == playback.
 
-export const MAX_PARTICLES = 8000
+// 30k is comfortably CPU-cheap per frame (one lerp per particle) and the
+// buffers are allocated once; the real cost of high counts is fill-rate from
+// overlapping dots, which the per-word brightness normalization already keeps
+// in check.
+export const MAX_PARTICLES = 30000
 /** World-space height of the word sample canvas (glyphs fill ~65% of it). */
 export const WORLD_TEXT_HEIGHT = 2.4
 const WORD_DEPTH = 0.22
@@ -49,7 +53,7 @@ function wordSeed(word: string): number {
 
 // The sketch's fibonacci sphere with jittered radius - the idle shape before
 // the first word note, and the morph source for word one.
-export const SPHERE_TARGETS: Float32Array = (() => {
+const SPHERE_TARGETS: Float32Array = (() => {
   const pos = new Float32Array(MAX_PARTICLES * 3)
   for (let i = 0; i < MAX_PARTICLES; i++) {
     const i3 = i * 3
@@ -63,16 +67,28 @@ export const SPHERE_TARGETS: Float32Array = (() => {
   return pos
 })()
 
-// Word targets, cached per (word, font) - the same word in a different face is
+/** A word's particle formation plus its glyph coverage (filled sample-canvas
+ *  pixels) - the coverage is what brightness normalization divides by. */
+export interface WordShape {
+  targets: Float32Array
+  fill: number
+}
+
+// The sphere's nominal coverage in the same sample-canvas-pixel units as the
+// words, so morphs to/from it normalize on the same scale. A shell projects
+// bigger than any word but spreads its dots in depth; this sits in between.
+export const SPHERE_SHAPE: WordShape = { targets: SPHERE_TARGETS, fill: 8000 }
+
+// Word shapes, cached per (word, font) - the same word in a different face is
 // a different cloud.
-const wordTargetCache = new Map<string, Float32Array | null>()
+const wordShapeCache = new Map<string, WordShape | null>()
 const WORD_CACHE_MAX = 64
 
 /** Rasterize a word in the given font and scatter MAX_PARTICLES deterministic
  *  targets over its filled pixels. Null when the word rasterizes to nothing. */
-export function wordTargets(word: string, font: ParticleFont): Float32Array | null {
+export function wordShape(word: string, font: ParticleFont): WordShape | null {
   const key = `${word}|${font.css}|${font.weight}`
-  const cached = wordTargetCache.get(key)
+  const cached = wordShapeCache.get(key)
   if (cached !== undefined) return cached
 
   const canvas = document.createElement('canvas')
@@ -108,9 +124,9 @@ export function wordTargets(word: string, font: ParticleFont): Float32Array | nu
     }
   }
 
-  let targets: Float32Array | null = null
+  let shape: WordShape | null = null
   if (xs.length > 0) {
-    targets = new Float32Array(MAX_PARTICLES * 3)
+    const targets = new Float32Array(MAX_PARTICLES * 3)
     const scale = WORLD_TEXT_HEIGHT / SAMPLE_HEIGHT
     const seed = wordSeed(word) * 1000
     for (let i = 0; i < MAX_PARTICLES; i++) {
@@ -121,18 +137,19 @@ export function wordTargets(word: string, font: ParticleFont): Float32Array | nu
       targets[i3 + 1] = -(ys[pick] + seededRand(seed + i * 3.17 + 2) - 0.5 - SAMPLE_HEIGHT / 2) * scale
       targets[i3 + 2] = (seededRand(seed + i * 3.17 + 3) - 0.5) * 2 * WORD_DEPTH
     }
+    shape = { targets, fill: xs.length }
   }
 
-  if (wordTargetCache.size >= WORD_CACHE_MAX) {
-    const firstKey = wordTargetCache.keys().next().value
-    if (firstKey !== undefined) wordTargetCache.delete(firstKey)
+  if (wordShapeCache.size >= WORD_CACHE_MAX) {
+    const firstKey = wordShapeCache.keys().next().value
+    if (firstKey !== undefined) wordShapeCache.delete(firstKey)
   }
-  wordTargetCache.set(key, targets)
-  return targets
+  wordShapeCache.set(key, shape)
+  return shape
 }
 
 /** The sketch's ease-in-out quad. */
-function easeInOutQuad(t: number): number {
+export function easeInOutQuad(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
 }
 
@@ -193,6 +210,11 @@ export interface ParticleCloudFrame {
   stagger: number
   /** Radial swell multiplier (1 = at rest). */
   pulseScale: number
+  /** Stacking compensation for additive mode: how the current word's on-screen
+   *  glyph area compares to a typical word's, per particle. Multiplied into the
+   *  glow lift so per-pixel brightness - which is what legibility reads - stays
+   *  constant across short/long words, sizes, and particle counts. */
+  stackComp: number
 }
 
 /** Write one frame of the cloud: per-particle colors (cached by key), material
@@ -254,7 +276,10 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
   } else {
     const additive = g > 0.0005
     material.blending = additive ? AdditiveBlending : NormalBlending
-    const lift = additive ? (g * g * g * g) / luma : 1
+    // stackComp: per-pixel brightness is (particles per glyph pixel) x lift, so
+    // the lift is scaled by area/count to hold that product constant - a short
+    // word no longer blazes and a long one no longer washes out.
+    const lift = additive ? ((g * g * g * g) / luma) * frame.stackComp : 1
     material.color.setRGB(lift, lift, lift)
   }
 

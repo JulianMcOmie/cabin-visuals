@@ -124,7 +124,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
     'particleEnabled', 'particleCount', 'particleSize', 'particleGlow', 'particleOpaque', 'particleMorphBeats',
-    'particleStagger', 'particleVariation', 'particleSpin', 'particleWobble', 'particlePulse',
+    'particleFillGap', 'particleStagger', 'particleVariation', 'particlePulse',
   ])
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
@@ -307,10 +307,9 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <BoundSlider bound={findParam(parameters, 'particleGlow')} />
         <BoundToggleRow bound={findParam(parameters, 'particleOpaque')} />
         <BoundSlider bound={findParam(parameters, 'particleMorphBeats')} />
+        <BoundToggleRow bound={findParam(parameters, 'particleFillGap')} />
         <BoundSlider bound={findParam(parameters, 'particleStagger')} />
         <BoundSlider bound={findParam(parameters, 'particleVariation')} />
-        <BoundSlider bound={findParam(parameters, 'particleSpin')} />
-        <BoundSlider bound={findParam(parameters, 'particleWobble')} />
         <BoundSlider bound={findParam(parameters, 'particlePulse')} />
       </div>
 

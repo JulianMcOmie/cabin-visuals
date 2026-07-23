@@ -9,10 +9,23 @@ import { lyricPattern } from './library-lyrics'
 // by hand against an actual song. Only the words are placeholder, since
 // transcription replaces them while keeping this styling.
 //
-// Latest sync: "tame impala (carried over)" at 98bpm. Earlier syncs came from
-// "wormhole template reference" (Save Your Tears at 118bpm), which is where the
-// instrument settings below were dialled in - those carried across unchanged;
-// the automation lanes are what the Tame Impala pass re-cut.
+// Latest sync: "wormhole template glow" (3d2f2e16-ce7b-4e74-9bf4-18ee298cf6cf,
+// Tame Impala at 98bpm) - the pass that switched the words to PARTICLE MODE:
+// each word is a cloud of dots that morphs into the next across the whole gap
+// between word notes (Fill Gap on). This re-sync picked up Julia's retune on
+// top of the brightness-normalized glow: Invert Behind (white dots), the full
+// 8000 particles at a finer dot size, glow at the slider's top, and full
+// morph stagger. Earlier syncs came from "wormhole template reference" (Save
+// Your Tears at 118bpm), where the tunnel settings were dialled in - those
+// carried across unchanged.
+//
+// The reference project also opens with a "-" lead-in word noted at beat 0,
+// so the cloud idles as a dash and streams into the first sung word instead
+// of holding the sphere through the intro. That is NOT baked into this
+// document (the placeholder pattern already starts at beat 0, which is the
+// rule's "already a note at the very start" case) - transcription adds it to
+// particle-words tracks whose first sung word starts late (see addLyricTrack
+// in ProjectStore).
 //
 // Brightness, Warp Scale and Ring Detail are all pinned to their maximum: a
 // blown-out, heavily warped tube at the densest lattice the instrument offers.
@@ -64,11 +77,11 @@ function wormholeDocument() {
     bpm: 120,
     totalBars: BARS,
     tracks: [
-      // Rainbow-cycled Bebas Neue in FLIGHT mode - the words rush the camera and
-      // tumble as they go, so they travel with the tunnel instead of hanging in
-      // front of it. Condensed caps at full glow survive a wall running at
-      // Brightness 3, and the black stroke stops them dissolving into the tunnel
-      // wherever the two overlap.
+      // Rainbow-cycled PARTICLE words: each word is a cloud of dots in Bebas
+      // Neue that streams into the next word across the whole gap between
+      // word notes. The flight-mode params from the earlier plane-based look
+      // are carried (they come back if Particle Words is toggled off) but sit
+      // dormant while particle mode owns the words.
       track({
         name: 'Lyrics',
         instrumentId: 'textDisplay',
@@ -82,16 +95,18 @@ function wormholeDocument() {
           // as varied word sizes rather than everything on screen pulsing.
           sizeMode: 1,
           opacity: 1,
-          colorMode: 0,
-          glow: 1,
+          // Invert Behind: in particle mode this renders the dots plain WHITE -
+          // the invert blending trick is canvas-plane-only - which is the look
+          // this sync chose: white sparks over the green tunnel. Rainbow + hue
+          // below sit dormant while this is on; toggling back to Custom lands
+          // on the rainbow cycle the earlier syncs used.
+          colorMode: 1,
+          glow: 0,
           // Hue Shift rotates whatever colour is about to draw. Rainbow is on
           // below, so this offsets the whole cycle by ~245 degrees rather than
           // tinting one fixed colour - it moves where the cycle starts, which is
           // what changes the mood of a run of words.
           hue: 0.68,
-          // Glow clipped at the stroke edge rather than bleeding past it -
-          // without this the halo washes into the tunnel wall wherever the two
-          // overlap, which is the thing the black stroke exists to prevent.
           glowContained: 1,
           strokeWidth: 0.2,
           onsetBounce: 0.09,
@@ -102,12 +117,26 @@ function wormholeDocument() {
           flightSpeed: 60,
           flightTumble: 2.2,
           flightSubdivRate: 2,
-          // Backdrop is OFF (shape 0). The colour and opacity are carried anyway
-          // so switching the shape on lands on Julia's staged cyan rather than a
-          // default black slab.
-          backdropShape: 0,
-          backdropPad: 0,
-          backdropOpacity: 0.5,
+          // --- Particle words, the pass this sync exists for ---
+          particleEnabled: 1,
+          // The full buffer at a fine dot: dense, sharp glyphs. Brightness is
+          // area-normalized per word, so the count sets granularity, not glow.
+          particleCount: 30000,
+          particleSize: 0.015,
+          // Top of the quartic slider. Survivable because the dots are white
+          // (luma 1, no luminance boost) and stacking is normalized per word -
+          // this reads as hot sparks, not a blown-out core.
+          particleGlow: 1,
+          particleOpaque: 0,
+          // Every morph spans the full distance between its two word notes -
+          // the cloud is always in motion at the lyric's own pace. Morph beats
+          // then only governs the opening sphere → first-word morph.
+          particleFillGap: 1,
+          particleMorphBeats: 0.3,
+          // Full stagger: dots leave one by one, so mid-morph the word smears
+          // into a comet trail before snapping together on the beat.
+          particleStagger: 1,
+          particleVariation: 0.3,
         },
         stringParams: {
           text: words.text,
@@ -116,7 +145,6 @@ function wormholeDocument() {
           // rather than a default white.
           color: '#ff0000',
           strokeColor: '#000000',
-          backdropColor: '#02beed',
         },
         // No offset effect: the reference dropped the -0.1 y nudge that used to
         // lift the words off centre. The placement lanes below do all the
@@ -177,8 +205,8 @@ function wormholeDocument() {
             targetParam: 'fontSize',
             interpolation: 'step',
             blocks: [loopBlock(16, [
-              n(0, 48, 8, 100), n(8, 44, 8, 100), n(16, 40, 8, 100), n(24, 44, 8, 100),
-              n(32, 52, 8, 100), n(40, 44, 8, 100), n(48, 44, 8, 100), n(56, 48, 8, 100),
+              n(0, 44, 8, 100), n(8, 40, 8, 100), n(16, 44, 8, 100), n(24, 48, 8, 100),
+              n(32, 44, 8, 100), n(40, 44, 8, 100), n(48, 44, 8, 100), n(56, 48, 8, 100),
             ])],
           }),
         ],
