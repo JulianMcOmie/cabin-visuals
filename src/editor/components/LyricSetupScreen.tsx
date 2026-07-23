@@ -180,6 +180,19 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
 
   const working = phase.kind === 'uploading' || phase.kind === 'transcribing' || phase.kind === 'aligning'
 
+  /** The quiet escape hatch every phase carries - no screen in this flow may
+   *  trap the user. Leaving mid-pipeline is safe: the async work runs against
+   *  the live module stores, so words still land (and autosave) after the
+   *  editor takes over. */
+  const EscapeButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      className="mt-5 text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
+    >
+      {label}
+    </button>
+  )
+
   /** Apply the chosen look and hand off to the editor. The project is already
    *  on the bare template, so "Minimal" is simply a no-op choice.
    *
@@ -327,6 +340,12 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                 )
               })}
             </div>
+            {/* Style is optional: the project already sits on the bare Lyric
+                Video look, so skipping is a real choice, not a dead end. Hidden
+                once a card is picked - the flow is already leaving. */}
+            {!chosen && (
+              <EscapeButton label="Skip for now — keep the minimal look" onClick={onClose} />
+            )}
           </div>
         </div>
       ) : (
@@ -365,6 +384,12 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                   }}
                 />
               </div>
+              <Link
+                href="/projects"
+                className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
+              >
+                ← Back to projects
+              </Link>
             </>
           ) : working ? (
             <div className="flex flex-col items-center gap-3">
@@ -383,6 +408,9 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                     ? 'Listening for the words'
                     : 'Timing every word to where it’s sung'}
               </p>
+              {/* Leaving is safe: the pipeline runs against the live stores, so
+                  the words still land (and autosave) after the editor opens. */}
+              <EscapeButton label="Skip waiting — open the editor" onClick={onClose} />
             </div>
           ) : phase.kind === 'error' ? (
             <>
@@ -393,6 +421,7 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
               >
                 Try again
               </button>
+              <EscapeButton label="Open the editor anyway" onClick={onClose} />
             </>
           ) : null}
         </div>
