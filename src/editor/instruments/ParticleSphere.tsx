@@ -12,7 +12,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
-import { beatInBlock, useInstrumentFrame } from '../core/visual/instrumentFrame'
+import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 // Ported from SafarSoFar/sphere-particle-wrap (MIT License, Copyright (c) 2025
@@ -144,6 +144,11 @@ export function ParticleSphere({ trackId }: { trackId: string }) {
     const instanced = new InstancedMesh(geometry, material, MAX_DOTS)
     instanced.instanceMatrix.setUsage(DynamicDrawUsage)
     instanced.frustumCulled = false
+    // three fills every instance matrix with IDENTITY at construction - until
+    // the first frame callback lays the shell out, that renders as a stack of
+    // raw unit boxes at the origin (a block in the middle of the scene).
+    // Draw nothing until real matrices exist.
+    instanced.count = 0
     return instanced
   }, [])
 
@@ -157,12 +162,8 @@ export function ParticleSphere({ trackId }: { trackId: string }) {
     const root = rootRef.current
     if (!root) return false
 
-    // Blocks are the instrument's on-screen region: no block at the playhead,
-    // no shell (block-gated ambient rule).
-    const inBlock = beatInBlock(state)
-    root.visible = inBlock
-    if (!inBlock) return
-
+    // Ambient-always by Julia's call: the shell shows whenever the track is
+    // live, blocks only gate where its notes can poke it.
     const p = state.params
     const detail = Math.max(8, Math.min(MAX_DETAIL, Math.round(p.detail ?? paramDefault(particleSphereInstrument, 'detail'))))
     if (detail !== lastDetail.current) {
