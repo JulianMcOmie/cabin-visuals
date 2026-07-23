@@ -80,36 +80,6 @@ export function ObjectRenderer({
     // anything drawn behind it (the visibility-mover ghost-wall artifact).
     g.visible = !!state && !state.blackedOut && fade > 0.001
     if (state) applyMaterialOpacity(g, fade)
-    // TEMP diagnostic (dev only): `__fadeDebug` in the console shows what the
-    // placement wrapper applied per occurrence this frame, plus what the
-    // materials under it actually hold AFTER the apply and whether the group
-    // is attached to a live scene. Remove once visibility on lasers is
-    // confirmed fixed.
-    if (process.env.NODE_ENV !== 'production') {
-      let materialCount = 0
-      let firstMaterial: { opacity: number; transparent: boolean } | null = null
-      g.traverse((o) => {
-        const m = (o as unknown as { material?: { opacity: number; transparent: boolean } | { opacity: number; transparent: boolean }[] }).material
-        if (!m) return
-        materialCount++
-        const mat = Array.isArray(m) ? m[0] : m
-        firstMaterial ??= { opacity: mat.opacity, transparent: mat.transparent }
-      })
-      let root: { parent: unknown; type: string } = g as unknown as { parent: never; type: string }
-      while (root.parent) root = root.parent as { parent: unknown; type: string }
-      const w = window as unknown as { __fadeDebug?: Record<string, unknown> }
-      ;(w.__fadeDebug ??= {})[`${sceneId}:${trackId}:${visualCopyIndex}`] = {
-        stateOpacity: state?.opacity,
-        copyOpacity: visualCopy?.opacity,
-        copyMissing: !visualCopy,
-        stateMissing: !state,
-        blackedOut: state?.blackedOut ?? null,
-        groupVisible: g.visible,
-        materialCount,
-        firstMaterial,
-        rootType: root.type,
-      }
-    }
     if (isFullFrame) {
       // Camera-facing screen anchor (see core/visual/screenAnchor.ts): the
       // occurrence's VisualCopy transform applies inside screen space, so an
