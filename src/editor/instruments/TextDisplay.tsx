@@ -48,6 +48,12 @@ import type { ObjectInstrumentDef, ParamDef } from './types'
 // "pop" pitch punches the current word, and a 60-72 band sets a vertical height offset.
 const PITCH_BASS_POP = 47
 const PITCH_NEXT_WORD = 48
+// A near-subliminal insert: for ~2 frames the current word renders BLOWN UP
+// (letterform fragments filling the frame) then snaps back - the single-frame
+// giant-text flash that punctuates word transitions in fast lyric edits.
+const PITCH_ZOOM_FLASH = 46
+const ZOOM_FLASH_SECONDS = 0.09
+const ZOOM_FLASH_SCALE = 6.5
 const PITCH_HEIGHT_MIN = 60 // C4
 const PITCH_HEIGHT_MAX = 72 // C5
 const PITCH_HEIGHT_CENTER = 66 // F#4 = no offset
@@ -825,6 +831,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const nextWordNotes: ResolvedNote[] = []
     const heightNotes: ResolvedNote[] = []
     let lastBassNote: ResolvedNote | null = null
+    let lastZoomNote: ResolvedNote | null = null
     let lastWordEndBeat = -1
     for (const n of state.notes) {
       if (n.beat > currentBeat) break // notes are sorted by beat
@@ -833,6 +840,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         lastWordEndBeat = Math.max(lastWordEndBeat, n.beat + n.durationBeats)
       } else if (n.pitch === PITCH_BASS_POP) {
         lastBassNote = n
+      } else if (n.pitch === PITCH_ZOOM_FLASH) {
+        lastZoomNote = n
       } else if (n.pitch >= PITCH_HEIGHT_MIN && n.pitch <= PITCH_HEIGHT_MAX) {
         heightNotes.push(n)
       }
@@ -1194,7 +1203,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const wordIdx = wordCount - 1
     const jitterSize = 1 + (seededRand(wordIdx * 131 + 8) - 0.5) * 2 * jitter * 0.18
     const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
-    const scale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
+    // Zoom flash: while its window is open the word renders BLOWN UP - the
+    // letterforms overflow the frame as giant fragments, then snap back. A
+    // hard switch, not a ramp: it reads as a subliminal insert.
+    const zoomAge = lastZoomNote ? (currentBeat - lastZoomNote.beat) * secPerBeat : Infinity
+    const zoomFlash = zoomAge < ZOOM_FLASH_SECONDS ? ZOOM_FLASH_SCALE : 1
+    const scale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize * zoomFlash
     meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
     meshRef.current.position.x = shakeX + placeX(wordOnsetBeat)
@@ -1278,6 +1292,7 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   midiRows: [
     { pitch: PITCH_NEXT_WORD, label: 'Next word', color: '#facc15', emphasized: true },
     { pitch: PITCH_BASS_POP, label: 'Bass pop (punch + shake)' },
+    { pitch: PITCH_ZOOM_FLASH, label: 'Zoom flash (1 frame)' },
     { pitch: 72, label: 'Word height · top' },
     { pitch: 69, label: 'Word height · high' },
     { pitch: 66, label: 'Word height · center' },

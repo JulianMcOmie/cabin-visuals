@@ -25,6 +25,53 @@ export function sanitizeWord(raw: string): string {
     .replace(/^[.,;:"“”‘’()[\]?-]+|[.,;:"“”‘’()[\]?-]+$/g, '')
 }
 
+/** A span (absolute beats) during which the Monochrome invert strobe holds. */
+export interface StrobeSpan {
+  startBeat: number
+  durationBeats: number
+}
+
+/**
+ * The Monochrome style's polarity plan: words split into phrases at gaps of
+ * `minGapBeats` or more, and every OTHER phrase gets an invert span covering
+ * it - so the frame flips black/white per phrase, and NEVER flips while
+ * nothing is being sung (no words = no spans, the screen stays black).
+ * Long phrases flip at their midpoint instead of holding one polarity, which
+ * is the reference's inside-a-line flip ("WHO YOU" white → "FOOLIN'?" black).
+ */
+export function invertStrobeSpans(
+  words: { startBeat: number; durationBeats: number }[],
+  minGapBeats = 1,
+): StrobeSpan[] {
+  if (words.length === 0) return []
+  const phrases: { start: number; end: number }[] = []
+  let start = words[0].startBeat
+  let end = words[0].startBeat + words[0].durationBeats
+  for (const w of words.slice(1)) {
+    if (w.startBeat - end >= minGapBeats) {
+      phrases.push({ start, end })
+      start = w.startBeat
+    }
+    end = Math.max(end, w.startBeat + w.durationBeats)
+  }
+  phrases.push({ start, end })
+
+  const spans: StrobeSpan[] = []
+  let inverted = false // open on black, like the reference
+  for (const phrase of phrases) {
+    const length = phrase.end - phrase.start
+    if (length > 6) {
+      // A long phrase alternates within itself: half one polarity, half the other.
+      const half = length / 2
+      spans.push({ startBeat: inverted ? phrase.start : phrase.start + half, durationBeats: half })
+    } else if (inverted) {
+      spans.push({ startBeat: phrase.start, durationBeats: length })
+    }
+    inverted = !inverted
+  }
+  return spans
+}
+
 /** Sung seconds -> project-beat words, mapped through the audio placement.
  *  `trustEnds` decides where a word's note ends: forced alignment returns
  *  dependable end times, so aligned words end when they're sung (no

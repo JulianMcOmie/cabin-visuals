@@ -228,13 +228,34 @@ void main() {
 // accumulated separately and folded into a single (colour, alpha) that
 // reproduces "darken, then lighten": dst·(1-D)(1-B) + B.
 const GRAIN_FRAGMENT = FILM_COMMON + `
+uniform float uStatic;
+
+// Analog STATIC: dense horizontal scratch-hatch strokes covering the frame -
+// hundreds of short gray-white dashes re-rolled every film frame (the TV-noise
+// burst of the Monochrome reference, distinct from film dust's specks).
+float staticMarks(vec2 hc) {
+  if (uStatic <= 0.0) return 0.0;
+  float rows = 92.0;
+  float cells = 5.0;
+  vec2 c = vec2(floor(hc.x * cells), floor(hc.y * rows));
+  vec2 l = vec2(fract(hc.x * cells), fract(hc.y * rows));
+  float present = hash21(c + vec2(uFrame * 23.7, uFrame * 5.3));
+  // Coverage scales with the burst: full static is a near-solid scribble.
+  if (present > uStatic * 0.85) return 0.0;
+  float x0 = hash21(c + vec2(uFrame * 3.1, 7.7)) * 0.7;
+  float len = 0.2 + hash21(c + vec2(uFrame * 9.3, 3.9)) * 0.8;
+  float inx = step(x0, l.x) * step(l.x, x0 + len);
+  float iny = smoothstep(0.52, 0.30, abs(l.y - 0.5));
+  return inx * iny * (0.2 + hash21(c + 1.1) * 0.55);
+}
+
 void main() {
   vec2 duv = barrel(vUv);
   vec2 hc = vec2(duv.x * uAspect, duv.y);
 
   vec2 grain = grainMarks(hc);
   float dark = grain.x;
-  float bright = grain.y + dustMarks(hc);
+  float bright = grain.y + dustMarks(hc) + staticMarks(hc);
 
   if (uFlicker < 0.0) dark = 1.0 - (1.0 - dark) * (1.0 + uFlicker);
   else bright = bright + uFlicker;
@@ -436,6 +457,8 @@ const GRAIN_PARAMS: ParamDef[] = [
   { key: 'grain', label: 'Grain', min: 0, max: 1, step: 0.05, default: 0.35 },
   { key: 'grainSize', label: 'Grain Size', min: 1, max: 4, step: 1, default: 2 },
   { key: 'dust', label: 'Dust', min: 0, max: 1, step: 0.05, default: 0.3 },
+  // Constant analog-static level; the Static burst MIDI row adds on top.
+  { key: 'static', label: 'Static', min: 0, max: 1, step: 0.05, default: 0 },
   { key: 'flicker', label: 'Flicker', min: 0, max: 1, step: 0.05, default: 0.35 },
   { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, default: 0.55 },
   { key: 'warp', label: 'Barrel Warp', min: 0, max: 1, step: 0.05, default: 0.2 },
@@ -444,7 +467,7 @@ const GRAIN_PARAMS: ParamDef[] = [
 function FilmGrainVisual({ trackId }: { trackId: string }) {
   const { viewport, size } = useThree()
   const meshRef = useRef<Mesh>(null)
-  const uniforms = useMemo(() => ({ ...commonUniforms(), uDustSalt: { value: 137 } }), [])
+  const uniforms = useMemo(() => ({ ...commonUniforms(), uDustSalt: { value: 137 }, uStatic: { value: 0 } }), [])
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
@@ -458,15 +481,21 @@ function FilmGrainVisual({ trackId }: { trackId: string }) {
     const u = (mesh.material as ShaderMaterial).uniforms
     const { elapsed, frame, signedFlicker } = filmFrameValues(state.beat, state.secPerBeat, p.flicker ?? 0.35)
 
-    // Note vocabulary: dust bursts (pitch < 62) thicken the speck field;
-    // flicker pops (pitch >= 62) slam the wobble amplitude for a beat-blink.
+    // Note vocabulary: static bursts (pitch < 60) hold the scratch-hatch on
+    // while the note sounds (a hard on/off, like TV noise cutting in); dust
+    // bursts (60-61) thicken the speck field; flicker pops (>= 62) slam the
+    // wobble amplitude for a beat-blink.
     let burst = 0
     let flickerBoost = 1
+    let staticEnv = 0
     for (const n of state.notes) {
       const age = elapsed - n.beat * state.secPerBeat
       if (age < 0) continue
       const velN = n.velocity <= 1 ? n.velocity : n.velocity / 127
-      if (n.pitch < 62) {
+      if (n.pitch < 60) {
+        const holdSec = Math.max(0.08, n.durationBeats * state.secPerBeat)
+        if (age < holdSec) staticEnv = Math.max(staticEnv, velN)
+      } else if (n.pitch < 62) {
         if (age < 0.35) burst = Math.max(burst, (1 - age / 0.35) * velN)
       } else if (age < 0.15) {
         flickerBoost = Math.max(flickerBoost, 1 + (1 - age / 0.15) * velN * 4)
@@ -479,6 +508,7 @@ function FilmGrainVisual({ trackId }: { trackId: string }) {
     u.uGrain.value = p.grain ?? 0.35
     u.uGrainSize.value = p.grainSize ?? 2
     u.uDust.value = Math.min(1, (p.dust ?? 0.3) + burst * 0.6)
+    u.uStatic.value = Math.min(1, (p.static ?? 0) + staticEnv)
     u.uFlicker.value = Math.max(-0.9, Math.min(0.9, signedFlicker * flickerBoost))
     u.uVignette.value = p.vignette ?? 0.55
     u.uWarp.value = p.warp ?? 0.2
@@ -516,6 +546,7 @@ export const filmGrainInstrument: ObjectInstrumentDef = {
   midiRows: [
     { pitch: 62, label: 'Flicker pop', color: '#ffffff', emphasized: true },
     { pitch: 60, label: 'Dust burst', color: '#e8e4da' },
+    { pitch: 56, label: 'Static burst (held)', color: '#9aa3b5' },
   ],
   component: FilmGrainVisual,
   fullFrame: true,

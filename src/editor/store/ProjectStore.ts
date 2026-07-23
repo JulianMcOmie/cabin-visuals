@@ -5,7 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
+import { placeTranscription, invertStrobeSpans, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
@@ -418,6 +418,8 @@ export type { LyricWord, TranscribedWord } from '../utils/lyricPlacement'
 
 // Text Display's "advance to the next word" pitch (its PITCH_NEXT_WORD).
 const TEXT_NEXT_WORD_PITCH = 48
+// Color Filters' Invert row - the Monochrome style's polarity strobe.
+const INVERT_FILTER_PITCH = 72
 
 function makeInitialScenes(): { scenes: Record<string, Scene>; sceneOrder: string[]; activeSceneId: string } {
   const mainId = crypto.randomUUID()
@@ -1516,7 +1518,38 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // block being written on this very call, so it is passed explicitly
       // rather than read back out of state.
       const endBars = Math.max(durationBars, songEndBars(s))
-      const trimmedTracks = trimLoopsToSongEnd(s.tracks, endBars)
+      let trimmedTracks = trimLoopsToSongEnd(s.tracks, endBars)
+
+      // Monochrome's polarity strobe follows the SINGING: rebuild the style's
+      // 'Invert Strobe' track (a Color Filters sibling the template ships)
+      // from the real word times, so the frame flips per phrase and never
+      // strobes through an instrumental. No strobe track = nothing happens.
+      const strobeId = s.rootTrackIds.find((tid) => {
+        const t = s.tracks[tid]
+        return t?.type === 'base' && t.instrumentId === 'colorFilters' && t.name === 'Invert Strobe'
+      })
+      if (strobeId) {
+        const spans = invertStrobeSpans(placed)
+        trimmedTracks = {
+          ...trimmedTracks,
+          [strobeId]: {
+            ...trimmedTracks[strobeId],
+            blocks: [{
+              id: crypto.randomUUID(),
+              startBar: 0,
+              durationBars,
+              loop: false,
+              notes: spans.map((span) => ({
+                id: crypto.randomUUID(),
+                startBeat: span.startBeat,
+                durationBeats: span.durationBeats,
+                pitch: INVERT_FILTER_PITCH,
+                velocity: 127,
+              })),
+            }],
+          },
+        }
+      }
 
       if (existingId) {
         const existing = s.tracks[existingId]
@@ -1646,6 +1679,39 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           },
           blocks,
           ...(existing.lyricTiming ? { lyricTiming: existing.lyricTiming } : {}),
+        }
+
+        // Monochrome's polarity strobe follows the words: when the incoming
+        // template ships an 'Invert Strobe' track and real words are being
+        // carried across, rebuild the strobe's notes from those words - the
+        // frame then flips per sung phrase and never strobes through an
+        // instrumental (the template's own pattern only fits its placeholder).
+        const strobeCloneId = clonedRoots.find((id) => {
+          const t = cloned[id]
+          return t?.instrumentId === 'colorFilters' && t.name === 'Invert Strobe'
+        })
+        if (strobeCloneId && existing.blocks.length > 0 && blocks[0].startBar === 0) {
+          const carriedWords = blocks[0].notes
+            .filter((note) => note.pitch === TEXT_NEXT_WORD_PITCH)
+            .map((note) => ({ startBeat: note.startBeat, durationBeats: note.durationBeats }))
+            .sort((a, b) => a.startBeat - b.startBeat)
+          const spans = invertStrobeSpans(carriedWords)
+          cloned[strobeCloneId] = {
+            ...cloned[strobeCloneId],
+            blocks: [{
+              id: crypto.randomUUID(),
+              startBar: 0,
+              durationBars: blocks[0].durationBars,
+              loop: false,
+              notes: spans.map((span) => ({
+                id: crypto.randomUUID(),
+                startBeat: span.startBeat,
+                durationBeats: span.durationBeats,
+                pitch: INVERT_FILTER_PITCH,
+                velocity: 127,
+              })),
+            }],
+          }
         }
       }
 

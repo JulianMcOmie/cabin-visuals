@@ -193,7 +193,7 @@ test('the Lyric Video template participates in the same carry-over', () => {
 })
 
 test('the lyric styles are exactly the looks the setup flow offers', () => {
-  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm', 'wormhole', 'neonPsychedelic'])
+  assert.deepEqual(LYRIC_STYLES.map((s) => s.id), ['lyricVideo', 'darkRed', 'silentFilm', 'wormhole', 'neonPsychedelic', 'monochrome'])
   for (const style of LYRIC_STYLES) {
     assert.ok(style.styleName, `${style.id} needs a style name for the picker`)
     // Every style must ship the contract the carry-over and refill depend on.
@@ -304,6 +304,40 @@ test('no dash lead-in when a word already opens the song, nor for plane-text sty
   useProjectStore.getState().addTrack(late)
   useProjectStore.getState().applyTemplate(silentFilm.document)
   assert.equal(findLyrics().stringParams?.text, 'real transcribed words')
+})
+
+test('the Monochrome invert strobe follows the carried words, not a free clock', () => {
+  hydrate(emptyDocument())
+  useProjectStore.getState().addTrack(audio())
+  // Two sung phrases with a long instrumental gap between them.
+  const lyrics = transcribedLyrics()
+  lyrics.blocks[0].notes = [
+    { id: 'w1', startBeat: 0, durationBeats: 1, pitch: 48, velocity: 100 },
+    { id: 'w2', startBeat: 1.2, durationBeats: 1, pitch: 48, velocity: 100 },
+    { id: 'w3', startBeat: 20, durationBeats: 1, pitch: 48, velocity: 100 },
+    { id: 'w4', startBeat: 21.4, durationBeats: 1, pitch: 48, velocity: 100 },
+  ]
+  useProjectStore.getState().addTrack(lyrics)
+
+  const mono = getTemplate('monochrome')
+  assert.ok(mono)
+  useProjectStore.getState().applyTemplate(mono.document)
+
+  const s = useProjectStore.getState()
+  const strobe = s.rootTrackIds.map((id) => s.tracks[id])
+    .find((t) => t.instrumentId === 'colorFilters' && t.name === 'Invert Strobe')
+  assert.ok(strobe, 'the style ships an Invert Strobe track')
+  const notes = strobe.blocks[0].notes
+  assert.ok(notes.length > 0, 'the strobe was rebuilt from the words')
+  assert.ok(notes.every((n) => n.pitch === 72), 'strobe notes sit on the Invert row')
+  // Every strobe span lives inside a sung phrase - nothing strobes in the
+  // instrumental gap (beats ~2.2 through 20).
+  for (const n of notes) {
+    const end = n.startBeat + n.durationBeats
+    const inFirst = n.startBeat >= 0 && end <= 2.3
+    const inSecond = n.startBeat >= 20 && end <= 22.5
+    assert.ok(inFirst || inSecond, `strobe span ${n.startBeat}-${end} stays inside a sung phrase`)
+  }
 })
 
 test('switching between lyric styles keeps the words and swaps the look', () => {
