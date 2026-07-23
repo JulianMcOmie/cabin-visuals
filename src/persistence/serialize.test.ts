@@ -24,3 +24,13 @@ test('documents without a loop region clear the previous project loop', () => {
   hydrate(document)
   assert.equal(useTimeStore.getState().loopRegion, null)
 })
+
+test('hydrating a project resets the playhead to the start', () => {
+  // currentBeat is session-scoped module state: without the reset, a newly
+  // created project opened mid-timeline wherever the previous project's
+  // playhead sat.
+  useTimeStore.setState({ currentBeat: 42 })
+
+  hydrate(emptyDocument())
+  assert.equal(useTimeStore.getState().currentBeat, 0)
+})

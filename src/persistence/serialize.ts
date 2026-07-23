@@ -54,5 +54,11 @@ export function hydrate(doc: ProjectDocument) {
   useAudioStore.setState({ audioClips: audioClips ?? {} })
   useVideoStore.setState({ videoClips: videoClips ?? {} })
   usePhotoStore.setState({ photoClips: photoClips ?? {} })
-  useTimeStore.setState({ loopRegion: loopRegion ?? null })
+  // Playhead back to the start. currentBeat is session-scoped module state
+  // that survives client-side navigation, so without this a newly opened (or
+  // freshly created) project inherits wherever the PREVIOUS project's playhead
+  // happened to sit and the timeline starts mid-song. Only project loads come
+  // through hydrate - undo restores ProjectStore directly - so undo never
+  // yanks the playhead.
+  useTimeStore.setState({ loopRegion: loopRegion ?? null, currentBeat: 0 })
 }
