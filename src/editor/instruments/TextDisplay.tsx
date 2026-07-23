@@ -1,4 +1,4 @@
-import { useContext, useRef, useEffect, useState } from 'react'
+import { useContext, useRef, useEffect, useMemo, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import {
   AddEquation,
@@ -22,6 +22,14 @@ import {
 } from 'three'
 import { useInstrumentFrame, seededRand, paramAtBeat } from '../core/visual/instrumentFrame'
 import { ensureFont } from '../core/visual/fonts'
+import {
+  MAX_PARTICLES,
+  SPHERE_TARGETS,
+  createParticleCloud,
+  disposeParticleCloud,
+  updateParticleCloud,
+  wordTargets,
+} from './particleWordCloud'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
 import type { ResolvedNote } from '../core/visual/types'
@@ -629,6 +637,20 @@ const PARAMS: ParamDef[] = [
   { key: 'hue', label: 'Hue Shift', min: 0, max: 1, step: 0.01, default: 0 },
   { key: 'rainbowEnabled', label: 'Rainbow', type: 'boolean', default: 0 },
   { key: 'rainbowCycleLength', label: 'Rainbow Cycle Length', min: 2, max: 64, step: 1, default: 12, showIf: 'rainbowEnabled' },
+  // --- Particle words: the words as a morphing particle cloud. Everything the
+  // text pipeline already has (font, color, size, placement, height) is reused;
+  // only what is genuinely particle-specific lives here. ---
+  { key: 'particleEnabled', label: 'Particle Words', type: 'boolean', default: 0 },
+  { key: 'particleCount', label: 'Particles', min: 1000, max: MAX_PARTICLES, step: 500, default: 6000, showIf: 'particleEnabled' },
+  { key: 'particleSize', label: 'Dot Size', min: 0.005, max: 0.1, step: 0.005, default: 0.025, showIf: 'particleEnabled' },
+  { key: 'particleGlow', label: 'Particle Glow', min: 0, max: 1, step: 0.001, default: 0.3, showIf: 'particleEnabled' },
+  { key: 'particleOpaque', label: 'Opaque Dots', type: 'boolean', default: 0, showIf: 'particleEnabled' },
+  { key: 'particleMorphBeats', label: 'Morph (beats)', min: 0.1, max: 8, step: 0.1, default: 2, showIf: 'particleEnabled' },
+  { key: 'particleStagger', label: 'Morph Stagger', min: 0, max: 1, step: 0.05, default: 0.4, showIf: 'particleEnabled' },
+  { key: 'particleVariation', label: 'Color Variation', min: 0, max: 1, step: 0.05, default: 0.5, showIf: 'particleEnabled' },
+  { key: 'particleSpin', label: 'Spin', min: 0, max: 4, step: 0.05, default: 0, showIf: 'particleEnabled' },
+  { key: 'particleWobble', label: 'Wobble', min: 0, max: 1, step: 0.05, default: 0.3, showIf: 'particleEnabled' },
+  { key: 'particlePulse', label: 'Pulse Push (bass pop)', min: 0, max: 1.5, step: 0.05, default: 0.35, showIf: 'particleEnabled' },
 ]
 const _hueColor = new Color()
 
@@ -651,6 +673,13 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
   // Scatter layout mesh pool - one mesh per visible phrase word.
   const scatterPoolRef = useRef<FlightPooled[]>([])
+
+  // Particle-words mode: one shared cloud that morphs between word formations.
+  // Anchor carries placement + size, the inner group carries spin/wobble.
+  const particleAnchorRef = useRef<Group>(null)
+  const particleSpinRef = useRef<Group>(null)
+  const particleCloud = useMemo(() => createParticleCloud(), [])
+  useEffect(() => () => disposeParticleCloud(particleCloud), [particleCloud])
 
   const { viewport, camera } = useThree()
   const [ready, setReady] = useState(false)
@@ -814,6 +843,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
     const glowContained = (p.glowContained ?? 0) >= 0.5
+    const particleMode = (p.particleEnabled ?? 0) >= 0.5
     // Built once per frame and passed down; every word canvas (main, echo,
     // scatter, flight) bakes the same backdrop so they stay consistent.
     const backdrop: Backdrop = {
@@ -830,8 +860,78 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const shiftHex = (hex: string) =>
       hueShift > 0 ? `#${_hueColor.set(hex).offsetHSL(hueShift, 0, 0).getHexString()}` : hex
 
+    // Word size, either live or latched at the beat a word was placed - the same
+    // split posMode makes for placement. `sizeAt` is called with whichever beat
+    // owns the thing being drawn (this word's onset, an echo tap's note, a
+    // flight sprite's spawn), so with Size automated a word keeps the size it
+    // was born at instead of resizing under the next word's value.
+    const sizeAt = (b: number) => Math.min(viewport.width, viewport.height) * 0.6
+      * (perWordSize ? paramAtBeat(state, 'fontSize', b) : fontSize)
+
+    // --- Particle words ---
+    // One frame of the cloud, sharing the text pipeline's font, color (rainbow /
+    // hue / invert included), size, placement and height offset - only the morph
+    // itself has its own params. `word` null = idle: the sketch's sphere, shown
+    // whenever there is no word to form yet. The 0.22 matches glyph heights:
+    // particle-canvas glyphs fill ~0.46 of their frame vs ~0.245 for the text
+    // canvas at scale sizeAt, and 0.245/0.46 * (canvas/world) lands there.
+    const driveCloud = (word: null | {
+      prev: Float32Array
+      cur: Float32Array
+      progress: number
+      morphSeed: number
+      pulseEnv: number
+      onsetBeat: number
+      yOffset: number
+    }) => {
+      const anchor = particleAnchorRef.current
+      const spinner = particleSpinRef.current
+      if (!anchor || !spinner) return
+      anchor.visible = true
+      // The sketch's gentle drift, beat-derived so scrub == playback. No
+      // automatic per-note pulsing - the only note-driven swell is bass pop.
+      const sec = state.beat * state.secPerBeat
+      spinner.rotation.set(
+        Math.sin(sec * 0.1) * 0.35 * (p.particleWobble ?? 0.3),
+        sec * 0.12 * (p.particleSpin ?? 0),
+        0,
+      )
+      const onset = word ? word.onsetBeat : state.beat
+      anchor.scale.setScalar(sizeAt(onset) * 0.22)
+      anchor.position.set(
+        placeX(onset),
+        (word?.yOffset ?? 0) * viewport.height * heightAmount + placeY(onset),
+        0,
+      )
+      const cloudSubdiv = Math.floor(state.beat * flightSubdivRate)
+      const cloudHue = rainbowEnabled ? ((cloudSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
+      // Invert mode renders plain white - the invert blending trick is
+      // canvas-plane-only, and white additive points read closest to it.
+      const cloudColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(cloudHue, 1, 0.55) : color)
+      updateParticleCloud(particleCloud, {
+        count: p.particleCount ?? 6000,
+        dotSize: p.particleSize ?? 0.025,
+        glow: p.particleGlow ?? 0.3,
+        opaque: (p.particleOpaque ?? 0) >= 0.5,
+        color: cloudColor,
+        variation: p.particleVariation ?? 0.5,
+        prevTargets: word?.prev ?? SPHERE_TARGETS,
+        curTargets: word?.cur ?? SPHERE_TARGETS,
+        progress: word?.progress ?? 1,
+        morphSeed: word?.morphSeed ?? 0,
+        stagger: p.particleStagger ?? 0.4,
+        pulseScale: 1 + (p.particlePulse ?? 0.35) * (word?.pulseEnv ?? 0),
+      })
+      setAnimatedOpacity(particleCloud.points.material as Material, textOpacity)
+    }
+    if (!particleMode && particleAnchorRef.current) particleAnchorRef.current.visible = false
+
     const entries = parseTextEntries(text)
-    if (entries.length === 0) { meshRef.current.visible = false; return }
+    if (entries.length === 0) {
+      meshRef.current.visible = false
+      if (particleMode) driveCloud(null) // no words on the sheet yet: idle sphere
+      return
+    }
 
     const currentBeat = state.beat
     const secPerBeat = state.secPerBeat
@@ -868,6 +968,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         spr.active = false
         spr.mesh.visible = false
       }
+      if (particleMode) driveCloud(null) // before the first word note: idle sphere
       return
     }
 
@@ -916,13 +1017,49 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const canvasColor = invertBehind ? '#ffffff' : effectiveColor
     const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
 
-    // Word size, either live or latched at the beat a word was placed - the same
-    // split posMode makes for placement. `sizeAt` is called with whichever beat
-    // owns the thing being drawn (this word's onset, an echo tap's note, a
-    // flight sprite's spawn), so with Size automated a word keeps the size it
-    // was born at instead of resizing under the next word's value.
-    const sizeAt = (b: number) => Math.min(viewport.width, viewport.height) * 0.6
-      * (perWordSize ? paramAtBeat(state, 'fontSize', b) : fontSize)
+    // --- Particle words: the cloud replaces every plane-based word visual ---
+    if (particleMode) {
+      meshRef.current.visible = false
+      setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
+      for (const mesh of echoMeshesRef.current) mesh.visible = false
+      for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+      for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
+      const curNote = nextWordNotes[wordCount - 1]
+      // Morph endpoints: sphere → word 1 → word 2 → ... A word that rasterizes
+      // to nothing falls back to the sphere.
+      const cur = wordTargets(currentEntry.text, font) ?? SPHERE_TARGETS
+      const prev = wordCount >= 2
+        ? wordTargets(entries[(wordCount - 2) % entries.length].text, font) ?? SPHERE_TARGETS
+        : SPHERE_TARGETS
+      // Cap the morph at the gap to the NEXT word note, so every morph settles
+      // on its target before the next begins - the closed form never jumps.
+      let nextOnset = Infinity
+      for (const n of state.notes) {
+        if (n.beat > currentBeat && n.pitch === PITCH_NEXT_WORD) { nextOnset = n.beat; break }
+      }
+      const duration = Math.max(0.05, Math.min(p.particleMorphBeats ?? 2, nextOnset - curNote.beat))
+      // Bass pop, in cloud form: a decaying outward swell instead of the punch.
+      let pulseEnv = 0
+      if (lastBassNote) {
+        const age = currentBeat - lastBassNote.beat
+        if (age < 0.6) {
+          const decay = 1 - age / 0.6
+          const velocity = lastBassNote.velocity <= 1 ? lastBassNote.velocity : lastBassNote.velocity / 127
+          pulseEnv = decay * decay * velocity
+        }
+      }
+      driveCloud({
+        prev,
+        cur,
+        progress: Math.min(1, (currentBeat - curNote.beat) / duration),
+        morphSeed: wordCount * 61.7,
+        pulseEnv,
+        onsetBeat: curNote.beat,
+        yOffset: currentYOffset,
+      })
+      return
+    }
 
     const invertInThisPass = invertBehind && !renderingFinalInvertMask
     configureTextMaterial(meshRef.current.material as MeshBasicMaterial, invertInThisPass)
@@ -1188,6 +1325,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           depthWrite={false}
         />
       </mesh>
+      {/* Particle-words cloud - hidden until the frame callback drives it. */}
+      <group ref={particleAnchorRef} visible={false}>
+        <group ref={particleSpinRef}>
+          <primitive object={particleCloud.points} />
+        </group>
+      </group>
     </group>
   )
 }

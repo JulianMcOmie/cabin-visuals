@@ -271,17 +271,6 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1.1" fill="none" stroke="#f9a66c" strokeWidth="0.7" strokeOpacity="0.5" />
     </svg>
   )},
-  { id: 'particleMorph', name: 'Particle Morph', description: 'A cloud of glowing particles that morphs into each lyric word, one note at a time.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="#5b9be6">
-        {/* dots loosely forming a "W" mid-morph */}
-        <circle cx="1.5" cy="3" r="0.8" /><circle cx="2.5" cy="6.5" r="0.8" /><circle cx="3.5" cy="9.5" r="0.8" />
-        <circle cx="4.8" cy="6" r="0.8" /><circle cx="6" cy="3.5" r="0.7" /><circle cx="7.2" cy="6" r="0.8" />
-        <circle cx="8.5" cy="9.5" r="0.8" /><circle cx="9.5" cy="6.5" r="0.8" /><circle cx="10.5" cy="3" r="0.8" />
-        <circle cx="9.8" cy="1.5" r="0.5" opacity="0.5" /><circle cx="2.2" cy="1.2" r="0.5" opacity="0.5" />
-      </g>
-    </svg>
-  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library

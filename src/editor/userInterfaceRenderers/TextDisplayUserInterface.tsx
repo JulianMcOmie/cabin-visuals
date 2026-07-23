@@ -123,6 +123,8 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
     'onsetBounce', 'releaseDuration', 'heightAmount',
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
+    'particleEnabled', 'particleCount', 'particleSize', 'particleGlow', 'particleOpaque', 'particleMorphBeats',
+    'particleStagger', 'particleVariation', 'particleSpin', 'particleWobble', 'particlePulse',
   ])
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
@@ -283,6 +285,33 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <BoundSlider bound={findParam(parameters, 'flightDrift')} />
         <BoundSlider bound={findParam(parameters, 'flightTumble')} />
         <BoundSlider bound={findParam(parameters, 'flightSubdivRate')} />
+      </div>
+
+      {/* --- Particle words - words become a morphing particle cloud; the
+              sliders appear with the toggle (showIf) --- */}
+      <div className="border-t border-[var(--border-subtle)] pt-3">
+        {(() => {
+          const particle = findParam(parameters, 'particleEnabled')
+          return (
+            <SectionLabel
+              right={particle && typeof particle.value === 'number'
+                ? <ParamToggle on={particle.value >= 0.5} onChange={(v) => particle.setValue(v ? 1 : 0)} label="Particle words" />
+                : undefined}
+            >
+              PARTICLES
+            </SectionLabel>
+          )
+        })()}
+        <BoundSlider bound={findParam(parameters, 'particleCount')} />
+        <BoundSlider bound={findParam(parameters, 'particleSize')} />
+        <BoundSlider bound={findParam(parameters, 'particleGlow')} />
+        <BoundToggleRow bound={findParam(parameters, 'particleOpaque')} />
+        <BoundSlider bound={findParam(parameters, 'particleMorphBeats')} />
+        <BoundSlider bound={findParam(parameters, 'particleStagger')} />
+        <BoundSlider bound={findParam(parameters, 'particleVariation')} />
+        <BoundSlider bound={findParam(parameters, 'particleSpin')} />
+        <BoundSlider bound={findParam(parameters, 'particleWobble')} />
+        <BoundSlider bound={findParam(parameters, 'particlePulse')} />
       </div>
 
       {/* Anything the layout does not know about still gets a control. */}
