@@ -398,7 +398,7 @@ function Header() {
           <button
             onClick={isPlaying ? pause : reset}
             title={isPlaying ? 'Pause' : 'Return to start'}
-            className="flex items-center justify-center w-7 h-7 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
+            className="flex items-center justify-center w-7 h-7 rounded bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
           >
             {isPlaying
               ? <Square size={10} fill="currentColor" />
@@ -408,7 +408,11 @@ function Header() {
             onClick={isPlaying ? restart : play}
             title={isPlaying ? 'Restart playback' : 'Play (Space)'}
             data-tutorial-play=""
-            className="flex items-center justify-center w-[34px] h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] transition-colors cursor-pointer"
+            className={`flex items-center justify-center w-7 h-7 rounded transition-colors cursor-pointer ${
+              isPlaying
+                ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
+                : 'bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)]'
+            }`}
           >
             <Play size={12} fill="currentColor" />
           </button>
