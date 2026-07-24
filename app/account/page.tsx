@@ -78,7 +78,7 @@ export default function AccountPage() {
                     {plan.loading
                       ? ''
                       : plan.isPro
-                        ? 'Full HD 1080p exports, unlimited projects.'
+                        ? '"4k" Full HD 1080p exports, unlimited projects.'
                         : '720p exports, 5 projects.'}
                   </div>
                 </div>
