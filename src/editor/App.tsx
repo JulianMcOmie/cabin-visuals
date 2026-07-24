@@ -100,7 +100,7 @@ function Scene({ previewMain }: { previewMain: boolean }) {
 }
 
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect
-// pin. Fullscreen targets the panel div, so the beat overlay and the buttons
+// pin. Fullscreen targets the panel div, so the buttons
 // ride along; R3F resizes to whatever box the canvas gets, and the
 // aspect-aware instruments re-compose - the same path the export pin
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
@@ -173,7 +173,6 @@ function VisualPanel() {
       >
         <Scene previewMain={previewMode === 'main'} />
       </div>
-      <BeatOverlay />
       {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
           Re-enable by uncommenting this and its import at the top of the file -
           nothing else was removed. Unmounted rather than early-returned on
@@ -222,17 +221,6 @@ function VisualPanel() {
           {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
         </button>
       </div>
-    </div>
-  )
-}
-
-function BeatOverlay() {
-  const currentBeat = useTimeStore((s) => s.currentBeat)
-  return (
-    <div className="absolute top-2 left-3 z-10 pointer-events-none select-none">
-      <span className="font-mono text-[11px] text-[var(--text-muted)] tabular-nums">
-        BEAT {currentBeat.toFixed(2)}
-      </span>
     </div>
   )
 }
