@@ -10,9 +10,8 @@ import { LoadingCabin } from '@/components/LoadingScreen'
 // Suspense boundary (useSearchParams requires one in the App Router).
 function EditorLoadingShell() {
   return (
-    <div className="w-screen h-screen flex flex-col items-center justify-center gap-4 bg-[var(--bg-app)]">
+    <div className="w-screen h-screen flex items-center justify-center bg-[var(--bg-page)]">
       <LoadingCabin />
-      <p className="text-sm text-[var(--text-muted)] select-none">Loading the studio…</p>
     </div>
   )
 }

@@ -30,6 +30,7 @@ let compositionLayers: CompositionLayer[] = []
 let activeTrackIds = new Set<string>()
 let mainCompositionOverride = false
 let mainPreviewEnabled = false
+let editorPreviewSceneId: string | null = null
 let mountedRenderScenes = new Map<string, ThreeScene>()
 // Project bpm, mirrored on every setProject/syncParams - computeAtBeat derives
 // secPerBeat from it so instruments can convert beat-ages to seconds.
@@ -173,7 +174,7 @@ function resolveComposition(beat: number): CompositionLayer[] {
   if (!project) return []
   const selected = mainCompositionOverride || mainPreviewEnabled
     ? project.sceneOrder.map((id) => project!.scenes[id]).find((scene) => scene?.isMain)
-    : project.scenes[project.activeSceneId]
+    : (editorPreviewSceneId ? project.scenes[editorPreviewSceneId] : undefined) ?? project.scenes[project.activeSceneId]
   if (selected && !selected.isMain) {
     return [{ directorTrackId: '__preview__', sceneId: selected.id, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
   }
@@ -378,6 +379,12 @@ export function setMainCompositionOverride(value: boolean) {
  * finishing an export restores whichever preview mode the user selected. */
 export function setMainPreviewEnabled(value: boolean) {
   mainPreviewEnabled = value
+}
+
+/** Editor-only explicit scene target. Null follows the scene currently being
+ * edited; a concrete id previews that scene without changing editor selection. */
+export function setEditorPreviewSceneId(sceneId: string | null) {
+  editorPreviewSceneId = sceneId
 }
 
 /** Dev invariant plumbing: logical scenes live outside R3F's default root scene,

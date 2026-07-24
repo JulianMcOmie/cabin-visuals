@@ -2,6 +2,7 @@ import { DEFAULT_SCENE_BACKGROUND, type AdsrEnvelope, type Block, type EffectIns
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { ViewAspect } from '../editor/store/ProjectStore'
 import type { ProjectDocument } from '../persistence/types'
+import { OBJECT_TRACK_COLOR } from '../editor/utils/trackColors'
 
 // Authoring helpers for template documents. Templates are plain v2 project
 // documents built at module load; ids only need to be unique within one
@@ -119,7 +120,7 @@ export function track(spec: TrackSpec): Track & { __children?: Track[] } {
     name: spec.name,
     type: spec.type ?? 'base',
     instrumentId: spec.instrumentId,
-    color: spec.color ?? '#6366f1',
+    color: spec.color ?? OBJECT_TRACK_COLOR,
     muted: false,
     solo: false,
     blocks: spec.blocks ?? [],

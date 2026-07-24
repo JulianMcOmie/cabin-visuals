@@ -1,14 +1,9 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
-import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, MoreHorizontal, Copy, Trash2 } from "lucide-react"
-import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
-import {
-  DropdownMenu,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu"
+import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2 } from "lucide-react"
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
@@ -20,6 +15,7 @@ import { TemplateSlideshowPreview } from "./TemplateSlideshowPreview"
 import { TemplateLyricPreview } from "./TemplateLyricPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
 import { track } from "../analytics/analytics"
+import { midiBlockPalette } from "../editor/utils/colors"
 
 export interface ProjectMetadata {
   id: string
@@ -28,14 +24,11 @@ export interface ProjectMetadata {
   preview?: ProjectPreview
 }
 
-// Mono-caps edited stamp for the card footer: TODAY / 1D AGO / … / date.
-const formatLastEdited = (iso: string): string => {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000)
-  if (days <= 0) return 'TODAY'
-  if (days < 30) return `${days}D AGO`
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
+const formatDuration = (seconds?: number): string => {
+  const rounded = Math.max(0, Math.round(seconds ?? 0))
+  const minutes = Math.floor(rounded / 60)
+  const remainingSeconds = rounded % 60
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
 // Mini timeline of the project's REAL arrangement: one row per root track drawn
@@ -47,8 +40,15 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
   // It spans the full container, letterboxed on black when the aspect ratio
   // differs - the bars double as a reminder of the project's aspect ratio.
   if (preview?.image) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={preview.image} alt="" className="h-full w-full bg-black object-contain" />
+    return (
+      <Image
+        src={preview.image}
+        alt=""
+        fill
+        unoptimized
+        className="h-full w-full bg-black object-contain"
+      />
+    )
   }
   const rows = preview?.rows ?? []
   if (rows.length === 0) {
@@ -60,23 +60,60 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
   }
   return (
     <div className="flex h-full flex-col justify-center gap-1.5 px-3 py-2.5">
-      {rows.map((row, ri) => (
-        <div key={ri} className="relative h-3.5">
-          {row.blocks.map((b, bi) => (
-            <div
-              key={bi}
-              className="absolute inset-y-0 rounded-[3px]"
-              style={{
-                left: `${b.left}%`,
-                width: `${b.width}%`,
-                backgroundColor: row.color + '24',
-                border: `1px solid ${row.color}55`,
-                borderLeft: `2px solid ${row.color}`,
-              }}
-            />
-          ))}
+      {rows.map((row, ri) => {
+        const palette = midiBlockPalette(row.color)
+        return (
+          <div key={ri} className="relative h-3.5">
+            {row.blocks.map((b, bi) => (
+              <div
+                key={bi}
+                className="absolute inset-y-0 rounded-[3px]"
+                style={{
+                  left: `${b.left}%`,
+                  width: `${b.width}%`,
+                  backgroundColor: palette.fill,
+                  border: `1px solid ${palette.outline}`,
+                  borderLeft: `2px solid ${palette.selectedOutline}`,
+                }}
+              />
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ProjectCard({
+  project,
+  onSelect,
+  onOpenMenu,
+}: {
+  project: ProjectMetadata
+  onSelect: () => void
+  onOpenMenu: (x: number, y: number) => void
+}) {
+  return (
+    <div
+      onClick={onSelect}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpenMenu(event.clientX, event.clientY)
+      }}
+      className="cursor-pointer overflow-hidden rounded-lg bg-[#030407] transition-transform duration-75 ease-out group-hover:scale-[1.012] active:scale-[0.99]"
+    >
+      <div className="relative h-[120px] overflow-hidden bg-black">
+        <div className="absolute inset-0">
+          <ProjectThumbnail preview={project.preview} />
         </div>
-      ))}
+      </div>
+      <div className="px-3.5 pb-[13px] pt-3">
+        <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
+        <p className="mt-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+          {formatDuration(project.preview?.durationSeconds)}
+        </p>
+      </div>
     </div>
   )
 }
@@ -154,13 +191,43 @@ export default function ProjectsDisplay({
   // The project pending an in-UI delete confirmation, with the click position
   // to anchor the popover near (null = no popover).
   const [deleteTarget, setDeleteTarget] = useState<{ project: ProjectMetadata; x: number; y: number } | null>(null)
-  // Where the last-opened card menu sits, so the delete confirmation can anchor
-  // near it. One ref is enough - only one menu can be open at a time.
-  const menuAnchor = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [projectMenu, setProjectMenu] = useState<{ project: ProjectMetadata; x: number; y: number } | null>(null)
   // Set the instant a create begins: the new card gets prepended and starts its
   // entrance right before we navigate to the editor, and that half-played slide
   // reads as a glitch. While navigating, new cards skip the entrance.
   const [navigating, setNavigating] = useState(false)
+  const projectGridRef = useRef<HTMLDivElement>(null)
+  const [initialGridColumns, setInitialGridColumns] = useState(0)
+  const [initialWave, setInitialWave] = useState(true)
+
+  // Measure the resolved auto-fill grid before it becomes visible. That lets
+  // every card in a visual row enter together at every responsive width.
+  useLayoutEffect(() => {
+    if (!projectGridRef.current) return
+    const columns = window.getComputedStyle(projectGridRef.current)
+      .gridTemplateColumns
+      .split(' ')
+      .filter(Boolean)
+      .length
+    setInitialGridColumns(Math.max(1, columns))
+  }, [])
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setInitialWave(false), 600)
+    return () => window.clearTimeout(timeout)
+  }, [])
+
+  const entranceTransition = (index: number) => initialWave && initialGridColumns > 0 && !navigating
+    ? {
+        duration: 0.2,
+        delay: Math.floor(index / initialGridColumns) * 0.04,
+        ease: 'easeOut' as const,
+      }
+    : { duration: 0.16, ease: 'easeOut' as const }
+
+  const entranceTarget = initialWave && initialGridColumns === 0
+    ? { opacity: 0, y: 2 }
+    : { opacity: 1, y: 0 }
 
   const chooseEmpty = (name: string) => { setCreateStep(null); setNavigating(true); onCreateProject(name) }
   const chooseTemplate = (tpl: TemplateDef) => { setCreateStep(null); setNavigating(true); onCreateFromTemplate(tpl) }
@@ -176,7 +243,7 @@ export default function ProjectsDisplay({
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
           <Link href="/" className="flex select-none items-center gap-2.5">
-            <CabinLogo className="h-[30px] w-auto" />
+            <CabinLogo className="cabin-logo-loaded h-[30px] w-auto" />
             <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
           </Link>
           <nav className="flex items-center gap-5">
@@ -226,12 +293,28 @@ export default function ProjectsDisplay({
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {projectMenu && (
+          <ProjectContextMenu
+            x={projectMenu.x}
+            y={projectMenu.y}
+            createBlocked={createBlocked}
+            onClose={() => setProjectMenu(null)}
+            onDuplicate={() => {
+              onDuplicateProject(projectMenu.project.id)
+              setProjectMenu(null)
+            }}
+            onDelete={() => {
+              setDeleteTarget(projectMenu)
+              setProjectMenu(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
         <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
-            <span className="font-mono text-xs text-[var(--text-muted)]">{projects.length}</span>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
           <div className="group relative">
             <button
               onClick={openCreate}
@@ -245,9 +328,9 @@ export default function ProjectsDisplay({
           </div>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-          <AnimatePresence mode="popLayout" initial={false}>
-          {projects.map((project) => (
+        <div ref={projectGridRef} className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+          <AnimatePresence mode="popLayout">
+          {projects.map((project, index) => (
             // Two elements on purpose. The outer one owns entrance/exit/layout
             // and is the hover GROUP - it spans the card plus its action menu,
             // so hovering the three dots or the open menu still counts as
@@ -258,10 +341,10 @@ export default function ProjectsDisplay({
             <motion.div
               key={project.id}
               layout
-              initial={navigating ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={navigating ? false : { opacity: 0, y: 2 }}
+              animate={entranceTarget}
               exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
+              transition={entranceTransition(index)}
               className="group relative"
             >
               {/* Hover/press scaling is CSS on the INNER card, not motion on
@@ -273,80 +356,26 @@ export default function ProjectsDisplay({
                   CSS rather than Framer for both states: Framer writes an
                   inline transform that would clobber the hover scale the moment
                   a press ended. */}
-              <div
-                onClick={() => onSelectProject(project.id)}
-                className="cursor-pointer overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] transition-[transform,border-color] duration-75 ease-out group-hover:scale-[1.012] group-hover:border-[rgba(53,167,230,0.6)] active:scale-[0.99]"
-              >
-                <div className="relative h-[120px] overflow-hidden border-b border-[var(--border-subtle)] bg-[var(--bg-app)]">
-                  <div className="absolute inset-0">
-                    <ProjectThumbnail preview={project.preview} />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between gap-3 px-3.5 pb-[13px] pt-3">
-                  <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
-                  <span className="shrink-0 font-mono text-[10px] text-[var(--text-muted)]">
-                    {formatLastEdited(project.updatedAt)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="absolute right-2 top-2 z-10">
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger
-                    aria-label="Project actions"
-                    title="Project actions"
-                    // The delete confirmation anchors to a click point, so
-                    // remember where this trigger sits before the menu opens.
-                    onClick={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect()
-                      menuAnchor.current = { x: r.left, y: r.bottom }
-                    }}
-                    className="flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded border border-[var(--border)] bg-[rgba(14,14,17,0.8)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]"
-                  >
-                    <MoreHorizontal size={12} />
-                  </DropdownMenuTrigger>
-                  {/* Rendered INLINE - deliberately not the shared
-                      DropdownMenuContent, which wraps itself in a Radix Portal.
-                      Portaling moves the panel out of the card's DOM, so the
-                      card stops counting as hovered the moment you touch its
-                      own menu. Keeping it a child means one plain whileHover on
-                      the wrapper covers card, trigger and panel alike. */}
-                  <DropdownMenuPrimitive.Content
-                    align="end"
-                    sideOffset={4}
-                    // The card scales on hover, which changes the trigger's
-                    // measured rect; with collision detection on, Radix
-                    // re-solves during that animation and flips the panel
-                    // between corners. The card is small and the menu is two
-                    // items - just pin it below-right and let it be.
-                    avoidCollisions={false}
-                    className="z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-1 text-[var(--text-2)] data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-                  >
-                    <DropdownMenuItem
-                      // A copy is a new project, so the free-plan cap applies
-                      // to it exactly as it does to the New project button.
-                      disabled={createBlocked}
-                      className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[var(--text)]"
-                      onSelect={() => onDuplicateProject(project.id)}
-                    >
-                      <Copy size={13} />
-                      {createBlocked ? 'Copy project (limit reached)' : 'Copy project'}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--text-2)] focus:bg-[var(--bg-elevated)] focus:text-[#d68383]"
-                      onSelect={() => setDeleteTarget({ project, ...menuAnchor.current })}
-                    >
-                      <Trash2 size={13} />
-                      Delete project
-                    </DropdownMenuItem>
-                  </DropdownMenuPrimitive.Content>
-                </DropdownMenu>
-              </div>
+              <ProjectCard
+                project={project}
+                onSelect={() => {
+                  setProjectMenu(null)
+                  onSelectProject(project.id)
+                }}
+                onOpenMenu={(x, y) => {
+                  setProjectMenu({ project, x, y })
+                }}
+              />
             </motion.div>
           ))}
           </AnimatePresence>
 
-          <div className="group relative">
+          <motion.div
+            initial={navigating ? false : { opacity: 0, y: 2 }}
+            animate={entranceTarget}
+            transition={entranceTransition(projects.length)}
+            className="group relative"
+          >
             <motion.button
               layout
               whileHover={createBlocked ? undefined : { scale: 1.012, transition: { duration: 0.06 } }}
@@ -359,7 +388,7 @@ export default function ProjectsDisplay({
               <span className="text-xs">Empty or from a template</span>
             </motion.button>
             {createBlocked && limitHint}
-          </div>
+          </motion.div>
         </div>
       </main>
     </div>
@@ -557,7 +586,73 @@ function CreateProjectModal({
 }
 
 // In-UI delete confirmation (replaces window.confirm): a small popover anchored
-// near the click, no screen dim. A transparent full-screen catcher closes it on
+function ProjectContextMenu({
+  x,
+  y,
+  createBlocked,
+  onClose,
+  onDuplicate,
+  onDelete,
+}: {
+  x: number
+  y: number
+  createBlocked: boolean
+  onClose: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const W = 176
+  const H = 76
+  const left = Math.max(8, Math.min(x, window.innerWidth - W - 8))
+  const top = Math.max(8, Math.min(y, window.innerHeight - H - 8))
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50" onMouseDown={onClose} />
+      <motion.div
+        role="menu"
+        aria-label="Project actions"
+        className="fixed z-50 min-w-[11rem] rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-1 text-[var(--text-2)] shadow-xl shadow-black/50"
+        style={{ left, top }}
+        onMouseDown={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ duration: 0.1, ease: 'easeOut' }}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          disabled={createBlocked}
+          onClick={onDuplicate}
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:cursor-default disabled:opacity-50"
+        >
+          <Copy size={13} />
+          {createBlocked ? 'Copy project (limit reached)' : 'Copy project'}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onDelete}
+          className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] text-[var(--text-2)] outline-none transition-colors hover:bg-[var(--bg-elevated)] hover:text-[#d68383]"
+        >
+          <Trash2 size={13} />
+          Delete project
+        </button>
+      </motion.div>
+    </>
+  )
+}
+
+// Near the click, no screen dim. A transparent full-screen catcher closes it on
 // an outside click (and stops that click from opening the card behind).
 function ConfirmDeletePopover({
   x,

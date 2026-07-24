@@ -1,21 +1,21 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2 } from 'lucide-react'
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import { Play, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { getPlaybackEngine } from './core/playback'
-import { useProjectStore, type ViewAspect } from './store/ProjectStore'
+import { useProjectStore } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { setMainPreviewEnabled } from './core/visual/VisualEngine'
+import { setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { ProfileMenu } from '../components/ProfileMenu'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
@@ -67,17 +67,36 @@ function DevThreeHook() {
   return null
 }
 
-function PreviewModeSync({ main }: { main: boolean }) {
+function PreviewSceneSync({ sceneId }: { sceneId: string }) {
   const invalidate = useThree((s) => s.invalidate)
   useEffect(() => {
-    setMainPreviewEnabled(main)
+    setEditorPreviewSceneId(sceneId)
     invalidate()
-    return () => setMainPreviewEnabled(false)
-  }, [main, invalidate])
+    return () => setEditorPreviewSceneId(null)
+  }, [sceneId, invalidate])
   return null
 }
 
-function Scene({ previewMain }: { previewMain: boolean }) {
+function CanvasSourceBridge({ sourceRef }: { sourceRef: RefObject<HTMLCanvasElement | null> }) {
+  const canvas = useThree((s) => s.gl.domElement)
+
+  useEffect(() => {
+    sourceRef.current = canvas
+    return () => {
+      if (sourceRef.current === canvas) sourceRef.current = null
+    }
+  }, [canvas, sourceRef])
+
+  return null
+}
+
+function Scene({
+  previewSceneId,
+  sourceCanvasRef,
+}: {
+  previewSceneId: string
+  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
+}) {
   // Paused → 'demand': the render loop idles instead of redrawing a static
   // frame 60×/s (heavy instruments were starving the editor UI even while
   // paused). RenderGovernor requests single frames when an input changes.
@@ -85,7 +104,8 @@ function Scene({ previewMain }: { previewMain: boolean }) {
   return (
     <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
-      <PreviewModeSync main={previewMain} />
+      <CanvasSourceBridge sourceRef={sourceCanvasRef} />
+      <PreviewSceneSync sceneId={previewSceneId} />
       <VisualBeatSync />
       <ExportDriver />
       <RenderGovernor />
@@ -98,6 +118,44 @@ function Scene({ previewMain }: { previewMain: boolean }) {
   )
 }
 
+/** A deliberately low-resolution copy of the finished WebGL frame. It is
+ * stretched and heavily blurred behind the upper workspace, extending the
+ * scene's color into otherwise blank UI space without rendering the Three
+ * scene a second time or changing the visualizer's viewport calculations. */
+function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
+  const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const bleed = bleedCanvasRef.current
+    const ctx = bleed?.getContext('2d')
+    if (!bleed || !ctx) return
+
+    let frame = 0
+    let lastPaint = 0
+    const paint = (now: number) => {
+      // 15fps is plenty once the 128px copy has passed through an 80px blur.
+      // The WebGL scene itself remains on its existing render schedule.
+      if (now - lastPaint >= 1000 / 15) {
+        const source = sourceCanvasRef.current
+        if (source?.width && source.height) {
+          try {
+            ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
+          } catch {
+            // A temporarily unavailable video-backed WebGL frame should not
+            // take down the editor; the previous ambient frame can stay put.
+          }
+        }
+        lastPaint = now
+      }
+      frame = requestAnimationFrame(paint)
+    }
+    frame = requestAnimationFrame(paint)
+    return () => cancelAnimationFrame(frame)
+  }, [sourceCanvasRef])
+
+  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
+}
+
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect
 // pin. Fullscreen targets the panel div, so the buttons
 // ride along; R3F resizes to whatever box the canvas gets, and the
@@ -105,15 +163,19 @@ function Scene({ previewMain }: { previewMain: boolean }) {
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
 // previews what an export at that aspect will compose like.
 
-const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
-
-function VisualPanel() {
+function VisualPanel({
+  previewSceneId,
+  sourceCanvasRef,
+}: {
+  previewSceneId: string
+  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
+}) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const fullscreenControlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [previewMode, setPreviewMode] = useState<'current' | 'main'>('current')
+  const [fullscreenControlVisible, setFullscreenControlVisible] = useState(false)
   // A project setting (persisted in the document, seeds the export default).
   const aspect = useProjectStore((s) => s.viewAspect)
-  const setAspect = useProjectStore((s) => s.setViewAspect)
   // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
   // can't contain-fit an aspect-ratio box against both dimensions).
   const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
@@ -134,6 +196,30 @@ function VisualPanel() {
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
+
+  useEffect(() => () => {
+    if (fullscreenControlTimerRef.current) clearTimeout(fullscreenControlTimerRef.current)
+  }, [])
+
+  const clearFullscreenControlTimer = () => {
+    if (!fullscreenControlTimerRef.current) return
+    clearTimeout(fullscreenControlTimerRef.current)
+    fullscreenControlTimerRef.current = null
+  }
+
+  const revealFullscreenControl = () => {
+    clearFullscreenControlTimer()
+    setFullscreenControlVisible(true)
+    fullscreenControlTimerRef.current = setTimeout(() => {
+      setFullscreenControlVisible(false)
+      fullscreenControlTimerRef.current = null
+    }, 1800)
+  }
+
+  const hideFullscreenControl = () => {
+    clearFullscreenControlTimer()
+    setFullscreenControlVisible(false)
+  }
 
   const toggle = () => {
     if (document.fullscreenElement) void document.exitFullscreen()
@@ -165,12 +251,18 @@ function VisualPanel() {
   }
 
   return (
-    <div ref={panelRef} className={`relative h-full ${box ? 'bg-[var(--bg-canvas-deep)]' : 'bg-[var(--bg-canvas)]'}`}>
+    <div
+      ref={panelRef}
+      onPointerEnter={revealFullscreenControl}
+      onPointerMove={revealFullscreenControl}
+      onPointerLeave={hideFullscreenControl}
+      className={`relative h-full ${box ? 'bg-[var(--bg-canvas-deep)]' : 'bg-[var(--bg-canvas)]'}`}
+    >
       <div
         className={`absolute ${box ? 'border border-[var(--border-subtle)]' : 'inset-0'}`}
         style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
       >
-        <Scene previewMain={previewMode === 'main'} />
+        <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
       </div>
       {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
           Re-enable by uncommenting this and its import at the top of the file -
@@ -180,42 +272,20 @@ function VisualPanel() {
           "first open" flag on every browser and never show again when you
           turn it back on. */}
       {/* <TutorialOverlay /> */}
-      <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
-        <div
-          role="group"
-          aria-label="Canvas preview"
-          className="flex items-center overflow-hidden rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)]"
-        >
-          {(['current', 'main'] as const).map((mode) => {
-            const active = previewMode === mode
-            return (
-              <button
-                key={mode}
-                onClick={() => setPreviewMode(mode)}
-                title={mode === 'current' ? 'View the scene currently being edited' : 'View the final Main composition'}
-                aria-pressed={active}
-                className={`h-6 px-2 text-[10px] font-medium transition-colors cursor-pointer ${
-                  active
-                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                    : 'text-[var(--text-3)] hover:text-[var(--text)]'
-                }`}
-              >
-                {mode === 'current' ? 'Current' : 'Main'}
-              </button>
-            )
-          })}
-        </div>
-        <button
-          onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
-          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
-          className="flex items-center justify-center h-6 px-1.5 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] font-mono text-[9px] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer uppercase tracking-wide"
-        >
-          {aspect === 'fill' ? 'Fill' : aspect}
-        </button>
+      <div className={`absolute top-2 right-3 z-10 transition-opacity duration-300 ${
+        fullscreenControlVisible
+          ? 'pointer-events-auto opacity-100'
+          : 'pointer-events-none opacity-0'
+      }`}>
         <button
           onClick={toggle}
+          onFocus={() => {
+            clearFullscreenControlTimer()
+            setFullscreenControlVisible(true)
+          }}
+          onBlur={hideFullscreenControl}
           title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          className="flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
+          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
         >
           {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
         </button>
@@ -307,10 +377,9 @@ function TemplateDemoChip() {
 // Autosave status: quiet when in sync, explicit when saving or in trouble.
 function SaveStatusChip() {
   const status = useSaveStatus((s) => s.status)
-  if (status === 'idle') return null
+  if (status === 'idle' || status === 'saved') return null
   const label =
     status === 'saving' ? 'Saving…'
-    : status === 'saved' ? 'Saved'
     // Paused, not broken - the dialog over the top explains it.
     : status === 'conflict' ? 'Paused - changed elsewhere'
     // The project never opened; nothing has been saved or lost.
@@ -329,7 +398,48 @@ function SaveStatusChip() {
   )
 }
 
-function Header() {
+function EditorPanelToggle({
+  label,
+  open,
+  onToggle,
+  controls,
+  children,
+}: {
+  label: string
+  open: boolean
+  onToggle: () => void
+  controls: string
+  children: ReactNode
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={`${open ? 'Hide' : 'Show'} ${label}`}
+      aria-controls={controls}
+      aria-pressed={open}
+      title={`${open ? 'Hide' : 'Show'} ${label}`}
+      className={`flex h-7 w-7 items-center justify-center rounded transition-colors cursor-pointer ${
+        open
+          ? 'bg-[var(--accent)]/15 text-[var(--accent)]'
+          : 'text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Header({
+  libraryOpen,
+  sceneEditorOpen,
+  onToggleLibrary,
+  onToggleSceneEditor,
+}: {
+  libraryOpen: boolean
+  sceneEditorOpen: boolean
+  onToggleLibrary: () => void
+  onToggleSceneEditor: () => void
+}) {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, reset, restart } = usePlayback();
   useTransportKeys({ play, pause, reset })
@@ -374,19 +484,42 @@ function Header() {
   const [leavingToProjects, setLeavingToProjects] = useState(false)
 
   return (
-    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-panel)] relative">
+    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-topbar)] relative">
       <Link
         href="/projects"
+        aria-label="Back to projects"
+        title="Back to projects"
         onClick={(e) => {
           if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setLeavingToProjects(true)
         }}
-        className="flex-shrink-0 flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text)] active:scale-[0.94] transition-[color,transform] cursor-pointer"
+        className="flex-shrink-0 flex items-center text-[var(--text-3)] hover:text-[var(--text)] active:scale-[0.94] transition-[color,transform] cursor-pointer"
       >
         {leavingToProjects ? <Loader2 size={13} className="animate-spin" /> : <ChevronLeft size={13} />}
-        Projects
       </Link>
-      <div className="w-px h-4 bg-[var(--border)] flex-shrink-0" />
       <EditableProjectName />
+
+      <div
+        className="flex flex-shrink-0 items-center gap-0.5 rounded-lg bg-[var(--bg-elevated)] p-0.5"
+        role="group"
+        aria-label="Editor panels"
+      >
+        <EditorPanelToggle
+          label="library"
+          open={libraryOpen}
+          onToggle={onToggleLibrary}
+          controls="library-panel"
+        >
+          <Library size={13} />
+        </EditorPanelToggle>
+        <EditorPanelToggle
+          label="scene editor"
+          open={sceneEditorOpen}
+          onToggle={onToggleSceneEditor}
+          controls="scene-editor-panel"
+        >
+          <SlidersHorizontal size={13} />
+        </EditorPanelToggle>
+      </div>
 
       <SaveStatusChip />
       {!authLoading && !user && (
@@ -455,7 +588,7 @@ function Header() {
           {/* One continuous pill: beat readout, BARS, and BPM share a single
               recessed track, separated by thin dividers rather than sitting as
               three detached chips. */}
-          <div className="flex items-stretch h-7 rounded bg-[var(--bg-app)] border border-[var(--border)] overflow-hidden select-none">
+          <div className="flex items-stretch h-7 rounded bg-[var(--bg-app)] overflow-hidden select-none">
             <div className="flex items-center justify-center px-2.5 min-w-[62px] font-mono text-[13px] text-[var(--text)] tabular-nums whitespace-nowrap">
               {formatBeat(currentBeat, beatsPerBar)}
             </div>
@@ -478,13 +611,13 @@ function Header() {
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => track('editor_discord_clicked')}
+          aria-label="Join the Cabin Visuals Discord"
           title="Join the Cabin Visuals Discord"
-          className="hidden md:flex items-center justify-center gap-1.5 h-7 w-7 lg:w-auto lg:px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap"
+          className="hidden md:flex items-center justify-center h-7 w-7 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
         >
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-3 w-3 flex-shrink-0">
             <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
           </svg>
-          <span className="hidden lg:inline">Join Discord to give feedback</span>
         </a>
         {permanent && !plan.loading && !plan.isPro && (
           <Link
@@ -584,6 +717,18 @@ export default function EditorApp() {
     useTimeStore.getState().setIsPlaying(false)
   }, [])
   const { topFrac, containerRef, startResize } = useVerticalSplit()
+  const visualCanvasRef = useRef<HTMLCanvasElement>(null)
+  const libraryPanelRef = useRef<PanelImperativeHandle>(null)
+  const sceneEditorPanelRef = useRef<PanelImperativeHandle>(null)
+  const [libraryOpen, setLibraryOpen] = useState(true)
+  const [sceneEditorOpen, setSceneEditorOpen] = useState(true)
+
+  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>) => {
+    const panel = panelRef.current
+    if (!panel) return
+    if (panel.isCollapsed()) panel.expand()
+    else panel.collapse()
+  }
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
   // The conflict dialog counts: it's blocking, and it rides on autosave state
@@ -591,18 +736,40 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
+  const scenes = useProjectStore((s) => s.scenes)
+  const activeSceneId = useProjectStore((s) => s.activeSceneId)
+  const [previewSceneId, setPreviewSceneId] = useState(activeSceneId)
+  // Project hydration and scene deletion can invalidate a local preview id.
+  // Falling back at render time keeps the canvas and segmented control live
+  // without writing an ephemeral viewing choice into the project document.
+  const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
       <MediaFileDropLayer />
       <ConflictDialog />
-      <Header />
+      <Header
+        libraryOpen={libraryOpen}
+        sceneEditorOpen={sceneEditorOpen}
+        onToggleLibrary={() => togglePanel(libraryPanelRef)}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef)}
+      />
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
 
-          {/* Library - resizable, pre-redesign proportions */}
-          <Panel defaultSize="15%" minSize="8%" maxSize="30%">
+          {/* Library - dragging below its minimum snaps it closed; the matching
+              header icon uses the same imperative panel state. */}
+          <Panel
+            id="library-panel"
+            panelRef={libraryPanelRef}
+            defaultSize="15%"
+            minSize="8%"
+            maxSize="30%"
+            collapsible
+            collapsedSize="0%"
+            onResize={(size) => setLibraryOpen(size.inPixels > 0)}
+          >
             <LeftSidebar />
           </Panel>
 
@@ -614,20 +781,33 @@ export default function EditorApp() {
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
-                <div className="min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
-
-                    <Panel defaultSize="55%" minSize="15%" maxSize="60%">
+                <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+                  <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
+                  <PanelGroup
+                    orientation="horizontal"
+                    style={{ height: '100%' }}
+                    disabled={modalOpen}
+                  >
+                    <Panel
+                      id="scene-editor-panel"
+                      panelRef={sceneEditorPanelRef}
+                      defaultSize="55%"
+                      minSize="15%"
+                      maxSize="60%"
+                      collapsible
+                      collapsedSize="0%"
+                      onResize={(size) => setSceneEditorOpen(size.inPixels > 0)}
+                    >
                       <TrackEditor />
                     </Panel>
 
                     <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
 
-                    {/* Canvas */}
+                    {/* The visualizer keeps its original panel and dimensions;
+                        only the cheap ambient copy extends behind its sibling. */}
                     <Panel>
-                      <VisualPanel />
+                      <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} />
                     </Panel>
-
                   </PanelGroup>
                 </div>
 
@@ -642,7 +822,7 @@ export default function EditorApp() {
                 </div>
 
                 {/* Tracks / Piano Roll */}
-                <SceneTabs />
+                <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
                 <div className="flex-1 min-h-0">
                   <BottomArea />
                 </div>

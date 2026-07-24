@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Copy, Trash2 } from 'lucide-react'
-import { useProjectStore } from '../store/ProjectStore'
+import { useProjectStore, type ViewAspect } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
+
+const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
 /** Flat right-click menu for a scene tab: duplicate or delete. Styled like the
  *  shared NestedMenu shell (backdrop-to-close, Esc, stands down editor surfaces). */
@@ -56,7 +58,12 @@ function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
   )
 }
 
-export function SceneTabs() {
+interface SceneTabsProps {
+  previewSceneId: string
+  onPreviewSceneChange: (sceneId: string) => void
+}
+
+export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsProps) {
   const scenes = useProjectStore((s) => s.scenes)
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
@@ -70,11 +77,21 @@ export function SceneTabs() {
   const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
   const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
+  const aspect = useProjectStore((s) => s.viewAspect)
+  const setAspect = useProjectStore((s) => s.setViewAspect)
+  const previewSceneIds = [
+    ...sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain),
+    ...sceneOrder.filter((id) => scenes[id]?.isMain),
+  ]
 
   const select = (id: string) => {
     useUIStore.getState().setEditingBlock(null)
     useUIStore.getState().setSelectedTrackId(null)
     useUIStore.getState().setSelectedBlockIds(new Set())
+    // Preserve the old "Current" behavior: while the preview is showing the
+    // scene being edited, changing tabs advances both together. A deliberately
+    // chosen different preview remains pinned.
+    if (previewSceneId === activeSceneId) onPreviewSceneChange(id)
     setActiveScene(id)
   }
 
@@ -96,7 +113,7 @@ export function SceneTabs() {
         return (
           <div key={id} className={`group relative flex w-24 flex-shrink-0 items-stretch border-r border-[var(--border-subtle)] transition-colors ${
             active
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
               : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
           }`}>
             <button
@@ -122,30 +139,68 @@ export function SceneTabs() {
       <button onClick={create} title="Add scene" className="ml-1 flex h-6 w-6 items-center justify-center self-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer">
         <Plus size={13} />
       </button>
-      {/* Timeline zoom sliders - live here (not floated over the lanes) so they
-          never cover track content. They drive the tracks view's zoom state. */}
-      <div className="ml-auto flex items-center gap-2.5 self-center pr-1">
-        <div className="flex items-center gap-1.5" title="Horizontal zoom">
-          <span className="text-[10px] text-zinc-600">H</span>
-          <input
-            type="range"
-            min={2}
-            max={100}
-            value={pixelsPerBeat}
-            onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
-            className="slider-square w-14 cursor-pointer"
-          />
+      <div className="ml-auto flex min-w-0 items-stretch">
+        {/* Canvas target, aspect and timeline sizing share the scene row instead
+            of floating over the preview. Visual scenes come first, then Main. */}
+        <div
+          role="group"
+          aria-label="Canvas preview"
+          className="flex min-w-0 items-stretch border-l border-[var(--border)]"
+        >
+          {previewSceneIds.map((id) => {
+            const scene = scenes[id]
+            if (!scene) return null
+            const active = previewSceneId === id
+            return (
+              <button
+                key={id}
+                onClick={() => onPreviewSceneChange(id)}
+                title={`Preview ${scene.name}`}
+                aria-pressed={active}
+                className={`h-full max-w-24 truncate border-r border-[var(--border)] px-2.5 text-[10px] font-medium transition-colors cursor-pointer ${
+                  active
+                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                    : 'bg-[var(--bg-panel)] text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                }`}
+              >
+                {scene.name}
+              </button>
+            )
+          })}
         </div>
-        <div className="flex items-center gap-1.5" title="Vertical zoom">
-          <span className="text-[10px] text-zinc-600">V</span>
-          <input
-            type="range"
-            min={28}
-            max={200}
-            value={tracksRowHeight}
-            onChange={(e) => setTracksRowHeight(Number(e.target.value))}
-            className="slider-square w-14 cursor-pointer"
-          />
+
+        <button
+          onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
+          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
+          className="h-full min-w-12 border-r border-[var(--border)] bg-[var(--bg-panel)] px-2 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer"
+        >
+          {aspect === 'fill' ? 'Fill' : aspect}
+        </button>
+
+        {/* Timeline zoom sliders live here so they never cover track content. */}
+        <div className="flex items-center gap-2.5 px-2">
+          <div className="flex items-center gap-1.5" title="Horizontal zoom">
+            <span className="text-[10px] text-zinc-600">H</span>
+            <input
+              type="range"
+              min={2}
+              max={100}
+              value={pixelsPerBeat}
+              onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
+              className="slider-square w-14 cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center gap-1.5" title="Vertical zoom">
+            <span className="text-[10px] text-zinc-600">V</span>
+            <input
+              type="range"
+              min={28}
+              max={200}
+              value={tracksRowHeight}
+              onChange={(e) => setTracksRowHeight(Number(e.target.value))}
+              className="slider-square w-14 cursor-pointer"
+            />
+          </div>
         </div>
       </div>
 

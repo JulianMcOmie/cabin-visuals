@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { Block } from './Block'
 import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -12,6 +13,7 @@ import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackIn
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
 import { flattenBlocks } from '../../core/visual/noteFlatten'
+import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
@@ -21,6 +23,8 @@ import type { Track as TrackType } from '../../types'
 // toggle's resulting state (painted, not flipped - sweeps stay predictable).
 // Module-level on purpose: one stroke spans many Track instances.
 let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
+
+const BRACKET_CORNER_RADIUS_PX = 6
 
 function startMsPaint(kind: 'mute' | 'solo', value: boolean) {
   msPaint = { kind, value }
@@ -63,6 +67,7 @@ interface TrackProps {
 
 export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const isPlaying = useTimeStore((s) => s.isPlaying)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
   const inMultiSelection = useUIStore((s) => s.selectedTrackIds.has(track.id))
@@ -134,6 +139,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
   const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
+  const declaredMidiRows = track.type === 'audio'
+    ? undefined
+    : resolveDeclaredMidiRows(track, useProjectStore.getState())
+  const previewRowPitches = declaredMidiRows?.rows.map((row) => row.pitch)
   // Automation, envelope and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
@@ -212,7 +221,13 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           {descendantRows > 0 && (
             <span
               className="absolute left-0 top-full bg-inherit"
-              style={{ width: depth === 0 ? LABEL_BASE_PX : INDENT_PX, height: descendantRows * rowHeight }}
+              style={{
+                // The first child surface has a rounded top-left cutout. Let a
+                // selected parent's strip underpaint that radius so the selected
+                // fill meets the curved divider without leaving a bare notch.
+                width: (depth === 0 ? LABEL_BASE_PX : INDENT_PX) + (isSelected ? BRACKET_CORNER_RADIUS_PX : 0),
+                height: descendantRows * rowHeight,
+              }}
             />
           )}
         </div>
@@ -336,6 +351,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 barWidthPx={barWidthPx}
                 beatsPerBar={beatsPerBar}
                 color={blockColor}
+                showOscilloscope={isPlaying}
               />
             ))
           : track.blocks.map((block) => (
@@ -347,6 +363,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 beatsPerBar={beatsPerBar}
                 color={blockColor}
                 isSelected={selectedBlockIds.has(block.id)}
+                previewRowPitches={previewRowPitches}
+                strictPreviewRows={declaredMidiRows?.strict}
                 onBlockPointerDown={onBlockPointerDown}
               />
             ))}

@@ -27,6 +27,7 @@ interface Entry {
 interface ScheduledBlock {
   block: AudioBlock
   audible: boolean
+  trackId: string
 }
 
 class AudioEngine {
@@ -46,14 +47,20 @@ class AudioEngine {
    * realtime analyser this is stable while paused/scrubbing and also works while
    * export renders frames without running the speakers' AudioContext clock.
    */
-  getWaveformAtBeat(atBeat: number, bpm: number, beatsPerBar: number, sampleCount = 1024): Float32Array {
+  getWaveformAtBeat(
+    atBeat: number,
+    bpm: number,
+    beatsPerBar: number,
+    sampleCount = 1024,
+    trackId?: string,
+  ): Float32Array {
     const count = Math.max(2, Math.round(sampleCount))
     const out = new Float32Array(count)
     const projectSec = atBeat * 60 / Math.max(1, bpm)
     const windowSec = 1 / 50
 
-    for (const { block, audible } of this.blocks) {
-      if (!audible) continue
+    for (const { block, audible, trackId: blockTrackId } of this.blocks) {
+      if (!audible || (trackId && blockTrackId !== trackId)) continue
       const buffer = this.entries.get(block.id)?.buffer
       if (!buffer) continue
       const blockStartSec = block.startBar * beatsPerBar * 60 / Math.max(1, bpm)
@@ -85,7 +92,7 @@ class AudioEngine {
     for (const t of audioTracks) {
       const audible = !t.muted && !(anySolo && !t.solo)
       for (const b of t.audioBlocks ?? []) {
-        this.blocks.push({ block: b, audible })
+        this.blocks.push({ block: b, audible, trackId: t.id })
         live.add(b.id)
       }
     }

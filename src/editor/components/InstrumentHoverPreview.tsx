@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
+import { View } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
@@ -605,14 +606,13 @@ export function InstrumentPreviewLayer() {
   )
   return (
     <div
-      className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-[var(--bg-canvas)] shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
+      className="fixed z-[90] w-[228px] h-[128px] rounded border border-[var(--border)] bg-transparent shadow-xl shadow-black/60 pointer-events-none overflow-hidden"
       style={preview ? { left: preview.anchor.left + 8, top } : { left: -9999, top, visibility: 'hidden' }}
     >
       {/* dpr follows the device (clamped) - at dpr 1 a HiDPI screen renders the
           popup half-res, which text previews show as blur. The canvas is tiny,
           so the extra pixels cost nothing. */}
-      <Canvas dpr={[1, 2]} frameloop={preview && !draw2d ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
-        <color attach="background" args={['#09090b']} />
+      <Canvas dpr={[1, 2]} frameloop={preview && !draw2d ? 'always' : 'never'} camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true, alpha: true }}>
         <ambientLight intensity={0.7} />
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
         {preview && !draw2d && (projectData
@@ -627,11 +627,27 @@ export function InstrumentPreviewLayer() {
   )
 }
 
-/**
- * The same live preview used by the hover popup, fitted into a card instead.
- * Only cards near the viewport mount their renderer: a long open library
- * therefore keeps just a few WebGL contexts alive at once.
- */
+/** One WebGL renderer shared by every 3D instrument card. A separate Canvas
+ * per card can exceed the browser's context limit as sections open or a drag
+ * starts, at which point three.js receives a null context. */
+export function InstrumentCardPreviewCanvas() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-0">
+      <Canvas
+        dpr={[1, 2]}
+        frameloop="always"
+        camera={{ position: [0, 0.9, 4.2], fov: 55 }}
+        gl={{ antialias: true, alpha: true }}
+      >
+        <View.Port />
+      </Canvas>
+    </div>
+  )
+}
+
+/** The same live preview used by the hover popup, fitted into a card. Three-
+ * dimensional cards render through views into InstrumentCardPreviewCanvas;
+ * 2D instrument vignettes keep their lightweight ordinary canvases. */
 export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [nearViewport, setNearViewport] = useState(false)
@@ -658,15 +674,13 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
     <div ref={hostRef} className="absolute inset-0">
       {nearViewport && draw2d && <Preview2D draw={draw2d} />}
       {nearViewport && !draw2d && (
-        <Canvas dpr={[1, 2]} frameloop="always" camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
-          <color attach="background" args={['#09090b']} />
+        <View className="absolute inset-0">
           <ambientLight intensity={0.7} />
           <directionalLight position={[3, 4, 5]} intensity={1.1} />
           {item.kind === 'object'
             ? <ObjectPreview instrumentId={item.id} trackId={trackId} />
             : <MoverPreview moverId={item.id} />}
-          <LaserPreviewBloom instrumentId={item.kind === 'object' ? item.id : undefined} />
-        </Canvas>
+        </View>
       )}
     </div>
   )

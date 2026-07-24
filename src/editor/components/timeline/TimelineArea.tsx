@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, useEffect, useLayoutEffect, type UIEvent
 import { Plus } from 'lucide-react'
 import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
+import { useTimeStore } from '../../store/TimeStore'
 import { Track } from './Track'
 import { OBJECT_TRACK_COLOR } from '../../utils/trackColors'
 import { TrackContextMenu } from './TrackContextMenu'
@@ -24,17 +25,19 @@ import {
   PLAYHEAD_TRIANGLE_HALF,
 } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
+import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
+const OUTSIDE_PROJECT_OVERSCAN_BARS = 2
 
 /** Keep a useful amount of timeline visible beyond the playback/export range.
- *  At least half a viewport (and never fewer than eight bars) remains available,
- *  while short projects still fill the complete lane viewport. */
+ *  The dimmed area spans at least one complete lane viewport plus a small
+ *  overscan, so it still fills the screen when the project edge is at the left. */
 function timelineDisplayBars(totalBars: number, barWidthPx: number, viewportWidthPx: number) {
   if (barWidthPx <= 0) return totalBars
   const viewportBars = Math.max(1, Math.ceil(viewportWidthPx / barWidthPx))
-  const outsideBars = Math.max(MIN_OUTSIDE_PROJECT_BARS, Math.ceil(viewportBars / 2))
-  return Math.max(viewportBars, Math.ceil(totalBars) + outsideBars)
+  const outsideBars = Math.max(MIN_OUTSIDE_PROJECT_BARS, viewportBars + OUTSIDE_PROJECT_OVERSCAN_BARS)
+  return Math.ceil(totalBars) + outsideBars
 }
 
 export function TimelineArea() {
@@ -141,16 +144,19 @@ export function TimelineArea() {
   const dragGapRow = copyDrag?.gapRow ?? null
   const dragRowHeight = copyDrag?.rowHeight ?? 0
 
+  // The playhead and loop region share one zoom-aware ruler quantization so
+  // their boundaries always land on the same musical subdivision.
+  const computeSnappedTimelineBeat = useCallback((clientX: number) => {
+    if (!laneRef.current) return null
+    const rect = laneRef.current.getBoundingClientRect()
+    const raw = (clientX - rect.left) / pixelsPerBeat
+    const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars).playheadSnapBeats
+    const beat = Math.round(raw / snap) * snap
+    return Math.max(0, Math.min(maxBeat, beat))
+  }, [beatsPerBar, displayBars, maxBeat, pixelsPerBeat])
+
   const { startScrub } = useScrub({
-    computeBeat: (clientX) => {
-      if (!laneRef.current) return null
-      const rect = laneRef.current.getBoundingClientRect()
-      const raw = (clientX - rect.left) / pixelsPerBeat
-      // Snap to half the smallest visible ruler subdivision at this zoom.
-      const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars).playheadSnapBeats
-      const beat = Math.round(raw / snap) * snap
-      return Math.max(0, Math.min(maxBeat, beat))
-    },
+    computeBeat: computeSnappedTimelineBeat,
   })
 
   const placeLoopGuide = useCallback((element: HTMLDivElement | null, beat: number | null, color: string) => {
@@ -173,15 +179,10 @@ export function TimelineArea() {
     placeLoopGuide(loopEndGuideRef.current, guide?.endBeat ?? null, color)
   }, [placeLoopGuide])
 
-  // Loop-region drag on the ruler's top half - same clientX -> beat math as the
-  // scrub, but snapped to whole beats (loop boundaries are bar-ish, not fine).
+  // Loop-region drag on the ruler's top half uses the exact same quantization
+  // as playhead scrubbing at the current zoom.
   const { startLoopDrag, startLoopMove, startLoopResize } = useLoopDrag({
-    computeBeat: (clientX) => {
-      if (!laneRef.current) return null
-      const rect = laneRef.current.getBoundingClientRect()
-      const beat = Math.round((clientX - rect.left) / pixelsPerBeat)
-      return Math.max(0, Math.min(maxBeat, beat))
-    },
+    computeBeat: computeSnappedTimelineBeat,
     maxBeat,
     onGuideChange: updateLoopDragGuides,
   })
@@ -242,6 +243,7 @@ export function TimelineArea() {
   }, [])
 
   usePlayhead((beat) => {
+    updateMidiActivityAtBeat(beat, useTimeStore.getState().isPlaying)
     // Snap to a pixel *center* (whole px + 0.5) so the 1px-wide lane line renders
     // crisp on a single column while the triangle apex sits exactly on that
     // column's center - otherwise the crisp line lands ~0.5px off the apex.

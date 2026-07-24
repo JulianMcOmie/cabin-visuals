@@ -25,6 +25,8 @@ export interface ProjectPreview {
   /** A real captured frame of the project (small JPEG data URL), when the
    *  editor has saved one - the card shows this over the row sketch. */
   image?: string
+  /** Project timeline length in seconds. */
+  durationSeconds: number
   rows: ProjectPreviewRow[]
 }
 
@@ -97,6 +99,7 @@ function documentToPreview(doc: unknown): ProjectPreview {
   const totalBars = Math.max(1, d.totalBars ?? 1)
   const beatsPerBar = d.beatsPerBar ?? 4
   const bpm = d.bpm ?? 120
+  const durationSeconds = Math.round((totalBars * beatsPerBar * 60) / Math.max(1, bpm))
   const rows: ProjectPreviewRow[] = []
   for (const id of rootIds) {
     if (rows.length >= MAX_PREVIEW_ROWS) break
@@ -116,9 +119,9 @@ function documentToPreview(doc: unknown): ProjectPreview {
       const width = Math.max(1.5, Math.min(100 - left, (durationBars / totalBars) * 100))
       blocks.push({ left, width })
     }
-    if (blocks.length > 0) rows.push({ color: t.color ?? '#35a7e6', blocks })
+    if (blocks.length > 0) rows.push({ color: t.color ?? '#3a7694', blocks })
   }
-  return { rows }
+  return { durationSeconds, rows }
 }
 
 /** List the caller's projects, newest-edited first. Pulls each document so the

@@ -17,11 +17,9 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
-import { getDirector } from '../../core/directors'
-import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
-import { getPriorVisualCopyCount } from '../../core/visual/resolve'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
+import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
 import type { Block, InterpolationMode } from '../../types'
 
 /** Automation editor context: the param a lane drives, and its value bounds.
@@ -235,22 +233,20 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const photoClips = usePhotoStore((s) => s.photoClips)
-  const rowsDef = track && (track.type === 'mover' || track.type === 'splitter')
-    ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)
-    : undefined
   const scenes = useProjectStore((s) => s.scenes)
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
-  const directorRows = !automation && track?.type === 'director'
-    ? getDirector(track.directorId)?.midiRows(track, scenes, sceneOrder)
+  const declaredRows = !automation && !trigger && track
+    ? resolveDeclaredMidiRows(track, {
+        tracks,
+        rootTrackIds,
+        scenes,
+        sceneOrder,
+        bpm,
+        beatsPerBar,
+        totalBars,
+      })
     : undefined
-  const defRows = !automation && track?.type === 'base'
-    ? getInstrument(track.instrumentId)?.midiRows
-    : !automation && !trigger && rowsDef?.midiRows && track
-      ? rowsDef.midiRows(
-          mergeDefinitionSettings(rowsDef, track.inputValues),
-          { priorCount: getPriorVisualCopyCount(track.id, { tracks, rootTrackIds, bpm, beatsPerBar, totalBars }) },
-        )
-      : directorRows
+  const defRows = declaredRows?.rows
   const rows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch))
@@ -273,7 +269,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             notes.map((n) => n.pitch),
           )
         : defRows
-          ? generateInstrumentRows(defRows, rowsDef?.strictMidiRows ? [] : notes.map((n) => n.pitch))
+          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch))
           : noteColor
             ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
             : generateRows(undefined)

@@ -20,8 +20,8 @@ function toggleLoopEnabled() {
 }
 
 interface UseLoopDragOptions {
-  /** Map a pointer clientX to a whole-beat boundary (snapped + clamped by the
-   *  caller), or null to ignore the event. */
+  /** Map a pointer clientX to a snapped, clamped beat boundary, or null to
+   *  ignore the event. */
   computeBeat: (clientX: number) => number | null
   /** Last beat available on this ruler, used to clamp moved loop regions. */
   maxBeat: number

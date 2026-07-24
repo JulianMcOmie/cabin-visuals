@@ -20,14 +20,15 @@ body {
    ============================================================ */
 :root {
   /* Surfaces */
-  --bg-app: #0e0e11;          /* editor app background */
-  --bg-page: #0a0a0c;         /* marketing/auth page background */
-  --bg-panel: #131316;        /* panels, cards, top bars */
-  --bg-panel-raised: #17171b; /* label columns, corner cells */
-  --bg-elevated: #1e1e23;     /* buttons, chips, hover surfaces */
-  --bg-canvas: #09090b;       /* 3D viewport */
-  --bg-canvas-deep: #060608;
-  --bg-timeline: #101013;
+  --bg-app: #0c0d12;          /* editor app background */
+  --bg-topbar: #17191f;       /* editor top bar */
+  --bg-page: #090a0e;         /* marketing/auth page background */
+  --bg-panel: #111318;        /* panels, cards, top bars */
+  --bg-panel-raised: #151820; /* label columns, corner cells */
+  --bg-elevated: #1c2029;     /* buttons, chips, hover surfaces */
+  --bg-canvas: #08090d;       /* 3D viewport */
+  --bg-canvas-deep: #05060a;
+  --bg-timeline: #090b10;
 
   /* Borders */
   --border: #26262c;
@@ -49,26 +50,50 @@ body {
   --warn: #d0a04c;
 
   /* Track palette */
-  --track-1: #35a7e6;
-  --track-2: #4ec3c9;
-  --track-3: #c583d6;
-  --track-4: #8d8ff0;
-  --track-5: #d6839e;
+  --track-1: #3a7694;
+  --track-2: #3f7f7c;
+  --track-3: #76517f;
+  --track-4: #62589a;
+  --track-5: #8a4f73;
 
   /* Legacy names remapped onto the console palette (pre-redesign CSS/components
      that still reference them land on-palette instead of on the old theme). */
   --highlight: #d0a04c;
   --green: #6a9955;
-  --background: #0e0e11;
-  --surface: #131316;
-  --lightSurface: #1e1e23;
+  --background: #0c0d12;
+  --surface: #111318;
+  --lightSurface: #1c2029;
   --lightSurfaceHover: #26262c;
-  --activeBg: #1e1e23;
+  --activeBg: #1c2029;
   --electricBlue: #35a7e6;
   --selectedBlue: #6fc0ee;
   --brightGreen: #00e676;
   --brightYellow: #ffdd00;
   --windowSelectionColor: rgba(53, 167, 230, 0.35);
+}
+
+/* A tiny copy of the finished visualizer frame creates a low-frequency color
+   wash behind the inspector. The real WebGL canvas keeps its normal size. */
+.visual-ambient-bleed {
+  position: absolute;
+  inset: -25%;
+  width: 150%;
+  height: 150%;
+  pointer-events: none;
+  opacity: 0.24;
+  filter: blur(80px) saturate(135%) brightness(0.78);
+}
+
+.visualizer-glass-surface {
+  background: rgba(17, 19, 24, 0.84);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
+}
+
+.visualizer-glass-control {
+  background: rgba(30, 30, 35, 0.68);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
 }
 
 /* Buttons/inputs inherit IBM Plex instead of UA fonts. */
@@ -450,4 +475,26 @@ body.drag-moving * {
 }
 .cabin-logo-loading .puff-2 {
   animation: cabin-billow 1.5s ease-out -1.125s infinite;
+}
+
+/* The projects page's finished logo completes the loading smoke's next upward
+   half-cycle instead of snapping both puffs back to their resting carets when
+   Next swaps the loading boundary for the page. The endpoint is the ordinary
+   static logo, so hover smoke continues to work after this one-shot arrival. */
+.cabin-logo-loaded .puff-1 {
+  animation: cabin-billow-settle 0.5s ease-out 0s both;
+}
+.cabin-logo-loaded .puff-2 {
+  animation: cabin-billow-settle 0.5s ease-out 0.075s both;
+}
+
+@keyframes cabin-billow-settle {
+  0%   { opacity: 0.2; transform: translateY(150px) }
+  100% { opacity: 1;   transform: translateY(0) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cabin-logo-loaded .puff {
+    animation: none;
+  }
 }

@@ -71,7 +71,7 @@ export default function StartPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
-      {chosen && <LoadingScreen label="Loading the studio…" />}
+      {chosen && <LoadingScreen />}
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center px-6">
           <Link href="/" className="flex select-none items-center gap-2.5">

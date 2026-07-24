@@ -19,6 +19,7 @@ import { projectDestination } from '../../src/templates/destination'
 const FREE_PROJECT_LIMIT = 5
 // Anonymous sessions hold a single project - signing up (free) is the way to 5.
 const ANON_PROJECT_LIMIT = 1
+const LOAD_HANDOFF_MS = 550
 
 
 interface ProfileData {
@@ -32,6 +33,22 @@ export default function ProjectsPage() {
   const { projects, loading: projectsLoading, createProject, duplicateProject, deleteProject } = useProjectList(!!user)
   const plan = usePlan()
   const [profile, setProfile] = useState<ProfileData | null>(null)
+  // Keep the skeleton mounted briefly after data resolves. Its smoking cabin
+  // sits at the exact same coordinates as the finished header logo, so fading
+  // the old page over the new one lets the moving smoke dissipate while the
+  // static cabin underneath remains perfectly still.
+  const loading = authLoading || projectsLoading
+  const [loadHandoff, setLoadHandoff] = useState<'loading' | 'settling' | 'done'>('loading')
+
+  useEffect(() => {
+    if (loading) {
+      setLoadHandoff('loading')
+      return
+    }
+    setLoadHandoff('settling')
+    const timeout = window.setTimeout(() => setLoadHandoff('done'), LOAD_HANDOFF_MS)
+    return () => window.clearTimeout(timeout)
+  }, [loading])
 
   // Free tier: five projects (one while anonymous). Client-side gate (like the
   // export resolution cap) - the point is a clear upgrade moment, not
@@ -186,31 +203,47 @@ export default function ProjectsPage() {
     }
   }
 
-  if (authLoading || projectsLoading) {
+  if (loading) {
     // Same chrome as the loaded page and the navigation boundary, so the header
     // stays put and the background never flashes a different color.
     return <ProjectsSkeleton />
   }
 
+  const handingOff = loadHandoff !== 'done'
+
   return (
     <>
       {/* Covers the page the INSTANT a create/open is clicked - the project
           write and navigation happen behind the same smoking-cabin screen the
-          route transition shows, so the grid never visibly reshuffles. Every
-          `creating` path lands in the editor, so it carries the studio label
-          from the first frame. */}
-      {creating && <LoadingScreen label="Loading the studio…" />}
-      <ProjectsDisplay
-        projects={projects}
-        user={user}
-        profile={profile}
-        onCreateProject={handleCreateProject}
-        onSelectProject={handleSelectProject}
-        onDeleteProject={handleDeleteProject}
-        onDuplicateProject={handleDuplicateProject}
-        onCreateFromTemplate={handleCreateFromTemplate}
-        createBlocked={atFreeLimit}
-      />
+          route transition shows, so the grid never visibly reshuffles. */}
+      {creating && <LoadingScreen />}
+      <div
+        className={`transition-opacity duration-500 ease-out motion-reduce:transition-none ${
+          loadHandoff === 'loading' ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        <ProjectsDisplay
+          projects={projects}
+          user={user}
+          profile={profile}
+          onCreateProject={handleCreateProject}
+          onSelectProject={handleSelectProject}
+          onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
+          onCreateFromTemplate={handleCreateFromTemplate}
+          createBlocked={atFreeLimit}
+        />
+      </div>
+      {handingOff && (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none fixed inset-0 z-[150] overflow-hidden transition-opacity duration-500 ease-out motion-reduce:transition-none ${
+            loadHandoff === 'settling' ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          <ProjectsSkeleton />
+        </div>
+      )}
     </>
   )
 }

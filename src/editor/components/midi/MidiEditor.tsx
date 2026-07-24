@@ -463,7 +463,7 @@ export function MidiEditor({
             if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
-          {rows.map((row) => (
+          {rows.map((row, rowIndex) => (
             <div
               key={row.pitch}
               title={row.noteLabel ? `${row.label} (${row.noteLabel})` : row.label}
@@ -476,6 +476,7 @@ export function MidiEditor({
                 paddingLeft: 6,
                 paddingRight: 8,
                 borderBottom: '1px solid rgba(255,255,255,0.05)',
+                backgroundColor: rowIndex % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
               }}
@@ -589,7 +590,9 @@ export function MidiEditor({
               bottom: 0,
             }}
           />
-          {/* Resize handles over the left/right borders (above notes so they grab). */}
+          {/* Full-height block resize handles stay below notes: where a note and
+              block edge overlap, the note's move/resize gesture wins. Empty
+              portions of the edge still resize the block. */}
           <div
             style={{ position: 'absolute', top: 0, bottom: 0, left: blockStartPx - 4, width: 8, cursor: 'ew-resize', zIndex: 4 }}
             onPointerDown={(e) => handleResizePointerDown(e, 'left')}
@@ -616,17 +619,20 @@ export function MidiEditor({
             />
           ))}
 
-          {/* Row dividers */}
+          {/* Alternating row bands + dividers make neighboring MIDI lanes easy
+              to track across the labels and time grid without adding visual weight. */}
           {rows.map((_, i) => (
             <div
               key={i}
               style={{
                 position: 'absolute',
-                top: i * rowHeight + rowHeight - 1,
+                top: i * rowHeight,
                 left: 0,
                 right: 0,
-                height: 1,
-                backgroundColor: 'rgba(255,255,255,0.05)',
+                height: rowHeight,
+                backgroundColor: i % 2 === 1 ? 'rgba(0,0,0,0.08)' : 'transparent',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                boxSizing: 'border-box',
                 pointerEvents: 'none',
               }}
             />
@@ -701,7 +707,7 @@ export function MidiEditor({
                     : '1px 1px 3px rgba(0,0,0,0.3)',
                   outline: isSelected ? '1px solid rgba(255,255,255,0.6)' : 'none',
                   cursor: 'inherit',
-                  zIndex: isSelected ? 3 : 1,
+                  zIndex: isSelected ? 6 : 5,
                 }}
                 onPointerDown={(e) => handleNotePointerDown(e, note)}
                 onPointerMove={handleNotePointerMove}

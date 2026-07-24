@@ -28,19 +28,20 @@ export function ProjectsSkeleton() {
       </header>
 
       <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
-        <div className="mb-6 flex items-baseline gap-3">
+        <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
+          <div className="h-9 w-[108px] animate-pulse rounded-[5px] bg-[var(--bg-elevated)]" />
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-panel)]"
+              className="overflow-hidden rounded-lg bg-black"
             >
-              <div className="h-[120px] animate-pulse border-b border-[var(--border-subtle)] bg-[var(--bg-app)]" />
-              <div className="flex items-center justify-between gap-3 px-3.5 pb-[13px] pt-3">
+              <div className="h-[120px] animate-pulse bg-[var(--bg-app)]" />
+              <div className="px-3.5 pb-[13px] pt-3">
                 <div className="h-3 w-24 animate-pulse rounded bg-[var(--bg-elevated)]" />
-                <div className="h-2.5 w-10 animate-pulse rounded bg-[var(--bg-elevated)]" />
+                <div className="mt-1.5 h-2.5 w-10 animate-pulse rounded bg-[var(--bg-elevated)]" />
               </div>
             </div>
           ))}

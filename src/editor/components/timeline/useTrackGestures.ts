@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { useProjectStore, cloneBlock, cloneTrackTree, snapshotTrackTree } from '../../store/ProjectStore'
+import { useProjectStore, cloneBlock, cloneTrackTree, snapshotTrackTree, MAX_TOTAL_BARS } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { LOOP_CURSOR, lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { useClipboardStore } from '../../store/ClipboardStore'
@@ -31,6 +31,7 @@ interface BlockOrigin {
 }
 
 const EDGE_PX = 8
+const PROJECT_END_EPSILON_BARS = 1e-9
 
 function rootAncestorId(tracks: Record<string, Track>, id: string): string {
   let cur = id
@@ -241,12 +242,19 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       const rowDelta = Math.round((e.clientY - d.startY) / useUIStore.getState().tracksRowHeight)
       const store = useProjectStore.getState()
       let guideStartBar = d.origins.get(d.guideBlockId)?.startBar ?? null
+      let requiredProjectEndBar = store.totalBars
 
       if (d.type === 'moving') {
         for (const [blockId, o] of d.origins) {
-          const maxStart = Math.max(0, d.totalBars - o.durationBars)
+          // Plain MIDI regions may enter the dark zone and grow the project.
+          // Looped regions retain their existing project-edge clamp.
+          const movementLimitBars = o.loop ? d.totalBars : MAX_TOTAL_BARS
+          const maxStart = Math.max(0, movementLimitBars - o.durationBars)
           const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
           if (blockId === d.guideBlockId) guideStartBar = newStartBar
+          if (!o.loop) {
+            requiredProjectEndBar = Math.max(requiredProjectEndBar, newStartBar + o.durationBars)
+          }
 
           // Vertical: move to the row at origin index + rowDelta (clamped), mapped to
           // its owning track - so nested/child rows and ability-lane rows are crossed
@@ -270,8 +278,15 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       } else if (d.type === 'resizing-right') {
         const oneBeat = 1 / useProjectStore.getState().beatsPerBar
         for (const [blockId, o] of d.origins) {
-          const maxDuration = d.totalBars - o.startBar
+          // A bottom-edge resize of a plain region can grow into the dark zone.
+          // Loop-arm drags and already-looped regions keep the previous clamp.
+          const canGrowProject = !d.loopArm && !o.loop
+          const resizeLimitBars = canGrowProject ? MAX_TOTAL_BARS : d.totalBars
+          const maxDuration = resizeLimitBars - o.startBar
           const newDuration = Math.max(oneBeat, Math.min(maxDuration, snapBar(o.durationBars + deltaBars)))
+          if (canGrowProject) {
+            requiredProjectEndBar = Math.max(requiredProjectEndBar, o.startBar + newDuration)
+          }
           if (d.loopArm) {
             // Top-half grab: past the authored pattern the block loops (pattern
             // length locked at drag start); back inside it is a plain block
@@ -310,6 +325,15 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
           const updates = { startBar: newStartBar, durationBars: end - newStartBar, notes }
           store.updateBlock(o.trackId, blockId, o.loop ? { ...updates, loopLengthBars: o.patternBars } : updates)
         }
+      }
+      // Grow by whole bars to contain the furthest plain MIDI edge reached.
+      // Never shrink here: once the boundary advances during a gesture, moving
+      // the region back leaves the newly established project length in place.
+      if (requiredProjectEndBar > store.totalBars + PROJECT_END_EPSILON_BARS) {
+        store.setTotalBars(Math.min(
+          MAX_TOTAL_BARS,
+          Math.ceil(requiredProjectEndBar - PROJECT_END_EPSILON_BARS),
+        ))
       }
       if (guideStartBar != null) placeDragGuideAtBar(guideStartBar, d.barWidthPx)
     }
@@ -441,7 +465,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
     }
     placeDragGuideAtClientX(rect.left)
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, laneRef, placeDragGuideAtClientX, beginGestureTracking])
+  }, [selectedBlockIds, setSelectedBlockIds, placeDragGuideAtClientX, beginGestureTracking])
 
   // Pointer down on a lane: right-click draws a new block on that track; left-click
   // begins a marquee (shift keeps the current selection as the base).

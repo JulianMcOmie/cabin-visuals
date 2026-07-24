@@ -1,8 +1,11 @@
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
+import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
+import { registerMidiActivityBlock } from './midiActivityRegistry'
 
 interface BlockProps {
   block: BlockType
@@ -11,14 +14,19 @@ interface BlockProps {
   beatsPerBar: number
   color: string
   isSelected: boolean
+  /** Semantic MIDI row order from the full editor (first pitch = top). */
+  previewRowPitches?: number[]
+  /** Hide pitches outside the declared vocabulary, matching strict editors. */
+  strictPreviewRows?: boolean
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
+export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const isEditing = editingBlock?.blockId === block.id
+  const blockRef = useRef<HTMLDivElement>(null)
 
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
@@ -27,9 +35,18 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   const totalBeatsInBlock = block.durationBars * beatsPerBar
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
+  const palette = midiBlockPalette(color)
+  const outlineColor = isEditing || isSelected ? palette.selectedOutline : palette.outline
+
+  useEffect(() => {
+    const element = blockRef.current
+    if (!element) return
+    return registerMidiActivityBlock(block, beatsPerBar, element)
+  }, [beatsPerBar, block, previewRowPitches, strictPreviewRows])
 
   return (
     <div
+      ref={blockRef}
       data-block-id={block.id}
       data-looped-block={hasLoopSections ? '' : undefined}
       title="Double-click to edit notes"
@@ -37,12 +54,16 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
-        backgroundColor: hasLoopSections ? 'transparent' : color + '24',
-        borderTop: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderRight: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderBottom: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderLeft: hasLoopSections ? undefined : `2px solid ${color}`,
-        boxShadow: !hasLoopSections && (isSelected || isEditing) ? `0 0 0 1px ${color}` : undefined,
+        backgroundColor: hasLoopSections ? 'transparent' : palette.fill,
+        borderTop: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
+        borderRight: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
+        borderBottom: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
+        borderLeft: hasLoopSections ? undefined : `2px solid ${outlineColor}`,
+        boxShadow: !hasLoopSections && (isSelected || isEditing)
+          ? `0 0 0 1px ${palette.selectedOutline}, 0 3px 10px rgba(0,0,0,0.24)`
+          : undefined,
+        filter: 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))',
+        willChange: 'filter',
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
@@ -77,14 +98,29 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         setEditingBlock({ trackId, blockId: block.id })
       }}
     >
+      {!hasLoopSections && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none rounded-[3px]"
+          style={{
+            backgroundColor: palette.selectedOutline,
+            opacity: 'var(--midi-activity-opacity, 0)',
+            boxShadow: `inset 0 0 16px ${palette.outline}`,
+            mixBlendMode: 'screen',
+            willChange: 'opacity',
+          }}
+        />
+      )}
       <NotePreview
         notes={block.notes}
         totalBeats={totalBeatsInBlock}
         loopBeats={loopBeats}
-        color={color}
+        palette={palette}
         highlighted={isEditing || isSelected}
         widthPx={renderedWidth}
         heightPx={renderedHeight}
+        rowPitches={previewRowPitches}
+        strictRows={strictPreviewRows}
       />
     </div>
   )
@@ -93,7 +129,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
 const PREVIEW_NOTE_CAP = 512
-const LOOP_CORNER_RADIUS_PX = 3
+const LOOP_CORNER_RADIUS_PX = 4
 
 interface LoopSection {
   startBeat: number
@@ -142,24 +178,17 @@ function loopOutlinePath(sections: LoopSection[], totalBeats: number, width: num
   return path
 }
 
-/** Miniature of the block's notes: x/width from time, y from pitch - normalized to
- *  the block's own pitch range (at least an octave, so near-monotone lines stay
- *  calm), dashes long notes read as dashes and hits as ticks. A looping block
+/** Miniature of the block's notes: x/width from time, y from the MIDI editor's
+ *  row order (or numeric pitch for a plain piano roll), dashes long notes read
+ *  as dashes and hits as ticks. A looping block
  *  tiles the pattern (repeats dimmed) across touching rounded sections. Those
  *  sections are the block surface itself, rather than decorations inside one
  *  large outer pill, so their touching corners form the familiar DAW divots. */
-function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx, heightPx }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string; highlighted: boolean; widthPx: number; heightPx: number }) {
+function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, widthPx, heightPx, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; highlighted: boolean; widthPx: number; heightPx: number; rowPitches?: number[]; strictRows?: boolean }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
-  let minPitch = notes[0]?.pitch ?? 60
-  let maxPitch = minPitch
-  for (const n of notes) {
-    if (n.pitch < minPitch) minPitch = n.pitch
-    if (n.pitch > maxPitch) maxPitch = n.pitch
-  }
-  const span = Math.max(12, maxPitch - minPitch)
-  const lo = (minPitch + maxPitch) / 2 - span / 2
+  const pitchPositions = notePreviewPitchPositions(notes, rowPitches, strictRows)
 
   const looping = loopBeats != null && loopBeats > 0 && loopBeats < totalBeats
   const occurrences = looping
@@ -185,7 +214,7 @@ function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx
           <div
             key={`loop-section:${startBeat}`}
             data-loop-section=""
-            className="absolute pointer-events-none rounded-[3px]"
+            className="absolute pointer-events-none rounded-[4px]"
             style={{
               // Adjacent border boxes meet exactly: their flat vertical portions
               // are flush while the paired rounded corners expose a small notch.
@@ -193,9 +222,21 @@ function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx
               width: `max(${widthPct}%, 1px)`,
               top: 0,
               bottom: 0,
-              backgroundColor: color + '24',
+              backgroundColor: palette.fill,
             }}
-          />
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 rounded-[inherit]"
+              style={{
+                backgroundColor: palette.selectedOutline,
+                opacity: 'var(--midi-activity-opacity, 0)',
+                boxShadow: `inset 0 0 16px ${palette.outline}`,
+                mixBlendMode: 'screen',
+                willChange: 'opacity',
+              }}
+            />
+          </div>
         )
       })}
       {outlinePath && (
@@ -209,7 +250,7 @@ function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx
           <path
             d={outlinePath}
             fill="none"
-            stroke={highlighted ? color : color + '55'}
+            stroke={highlighted ? palette.selectedOutline : palette.outline}
             strokeWidth={outlineStrokeWidth}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
@@ -217,23 +258,39 @@ function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx
         </svg>
       )}
       {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
+        const pitchPosition = pitchPositions.get(note.pitch)
+        if (pitchPosition == null) return null
         const leftPct = (startBeat / totalBeats) * 100
         const widthPct = (durationBeats / totalBeats) * 100
-        // Top pitch at the top; 8%–88% band keeps dashes inside the rounded border.
-        const topPct = 8 + (1 - (note.pitch - lo) / span) * 80
+        // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
+        // follow their declared row order; plain piano rolls keep high pitch up.
+        const topPct = 8 + pitchPosition * 80
         return (
           <div
             key={`${note.id}:${repeat}`}
+            data-midi-preview-key={`${note.id}:${repeat}`}
             className="absolute rounded-full pointer-events-none"
             style={{
               left: `${leftPct}%`,
               width: `max(${widthPct}%, 3px)`,
               top: `${topPct}%`,
               height: 2,
-              backgroundColor: color + 'cc',
-              opacity: repeat > 0 ? 0.55 : 1,
+              backgroundColor: repeat > 0 ? palette.repeatedNote : palette.note,
+              filter: 'brightness(calc(1 + var(--midi-note-activity, 0) * 2.6)) saturate(1.25)',
+              willChange: 'filter',
             }}
-          />
+          >
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 rounded-[inherit]"
+              style={{
+                backgroundColor: palette.selectedOutline,
+                opacity: 'var(--midi-note-activity, 0)',
+                boxShadow: `0 0 6px ${palette.outline}`,
+                willChange: 'opacity',
+              }}
+            />
+          </div>
         )
       })}
     </>

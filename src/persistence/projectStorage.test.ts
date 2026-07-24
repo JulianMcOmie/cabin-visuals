@@ -43,8 +43,8 @@ const client = {
 
 // `mock.module` is real on Node 22+ (run with --experimental-test-module-mocks)
 // but isn't in @types/node's MockTracker yet, hence the cast.
-;(mock as unknown as { module(specifier: string, options: { exports: unknown }): void })
-  .module('./supabase.ts', { exports: { getSupabase: () => client } })
+;(mock as unknown as { module(specifier: string, options: { namedExports: unknown }): void })
+  .module('./supabase.ts', { namedExports: { getSupabase: () => client } })
 
 // Imported lazily (the build target is CJS, so no top-level await) and only
 // once - the mock has to be in place before projectStorage first resolves it.
@@ -110,4 +110,3 @@ test('load hands back the rev alongside the document', async () => {
   assert.equal(loaded.rev, 4, 'without this the editor has no rev to save against')
   assert.equal(loaded.name, 'Song')
 })
-

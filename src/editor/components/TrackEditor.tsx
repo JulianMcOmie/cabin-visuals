@@ -43,7 +43,7 @@ function EditableTrackName({ trackId, name }: { trackId: string; name: string })
           if (e.key === 'Enter') e.currentTarget.blur()
           else if (e.key === 'Escape') { e.currentTarget.value = name; e.currentTarget.blur() }
         }}
-        className="w-32 text-[11px] font-semibold text-right text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none focus:border-[var(--accent)]"
+        className="w-32 text-[11px] font-semibold text-left text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none focus:border-[var(--accent)]"
       />
     )
   }
@@ -460,17 +460,16 @@ export function TrackEditor() {
   useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
 
   return (
-    <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
+    <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
       {/* A scene tab selects the scene inspector; selecting a timeline row swaps
           this same surface back to the track inspector. */}
-      <div className="h-8 flex-shrink-0 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)]">
-        <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">{track ? 'TRACK' : 'SCENE'}</span>
+      <div className="h-8 flex-shrink-0 flex items-center justify-start gap-2 px-3 border-b border-[var(--border)]">
         {track
           ? <EditableTrackName trackId={track.id} name={track.name} />
           : <span className="text-[11px] font-semibold text-[var(--accent)] select-none">{activeScene?.name ?? '-'}</span>}
       </div>
 
-      {/* Tabs - flat segmented row, inset accent underline on the active tab. */}
+      {/* Tabs - flat segmented row with background and text emphasis for the active tab. */}
       <div className="flex flex-shrink-0 border-b border-[var(--border)]">
         {track ? TABS.map((t, i) => (
           <button
@@ -480,14 +479,14 @@ export function TrackEditor() {
               i < TABS.length - 1 ? 'border-r border-[var(--border)]' : ''
             } ${
               tab === t.id
-                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
                 : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             {t.label}
           </button>
         )) : (
-          <div className="flex-1 h-7 flex items-center justify-center bg-[var(--bg-app)] text-[11px] font-semibold text-[var(--text)] shadow-[inset_0_-2px_0_var(--accent)]">
+          <div className="flex-1 h-7 flex items-center justify-center bg-[var(--bg-app)] text-[11px] font-semibold text-[var(--text)]">
             Settings
           </div>
         )}

@@ -7,6 +7,7 @@ import { selectNewBlock } from '../../utils/selection'
 import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
 import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
+import { AudioTrackOscilloscope } from './AudioTrackOscilloscope'
 import type { AudioBlock as AudioBlockType } from '../../types'
 
 interface AudioBlockProps {
@@ -15,6 +16,8 @@ interface AudioBlockProps {
   barWidthPx: number
   beatsPerBar: number
   color: string
+  /** Replace the static waveform with the live track oscilloscope. */
+  showOscilloscope?: boolean
 }
 
 /**
@@ -24,7 +27,7 @@ interface AudioBlockProps {
  * it just takes more or fewer beats). Dragging writes startBar freely (no
  * grid snap); the audio engine reschedules via the store subscription.
  */
-export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: AudioBlockProps) {
+export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, showOscilloscope = false }: AudioBlockProps) {
   // Width follows tempo reactively - this subscription is the feature.
   const bpm = useProjectStore((s) => s.bpm)
   const clip = useAudioStore((s) => s.audioClips[block.clipRef])
@@ -210,7 +213,12 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ opacity: showOscilloscope ? 0 : 1 }}
+      />
+      {showOscilloscope && <AudioTrackOscilloscope trackId={trackId} />}
       <span
         className="absolute top-0.5 left-1.5 text-[10px] font-medium text-white pointer-events-none truncate max-w-full pr-2"
         style={{ textShadow: '0 1px 2px rgba(63, 10, 23, 0.8)' }}

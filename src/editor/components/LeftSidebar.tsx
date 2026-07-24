@@ -10,7 +10,7 @@ import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
@@ -340,7 +340,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div>
+    <div className="@container">
       <div className="flex items-center gap-1 px-3 pt-3 pb-1 select-none">
         {/* Caps section row - clicking the label still collapses/expands the list. */}
         <button
@@ -390,7 +390,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
         </button>
       </div>
       {open && (
-        <div>
+        <div className="grid grid-cols-1 gap-2 px-2 @[176px]:grid-cols-2">
           {items.map((item) => (
             <div
               key={item.id}
@@ -398,9 +398,9 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
               onPointerDown={(e) => onItemPointerDown(e, item)}
               onDoubleClick={() => onItemDoubleClick(item)}
               title={item.description}
-              className="mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-app)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
+              className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
             >
-              <div className="relative aspect-video bg-[var(--bg-canvas)]">
+              <div className="relative aspect-video">
                 {canPreview(item)
                   ? <InstrumentCardPreview item={item} />
                   : (
@@ -408,12 +408,14 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
                       {item.icon}
                     </span>
                   )}
-              </div>
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <span className="flex w-3.5 flex-shrink-0 items-center justify-center">
-                  {item.icon}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{item.name}</span>
+                <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  <span
+                    className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
+                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
+                  >
+                    {item.name}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
@@ -615,12 +617,15 @@ export function LeftSidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)] overflow-hidden">
+    <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-panel)]">
       {/* One warm preview canvas for all sections' hover popups. */}
       <InstrumentPreviewLayer />
+      {/* All live 3D cards share this renderer, avoiding browser WebGL-context
+          exhaustion when several two-column sections are visible. */}
+      {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
           narrow, and icon + label once there's room for the text. */}
-      <div className="@container flex flex-shrink-0 border-b border-[var(--border)]">
+      <div className="@container relative z-10 flex flex-shrink-0 border-b border-[var(--border)]">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
           { id: 'loops', label: 'Loops', Icon: Repeat },
@@ -634,7 +639,7 @@ export function LeftSidebar() {
               i < arr.length - 1 ? 'border-r border-[var(--border)]' : ''
             } ${
               tab === id
-                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
                 : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
             }`}
           >
@@ -644,7 +649,7 @@ export function LeftSidebar() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto timeline-scrollbar pb-4">
+      <div className="timeline-scrollbar relative z-10 flex-1 overflow-y-auto pb-4">
         {tab === 'instruments' && (
           <>
             {activeIsMain ? (
