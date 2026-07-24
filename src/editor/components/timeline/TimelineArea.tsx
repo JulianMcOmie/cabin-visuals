@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Plus } from 'lucide-react'
-import { useProjectStore } from '../../store/ProjectStore'
+import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
 import { OBJECT_TRACK_COLOR } from '../../utils/trackColors'
@@ -10,7 +10,7 @@ import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
-import { useLoopDrag } from '../../hooks/useLoopDrag'
+import { useLoopDrag, type LoopDragGuide } from '../../hooks/useLoopDrag'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
@@ -18,7 +18,11 @@ import { flattenVisualRows, rowGuidesOf } from './trackTree'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { startEdgeResize } from '../../utils/edgeResize'
-import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import {
+  LOOP_REGION_DISABLED_COLOR,
+  LOOP_REGION_ENABLED_COLOR,
+  PLAYHEAD_TRIANGLE_HALF,
+} from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
@@ -59,12 +63,18 @@ export function TimelineArea() {
   const rulerContentRef = useRef<HTMLDivElement>(null)
   const clipRef = useRef<HTMLDivElement>(null)
   const blockDragGuideRef = useRef<HTMLDivElement>(null)
+  const loopStartGuideRef = useRef<HTMLDivElement>(null)
+  const loopEndGuideRef = useRef<HTMLDivElement>(null)
+  const projectLengthEdgeRef = useRef<HTMLDivElement>(null)
 
   // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
   const onTimelineScroll = (e: ReactScrollEvent<HTMLDivElement>) => {
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
+    }
+    if (projectLengthEdgeRef.current) {
+      projectLengthEdgeRef.current.style.transform = `translateX(${projectWidthPx - e.currentTarget.scrollLeft}px)`
     }
     // Persist continuously so the position survives unmount (the ref may already be
     // detached by the time an unmount cleanup would run).
@@ -143,6 +153,26 @@ export function TimelineArea() {
     },
   })
 
+  const placeLoopGuide = useCallback((element: HTMLDivElement | null, beat: number | null, color: string) => {
+    if (!element) return
+    if (beat == null) {
+      element.style.visibility = 'hidden'
+      return
+    }
+    const laneR = laneRef.current?.getBoundingClientRect()
+    if (!laneR) return
+    const hostLeft = element.parentElement?.getBoundingClientRect().left ?? 0
+    element.style.transform = `translateX(${laneR.left + beat * pixelsPerBeat - hostLeft}px)`
+    element.style.backgroundColor = color
+    element.style.visibility = 'visible'
+  }, [pixelsPerBeat])
+
+  const updateLoopDragGuides = useCallback((guide: LoopDragGuide | null) => {
+    const color = guide?.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR
+    placeLoopGuide(loopStartGuideRef.current, guide?.startBeat ?? null, color)
+    placeLoopGuide(loopEndGuideRef.current, guide?.endBeat ?? null, color)
+  }, [placeLoopGuide])
+
   // Loop-region drag on the ruler's top half - same clientX -> beat math as the
   // scrub, but snapped to whole beats (loop boundaries are bar-ish, not fine).
   const { startLoopDrag, startLoopMove, startLoopResize } = useLoopDrag({
@@ -153,6 +183,7 @@ export function TimelineArea() {
       return Math.max(0, Math.min(maxBeat, beat))
     },
     maxBeat,
+    onGuideChange: updateLoopDragGuides,
   })
 
   // Restore the saved scroll on mount (before paint), and save it on unmount, so
@@ -165,6 +196,14 @@ export function TimelineArea() {
     sc.scrollTop = tracksScrollTop
     if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
   }, [])
+
+  // The project-end separator lives in viewport space so one continuous handle
+  // spans the ruler and every lane, but follows the content during scrolling.
+  useLayoutEffect(() => {
+    if (!projectLengthEdgeRef.current) return
+    projectLengthEdgeRef.current.style.transform =
+      `translateX(${projectWidthPx - (scrollRef.current?.scrollLeft ?? 0)}px)`
+  }, [projectWidthPx])
 
   // The render extent is responsive: short projects still show grid/ruler
   // across the full viewport, plus a useful horizontally scrollable overrun.
@@ -256,6 +295,12 @@ export function TimelineArea() {
   function startLabelResize(e: ReactPointerEvent) {
     const { tracksLabelWidth, setTracksLabelWidth } = useUIStore.getState()
     startEdgeResize(e, tracksLabelWidth, setTracksLabelWidth)
+  }
+
+  function startProjectLengthResize(e: ReactPointerEvent) {
+    startEdgeResize(e, projectWidthPx, (widthPx) => {
+      useProjectStore.getState().setTotalBars(widthPx / barWidthPx)
+    })
   }
 
   return (
@@ -403,7 +448,6 @@ export function TimelineArea() {
                 width: Math.max(0, timelineWidthPx - projectWidthPx),
                 backgroundColor: 'rgba(8, 8, 11, 0.46)',
                 backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
               }}
             />
 
@@ -475,6 +519,40 @@ export function TimelineArea() {
         </div>
       </div>
 
+      {/* One draggable project-end edge across the ruler and every lane. The
+          clipping host keeps it out of the frozen label column and hides it when
+          horizontal scrolling moves the boundary outside the lane viewport. */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 bottom-0 z-[44] overflow-hidden"
+        style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
+      >
+        <div
+          ref={projectLengthEdgeRef}
+          className="absolute top-0 bottom-0 left-0 w-0 will-change-transform"
+          style={{ transform: `translateX(${projectWidthPx}px)` }}
+        >
+          <div
+            data-project-length-edge=""
+            role="separator"
+            aria-label="Project end"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_TOTAL_BARS}
+            aria-valuemax={MAX_TOTAL_BARS}
+            aria-valuenow={totalBars}
+            tabIndex={0}
+            onPointerDown={startProjectLengthResize}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+              e.preventDefault()
+              useProjectStore.getState().setTotalBars(totalBars + (e.key === 'ArrowRight' ? 1 : -1))
+            }}
+            className="group pointer-events-auto absolute top-0 bottom-0 -left-[5px] w-[10px] cursor-ew-resize touch-none outline-none"
+          >
+            <span className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-white/[0.12] transition-[width,background-color,box-shadow] group-hover:w-0.5 group-hover:bg-[var(--accent)] group-hover:shadow-[0_0_6px_var(--accent)] group-focus-visible:w-0.5 group-focus-visible:bg-[var(--accent)] group-focus-visible:shadow-[0_0_6px_var(--accent)]" />
+          </div>
+        </div>
+      </div>
+
       {/* MIDI drag alignment guide. Positioned imperatively from the dragged
           block's snapped left edge; this root begins at the ruler and ends at
           the bottom of the editor, so the hairline spans the full workspace. */}
@@ -485,8 +563,24 @@ export function TimelineArea() {
         className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
         style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
       >
-        <div className="absolute top-0 bottom-0 w-px bg-white/90" style={{ left: -0.5 }} />
+        <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: -0.5 }} />
       </div>
+
+      {([
+        ['start', loopStartGuideRef],
+        ['end', loopEndGuideRef],
+      ] as const).map(([edge, ref]) => (
+        <div
+          key={edge}
+          ref={ref}
+          data-loop-drag-guide={edge}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
+          style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
+        >
+          <div className="absolute top-0 bottom-0 w-px" style={{ left: -0.5, backgroundColor: 'inherit' }} />
+        </div>
+      ))}
 
       {/* Floating ghost of the row being Alt-copy-dragged - mirrors the label box so
           it reads like the lifted row of a normal drag (top set imperatively). */}

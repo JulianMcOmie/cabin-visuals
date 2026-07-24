@@ -237,7 +237,6 @@ export function Ruler({
                 zIndex: 20,
                 backgroundColor: 'rgba(8, 8, 11, 0.46)',
                 backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
               }}
             />
           )}
