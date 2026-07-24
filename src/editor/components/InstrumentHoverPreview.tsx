@@ -24,6 +24,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import type { ObjectState, ResolvedNote, ResolvedObject } from '../core/visual/types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
+import { useInstrumentClipUrl } from '../../components/instrumentClipUrl'
 import type { InstrumentItem } from './LeftSidebar'
 
 /**
@@ -69,7 +70,7 @@ function previewBeat(elapsedSec: number): number {
  *  pixels only become a laser after the scene bloom pass. Keep that same pass
  *  in the isolated preview canvases, but only mount it for laser objects so
  *  ordinary instrument cards retain their existing rendering and cost. */
-function LaserPreviewBloom({ instrumentId }: { instrumentId?: string }) {
+export function LaserPreviewBloom({ instrumentId }: { instrumentId?: string }) {
   if (!instrumentId || !LASER_INSTRUMENT_IDS.has(instrumentId)) return null
   return (
     <EffectComposer multisampling={0}>
@@ -89,11 +90,21 @@ function LaserPreviewBloom({ instrumentId }: { instrumentId?: string }) {
  *  follows the project beat (the preview IS the music); paused or for plain
  *  library rows, the private 120bpm loop clock runs instead. */
 function previewBeatNow(elapsedSec: number, sync?: boolean): number {
+  if (previewTimeOverrideSec !== null) return previewBeat(previewTimeOverrideSec)
   if (sync) {
     const t = useTimeStore.getState()
     if (t.isPlaying) return t.currentBeat
   }
   return previewBeat(elapsedSec)
+}
+
+// The clip-capture page steps this instead of letting the canvas clock run:
+// with frameloop 'never' + advance(), every driver reads the SAME stepped time,
+// so a captured frame is a pure function of its index and the 8s clip loops
+// exactly (previewBeat is periodic over LOOP_BEATS). Null = live clocks.
+let previewTimeOverrideSec: number | null = null
+export function setPreviewTimeOverride(sec: number | null): void {
+  previewTimeOverrideSec = sec
 }
 
 // Instruments whose real render needs context a popup can't provide (uploads,
@@ -190,7 +201,7 @@ function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumen
   return null
 }
 
-function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean }) {
+export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const def = getInstrument(instrumentId)
   if (!def) return null
   const Comp = def.component
@@ -225,7 +236,7 @@ const CUBE_BASE_COLOR = new Color('#35a7e6')
 // off-frame.
 const MOVER_BASE_OFFSET = 1.3
 
-function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
+export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
   const def = getMoverOrSplitterDefinition(moverId)
   const meshesRef = useRef<Mesh[]>([])
   const chain = useMemo(() => {
@@ -657,15 +668,24 @@ export function InstrumentCardPreviewCanvas() {
   )
 }
 
-/** The same live preview used by the hover popup, fitted into a card. Three-
- * dimensional cards render through views into InstrumentCardPreviewCanvas;
- * 2D instrument vignettes keep their lightweight ordinary canvases. */
+/** The library card's preview. Clip-first: 3D previews play their captured 8s
+ * loop from the instrument-previews bucket (one <video>, no per-frame GPU cost,
+ * and the bloom pass baked in - see InstrumentPreviewCapture). Ids without a
+ * clip yet (or a failed load) fall back to the live render through a View into
+ * InstrumentCardPreviewCanvas, so a new instrument previews correctly before
+ * its capture ever runs. 2D instrument vignettes keep their lightweight
+ * ordinary canvases. */
 export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [nearViewport, setNearViewport] = useState(false)
+  const [clipFailed, setClipFailed] = useState(false)
   const reactId = useId()
   const trackId = `${PREVIEW_TRACK_ID}-${reactId}`
   const draw2d = get2DPreview(item.id)
+  // undefined = manifest still resolving; hold the card empty instead of
+  // mounting a live View that the arriving clip would immediately replace.
+  const clipUrl = useInstrumentClipUrl(item.id)
+  const clip = draw2d ? null : clipUrl
 
   useEffect(() => {
     const host = hostRef.current
@@ -685,7 +705,19 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   return (
     <div ref={hostRef} className="absolute inset-0">
       {nearViewport && draw2d && <Preview2D draw={draw2d} />}
-      {nearViewport && !draw2d && (
+      {nearViewport && !draw2d && clip && !clipFailed && (
+        <video
+          src={clip}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          onError={() => setClipFailed(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+      {nearViewport && !draw2d && (clip === null || clipFailed) && (
         <View className="absolute inset-0">
           <ambientLight intensity={0.7} />
           <directionalLight position={[3, 4, 5]} intensity={1.1} />
