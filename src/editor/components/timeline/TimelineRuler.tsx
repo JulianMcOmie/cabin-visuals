@@ -86,9 +86,9 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
                 left: loopRegion.startBeat * pixelsPerBeat,
                 width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
                 height: '50%',
-                backgroundColor: loopRegion.enabled ? 'rgba(250, 204, 21, 0.3)' : 'rgba(161, 161, 170, 0.25)',
-                borderLeft: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
-                borderRight: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
+                backgroundColor: loopRegion.enabled ? '#4da3d9' : '#52525b',
+                borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
+                borderRight: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
                 zIndex: 5,
               }}
             >
@@ -120,17 +120,54 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
 
           {bars.map((bar) => {
             const numbered = bar % interval === 0
+            // Numbers sit ON the (solid) loop band - inside an active loop they
+            // invert to black to stay readable against the gold.
+            const barBeat = bar * beatsPerBar
+            // Lines strictly inside the band (its edges already draw borders)
+            // get a dark top-half segment drawn OVER the solid band.
+            const inLoopBand = !!loopRegion && barBeat > loopRegion.startBeat && barBeat < loopRegion.endBeat
+            // Band extent relative to this bar's origin - for the clipped black
+            // copy of the number (dynamic per-pixel inversion at the band edges).
+            const bandStartRel = loopRegion ? loopRegion.startBeat * pixelsPerBeat - bar * barWidthPx : 0
+            const bandEndRel = loopRegion ? loopRegion.endBeat * pixelsPerBeat - bar * barWidthPx : 0
+            // Only bars whose number (at x 4px, ~30px wide max) can touch the band.
+            const numberTouchesBand = !!loopRegion?.enabled && bandEndRel > 4 && bandStartRel < 34
             return (
               <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
                 {numbered ? (
                   <>
                     {/* Top half: bar number - 10px/500 mono, one step brighter
                         than faint so it reads at a glance */}
-                    <span className="absolute left-1 font-mono text-[10px] font-medium text-[var(--text-3)] leading-none" style={{ top: 3 }}>
+                    <span
+                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--text-3)]"
+                      style={{ top: 3, zIndex: 6 }}
+                    >
                       {bar + 1}
                     </span>
-                    {/* Full-height line beside the number */}
-                    <div className="absolute top-0 bottom-0 w-px bg-[var(--border-strong)]" />
+                    {/* Black copy of the number, clipped to the band's extent -
+                        a number straddling the band edge inverts only the part
+                        actually sitting on the gold. */}
+                    {numberTouchesBand && (
+                      <div
+                        className="absolute top-0 overflow-hidden pointer-events-none"
+                        style={{ left: Math.max(0, bandStartRel), width: bandEndRel - Math.max(0, bandStartRel), height: '50%', zIndex: 7 }}
+                      >
+                        <span
+                          className="absolute font-mono text-[10px] font-medium leading-none text-black"
+                          style={{ top: 3, left: 4 - Math.max(0, bandStartRel) }}
+                        >
+                          {bar + 1}
+                        </span>
+                      </div>
+                    )}
+                    {/* Near-full-height line beside the number - stops a hair
+                        below the ruler's top edge (matches other DAWs). */}
+                    <div className="absolute bottom-0 w-px bg-[var(--border-strong)]" style={{ top: 2 }} />
+                    {/* Its top-half restated above the loop band, darkened to
+                        read against the solid fill. */}
+                    {inLoopBand && (
+                      <div className="absolute w-px" style={{ top: 2, height: 'calc(50% - 2px)', backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: 6 }} />
+                    )}
                   </>
                 ) : (
                   /* Blank bar: short tick, same as the beat ticks */
