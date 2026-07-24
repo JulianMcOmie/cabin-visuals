@@ -218,25 +218,41 @@ export function Ruler({
               below the playhead triangle. */}
           {children}
 
-          {/* Playhead head: a downward triangle filling the bottom half (positioned
-              by the caller's RAF loop). Clipped to the strip, so at beat 0 it sits
-              flush at the lane edge rather than spilling over the corner box. */}
+          {/* Playhead head: a marker confined to the ruler's bottom half (below the
+              loop band) - a rectangular top tapering to a rounded point, one
+              continuous rounded shape (positioned by the caller's RAF loop). Clipped
+              to the strip, so at beat 0 it sits flush at the lane edge rather than
+              spilling over the corner box. */}
           <div
             ref={playheadHeadRef}
             className="absolute pointer-events-none"
             style={{ top: '50%', bottom: 0, left: playheadNudgePx, width: 0, zIndex: 21 }}
           >
-            <div
+            <svg
               className="absolute top-0"
-              style={{
-                left: -PLAYHEAD_TRIANGLE_HALF,
-                width: 0,
-                height: 0,
-                borderLeft: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-                borderRight: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-                borderTop: `${height / 2}px solid #ecedef`,
-              }}
-            />
+              width={PLAYHEAD_TRIANGLE_HALF * 2}
+              height={height / 2}
+              viewBox={`0 0 ${PLAYHEAD_TRIANGLE_HALF * 2} ${height / 2}`}
+              style={{ left: -PLAYHEAD_TRIANGLE_HALF }}
+              fill="none"
+            >
+              {(() => {
+                const w = PLAYHEAD_TRIANGLE_HALF * 2
+                const h = height / 2
+                const p = 1.25 // inset so the rounded stroke stays inside the viewBox
+                const midY = h / 2
+                const d = `M ${p},${p} L ${w - p},${p} L ${w - p},${midY} L ${w / 2},${h - p} L ${p},${midY} Z`
+                return (
+                  <path
+                    d={d}
+                    fill="#ecedef"
+                    stroke="#ecedef"
+                    strokeWidth={2.5}
+                    strokeLinejoin="round"
+                  />
+                )
+              })()}
+            </svg>
           </div>
         </div>
       </div>
