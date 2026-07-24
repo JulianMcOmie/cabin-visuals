@@ -6,6 +6,7 @@ import { Block } from './Block'
 import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
+import type { RowGuide } from './trackTree'
 import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
@@ -37,6 +38,15 @@ interface TrackProps {
   isLast?: boolean
   /** Nesting depth (0 = root) - indents the label by INDENT_PX per level. */
   depth?: number
+  /** Ancestor bracket lines (index = ancestor depth), drawn along the label's left. */
+  guides?: RowGuide[]
+  /** Left inset (px) of the label's bottom divider - it starts at the bracket line
+   *  of the NEXT row's depth, so it never crosses a parent's bracket region.
+   *  null/undefined = no divider (last row, or the next row's curve draws it). */
+  dividerInset?: number | null
+  /** Number of visible rows in this track's subtree below it - the parent's
+   *  background strip beside its children spans exactly this many rows. */
+  descendantRows?: number
   /** During an Alt copy-drag / library drag: vertical shift (px) to open the gap. */
   liftOffset?: number
   /** This row is the source of an in-progress nest-drag (dim it). */
@@ -51,7 +61,7 @@ interface TrackProps {
   onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -144,7 +154,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         position: 'relative',
         height: rowHeight,
       }}
-      className={`flex items-stretch border-b border-[rgba(38,38,44,0.6)] last:border-b-0 cursor-default transition-colors duration-100 ${
+      className={`flex items-stretch cursor-default transition-colors duration-100 ${
         isSelected ? 'bg-[rgba(53,167,230,0.05)]' : 'hover:bg-white/[0.02]'
       }`}
     >
@@ -183,20 +193,49 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className={`sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)] transition-colors duration-100 ${
-          isLast ? '' : 'border-b border-b-[var(--border-subtle)]'
-        } ${
-          dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
-        }`}
+        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)]"
       >
-        {/* 3px colour spine - the row's track colour, full label height. */}
-        <span
-          className="w-[3px] flex-shrink-0 self-stretch my-1.5 rounded-[2px]"
-          style={{ backgroundColor: blockColor }}
-        />
+        {/* Row-state background, scoped to this row's own region: a child row's
+            colour starts at its bracket line, never bleeding into a parent's
+            strip. The strip below a parent (the indent gap left of its children)
+            inherits this background, so selecting a parent lights its whole
+            bracket region while a child's highlight stops at the divider. */}
+        <div
+          className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${
+            dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
+          }`}
+          style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX }}
+        >
+          {descendantRows > 0 && (
+            <span
+              className="absolute left-0 top-full bg-inherit"
+              style={{ width: depth === 0 ? LABEL_BASE_PX : INDENT_PX, height: descendantRows * rowHeight }}
+            />
+          )}
+        </div>
+        {/* Logic-style hierarchy brackets: each ancestor's border drops down the
+            label past its children; on the first child it curves in from the
+            divider above. Extends 1px above the row to paint over the previous
+            row's divider so the vertical line reads as continuous. */}
+        {guides?.map((g, level) => (
+          <span
+            key={level}
+            className={`pointer-events-none absolute right-0 border-[var(--border)] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
+            style={{ left: LABEL_BASE_PX + level * INDENT_PX, top: -1, bottom: 0 }}
+          />
+        ))}
+        {/* Bottom divider, inset so it starts at the bracket it meets (never
+            crossing a parent's bracket region); the divider above a first child
+            is drawn by that child's curve instead. */}
+        {dividerInset != null && (
+          <span
+            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--border-subtle)]"
+            style={{ left: dividerInset }}
+          />
+        )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        <div className="relative flex-1 min-w-0 flex items-center gap-1.5">
           {renaming ? (
             <input
               ref={renameRef}
@@ -229,7 +268,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           )}
         </div>
 
-        <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="relative flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onPointerDown={(e) => {
               if (e.button !== 0) return
@@ -268,12 +307,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       </div>
 
       {/* Gutter (half a triangle wide) between the label and the lane so the ruler
-          playhead triangle has room to show its left half at beat 0. */}
-      <div className="flex-shrink-0" style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
+          playhead triangle has room to show its left half at beat 0. The row
+          divider lives on the gutter + lane (not the row itself), so the label
+          column can inset its own divider around the hierarchy brackets. */}
+      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[rgba(38,38,44,0.6)]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''}`}
+        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[rgba(38,38,44,0.6)]'}`}
         // A muted track's blocks fade so mute state reads from the MIDI side too.
         style={{ width: timelineWidthPx, opacity: track.muted ? 0.4 : 1 }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),

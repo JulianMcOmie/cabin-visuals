@@ -43,6 +43,22 @@ export function flattenVisualRows(
   return flattenTracks(tracks, rootTrackIds, collapsed).map(({ id, depth }) => ({ kind: 'track' as const, id, depth }))
 }
 
+/** One ancestor bracket line on a row - drawn in the label at that ancestor's
+ *  indent (Logic-style track-stack left edge). */
+export interface RowGuide {
+  /** First child of that ancestor: the line curves in from the divider above. */
+  curve: boolean
+}
+
+/** Per-row ancestor guides, parallel to `rows`. Row i's array has one entry per
+ *  nesting level (index = ancestor depth). DFS order means a first child always
+ *  directly follows its parent, which is all the curve flag needs. */
+export function rowGuidesOf(rows: VisualRow[]): RowGuide[][] {
+  return rows.map((row, i) => Array.from({ length: row.depth }, (_, level) => ({
+    curve: level === row.depth - 1 && rows[i - 1]?.depth === row.depth - 1,
+  })))
+}
+
 /** A track plus all its descendants - you can't drop a track into its own subtree. */
 export function subtreeIds(tracks: Record<string, Track>, id: string): Set<string> {
   const out = new Set<string>()

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { FileMusic, Plus, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { Track } from './Track'
@@ -14,9 +14,9 @@ import { useLoopDrag } from '../../hooks/useLoopDrag'
 import { useTrackGestures } from './useTrackGestures'
 import { useTrackCopyDrag } from './useTrackCopyDrag'
 import { useTrackNestDrag } from './useTrackNestDrag'
-import { flattenVisualRows } from './trackTree'
-import { deselectTrack, selectNewTrack, deleteSelectedTracks } from '../../utils/selection'
-import { importMidiFiles } from '../MediaFileDropLayer'
+import { flattenVisualRows, rowGuidesOf } from './trackTree'
+import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
+import { deselectTrack, selectNewTrack } from '../../utils/selection'
 import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
@@ -26,13 +26,8 @@ export function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
-  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
-  const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
-  const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
-  const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
-  const hasTrackSelection = useUIStore((s) => !!s.selectedTrackId || s.selectedTrackIds.size > 0)
   const loopDragging = useUIStore((s) => !!s.loopDrag)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -66,6 +61,7 @@ export function TimelineArea() {
   // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
   const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds)
+  const rowGuides = rowGuidesOf(visualRows)
 
   // Right-click-a-track menu (add ability / automation), positioned at the cursor.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null)
@@ -198,7 +194,6 @@ export function TimelineArea() {
   // OS-file drops moved to the editor-wide MediaFileDropLayer (App root) -
   // files can land anywhere in the editor, not just this section. Only the
   // MIDI import button's plumbing stays here.
-  const midiInputRef = useRef<HTMLInputElement>(null)
 
   // Drag the label column's right edge to resize it (spans the ruler corner, every
   // track label, and the empty space below - one handle along the whole edge).
@@ -213,7 +208,7 @@ export function TimelineArea() {
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
           gutter reserves the lanes' scrollbar width so the strip ends where the
-          lanes' content does. The Tracks header lives in the ruler's frozen corner. */}
+          lanes' content does. The add-track button lives in the ruler's frozen corner. */}
       <div className="flex-shrink-0">
         <TimelineRuler
           onScrubStart={startScrub}
@@ -227,7 +222,6 @@ export function TimelineArea() {
           playheadHeadRef={playheadHeadRef}
           corner={
             <div className="flex items-center gap-2 px-3 w-full">
-              <span className="text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">TRACKS</span>
               <button
                 className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors cursor-pointer"
                 onClick={insertTrack}
@@ -235,35 +229,6 @@ export function TimelineArea() {
               >
                 <Plus size={11} />
               </button>
-              <button
-                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-35 disabled:cursor-default transition-colors cursor-pointer"
-                onClick={() => midiInputRef.current?.click()}
-                disabled={activeIsMain}
-                title={activeIsMain ? 'MIDI import is available inside visual scenes' : 'Import MIDI file'}
-              >
-                <FileMusic size={11} />
-              </button>
-              <button
-                className="flex items-center justify-center w-4 h-4 rounded-[3px] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[#d68383] hover:bg-[var(--border)] disabled:opacity-35 disabled:cursor-default transition-colors cursor-pointer"
-                onClick={deleteSelectedTracks}
-                disabled={!hasTrackSelection}
-                title="Delete selected tracks (ctrl-click labels to select several)"
-              >
-                <Trash2 size={11} />
-              </button>
-              <input
-                ref={midiInputRef}
-                type="file"
-                accept=".mid,.midi"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? [])
-                  // Reset so re-picking the same file fires change again.
-                  e.target.value = ''
-                  if (files.length > 0) importMidiFiles(files)
-                }}
-              />
             </div>
           }
         />
@@ -276,33 +241,6 @@ export function TimelineArea() {
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
-        {/* Zoom sliders, same pattern as the MIDI editor's toolbar pair -
-            floated over the lanes' top-right so the (narrow, resizable)
-            label-column corner doesn't have to fit them. */}
-        <div className="absolute right-3 top-1 z-40 flex items-center gap-2.5 rounded bg-[var(--bg-panel)]/85 px-2 py-1">
-          <div className="flex items-center gap-1.5" title="Horizontal zoom">
-            <span className="text-[10px] text-zinc-600">H</span>
-            <input
-              type="range"
-              min={2}
-              max={100}
-              value={pixelsPerBeat}
-              onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
-              className="slider-square w-14 cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center gap-1.5" title="Vertical zoom">
-            <span className="text-[10px] text-zinc-600">V</span>
-            <input
-              type="range"
-              min={28}
-              max={200}
-              value={tracksRowHeight}
-              onChange={(e) => setTracksRowHeight(Number(e.target.value))}
-              className="slider-square w-14 cursor-pointer"
-            />
-          </div>
-        </div>
         {/* A loop drag lights the LANES as its drop zone - the mirror of the
             label-column glow an instrument drag gets. */}
         {loopDragging && (
@@ -347,11 +285,25 @@ export function TimelineArea() {
             {visualRows.map((row, i) => {
               const isLast = i === visualRows.length - 1
               const track = tracks[row.id]
+              // The label divider below this row starts at the bracket line of the
+              // NEXT row's depth; a deeper next row is a first child, whose curve
+              // draws that divider itself (so this row draws none).
+              const nextDepth = visualRows[i + 1]?.depth
+              const dividerInset = isLast || nextDepth === undefined || nextDepth > row.depth
+                ? null
+                : nextDepth > 0 ? LABEL_BASE_PX + (nextDepth - 1) * INDENT_PX : 0
+              // Visible rows in this track's subtree - its background strip beside
+              // the children spans exactly these rows.
+              let descendantRows = 0
+              while (visualRows[i + 1 + descendantRows] && visualRows[i + 1 + descendantRows].depth > row.depth) descendantRows++
               return track ? (
                 <Track
                   key={row.id}
                   track={track}
                   depth={row.depth}
+                  guides={rowGuides[i]}
+                  dividerInset={dividerInset}
+                  descendantRows={descendantRows}
                   isLast={isLast}
                   liftOffset={dragActive ? (dragHasTarget && dragGapRow != null && i >= dragGapRow ? dragRowHeight : 0) : undefined}
                   dimmed={trackDrop?.activeId === row.id}
