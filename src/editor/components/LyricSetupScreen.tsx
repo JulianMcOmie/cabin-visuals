@@ -42,6 +42,16 @@ type Phase =
   | { kind: 'ready' }
   | { kind: 'error'; message: string }
 
+// The no-song-handy demo track: lives in the public demo-audio bucket
+// (uploaded once, independent of any project - same idea as the template
+// preview clips), fetched and fed through the normal addSong path so BPM
+// detection, upload and transcription all run exactly as with a user file.
+const DEMO_SONG = {
+  url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/demo-audio/borderline.mp3`,
+  fileName: 'Tame Impala - Borderline.mp3',
+  label: 'Borderline by Tame Impala',
+}
+
 function firstAudioBlock() {
   const s = useProjectStore.getState()
   for (const id of s.rootTrackIds) {
@@ -272,6 +282,26 @@ export function LyricSetupScreen({
     startSong(file)
   }, [projectLoading])
 
+  // Demo song: fetched from the public bucket, then handed to addSong like
+  // any browsed file. `loading` only covers the fetch - addSong flips the
+  // phase to 'uploading' the moment the bytes are in.
+  const [demoLoading, setDemoLoading] = useState(false)
+  const loadDemoSong = async () => {
+    if (demoLoading) return
+    setDemoLoading(true)
+    try {
+      const res = await fetch(DEMO_SONG.url)
+      if (!res.ok) throw new Error(`Demo song fetch failed (${res.status})`)
+      const blob = await res.blob()
+      track('demo_song_used')
+      addSong(new File([blob], DEMO_SONG.fileName, { type: 'audio/mpeg' }))
+    } catch (err) {
+      console.error('Could not load the demo song', err)
+      setDemoLoading(false)
+      setPhase({ kind: 'error', message: 'Could not load the demo song - try one of your own files.' })
+    }
+  }
+
   // Drag-over indicator, same look as the editor's drop layer. Depth counter
   // absorbs enter/leave noise from crossing child boundaries.
   const [dragActive, setDragActive] = useState(false)
@@ -438,6 +468,19 @@ export function LyricSetupScreen({
                   }}
                 />
               </div>
+              {/* The mobile flow's no-song-handy door: one tap tries the whole
+                  pipeline on a known track. */}
+              {preStyled && (
+                <button
+                  onClick={() => void loadDemoSong()}
+                  disabled={demoLoading}
+                  className="-mt-3 text-[12px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:opacity-60 cursor-pointer"
+                >
+                  {demoLoading
+                    ? `Loading ${DEMO_SONG.label}…`
+                    : <>No song handy? Use <span className="font-semibold text-[var(--text-2)]">{DEMO_SONG.label}</span></>}
+                </button>
+              )}
               <Link
                 href="/projects"
                 className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
