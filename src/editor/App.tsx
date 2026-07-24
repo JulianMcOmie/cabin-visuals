@@ -896,14 +896,15 @@ export default function EditorApp() {
   const libraryOpenRef = useRef(paneDefaults.library)
   const sceneEditorOpenRef = useRef(paneDefaults.sceneEditor)
 
-  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, fallbackPct: number) => {
+  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, fallbackSize: string) => {
     const panel = panelRef.current
     if (!panel) return
     if (panel.isCollapsed()) {
       panel.expand()
-      // A panel that MOUNTED collapsed (mobile pane defaults) has no
-      // remembered size for expand() to restore - open it explicitly.
-      if (panel.isCollapsed() || panel.getSize().inPixels === 0) panel.resize(fallbackPct)
+      // A panel that MOUNTED collapsed has no remembered size for expand() to
+      // restore - open it explicitly. Percentage STRING on purpose: resize()
+      // reads bare numbers as PIXELS (resize(15) = a 15px sliver).
+      if (panel.isCollapsed() || panel.getSize().inPixels === 0) panel.resize(fallbackSize)
     } else {
       panel.collapse()
     }
@@ -931,8 +932,8 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, 15)}
-        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 55)}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, '15%')}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '55%')}
         playback={playback}
       />
       <div className="flex-1 min-h-0">
@@ -948,10 +949,12 @@ export default function EditorApp() {
             maxSize="30%"
             collapsible
             collapsedSize="0%"
-            onResize={(size) => {
+            onResize={(size, _id, prevSize) => {
               const open = size.inPixels > 0
               setLibraryOpen(open)
-              if (libraryOpenRef.current !== open) {
+              // Persist only real transitions (prev defined = not the mount
+              // layout, whose transient 0px sizes are noise, not intent).
+              if (prevSize !== undefined && libraryOpenRef.current !== open) {
                 libraryOpenRef.current = open
                 writePaneOpen('library', open)
               }
@@ -983,10 +986,10 @@ export default function EditorApp() {
                       maxSize="60%"
                       collapsible
                       collapsedSize="0%"
-                      onResize={(size) => {
+                      onResize={(size, _id, prevSize) => {
                         const open = size.inPixels > 0
                         setSceneEditorOpen(open)
-                        if (sceneEditorOpenRef.current !== open) {
+                        if (prevSize !== undefined && sceneEditorOpenRef.current !== open) {
                           sceneEditorOpenRef.current = open
                           writePaneOpen('sceneEditor', open)
                         }
