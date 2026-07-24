@@ -10,7 +10,9 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
 interface UseMidiEditorStateOptions {
   trackId: string
   block: Block
-  defaultQuantize: number
+  /** Grid resolution in beats, or 'smart' - follow the ruler's zoom-adaptive
+   *  subdivision (resolved to beats by the caller). */
+  defaultQuantize: number | 'smart'
 }
 
 /**
@@ -32,7 +34,7 @@ interface UseMidiEditorStateOptions {
 export function useMidiEditorState({ trackId, block, defaultQuantize }: UseMidiEditorStateOptions) {
   const updateBlockNotes = useProjectStore((s) => s.updateBlockNotes)
 
-  const [quantize, setQuantize] = useState(defaultQuantize)
+  const [quantize, setQuantize] = useState<number | 'smart'>(defaultQuantize)
   const [notes, setNotes] = useState<Note[]>(() => block.notes)
 
   const localEditRef = useRef(false)

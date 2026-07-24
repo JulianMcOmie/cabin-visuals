@@ -8,6 +8,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
 import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { computeRulerGrid } from '../rulerGrid'
 import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
 import { useVideoStore } from '../../store/VideoStore'
 import { usePhotoStore } from '../../store/PhotoStore'
@@ -50,7 +51,7 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
   { value: 'smooth-step', label: 'Smooth Step' },
 ]
 
-const DEFAULT_QUANTIZE = 0.25
+const DEFAULT_QUANTIZE: number | 'smart' = 'smart'
 
 // Minimum bars the editor timeline spans, so short projects still have room to
 // work past the block. Longer projects span their full length (TimeStore.totalBars).
@@ -67,6 +68,19 @@ const QUANTIZE_OPTIONS = [
   { value: 1 / 6, label: '1/16T' },
   { value: 0.125, label: '1/32' },
 ]
+
+/** Human label for a grid resolution in beats (1 beat = 1/4 note), for the
+ *  Smart option's live readout. Falls back to beats/bars for the coarse
+ *  zoomed-out grids that have no note-value name. */
+function quantizeLabel(beats: number, beatsPerBar: number): string {
+  const named = QUANTIZE_OPTIONS.find((o) => o.value === beats)
+  if (named) return named.label
+  if (beats % beatsPerBar === 0) {
+    const bars = beats / beatsPerBar
+    return bars === 1 ? '1 bar' : `${bars} bars`
+  }
+  return beats === 1 ? '1 beat' : `${beats} beats`
+}
 
 export function PianoRollPanel() {
   const editingBlock = useUIStore((s) => s.editingBlock)
@@ -200,6 +214,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     defaultQuantize: DEFAULT_QUANTIZE,
   })
 
+  // 'Smart' keeps the note grid in sync with the header: quantize = the smallest
+  // subdivision the ruler currently shows at this zoom (computeRulerGrid, the
+  // same rule the ruler renders and the playhead snaps by).
+  const smartQuantize = computeRulerGrid(midiPixelsPerBeat, beatsPerBar, Math.max(totalBars, INITIAL_TOTAL_BARS)).smallestBeats
+  const effectiveQuantize = quantize === 'smart' ? smartQuantize : quantize
+
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
   const noise = useProjectStore((s) => s.tracks[trackId]?.noise)
@@ -313,17 +333,6 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
         <div className="w-px h-4 bg-zinc-800" />
 
-        <span className="text-xs font-medium" style={{ color: trackColor }}>
-          {trackName}
-        </span>
-        <span className="text-xs text-zinc-600">
-          Bar {block.startBar + 1} · {block.durationBars} bar{block.durationBars !== 1 ? 's' : ''}
-          {block.loop && block.loopLengthBars != null && ` · loops every ${block.loopLengthBars} bar${block.loopLengthBars !== 1 ? 's' : ''}`}
-          {block.loop && block.loopLengthBars == null && ' · loops'}
-        </span>
-
-        <div className="w-px h-4 bg-zinc-800" />
-
         <button
           onClick={() => setSnapEnabled(!snapEnabled)}
           title={snapEnabled ? 'Snap to grid (on)' : 'Snap to grid (off)'}
@@ -339,10 +348,12 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
 
         <select
           value={quantize}
-          onChange={(e) => setQuantize(Number(e.target.value))}
+          onChange={(e) => setQuantize(e.target.value === 'smart' ? 'smart' : Number(e.target.value))}
           title="Grid resolution"
           className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
         >
+          {/* The live readout shows what Smart resolves to at this zoom. */}
+          <option value="smart">Smart ({quantizeLabel(smartQuantize, beatsPerBar)})</option>
           {QUANTIZE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -448,14 +459,14 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}
-        cornerLabel={automation?.paramLabel ?? trigger?.cornerLabel}
+        cornerLabel={automation?.paramLabel ?? trigger?.cornerLabel ?? trackName}
         block={block}
         notes={notes}
         onNotesChange={setNotes}
         onCommit={commit}
         initialTotalBeats={initialTotalBeats}
         beatsPerBar={beatsPerBar}
-        quantize={quantize}
+        quantize={effectiveQuantize}
         snapEnabled={snapEnabled}
         pixelsPerBeat={midiPixelsPerBeat}
         rowHeight={rowHeight}

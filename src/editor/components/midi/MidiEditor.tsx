@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { computeRulerGrid } from '../rulerGrid'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
@@ -88,8 +89,10 @@ export function MidiEditor({
       if (!gridRef.current) return null
       const rect = gridRef.current.getBoundingClientRect()
       const rawBeat = xToBeat(clientX - rect.left, pixelsPerBeat)
-      // Playhead always snaps to 1/4 beat, independent of the note-snap toggle.
-      const snapped = Math.round(rawBeat / PLAYHEAD_SNAP_BEATS) * PLAYHEAD_SNAP_BEATS
+      // Snap to half the smallest visible ruler subdivision at this zoom
+      // (independent of the note-snap toggle) - same rule as the timeline.
+      const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, Math.ceil(initialTotalBeats / beatsPerBar)).playheadSnapBeats
+      const snapped = Math.round(rawBeat / snap) * snap
       return Math.max(0, Math.min(initialTotalBeats, snapped))
     },
     onStart: () => { if (containerRef.current) containerRef.current.style.cursor = 'ew-resize' },

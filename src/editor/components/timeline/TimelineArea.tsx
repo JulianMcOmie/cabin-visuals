@@ -18,7 +18,8 @@ import { flattenVisualRows } from './trackTree'
 import { deselectTrack, selectNewTrack, deleteSelectedTracks } from '../../utils/selection'
 import { importMidiFiles } from '../MediaFileDropLayer'
 import { startEdgeResize } from '../../utils/edgeResize'
-import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
+import { computeRulerGrid } from '../rulerGrid'
 
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
@@ -97,7 +98,9 @@ export function TimelineArea() {
       if (!laneRef.current) return null
       const rect = laneRef.current.getBoundingClientRect()
       const raw = (clientX - rect.left) / pixelsPerBeat
-      const beat = Math.round(raw / PLAYHEAD_SNAP_BEATS) * PLAYHEAD_SNAP_BEATS // snap to 1/4 beat
+      // Snap to half the smallest visible ruler subdivision at this zoom.
+      const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars).playheadSnapBeats
+      const beat = Math.round(raw / snap) * snap
       return Math.max(0, Math.min(maxBeat, beat))
     },
   })

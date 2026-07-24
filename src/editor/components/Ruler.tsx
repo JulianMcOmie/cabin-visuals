@@ -1,6 +1,7 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
 import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import { computeRulerGrid } from './rulerGrid'
 import type { LoopResizeEdge } from '../hooks/useLoopDrag'
 
 interface RulerProps {
@@ -73,24 +74,18 @@ export function Ruler({
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const beatExtent = totalBeats ?? totalBars * beatsPerBar
 
-  // Zoom-adaptive grid (Logic-style). Numbered "major" lines sit at the smallest
-  // power-of-2 bar multiple that keeps them ~64px apart, so zooming out thins
-  // 1 → 2 → 4 → 8... bars. Each major span carries 4 "minor" ticks - beats when
-  // majors are single bars (the musical case), quarter-spans when they're wider.
-  let majorBars = 1
-  while (majorBars < totalBars && majorBars * barWidthPx < 64) majorBars *= 2
-  const majorBeats = majorBars * beatsPerBar
-  const minorBeats = majorBars === 1 ? 1 : majorBeats / 4
+  // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
+  // computeRulerGrid. Zooming out thins the numbered lines 1 → 2 → 4 → 8...
+  // bars; each major span carries 4 minor ticks; deep zoom adds 16th sub-ticks.
+  const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
   const bars = Array.from({ length: Math.ceil(totalBars / majorBars) }, (_, i) => i * majorBars)
   // Minor ticks: every minor position that isn't a major line (k % 4 skips them
   // exactly - floats included - since majors sit every 4 minors).
   const minors = Array.from({ length: Math.ceil(beatExtent / minorBeats) }, (_, k) => k)
     .filter((k) => (majorBars === 1 ? k % beatsPerBar !== 0 : k % 4 !== 0))
     .map((k) => k * minorBeats)
-  // Zoomed far in, beats subdivide again: faint 16th sub-ticks.
-  const showSubTicks = majorBars === 1 && pixelsPerBeat >= 48
-  const subs = showSubTicks
-    ? Array.from({ length: Math.ceil(beatExtent * 4) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k / 4)
+  const subs = subBeats != null
+    ? Array.from({ length: Math.ceil(beatExtent / subBeats) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k * subBeats)
     : []
 
   return (
