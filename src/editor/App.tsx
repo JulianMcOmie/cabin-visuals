@@ -22,7 +22,6 @@ import { track } from '../analytics/analytics'
 // import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
-import { AudioBar } from './components/AudioBar'
 import { BpmControl } from './components/BpmControl'
 import { ProjectLengthControl } from './components/ProjectLengthControl'
 import { ExportDialog } from './components/ExportDialog'
@@ -453,12 +452,22 @@ function Header() {
             </button>
           </div>
 
-          <span className="font-mono text-[13px] text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border)] rounded px-2.5 py-1 min-w-[62px] text-center tabular-nums whitespace-nowrap">
-            {formatBeat(currentBeat, beatsPerBar)}
-          </span>
-
-          <ProjectLengthControl />
-          <BpmControl />
+          {/* One continuous pill: beat readout, BARS, and BPM share a single
+              recessed track, separated by thin dividers rather than sitting as
+              three detached chips. */}
+          <div className="flex items-stretch h-7 rounded bg-[var(--bg-app)] border border-[var(--border)] overflow-hidden select-none">
+            <div className="flex items-center justify-center px-2.5 min-w-[62px] font-mono text-[13px] text-[var(--text)] tabular-nums whitespace-nowrap">
+              {formatBeat(currentBeat, beatsPerBar)}
+            </div>
+            <div className="w-px bg-[var(--border)]" />
+            <div className="flex items-center px-2.5">
+              <ProjectLengthControl />
+            </div>
+            <div className="w-px bg-[var(--border)]" />
+            <div className="flex items-center px-2.5">
+              <BpmControl />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -639,8 +648,6 @@ export default function EditorApp() {
                 </div>
 
               </div>
-
-              <AudioBar />
             </div>
           </Panel>
 
