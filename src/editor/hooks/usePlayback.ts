@@ -11,7 +11,13 @@ function gatherAudioTracks(tracks: Record<string, Track>): Track[] {
 }
 
 export function usePlayback() {
-  const { setIsPlaying } = useTimeStore();
+  // Selector on the stable action, NOT `useTimeStore()` bare: selectorless
+  // zustand subscribes to the WHOLE store, re-rendering the caller on every
+  // currentBeat tick (60/s while playing). Harmless when Header (already
+  // beat-subscribed) was the only caller; catastrophic once EditorApp - the
+  // editor's root - started calling this hook, re-rendering the entire tree
+  // every frame of playback.
+  const setIsPlaying = useTimeStore((s) => s.setIsPlaying);
   const engine = getPlaybackEngine();
 
   useEffect(() => {
