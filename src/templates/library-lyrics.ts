@@ -163,7 +163,7 @@ export const LYRIC_TEMPLATES: TemplateDef[] = [
     id: 'lyricVideo',
     name: 'Lyric Video',
     styleName: 'Minimal',
-    description: 'Just the words - big, white, landing on the beat. Add your song and they write themselves.',
+    description: 'Upload your song, choose the style, and a lyric video will be generated for you.',
     bpm: 120,
     cardPreview: 'animatedLyric',
     lyricFlow: true,
