@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, type UIEvent as ReactScrollEvent } from 'react'
 import { useUIStore } from '../../store/UIStore'
-import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
+import { PLAYHEAD_TRIANGLE_HALF, PLAYHEAD_SNAP_BEATS } from '../../constants'
 import { lighten } from '../../utils/colors'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
@@ -11,7 +11,7 @@ import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useLoopDrag } from '../../hooks/useLoopDrag'
-import { useTimeStore } from '../../store/TimeStore'
+import { Ruler } from '../Ruler'
 import { xToBeat, beatToX, rowIndexToY } from './coords'
 import { startEdgeResize } from '../../utils/edgeResize'
 import type { MidiRow, RangeLabel } from './types'
@@ -99,7 +99,6 @@ export function MidiEditor({
   // Loop-region drag on the ruler's top half - same grid beat math as the
   // scrub, but snapped to whole beats. The region is absolute project beats
   // (this ruler spans the whole project, with the block at blockStartBeat).
-  const loopRegion = useTimeStore((s) => s.loopRegion)
   const { startLoopDrag, startLoopMove, startLoopResize } = useLoopDrag({
     computeBeat: (clientX) => {
       if (!gridRef.current) return null
@@ -374,162 +373,55 @@ export function MidiEditor({
       />
       {/* Ruler in its own row (outside the grid scroll container) so the grid owns
           the only scrollbars: the vertical one then ends below the ruler. Horizontal
-          scroll is synced via onScrollSync; the ruler's own bar is hidden.
-          Two-tone Logic-style: lighter top half with bar numbers, darker bottom half
-          with tick lines and the playhead triangle. The playhead line lives in the grid. */}
-      <div className="flex-shrink-0" style={{ display: 'flex', height: RULER_HEIGHT, borderBottom: '1px solid #27272a' }}>
-        {/* Frozen corner - stays put on horizontal scroll, aligned with the sticky labels.
-            Distinct box colour (matching the track ruler + the label column below). */}
-        <div style={{ width: labelWidth, flexShrink: 0, backgroundColor: '#202024', borderRight: '1px solid #27272a', zIndex: 2, display: 'flex', alignItems: 'center', padding: '0 8px' }}>
-          {cornerLabel && (
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: '#a1a1aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cornerLabel}</span>
-          )}
-        </div>
-        {/* Strip viewport clips the translated inner content (mirrors the grid scroll). */}
+          scroll is synced via onScrollSync; the ruler's own bar is hidden. The shared
+          Ruler renders the loop lane, bar numbers, ticks, and playhead triangle -
+          identical to the main timeline's. The playhead line lives in the grid. */}
+      <Ruler
+        height={RULER_HEIGHT}
+        labelWidth={labelWidth}
+        corner={cornerLabel && (
+          <span className="px-2 text-[10.5px] font-semibold text-[var(--text-3)] whitespace-nowrap overflow-hidden text-ellipsis">{cornerLabel}</span>
+        )}
+        contentWidthPx={canvasWidth - labelWidth}
+        pixelsPerBeat={pixelsPerBeat}
+        beatsPerBar={beatsPerBar}
+        totalBars={barCount}
+        totalBeats={initialTotalBeats}
+        contentRef={rulerContentRef}
+        playheadHeadRef={rulerPlayheadRef}
+        onScrubStart={startScrub}
+        onLoopDragStart={startLoopDrag}
+        onLoopMoveStart={startLoopMove}
+        onLoopResizeStart={startLoopResize}
+      >
+        {/* Block clip header: drag the body to move the block, the edges to resize.
+            Sits in the bottom half below the triangle (zIndex 10 < 21). */}
         <div
-          data-loop-lane=""
           style={{
-            flex: 1,
-            position: 'relative',
-            overflow: 'hidden',
-            backgroundColor: '#18181b',
+            position: 'absolute',
+            top: '50%',
+            bottom: 0,
+            left: blockStartPx,
+            width: blockWidthPx,
+            backgroundColor: 'rgba(129, 140, 248, 0.6)',
+            zIndex: 10,
+            pointerEvents: 'auto',
           }}
           onPointerDown={(e) => {
-            // Top half = the loop lane (drag defines a region, click clears it);
-            // bottom half scrubs - the toolbar above (part of the editor) owns
-            // the panel-resize edge, so the ruler top doesn't double as a resizer.
-            const rect = e.currentTarget.getBoundingClientRect()
-            if (e.clientY < rect.top + rect.height / 2) { startLoopDrag(e); return }
-            startScrub(e)
+            // Clicking on/near the playhead triangle scrubs instead of grabbing
+            // the block (gives the playhead priority without a moving hit target).
+            const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
+            if (ph != null && Math.abs(e.clientX - ph) <= 10) { startScrub(e); return }
+            handleHeaderPointerDown(e)
           }}
           onPointerMove={(e) => {
-            // The loop lane (top half) shows the normal cursor; only the scrub
-            // half advertises ew-resize.
-            const rect = e.currentTarget.getBoundingClientRect()
-            e.currentTarget.style.cursor = e.clientY < rect.top + rect.height / 2 ? 'default' : 'ew-resize'
+            // Show the scrub cursor where a click would scrub (near the playhead).
+            const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
+            if (ph != null && Math.abs(e.clientX - ph) <= 10) { e.currentTarget.style.cursor = 'ew-resize'; return }
+            handleHeaderPointerMove(e)
           }}
-        >
-          {/* Subtle divider separating the top (numbers) and bottom (ticks) halves -
-              matches the track ruler (zinc-700 @ 40%). */}
-          <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, backgroundColor: 'rgba(63,63,70,0.4)', pointerEvents: 'none' }} />
-
-          <div ref={rulerContentRef} style={{ position: 'absolute', top: 0, bottom: 0, left: PLAYHEAD_TRIANGLE_HALF, width: canvasWidth - labelWidth, willChange: 'transform' }}>
-
-          {/* Loop region band - top half only (the loop lane), content space so
-              it scrolls with the ruler. Same accent as the tracks ruler band. */}
-          {loopRegion && (
-            <div
-              data-loop-region=""
-              data-loop-enabled={loopRegion.enabled ? 'true' : 'false'}
-              style={{
-                position: 'absolute',
-                top: 0,
-                height: '50%',
-                left: beatToX(loopRegion.startBeat, pixelsPerBeat),
-                width: beatToX(loopRegion.endBeat - loopRegion.startBeat, pixelsPerBeat),
-                backgroundColor: loopRegion.enabled ? 'rgba(250, 204, 21, 0.3)' : 'rgba(161, 161, 170, 0.25)',
-                borderLeft: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
-                borderRight: `1px solid ${loopRegion.enabled ? '#facc15' : '#a1a1aa'}`,
-                pointerEvents: 'none',
-                zIndex: 5,
-              }}
-            >
-              <div
-                data-loop-resize-handle="start"
-                className="absolute top-0 bottom-0 left-0 cursor-ew-resize"
-                style={{ width: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
-                onPointerDown={(e) => startLoopResize(e, 'start')}
-              />
-              <div
-                data-loop-move-handle=""
-                className="absolute top-0 bottom-0 cursor-grab"
-                style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
-                onPointerDown={startLoopMove}
-              />
-              <div
-                data-loop-resize-handle="end"
-                className="absolute top-0 bottom-0 right-0 cursor-ew-resize"
-                style={{ width: LOOP_MOVE_EDGE_INSET, pointerEvents: 'auto' }}
-                onPointerDown={(e) => startLoopResize(e, 'end')}
-              />
-            </div>
-          )}
-
-          {/* Faint, short beat ticks (every beat that isn't a bar line) */}
-          {Array.from({ length: Math.ceil(initialTotalBeats) }, (_, i) => i)
-            .filter((i) => i % beatsPerBar !== 0)
-            .map((i) => (
-              <div key={`beat${i}`} style={{ position: 'absolute', left: i * pixelsPerBeat, top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(63,63,70,0.6)' }} />
-            ))}
-
-          {Array.from({ length: barCount }).map((_, i) => {
-            const numbered = i % barInterval === 0
-            return (
-              <div key={i} style={{ position: 'absolute', left: i * beatsPerBar * pixelsPerBeat, top: 0, bottom: 0 }}>
-                {numbered ? (
-                  <>
-                    {/* Top half: bar number + full-height tick line */}
-                    <span style={{ position: 'absolute', top: 0, left: 4, paddingTop: 4, fontSize: 10, lineHeight: 1, color: '#a1a1aa' }}>
-                      {i + 1}
-                    </span>
-                    <div style={{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#52525b' }} />
-                  </>
-                ) : (
-                  /* Blank bar: short faint tick, same as the beat ticks */
-                  <div style={{ position: 'absolute', top: '72%', bottom: 0, width: 1, backgroundColor: 'rgba(63,63,70,0.6)' }} />
-                )}
-              </div>
-            )
-          })}
-
-          {/* Block clip header: drag the body to move the block, the edges to resize.
-              Sits in the bottom half below the triangle (zIndex 10 < 21). */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '50%',
-              bottom: 0,
-              left: blockStartPx,
-              width: blockWidthPx,
-              backgroundColor: 'rgba(129, 140, 248, 0.6)',
-              zIndex: 10,
-              pointerEvents: 'auto',
-            }}
-            onPointerDown={(e) => {
-              // Clicking on/near the playhead triangle scrubs instead of grabbing
-              // the block (gives the playhead priority without a moving hit target).
-              const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
-              if (ph != null && Math.abs(e.clientX - ph) <= 10) { startScrub(e); return }
-              handleHeaderPointerDown(e)
-            }}
-            onPointerMove={(e) => {
-              // Show the scrub cursor where a click would scrub (near the playhead).
-              const ph = rulerPlayheadRef.current?.getBoundingClientRect().left
-              if (ph != null && Math.abs(e.clientX - ph) <= 10) { e.currentTarget.style.cursor = 'ew-resize'; return }
-              handleHeaderPointerMove(e)
-            }}
-          />
-
-          {/* Playhead head: downward triangle filling the bottom half (RAF-positioned).
-              Clipped to the strip so it sits flush at the lane edge at beat 0. */}
-          <div
-            ref={rulerPlayheadRef}
-            style={{ position: 'absolute', top: '50%', bottom: 0, left: 0, width: 0, pointerEvents: 'none', zIndex: 21 }}
-          >
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: -PLAYHEAD_TRIANGLE_HALF,
-              width: 0,
-              height: 0,
-              borderLeft: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-              borderRight: `${PLAYHEAD_TRIANGLE_HALF}px solid transparent`,
-              borderTop: '20px solid #ffffff',
-            }} />
-          </div>
-        </div>
-      </div>
-      </div>
+        />
+      </Ruler>
 
       <div
         ref={containerRef}
