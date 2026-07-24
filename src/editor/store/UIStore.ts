@@ -153,7 +153,7 @@ export const useUIStore = create<UIState>((set) => ({
   setTracksLabelWidth: (px) =>
     set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
 
-  midiLabelWidth: 88,
+  midiLabelWidth: 108,
   setMidiLabelWidth: (px) =>
     set({ midiLabelWidth: Math.max(56, Math.min(360, px)) }),
 

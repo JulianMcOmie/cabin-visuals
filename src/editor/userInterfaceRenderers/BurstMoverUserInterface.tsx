@@ -64,7 +64,7 @@ function EasingSelector({ bound }: { bound: UserInterfaceParameter }) {
   if (definition.type !== 'select') return null
   const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
   return (
-    <div className="grid grid-cols-6 gap-1 border-t border-white/[0.06] px-2 py-1.5">
+    <div className="grid grid-cols-5 gap-1 border-t border-white/[0.06] px-2 py-1.5">
       {definition.options.map((option) => {
         const active = option.value === selected
         return (
@@ -109,7 +109,7 @@ function CurvePreview({
   const markerRef = useRef<SVGCircleElement>(null)
   const cursorRef = useRef<SVGLineElement>(null)
 
-  const { ease, label } = BURST_EASINGS[easingIndex] ?? BURST_EASINGS[0]
+  const { ease, label, returnsHome } = BURST_EASINGS[easingIndex] ?? BURST_EASINGS[0]
   const warp = Math.max(0.0001, sharpness)
   const samples = 110
   const values: number[] = []
@@ -174,7 +174,10 @@ function CurvePreview({
         <circle ref={markerRef} cx={toX(0)} cy={toY(0)} r="3.2" fill="#ffe1a6" stroke="rgba(245,166,35,0.55)" strokeWidth="2.5" />
         <text x={CURVE_PAD_X} y={CURVE_H - 4} fill="rgba(255,255,255,0.30)" fontSize="7" fontFamily="monospace">0</text>
         <text x={CURVE_W - CURVE_PAD_X} y={CURVE_H - 4} fill="rgba(255,255,255,0.30)" fontSize="7" fontFamily="monospace" textAnchor="end">{burstBeats.toFixed(2)} beats</text>
-        <text x={CURVE_W - CURVE_PAD_X} y={toY(1) - 3} fill="rgba(245,166,35,0.55)" fontSize="7" fontFamily="monospace" textAnchor="end">landed</text>
+        <text x={CURVE_W - CURVE_PAD_X} y={toY(1) - 3} fill="rgba(245,166,35,0.55)" fontSize="7" fontFamily="monospace" textAnchor="end">{returnsHome ? 'peak' : 'landed'}</text>
+        {returnsHome && (
+          <text x={CURVE_PAD_X} y={toY(0) - 3} fill="rgba(245,166,35,0.55)" fontSize="7" fontFamily="monospace">home</text>
+        )}
       </svg>
     </div>
   )

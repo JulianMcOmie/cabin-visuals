@@ -71,11 +71,13 @@ function radialDamp(distance: number, damping: number): number {
 /**
  * The amplitude added by the two MIDI direction rows: each note steps the
  * surface amplitude by `amount * velocity`, animated by a Burst-style ease-out
- * over `burstBeats`. Steps accumulate permanently once landed - repeated Up
- * notes keep raising the surface, a Down note steps it back - so amplitude is
- * fully choreographed by the note history and stays a closed-form function of
- * the beat (the pause invariant: scrub == playback == export). The summed
- * step is signed and unclamped: a net-negative amplitude inverts the surface.
+ * over `burstBeats`. Step-family curves land permanently - repeated Up notes
+ * keep raising the surface, a Down note steps it back - while return-family
+ * curves (BURST_EASINGS entries flagged `returnsHome`) make each note a
+ * temporary bump that settles back to the previous level, ADSR-style. Either
+ * way amplitude stays a closed-form function of the beat (the pause
+ * invariant: scrub == playback == export). The summed step is signed and
+ * unclamped: a net-negative amplitude inverts the surface.
  */
 export function evaluateWaveAmplitude(
   notes: readonly ResolvedNote[],

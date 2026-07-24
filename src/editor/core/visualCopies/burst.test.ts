@@ -73,17 +73,72 @@ test('per-axis distances and the overall multiplier both apply', () => {
   close(evaluateBurstOffset([note(0, 63)], s, 2)[1], -1.5) // Down: -Y * 3 * 0.5
 })
 
-test('easing families differ mid-burst but agree at the destination', () => {
+test('easing families differ mid-burst; steps land at 1, returns come home to 0', () => {
   const mid: number[] = []
   for (let easing = 0; easing < BURST_EASINGS.length; easing++) {
     const s = settings({ easing, burstBeats: 2 })
     mid.push(evaluateBurstOffset([note(0, 60)], s, 1)[0])
-    close(evaluateBurstOffset([note(0, 60)], s, 2)[0], 1, `${BURST_EASINGS[easing].label} lands at 1`)
+    const landed = evaluateBurstOffset([note(0, 60)], s, 2)[0]
+    if (BURST_EASINGS[easing].returnsHome) {
+      close(landed, 0, `${BURST_EASINGS[easing].label} returns home to 0`)
+    } else {
+      close(landed, 1, `${BURST_EASINGS[easing].label} lands at 1`)
+    }
   }
   assert.ok(new Set(mid.map((v) => v.toFixed(6))).size > 1, 'curves are actually different')
   const expoMid = mid[0]
-  const linearMid = mid[BURST_EASINGS.length - 1]
+  const linearMid = mid[5]
   assert.ok(expoMid > linearMid, 'expo bursts ahead of linear early on')
+})
+
+test('return curves start and end at the same value, like an ADSR envelope', () => {
+  const returnCurves = BURST_EASINGS.filter((e) => e.returnsHome)
+  assert.ok(returnCurves.length >= 4, 'several return curves are on offer')
+  for (const curve of returnCurves) {
+    close(curve.ease(1), curve.ease(0), `${curve.label} ends where it starts`)
+    assert.ok(curve.ease(0.5) > 0.5, `${curve.label} actually travels mid-burst`)
+  }
+})
+
+test('the ADSR return curve rises, holds a sustain, and releases home', () => {
+  const adsr = BURST_EASINGS.find((e) => e.label === 'ADSR')
+  assert.ok(adsr, 'ADSR curve exists')
+  close(adsr.ease(0), 0)
+  close(adsr.ease(0.15), 1, 'attack reaches the peak')
+  close(adsr.ease(0.5), 0.65, 'holds the sustain level')
+  close(adsr.ease(1), 0, 'release returns home')
+})
+
+test('a return burst displaces temporarily, then the object comes home', () => {
+  const sine = BURST_EASINGS.findIndex((e) => e.label === 'Sine')
+  const s = settings({ easing: sine, burstBeats: 2, distanceX: 3 })
+  const notes = [note(0, 60)]
+  close(evaluateBurstOffset(notes, s, 0)[0], 0)
+  close(evaluateBurstOffset(notes, s, 1)[0], 3, 'peak mid-burst')
+  close(evaluateBurstOffset(notes, s, 2)[0], 0, 'home when the burst lands')
+  close(evaluateBurstOffset(notes, s, 100)[0], 0, 'no permanent step remains')
+})
+
+test('overlapping return bursts sum while active, then both come home', () => {
+  const tri = BURST_EASINGS.findIndex((e) => e.label === 'Tri')
+  const s = settings({ easing: tri, burstBeats: 2 })
+  const notes = [note(0, 60), note(1, 60)] // two +X hits a beat apart
+  close(evaluateBurstOffset(notes, s, 1)[0], 1, 'first burst at its peak, second not started')
+  close(evaluateBurstOffset(notes, s, 1.5)[0], 1, 'both halfway: 0.5 + 0.5')
+  close(evaluateBurstOffset(notes, s, 3)[0], 0, 'both bursts landed home')
+})
+
+test('sharpness warps a return curve mid-burst without moving its endpoints', () => {
+  const sine = BURST_EASINGS.findIndex((e) => e.label === 'Sine')
+  const soft = settings({ easing: sine, burstBeats: 2, sharpness: 1 })
+  const sharp = settings({ easing: sine, burstBeats: 2, sharpness: 4 })
+  const notes = [note(0, 60)]
+  assert.ok(
+    evaluateBurstOffset(notes, sharp, 0.5)[0] > evaluateBurstOffset(notes, soft, 0.5)[0],
+    'sharper curve reaches further out early',
+  )
+  close(evaluateBurstOffset(notes, sharp, 0)[0], 0, 'still launches from home')
+  close(evaluateBurstOffset(notes, sharp, 2)[0], 0, 'still lands back home')
 })
 
 test('sharpness makes the early burst more violent without changing the destination', () => {

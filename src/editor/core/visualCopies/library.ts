@@ -69,8 +69,11 @@ export { BURST_EASINGS }
 /**
  * The summed offset of every burst launched at or before `beat`. Each note
  * contributes `direction * axisDistance * multiplier * velocity * ease(age)`,
- * where the eased progress clamps at 1 once the burst lands - the step is
- * permanent. Pitches outside the vocabulary are ignored.
+ * where the eased progress clamps at 1 once the burst lands. Step-family
+ * curves (BURST_EASINGS entries without `returnsHome`) end at 1, so the step
+ * is permanent; return-family curves end back at 0 like an ADSR envelope, so
+ * the displacement is temporary and the object comes home once the burst
+ * lands. Pitches outside the vocabulary are ignored.
  */
 export function evaluateBurstOffset(
   notes: ResolvedNote[],

@@ -14,6 +14,10 @@ export function SceneTabs() {
   const duplicateScene = useProjectStore((s) => s.duplicateScene)
   const deleteScene = useProjectStore((s) => s.deleteScene)
   const visualCount = sceneOrder.filter((id) => !scenes[id]?.isMain).length
+  const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
+  const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
+  const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
+  const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
 
   const select = (id: string) => {
     useUIStore.getState().setEditingBlock(null)
@@ -73,6 +77,32 @@ export function SceneTabs() {
       <button onClick={create} title="Add scene" className="mb-1 ml-1 flex h-6 w-6 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer">
         <Plus size={13} />
       </button>
+      {/* Timeline zoom sliders - live here (not floated over the lanes) so they
+          never cover track content. They drive the tracks view's zoom state. */}
+      <div className="ml-auto flex items-center gap-2.5 self-center pr-1">
+        <div className="flex items-center gap-1.5" title="Horizontal zoom">
+          <span className="text-[10px] text-zinc-600">H</span>
+          <input
+            type="range"
+            min={2}
+            max={100}
+            value={pixelsPerBeat}
+            onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
+            className="slider-square w-14 cursor-pointer"
+          />
+        </div>
+        <div className="flex items-center gap-1.5" title="Vertical zoom">
+          <span className="text-[10px] text-zinc-600">V</span>
+          <input
+            type="range"
+            min={28}
+            max={200}
+            value={tracksRowHeight}
+            onChange={(e) => setTracksRowHeight(Number(e.target.value))}
+            className="slider-square w-14 cursor-pointer"
+          />
+        </div>
+      </div>
     </div>
   )
 }
