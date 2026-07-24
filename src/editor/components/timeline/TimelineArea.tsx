@@ -86,9 +86,9 @@ export function TimelineArea() {
 
   // Alt copy-drag still reflows rows to open a gap at its live insertion point. The
   // gap is a VISUAL row index (root tracks aren't at index*rowHeight once lanes exist);
-  // it only opens when there's a real target (insertIndex != null).
+  // it only opens on a sibling drop (a nest-into drop highlights the row instead).
   const dragActive = !!copyDrag
-  const dragHasTarget = copyDrag?.insertIndex != null
+  const dragHasTarget = !!copyDrag?.hasTarget
   const dragGapRow = copyDrag?.gapRow ?? null
   const dragRowHeight = copyDrag?.rowHeight ?? 0
 

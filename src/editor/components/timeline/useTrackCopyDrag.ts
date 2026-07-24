@@ -1,17 +1,18 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import { useProjectStore, audioPinnedCount } from '../../store/ProjectStore'
+import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
-import { flattenVisualRows } from './trackTree'
+import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
+import { computeDropTarget } from './trackDrop'
 
 interface CopyDragState {
-  srcIndex: number
-  /** Where the copy would land in its sibling/root list, or null over original. */
-  insertIndex: number | null
   /** The VISUAL row index the reflow gap opens at (root tracks aren't at
-   *  `index * rowHeight` once lanes/nested rows exist). null = no gap. */
+   *  `index * rowHeight` once nested rows exist). null = no gap (no target,
+   *  or a nest-into drop, which highlights the row instead). */
   gapRow: number | null
+  /** Whether releasing now would commit a copy somewhere. */
+  hasTarget: boolean
   name: string
   color: string
   muted: boolean
@@ -22,16 +23,33 @@ interface CopyDragState {
   rowHeight: number
 }
 
+interface Session {
+  srcId: string
+  srcParentId: string | null
+  subtree: Set<string>
+  rows: VisualRow[]
+  grabOffsetY: number
+  listTop: number
+  rowHeight: number
+  /** Resolved drop, applied on pointer-up. null = no valid target. */
+  target: { parentId: string | null; index: number | undefined } | null
+  gapRow: number | null
+  hasTarget: boolean
+}
+
 /**
  * Alt-drag-to-duplicate for tracks. The original stays in the list, a ghost of the
- * row floats with the cursor, and the other rows reflow to open a gap at the live
- * insertion point. Committed on pointer-up (a copy is inserted at the gap); a no-op
- * if released over the original's own slot. `scrollRef` is the lane scroll container.
+ * row floats with the cursor, and the drop targeting mirrors the plain nest-drag
+ * (computeDropTarget): a row's top/bottom edge inserts a copy as a sibling at that
+ * level - in any parent, not just the original's - and its middle band nests the
+ * copy into that row. Sibling drops open a reflow gap; nest drops highlight the
+ * target row. Committed on pointer-up; a no-op if released over the original's own
+ * subtree. `scrollRef` is the lane scroll container.
  */
 export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
   const [copyDrag, setCopyDrag] = useState<CopyDragState | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
-  const sessionRef = useRef<{ srcId: string; srcIndex: number; grabOffsetY: number; listTop: number; insertIndex: number | null; gapRow: number | null; rowHeight: number; itemTops: number[]; containerEnd: number; parentId: string | null } | null>(null)
+  const sessionRef = useRef<Session | null>(null)
 
   const startTrackCopyDrag = useCallback((e: ReactPointerEvent, trackId: string) => {
     const sc = scrollRef.current
@@ -39,35 +57,28 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     const { tracks, rootTrackIds } = useProjectStore.getState()
     const track = tracks[trackId]
     if (!track) return
-    const parentId = track.parentId ?? null
-    const siblingIds = parentId ? tracks[parentId]?.childIds ?? [] : rootTrackIds
-    const srcIndex = siblingIds.indexOf(trackId)
-    if (srcIndex < 0) return
     const rowHeight = useUIStore.getState().tracksRowHeight
-
-    // Visual row of each sibling (roots and child movers both spread apart by
-    // descendants), so the ghost maps to the real layout, not `index * rowHeight`.
     const rows = flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds)
-    const rowIndexById = new Map<string, number>()
-    rows.forEach((r, i) => { if (r.kind === 'track') rowIndexById.set(r.id, i) })
-    const itemTops = siblingIds
-      .map((id) => rowIndexById.get(id))
-      .filter((i): i is number => i != null)
-    const srcVisualIndex = rowIndexById.get(trackId)
-    if (srcVisualIndex == null || itemTops.length === 0) return
-    const parentVisualIndex = parentId ? rowIndexById.get(parentId) : undefined
-    const parentDepth = parentVisualIndex == null ? -1 : rows[parentVisualIndex].depth
-    const containerEnd = parentVisualIndex == null
-      ? rows.length
-      : rows.findIndex((r, i) => i > parentVisualIndex && r.depth <= parentDepth)
-    const endRow = containerEnd === -1 ? rows.length : containerEnd
+    const srcVisualIndex = rows.findIndex((r) => r.id === trackId)
+    if (srcVisualIndex < 0) return
 
     const scRect = sc.getBoundingClientRect()
     const listTop = scRect.top - sc.scrollTop // screen-y of row 0's top
     const grabOffsetY = e.clientY - (listTop + srcVisualIndex * rowHeight)
 
-    sessionRef.current = { srcId: trackId, srcIndex, grabOffsetY, listTop, insertIndex: null, gapRow: null, rowHeight, itemTops, containerEnd: endRow, parentId }
-    setCopyDrag({ srcIndex, insertIndex: null, gapRow: null, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    sessionRef.current = {
+      srcId: trackId,
+      srcParentId: track.parentId ?? null,
+      subtree: subtreeIds(tracks, trackId),
+      rows,
+      grabOffsetY,
+      listTop,
+      rowHeight,
+      target: null,
+      gapRow: null,
+      hasTarget: false,
+    }
+    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
     lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {
@@ -86,34 +97,35 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       // selection from the new copy (selectNewTrack at drop).
       suppressTrackSelectBriefly()
       moveGhost(ev.clientY)
-      const k = s.itemTops.length
-      const bottomOf = (j: number) => (j + 1 < k ? s.itemTops[j + 1] : s.containerEnd)
-      // Ghost center in visual-row units, against the static (un-shifted) layout.
-      const gcRow = (ev.clientY - s.listTop - s.grabOffsetY + s.rowHeight / 2) / s.rowHeight
 
-      let insertIndex: number | null
-      let gapRow: number | null
-      // Hovering anywhere over the original's block (its row + its lanes) is the no-op.
-      if (gcRow >= s.itemTops[s.srcIndex] && gcRow < bottomOf(s.srcIndex)) {
-        insertIndex = null
-        gapRow = null
-      } else {
-        // Insert after every sibling block whose midpoint is above the cursor.
-        let idx = 0
-        for (let j = 0; j < k; j++) {
-          if ((s.itemTops[j] + bottomOf(j)) / 2 < gcRow) idx = j + 1
-        }
-        // Audio tracks are pinned as a block at the top - nothing lands above
-        // (or between) them.
-        const { tracks, rootTrackIds } = useProjectStore.getState()
-        if (s.parentId == null) idx = Math.max(idx, audioPinnedCount(tracks, rootTrackIds))
-        insertIndex = idx
-        gapRow = idx < k ? s.itemTops[idx] : s.containerEnd
+      const { tracks, rootTrackIds } = useProjectStore.getState()
+      const overIndex = Math.floor((ev.clientY - s.listTop) / s.rowHeight)
+      // Hovering the original's own subtree is the cancel/no-op zone.
+      const overOriginal = overIndex >= 0 && overIndex < s.rows.length && s.subtree.has(s.rows[overIndex].id)
+      // No excludeSubtree: the original stays in place, so sibling indexes must be
+      // computed against the full (unfiltered) lists - they map 1:1 onto the
+      // insertion index insertTrackCopy uses.
+      let drop = overOriginal ? null : computeDropTarget({
+        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, rowHeight: s.rowHeight,
+        clientY: ev.clientY,
+      })
+      // Automation + envelope + ability tracks live only on their parent object -
+      // a copy can't land under a different parent (or nest into anything).
+      const srcType = tracks[s.srcId]?.type
+      if (drop && (srcType === 'automation' || srcType === 'ability' || srcType === 'envelope')) {
+        if (drop.intoId != null || drop.parentId !== s.srcParentId) drop = null
       }
-      if (s.insertIndex !== insertIndex || s.gapRow !== gapRow) {
-        s.insertIndex = insertIndex
+
+      s.target = drop ? { parentId: drop.parentId, index: drop.index } : null
+      const gapRow = drop?.line ? Math.round(drop.line.top / s.rowHeight) : null
+      const hasTarget = drop != null
+      // Nest-into highlight (and the indented insertion line inside the gap) reuse
+      // the shared drop indicator; no activeId - the original isn't dimmed.
+      useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
+      if (s.gapRow !== gapRow || s.hasTarget !== hasTarget) {
         s.gapRow = gapRow
-        setCopyDrag((prev) => (prev ? { ...prev, insertIndex, gapRow } : prev))
+        s.hasTarget = hasTarget
+        setCopyDrag((prev) => (prev ? { ...prev, gapRow, hasTarget } : prev))
       }
     }
     const onUp = () => {
@@ -121,9 +133,14 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       controller.abort()
       sessionRef.current = null
       unlockCursor()
-      if (s && s.insertIndex != null) {
-        const copyId = useProjectStore.getState().insertTrackCopy(s.srcId, s.insertIndex)
-        if (copyId) selectNewTrack(copyId)
+      useUIStore.getState().setTrackDrop(null)
+      if (s?.target) {
+        const copyId = useProjectStore.getState().insertTrackCopy(s.srcId, s.target.parentId, s.target.index)
+        if (copyId) {
+          selectNewTrack(copyId)
+          // Reveal the drop: expand the parent if it was collapsed.
+          if (s.target.parentId) useUIStore.getState().setTrackCollapsed(s.target.parentId, false)
+        }
       }
       setCopyDrag(null)
     }

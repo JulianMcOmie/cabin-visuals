@@ -325,7 +325,7 @@ export interface ProjectState {
   /** Move one root track and its complete child subtree to another compatible scene. */
   moveTrackToScene: (trackId: string, targetSceneId: string) => void
   /** Returns the new copy's id (for selection), or null if the source vanished. */
-  insertTrackCopy: (srcId: string, index: number) => string | null
+  insertTrackCopy: (srcId: string, parentId: string | null, index?: number) => string | null
   addTrackTree: (tree: Track[], atIndex?: number) => void
   reorderRootTracks: (orderedIds: string[]) => void
   /** Re-parent a track: parentId=null makes it a root. `index` positions it among
@@ -930,15 +930,17 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes, ...viewForScene(scenes, s.activeSceneId, s.audioTracks, s.audioRootTrackIds) }
   }),
 
-  // Insert an identical copy of a track subtree at a given sibling/root index
-  // (Alt-drag commit). The original is left untouched.
-  insertTrackCopy: (srcId, index) => {
+  // Insert an identical copy of a track subtree under `parentId` (null = root) at a
+  // given sibling index (undefined = append) - the Alt-drag commit. The original is
+  // left untouched.
+  insertTrackCopy: (srcId, parentId, index) => {
     let newId: string | null = null
     set((s) => {
       const snapshot = snapshotTrackTree(srcId, s.tracks)
       if (!snapshot) return s
-      const src = s.tracks[srcId]
-      const tree = cloneTrackTree(snapshot, src.parentId ?? null)
+      // Nothing nests under the audio track (the UI blocks this; the backstop).
+      if (parentId != null && (!s.tracks[parentId] || s.tracks[parentId].type === 'audio')) return s
+      const tree = cloneTrackTree(snapshot, parentId)
       newId = tree[0]?.id ?? null
       return insertTrackTreeIntoState(s, tree, index)
     })
