@@ -488,18 +488,22 @@ function TemplatesTab() {
           ? 'Double-click a style to restyle this lyric video. Your song and words stay.'
           : 'Double-click a template to switch this project onto it. Your song stays.'}
       </p>
-      {/* Same preview treatment as the projects-page template gallery, sized
-          for the sidebar: one card per template, its real render (or bespoke
-          animation) looping above the name. */}
-      {shown.map((tpl) => (
-        <TemplateCard
-          key={tpl.id}
-          tpl={tpl}
-          label={isLyricProject ? tpl.styleName ?? tpl.name : tpl.name}
-          onApply={() => apply(tpl)}
-          selected={tpl.id === appliedTemplateId}
-        />
-      ))}
+      {/* Same structure as the instrument sections: a container-query grid
+          that goes two-up once the sidebar has the width, cards borderless
+          with the name riding a hover gradient. */}
+      <div className="@container">
+        <div className="grid grid-cols-1 gap-2 px-2 @[176px]:grid-cols-2">
+          {shown.map((tpl) => (
+            <TemplateCard
+              key={tpl.id}
+              tpl={tpl}
+              label={isLyricProject ? tpl.styleName ?? tpl.name : tpl.name}
+              onApply={() => apply(tpl)}
+              selected={tpl.id === appliedTemplateId}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -520,10 +524,8 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
     <div
       onDoubleClick={onApply}
       title={tpl.description}
-      className={`mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border bg-[var(--bg-app)] transition-colors ${
-        selected
-          ? 'border-[var(--accent)]'
-          : 'border-[var(--border)] hover:border-[rgba(53,167,230,0.6)]'
+      className={`group min-w-0 cursor-default select-none overflow-hidden rounded-md ${
+        selected ? 'ring-2 ring-[var(--accent)]' : ''
       }`}
     >
       {/* True 16:9 box: capture clips are 640×360, so they fit exactly -
@@ -534,16 +536,20 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
           : tpl.cardPreview === 'animatedLyric'
             ? <TemplateLyricPreview templateId={tpl.id} />
             : <TemplatePreviewVideo id={tpl.id} />}
-      </div>
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
-        <LayoutTemplate size={11} className="flex-shrink-0 text-[var(--text-3)]" />
-        <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{label ?? tpl.name}</span>
-        {selected && (
-          <span className="flex flex-shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--accent)]">
-            <Check size={10} strokeWidth={3} />
-            Current
+        {/* The instrument cards' name treatment: a bottom gradient that
+            reveals on hover - held visible on the current template so its
+            marking never hides. */}
+        <div className={`pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 transition-opacity duration-150 ${
+          selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}>
+          <span
+            className="flex min-w-0 items-center gap-1 truncate px-2 pb-1.5 text-xs font-medium text-white"
+            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
+          >
+            {selected && <Check size={10} strokeWidth={3} className="flex-shrink-0 text-[var(--accent)]" />}
+            {label ?? tpl.name}
           </span>
-        )}
+        </div>
       </div>
     </div>
   )
