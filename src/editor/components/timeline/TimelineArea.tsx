@@ -104,15 +104,15 @@ export function TimelineArea() {
     const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
     const majorPx = majorBars * beatsPerBar * pixelsPerBeat
     const minorPx = minorBeats * pixelsPerBeat
-    const images: string[] = [`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${majorPx}px)`]
+    const images: string[] = [`repeating-linear-gradient(to right, rgba(255,255,255,0.05) 0px 1px, transparent 1px ${majorPx}px)`]
     const sizes: string[] = [`${majorPx}px 100%`]
     if (minorPx !== majorPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.028) 0px 1px, transparent 1px ${minorPx}px)`)
+      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.024) 0px 1px, transparent 1px ${minorPx}px)`)
       sizes.push(`${minorPx}px 100%`)
     }
     if (subBeats != null && subBeats * pixelsPerBeat !== minorPx) {
       const subPx = subBeats * pixelsPerBeat
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.014) 0px 1px, transparent 1px ${subPx}px)`)
+      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.012) 0px 1px, transparent 1px ${subPx}px)`)
       sizes.push(`${subPx}px 100%`)
     }
     return { backgroundImage: images.join(', '), backgroundSize: sizes.join(', ') }

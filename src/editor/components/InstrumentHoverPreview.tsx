@@ -630,6 +630,17 @@ export function InstrumentPreviewLayer() {
 /** One WebGL renderer shared by every 3D instrument card. A separate Canvas
  * per card can exceed the browser's context limit as sections open or a drag
  * starts, at which point three.js receives a null context. */
+function ClearInstrumentCardPreviewFrame() {
+  // Drei View renders each card with a scissor and disables the root renderer's
+  // automatic clear. Clear the full transparent framebuffer before the views
+  // move/render so scrolling cannot leave pixels at their previous positions.
+  useFrame(({ gl }) => {
+    gl.setScissorTest(false)
+    gl.clear(true, true, true)
+  }, -1)
+  return null
+}
+
 export function InstrumentCardPreviewCanvas() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0">
@@ -639,6 +650,7 @@ export function InstrumentCardPreviewCanvas() {
         camera={{ position: [0, 0.9, 4.2], fov: 55 }}
         gl={{ antialias: true, alpha: true }}
       >
+        <ClearInstrumentCardPreviewFrame />
         <View.Port />
       </Canvas>
     </div>

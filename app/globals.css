@@ -21,7 +21,7 @@ body {
 :root {
   /* Surfaces */
   --bg-app: #0c0d12;          /* editor app background */
-  --bg-topbar: #17191f;       /* editor top bar */
+  --bg-topbar: #14161c;       /* editor top bar */
   --bg-page: #090a0e;         /* marketing/auth page background */
   --bg-panel: #111318;        /* panels, cards, top bars */
   --bg-panel-raised: #151820; /* label columns, corner cells */
