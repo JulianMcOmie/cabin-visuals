@@ -1,4 +1,4 @@
-import { DEFAULT_SCENE_BACKGROUND, type Block, type EffectInstance, type InterpolationMode, type Note, type Track, type TrackType, type Routing, type VideoPad } from '../editor/types'
+import { DEFAULT_SCENE_BACKGROUND, type AdsrEnvelope, type Block, type EffectInstance, type InterpolationMode, type Note, type Track, type TrackType, type Routing, type VideoPad } from '../editor/types'
 import type { VideoClip } from '../editor/store/VideoStore'
 import type { ViewAspect } from '../editor/store/ProjectStore'
 import type { ProjectDocument } from '../persistence/types'
@@ -84,6 +84,11 @@ export interface TrackSpec {
   /** For type 'automation': the parent param (or fx:<id>:<key>) it drives. */
   targetParam?: string
   interpolation?: InterpolationMode
+  /** For type 'envelope': the gate lane's ADSR shape, depth, and target value
+   *  (targetParam addresses the param / fx setting / 'opacity'). */
+  adsr?: AdsrEnvelope
+  envDepth?: number
+  envTarget?: number
   /** Automation noise mode: notes become gates around their pitch-value. */
   noise?: Track['noise']
   /** Visual effect plugins on this track (build with the fx() helper). */
@@ -129,6 +134,9 @@ export function track(spec: TrackSpec): Track & { __children?: Track[] } {
   if (spec.inputValues) t.inputValues = spec.inputValues
   if (spec.targetParam) t.targetParam = spec.targetParam
   if (spec.interpolation) t.interpolation = spec.interpolation
+  if (spec.adsr) t.adsr = spec.adsr
+  if (spec.envDepth !== undefined) t.envDepth = spec.envDepth
+  if (spec.envTarget !== undefined) t.envTarget = spec.envTarget
   if (spec.noise) t.noise = spec.noise
   if (spec.effects) t.effects = spec.effects
   if (spec.videoPads) t.videoPads = spec.videoPads

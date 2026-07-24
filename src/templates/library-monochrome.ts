@@ -1,4 +1,4 @@
-import { doc, track, block, n, fx } from './builder'
+import { doc, track, block, n, fx, fxTarget } from './builder'
 import type { TemplateDef } from './library'
 import type { Block, Note } from '../editor/types'
 import { invertStrobeSpans, stackCardStarts } from '../editor/utils/lyricPlacement'
@@ -73,6 +73,10 @@ const words = lyricPattern()
 
 const INVERT = 72 // Color Filters' Invert row
 
+// The boil instance is held in a variable so the Line Sweeps envelope lane
+// below can address its linePhase setting (fxTarget needs the instance id).
+const boilFx = fx('boil', { wobble: 0.65, wobbleHold: 0.27, line: 1, linePhase: 0 })
+
 function monochromeDocument() {
   return doc({
     bpm: 120,
@@ -112,9 +116,9 @@ function monochromeDocument() {
           strokeColor: '#000000',
         },
         // The boil, at Julia's tune: a gentler wobble holding each distortion
-        // longer (0.27 beats), with the traveling line at FULL strength taking
-        // five beats per sweep - a slow, heavy line rather than a quick tic.
-        effects: [fx('boil', { wobble: 0.65, wobbleHold: 0.27, line: 1, lineBeats: 5 })],
+        // longer (0.27 beats), line at FULL strength. The line's MOTION is not
+        // here - it is an EVENT, fired by the Line Sweeps envelope lane below.
+        effects: [boilFx],
         blocks: [block(0, BARS, [
           ...words.notes,
           // Zoom flashes: 1-frame giant-letterform inserts (~6x) exactly ON
@@ -123,10 +127,30 @@ function monochromeDocument() {
           // behave identically.
           ...stackCardStarts(
             words.notes.map((note) => ({ startBeat: note.startBeat, durationBeats: note.durationBeats })),
-            2, // phraseGap, matching the params above
-            4, // stackMaxWords
+            1.5, // phraseGap, matching the params above
+            3, // stackMaxWords
           ).map((beat) => n(beat, 46, 0.1)),
         ])],
+        children: [
+          // THE LINE IS MIDI. Each gate note here fires ONE top-to-bottom
+          // sweep of the boil's traveling line: the envelope's attack (5
+          // beats, Julia's tuned travel time) ramps linePhase 0→1 across the
+          // note, the near-zero release parks the line off-frame the instant
+          // the note ends, and velocity scales how deep the sweep cuts. Move,
+          // add, or delete notes to place sweeps on the song - nothing here
+          // is periodic except this placeholder's loop.
+          track({
+            name: 'Line Sweeps',
+            instrumentId: '',
+            type: 'envelope',
+            color: '#e4e4e7',
+            targetParam: fxTarget(boilFx, 'linePhase'),
+            adsr: { attackBeats: 5, decayBeats: 0.01, sustainLevel: 1, releaseBeats: 0.01 },
+            envDepth: 1,
+            envTarget: 1,
+            blocks: [loopBlock(2, [n(2, 60, 5, 127)])],
+          }),
+        ],
       }),
       // The polarity strobe. Full-velocity invert notes flip the whole frame
       // (scene, grain, and - via Invert Behind - the text) to white/black.

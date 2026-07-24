@@ -15,14 +15,17 @@ export const boilPlugin: VisualEffect = {
   id: 'boil',
   name: 'Boil',
   category: 'shader',
-  // Intensity and DURATION are independent knobs for both components: how
-  // hard the wobble hits vs how long each distortion holds, and how strong
-  // the traveling line shears vs how many beats one top-to-bottom sweep takes.
+  // The wobble is a SUSTAINED texture: intensity plus how long each
+  // distortion holds. The traveling line is an EVENT: linePhase is the line's
+  // position (0 parked above the frame, 1 exited below), and driving it with
+  // an ENVELOPE lane makes each gate note one top-to-bottom sweep - attack
+  // time is the travel time, note velocity scales it, and between notes the
+  // line simply is not there. (An automation lane ramping 0→1 works too.)
   params: [
     { key: 'wobble', label: 'Wobble Intensity', min: 0, max: 1, step: 0.05, default: 0.5 },
     { key: 'wobbleHold', label: 'Wobble Hold (beats)', min: 0.02, max: 1, step: 0.01, default: 0.15 },
     { key: 'line', label: 'Line Intensity', min: 0, max: 1, step: 0.05, default: 0.5 },
-    { key: 'lineBeats', label: 'Line Travel (beats)', min: 0.25, max: 8, step: 0.25, default: 1 },
+    { key: 'linePhase', label: 'Line Position', min: 0, max: 1, step: 0.01, default: 0 },
   ],
   fragmentShader: `
     uniform sampler2D tDiffuse;
@@ -31,7 +34,7 @@ export const boilPlugin: VisualEffect = {
     uniform float wobble;
     uniform float wobbleHold;
     uniform float line;
-    uniform float lineBeats;
+    uniform float linePhase;
     varying vec2 vUv;
 
     float hash(vec2 p) {
@@ -60,12 +63,14 @@ export const boilPlugin: VisualEffect = {
         vnoise(p + roll * 61.73 + 19.19) - 0.5
       ) * wobble * 0.02;
 
-      // The traveling line: a THIN band taking lineBeats to sweep top to
-      // bottom. The slice it crosses shears SIDEWAYS raggedly (each x gets
-      // its own shove) and drags down a touch - the reference's descending
-      // distortion line passing through the glyphs.
-      if (line > 0.0) {
-        float bandY = 1.0 - fract(time / max(0.25, lineBeats));
+      // The traveling line: a THIN band whose position is linePhase - 0 sits
+      // just above the frame (hidden), 1 just below (hidden), so a 0→1 ramp
+      // is one full top-to-bottom crossing. The slice it crosses shears
+      // SIDEWAYS raggedly (each x gets its own shove) and drags down a touch
+      // - the reference's descending distortion line passing through the
+      // glyphs.
+      if (line > 0.0 && linePhase > 0.001 && linePhase < 0.999) {
+        float bandY = 1.08 - linePhase * 1.16;
         float band = smoothstep(0.05, 0.0, abs(vUv.y - bandY));
         float rag = vnoise(vec2(vUv.x * 20.0, roll * 3.7));
         disp.x += band * line * 0.06 * (rag - 0.5) * 2.0;
