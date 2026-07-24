@@ -36,7 +36,7 @@ import { videoCodec } from '../core/export/types'
 // Bump to force every clip to regenerate on the next `npm run
 // previews:instruments` (it is the manifest's staleness signal - instrument
 // code has no content hash the way template documents do).
-export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 2
+export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 3
 
 // Sized for the sidebar, not the export ladder: cards render at ~100-230 CSS px
 // (so ≤~460 device px on HiDPI), and a section expanding mounts a whole column

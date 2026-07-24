@@ -17,6 +17,7 @@ import { evaluatePulse } from '../core/visual/energy'
 import { sampleLane, sampleNoiseLane } from '../core/visual/automation'
 import { evaluateAdsrGain } from '../core/visual/adsr'
 import { composeMatrix, localTransformToSV } from '../core/visual/stateVector'
+import { composeScreenAnchor } from '../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../core/visual/animatedOpacity'
 import { applyMaterialHueShift } from '../core/visual/animatedColor'
 import { flattenTrackNotes as flattenProjectTrackNotes } from '../core/visual/noteFlatten'
@@ -201,16 +202,37 @@ function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumen
   return null
 }
 
+const _fullFrameAnchor = new Matrix4()
+
+/** Full-frame instruments are SCREENS on the main canvas: ObjectRenderer pins
+ *  them dead-ahead of the camera every frame (screenAnchor.ts). Previews mount
+ *  instrument components WITHOUT ObjectRenderer, so unanchored they sit at the
+ *  origin while the preview camera looks down at them from y=0.9 - the
+ *  keystoned Windows XP / film cards. Same anchor, same math, on a wrapper. */
+function FullFramePreviewAnchor({ children }: { children: React.ReactNode }) {
+  const groupRef = useRef<Group>(null)
+  useFrame(({ camera }) => {
+    const g = groupRef.current
+    if (!g) return
+    composeScreenAnchor(camera.position, camera.quaternion, undefined, _fullFrameAnchor)
+    _fullFrameAnchor.decompose(g.position, g.quaternion, g.scale)
+  })
+  return <group ref={groupRef}>{children}</group>
+}
+
 export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const def = getInstrument(instrumentId)
   if (!def) return null
   const Comp = def.component
+  const content = (
+    <Suspense fallback={null}>
+      <Comp trackId={trackId} />
+    </Suspense>
+  )
   return (
     <>
       <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
-      <Suspense fallback={null}>
-        <Comp trackId={trackId} />
-      </Suspense>
+      {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
     </>
   )
 }
@@ -508,26 +530,31 @@ const _occurrenceMatrix = new Matrix4()
 
 /** One rendered copy of the object - the popup's ObjectRenderer: placement =
  *  local world × this occurrence's copy transform, opacity/color from the copy
- *  (ghosts additionally faded to read as "without"). */
+ *  (ghosts additionally faded to read as "without"). Full-frame objects pin to
+ *  the camera-facing screen anchor with the copy applied inside it, exactly
+ *  like ObjectRenderer's full-frame branch. */
 function ProjectOccurrence({
   component: Component,
   index,
   ghost,
   frame,
+  fullFrame,
 }: {
   component: NonNullable<ReturnType<typeof getInstrument>>['component']
   index: number
   ghost: boolean
   frame: ProjectFrame
+  fullFrame: boolean
 }) {
   const groupRef = useRef<Group>(null)
-  useFrame(() => {
+  useFrame(({ camera }) => {
     const g = groupRef.current
     if (!g) return
     const copy = (ghost ? frame.ghostCopies : frame.copies)[index]
     g.visible = !!copy
     if (!copy) return
-    _occurrenceMatrix.multiplyMatrices(frame.world, copy.transform)
+    if (fullFrame) composeScreenAnchor(camera.position, camera.quaternion, copy.transform, _occurrenceMatrix)
+    else _occurrenceMatrix.multiplyMatrices(frame.world, copy.transform)
     _occurrenceMatrix.decompose(g.position, g.quaternion, g.scale)
     applyMaterialOpacity(g, frame.opacity * copy.opacity * (ghost ? GHOST_OPACITY : 1))
     applyMaterialHueShift(g, copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
@@ -555,10 +582,10 @@ function ProjectTrackPreview({ data, sync }: { data: ProjectPreviewData; sync?: 
     <>
       <ProjectPreviewDriver data={data} sync={sync} frame={frame} />
       {Array.from({ length: data.ghostCount }, (_, i) => (
-        <ProjectOccurrence key={`ghost-${i}`} component={def.component} index={i} ghost frame={frame} />
+        <ProjectOccurrence key={`ghost-${i}`} component={def.component} index={i} ghost frame={frame} fullFrame={!!def.fullFrame} />
       ))}
       {Array.from({ length: data.copyCount }, (_, i) => (
-        <ProjectOccurrence key={i} component={def.component} index={i} ghost={false} frame={frame} />
+        <ProjectOccurrence key={i} component={def.component} index={i} ghost={false} frame={frame} fullFrame={!!def.fullFrame} />
       ))}
     </>
   )
