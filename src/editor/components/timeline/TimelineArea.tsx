@@ -28,6 +28,7 @@ export function TimelineArea() {
   const totalBars = useProjectStore((s) => s.totalBars)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
+  const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const loopDragging = useUIStore((s) => !!s.loopDrag)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -305,12 +306,18 @@ export function TimelineArea() {
             style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
             {/* Vertical grid lines aligned to the ruler's divisions (DAW-style).
-                First child + no z-index so the relative-positioned track rows paint
-                over it (their lanes are transparent, so it shows through); starts at
-                the lane origin so it never underlaps the sticky label column. */}
+                Their height is the visible track stack, rather than the scroll
+                viewport, so they stop at the bottom of the lowest track. First
+                child + no z-index lets the relative-positioned rows paint over
+                them (their lanes are transparent, so the grid shows through). */}
             <div
-              className="pointer-events-none absolute top-0 bottom-0"
-              style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx, ...laneGrid }}
+              className="pointer-events-none absolute top-0"
+              style={{
+                left: labelWidth + PLAYHEAD_TRIANGLE_HALF,
+                width: timelineWidthPx,
+                height: visualRows.length * rowHeight,
+                ...laneGrid,
+              }}
             />
             {visualRows.map((row, i) => {
               const isLast = i === visualRows.length - 1
