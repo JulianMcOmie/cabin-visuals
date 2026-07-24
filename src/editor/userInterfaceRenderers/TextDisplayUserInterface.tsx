@@ -39,6 +39,7 @@ const FONT_PREVIEWS: Record<number, { family: string; short: string; load?: stri
   12: { family: '"Palatino Linotype", Palatino, "Book Antiqua", serif', short: 'PROPER' },
   13: { family: '"Times New Roman", Times, serif', short: 'NEWS' },
   14: { family: 'Consolas, "Lucida Console", Menlo, monospace', short: 'TERMINAL' },
+  15: { family: '"Permanent Marker", "Comic Sans MS", cursive', short: 'MARKER', load: 'Permanent Marker' },
 }
 
 function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {

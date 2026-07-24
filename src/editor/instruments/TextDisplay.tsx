@@ -89,6 +89,9 @@ const FONT_STACKS: FontDef[] = [
   { css: '"Palatino Linotype", Palatino, "Book Antiqua", serif', weight: 700 },
   { css: '"Times New Roman", Times, serif', weight: 700 },
   { css: 'Consolas, "Lucida Console", Menlo, monospace', weight: 700 },
+  // Thick handwritten marker (the beach-lyric look); degrades to Comic Sans
+  // so the mood survives a failed font load.
+  { css: '"Permanent Marker", "Comic Sans MS", cursive', weight: 400, load: 'Permanent Marker' },
 ]
 const fontStack = (i: number) => FONT_STACKS[Math.max(0, Math.min(FONT_STACKS.length - 1, Math.round(i)))]
 
@@ -519,6 +522,7 @@ const PARAMS: ParamDef[] = [
       { value: 12, label: 'Proper (Palatino)' },
       { value: 13, label: 'Newsprint (Times)' },
       { value: 14, label: 'Terminal (Consolas)' },
+      { value: 15, label: 'Marker (Permanent Marker)' },
     ],
   },
   {

@@ -456,10 +456,14 @@ export function LyricSetupScreen({
                 >
                   Browse files
                 </button>
+                {/* accept lists explicit extensions AND MIME types on purpose:
+                    iOS Safari's file picker greys out audio files behind a
+                    bare audio/* (its Files app matches on extension), which
+                    made the add-song screen video-only on iPhone. */}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/flac"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]

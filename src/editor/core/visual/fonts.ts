@@ -27,6 +27,8 @@ const FONT_FILES: Record<string, FontFileDef[]> = {
   'Bebas Neue': [{ file: 'BebasNeue-Regular.woff2' }],
   Righteous: [{ file: 'Righteous-Regular.woff2' }],
   'Abril Fatface': [{ file: 'AbrilFatface-Regular.woff2' }],
+  // The handwritten-marker lyric face (Apache 2.0, Font Diner).
+  'Permanent Marker': [{ file: 'PermanentMarker-Regular.woff2' }],
 }
 
 const loaded = new Set<string>()

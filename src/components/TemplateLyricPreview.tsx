@@ -32,6 +32,7 @@ const FONTS = [
   '"Palatino Linotype", Palatino, "Book Antiqua", serif',
   '"Times New Roman", Times, serif',
   'Consolas, "Lucida Console", Menlo, monospace',
+  '"Permanent Marker", "Comic Sans MS", cursive',
 ]
 
 interface CardStyle {

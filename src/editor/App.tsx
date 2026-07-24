@@ -624,6 +624,8 @@ function Header({
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
   const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
+  // Touch path for the gate explanation: tap toggles what hover reveals.
+  const [gateNoteOpen, setGateNoteOpen] = useState(false)
   useEffect(() => {
     void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
   }, [])
@@ -809,10 +811,22 @@ function Header({
             OS-positioned tooltip stays inside the window. */}
         <div className="group relative">
           <button
-            onClick={() => { track('export_clicked'); setExportOpen(true) }}
-            disabled={exportGate?.ok === false || !permanent}
+            onClick={() => {
+              // Gated: the button stays TAPPABLE and toggles the explanation
+              // panel - hover never happens on touch, and a disabled button
+              // swallows the tap silently (the mobile "where is export?"
+              // failure mode).
+              if (exportGate?.ok === false || !permanent) { setGateNoteOpen((v) => !v); return }
+              track('export_clicked')
+              setExportOpen(true)
+            }}
+            aria-disabled={exportGate?.ok === false || !permanent}
             title={exportGate?.ok === false || !permanent ? undefined : 'Export as MP4'}
-            className="flex items-center gap-1.5 h-7 px-3 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-[11px] font-bold transition-colors cursor-pointer disabled:cursor-default"
+            className={`flex items-center gap-1.5 h-7 px-3 rounded text-[11px] font-bold transition-colors cursor-pointer ${
+              exportGate?.ok === false || !permanent
+                ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
+                : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
+            }`}
           >
             <Upload size={11} strokeWidth={2.5} />
             Export
@@ -820,7 +834,7 @@ function Header({
           {(exportGate?.ok === false || (!authLoading && !permanent)) && (
             // Padding on a hidden wrapper (not a margin) so the pointer can
             // cross from the button into the panel without leaving the group.
-            <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
+            <div className={`absolute right-0 top-full z-40 pt-1.5 ${gateNoteOpen ? 'block' : 'hidden group-hover:block'}`}>
               <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
                 {exportGate?.ok === false
                   ? exportGate.reason ?? 'Video export is not available in this browser.'
