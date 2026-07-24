@@ -71,12 +71,27 @@ export function Ruler({
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
-  // Every bar gets a tick line; only every `interval`th bar is numbered.
-  const interval = totalBars <= 16 ? 1 : totalBars <= 64 ? 2 : 4
-  const bars = Array.from({ length: totalBars }, (_, i) => i)
-  // Faint sub-beat ticks (every beat that isn't a bar line).
-  const beatExtent = Math.ceil(totalBeats ?? totalBars * beatsPerBar)
-  const beats = Array.from({ length: beatExtent }, (_, i) => i).filter((i) => i % beatsPerBar !== 0)
+  const beatExtent = totalBeats ?? totalBars * beatsPerBar
+
+  // Zoom-adaptive grid (Logic-style). Numbered "major" lines sit at the smallest
+  // power-of-2 bar multiple that keeps them ~64px apart, so zooming out thins
+  // 1 → 2 → 4 → 8... bars. Each major span carries 4 "minor" ticks - beats when
+  // majors are single bars (the musical case), quarter-spans when they're wider.
+  let majorBars = 1
+  while (majorBars < totalBars && majorBars * barWidthPx < 64) majorBars *= 2
+  const majorBeats = majorBars * beatsPerBar
+  const minorBeats = majorBars === 1 ? 1 : majorBeats / 4
+  const bars = Array.from({ length: Math.ceil(totalBars / majorBars) }, (_, i) => i * majorBars)
+  // Minor ticks: every minor position that isn't a major line (k % 4 skips them
+  // exactly - floats included - since majors sit every 4 minors).
+  const minors = Array.from({ length: Math.ceil(beatExtent / minorBeats) }, (_, k) => k)
+    .filter((k) => (majorBars === 1 ? k % beatsPerBar !== 0 : k % 4 !== 0))
+    .map((k) => k * minorBeats)
+  // Zoomed far in, beats subdivide again: faint 16th sub-ticks.
+  const showSubTicks = majorBars === 1 && pixelsPerBeat >= 48
+  const subs = showSubTicks
+    ? Array.from({ length: Math.ceil(beatExtent * 4) }, (_, k) => k).filter((k) => k % 4 !== 0).map((k) => k / 4)
+    : []
 
   return (
     <div className="flex border-b border-[var(--border)] bg-[var(--bg-timeline)] select-none flex-shrink-0" style={{ height, paddingRight: gutterPx }}>
@@ -143,13 +158,17 @@ export function Ruler({
             </div>
           )}
 
-          {/* Faint, short beat ticks */}
-          {beats.map((beat) => (
+          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest. */}
+          {subs.map((beat) => (
+            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[#222228]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
+          ))}
+
+          {/* Short minor ticks - 4 per major span. */}
+          {minors.map((beat) => (
             <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '65%' }} />
           ))}
 
           {bars.map((bar) => {
-            const numbered = bar % interval === 0
             const barBeat = bar * beatsPerBar
             // Lines strictly inside the band (its edges already draw borders)
             // get a dark top-half segment drawn OVER the solid band.
@@ -162,8 +181,7 @@ export function Ruler({
             const numberTouchesBand = !!loopRegion?.enabled && bandEndRel > 4 && bandStartRel < 34
             return (
               <div key={bar} className="absolute top-0 bottom-0" style={{ left: bar * barWidthPx }}>
-                {numbered ? (
-                  <>
+                <>
                     {/* Top half: bar number - 10px/500 mono, one step brighter
                         than faint so it reads at a glance */}
                     <span
@@ -196,11 +214,7 @@ export function Ruler({
                     {inLoopBand && (
                       <div className="absolute w-px" style={{ top: 2, height: 'calc(50% - 2px)', backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: 6 }} />
                     )}
-                  </>
-                ) : (
-                  /* Blank bar: short tick, same as the beat ticks */
-                  <div className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ top: '65%' }} />
-                )}
+                </>
               </div>
             )
           })}
