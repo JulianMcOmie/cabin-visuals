@@ -36,15 +36,18 @@ import { videoCodec } from '../core/export/types'
 // Bump to force every clip to regenerate on the next `npm run
 // previews:instruments` (it is the manifest's staleness signal - instrument
 // code has no content hash the way template documents do).
-export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 1
+export const INSTRUMENT_PREVIEW_CAPTURE_VERSION = 2
 
-const CLIP_W = 640
-const CLIP_H = 360
+// Sized for the sidebar, not the export ladder: cards render at ~100-230 CSS px
+// (so ≤~460 device px on HiDPI), and a section expanding mounts a whole column
+// of these at once - smaller clips cut both the fetch burst and the decoder
+// spin-up that made first loads janky at 640x360.
+const CLIP_W = 480
+const CLIP_H = 270
 const CLIP_FPS = 30
 // One full preview loop: LOOP_BEATS (16) at the previews' 120bpm = 8 seconds.
 const CLIP_FRAMES = CLIP_FPS * 8
-// Small cards, simple content - well below the export ladder's rates.
-const CLIP_BITRATE = 2_500_000
+const CLIP_BITRATE = 1_200_000
 
 // What gets a clip: everything the sidebar would render through R3F. Directors
 // and the upload/audio/camera instruments are 2D vignettes and stay live.

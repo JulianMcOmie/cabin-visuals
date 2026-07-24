@@ -668,6 +668,55 @@ export function InstrumentCardPreviewCanvas() {
   )
 }
 
+// Expanding a section mounts a whole column of clip cards at once; letting
+// every <video> fetch + spin up a decoder simultaneously stalls the main
+// thread. This tiny gate staggers the INITIAL loads: a card may mount its
+// video only while a slot is free, and passes the slot on when its first
+// frame is ready (loadeddata) or it errors. Already-loaded videos keep
+// playing - slots only meter the expensive startup.
+const MAX_CONCURRENT_CLIP_LOADS = 3
+let activeClipLoads = 0
+const clipLoadQueue: Array<() => void> = []
+
+function releaseClipLoadSlot() {
+  activeClipLoads--
+  clipLoadQueue.shift()?.()
+}
+
+/** `ready` turns true once this card may mount its <video>; call `done()` when
+ *  the video has loaded (or failed) to hand the slot to the next card. */
+function useClipLoadSlot(wanted: boolean): { ready: boolean; done: () => void } {
+  const [ready, setReady] = useState(false)
+  const doneRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (!wanted) return
+    let alive = true
+    let granted = false
+    let finished = false
+    const grant = () => {
+      // Slot arrived after unmount/scroll-out: pass it straight on.
+      if (!alive) { releaseClipLoadSlot(); return }
+      granted = true
+      setReady(true)
+    }
+    if (activeClipLoads < MAX_CONCURRENT_CLIP_LOADS) {
+      activeClipLoads++
+      grant()
+    } else {
+      clipLoadQueue.push(() => { activeClipLoads++; grant() })
+    }
+    doneRef.current = () => {
+      if (granted && !finished) { finished = true; releaseClipLoadSlot() }
+    }
+    return () => {
+      alive = false
+      if (granted && !finished) { finished = true; releaseClipLoadSlot() }
+      setReady(false)
+    }
+  }, [wanted])
+  return { ready, done: () => doneRef.current() }
+}
+
 /** The library card's preview. Clip-first: 3D previews play their captured 8s
  * loop from the instrument-previews bucket (one <video>, no per-frame GPU cost,
  * and the bloom pass baked in - see InstrumentPreviewCapture). Ids without a
@@ -686,6 +735,8 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   // mounting a live View that the arriving clip would immediately replace.
   const clipUrl = useInstrumentClipUrl(item.id)
   const clip = draw2d ? null : clipUrl
+  const wantClip = nearViewport && !draw2d && !!clip && !clipFailed
+  const clipSlot = useClipLoadSlot(wantClip)
 
   useEffect(() => {
     const host = hostRef.current
@@ -705,15 +756,16 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   return (
     <div ref={hostRef} className="absolute inset-0">
       {nearViewport && draw2d && <Preview2D draw={draw2d} />}
-      {nearViewport && !draw2d && clip && !clipFailed && (
+      {wantClip && clipSlot.ready && (
         <video
-          src={clip}
+          src={clip!}
           autoPlay
           loop
           muted
           playsInline
-          preload="metadata"
-          onError={() => setClipFailed(true)}
+          preload="auto"
+          onLoadedData={clipSlot.done}
+          onError={() => { clipSlot.done(); setClipFailed(true) }}
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}

@@ -138,7 +138,14 @@ try {
       const bytes = Buffer.from(b64, 'base64')
       const { error } = await supabase.storage
         .from(BUCKET)
-        .upload(`${id}.mp4`, bytes, { upsert: true, contentType: 'video/mp4' })
+        .upload(`${id}.mp4`, bytes, {
+          upsert: true,
+          contentType: 'video/mp4',
+          // Clip URLs are versioned via the manifest (?v=), so the bytes at a
+          // given URL never change - cache for a year and repeat sessions play
+          // from disk instead of re-downloading the whole library.
+          cacheControl: '31536000',
+        })
       if (error) {
         console.log(`upload failed: ${error.message}`)
         continue
