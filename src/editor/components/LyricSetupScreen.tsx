@@ -468,19 +468,17 @@ export function LyricSetupScreen({
                   }}
                 />
               </div>
-              {/* The mobile flow's no-song-handy door: one tap tries the whole
-                  pipeline on a known track. */}
-              {preStyled && (
-                <button
-                  onClick={() => void loadDemoSong()}
-                  disabled={demoLoading}
-                  className="-mt-3 text-[12px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:opacity-60 cursor-pointer"
-                >
-                  {demoLoading
-                    ? `Loading ${DEMO_SONG.label}…`
-                    : <>No song handy? Use <span className="font-semibold text-[var(--text-2)]">{DEMO_SONG.label}</span></>}
-                </button>
-              )}
+              {/* The no-song-handy door: one tap tries the whole pipeline on a
+                  known track. */}
+              <button
+                onClick={() => void loadDemoSong()}
+                disabled={demoLoading}
+                className="-mt-3 text-[12px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:opacity-60 cursor-pointer"
+              >
+                {demoLoading
+                  ? `Loading ${DEMO_SONG.label}…`
+                  : <>No song handy? Use <span className="font-semibold text-[var(--text-2)]">{DEMO_SONG.label}</span></>}
+              </button>
               <Link
                 href="/projects"
                 className="text-[12px] text-[var(--text-muted)] transition-colors hover:text-[var(--text)] cursor-pointer"
