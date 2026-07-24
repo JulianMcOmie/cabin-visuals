@@ -147,13 +147,13 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-11 px-6 pt-24 pb-20 text-center">
+        <section className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-8 px-5 pt-14 pb-14 text-center sm:gap-11 sm:px-6 sm:pt-24 sm:pb-20">
           <Appear className="flex flex-col items-center gap-6">
-            <CabinLogo className="block h-[150px] w-auto" />
-            <h1 className="m-0 max-w-[880px] text-[44px] font-bold leading-[1.06] tracking-[-0.03em] text-[var(--text)] md:text-[64px]">
+            <CabinLogo className="block h-[104px] w-auto sm:h-[150px]" />
+            <h1 className="m-0 max-w-[880px] text-[34px] font-bold leading-[1.06] tracking-[-0.03em] text-[var(--text)] sm:text-[44px] md:text-[64px]">
               <span>Create insanely great visuals for music</span>
             </h1>
-            <p className="m-0 max-w-[620px] text-[17px] leading-[1.55] tracking-[-0.01em] text-[var(--text-3)]">
+            <p className="m-0 max-w-[620px] text-[15px] leading-[1.55] tracking-[-0.01em] text-[var(--text-3)] sm:text-[17px]">
               The best workstation for music-synced visuals
             </p>
           </Appear>
@@ -193,12 +193,15 @@ export default function LandingPage() {
         {/* Video Section */}
         <section className="mx-auto flex w-full max-w-[1200px] justify-center px-6 pb-24">
           <Reveal className="w-full">
-            <div className="group/carousel relative grid grid-cols-[minmax(0,0.26fr)_minmax(0,1fr)_minmax(0,0.26fr)] items-center gap-3 sm:gap-5 lg:gap-7">
+            {/* Under sm the peek thumbnails would be ~55px slivers - the
+                carousel collapses to the main video alone, arrows always on
+                (touch has no hover to reveal them). */}
+            <div className="group/carousel relative grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,0.26fr)_minmax(0,1fr)_minmax(0,0.26fr)] sm:gap-5 lg:gap-7">
               <button
                 type="button"
                 onClick={() => switchVideo(previousVideoIndex, -1, 'thumb')}
                 aria-label={`Show previous video: ${previousVideo.title}`}
-                className="group relative aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer"
+                className="group relative hidden aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer sm:block"
               >
                 <AnimatePresence initial={false}>
                   <motion.span
@@ -241,7 +244,7 @@ export default function LandingPage() {
                 type="button"
                 onClick={() => switchVideo(nextVideoIndex, 1, 'thumb')}
                 aria-label={`Show next video: ${nextVideo.title}`}
-                className="group relative aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer"
+                className="group relative hidden aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer sm:block"
               >
                 <AnimatePresence initial={false}>
                   <motion.span
@@ -262,7 +265,7 @@ export default function LandingPage() {
                 type="button"
                 onClick={() => switchVideo(previousVideoIndex, -1, 'arrow')}
                 aria-label="Previous demo video"
-                className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md opacity-0 transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:left-3 sm:h-10 sm:w-10 cursor-pointer"
+                className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:left-3 sm:h-10 sm:w-10 sm:opacity-0 cursor-pointer"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -270,7 +273,7 @@ export default function LandingPage() {
                 type="button"
                 onClick={() => switchVideo(nextVideoIndex, 1, 'arrow')}
                 aria-label="Next demo video"
-                className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md opacity-0 transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:right-3 sm:h-10 sm:w-10 cursor-pointer"
+                className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:right-3 sm:h-10 sm:w-10 sm:opacity-0 cursor-pointer"
               >
                 <ChevronRight size={20} />
               </button>

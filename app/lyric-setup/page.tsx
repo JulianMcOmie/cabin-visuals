@@ -20,7 +20,11 @@ function LyricSetupContent() {
   // binding the editor itself uses, so the pipeline's writes persist.
   useProjectPersistence()
   const router = useRouter()
-  const projectId = useSearchParams().get('project')
+  const search = useSearchParams()
+  const projectId = search.get('project')
+  // The mobile flow creates the project already ON its chosen style
+  // (/start's style-first step) - no style grid, no apply at the end.
+  const preStyled = search.get('styled') === '1'
   const projectName = useUIStore((s) => s.projectName)
   const projectLoading = !!projectId && projectName === null
 
@@ -29,7 +33,7 @@ function LyricSetupContent() {
     router.replace(projectId ? `/editor?project=${projectId}` : '/editor')
   }
 
-  return <LyricSetupScreen projectLoading={projectLoading} onClose={() => void done()} />
+  return <LyricSetupScreen projectLoading={projectLoading} preStyled={preStyled} onClose={() => void done()} />
 }
 
 export default function LyricSetupPage() {

@@ -62,11 +62,11 @@ export function AuthSubmit({
  *  submissions and OAuth waits - no separate transition page). */
 export function AuthShell({ children, footnote, loading }: { children: ReactNode; footnote?: string; loading?: boolean }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-page)] px-6 py-10 font-sans text-[var(--text)]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-page)] px-4 py-10 font-sans text-[var(--text)] sm:px-6">
       <Link href="/" className="mb-7 flex cursor-pointer select-none flex-col items-center" aria-label="Cabin Visuals home">
         <CabinLogo className={`h-14 w-auto ${loading ? 'cabin-logo-loading' : ''}`} />
       </Link>
-      <Appear className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
+      <Appear className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-5 sm:p-7">
         {children}
       </Appear>
       {footnote && (

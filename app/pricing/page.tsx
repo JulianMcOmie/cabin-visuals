@@ -57,12 +57,12 @@ export default function PricingPage() {
     <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text)] font-sans">
       {/* Nav - 64px, hairline border (same as Landing) */}
       <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2.5 select-none cursor-pointer">
-            <CabinLogo className="h-[30px] w-auto" />
-            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
+        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
+          <Link href="/" className="flex min-w-0 items-center gap-2.5 select-none cursor-pointer">
+            <CabinLogo className="h-[30px] w-auto flex-shrink-0" />
+            <span className="hidden translate-y-[5px] text-[15px] font-semibold text-[var(--text)] min-[430px]:inline">Cabin Visuals</span>
           </Link>
-          <nav className="flex items-center gap-5 text-[13px]">
+          <nav className="flex flex-shrink-0 items-center gap-4 text-[13px] sm:gap-5">
             <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Editor</Link>
             {hasAccount ? (
               <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Projects</Link>
@@ -74,9 +74,9 @@ export default function PricingPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1200px] px-6 pb-24">
-        <Appear className="mt-16 mb-3 text-center">
-          <h1 className="m-0 text-[36px] font-bold tracking-[-0.02em] text-[var(--text)]">Seriously, just use it for free (it&apos;s great).</h1>
+      <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 sm:px-6 sm:pb-24">
+        <Appear className="mt-10 mb-3 text-center sm:mt-16">
+          <h1 className="m-0 text-[26px] font-bold tracking-[-0.02em] text-[var(--text)] sm:text-[36px]">Seriously, just use it for free (it&apos;s great).</h1>
           <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
             The whole editor - the instruments, templates, and AI lyric videos - is free.
             Pro is for the person who wants to use it seriously and professionally.

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence, MotionConfig } from "framer-motion"
-import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2 } from "lucide-react"
+import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2, MoreHorizontal } from "lucide-react"
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
@@ -108,11 +108,27 @@ function ProjectCard({
           <ProjectThumbnail preview={project.preview} />
         </div>
       </div>
-      <div className="px-3.5 pb-[13px] pt-3">
-        <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
-        <p className="mt-0.5 font-mono text-[10px] text-[var(--text-muted)]">
-          {formatDuration(project.preview?.durationSeconds)}
-        </p>
+      <div className="flex items-center px-3.5 pb-[13px] pt-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[13px] font-semibold text-[var(--text)]">{project.name}</h3>
+          <p className="mt-0.5 font-mono text-[10px] text-[var(--text-muted)]">
+            {formatDuration(project.preview?.durationSeconds)}
+          </p>
+        </div>
+        {/* Touch path to the card menu: right-click doesn't exist on phones,
+            so the same duplicate/delete menu hangs off this button. Hidden on
+            md+ where the context menu is the affordance. */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            const r = e.currentTarget.getBoundingClientRect()
+            onOpenMenu(r.right, r.bottom + 4)
+          }}
+          aria-label={`Actions for ${project.name}`}
+          className="ml-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[var(--text-muted)] active:bg-white/10 md:hidden"
+        >
+          <MoreHorizontal size={16} />
+        </button>
       </div>
     </div>
   )
@@ -241,12 +257,12 @@ export default function ProjectsDisplay({
     <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
       <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
-          <Link href="/" className="flex select-none items-center gap-2.5">
-            <CabinLogo className="cabin-logo-loaded h-[30px] w-auto" />
-            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
+        <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
+          <Link href="/" className="flex min-w-0 select-none items-center gap-2.5">
+            <CabinLogo className="cabin-logo-loaded h-[30px] w-auto flex-shrink-0" />
+            <span className="hidden translate-y-[5px] text-[15px] font-semibold text-[var(--text)] min-[430px]:inline">Cabin Visuals</span>
           </Link>
-          <nav className="flex items-center gap-5">
+          <nav className="flex flex-shrink-0 items-center gap-4 sm:gap-5">
             <Link
               href="/pricing"
               className="text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)]"

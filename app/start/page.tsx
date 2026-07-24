@@ -9,11 +9,12 @@ import { LoadingScreen } from '@/components/LoadingScreen'
 import { TemplatePreviewVideo } from '@/components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '@/components/TemplateSlideshowPreview'
 import { TemplateLyricPreview } from '@/components/TemplateLyricPreview'
-import { GALLERY_TEMPLATES, type TemplateDef } from '@/templates'
+import { GALLERY_TEMPLATES, LYRIC_STYLES, type TemplateDef } from '@/templates'
 import { projectDestination } from '@/templates/destination'
 import { ensureSession, anonSessionsEnabled } from '@/persistence/anonSession'
 import * as projectStorage from '@/persistence/projectStorage'
 import { track } from '@/analytics/analytics'
+import { useIsMobile } from '@/components/useIsMobile'
 
 // First-run template picker: where "Start creating" sends a signed-out visitor,
 // instead of dropping them into an empty editor.
@@ -26,6 +27,9 @@ import { track } from '@/analytics/analytics'
 export default function StartPage() {
   const router = useRouter()
   const [chosen, setChosen] = useState<string | null>(null)
+  // Phones skip the template gallery: the mobile flow is style → song →
+  // editor, so this page IS the style step there.
+  const isMobile = useIsMobile()
 
   const choose = async (template: TemplateDef) => {
     if (chosen) return
@@ -46,6 +50,27 @@ export default function StartPage() {
     } catch (err) {
       console.error('Create from template failed:', err)
       router.push(`/editor?template=${template.id}`)
+    }
+  }
+
+  // Mobile: the style is chosen FIRST, so the project is created directly on
+  // the chosen style's document - lyric setup then only needs the song, and
+  // no style is applied at the end (`styled=1` tells it so).
+  const chooseStyle = async (style: TemplateDef) => {
+    if (chosen) return
+    setChosen(style.id)
+    const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
+    if (!sessionUser) {
+      router.push(`/editor?template=${style.id}`)
+      return
+    }
+    try {
+      const project = await projectStorage.create(style.name, structuredClone(style.document))
+      track('project_created', { source: 'template', template: style.id })
+      router.push(`/lyric-setup?project=${project.id}&styled=1`)
+    } catch (err) {
+      console.error('Create from style failed:', err)
+      router.push(`/editor?template=${style.id}`)
     }
   }
 
@@ -73,14 +98,53 @@ export default function StartPage() {
     <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
       {chosen && <LoadingScreen />}
       <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 max-w-[1200px] items-center px-6">
+        <div className="mx-auto flex h-16 max-w-[1200px] items-center px-4 sm:px-6">
           <Link href="/" className="flex select-none items-center gap-2.5">
-            <CabinLogo className="h-[30px] w-auto" />
+            <CabinLogo className="h-[30px] w-auto flex-shrink-0" />
             <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
           </Link>
         </div>
       </header>
 
+      {isMobile ? (
+        // The phone flow's first step: pick a look, then add the song. The
+        // template gallery (slideshow etc.) stays a desktop doorway.
+        <main className="mx-auto max-w-[900px] px-4 pb-16 pt-10 text-center">
+          <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a look</h1>
+          <p className="mx-auto mt-2 mb-6 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
+            Your lyric video starts from a style - you can change it any time.
+          </p>
+          <div className="grid grid-cols-2 gap-3 text-left">
+            {LYRIC_STYLES.map((style) => {
+              const picked = chosen === style.id
+              return (
+                <button
+                  key={style.id}
+                  onClick={() => void chooseStyle(style)}
+                  disabled={!!chosen}
+                  aria-busy={picked}
+                  className={`group overflow-hidden rounded-lg border bg-[var(--bg-app)] text-left transition-all duration-150 ${
+                    picked
+                      ? 'scale-[1.03] border-[var(--accent)] ring-2 ring-[var(--accent)]'
+                      : chosen
+                        ? 'border-[var(--border)] opacity-40'
+                        : 'border-[var(--border)]'
+                  }`}
+                >
+                  <div className="relative aspect-video bg-[var(--bg-app)]">
+                    <TemplateLyricPreview templateId={style.id} />
+                  </div>
+                  <div className="p-2.5">
+                    <h3 className="m-0 truncate text-[13px] font-semibold text-[var(--text)]">
+                      {style.styleName ?? style.name}
+                    </h3>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </main>
+      ) : (
       <main className="mx-auto max-w-[900px] px-6 pb-24 pt-14 text-center">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a template</h1>
         <p className="mx-auto mt-2 mb-8 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
@@ -131,6 +195,7 @@ export default function StartPage() {
           Create an empty project <ArrowRight size={14} />
         </button>
       </main>
+      )}
     </div>
   )
 }

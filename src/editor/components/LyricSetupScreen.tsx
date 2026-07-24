@@ -79,7 +79,18 @@ function ProgressBar({ value, className = 'w-64' }: { value?: number; className?
   )
 }
 
-export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => void; projectLoading: boolean }) {
+export function LyricSetupScreen({
+  onClose,
+  projectLoading,
+  preStyled = false,
+}: {
+  onClose: () => void
+  projectLoading: boolean
+  /** Mobile flow: the project was CREATED on the chosen style (style picked
+   *  before the song), so no style grid and no apply-at-the-end - the screen
+   *  is just song-in → pipeline → editor. */
+  preStyled?: boolean
+}) {
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' })
   /** The style the user just clicked, held so the card can show it landed. */
   const [chosen, setChosen] = useState<string | null>(null)
@@ -180,8 +191,9 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
   const working = phase.kind === 'uploading' || phase.kind === 'transcribing' || phase.kind === 'aligning'
   // The style grid is on screen from the moment a song lands: the wait IS the
   // browsing time. Deliberately no skip-out while working - the pipeline needs
-  // to finish for the project to make sense.
-  const onGrid = working || phase.kind === 'ready'
+  // to finish for the project to make sense. Pre-styled projects never show
+  // the grid: their wait renders in the card below instead.
+  const onGrid = !preStyled && (working || phase.kind === 'ready')
 
   /** A quiet secondary action, visually subordinate to the main one. */
   const EscapeButton = ({ label, onClick }: { label: string; onClick: () => void }) => (
@@ -225,6 +237,14 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
     onClose()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, phase.kind])
+
+  // Pre-styled: the project already wears its look, so words-in IS done.
+  useEffect(() => {
+    if (!preStyled || phase.kind !== 'ready' || appliedRef.current) return
+    appliedRef.current = true
+    onClose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preStyled, phase.kind])
 
   // Files can arrive before the project document has hydrated - the pick UI
   // shows immediately (no "loading" detour), and an early song just queues
@@ -333,7 +353,7 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
                 </>
               )}
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
               {LYRIC_STYLES.map((style) => {
                 const picked = chosen === style.id
                 return (
@@ -382,11 +402,12 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
           </div>
         </div>
       ) : (
-      <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
+      <div className="flex flex-1 min-h-0 flex-col items-center justify-center overflow-y-auto px-4 text-center sm:px-6">
         {/* The thin card framing the pick and error steps - the working phases
-            live on the style grid now, not in here. */}
-        <div className="flex w-full max-w-[460px] flex-col items-center gap-7 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-8 py-10">
-          <CabinLogo className="h-24 w-auto" />
+            live on the style grid now, not in here (except pre-styled runs,
+            whose whole wait renders in this card). */}
+        <div className="flex w-full max-w-[460px] flex-col items-center gap-7 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-5 py-8 sm:px-8 sm:py-10">
+          <CabinLogo className="h-16 w-auto sm:h-24" />
 
           {phase.kind === 'pick' ? (
             <>
@@ -435,7 +456,30 @@ export function LyricSetupScreen({ onClose, projectLoading }: { onClose: () => v
               </button>
               <EscapeButton label="Open the editor anyway" onClick={onClose} />
             </>
-          ) : null}
+          ) : (
+            // Pre-styled pipeline wait: same status language the grid shows,
+            // in the card - the style is already on, nothing to browse.
+            <>
+              <div>
+                <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">
+                  {phase.kind === 'ready' ? 'Opening the editor…' : 'Making your lyric video'}
+                </h1>
+                <p className="mx-auto mt-2 mb-0 max-w-[380px] text-[13px] leading-relaxed text-[var(--text-3)]">
+                  {phase.kind === 'uploading'
+                    ? 'Uploading song - syncing the beat grid'
+                    : phase.kind === 'transcribing'
+                      ? 'Transcribing - listening for the words'
+                      : phase.kind === 'aligning'
+                        ? 'Aligning - timing every word to where it’s sung'
+                        : 'Words timed to the song.'}
+                </p>
+              </div>
+              <ProgressBar
+                value={phase.kind === 'uploading' ? phase.progress : undefined}
+                className="w-full max-w-[280px]"
+              />
+            </>
+          )}
         </div>
       </div>
       )}

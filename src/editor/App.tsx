@@ -41,6 +41,7 @@ import { ConflictDialog } from './components/ConflictDialog'
 import * as projectStorage from '../persistence/projectStorage'
 import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
+import { useIsMobile } from '../components/useIsMobile'
 
 // Dev-only: expose the stores for console/E2E debugging. Never ships.
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -703,6 +704,124 @@ function BottomArea() {
   return editingBlock ? <PianoRollPanel /> : <TimelineArea />
 }
 
+/** The phone editor: canvas + transport, nothing else. Library, timeline,
+ *  scene editing and MIDI stay desktop-only - on a phone this is a player
+ *  with rename and export, not an authoring surface. Same stores, same
+ *  VisualPanel; only the shell differs. */
+function MobileEditor({
+  previewSceneId,
+  sourceCanvasRef,
+}: {
+  previewSceneId: string
+  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
+}) {
+  const isPlaying = useTimeStore((s) => s.isPlaying)
+  const { play, pause, reset, restart } = usePlayback()
+  const currentBeat = useTimeStore((s) => s.currentBeat)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const totalBars = useProjectStore((s) => s.totalBars)
+  const loopEnabled = useTimeStore((s) => !!s.loopRegion?.enabled)
+
+  // Same default-loop seeding as the desktop Header, so the loop toggle always
+  // has a region to enable.
+  const defaultLoopEndBeat = Math.min(4, Math.max(1, totalBars)) * beatsPerBar
+  useEffect(() => {
+    const { loopRegion, setLoopRegion } = useTimeStore.getState()
+    if (!loopRegion) setLoopRegion({ startBeat: 0, endBeat: defaultLoopEndBeat, enabled: false })
+  }, [defaultLoopEndBeat])
+  const toggleLoop = () => {
+    const { loopRegion, setLoopRegion } = useTimeStore.getState()
+    setLoopRegion(loopRegion
+      ? { ...loopRegion, enabled: !loopRegion.enabled }
+      : { startBeat: 0, endBeat: defaultLoopEndBeat, enabled: true })
+  }
+
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
+  useEffect(() => {
+    void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
+  }, [])
+  const plan = usePlan()
+  const { user, loading: authLoading, isAnonymous } = useAuth()
+  const permanent = !authLoading && !!user && !isAnonymous
+
+  return (
+    // h-dvh, not h-screen: mobile browsers' collapsing URL bar makes 100vh
+    // taller than the visible viewport, which would push the transport bar
+    // half off-screen.
+    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
+      <ConflictDialog />
+      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-topbar)] px-3">
+        <Link
+          href="/projects"
+          aria-label="Back to projects"
+          className="flex flex-shrink-0 items-center text-[var(--text-3)] active:scale-[0.94] transition-transform"
+        >
+          <ChevronLeft size={15} />
+        </Link>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <EditableProjectName />
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Export only when it can actually run here: capability-gated, and
+              the sign-up nudge panel is hover-based - useless on touch. */}
+          {permanent && exportGate?.ok !== false && (
+            <button
+              onClick={() => { track('export_clicked'); setExportOpen(true) }}
+              className="flex h-7 items-center gap-1.5 rounded bg-[var(--accent)] px-3 text-[11px] font-bold text-[var(--on-accent)]"
+            >
+              <Upload size={11} strokeWidth={2.5} />
+              Export
+            </button>
+          )}
+          <ProfileMenu size="sm" />
+        </div>
+      </div>
+
+      <div className="relative min-h-0 flex-1">
+        <VisualPanel previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
+      </div>
+
+      {/* Transport: thumb-sized targets, centered, above the home-indicator. */}
+      <div className="flex flex-shrink-0 items-center justify-center gap-3 border-t border-[var(--border)] bg-[var(--bg-topbar)] px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        <div className="flex min-w-[64px] items-center justify-center rounded bg-[var(--bg-app)] px-2.5 py-1.5 font-mono text-[13px] tabular-nums text-[var(--text)] select-none">
+          {formatBeat(currentBeat, beatsPerBar)}
+        </div>
+        <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-elevated)] p-1">
+          <button
+            onClick={isPlaying ? pause : reset}
+            aria-label={isPlaying ? 'Pause' : 'Return to start'}
+            className="flex h-10 w-12 items-center justify-center rounded-md text-[var(--text-3)] active:bg-white/10"
+          >
+            {isPlaying ? <Square size={14} fill="currentColor" /> : <SkipBack size={15} fill="currentColor" />}
+          </button>
+          <button
+            onClick={isPlaying ? restart : play}
+            aria-label={isPlaying ? 'Restart playback' : 'Play'}
+            className={`flex h-10 w-14 items-center justify-center rounded-md transition-colors ${
+              isPlaying
+                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                : 'bg-white/5 text-[var(--text)] active:bg-white/10'
+            }`}
+          >
+            <Play size={16} fill="currentColor" />
+          </button>
+          <button
+            onClick={toggleLoop}
+            aria-label={loopEnabled ? 'Loop on' : 'Loop off'}
+            className={`flex h-10 w-12 items-center justify-center rounded-md transition-colors ${
+              loopEnabled ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'text-[var(--text-3)] active:bg-white/10'
+            }`}
+          >
+            <Repeat size={14} />
+          </button>
+        </div>
+      </div>
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+    </div>
+  )
+}
+
 export default function EditorApp() {
   useProjectPersistence()
   useAnonymousAdoption()
@@ -743,6 +862,13 @@ export default function EditorApp() {
   // Falling back at render time keeps the canvas and segmented control live
   // without writing an ephemeral viewing choice into the project document.
   const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
+
+  // Phones get the player shell instead of the panel workspace. After every
+  // hook so the two layouts never diverge in hook order.
+  const isMobile = useIsMobile()
+  if (isMobile) {
+    return <MobileEditor previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} />
+  }
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">

@@ -92,9 +92,11 @@ function LoginPageContent() {
                 window.google.accounts.id.renderButton(
                     buttonContainer,
                     // "Console" restyle: filled_black is the darkest surface GSI
-                    // offers (its exact bg/radius can't be overridden), width
-                    // pinned to the card's inner width.
-                    { theme: "filled_black", size: "large", type: "standard", text: "signin_with", shape: "rectangular", logo_alignment: "left", width: 342 }
+                    // offers (its exact bg/radius can't be overridden). Width
+                    // follows the card's MEASURED inner width - a fixed 342
+                    // overflowed the card on small phones (GSI renders its
+                    // pixel width regardless of its container).
+                    { theme: "filled_black", size: "large", type: "standard", text: "signin_with", shape: "rectangular", logo_alignment: "left", width: Math.min(342, Math.max(200, buttonContainer.clientWidth || 342)) }
                 );
             }
         } else {
@@ -142,7 +144,9 @@ function LoginPageContent() {
              declarative auto-render with WHITE defaults, overriding our theme)
              and no styled wrapper (a mismatched container strip looks wrong
              behind whatever width GSI decides to render). */}
-         <div id="google-signin-button-container" className="flex justify-center"></div>
+         {/* w-full so the empty container measures the card's inner width -
+             renderButton reads clientWidth before anything is in it. */}
+         <div id="google-signin-button-container" className="flex w-full justify-center"></div>
       </div>
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">

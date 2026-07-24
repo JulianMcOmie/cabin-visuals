@@ -202,7 +202,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
           style={{ left: freeze.rect.left, top: freeze.rect.top, width: freeze.rect.width, height: freeze.rect.height }}
         />
       )}
-      <div ref={panelRef} className="w-[340px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] shadow-2xl shadow-black/60 p-4">
+      <div ref={panelRef} className="w-[340px] max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] shadow-2xl shadow-black/60 p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
             <Film size={14} className="text-[var(--accent)]" />
