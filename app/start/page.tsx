@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 import { CabinLogo } from '@/components/CabinLogo'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { TemplatePreviewVideo } from '@/components/TemplatePreviewVideo'
@@ -45,6 +46,26 @@ export default function StartPage() {
     } catch (err) {
       console.error('Create from template failed:', err)
       router.push(`/editor?template=${template.id}`)
+    }
+  }
+
+  // The no-template door: same session/row dance as choose(), just with an
+  // empty document - and the same in-memory fallback when there is no session.
+  const startEmpty = async () => {
+    if (chosen) return
+    setChosen('__empty__')
+    const sessionUser = anonSessionsEnabled() ? await ensureSession() : null
+    if (!sessionUser) {
+      router.push('/editor')
+      return
+    }
+    try {
+      const project = await projectStorage.create('Untitled')
+      track('project_created', { source: 'empty' })
+      router.push(`/editor?project=${project.id}`)
+    } catch (err) {
+      console.error('Create empty project failed:', err)
+      router.push('/editor')
     }
   }
 
@@ -101,6 +122,14 @@ export default function StartPage() {
             )
           })}
         </div>
+
+        <button
+          onClick={() => void startEmpty()}
+          disabled={!!chosen}
+          className="mt-8 inline-flex cursor-pointer items-center gap-1.5 text-[13px] text-[var(--text-3)] transition-colors hover:text-[var(--text)] disabled:cursor-default disabled:opacity-40"
+        >
+          Create an empty project <ArrowRight size={14} />
+        </button>
       </main>
     </div>
   )
