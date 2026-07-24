@@ -1,10 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
+import { Play, Pause, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -41,7 +41,8 @@ import { ConflictDialog } from './components/ConflictDialog'
 import * as projectStorage from '../persistence/projectStorage'
 import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
-import { useIsMobile } from '../components/useIsMobile'
+import { useScrub } from './hooks/useScrub'
+import { readPaneDefaults, writePaneOpen } from './uiSettings'
 
 // Dev-only: expose the stores for console/E2E debugging. Never ships.
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -164,12 +165,87 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
 // previews what an export at that aspect will compose like.
 
+/** YouTube-style transport riding the bottom of the canvas: play/pause, a
+ *  seek bar mapped over the whole project, and the current position. Shares
+ *  the auto-hide reveal with the fullscreen button, and stays up while
+ *  paused. Scrubbing reuses the timeline's shared gesture (audio is muted for
+ *  the drag and resumes at the drop point). */
+function CanvasTransportBar({ playback, visible }: { playback: PlaybackControls; visible: boolean }) {
+  const isPlaying = useTimeStore((s) => s.isPlaying)
+  const currentBeat = useTimeStore((s) => s.currentBeat)
+  const bpm = useProjectStore((s) => s.bpm)
+  const totalBeats = useProjectStore((s) => s.totalBars * s.beatsPerBar)
+  const trackRef = useRef<HTMLDivElement>(null)
+
+  const { startScrub } = useScrub({
+    computeBeat: (clientX) => {
+      const el = trackRef.current
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      if (r.width <= 0) return null
+      const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
+      return frac * totalBeats
+    },
+  })
+
+  const fmtTime = (beat: number) => {
+    const sec = Math.max(0, (beat * 60) / Math.max(1, bpm))
+    return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+  }
+  const frac = totalBeats > 0 ? Math.min(1, currentBeat / totalBeats) : 0
+
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300 ${
+        visible ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}
+    >
+      <div className="bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 pb-1.5 pt-8">
+        {/* Seek bar: the padded wrapper is the hit target (a 4px line is not
+            a touch target); touch-none so a phone drag scrubs instead of
+            scrolling. */}
+        <div
+          ref={trackRef}
+          onPointerDown={startScrub}
+          className="group/scrub relative cursor-pointer touch-none py-2"
+          aria-label="Seek"
+        >
+          <div className="relative h-1 rounded-full bg-white/25 transition-[height] duration-100 group-hover/scrub:h-1.5">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]"
+              style={{ width: `${frac * 100}%` }}
+            />
+          </div>
+          <div
+            className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)] shadow shadow-black/40"
+            style={{ left: `${frac * 100}%` }}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={isPlaying ? playback.pause : () => void playback.play()}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            className="visualizer-glass-control flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[rgba(30,30,35,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
+          >
+            {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="translate-x-px" />}
+          </button>
+          <span className="select-none font-mono text-[11px] tabular-nums text-white/80">
+            {fmtTime(currentBeat)} / {fmtTime(totalBeats)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function VisualPanel({
   previewSceneId,
   sourceCanvasRef,
+  playback,
 }: {
   previewSceneId: string
   sourceCanvasRef: RefObject<HTMLCanvasElement | null>
+  playback: PlaybackControls
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const fullscreenControlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -177,6 +253,9 @@ function VisualPanel({
   const [fullscreenControlVisible, setFullscreenControlVisible] = useState(false)
   // A project setting (persisted in the document, seeds the export default).
   const aspect = useProjectStore((s) => s.viewAspect)
+  // Controls stay up whenever paused (YouTube-style); while playing they ride
+  // the same reveal-then-fade the fullscreen button always used.
+  const isPlaying = useTimeStore((s) => s.isPlaying)
   // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
   // can't contain-fit an aspect-ratio box against both dimensions).
   const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
@@ -273,8 +352,9 @@ function VisualPanel({
           "first open" flag on every browser and never show again when you
           turn it back on. */}
       {/* <TutorialOverlay /> */}
+      <CanvasTransportBar playback={playback} visible={fullscreenControlVisible || !isPlaying} />
       <div className={`absolute top-2 right-3 z-10 transition-opacity duration-300 ${
-        fullscreenControlVisible
+        fullscreenControlVisible || !isPlaying
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0'
       }`}>
@@ -435,14 +515,16 @@ function Header({
   sceneEditorOpen,
   onToggleLibrary,
   onToggleSceneEditor,
+  playback,
 }: {
   libraryOpen: boolean
   sceneEditorOpen: boolean
   onToggleLibrary: () => void
   onToggleSceneEditor: () => void
+  playback: PlaybackControls
 }) {
   const isPlaying = useTimeStore((s) => s.isPlaying)
-  const { play, pause, reset, restart } = usePlayback();
+  const { play, pause, reset, restart } = playback
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
   const currentBeat = useTimeStore((s) => s.currentBeat)
@@ -543,8 +625,10 @@ function Header({
       )}
       <TemplateDemoChip />
 
-      {/* Center transport - absolutely centered on the bar. */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none select-none">
+      {/* Center transport - absolutely centered on the bar. Hidden on phones:
+          it would collide with the side clusters, and the canvas overlay
+          carries play/pause/scrub there. */}
+      <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 pointer-events-none select-none">
         <div className="flex items-center gap-2 pointer-events-auto">
           {/* Transport band - a continuous elevated strip (same surface the
               buttons used); each control is a segment whose hover/active state is
@@ -704,123 +788,10 @@ function BottomArea() {
   return editingBlock ? <PianoRollPanel /> : <TimelineArea />
 }
 
-/** The phone editor: canvas + transport, nothing else. Library, timeline,
- *  scene editing and MIDI stay desktop-only - on a phone this is a player
- *  with rename and export, not an authoring surface. Same stores, same
- *  VisualPanel; only the shell differs. */
-function MobileEditor({
-  previewSceneId,
-  sourceCanvasRef,
-}: {
-  previewSceneId: string
-  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
-}) {
-  const isPlaying = useTimeStore((s) => s.isPlaying)
-  const { play, pause, reset, restart } = usePlayback()
-  const currentBeat = useTimeStore((s) => s.currentBeat)
-  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
-  const totalBars = useProjectStore((s) => s.totalBars)
-  const loopEnabled = useTimeStore((s) => !!s.loopRegion?.enabled)
-
-  // Same default-loop seeding as the desktop Header, so the loop toggle always
-  // has a region to enable.
-  const defaultLoopEndBeat = Math.min(4, Math.max(1, totalBars)) * beatsPerBar
-  useEffect(() => {
-    const { loopRegion, setLoopRegion } = useTimeStore.getState()
-    if (!loopRegion) setLoopRegion({ startBeat: 0, endBeat: defaultLoopEndBeat, enabled: false })
-  }, [defaultLoopEndBeat])
-  const toggleLoop = () => {
-    const { loopRegion, setLoopRegion } = useTimeStore.getState()
-    setLoopRegion(loopRegion
-      ? { ...loopRegion, enabled: !loopRegion.enabled }
-      : { startBeat: 0, endBeat: defaultLoopEndBeat, enabled: true })
-  }
-
-  const [exportOpen, setExportOpen] = useState(false)
-  const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
-  useEffect(() => {
-    void isExportSupported().then((s) => setExportGate({ ok: s.ok, reason: s.reason }))
-  }, [])
-  const plan = usePlan()
-  const { user, loading: authLoading, isAnonymous } = useAuth()
-  const permanent = !authLoading && !!user && !isAnonymous
-
-  return (
-    // h-dvh, not h-screen: mobile browsers' collapsing URL bar makes 100vh
-    // taller than the visible viewport, which would push the transport bar
-    // half off-screen.
-    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
-      <ConflictDialog />
-      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-topbar)] px-3">
-        <Link
-          href="/projects"
-          aria-label="Back to projects"
-          className="flex flex-shrink-0 items-center text-[var(--text-3)] active:scale-[0.94] transition-transform"
-        >
-          <ChevronLeft size={15} />
-        </Link>
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <EditableProjectName />
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {/* Export only when it can actually run here: capability-gated, and
-              the sign-up nudge panel is hover-based - useless on touch. */}
-          {permanent && exportGate?.ok !== false && (
-            <button
-              onClick={() => { track('export_clicked'); setExportOpen(true) }}
-              className="flex h-7 items-center gap-1.5 rounded bg-[var(--accent)] px-3 text-[11px] font-bold text-[var(--on-accent)]"
-            >
-              <Upload size={11} strokeWidth={2.5} />
-              Export
-            </button>
-          )}
-          <ProfileMenu size="sm" />
-        </div>
-      </div>
-
-      <div className="relative min-h-0 flex-1">
-        <VisualPanel previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
-      </div>
-
-      {/* Transport: thumb-sized targets, centered, above the home-indicator. */}
-      <div className="flex flex-shrink-0 items-center justify-center gap-3 border-t border-[var(--border)] bg-[var(--bg-topbar)] px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-        <div className="flex min-w-[64px] items-center justify-center rounded bg-[var(--bg-app)] px-2.5 py-1.5 font-mono text-[13px] tabular-nums text-[var(--text)] select-none">
-          {formatBeat(currentBeat, beatsPerBar)}
-        </div>
-        <div className="flex items-center gap-1 rounded-lg bg-[var(--bg-elevated)] p-1">
-          <button
-            onClick={isPlaying ? pause : reset}
-            aria-label={isPlaying ? 'Pause' : 'Return to start'}
-            className="flex h-10 w-12 items-center justify-center rounded-md text-[var(--text-3)] active:bg-white/10"
-          >
-            {isPlaying ? <Square size={14} fill="currentColor" /> : <SkipBack size={15} fill="currentColor" />}
-          </button>
-          <button
-            onClick={isPlaying ? restart : play}
-            aria-label={isPlaying ? 'Restart playback' : 'Play'}
-            className={`flex h-10 w-14 items-center justify-center rounded-md transition-colors ${
-              isPlaying
-                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                : 'bg-white/5 text-[var(--text)] active:bg-white/10'
-            }`}
-          >
-            <Play size={16} fill="currentColor" />
-          </button>
-          <button
-            onClick={toggleLoop}
-            aria-label={loopEnabled ? 'Loop on' : 'Loop off'}
-            className={`flex h-10 w-12 items-center justify-center rounded-md transition-colors ${
-              loopEnabled ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'text-[var(--text-3)] active:bg-white/10'
-            }`}
-          >
-            <Repeat size={14} />
-          </button>
-        </div>
-      </div>
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
-    </div>
-  )
-}
+/** The transport handles usePlayback returns - created once in EditorApp and
+ *  shared by the header band and the canvas overlay, so the engine is only
+ *  initialized once. */
+type PlaybackControls = ReturnType<typeof usePlayback>
 
 export default function EditorApp() {
   useProjectPersistence()
@@ -839,14 +810,30 @@ export default function EditorApp() {
   const visualCanvasRef = useRef<HTMLCanvasElement>(null)
   const libraryPanelRef = useRef<PanelImperativeHandle>(null)
   const sceneEditorPanelRef = useRef<PanelImperativeHandle>(null)
-  const [libraryOpen, setLibraryOpen] = useState(true)
-  const [sceneEditorOpen, setSceneEditorOpen] = useState(true)
+  // One engine wiring for the whole editor: the header band and the canvas
+  // overlay share these handles.
+  const playback = usePlayback()
+  // Pane visibility is a remembered per-device setting; phones start with both
+  // collapsed (canvas-first) until the user opens them. Read once at mount -
+  // the Panels' defaultSize only applies then anyway.
+  const paneDefaults = useMemo(readPaneDefaults, [])
+  const [libraryOpen, setLibraryOpen] = useState(paneDefaults.library)
+  const [sceneEditorOpen, setSceneEditorOpen] = useState(paneDefaults.sceneEditor)
+  // Persist only on actual open/closed flips - onResize streams every drag frame.
+  const libraryOpenRef = useRef(paneDefaults.library)
+  const sceneEditorOpenRef = useRef(paneDefaults.sceneEditor)
 
-  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>) => {
+  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, fallbackPct: number) => {
     const panel = panelRef.current
     if (!panel) return
-    if (panel.isCollapsed()) panel.expand()
-    else panel.collapse()
+    if (panel.isCollapsed()) {
+      panel.expand()
+      // A panel that MOUNTED collapsed (mobile pane defaults) has no
+      // remembered size for expand() to restore - open it explicitly.
+      if (panel.isCollapsed() || panel.getSize().inPixels === 0) panel.resize(fallbackPct)
+    } else {
+      panel.collapse()
+    }
   }
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
@@ -863,13 +850,6 @@ export default function EditorApp() {
   // without writing an ephemeral viewing choice into the project document.
   const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
 
-  // Phones get the player shell instead of the panel workspace. After every
-  // hook so the two layouts never diverge in hook order.
-  const isMobile = useIsMobile()
-  if (isMobile) {
-    return <MobileEditor previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} />
-  }
-
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
@@ -878,8 +858,9 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef)}
-        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef)}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, 15)}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 55)}
+        playback={playback}
       />
       <div className="flex-1 min-h-0">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
@@ -889,12 +870,19 @@ export default function EditorApp() {
           <Panel
             id="library-panel"
             panelRef={libraryPanelRef}
-            defaultSize="15%"
+            defaultSize={paneDefaults.library ? '15%' : '0%'}
             minSize="8%"
             maxSize="30%"
             collapsible
             collapsedSize="0%"
-            onResize={(size) => setLibraryOpen(size.inPixels > 0)}
+            onResize={(size) => {
+              const open = size.inPixels > 0
+              setLibraryOpen(open)
+              if (libraryOpenRef.current !== open) {
+                libraryOpenRef.current = open
+                writePaneOpen('library', open)
+              }
+            }}
           >
             <LeftSidebar />
           </Panel>
@@ -917,12 +905,19 @@ export default function EditorApp() {
                     <Panel
                       id="scene-editor-panel"
                       panelRef={sceneEditorPanelRef}
-                      defaultSize="55%"
+                      defaultSize={paneDefaults.sceneEditor ? '55%' : '0%'}
                       minSize="15%"
                       maxSize="60%"
                       collapsible
                       collapsedSize="0%"
-                      onResize={(size) => setSceneEditorOpen(size.inPixels > 0)}
+                      onResize={(size) => {
+                        const open = size.inPixels > 0
+                        setSceneEditorOpen(open)
+                        if (sceneEditorOpenRef.current !== open) {
+                          sceneEditorOpenRef.current = open
+                          writePaneOpen('sceneEditor', open)
+                        }
+                      }}
                     >
                       <TrackEditor />
                     </Panel>
@@ -932,7 +927,7 @@ export default function EditorApp() {
                     {/* The visualizer keeps its original panel and dimensions;
                         only the cheap ambient copy extends behind its sibling. */}
                     <Panel>
-                      <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} />
+                      <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} playback={playback} />
                     </Panel>
                   </PanelGroup>
                 </div>
