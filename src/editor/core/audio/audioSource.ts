@@ -49,6 +49,18 @@ export async function retryAudioUpload(
   localFiles.delete(ref)
 }
 
+/**
+ * Whether a ref addresses bytes in the bucket - i.e. whether anything OUTSIDE
+ * this tab (a signed URL, the transcription routes) can reach them. Uploaded
+ * refs are the `{userId}/{projectId}/{clipId}` paths mintAudioPath produces;
+ * a session-only clip (no project row, see beginSaveAudio) is a bare id whose
+ * bytes never left the browser, and a template-shipped ref is a public app
+ * asset served from '/'.
+ */
+export function isUploadedRef(ref: string): boolean {
+  return !ref.startsWith('/') && ref.includes('/')
+}
+
 /** Resolve a ref to a URL a Tone.Player can load. */
 export async function getPlayableUrl(ref: string): Promise<string> {
   const cached = mem.get(ref)

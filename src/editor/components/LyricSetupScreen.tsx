@@ -7,11 +7,10 @@ import { CabinLogo } from '../../components/CabinLogo'
 import { SiteHeader } from '../../components/SiteHeader'
 import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
-import { useAudioStore } from '../store/AudioStore'
 import { useUIStore } from '../store/UIStore'
-import { getAudioUrl } from '../../persistence/audioStorage'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
-import { placeTranscription, type TranscribedWord } from '../utils/lyricPlacement'
+import { placeTranscription } from '../utils/lyricPlacement'
+import { firstAudioBlock, transcribeActiveSong } from '../utils/transcribeSong'
 import { track } from '../../analytics/analytics'
 import { LYRIC_STYLES } from '../../templates'
 import { TemplateLyricPreview } from '../../components/TemplateLyricPreview'
@@ -50,27 +49,6 @@ const DEMO_SONG = {
   url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/demo-audio/borderline.mp3`,
   fileName: 'Tame Impala - Borderline.mp3',
   label: 'Borderline by Tame Impala',
-}
-
-function firstAudioBlock() {
-  const s = useProjectStore.getState()
-  for (const id of s.rootTrackIds) {
-    const t = s.tracks[id]
-    if (t?.type === 'audio' && t.audioBlocks?.length) return t.audioBlocks[0]
-  }
-  return undefined
-}
-
-async function postWords(endpoint: string, payload: Record<string, unknown>): Promise<{ text?: string; words: TranscribedWord[] }> {
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  const data = (await res.json().catch(() => ({}))) as { error?: string; text?: string; words?: TranscribedWord[] }
-  if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`)
-  if (!data.words?.length) throw new Error('No words came back for the song.')
-  return { text: data.text, words: data.words }
 }
 
 /** Progress bar: determinate with a value, indeterminate sweep without. */
@@ -130,54 +108,18 @@ export function LyricSetupScreen({
     runningRef.current = true
     const setLivePhase = (p: Phase) => { if (!closedRef.current) setPhase(p) }
     try {
-      const block = firstAudioBlock()
-      if (!block) throw new Error('The song did not land - try adding it again.')
-      if (block.clipRef.startsWith('blob:')) {
-        throw new Error('The song only lives in this tab so far - sign in so it uploads, then try again.')
-      }
+      if (!firstAudioBlock()) throw new Error('The song did not land - try adding it again.')
+      const alignedWords = await transcribeActiveSong(setLivePhase)
 
-      // Ride the background upload out; transcription reads the uploaded file.
-      const deadline = Date.now() + 180_000
-      for (;;) {
-        const up = useAudioStore.getState().uploads[block.clipRef]
-        if (!up) break
-        if (up.status === 'failed') throw new Error(up.error ?? 'The song upload failed.')
-        if (Date.now() > deadline) throw new Error('The song upload timed out.')
-        setLivePhase({ kind: 'uploading', progress: up.progress })
-        await new Promise((r) => setTimeout(r, 200))
-      }
-
-      // Also wait for the local decode: it writes the detected BPM and the
-      // first-beat trim, and placing words against a pre-detection snapshot
-      // shifts every lyric late by the downbeat offset. Decode failure just
-      // stops setting trimEnd - proceed (unsynced grid) after a short wait.
-      const decodeDeadline = Date.now() + 30_000
-      while (Date.now() < decodeDeadline) {
-        const b = firstAudioBlock()
-        if (!b || b.trimEnd > 0) break
-        await new Promise((r) => setTimeout(r, 200))
-      }
-
-      const url = await getAudioUrl(block.clipRef)
-      const fileName = useAudioStore.getState().audioClips[block.clipRef]?.fileName
-
-      setLivePhase({ kind: 'transcribing' })
-      const transcribed = await postWords('/api/transcribe', { url, fileName })
-
-      setLivePhase({ kind: 'aligning' })
-      // Align against the FILTERED word list, never the raw transcript - the
-      // raw text can carry annotations that would come back timed as words.
-      const text = transcribed.words.map((w) => w.word).join(' ')
-      const aligned = await postWords('/api/align', { url, fileName, text })
-
-      // Fresh read: the block object captured at start predates the detected
-      // trimStart/bpm writes.
-      const placedBlock = firstAudioBlock() ?? block
+      // Fresh read: the block captured before the pipeline predates the
+      // detected trimStart/bpm writes.
+      const placedBlock = firstAudioBlock()
+      if (!placedBlock) throw new Error('The song did not land - try adding it again.')
       const { bpm, beatsPerBar } = useProjectStore.getState()
-      const words = placeTranscription(aligned.words, placedBlock, bpm, beatsPerBar, true)
+      const words = placeTranscription(alignedWords, placedBlock, bpm, beatsPerBar, true)
       // The aligner's seconds ride along as the track's source of truth, so
       // a later BPM correction re-derives the beats instead of moving words.
-      const id = useProjectStore.getState().addLyricTrack(words, aligned.words)
+      const id = useProjectStore.getState().addLyricTrack(words, alignedWords)
       if (!id) throw new Error('No usable words found in the song.')
       useUIStore.getState().setSelectedTrackId(id)
       track('lyrics_applied', { source: 'aligned', words: words.length })

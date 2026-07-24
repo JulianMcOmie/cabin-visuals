@@ -47,7 +47,7 @@ export type AnalyticsEvent =
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
   | 'lyrics_align_clicked'
-  | 'lyrics_applied' // props: { source: 'transcription' | 'aligned' | 'pasted', words }
+  | 'lyrics_applied' // props: { source: 'transcription' | 'aligned' | 'pasted', words, where?: 'text_display_panel' }
   | 'template_applied' // props: { template } - switched onto a template from the editor library
   | 'lyric_style_chosen' // props: { style } - the look picked at the end of lyric setup
   | 'demo_song_used' // the "no song handy?" Borderline option on the lyric-setup upload card

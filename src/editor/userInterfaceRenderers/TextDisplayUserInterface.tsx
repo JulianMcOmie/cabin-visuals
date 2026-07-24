@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Mic } from 'lucide-react'
+import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { useProjectStore } from '../store/ProjectStore'
+import { placeTranscription } from '../utils/lyricPlacement'
+import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
@@ -104,6 +108,104 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
   )
 }
 
+/**
+ * Transcribe the project's song straight onto THIS track - the Lyric Video
+ * setup screen's pipeline (upload → Scribe → forced alignment), reachable from
+ * any Text Display track without going through a template. The words replace
+ * this track's sheet and notes in one undoable step.
+ */
+function TranscribeButton({ trackId }: { trackId: string }) {
+  const hasSong = useProjectStore((s) =>
+    s.rootTrackIds.some((id) => {
+      const t = s.tracks[id]
+      return t?.type === 'audio' && !!t.audioBlocks?.length
+    }),
+  )
+  const [phase, setPhase] = useState<TranscribePhase | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const runningRef = useRef(false)
+  // Selecting another track unmounts this panel mid-flight; the pipeline keeps
+  // running (its result still lands in the store) but must not set state after.
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
+
+  const run = async () => {
+    if (runningRef.current) return
+    runningRef.current = true
+    setError(null)
+    setPhase({ kind: 'uploading', progress: 0 })
+    try {
+      const timing = await transcribeActiveSong((next) => { if (aliveRef.current) setPhase(next) })
+      // Fresh read: the pipeline waits out the decode, which writes the
+      // detected BPM and the first-beat trim these beats are measured against.
+      const block = firstAudioBlock()
+      if (!block) throw new Error('The song went away mid-transcription - try again.')
+      const { bpm, beatsPerBar } = useProjectStore.getState()
+      const words = placeTranscription(timing, block, bpm, beatsPerBar, true)
+      const id = useProjectStore.getState().addLyricTrack(words, timing, trackId)
+      if (!id) throw new Error('No usable words found in the song.')
+      trackEvent('lyrics_applied', { source: 'aligned', where: 'text_display_panel', words: words.length })
+    } catch (err) {
+      if (aliveRef.current) setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      runningRef.current = false
+      if (aliveRef.current) setPhase(null)
+    }
+  }
+
+  const working = phase !== null
+  const status = phase?.kind === 'uploading'
+    ? `Uploading song - syncing the beat grid${phase.progress > 0 ? ` (${Math.round(phase.progress * 100)}%)` : ''}`
+    : phase?.kind === 'transcribing'
+      ? 'Transcribing - listening for the words'
+      : phase?.kind === 'aligning'
+        ? 'Aligning - timing every word to where it’s sung'
+        : null
+
+  return (
+    <>
+      <button
+        onClick={() => void run()}
+        disabled={working || !hasSong}
+        aria-busy={working}
+        title={hasSong
+          ? 'Transcribe the song and write its words onto this track'
+          : 'Add a song to the timeline first'}
+        className={`mb-1.5 flex h-7 w-full items-center justify-center gap-1.5 rounded border text-[11px] font-medium transition-colors ${
+          working || !hasSong
+            ? 'cursor-default border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'
+            : 'cursor-pointer border-[var(--accent-muted)] bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
+        }`}
+      >
+        <Mic size={12} />
+        {working ? 'Transcribing…' : error ? 'Try again' : 'Transcribe song'}
+      </button>
+      {status && (
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
+            {phase?.kind === 'uploading' && phase.progress > 0 ? (
+              <span
+                className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)] transition-[width] duration-200"
+                style={{ width: `${Math.round(Math.max(0.02, Math.min(1, phase.progress)) * 100)}%` }}
+              />
+            ) : (
+              <span className="absolute inset-y-0 w-1/3 rounded-full bg-[var(--accent)] motion-safe:animate-[lyric-progress-sweep_1.2s_ease-in-out_infinite]" />
+            )}
+          </span>
+        </div>
+      )}
+      <p className={`mb-3 mt-1 text-[9px] leading-relaxed ${error ? 'text-[#d68383]' : 'text-[var(--text-muted)]'}`}>
+        {error ?? status ?? (hasSong
+          ? 'Writes the song’s words and their timing onto this track, replacing what is here.'
+          : 'Add a song to the timeline to transcribe it onto this track.')}
+      </p>
+    </>
+  )
+}
+
 export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ targetId, parameters }) => {
   // The template faces are lazy-loaded; kick them off so the specimen buttons
   // (and the lyric-sheet preview) render in the real face, not the fallback.
@@ -162,6 +264,8 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
       {/* --- Lyrics: how the words hit the screen --- */}
       <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
         <SectionLabel>LYRICS</SectionLabel>
+        {/* The words can come from the song itself - no template required. */}
+        <TranscribeButton trackId={targetId} />
         <div className="grid grid-cols-2 overflow-hidden rounded border border-[var(--border)]">
           {([
             { id: 'words', label: 'Word by word' },

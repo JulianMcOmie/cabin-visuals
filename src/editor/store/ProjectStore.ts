@@ -393,8 +393,12 @@ export interface ProjectState {
    *  is created. Pass the aligner's sung-seconds `timing` so the track keeps
    *  seconds as its source of truth (setBpm re-derives the beats from it).
    *  One set() = one undo step. Returns the track id, or null when there are
-   *  no words. */
-  addLyricTrack: (words: LyricWord[], timing?: TranscribedWord[]) => string | null
+   *  no words.
+   *
+   *  Pass `targetId` to refill THAT Text Display track instead (the panel's
+   *  Transcribe button, where the words belong on the track you pressed it
+   *  from, whatever it is named). */
+  addLyricTrack: (words: LyricWord[], timing?: TranscribedWord[], targetId?: string) => string | null
   /** Rebuild a Lyrics track's notes + text from its lyricTiming: word-by-word
    *  (one note per word) or whole lines at once (one note per grouped line). */
   setLyricGrouping: (trackId: string, grouping: 'words' | 'lines') => void
@@ -1476,16 +1480,19 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return ids
   },
 
-  addLyricTrack: (words, timing) => {
+  addLyricTrack: (words, timing, targetId) => {
     if (words.length === 0) return null
     let resultId: string | null = null
     set((s) => {
       // A lyric-template project ships a styled root track named 'Lyrics' -
       // refill it (words swap, styling stays) instead of stacking a second one.
-      const existingId = s.rootTrackIds.find((tid) => {
+      // An explicit target wins: that is the track the button was pressed on.
+      const named = s.rootTrackIds.find((tid) => {
         const t = s.tracks[tid]
         return t?.type === 'base' && t.instrumentId === 'textDisplay' && t.name === 'Lyrics'
       })
+      const targeted = targetId && s.tracks[targetId]?.instrumentId === 'textDisplay' ? targetId : undefined
+      const existingId = targeted ?? named
       // Particle-words tracks get a "-" lead-in: a dash word with a note at the
       // very start, skipped when the song's first word already lands there.
       // The cloud then idles as a dash and streams into the first sung word,
@@ -1546,8 +1553,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       // instead of looping forever into empty timeline. `durationBars` is the
       // block being written on this very call, so it is passed explicitly
       // rather than read back out of state.
+      // ...but only on the template path. Transcribing into a hand-made track
+      // (an explicit target that is not the template's 'Lyrics' track) must not
+      // reach across the project and shorten loops the user chose themselves.
       const endBars = Math.max(durationBars, songEndBars(s))
-      let trimmedTracks = trimLoopsToSongEnd(s.tracks, endBars)
+      let trimmedTracks = !targeted || targeted === named
+        ? trimLoopsToSongEnd(s.tracks, endBars)
+        : s.tracks
 
       // Monochrome's polarity strobe follows the SINGING: rebuild the style's
       // 'Invert Strobe' track (a Color Filters sibling the template ships)
