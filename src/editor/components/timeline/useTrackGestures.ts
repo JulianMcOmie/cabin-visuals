@@ -96,6 +96,8 @@ type DragState =
       /** Right-edge grabs on the TOP half of the block arm looping (dragging past
        *  the pattern repeats it); bottom-half grabs are a plain resize. */
       loopArm: boolean
+      /** Block whose left edge the full-height alignment guide follows. */
+      guideBlockId: string
       origins: Map<string, BlockOrigin>
       /** Owning track id per VISUAL row (track rows + ability-lane sub-rows), so a
        *  vertical block move indexes by the rows the user actually sees. Lane rows map
@@ -127,6 +129,8 @@ interface MarqueeRect {
 interface UseTrackGesturesOptions {
   /** The lane region element (excludes the label column) used to measure width. */
   laneRef: RefObject<HTMLDivElement | null>
+  /** Imperative overlay spanning the ruler and timeline during a MIDI drag. */
+  dragGuideRef: RefObject<HTMLDivElement | null>
 }
 
 /**
@@ -135,13 +139,31 @@ interface UseTrackGesturesOptions {
  * local copy / debounce). Reads current positions from the store each frame,
  * so it never needs a stale-closure latest ref for data.
  */
-export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
+export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOptions) {
   const selectedBlockIds = useUIStore((s) => s.selectedBlockIds)
   const setSelectedBlockIds = useUIStore((s) => s.setSelectedBlockIds)
 
   const dragRef = useRef<DragState | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
+
+  const placeDragGuideAtClientX = useCallback((clientX: number | null) => {
+    const guide = dragGuideRef.current
+    if (!guide) return
+    if (clientX == null) {
+      guide.style.visibility = 'hidden'
+      return
+    }
+    const hostLeft = guide.parentElement?.getBoundingClientRect().left ?? 0
+    guide.style.transform = `translateX(${clientX - hostLeft}px)`
+    guide.style.visibility = 'visible'
+  }, [dragGuideRef])
+
+  const placeDragGuideAtBar = useCallback((bar: number, barWidthPx: number) => {
+    const laneR = laneRef.current?.getBoundingClientRect()
+    if (!laneR) return
+    placeDragGuideAtClientX(laneR.left + bar * barWidthPx)
+  }, [laneRef, placeDragGuideAtClientX])
 
   // Snap a bar position to the zoom-aware step (move, resize, and the draw
   // gesture's growing edge all come through here): beats when zoomed in,
@@ -210,6 +232,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
         const endBar = snapBar(beat / d.beatsPerBar)
         const durationBars = Math.max(oneBeat, endBar - d.startBar)
         useProjectStore.getState().updateBlock(d.trackId, d.blockId, { durationBars })
+        placeDragGuideAtBar(d.startBar, d.pixelsPerBeat * d.beatsPerBar)
         return
       }
 
@@ -217,11 +240,13 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       const deltaBars = d.barWidthPx > 0 ? deltaX / d.barWidthPx : 0
       const rowDelta = Math.round((e.clientY - d.startY) / useUIStore.getState().tracksRowHeight)
       const store = useProjectStore.getState()
+      let guideStartBar = d.origins.get(d.guideBlockId)?.startBar ?? null
 
       if (d.type === 'moving') {
         for (const [blockId, o] of d.origins) {
           const maxStart = Math.max(0, d.totalBars - o.durationBars)
           const newStartBar = Math.max(0, Math.min(maxStart, snapBar(o.startBar + deltaBars)))
+          if (blockId === d.guideBlockId) guideStartBar = newStartBar
 
           // Vertical: move to the row at origin index + rowDelta (clamped), mapped to
           // its owning track - so nested/child rows and ability-lane rows are crossed
@@ -275,6 +300,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           // Drag the start, keep the end planted; clamp to >= 0 and >= 1 beat long.
           const end = o.startBar + o.durationBars
           const newStartBar = Math.max(0, Math.min(end - oneBeat, snapBar(o.startBar + deltaBars)))
+          if (blockId === d.guideBlockId) guideStartBar = newStartBar
           // Counter-shift notes (block-relative) so they stay put in absolute time,
           // written atomically with the start so they don't move on resize. A
           // looping block also gets its loop length pinned: the shifted notes
@@ -285,6 +311,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
           store.updateBlock(o.trackId, blockId, o.loop ? { ...updates, loopLengthBars: o.patternBars } : updates)
         }
       }
+      if (guideStartBar != null) placeDragGuideAtBar(guideStartBar, d.barWidthPx)
     }
 
     const handleUp = () => {
@@ -293,6 +320,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       if (dragRef.current?.type === 'drawing') suppressNextContextMenu()
       dragRef.current = null
       setMarqueeRect(null)
+      placeDragGuideAtClientX(null)
       unlockCursor()
       controller.abort()
       abortRef.current = null
@@ -300,15 +328,17 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
 
     window.addEventListener('pointermove', handleMove, { signal: controller.signal })
     window.addEventListener('pointerup', handleUp, { signal: controller.signal })
-  }, [setSelectedBlockIds, laneRef])
+    window.addEventListener('pointercancel', handleUp, { signal: controller.signal })
+  }, [setSelectedBlockIds, laneRef, placeDragGuideAtBar, placeDragGuideAtClientX])
 
   // Tear down a drag still in flight if the component unmounts.
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      placeDragGuideAtClientX(null)
       document.body.style.userSelect = ''
     }
-  }, [])
+  }, [placeDragGuideAtClientX])
 
   // Capture the drag-start positions of every block in `dragSet`. `rows` is the visible
   // visual-row list; a block's `trackIndex` is the visual index of ITS track row, so
@@ -378,6 +408,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     // Alt-drag = duplicate: clone the drag set in place (originals stay put) and
     // drag the clones. Scans ALL tracks (root + child: nested/automation/ability), so
     // blocks on child tracks duplicate too. Only for moving, not edge-resize.
+    let guideBlockId = blockId
     if (e.altKey && type === 'moving') {
       const store = useProjectStore.getState()
       const cloneIds = new Set<string>()
@@ -387,6 +418,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
             const clone = cloneBlock(b)
             store.addBlock(tId, clone)
             cloneIds.add(clone.id)
+            if (b.id === blockId) guideBlockId = clone.id
           }
         }
       }
@@ -399,6 +431,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
     dragRef.current = {
       type,
       loopArm,
+      guideBlockId,
       startX: e.clientX,
       startY: e.clientY,
       barWidthPx: useProjectStore.getState().beatsPerBar * useUIStore.getState().tracksPixelsPerBeat,
@@ -406,8 +439,9 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       origins: captureOrigins(dragSet, rows),
       rowTrackIds: rowTrackIdsOf(rows),
     }
+    placeDragGuideAtClientX(rect.left)
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, laneRef, beginGestureTracking])
+  }, [selectedBlockIds, setSelectedBlockIds, laneRef, placeDragGuideAtClientX, beginGestureTracking])
 
   // Pointer down on a lane: right-click draws a new block on that track; left-click
   // begins a marquee (shift keeps the current selection as the base).
@@ -425,6 +459,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       useProjectStore.getState().addBlock(trackId, { id: blockId, startBar, durationBars: oneBeat, loop: false, notes: [] })
       setSelectedBlockIds(new Set([blockId]))
       dragRef.current = { type: 'drawing', trackId, blockId, startBar, pixelsPerBeat, beatsPerBar }
+      placeDragGuideAtBar(startBar, pixelsPerBeat * beatsPerBar)
       beginGestureTracking()
       return
     }
@@ -442,7 +477,7 @@ export function useTrackGestures({ laneRef }: UseTrackGesturesOptions) {
       base,
     }
     beginGestureTracking()
-  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking, laneRef])
+  }, [selectedBlockIds, setSelectedBlockIds, beginGestureTracking, laneRef, placeDragGuideAtBar])
 
   // Delete: selected blocks win (their track stays); with no blocks selected,
   // a selected track is deleted along with its blocks. Escape clears selection.

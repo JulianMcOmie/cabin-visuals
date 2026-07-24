@@ -17,6 +17,8 @@ interface TimelineRulerProps {
   barWidthPx: number
   /** Full timeline width in pixels (totalBars * barWidthPx). */
   timelineWidthPx: number
+  /** Number of bars rendered, including the dimmed area after the project end. */
+  displayBars: number
   /** Trailing gutter (px) so the strip ends where the lanes' vertical scrollbar starts. */
   gutterPx: number
   /** Inner content element - translated horizontally to mirror the lane scroll. */
@@ -29,7 +31,7 @@ interface TimelineRulerProps {
 
 /** The main timeline's ruler - a thin adapter over the shared Ruler (also used by
  *  the MIDI editor), fed from the project/UI stores. All ruler UI lives in Ruler. */
-export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, onLoopResizeStart, barWidthPx, timelineWidthPx, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
+export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, onLoopResizeStart, barWidthPx, timelineWidthPx, displayBars, gutterPx, contentRef, playheadHeadRef, corner }: TimelineRulerProps) {
   const totalBars = useProjectStore((s) => s.totalBars)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
@@ -44,7 +46,8 @@ export function TimelineRuler({ onScrubStart, onLoopDragStart, onLoopMoveStart, 
       gutterPx={gutterPx}
       pixelsPerBeat={pixelsPerBeat}
       beatsPerBar={beatsPerBar}
-      totalBars={totalBars}
+      totalBars={displayBars}
+      dimAfterBars={totalBars}
       // left: 0.5 nudges the apex to sit on the lane playhead line - the line
       // lives in a separate viewport-space overlay, so the ruler triangle
       // otherwise renders ~0.5px to its left.

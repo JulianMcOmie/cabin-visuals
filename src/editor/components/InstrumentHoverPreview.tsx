@@ -1,7 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
+import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
@@ -39,6 +40,7 @@ import type { InstrumentItem } from './LeftSidebar'
 
 const PREVIEW_BPM = 120
 const BEATS_PER_SEC = PREVIEW_BPM / 60
+const LASER_INSTRUMENT_IDS = new Set(['laserSphere', 'laserLine'])
 // The pattern loops over this span; the driver starts a beat IN so the first
 // rendered frame already has a note in the past - motion from frame one, no
 // dead ramp-up while the popup appears. Exactly 1 so Text Display's word
@@ -60,6 +62,26 @@ function makeLoopNotes(pitches: number[], durationBeats: number, strideBeats = 1
 
 function previewBeat(elapsedSec: number): number {
   return (elapsedSec * BEATS_PER_SEC + START_OFFSET_BEATS) % LOOP_BEATS
+}
+
+/** Laser emitters intentionally contain no geometry-based glow: their HDR
+ *  pixels only become a laser after the scene bloom pass. Keep that same pass
+ *  in the isolated preview canvases, but only mount it for laser objects so
+ *  ordinary instrument cards retain their existing rendering and cost. */
+function LaserPreviewBloom({ instrumentId }: { instrumentId?: string }) {
+  if (!instrumentId || !LASER_INSTRUMENT_IDS.has(instrumentId)) return null
+  return (
+    <EffectComposer multisampling={0}>
+      <Bloom
+        intensity={0.9}
+        luminanceThreshold={1.15}
+        luminanceSmoothing={0.08}
+        mipmapBlur
+        radius={0.72}
+        levels={7}
+      />
+    </EffectComposer>
+  )
 }
 
 /** Track-row previews sync to the song: while the transport plays, the popup
@@ -141,7 +163,7 @@ function makePreviewState(instrumentId: string): ObjectState {
  *  so the state is registered and ticked ahead of the instrument's read.
  *  Recomputes activeNotes and the decaying energy pulse each frame - the
  *  preview's stand-in for what computeAtBeat derives on the main canvas. */
-function ObjectPreviewDriver({ instrumentId, notes, sync }: { instrumentId: string; notes?: ResolvedNote[]; sync?: boolean }) {
+function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumentId: string; trackId: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const state = useMemo(() => {
     const s = makePreviewState(instrumentId)
     // Track rows preview their OWN notes rather than the canned arc.
@@ -159,23 +181,23 @@ function ObjectPreviewDriver({ instrumentId, notes, sync }: { instrumentId: stri
       if (n.beat <= beat && n.beat > lastOnset) { lastOnset = n.beat; lastVel = n.velocity }
     }
     state.energy = lastOnset === -Infinity ? 0 : (lastVel / 127) * Math.exp(-3 * (beat - lastOnset))
-    setPreviewObjectState(PREVIEW_TRACK_ID, state)
+    setPreviewObjectState(trackId, state)
   })
   useEffect(() => {
-    return () => setPreviewObjectState(PREVIEW_TRACK_ID, null)
-  }, [instrumentId])
+    return () => setPreviewObjectState(trackId, null)
+  }, [instrumentId, trackId])
   return null
 }
 
-function ObjectPreview({ instrumentId, notes, sync }: { instrumentId: string; notes?: ResolvedNote[]; sync?: boolean }) {
+function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const def = getInstrument(instrumentId)
   if (!def) return null
   const Comp = def.component
   return (
     <>
-      <ObjectPreviewDriver instrumentId={instrumentId} notes={notes} sync={sync} />
+      <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       <Suspense fallback={null}>
-        <Comp trackId={PREVIEW_TRACK_ID} />
+        <Comp trackId={trackId} />
       </Suspense>
     </>
   )
@@ -598,8 +620,54 @@ export function InstrumentPreviewLayer() {
           : preview.item.kind === 'object'
             ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
             : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}
+        <LaserPreviewBloom instrumentId={projectData?.object.instrumentId ?? preview?.item.id} />
       </Canvas>
       {preview && draw2d && <Preview2D key={preview.item.id} draw={draw2d} />}
+    </div>
+  )
+}
+
+/**
+ * The same live preview used by the hover popup, fitted into a card instead.
+ * Only cards near the viewport mount their renderer: a long open library
+ * therefore keeps just a few WebGL contexts alive at once.
+ */
+export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const [nearViewport, setNearViewport] = useState(false)
+  const reactId = useId()
+  const trackId = `${PREVIEW_TRACK_ID}-${reactId}`
+  const draw2d = get2DPreview(item.id)
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setNearViewport(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setNearViewport(entry.isIntersecting),
+      { rootMargin: '128px 0px' },
+    )
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={hostRef} className="absolute inset-0">
+      {nearViewport && draw2d && <Preview2D draw={draw2d} />}
+      {nearViewport && !draw2d && (
+        <Canvas dpr={[1, 2]} frameloop="always" camera={{ position: [0, 0.9, 4.2], fov: 55 }} gl={{ antialias: true }}>
+          <color attach="background" args={['#09090b']} />
+          <ambientLight intensity={0.7} />
+          <directionalLight position={[3, 4, 5]} intensity={1.1} />
+          {item.kind === 'object'
+            ? <ObjectPreview instrumentId={item.id} trackId={trackId} />
+            : <MoverPreview moverId={item.id} />}
+          <LaserPreviewBloom instrumentId={item.kind === 'object' ? item.id : undefined} />
+        </Canvas>
+      )}
     </div>
   )
 }

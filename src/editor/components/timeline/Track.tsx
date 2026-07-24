@@ -141,6 +141,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   // While a copy/library drag is in progress, rows shift via liftOffset (with a
   // smooth transition) to open the insertion gap.
   const inCopyDrag = liftOffset !== undefined
+  // The deepest curved guide marks the first child directly beneath its parent.
+  // Its row-state surface follows that same corner instead of covering the curve.
+  const isFirstChild = guides?.[guides.length - 1]?.curve === true
 
   return (
     <div
@@ -201,7 +204,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             inherits this background, so selecting a parent lights its whole
             bracket region while a child's highlight stops at the divider. */}
         <div
-          className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${
+          className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${isFirstChild ? 'rounded-tl-md' : ''} ${
             dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
           }`}
           style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX }}
@@ -229,7 +232,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             is drawn by that child's curve instead. */}
         {dividerInset != null && (
           <span
-            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--border-subtle)]"
+            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--border)]"
             style={{ left: dividerInset }}
           />
         )}
@@ -310,11 +313,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           playhead triangle has room to show its left half at beat 0. The row
           divider lives on the gutter + lane (not the row itself), so the label
           column can inset its own divider around the hierarchy brackets. */}
-      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[rgba(38,38,44,0.6)]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
+      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[var(--border)]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[rgba(38,38,44,0.6)]'}`}
+        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--border)]'}`}
         // A muted track's blocks fade so mute state reads from the MIDI side too.
         style={{ width: timelineWidthPx, opacity: track.muted ? 0.4 : 1 }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),

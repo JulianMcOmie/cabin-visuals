@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/UIStore'
 import { selectNewBlock } from '../../utils/selection'
 import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
+import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
 import type { AudioBlock as AudioBlockType } from '../../types'
 
 interface AudioBlockProps {
@@ -60,7 +61,10 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
-      ctx.fillStyle = color + 'aa'
+      // The clip colour is the solid surface; the waveform is a separate,
+      // fully opaque ink. Keeping the hues related makes the contrast feel
+      // intentional without falling back to a translucent wash.
+      ctx.fillStyle = AUDIO_WAVEFORM_COLOR
       const mid = c.height / 2
       const startFrac = clip.duration > 0 ? block.trimStart / clip.duration : 0
       const endFrac = clip.duration > 0 ? block.trimEnd / clip.duration : 1
@@ -192,12 +196,14 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       style={{
         left: `${left}px`,
         width: `${width}px`,
-        backgroundColor: color + '24',
-        borderTop: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderRight: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderBottom: isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderLeft: `2px solid ${color}`,
-        boxShadow: isSelected ? `0 0 0 1px ${color}` : undefined,
+        backgroundColor: color,
+        borderTop: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
+        borderRight: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
+        borderBottom: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
+        borderLeft: `2px solid ${AUDIO_WAVEFORM_COLOR}`,
+        boxShadow: isSelected
+          ? '0 0 0 1px #fff1f3, 0 2px 10px rgba(159, 18, 57, 0.28)'
+          : '0 1px 4px rgba(74, 4, 24, 0.2)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -205,22 +211,25 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color }: A
       onPointerCancel={onPointerUp}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-      <span className="absolute top-0.5 left-1.5 text-[10px] text-white/70 pointer-events-none truncate max-w-full pr-2">
+      <span
+        className="absolute top-0.5 left-1.5 text-[10px] font-medium text-white pointer-events-none truncate max-w-full pr-2"
+        style={{ textShadow: '0 1px 2px rgba(63, 10, 23, 0.8)' }}
+      >
         {clip?.fileName}
       </span>
       {pending && (
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] text-white/60 animate-pulse pointer-events-none">
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white animate-pulse pointer-events-none">
           loading…
         </span>
       )}
       {upload?.status === 'saving' && (
         <>
-          <span className="absolute bottom-0.5 right-1.5 font-mono text-[9px] text-white/70 pointer-events-none">
+          <span className="absolute bottom-0.5 right-1.5 font-mono text-[9px] font-medium text-white pointer-events-none">
             ↑{Math.round(upload.progress * 100)}%
           </span>
           <div
             className="absolute bottom-0 left-0 h-[2px] pointer-events-none transition-[width] duration-150"
-            style={{ width: `${upload.progress * 100}%`, backgroundColor: color }}
+            style={{ width: `${upload.progress * 100}%`, backgroundColor: AUDIO_WAVEFORM_COLOR }}
           />
         </>
       )}

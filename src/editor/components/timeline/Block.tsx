@@ -17,26 +17,32 @@ interface BlockProps {
 export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
+  const rowHeight = useUIStore((s) => s.tracksRowHeight)
   const isEditing = editingBlock?.blockId === block.id
 
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
+  const renderedWidth = Math.max(width, 4)
+  const renderedHeight = Math.max(rowHeight - 8, 1)
   const totalBeatsInBlock = block.durationBars * beatsPerBar
+  const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
+  const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
 
   return (
     <div
       data-block-id={block.id}
+      data-looped-block={hasLoopSections ? '' : undefined}
       title="Double-click to edit notes"
-      className="absolute top-1 bottom-1 rounded-[3px] overflow-hidden"
+      className={`absolute top-1 bottom-1 overflow-hidden ${hasLoopSections ? '' : 'rounded-[3px]'}`}
       style={{
         left: `${left}px`,
-        width: `${Math.max(width, 4)}px`,
-        backgroundColor: color + '24',
-        borderTop: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderRight: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderBottom: isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
-        borderLeft: `2px solid ${color}`,
-        boxShadow: isSelected || isEditing ? `0 0 0 1px ${color}` : undefined,
+        width: `${renderedWidth}px`,
+        backgroundColor: hasLoopSections ? 'transparent' : color + '24',
+        borderTop: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderRight: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderBottom: hasLoopSections ? undefined : isEditing || isSelected ? `1px solid ${color}` : `1px solid ${color}55`,
+        borderLeft: hasLoopSections ? undefined : `2px solid ${color}`,
+        boxShadow: !hasLoopSections && (isSelected || isEditing) ? `0 0 0 1px ${color}` : undefined,
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
       onPointerMove={(e) => {
@@ -74,8 +80,11 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       <NotePreview
         notes={block.notes}
         totalBeats={totalBeatsInBlock}
-        loopBeats={block.loop ? loopLengthBeats(block, beatsPerBar) : null}
+        loopBeats={loopBeats}
         color={color}
+        highlighted={isEditing || isSelected}
+        widthPx={renderedWidth}
+        heightPx={renderedHeight}
       />
     </div>
   )
@@ -84,12 +93,62 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
 const PREVIEW_NOTE_CAP = 512
+const LOOP_CORNER_RADIUS_PX = 3
+
+interface LoopSection {
+  startBeat: number
+  durationBeats: number
+}
+
+/** One closed contour around the union of all repeated sections. At each
+ *  internal join the path follows the two rounded corners into a divot, but
+ *  deliberately omits the tangent vertical edges because those are internal
+ *  to the combined loop shape. */
+function loopOutlinePath(sections: LoopSection[], totalBeats: number, width: number, height: number, strokeWidth: number): string {
+  const inset = strokeWidth / 2
+  const left = inset
+  const top = inset
+  const right = Math.max(left, width - inset)
+  const bottom = Math.max(top, height - inset)
+  const maxVerticalRadius = Math.max(0, (bottom - top) / 2)
+  const seams = sections.slice(1).map((section, index) => {
+    const x = (section.startBeat / totalBeats) * width
+    const previousWidth = sections[index].durationBeats / totalBeats * width
+    const nextWidth = section.durationBeats / totalBeats * width
+    const radius = Math.min(LOOP_CORNER_RADIUS_PX, maxVerticalRadius, previousWidth / 2, nextWidth / 2)
+    return { x, radius }
+  })
+  const outerRadius = Math.min(
+    LOOP_CORNER_RADIUS_PX,
+    maxVerticalRadius,
+    (sections[0]?.durationBeats ?? totalBeats) / totalBeats * width / 2,
+    (sections.at(-1)?.durationBeats ?? totalBeats) / totalBeats * width / 2,
+  )
+
+  let path = `M ${left + outerRadius} ${top}`
+  for (const seam of seams) {
+    path += ` H ${seam.x - seam.radius} Q ${seam.x} ${top} ${seam.x} ${top + seam.radius}`
+    path += ` Q ${seam.x} ${top} ${seam.x + seam.radius} ${top}`
+  }
+  path += ` H ${right - outerRadius} Q ${right} ${top} ${right} ${top + outerRadius}`
+  path += ` V ${bottom - outerRadius} Q ${right} ${bottom} ${right - outerRadius} ${bottom}`
+  for (let index = seams.length - 1; index >= 0; index -= 1) {
+    const seam = seams[index]
+    path += ` H ${seam.x + seam.radius} Q ${seam.x} ${bottom} ${seam.x} ${bottom - seam.radius}`
+    path += ` Q ${seam.x} ${bottom} ${seam.x - seam.radius} ${bottom}`
+  }
+  path += ` H ${left + outerRadius} Q ${left} ${bottom} ${left} ${bottom - outerRadius}`
+  path += ` V ${top + outerRadius} Q ${left} ${top} ${left + outerRadius} ${top} Z`
+  return path
+}
 
 /** Miniature of the block's notes: x/width from time, y from pitch - normalized to
  *  the block's own pitch range (at least an octave, so near-monotone lines stay
  *  calm), dashes long notes read as dashes and hits as ticks. A looping block
- *  tiles the pattern (repeats dimmed) inside individually rounded sections. */
-function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string }) {
+ *  tiles the pattern (repeats dimmed) across touching rounded sections. Those
+ *  sections are the block surface itself, rather than decorations inside one
+ *  large outer pill, so their touching corners form the familiar DAW divots. */
+function NotePreview({ notes, totalBeats, loopBeats, color, highlighted, widthPx, heightPx }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; color: string; highlighted: boolean; widthPx: number; heightPx: number }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
@@ -106,12 +165,16 @@ function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType
   const occurrences = looping
     ? tileLoopNotes(notes, loopBeats, totalBeats, PREVIEW_NOTE_CAP)
     : notes.map((note) => ({ note, startBeat: note.startBeat, durationBeats: note.durationBeats, repeat: 0 }))
-  const sections: { startBeat: number; durationBeats: number }[] = []
+  const sections: LoopSection[] = []
   if (looping) {
     for (let startBeat = 0; startBeat < totalBeats; startBeat += loopBeats) {
       sections.push({ startBeat, durationBeats: Math.min(loopBeats, totalBeats - startBeat) })
     }
   }
+  const outlineStrokeWidth = highlighted ? 2 : 1
+  const outlinePath = looping
+    ? loopOutlinePath(sections, totalBeats, widthPx, heightPx, outlineStrokeWidth)
+    : null
 
   return (
     <>
@@ -124,17 +187,35 @@ function NotePreview({ notes, totalBeats, loopBeats, color }: { notes: BlockType
             data-loop-section=""
             className="absolute pointer-events-none rounded-[3px]"
             style={{
-              left: `calc(${leftPct}% + 1px)`,
-              width: `max(calc(${widthPct}% - 2px), 1px)`,
-              top: 1,
-              bottom: 1,
-              border: `1px solid ${color}88`,
-              backgroundColor: color + '0d',
-              boxSizing: 'border-box',
+              // Adjacent border boxes meet exactly: their flat vertical portions
+              // are flush while the paired rounded corners expose a small notch.
+              left: `${leftPct}%`,
+              width: `max(${widthPct}%, 1px)`,
+              top: 0,
+              bottom: 0,
+              backgroundColor: color + '24',
             }}
           />
         )
       })}
+      {outlinePath && (
+        <svg
+          data-loop-outline=""
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          viewBox={`0 0 ${widthPx} ${heightPx}`}
+          preserveAspectRatio="none"
+        >
+          <path
+            d={outlinePath}
+            fill="none"
+            stroke={highlighted ? color : color + '55'}
+            strokeWidth={outlineStrokeWidth}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      )}
       {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
         const leftPct = (startBeat / totalBeats) * 100
         const widthPct = (durationBeats / totalBeats) * 100

@@ -1,6 +1,11 @@
 import type { PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react'
 import { useTimeStore } from '../store/TimeStore'
-import { LOOP_MOVE_EDGE_INSET, PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import {
+  LOOP_MOVE_EDGE_INSET,
+  LOOP_REGION_DISABLED_COLOR,
+  LOOP_REGION_ENABLED_COLOR,
+  PLAYHEAD_TRIANGLE_HALF,
+} from '../constants'
 import { computeRulerGrid } from './rulerGrid'
 import type { LoopResizeEdge } from '../hooks/useLoopDrag'
 
@@ -19,6 +24,9 @@ interface RulerProps {
   beatsPerBar: number
   /** Bars drawn (numbered per the thinning interval). */
   totalBars: number
+  /** Optional project boundary. Ruler content after this bar remains visible,
+   *  but is desaturated and darkened to mark it outside the active range. */
+  dimAfterBars?: number
   /** Beat-tick extent; defaults to totalBars * beatsPerBar (used when the
    *  timeline ends mid-bar, so ticks don't overshoot the content). */
   totalBeats?: number
@@ -60,6 +68,7 @@ export function Ruler({
   pixelsPerBeat,
   beatsPerBar,
   totalBars,
+  dimAfterBars,
   totalBeats,
   playheadNudgePx = 0,
   contentRef,
@@ -126,7 +135,7 @@ export function Ruler({
                 left: loopRegion.startBeat * pixelsPerBeat,
                 width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
                 height: '50%',
-                backgroundColor: loopRegion.enabled ? '#4da3d9' : '#52525b',
+                backgroundColor: loopRegion.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR,
                 borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
                 borderRight: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
                 zIndex: 5,
@@ -217,6 +226,21 @@ export function Ruler({
           {/* Caller-specific content-space layers (e.g. the MIDI block header) -
               below the playhead triangle. */}
           {children}
+
+          {dimAfterBars != null && dimAfterBars < totalBars && (
+            <div
+              data-outside-project-ruler=""
+              className="pointer-events-none absolute top-0 bottom-0"
+              style={{
+                left: dimAfterBars * barWidthPx,
+                right: 0,
+                zIndex: 20,
+                backgroundColor: 'rgba(8, 8, 11, 0.46)',
+                backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
+              }}
+            />
+          )}
 
           {/* Playhead head: a marker confined to the ruler's bottom half (below the
               loop band) - a rectangular top tapering to a rounded point, one

@@ -417,7 +417,7 @@ function Header() {
               a rounded rectangle within the band (GarageBand-style). Segment
               radius is concentric with the band's so the highlights sit flush.
               Play lights accent while playing, loop while enabled. */}
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--bg-elevated)]">
+          <div className="flex items-center gap-0.5 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
             <button
               onClick={isPlaying ? pause : reset}
               title={isPlaying ? 'Pause' : 'Return to start'}

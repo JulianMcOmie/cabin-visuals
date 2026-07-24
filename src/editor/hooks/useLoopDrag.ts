@@ -8,6 +8,11 @@ const CLICK_THRESHOLD_PX = 3
 const MIN_RESIZED_LOOP_BEATS = 1
 
 export type LoopResizeEdge = 'start' | 'end'
+export interface LoopDragGuide {
+  startBeat: number | null
+  endBeat: number | null
+  enabled: boolean
+}
 
 function toggleLoopEnabled() {
   const { loopRegion, setLoopRegion } = useTimeStore.getState()
@@ -20,6 +25,8 @@ interface UseLoopDragOptions {
   computeBeat: (clientX: number) => number | null
   /** Last beat available on this ruler, used to clamp moved loop regions. */
   maxBeat: number
+  /** Optional full-height boundary guides supplied by the main timeline. */
+  onGuideChange?: (guide: LoopDragGuide | null) => void
 }
 
 /**
@@ -28,11 +35,13 @@ interface UseLoopDragOptions {
  * click clears it. Window-level listeners + the shared cursor lock, same shape
  * as useScrub. The region lives in TimeStore (ephemeral transport state).
  */
-export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
+export function useLoopDrag({ computeBeat, maxBeat, onGuideChange }: UseLoopDragOptions) {
   const computeRef = useRef(computeBeat)
   computeRef.current = computeBeat
   const maxBeatRef = useRef(maxBeat)
   maxBeatRef.current = maxBeat
+  const guideRef = useRef(onGuideChange)
+  guideRef.current = onGuideChange
 
   const startLoopDrag = useCallback((e: ReactPointerEvent) => {
     e.stopPropagation()
@@ -89,15 +98,24 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
       const duration = origin.endBeat - origin.startBeat
       const maxStart = Math.max(0, maxBeatRef.current - duration)
       const startBeat = Math.max(0, Math.min(maxStart, origin.startBeat + beat - anchor))
-      useTimeStore.getState().setLoopRegion({ ...origin, startBeat, endBeat: startBeat + duration })
+      const endBeat = startBeat + duration
+      useTimeStore.getState().setLoopRegion({ ...origin, startBeat, endBeat })
+      guideRef.current?.({ startBeat, endBeat, enabled: origin.enabled })
     }
     const onUp = () => {
       unlockCursor()
       if (!dragging) toggleLoopEnabled()
+      guideRef.current?.(null)
+      controller.abort()
+    }
+    const onCancel = () => {
+      unlockCursor()
+      guideRef.current?.(null)
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onCancel, { signal: controller.signal })
   }, [])
 
   const startLoopResize = useCallback((e: ReactPointerEvent, edge: LoopResizeEdge) => {
@@ -114,17 +132,30 @@ export function useLoopDrag({ computeBeat, maxBeat }: UseLoopDragOptions) {
       dragging = true
       const beat = computeRef.current(ev.clientX)
       if (beat == null) return
-      useTimeStore.getState().setLoopRegion(edge === 'start'
+      const next = edge === 'start'
         ? { ...origin, startBeat: Math.max(0, Math.min(beat, origin.endBeat - MIN_RESIZED_LOOP_BEATS)) }
-        : { ...origin, endBeat: Math.min(maxBeatRef.current, Math.max(beat, origin.startBeat + MIN_RESIZED_LOOP_BEATS)) })
+        : { ...origin, endBeat: Math.min(maxBeatRef.current, Math.max(beat, origin.startBeat + MIN_RESIZED_LOOP_BEATS)) }
+      useTimeStore.getState().setLoopRegion(next)
+      guideRef.current?.({
+        startBeat: edge === 'start' ? next.startBeat : null,
+        endBeat: edge === 'end' ? next.endBeat : null,
+        enabled: origin.enabled,
+      })
     }
     const onUp = () => {
       unlockCursor()
       if (!dragging) toggleLoopEnabled()
+      guideRef.current?.(null)
+      controller.abort()
+    }
+    const onCancel = () => {
+      unlockCursor()
+      guideRef.current?.(null)
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    window.addEventListener('pointercancel', onCancel, { signal: controller.signal })
   }, [])
 
   return { startLoopDrag, startLoopMove, startLoopResize }

@@ -1,17 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, ChevronRight, Plus, Sparkles, Info, LayoutTemplate, Repeat } from 'lucide-react'
+import * as TooltipPrimitive from '@radix-ui/react-tooltip'
+import { Check, ChevronRight, Plus, Sparkles, CircleHelp, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
-import { useEffectDrag } from './useEffectDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
-import { PLUGIN_LIST } from '../effects'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { canPreview, setInstrumentPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
@@ -339,63 +338,56 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
 
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
-  const [infoOpen, setInfoOpen] = useState(false)
-  // Hover preview: after a short dwell on a row, aim the shared preview layer
-  // (one warm canvas for the whole sidebar - see InstrumentPreviewLayer).
-  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const enterRow = (e: React.MouseEvent, item: InstrumentItem) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (previewTimer.current) clearTimeout(previewTimer.current)
-    previewTimer.current = setTimeout(
-      () => setInstrumentPreview({ item, anchor: { left: rect.right, top: rect.top } }),
-      100,
-    )
-  }
-  const leaveRow = () => {
-    if (previewTimer.current) clearTimeout(previewTimer.current)
-    setInstrumentPreview(null)
-  }
-  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
-  // Show the info popup after a short hover dwell; hide immediately on leave.
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const openAfterDelay = () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    hoverTimer.current = setTimeout(() => setInfoOpen(true), 250)
-  }
-  const cancelHover = () => {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current)
-    setInfoOpen(false)
-  }
-  useEffect(() => () => { if (hoverTimer.current) clearTimeout(hoverTimer.current) }, [])
 
   return (
     <div>
-      <div className="flex items-center justify-between px-3 pt-3 pb-1 select-none">
+      <div className="flex items-center gap-1 px-3 pt-3 pb-1 select-none">
         {/* Caps section row - clicking the label still collapses/expands the list. */}
         <button
           onClick={() => setOpen(!open)}
-          className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--text-2)] transition-colors cursor-pointer"
+          aria-expanded={open}
+          className="flex items-center text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors cursor-pointer hover:text-[var(--text-2)]"
         >
           {title}
-          {!open && <ChevronRight size={10} className="text-[var(--text-muted)]" />}
         </button>
-        <div
-          className="relative flex items-center"
-          onMouseEnter={openAfterDelay}
-          onMouseLeave={cancelHover}
+        <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
+          <TooltipPrimitive.Root>
+            <TooltipPrimitive.Trigger asChild>
+              <button
+                type="button"
+                className="flex size-3.5 flex-shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--border-strong)] transition-colors hover:text-[var(--text-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] data-[state=delayed-open]:text-[var(--text-2)] data-[state=instant-open]:text-[var(--text-2)]"
+                aria-label={`About ${title}`}
+              >
+                <CircleHelp size={11} aria-hidden="true" />
+              </button>
+            </TooltipPrimitive.Trigger>
+            <TooltipPrimitive.Portal>
+              <TooltipPrimitive.Content
+                side="right"
+                align="start"
+                sideOffset={8}
+                collisionPadding={8}
+                avoidCollisions
+                sticky="always"
+                className="z-[100] max-h-[calc(100vh-1rem)] w-52 max-w-[calc(100vw-1rem)] overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-[var(--text-2)] shadow-lg shadow-black/50"
+              >
+                {description}
+              </TooltipPrimitive.Content>
+            </TooltipPrimitive.Portal>
+          </TooltipPrimitive.Root>
+        </TooltipPrimitive.Provider>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+          aria-expanded={open}
+          className="ml-auto flex size-4 flex-shrink-0 cursor-pointer items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--text-2)]"
         >
-          <button
-            className={`transition-colors cursor-pointer ${infoOpen ? 'text-[var(--text-2)]' : 'text-[var(--border-strong)] hover:text-[var(--text-2)]'}`}
-            aria-label={`About ${title}`}
-          >
-            <Info size={11} />
-          </button>
-          {infoOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-40 w-52 p-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[11px] font-normal normal-case tracking-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-              {description}
-            </div>
-          )}
-        </div>
+          <ChevronRight
+            size={10}
+            className={`transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+        </button>
       </div>
       {open && (
         <div>
@@ -403,17 +395,26 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
             <div
               key={item.id}
               data-instrument-id={item.id}
-              onPointerDown={(e) => { leaveRow(); onItemPointerDown(e, item) }}
+              onPointerDown={(e) => onItemPointerDown(e, item)}
               onDoubleClick={() => onItemDoubleClick(item)}
-              onMouseEnter={(e) => enterRow(e, item)}
-              onMouseLeave={leaveRow}
-              title={canPreview(item) ? undefined : item.description}
-              className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+              title={item.description}
+              className="mx-2 mb-2 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-app)] transition-colors hover:border-[rgba(53,167,230,0.6)]"
             >
-              <span className="flex-shrink-0 flex items-center justify-center w-3.5">
-                {item.icon}
-              </span>
-              <span className="text-xs text-[var(--text-2)] truncate">{item.name}</span>
+              <div className="relative aspect-video bg-[var(--bg-canvas)]">
+                {canPreview(item)
+                  ? <InstrumentCardPreview item={item} />
+                  : (
+                    <span className="absolute inset-0 flex items-center justify-center [&_svg]:h-8 [&_svg]:w-8">
+                      {item.icon}
+                    </span>
+                  )}
+              </div>
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <span className="flex w-3.5 flex-shrink-0 items-center justify-center">
+                  {item.icon}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{item.name}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -422,7 +423,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   )
 }
 
-type LibraryTab = 'instruments' | 'effects' | 'loops' | 'templates'
+type LibraryTab = 'instruments' | 'loops' | 'templates'
 
 /** Hover popup for a loop row: the pattern as a mini piano roll - one lane
  *  per used row, notes as bars (velocity = brightness), beat gridlines. */
@@ -596,27 +597,8 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
-  const { startEffectDrag, ghostRef: effectGhostRef, ghostName: effectGhostName } = useEffectDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
   const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)
-  // Effects hover previews ride the instruments' popup machinery: the plugin
-  // becomes a pseudo library item, and its vignette is registered under the
-  // plugin id in InstrumentPreview2D (same dwell as Section's enterRow).
-  const effectPreviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const enterEffectRow = (e: React.MouseEvent, plugin: (typeof PLUGIN_LIST)[number]) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current)
-    const item: InstrumentItem = { id: plugin.id, name: plugin.name, description: '', icon: null, kind: 'modulator' }
-    effectPreviewTimer.current = setTimeout(
-      () => setInstrumentPreview({ item, anchor: { left: rect.right, top: rect.top } }),
-      100,
-    )
-  }
-  const leaveEffectRow = () => {
-    if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current)
-    setInstrumentPreview(null)
-  }
-  useEffect(() => () => { if (effectPreviewTimer.current) clearTimeout(effectPreviewTimer.current) }, [])
   // Over a valid drop slot → show a "+" on the ghost to signal "release to add".
   const droppable = useUIStore((s) => !!s.trackDrop && (s.trackDrop.line != null || s.trackDrop.intoId != null))
   // Double-click converts the selected track to the item (no-op if nothing selected).
@@ -636,65 +618,45 @@ export function LeftSidebar() {
     <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)] overflow-hidden">
       {/* One warm preview canvas for all sections' hover popups. */}
       <InstrumentPreviewLayer />
-      <div className="h-8 flex-shrink-0 flex items-center px-3 border-b border-[var(--border)] text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)] select-none">
-        LIBRARY
-      </div>
-      <div className="flex flex-shrink-0 border-b border-[var(--border)]">
-        <button
-          onClick={() => setTab('instruments')}
-          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
-            tab === 'instruments'
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
-              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
-          }`}
-        >
-          Instruments
-        </button>
-        <button
-          onClick={() => setTab('effects')}
-          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
-            tab === 'effects'
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
-              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
-          }`}
-        >
-          Effects
-        </button>
-        <button
-          onClick={() => setTab('loops')}
-          className={`flex-1 h-7 text-[11px] border-r border-[var(--border)] transition-colors cursor-pointer ${
-            tab === 'loops'
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
-              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
-          }`}
-        >
-          Loops
-        </button>
-        <button
-          onClick={() => setTab('templates')}
-          className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
-            tab === 'templates'
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
-              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
-          }`}
-        >
-          Templates
-        </button>
+      {/* @container so the tabs show icon-only when the (resizable) sidebar is
+          narrow, and icon + label once there's room for the text. */}
+      <div className="@container flex flex-shrink-0 border-b border-[var(--border)]">
+        {([
+          { id: 'instruments', label: 'Instruments', Icon: Shapes },
+          { id: 'loops', label: 'Loops', Icon: Repeat },
+          { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
+        ] as const).map(({ id, label, Icon }, i, arr) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            title={label}
+            className={`flex-1 h-7 flex items-center justify-center gap-1.5 text-[11px] transition-colors cursor-pointer ${
+              i < arr.length - 1 ? 'border-r border-[var(--border)]' : ''
+            } ${
+              tab === id
+                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold shadow-[inset_0_-2px_0_var(--accent)]'
+                : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+            }`}
+          >
+            <Icon size={13} className="flex-shrink-0" />
+            <span className="hidden @[224px]:inline truncate">{label}</span>
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 overflow-y-auto timeline-scrollbar pb-4">
         {tab === 'instruments' && (
           <>
             {activeIsMain ? (
-              <Section title="Director" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+              <Section title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             ) : <>
             <Section title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Object" description="An Object instrument is a visual object that renders in the 3D scene - for example, a cube or sphere." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Objects" description="Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
-            <Section title="Mover" description="A Mover moves, spins, scales, or fades any object - add one under a track (or drag onto one) and drive it with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Colorizer" description="A Colorizer changes an object's material color in the ordered mover/splitter chain, driven by its own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Splitter" description="A Splitter renders its object several times, giving each copy its own reference frame - movers BELOW the splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}
           </>
@@ -726,25 +688,6 @@ export function LeftSidebar() {
           </div>
         )}
         {tab === 'templates' && <TemplatesTab />}
-        {tab === 'effects' && (
-          <div className="pt-1">
-            {PLUGIN_LIST.map((plugin) => (
-              <div
-                key={plugin.id}
-                onPointerDown={(e) => { leaveEffectRow(); startEffectDrag(e, plugin) }}
-                onMouseEnter={(e) => enterEffectRow(e, plugin)}
-                onMouseLeave={leaveEffectRow}
-                title={`Drag ${plugin.name} onto a track's Effects panel`}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
-              >
-                <span className="flex-shrink-0 flex items-center justify-center w-3.5">
-                  <Sparkles size={12} className="text-zinc-400" />
-                </span>
-                <span className="text-xs text-[var(--text-2)] truncate">{plugin.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Floating ghost while dragging a library item into the track list. Centered
@@ -775,17 +718,6 @@ export function LeftSidebar() {
         </div>
       )}
 
-      {/* Ghost while dragging an effect onto the Track Editor's Effects panel. */}
-      {effectGhostName && (
-        <div
-          ref={effectGhostRef}
-          className="fixed z-50 pointer-events-none flex items-center gap-1.5 px-3 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-xs font-medium text-[var(--text)] shadow-lg shadow-black/40"
-          style={{ left: 0, top: 0, height: 28, transform: 'translate(-50%, -50%)' }}
-        >
-          <Sparkles size={12} className="text-zinc-400" />
-          {effectGhostName}
-        </div>
-      )}
     </div>
   )
 }

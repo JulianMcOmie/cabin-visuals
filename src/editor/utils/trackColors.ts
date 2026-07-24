@@ -3,4 +3,5 @@
 export const OBJECT_TRACK_COLOR = '#35a7e6'
 export const MOVER_TRACK_COLOR = '#6366f1'
 export const COLORIZER_TRACK_COLOR = '#ec4899'
-export const AUDIO_TRACK_COLOR = '#ef4444'
+export const AUDIO_TRACK_COLOR = '#f0657d'
+export const AUDIO_WAVEFORM_COLOR = '#9f1239'

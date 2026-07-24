@@ -21,6 +21,18 @@ import { startEdgeResize } from '../../utils/edgeResize'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 
+const MIN_OUTSIDE_PROJECT_BARS = 8
+
+/** Keep a useful amount of timeline visible beyond the playback/export range.
+ *  At least half a viewport (and never fewer than eight bars) remains available,
+ *  while short projects still fill the complete lane viewport. */
+function timelineDisplayBars(totalBars: number, barWidthPx: number, viewportWidthPx: number) {
+  if (barWidthPx <= 0) return totalBars
+  const viewportBars = Math.max(1, Math.ceil(viewportWidthPx / barWidthPx))
+  const outsideBars = Math.max(MIN_OUTSIDE_PROJECT_BARS, Math.ceil(viewportBars / 2))
+  return Math.max(viewportBars, Math.ceil(totalBars) + outsideBars)
+}
+
 export function TimelineArea() {
   const tracks = useProjectStore((s) => s.tracks)
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
@@ -32,7 +44,10 @@ export function TimelineArea() {
   const loopDragging = useUIStore((s) => !!s.loopDrag)
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
-  const timelineWidthPx = totalBars * barWidthPx
+  const projectWidthPx = totalBars * barWidthPx
+  const [laneViewportWidthPx, setLaneViewportWidthPx] = useState(0)
+  const displayBars = timelineDisplayBars(totalBars, barWidthPx, laneViewportWidthPx)
+  const timelineWidthPx = displayBars * barWidthPx
 
   // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
   // draggable scrub from the ruler. laneRef measures the lane region (excludes
@@ -43,6 +58,7 @@ export function TimelineArea() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const rulerContentRef = useRef<HTMLDivElement>(null)
   const clipRef = useRef<HTMLDivElement>(null)
+  const blockDragGuideRef = useRef<HTMLDivElement>(null)
 
   // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
@@ -55,7 +71,10 @@ export function TimelineArea() {
     useUIStore.getState().setTracksScroll(e.currentTarget.scrollLeft, e.currentTarget.scrollTop)
   }
 
-  const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({ laneRef })
+  const { selectedBlockIds, marqueeRect, handleBlockPointerDown, handleLanePointerDown } = useTrackGestures({
+    laneRef,
+    dragGuideRef: blockDragGuideRef,
+  })
 
   // Tracks render as a flattened tree (DFS order, indented by depth); collapsed
   // parents hide their descendant rows. Each object track's ability lanes are
@@ -69,7 +88,7 @@ export function TimelineArea() {
   // lines line up exactly with the ticks above at every zoom. Rendered behind the
   // tracks and blocks. Coincident layers are skipped to avoid doubling opacity.
   const laneGrid = (() => {
-    const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
+    const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
     const majorPx = majorBars * beatsPerBar * pixelsPerBeat
     const minorPx = minorBeats * pixelsPerBeat
     const images: string[] = [`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${majorPx}px)`]
@@ -118,7 +137,7 @@ export function TimelineArea() {
       const rect = laneRef.current.getBoundingClientRect()
       const raw = (clientX - rect.left) / pixelsPerBeat
       // Snap to half the smallest visible ruler subdivision at this zoom.
-      const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars).playheadSnapBeats
+      const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars).playheadSnapBeats
       const beat = Math.round(raw / snap) * snap
       return Math.max(0, Math.min(maxBeat, beat))
     },
@@ -146,6 +165,20 @@ export function TimelineArea() {
     sc.scrollTop = tracksScrollTop
     if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
   }, [])
+
+  // The render extent is responsive: short projects still show grid/ruler
+  // across the full viewport, plus a useful horizontally scrollable overrun.
+  useLayoutEffect(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const measure = () => {
+      setLaneViewportWidthPx(Math.max(0, sc.clientWidth - labelWidth - PLAYHEAD_TRIANGLE_HALF))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(sc)
+    return () => observer.disconnect()
+  }, [labelWidth])
 
   // Alt+scroll over the lanes zooms: deltaY → row height (vertical zoom), deltaX →
   // pixels-per-beat (horizontal zoom). Mirrors the MIDI editor's alt-scroll.
@@ -240,6 +273,7 @@ export function TimelineArea() {
           onLoopResizeStart={startLoopResize}
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
+          displayBars={displayBars}
           gutterPx={0}
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
@@ -357,6 +391,22 @@ export function TimelineArea() {
               ) : null
             })}
 
+            {/* The project boundary controls playback/export, not how much ruler
+                and grid we render. This overlay desaturates and darkens every
+                lane surface and every portion of a MIDI/audio region beyond it,
+                while leaving the underlying grid visible. */}
+            <div
+              data-outside-project-lanes=""
+              className="pointer-events-none absolute top-0 bottom-0 z-[5]"
+              style={{
+                left: labelWidth + PLAYHEAD_TRIANGLE_HALF + projectWidthPx,
+                width: Math.max(0, timelineWidthPx - projectWidthPx),
+                backgroundColor: 'rgba(8, 8, 11, 0.46)',
+                backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
+              }}
+            />
+
             {/* Shared drop insertion line (nest-drag + library drag). Content-space,
                 full width so it stays visible through horizontal scroll; indented to
                 the target depth. Nesting *into* a row shows that row's highlight. */}
@@ -423,6 +473,19 @@ export function TimelineArea() {
             />
           </div>
         </div>
+      </div>
+
+      {/* MIDI drag alignment guide. Positioned imperatively from the dragged
+          block's snapped left edge; this root begins at the ruler and ends at
+          the bottom of the editor, so the hairline spans the full workspace. */}
+      <div
+        ref={blockDragGuideRef}
+        data-midi-drag-guide=""
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-0 bottom-0 z-[45]"
+        style={{ visibility: 'hidden', width: 0, willChange: 'transform' }}
+      >
+        <div className="absolute top-0 bottom-0 w-px bg-white/90" style={{ left: -0.5 }} />
       </div>
 
       {/* Floating ghost of the row being Alt-copy-dragged - mirrors the label box so
