@@ -43,6 +43,10 @@ import { usePlan, openBillingPortal } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
 import { useScrub } from './hooks/useScrub'
 import { readPaneDefaults, writePaneOpen } from './uiSettings'
+import { useIsMobile } from '../components/useIsMobile'
+// Already in the project (landing carousel, projects grid): framer-motion
+// handles the controls' fade-in/out via AnimatePresence.
+import { AnimatePresence, motion } from 'framer-motion'
 
 // Dev-only: expose the stores for console/E2E debugging. Never ships.
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -165,12 +169,23 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
 // previews what an export at that aspect will compose like.
 
-/** YouTube-style transport riding the bottom of the canvas: play/pause, a
- *  seek bar mapped over the whole project, and the current position. Shares
- *  the auto-hide reveal with the fullscreen button, and stays up while
- *  paused. Scrubbing reuses the timeline's shared gesture (audio is muted for
- *  the drag and resumes at the drop point). */
-function CanvasTransportBar({ playback, visible }: { playback: PlaybackControls; visible: boolean }) {
+/** The phone canvas transport (YouTube-style): play/pause, a seek bar mapped
+ *  over the whole project, and the current position. Mounted only while the
+ *  tap-toggled controls are up - AnimatePresence in VisualPanel fades it in
+ *  and out. Scrubbing reuses the timeline's shared gesture (audio is muted
+ *  for the drag and resumes at the drop point); `onInteract`/`onScrub*` let
+ *  the owner keep the controls alive while they're being used. */
+function CanvasTransportBar({
+  playback,
+  onInteract,
+  onScrubStart,
+  onScrubEnd,
+}: {
+  playback: PlaybackControls
+  onInteract: () => void
+  onScrubStart: () => void
+  onScrubEnd: () => void
+}) {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const currentBeat = useTimeStore((s) => s.currentBeat)
   const bpm = useProjectStore((s) => s.bpm)
@@ -186,6 +201,8 @@ function CanvasTransportBar({ playback, visible }: { playback: PlaybackControls;
       const frac = Math.min(1, Math.max(0, (clientX - r.left) / r.width))
       return frac * totalBeats
     },
+    onStart: onScrubStart,
+    onEnd: onScrubEnd,
   })
 
   const fmtTime = (beat: number) => {
@@ -195,10 +212,14 @@ function CanvasTransportBar({ playback, visible }: { playback: PlaybackControls;
   const frac = totalBeats > 0 ? Math.min(1, currentBeat / totalBeats) : 0
 
   return (
-    <div
-      className={`absolute inset-x-0 bottom-0 z-10 transition-opacity duration-300 ${
-        visible ? 'opacity-100' : 'pointer-events-none opacity-0'
-      }`}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      // Taps on the controls are interactions, not toggle-offs.
+      onClick={(e) => e.stopPropagation()}
+      className="absolute inset-x-0 bottom-0 z-10"
     >
       <div className="bg-gradient-to-t from-black/75 via-black/35 to-transparent px-3 pb-1.5 pt-8">
         {/* Seek bar: the padded wrapper is the hit target (a 4px line is not
@@ -223,18 +244,22 @@ function CanvasTransportBar({ playback, visible }: { playback: PlaybackControls;
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={isPlaying ? playback.pause : () => void playback.play()}
+            onClick={() => {
+              onInteract()
+              if (isPlaying) playback.pause()
+              else void playback.play()
+            }}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="visualizer-glass-control flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-[rgba(30,30,35,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
+            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(30,30,35,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
           >
-            {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="translate-x-px" />}
+            {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="translate-x-px" />}
           </button>
           <span className="select-none font-mono text-[11px] tabular-nums text-white/80">
             {fmtTime(currentBeat)} / {fmtTime(totalBeats)}
           </span>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -253,9 +278,40 @@ function VisualPanel({
   const [fullscreenControlVisible, setFullscreenControlVisible] = useState(false)
   // A project setting (persisted in the document, seeds the export default).
   const aspect = useProjectStore((s) => s.viewAspect)
-  // Controls stay up whenever paused (YouTube-style); while playing they ride
-  // the same reveal-then-fade the fullscreen button always used.
-  const isPlaying = useTimeStore((s) => s.isPlaying)
+
+  // Phones: YouTube-style tap-toggled controls. One tap reveals play/scrub
+  // (+ fullscreen), they fade away on their own after a few seconds, and a
+  // second tap on the canvas dismisses them immediately. Desktop keeps its
+  // hover-revealed fullscreen button and has no canvas transport at all.
+  const isMobile = useIsMobile()
+  const [touchControlsVisible, setTouchControlsVisible] = useState(false)
+  const touchHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressTapRef = useRef(false)
+  const clearTouchTimer = () => {
+    if (!touchHideTimerRef.current) return
+    clearTimeout(touchHideTimerRef.current)
+    touchHideTimerRef.current = null
+  }
+  const armTouchHide = () => {
+    clearTouchTimer()
+    touchHideTimerRef.current = setTimeout(() => {
+      setTouchControlsVisible(false)
+      touchHideTimerRef.current = null
+    }, 3000)
+  }
+  const onCanvasTap = () => {
+    if (!isMobile) return
+    // A scrub that ends over the canvas fires a click - not a toggle.
+    if (suppressTapRef.current) return
+    if (touchControlsVisible) {
+      clearTouchTimer()
+      setTouchControlsVisible(false)
+    } else {
+      setTouchControlsVisible(true)
+      armTouchHide()
+    }
+  }
+  useEffect(() => () => clearTouchTimer(), [])
   // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
   // can't contain-fit an aspect-ratio box against both dimensions).
   const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
@@ -333,9 +389,10 @@ function VisualPanel({
   return (
     <div
       ref={panelRef}
-      onPointerEnter={revealFullscreenControl}
-      onPointerMove={revealFullscreenControl}
-      onPointerLeave={hideFullscreenControl}
+      onPointerEnter={isMobile ? undefined : revealFullscreenControl}
+      onPointerMove={isMobile ? undefined : revealFullscreenControl}
+      onPointerLeave={isMobile ? undefined : hideFullscreenControl}
+      onClick={onCanvasTap}
       className={`relative h-full ${box ? 'bg-[var(--bg-canvas-deep)]' : 'bg-[var(--bg-canvas)]'}`}
     >
       <div
@@ -352,14 +409,30 @@ function VisualPanel({
           "first open" flag on every browser and never show again when you
           turn it back on. */}
       {/* <TutorialOverlay /> */}
-      <CanvasTransportBar playback={playback} visible={fullscreenControlVisible || !isPlaying} />
+      {isMobile && (
+        <AnimatePresence>
+          {touchControlsVisible && (
+            <CanvasTransportBar
+              playback={playback}
+              onInteract={armTouchHide}
+              onScrubStart={() => { suppressTapRef.current = true; clearTouchTimer() }}
+              onScrubEnd={() => {
+                // The release's synthetic click must not toggle the controls;
+                // clear the guard next tick so real taps work again.
+                setTimeout(() => { suppressTapRef.current = false }, 120)
+                armTouchHide()
+              }}
+            />
+          )}
+        </AnimatePresence>
+      )}
       <div className={`absolute top-2 right-3 z-10 transition-opacity duration-300 ${
-        fullscreenControlVisible || !isPlaying
+        (isMobile ? touchControlsVisible : fullscreenControlVisible)
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0'
       }`}>
         <button
-          onClick={toggle}
+          onClick={(e) => { e.stopPropagation(); toggle() }}
           onFocus={() => {
             clearFullscreenControlTimer()
             setFullscreenControlVisible(true)
