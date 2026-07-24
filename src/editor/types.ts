@@ -125,6 +125,11 @@ export interface Track {
   /** Set ONLY on the transcribed Lyrics track: sung-seconds word timing that
    *  its note beats are re-derived from on BPM changes. */
   lyricTiming?: LyricTimingWord[]
+  /** Lyrics tracks only: how lyricTiming becomes notes+text - one WORD per
+   *  note (default), or grouped LINES shown whole (one note per line, the
+   *  line wrapped in Text Display's !...! phrase syntax). Note rebuilds
+   *  (setLyricGrouping, BPM rescale) honor it; timing stays word-level. */
+  lyricGrouping?: 'words' | 'lines'
   /** Automation tracks only: flips the lane into noise mode - notes gate
    *  seeded random bursts around their pitch-value instead of keyframing.
    *  (See core/visual/automation.ts NoiseConfig.) */

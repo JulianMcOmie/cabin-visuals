@@ -242,14 +242,68 @@ function createTextCanvas(
   const layoutText = entry.layoutText || entry.text
   // Stroke joins, glow halos, and shadow blur poke past the glyph box - pad
   // for all three.
-  const pad = TEXT_CANVAS_SIZE * 0.04 + strokeWidth * fontSize + glow * fontSize * 0.35 + shadow * fontSize * 0.3
-  const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
-  let measured = ctx.measureText(layoutText).width
-  if (measured > maxTextWidth && measured > 0) {
-    fontSize *= maxTextWidth / measured
-    measured = maxTextWidth
+  const padFor = (size: number) => TEXT_CANVAS_SIZE * 0.04 + strokeWidth * size + glow * size * 0.35 + shadow * size * 0.3
+  let pad = padFor(fontSize)
+
+  // Multi-word entries (whole-line mode, grouped phrases) WRAP into centered
+  // rows instead of one ever-wider strip: a sentence reads as a lyric card
+  // and fits a 9:16 frame instead of sailing off both edges. Syllable
+  // entries stay single-line by contract (their layout math assumes it).
+  const wrapWords = entry.syllableCount === 1 && /\s/.test(entry.text.trim())
+    ? entry.text.trim().split(/\s+/)
+    : null
+
+  let cssWidth: number
+  let lines: { text: string; y: number }[]
+  if (wrapWords && wrapWords.length > 1) {
+    // As FEW rows as the width cap allows, then balance words across them -
+    // "Send this to someone in" should be two even rows, not a ragged
+    // four-row tower. rowsWanted comes from the single-line width; the
+    // greedy fill targets each row's fair share (with slack) and the guard
+    // hands any remainder to the last row.
+    const total = ctx.measureText(wrapWords.join(' ')).width
+    const spaceW = ctx.measureText(' ').width
+    const rowsWanted = Math.max(1, Math.ceil(total / (TEXT_CANVAS_SIZE * 2.4)))
+    const targetRow = total / rowsWanted
+    const rows: string[] = []
+    let line = ''
+    let lineW = 0
+    for (const word of wrapWords) {
+      const wordW = ctx.measureText(word).width
+      if (line && rows.length < rowsWanted - 1 && lineW + spaceW + wordW > targetRow * 1.15) {
+        rows.push(line)
+        line = word
+        lineW = wordW
+      } else {
+        line = line ? `${line} ${word}` : word
+        lineW = line === word ? wordW : lineW + spaceW + wordW
+      }
+    }
+    if (line) rows.push(line)
+    let lineHeight = fontSize * 1.12
+    const maxBlockH = TEXT_CANVAS_SIZE * 0.88
+    if (rows.length * lineHeight > maxBlockH) {
+      const k = maxBlockH / (rows.length * lineHeight)
+      fontSize *= k
+      lineHeight *= k
+      ctx.font = fontStr(fontSize)
+    }
+    pad = padFor(fontSize)
+    let rowMax = 0
+    for (const r of rows) rowMax = Math.max(rowMax, ctx.measureText(r).width)
+    cssWidth = Math.max(64, Math.ceil(rowMax + pad * 2))
+    const mid = TEXT_CANVAS_SIZE / 2
+    lines = rows.map((r, i) => ({ text: r, y: mid - ((rows.length - 1) / 2) * lineHeight + i * lineHeight }))
+  } else {
+    const maxTextWidth = TEXT_CANVAS_SIZE * MAX_TEXT_ASPECT - pad * 2
+    let measured = ctx.measureText(layoutText).width
+    if (measured > maxTextWidth && measured > 0) {
+      fontSize *= maxTextWidth / measured
+      measured = maxTextWidth
+    }
+    cssWidth = Math.max(64, Math.ceil(measured + pad * 2))
+    lines = [{ text: entry.text, y: TEXT_CANVAS_SIZE / 2 }]
   }
-  const cssWidth = Math.max(64, Math.ceil(measured + pad * 2))
 
   canvas.width = Math.round(cssWidth * dpr)
   canvas.height = TEXT_CANVAS_SIZE * dpr
@@ -267,6 +321,14 @@ function createTextCanvas(
     ? cx - layoutWidth / 2 + prefixWidth
     : cx
   ctx.textAlign = entry.syllableCount > 1 ? 'left' : 'center'
+  /** Every paint pass goes through here so wrapped rows and single words
+   *  share the stroke/glow/shadow pipeline unchanged. */
+  const drawAll = (target: CanvasRenderingContext2D, mode: 'fill' | 'stroke') => {
+    for (const l of lines) {
+      if (mode === 'fill') target.fillText(l.text, drawX, l.y)
+      else target.strokeText(l.text, drawX, l.y)
+    }
+  }
 
   if (strokeWidth > 0) {
     ctx.lineWidth = Math.max(1, strokeWidth * fontSize)
@@ -280,7 +342,7 @@ function createTextCanvas(
       const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
       ctx.strokeStyle = luminance > 0.5 ? 'black' : 'white'
     }
-    ctx.strokeText(entry.text, drawX, cy)
+    drawAll(ctx, 'stroke')
   }
   ctx.fillStyle = color
   if (glow > 0) {
@@ -291,9 +353,9 @@ function createTextCanvas(
       target.fillStyle = color
       target.shadowColor = color
       target.shadowBlur = glow * fontSize * 0.22
-      target.fillText(entry.text, drawX, cy)
+      drawAll(target, 'fill')
       target.shadowBlur = glow * fontSize * 0.07
-      target.fillText(entry.text, drawX, cy)
+      drawAll(target, 'fill')
       target.shadowBlur = 0
     }
 
@@ -332,9 +394,9 @@ function createTextCanvas(
       if (strokeWidth > 0) {
         mc.lineWidth = Math.max(1, strokeWidth * fontSize)
         mc.lineJoin = 'round'
-        mc.strokeText(entry.text, drawX, cy)
+        drawAll(mc, 'stroke')
       }
-      mc.fillText(entry.text, drawX, cy)
+      drawAll(mc, 'fill')
 
       const [layer, lc] = newLayer()
       paintGlow(lc)
@@ -354,7 +416,7 @@ function createTextCanvas(
     ctx.shadowBlur = shadow * fontSize * 0.18
     ctx.shadowOffsetY = shadow * fontSize * 0.07
   }
-  ctx.fillText(entry.text, drawX, cy)
+  drawAll(ctx, 'fill')
   if (shadow > 0) {
     ctx.shadowColor = 'transparent'
     ctx.shadowBlur = 0
@@ -389,8 +451,20 @@ function setTextureCanvas(tex: CanvasTexture, canvas: HTMLCanvasElement) {
 
 // Parse text into display entries. Whitespace separates words, !...! keeps a
 // phrase together, |inside| a word can split syllables, and |... ...| groups
-// a phrase with spaces into one display entry.
-function parseTextEntries(text: string): TextEntry[] {
+// a phrase with spaces into one display entry. `byLine` (the Advance By
+// param) ignores all of that: every newline-separated line of the sheet is
+// one entry, whole.
+function parseTextEntries(text: string, byLine = false): TextEntry[] {
+  if (byLine) {
+    const result: TextEntry[] = []
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.replace(/[|!]+/g, ' ').replace(/\s+/g, ' ').trim()
+      if (!line) continue
+      if (/\s/.test(line)) result.push(singleTextEntry(line))
+      else result.push(...entriesForWord(line))
+    }
+    return result
+  }
   const result: TextEntry[] = []
   const parts = text.split('!')
   for (let i = 0; i < parts.length; i++) {
@@ -419,6 +493,15 @@ const MAX_SCATTER_WORDS = 16
 
 const PARAMS: ParamDef[] = [
   { key: 'text', label: 'Text', type: 'string', default: 'HELLO', multiline: true },
+  // Line mode: each NEWLINE-separated line of the sheet is one display unit
+  // (one note advance shows the whole line). Word mode keeps the classic
+  // whitespace split with !...! / |...| grouping powers.
+  {
+    key: 'advanceUnit', label: 'Advance By', type: 'select', default: 0, options: [
+      { value: 0, label: 'Word' },
+      { value: 1, label: 'Line' },
+    ],
+  },
   {
     key: 'font', label: 'Font', type: 'select', default: 0, options: [
       { value: 0, label: 'Impact / Sans' },
@@ -840,7 +923,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     }
     if (!particleMode && particleAnchorRef.current) particleAnchorRef.current.visible = false
 
-    const entries = parseTextEntries(text)
+    const entries = parseTextEntries(text, (p.advanceUnit ?? 0) >= 0.5)
     if (entries.length === 0) {
       meshRef.current.visible = false
       if (particleMode) driveCloud(null) // no words on the sheet yet: idle sphere
@@ -1355,8 +1438,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // snaps back. A hard switch, not a ramp: it reads as a subliminal insert.
     const zoomAge = lastZoomNote ? (currentBeat - lastZoomNote.beat) * secPerBeat : Infinity
     const zoomFlash = zoomAge < ZOOM_FLASH_SECONDS ? zoomFlashScale : 1
-    const scale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize * zoomFlash
-    meshRef.current.scale.set(scale * texAspect(textureRef.current), scale, 1)
+    // Fit guard: whatever the size and canvas aspect, the word block never
+    // overflows the visible frame (a whole-line entry in a 9:16 view used to
+    // sail off both edges). Applied BEFORE the zoom flash, whose blow-up is
+    // an intentional overflow.
+    const aspect = texAspect(textureRef.current)
+    const baseScale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
+    const scale = Math.min(baseScale, (viewport.width * 0.92) / Math.max(0.0001, aspect)) * zoomFlash
+    meshRef.current.scale.set(scale * aspect, scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
     meshRef.current.position.x = shakeX + placeX(wordOnsetBeat)
     meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY

@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
+import { useProjectStore } from '../store/ProjectStore'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
@@ -102,7 +103,7 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
   )
 }
 
-export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ targetId, parameters }) => {
   // The template faces are lazy-loaded; kick them off so the specimen buttons
   // (and the lyric-sheet preview) render in the real face, not the fallback.
   useEffect(() => {
@@ -110,6 +111,13 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
       if (preview.load) ensureFont(preview.load)
     }
   }, [])
+  // Word-by-word vs whole-lines display, for EVERY Text Display track. The
+  // active side is the instrument's own Advance By param; transcribed tracks
+  // additionally get their notes + sheet regrouped from the sung timing.
+  const hasTiming = useProjectStore((s) => !!s.tracks[targetId]?.lyricTiming?.length)
+  const setLyricGrouping = useProjectStore((s) => s.setLyricGrouping)
+  const advanceUnit = findParam(parameters, 'advanceUnit')
+  const lyricGrouping: 'words' | 'lines' = numberOf(advanceUnit) >= 0.5 ? 'lines' : 'words'
   const text = findParam(parameters, 'text')
   const font = findParam(parameters, 'font')
   const colorMode = findParam(parameters, 'colorMode')
@@ -117,7 +125,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const invertBehind = numberOf(colorMode) >= 0.5
 
   const placed = new Set([
-    'text', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
+    'text', 'advanceUnit', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
     'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
     'posX', 'posY', 'posMode',
     'onsetBounce', 'zoomFlash', 'sustain', 'releaseDuration', 'heightAmount',
@@ -149,6 +157,39 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
           </p>
         </>
       )}
+
+      {/* --- Lyrics: how the words hit the screen --- */}
+      <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
+        <SectionLabel>LYRICS</SectionLabel>
+        <div className="grid grid-cols-2 overflow-hidden rounded border border-[var(--border)]">
+          {([
+            { id: 'words', label: 'Word by word' },
+            { id: 'lines', label: 'Whole lines' },
+          ] as const).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setLyricGrouping(targetId, id)}
+              aria-pressed={lyricGrouping === id}
+              className={`h-7 text-[11px] font-medium transition-colors cursor-pointer ${
+                lyricGrouping === id
+                  ? 'bg-[var(--accent)]/15 text-[var(--accent)]'
+                  : 'bg-[var(--bg-app)] text-[var(--text-3)] hover:text-[var(--text)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mb-3 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
+          {lyricGrouping === 'lines'
+            ? hasTiming
+              ? 'One line per note, grouped from the sung timing. Edit line breaks freely.'
+              : 'Each line of the sheet shows whole - one note advance per line.'
+            : hasTiming
+              ? 'One word per note, timed to the singing.'
+              : 'One word per note advance.'}
+        </p>
+      </div>
 
       {/* --- Type: font specimens + the glyph sliders --- */}
       {font && font.definition.type === 'select' && (

@@ -8,6 +8,7 @@ import Script from 'next/script';
 import { handleSignInWithGoogle } from '../login/actions'; // Updated import
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';
+import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -107,6 +108,9 @@ function SignupPageContent() {
 
   return (
     <AuthShell footnote="Anonymous work carries over when you sign up" loading={googleBusy || formBusy}>
+      {/* Same treatment as login: the wait between Google's popup closing and
+          the redirect gets the full transition screen, not just logo smoke. */}
+      {(googleBusy || formBusy) && <LoadingScreen />}
       <AuthTitle title="Sign up" sub="Make music you can see." />
 
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}

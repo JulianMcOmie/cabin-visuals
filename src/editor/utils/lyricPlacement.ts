@@ -100,6 +100,40 @@ export function stackCardStarts(
   return starts
 }
 
+/**
+ * Word-level timing → line-level units, for showing a whole line at once
+ * instead of word-by-word. A line closes at sentence punctuation (checked on
+ * the RAW word - the aligner echoes it back before sanitizeWord strips it),
+ * at a sung pause of `gapSec`, or at `maxWords`. Each unit's `word` is its
+ * member words individually sanitized then space-joined; note-builders wrap
+ * spaced units in Text Display's !...! phrase syntax so one note advance
+ * shows the whole line.
+ */
+export function groupTimingIntoLines(
+  words: TranscribedWord[],
+  { maxWords = 8, gapSec = 0.7 }: { maxWords?: number; gapSec?: number } = {},
+): TranscribedWord[] {
+  const lines: TranscribedWord[] = []
+  let current: TranscribedWord[] = []
+  const flush = () => {
+    if (current.length === 0) return
+    const text = current.map((w) => sanitizeWord(w.word)).filter(Boolean).join(' ')
+    if (text) lines.push({ word: text, start: current[0].start, end: current[current.length - 1].end })
+    current = []
+  }
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]
+    current.push(w)
+    const next = words[i + 1]
+    const sentenceEnd = /[.!?…]["”’)]*$/.test(w.word.trim())
+    if (sentenceEnd || current.length >= maxWords || (next !== undefined && next.start - w.end >= gapSec)) {
+      flush()
+    }
+  }
+  flush()
+  return lines
+}
+
 /** Sung seconds -> project-beat words, mapped through the audio placement.
  *  `trustEnds` decides where a word's note ends: forced alignment returns
  *  dependable end times, so aligned words end when they're sung (no
@@ -117,7 +151,9 @@ export function placeTranscription(
   const placed: LyricWord[] = []
   for (let i = 0; i < words.length; i++) {
     const w = words[i]
-    const word = sanitizeWord(w.word)
+    // Token-wise so line-grouped units (groupTimingIntoLines) keep their
+    // internal spaces; plain single words behave exactly as before.
+    const word = w.word.split(/\s+/).map(sanitizeWord).filter(Boolean).join(' ')
     if (!word) continue
     const startBeat = blockStartBeat + (w.start - audio.trimStart) / secPerBeat
     if (startBeat < 0) continue // sung before the clip's in-point

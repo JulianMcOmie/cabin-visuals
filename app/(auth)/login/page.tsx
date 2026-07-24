@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { stashAnonWork } from '../../../src/persistence/carryover';
 import { track } from '../../../src/analytics/analytics';
+import { LoadingScreen } from '../../../src/components/LoadingScreen';
 import {
   AuthShell,
   AuthTitle,
@@ -112,6 +113,10 @@ function LoginPageContent() {
 
   return (
     <AuthShell footnote="Anonymous work carries over when you sign in" loading={isLoading || formBusy}>
+      {/* The smoking logo alone reads as "static" during the second between
+          Google's popup closing and the redirect - the full transition screen
+          makes the wait unmistakable (same overlay every other handoff uses). */}
+      {(isLoading || formBusy) && <LoadingScreen />}
       <AuthTitle title="Sign in" sub="Your projects are waiting." />
 
       {message && <AuthBanner kind="success">{message}</AuthBanner>}

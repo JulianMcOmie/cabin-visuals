@@ -5,7 +5,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { placeTranscription, invertStrobeSpans, stackCardStarts, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
+import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
@@ -395,6 +395,9 @@ export interface ProjectState {
    *  One set() = one undo step. Returns the track id, or null when there are
    *  no words. */
   addLyricTrack: (words: LyricWord[], timing?: TranscribedWord[]) => string | null
+  /** Rebuild a Lyrics track's notes + text from its lyricTiming: word-by-word
+   *  (one note per word) or whole lines at once (one note per grouped line). */
+  setLyricGrouping: (trackId: string, grouping: 'words' | 'lines') => void
   /** Switch the active scene onto a template: its visual tracks replace the
    *  scene's (audio tracks stay, and with a song present the song's BPM wins
    *  over the template's). Every id is reminted, so re-applying can never
@@ -1584,6 +1587,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           ...existing,
           stringParams: { ...existing.stringParams, text },
           lyricTiming: timing ?? existing.lyricTiming,
+          // A refill arrives word-per-note, so the grouping resets with it -
+          // a stale 'lines' flag (or Advance By param) would desync the next
+          // rebuild from what's actually on the sheet.
+          lyricGrouping: 'words',
+          params: { ...existing.params, advanceUnit: 0 },
           blocks: [block],
         }
         return { tracks: { ...trimmedTracks, [existingId]: updated }, totalBars }
@@ -1601,6 +1609,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         solo: false,
         stringParams: { text },
         lyricTiming: timing,
+        lyricGrouping: 'words',
         blocks: [block],
         childIds: [],
       }
@@ -1608,6 +1617,87 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     })
     return resultId
   },
+
+  setLyricGrouping: (trackId, grouping) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t) return s
+      const advanceUnit = grouping === 'lines' ? 1 : 0
+      // Hand-typed tracks (no sung timing): the sheet is already the source of
+      // truth, so flipping the instrument's Advance By param is the whole job -
+      // each newline-separated line becomes one display unit. Notes stay the
+      // user's own.
+      if (!t.lyricTiming?.length || t.blocks.length === 0) {
+        if ((t.params?.advanceUnit ?? 0) === advanceUnit) return s
+        return {
+          tracks: {
+            ...s.tracks,
+            [trackId]: { ...t, lyricGrouping: grouping, params: { ...t.params, advanceUnit } },
+          },
+        }
+      }
+      if ((t.lyricGrouping ?? 'words') === grouping) return s
+      // Same audio anchor the BPM rescale uses: words place relative to the
+      // song's start bar and trim.
+      let audioBlock: { startBar: number; trimStart: number } | undefined
+      for (const id of s.rootTrackIds) {
+        const at = s.tracks[id]
+        if (at?.type === 'audio' && at.audioBlocks?.length) { audioBlock = at.audioBlocks[0]; break }
+      }
+      const units = grouping === 'lines' ? groupTimingIntoLines(t.lyricTiming) : t.lyricTiming
+      const placed = placeTranscription(units, audioBlock ?? { startBar: 0, trimStart: 0 }, s.bpm, s.beatsPerBar, true)
+      if (placed.length === 0) return s
+      // Lines mode writes the sheet one line per row and flips the
+      // instrument's Advance By param - the sheet stays human-readable,
+      // no !...! smuggling.
+      const text = placed.map((w) => w.word).join(grouping === 'lines' ? '\n' : ' ')
+      const lastBeat = Math.max(...placed.map((w) => w.startBeat + w.durationBeats))
+      const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
+      // Stack layouts keep their zoom flashes on card boundaries, re-derived
+      // for the new units (mirrors addLyricTrack's refill).
+      const stackLayout = Math.round(t.params?.layoutMode ?? 0) === 2
+      const flashNotes: Note[] = stackLayout
+        ? stackCardStarts(
+            placed,
+            t.params?.phraseGap ?? 2,
+            Math.max(1, Math.round(t.params?.stackMaxWords ?? 4)),
+          ).map((beat) => ({
+            id: crypto.randomUUID(),
+            startBeat: beat,
+            durationBeats: 0.1,
+            pitch: TEXT_ZOOM_FLASH_PITCH,
+            velocity: 100,
+          }))
+        : []
+      const block: Block = {
+        ...t.blocks[0],
+        startBar: 0,
+        durationBars,
+        notes: [
+          ...placed.map((w) => ({
+            id: crypto.randomUUID(),
+            startBeat: w.startBeat,
+            durationBeats: w.durationBeats,
+            pitch: TEXT_NEXT_WORD_PITCH,
+            velocity: 100,
+          })),
+          ...flashNotes,
+        ],
+      }
+      return {
+        tracks: {
+          ...s.tracks,
+          [trackId]: {
+            ...t,
+            lyricGrouping: grouping,
+            params: { ...t.params, advanceUnit },
+            stringParams: { ...t.stringParams, text },
+            blocks: [block],
+          },
+        },
+        totalBars: Math.max(s.totalBars, durationBars),
+      }
+    }),
 
   applyTemplate: (templateDoc) => {
     // The template's content lives in its non-main scene.
@@ -1936,7 +2026,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       let totalBars = s.totalBars
       for (const [id, t] of Object.entries(s.tracks)) {
         if (!t.lyricTiming?.length || t.blocks.length === 0) continue
-        const words = placeTranscription(t.lyricTiming, audioBlock ?? { startBar: 0, trimStart: 0 }, next, s.beatsPerBar, true)
+        // Rebuild at the track's grouping: a lines-mode track must come back
+        // with one note per LINE, or the notes outrun the display entries.
+        const units = t.lyricGrouping === 'lines' ? groupTimingIntoLines(t.lyricTiming) : t.lyricTiming
+        const words = placeTranscription(units, audioBlock ?? { startBar: 0, trimStart: 0 }, next, s.beatsPerBar, true)
         if (words.length === 0) continue
         const lastBeat = Math.max(...words.map((w) => w.startBeat + w.durationBeats))
         const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
