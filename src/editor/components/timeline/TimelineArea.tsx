@@ -63,6 +63,28 @@ export function TimelineArea() {
   const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds)
   const rowGuides = rowGuidesOf(visualRows)
 
+  // Vertical lane grid (DAW-style): layered repeating gradients whose intervals
+  // come from the SAME computeRulerGrid the ruler ticks use, so bar / beat / 16th
+  // lines line up exactly with the ticks above at every zoom. Rendered behind the
+  // tracks and blocks. Coincident layers are skipped to avoid doubling opacity.
+  const laneGrid = (() => {
+    const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, totalBars)
+    const majorPx = majorBars * beatsPerBar * pixelsPerBeat
+    const minorPx = minorBeats * pixelsPerBeat
+    const images: string[] = [`repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0px 1px, transparent 1px ${majorPx}px)`]
+    const sizes: string[] = [`${majorPx}px 100%`]
+    if (minorPx !== majorPx) {
+      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.028) 0px 1px, transparent 1px ${minorPx}px)`)
+      sizes.push(`${minorPx}px 100%`)
+    }
+    if (subBeats != null && subBeats * pixelsPerBeat !== minorPx) {
+      const subPx = subBeats * pixelsPerBeat
+      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.014) 0px 1px, transparent 1px ${subPx}px)`)
+      sizes.push(`${subPx}px 100%`)
+    }
+    return { backgroundImage: images.join(', '), backgroundSize: sizes.join(', ') }
+  })()
+
   // Right-click-a-track menu (add ability / automation), positioned at the cursor.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null)
 
@@ -282,6 +304,14 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
+            {/* Vertical grid lines aligned to the ruler's divisions (DAW-style).
+                First child + no z-index so the relative-positioned track rows paint
+                over it (their lanes are transparent, so it shows through); starts at
+                the lane origin so it never underlaps the sticky label column. */}
+            <div
+              className="pointer-events-none absolute top-0 bottom-0"
+              style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx, ...laneGrid }}
+            />
             {visualRows.map((row, i) => {
               const isLast = i === visualRows.length - 1
               const track = tracks[row.id]
