@@ -98,27 +98,9 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M1 6 H11" stroke="#cffafe" strokeWidth="1" strokeLinecap="round" />
     </svg>
   )},
-  { id: 'pointLight', name: 'Point Light', description: 'A colored light that flares brighter with each note.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <circle cx="6" cy="5" r="2.5" fill="#facc15" />
-      <path d="M4.7 8.3 H7.3 M5 10 H7" stroke="#fde68a" strokeWidth="1" strokeLinecap="round" />
-      <path d="M6 0.8 V1.8 M1.7 5 H2.7 M9.3 5 H10.3 M3 2 L3.7 2.7 M9 2 L8.3 2.7" stroke="#facc15" strokeWidth="0.8" strokeLinecap="round" />
-    </svg>
-  )},
   { id: 'icosahedronBurst', name: 'Icosahedron Burst', description: 'Each note spawns an expanding, fading wireframe shell.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M6 1 L11 6 L6 11 L1 6 Z" fill="none" stroke="#22d3ee" strokeWidth="1.2" />
-    </svg>
-  )},
-  { id: 'hexagonDots', name: 'Hexagon Dots', description: 'Each note spawns a spinning ring of dots drifting toward the camera.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="none" stroke="#4ecdc4" strokeWidth="1.1" />
-    </svg>
-  )},
-  { id: 'particleRiser', name: 'Particle Riser', description: 'Each note launches a rising column of particles.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M4 11 Q4 6 6 1 Q8 6 8 11" fill="none" stroke="#a78bfa" strokeWidth="1.1" />
-      <circle cx="6" cy="2" r="0.7" fill="#a78bfa" />
     </svg>
   )},
   { id: 'stars', name: 'Stars', description: 'A warp starfield - notes steer speed, drift, roll, and color.', icon: (
@@ -134,15 +116,6 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <g fill="#f59e0b">
         <circle cx="6" cy="6" r="1.4" /><circle cx="6" cy="1.5" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
         <circle cx="2.8" cy="2.8" r="0.7" /><circle cx="9.2" cy="2.8" r="0.7" /><circle cx="2.8" cy="9.2" r="0.7" /><circle cx="9.2" cy="9.2" r="0.7" />
-      </g>
-    </svg>
-  )},
-  { id: 'circleGrid', name: 'Circle Grid', description: 'A grid of glowing dots whose pattern steps forward with each note.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="#14b8a6">
-        <circle cx="3" cy="3" r="1.2" /><circle cx="6" cy="3" r="1.2" /><circle cx="9" cy="3" r="1.2" />
-        <circle cx="3" cy="6" r="1.2" /><circle cx="6" cy="6" r="1.2" /><circle cx="9" cy="6" r="1.2" />
-        <circle cx="3" cy="9" r="1.2" /><circle cx="6" cy="9" r="1.2" /><circle cx="9" cy="9" r="1.2" />
       </g>
     </svg>
   )},
@@ -189,27 +162,12 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1" /><circle cx="10" cy="3" r="1" /><circle cx="2" cy="3" r="1" /><circle cx="3" cy="10" r="1" /><circle cx="9" cy="10" r="1" />
     </svg>
   )},
-  { id: 'folderFlight', name: 'Folder Flight', description: 'Each note pops a folder icon that tumbles away into depth.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M1 3.5 L4.5 3.5 L5.5 2.5 L1 2.5 Z" fill="#f7d774" stroke="#d4a840" strokeWidth="0.3" />
-      <rect x="1" y="3.5" width="9" height="6" rx="0.6" fill="#f7d774" stroke="#d4a840" strokeWidth="0.3" />
-    </svg>
-  )},
   { id: 'emojiDisplay', name: 'Emoji Display', description: 'A grid of emoji rearranged by notes - swaps, spins, and flips.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6" r="5.5" fill="#ffcc00" />
       <circle cx="4" cy="5" r="1" fill="#000" /><circle cx="8" cy="5" r="1" fill="#000" />
       <path d="M3.5 7.5 Q6 10 8.5 7.5" fill="none" stroke="#000" strokeWidth="1" strokeLinecap="round" />
     </svg>
-  )},
-  { id: 'windowsXp', name: 'Windows XP', description: 'A Windows XP desktop - notes spawn windows, swap wallpaper, and shake the screen.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect x="1" y="1" width="10" height="10" rx="1.5" fill="#ECE9D8" stroke="#0054E3" />
-      <rect x="1" y="1" width="10" height="3.2" rx="1.5" fill="#0058ee" />
-    </svg>
-  )},
-  { id: 'crtScanlines', name: 'CRT Scanlines', description: "A retro CRT that flashes in each note's pitch color.", icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="2" width="10" height="8" rx="2" fill="none" stroke="#3aff8c" strokeWidth="1"/><line x1="3" y1="4.5" x2="9" y2="4.5" stroke="#3aff8c" strokeWidth="0.7" opacity="0.8"/><line x1="3" y1="6" x2="9" y2="6" stroke="#3aff8c" strokeWidth="0.7" opacity="0.5"/><line x1="3" y1="7.5" x2="9" y2="7.5" stroke="#3aff8c" strokeWidth="0.7" opacity="0.3"/></svg>
   )},
   { id: 'filmStock', name: 'Film Stock', description: 'A degraded-film background - grain, dust, flicker and vignette; notes fire burn flashes and scratches.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
@@ -241,17 +199,8 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <line x1="3.2" y1="6" x2="8.8" y2="6" stroke="#303820" strokeWidth="0.9" />
     </svg>
   )},
-  { id: 'paddleBounce', name: 'Paddle Bounce', description: 'A Pong rally crossing once per beat - notes smash the ball faster.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="4" width="1.4" height="4" fill="#22d3ee"/><rect x="9.6" y="4" width="1.4" height="4" fill="#22d3ee"/><rect x="5" y="5" width="2" height="2" fill="#ffffff"/><rect x="3.6" y="6.4" width="1" height="1" fill="#ffffff" opacity="0.4"/></svg>
-  )},
   { id: 'pixelBlast', name: 'Pixel Blast', description: 'Each note detonates chunky 8-bit particles - pitch sets position.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12"><rect x="5" y="5" width="2" height="2" fill="#ffec27"/><rect x="2" y="5.5" width="1.4" height="1.4" fill="#ff6c24"/><rect x="8.6" y="5.5" width="1.4" height="1.4" fill="#ff6c24"/><rect x="5.3" y="2" width="1.4" height="1.4" fill="#ff004d"/><rect x="5.3" y="8.6" width="1.4" height="1.4" fill="#ff004d"/><rect x="2.8" y="2.8" width="1" height="1" fill="#ffa300"/><rect x="8.2" y="2.8" width="1" height="1" fill="#ffa300"/><rect x="2.8" y="8.2" width="1" height="1" fill="#ffa300"/><rect x="8.2" y="8.2" width="1" height="1" fill="#ffa300"/></svg>
-  )},
-  { id: 'pixelInvaders', name: 'Pixel Invaders', description: 'Marching pixel invaders - each note fires the cannon at one.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 2h1v1h4V2h1v1h1v2h1v3h-1v1h-1v1H8V9H4v1H3V9H2V8H1V5h1V3h1V2z" fill="#39ff14"/><rect x="4" y="5" width="1" height="1" fill="#04070a"/><rect x="7" y="5" width="1" height="1" fill="#04070a"/></svg>
-  )},
-  { id: 'scoreTicker', name: 'Score Ticker', description: 'A giant pixel score that ticks up as notes play.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/><rect x="4.8" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/><rect x="8.6" y="3.5" width="2.4" height="5" fill="none" stroke="#facc15" strokeWidth="1"/></svg>
   )},
   { id: 'wormhole', name: 'Wormhole', description: 'A flight down an endless noise-warped tunnel of points - each note lurches you forward.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
