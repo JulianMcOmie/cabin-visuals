@@ -336,6 +336,18 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
     ),
   })))
 
+// Every library item, flat. The instrument-preview capture page iterates this
+// to know what can be clipped - the picker arrays above stay the single source
+// of what exists in the library.
+export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
+  ...MAIN_INSTRUMENTS,
+  ...DIRECTOR_INSTRUMENTS,
+  ...ALL_OBJECT_INSTRUMENTS,
+  ...MOVER_INSTRUMENTS,
+  ...COLORIZER_INSTRUMENTS,
+  ...SPLITTER_INSTRUMENTS,
+]
+
 function Section({ title, description, items, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen)
 
