@@ -14,7 +14,6 @@ import { particleBurstInstrument } from './ParticleBurst'
 import { fractalTunnelInstrument } from './FractalTunnel'
 import { neonPolarInstrument } from './NeonPolar'
 import { hopfFibrationInstrument } from './HopfFibration'
-import { particleStreamsInstrument } from './ParticleStreams'
 import { shapeFlightInstrument } from './ShapeFlight'
 import { dotFieldInstrument } from './DotField'
 import { metronomeBallsInstrument } from './MetronomeBalls'
@@ -47,7 +46,6 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [fractalTunnelInstrument.id]: fractalTunnelInstrument,
   [neonPolarInstrument.id]: neonPolarInstrument,
   [hopfFibrationInstrument.id]: hopfFibrationInstrument,
-  [particleStreamsInstrument.id]: particleStreamsInstrument,
   [shapeFlightInstrument.id]: shapeFlightInstrument,
   [dotFieldInstrument.id]: dotFieldInstrument,
   [metronomeBallsInstrument.id]: metronomeBallsInstrument,

@@ -8,7 +8,6 @@ export type UserInterfaceRendererId =
   | 'oscilloscope'
   | 'colorFilters'
   | 'particleBurst'
-  | 'particleStreams'
   | 'pixelBlast'
   | 'icosahedronBurst'
   | 'dotField'

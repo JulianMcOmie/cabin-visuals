@@ -7,7 +7,6 @@ import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
 import { ParticleBurstUserInterfaceRenderer } from './ParticleBurstUserInterface'
-import { ParticleStreamsUserInterfaceRenderer } from './ParticleStreamsUserInterface'
 import { PixelBlastUserInterfaceRenderer } from './PixelBlastUserInterface'
 import { IcosahedronBurstUserInterfaceRenderer } from './IcosahedronBurstUserInterface'
 import { DotFieldUserInterfaceRenderer } from './DotFieldUserInterface'
@@ -35,7 +34,6 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
   particleBurst: ParticleBurstUserInterfaceRenderer,
-  particleStreams: ParticleStreamsUserInterfaceRenderer,
   pixelBlast: PixelBlastUserInterfaceRenderer,
   icosahedronBurst: IcosahedronBurstUserInterfaceRenderer,
   dotField: DotFieldUserInterfaceRenderer,

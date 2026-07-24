@@ -136,14 +136,6 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <ellipse cx="6" cy="6" rx="5" ry="2.2" /><ellipse cx="6" cy="6" rx="2.2" ry="5" /><circle cx="6" cy="6" r="4" />
     </svg>
   )},
-  { id: 'particleStreams', name: 'Particle Streams', description: 'Each note bursts particle strings rushing toward the camera.', icon: (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <g fill="#60a5fa">
-        <circle cx="6" cy="6" r="1.3" /><circle cx="9" cy="4" r="0.8" /><circle cx="10.5" cy="3" r="0.5" /><circle cx="8.5" cy="8.5" r="0.8" /><circle cx="10" cy="10" r="0.5" />
-        <circle cx="3" cy="4" r="0.8" /><circle cx="1.5" cy="3" r="0.5" /><circle cx="3.5" cy="8.5" r="0.8" /><circle cx="2" cy="10" r="0.5" />
-      </g>
-    </svg>
-  )},
   { id: 'shapeFlight', name: 'Shape Flight', description: 'Held notes stream spirograph shapes past the camera - pitch picks the shape.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#f59e0b" strokeWidth="1">
       <polygon points="6,1 10,6 6,11 2,6" /><polygon points="6,3.5 8,6 6,8.5 4,6" />
