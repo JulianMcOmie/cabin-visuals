@@ -377,9 +377,9 @@ export interface ProjectState {
   /** Replace a Photo track's ordered photos (its bank). */
   setTrackPhotoPads: (trackId: string, photoPads: PhotoPad[]) => void
   /** Create an audio track (top of the root tracks) holding one block at bar 0
-   *  spanning the whole clip. The load pipeline's landing spot - the AudioBar
-   *  button and files dropped on the track area both end here; a project can
-   *  hold several. Returns the new track's id (for selection). */
+   *  spanning the whole clip. The load pipeline's landing spot - files dropped
+   *  on the track area end here; a project can hold several. Returns the new
+   *  track's id (for selection). */
   addAudioTrack: (clip: { ref: string; fileName: string; duration: number }) => string
   /** Create one root track per imported MIDI track (default instrument, one
    *  block spanning its notes, whole bars), growing totalBars if the content

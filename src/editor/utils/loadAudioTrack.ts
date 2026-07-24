@@ -16,7 +16,7 @@ const BEAT_CONFIDENCE_MIN = 0.2
  *  - the local decode fills in the clip's real duration (until it lands the
  *    block renders as a loading placeholder - duration 0 is the signal), and
  *  - the upload runs as pure durability, progress shown on the block.
- * The AudioBar button and files dropped onto the track area both come here.
+ * Files dropped onto the track area (and the lyric-setup flow) come here.
  */
 export async function loadAudioTrack(file: File): Promise<void> {
   const audio = useAudioStore.getState()
