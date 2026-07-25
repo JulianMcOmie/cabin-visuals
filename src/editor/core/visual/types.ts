@@ -157,9 +157,17 @@ export interface ObjectState {
   photoPads?: PhotoPad[]
   /** True this frame when the object track is muted or excluded by solo. */
   blackedOut: boolean
-  /** World transform (local composed with all ancestors). Reused across frames -
-   *  the renderer reads it imperatively in the same frame, after computeAtBeat. */
+  /** World transform (local composed with all ancestors) WITHOUT the object's
+   *  own size scale - see meshScale. Reused across frames - the renderer reads
+   *  it imperatively in the same frame, after computeAtBeat. */
   world: Matrix4
+  /** The object's uniform size scale (localTransform.scale). Kept OUT of the
+   *  world matrix so it applies to the mesh itself BEFORE movers and children:
+   *  the VisualCopy chain lays out copies in unscaled placement space, and
+   *  child tracks don't inherit a parent's size. Renderers multiply it back in
+   *  after the copy transform (uniform scale commutes, so an un-moved object
+   *  renders exactly as before). */
+  meshScale: number
   opacity: number
   /** Sampled effect automation for this frame: instanceId → key → value
    *  ('enabled' as 0/1). Absent when the object has no effect automation. */

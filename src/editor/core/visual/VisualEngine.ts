@@ -266,6 +266,14 @@ export function computeAtBeat(beat: number) {
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
     const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
     localTransformToSV(local, obj.scratchBase)
+    // The size scale is a MESH property, not a placement property: strip it from
+    // the local matrix so the VisualCopy chain (movers) and child tracks compose
+    // in unscaled placement space - mover distances and child placements no longer
+    // shrink/grow with an instrument's size. Renderers multiply it back in AFTER
+    // the copy transform (uniform scale commutes, so an un-moved, un-parented
+    // object produces the exact same final matrix as before).
+    const meshScale = Math.exp(obj.scratchBase.logScale)
+    obj.scratchBase.logScale = 0
     composeMatrix(obj.scratchBase, _local)
     const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate)
     if (parentWorld) world.multiplyMatrices(parentWorld, _local)
@@ -307,6 +315,7 @@ export function computeAtBeat(beat: number) {
       videoPads: obj.videoPads,
       photoPads: obj.photoPads,
       world,
+      meshScale,
       opacity,
       effectOverrides,
       blackedOut,

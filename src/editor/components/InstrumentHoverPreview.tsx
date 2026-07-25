@@ -163,7 +163,9 @@ function makePreviewState(instrumentId: string): ObjectState {
     baseParams: params,
     energy: 0,
     blackedOut: false,
+    // Solo previews never apply localTransform (identity world), so no size scale either.
     world: new Matrix4(),
+    meshScale: 1,
     opacity: 1,
     stringParams,
     abilityEvents: new Map(),
@@ -440,6 +442,8 @@ function buildProjectPreview(projectTrackId: string): ProjectPreviewData | null 
 /** Per-frame data every occurrence group reads; written once by the driver. */
 interface ProjectFrame {
   world: Matrix4
+  /** The object's size scale, kept out of `world` (applied after the copy). */
+  meshScale: number
   opacity: number
   copies: VisualCopy[]
   ghostCopies: VisualCopy[]
@@ -483,6 +487,10 @@ function computeProjectState(
   }
   const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
   localTransformToSV(local, obj.scratchBase)
+  // Same split as computeAtBeat: the size scale stays OUT of the placement world
+  // (movers lay out in unscaled space) and rides the frame separately.
+  const meshScale = Math.exp(obj.scratchBase.logScale)
+  obj.scratchBase.logScale = 0
   composeMatrix(obj.scratchBase, world)
   const opacity = Math.max(0, Math.min(1, obj.scratchBase.opacity * opacityGate))
   const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
@@ -497,6 +505,7 @@ function computeProjectState(
     videoPads: obj.videoPads,
     photoPads: obj.photoPads,
     world,
+    meshScale,
     opacity,
     blackedOut: false,
     stringParams: obj.stringParams,
@@ -515,6 +524,7 @@ function ProjectPreviewDriver({ data, sync, frame }: { data: ProjectPreviewData;
       ? t.currentBeat
       : data.loopStart + previewBeat(root.clock.elapsedTime)
     const state = computeProjectState(data.object, beat, data.bpm, data.beatsPerBar, frame.world)
+    frame.meshScale = state.meshScale
     frame.opacity = state.opacity
     setPreviewObjectState(PROJECT_PREVIEW_TRACK_ID, state)
     frame.copies = resolveVisualCopies(data.object.moverAndSplitterChain, beat)
@@ -556,6 +566,9 @@ function ProjectOccurrence({
     if (fullFrame) composeScreenAnchor(camera.position, camera.quaternion, copy.transform, _occurrenceMatrix)
     else _occurrenceMatrix.multiplyMatrices(frame.world, copy.transform)
     _occurrenceMatrix.decompose(g.position, g.quaternion, g.scale)
+    // Size scales the mesh inside the mover/copy layout (full-frame occurrences
+    // never applied the placement scale, so they skip it here too).
+    if (!fullFrame) g.scale.multiplyScalar(frame.meshScale)
     applyMaterialOpacity(g, frame.opacity * copy.opacity * (ghost ? GHOST_OPACITY : 1))
     applyMaterialHueShift(g, copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
   })
@@ -573,7 +586,7 @@ function ProjectTrackPreview({ data, sync }: { data: ProjectPreviewData; sync?: 
   // world matrix from the previous row can never bleed into the first paint.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const frame = useMemo<ProjectFrame>(
-    () => ({ world: new Matrix4(), opacity: 1, copies: [], ghostCopies: [] }),
+    () => ({ world: new Matrix4(), meshScale: 1, opacity: 1, copies: [], ghostCopies: [] }),
     [data],
   )
   const def = getInstrument(data.object.instrumentId)

@@ -94,6 +94,10 @@ export function ObjectRenderer({
       } else {
         state.world.decompose(g.position, g.quaternion, g.scale)
       }
+      // The instrument's size lives OUTSIDE the world matrix (see VisualEngine):
+      // it scales the mesh itself, applied inside the mover/copy layout, so
+      // movers and child tracks work in unscaled placement space.
+      g.scale.multiplyScalar(state.meshScale)
     }
   })
 

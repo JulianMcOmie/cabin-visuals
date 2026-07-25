@@ -19,6 +19,7 @@ function stateWith(automations: ResolvedAutomation[], params: Record<string, num
     energy: 0,
     blackedOut: false,
     world: new Matrix4(),
+    meshScale: 1,
     opacity: 1,
     stringParams: {},
     abilityEvents: new Map(),

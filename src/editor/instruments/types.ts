@@ -94,8 +94,13 @@ export interface MidiRowDef {
 }
 
 /** An object's transform relative to its parent (identity-ish defaults). Position in
- *  world units, rotation as XYZ Euler radians, scale uniform or per-axis. The engine
- *  composes these down the hierarchy into a world transform (see core/visual). */
+ *  world units, rotation as XYZ Euler radians, scale uniform or per-axis.
+ *  POSITION and ROTATION are placement: the engine composes them down the hierarchy
+ *  into the world transform (see core/visual), so movers and child tracks see them.
+ *  SCALE is a mesh property (the instrument's size): it is kept OUT of the world
+ *  transform and applied to the mesh itself, BEFORE mover tracks lay out copies and
+ *  BEFORE children compose - mover distances and child placements stay in unscaled
+ *  world units no matter the size. */
 export interface LocalTransform {
   position?: [number, number, number]
   rotation?: [number, number, number]

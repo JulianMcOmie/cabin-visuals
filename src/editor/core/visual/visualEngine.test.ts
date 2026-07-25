@@ -323,3 +323,50 @@ test('muted envelope child is ignored', () => {
   assert.equal(serializeState('cube-env-muted').opacity, 1)
 })
 
+
+test("an instrument's size is mesh-local: it never reaches movers or child tracks", () => {
+  // baseSize 3.2 = 2× the cube's 1.6 reference. Before the split, that 2× sat in
+  // the world matrix: mover layouts stretched with it and children inherited it.
+  const parent: Track = {
+    id: 'cube-parent',
+    name: 'Parent',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 3.2, baseXPosition: 0, baseYPosition: 0, baseZPosition: 0, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['cube-child'],
+  }
+  const child: Track = {
+    id: 'cube-child',
+    name: 'Child',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { baseSize: 1.6, baseXPosition: 1, baseYPosition: 0, baseZPosition: 0, spinSpeed: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: [],
+    parentId: 'cube-parent',
+  }
+
+  setProject({ tracks: { 'cube-parent': parent, 'cube-child': child }, rootTrackIds: ['cube-parent'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+  computeAtBeat(0)
+
+  // The parent's size rides state.meshScale (applied to the mesh after the copy
+  // transform); its placement world stays scale-free for the mover chain.
+  const p = getObjectState('cube-parent')
+  assert.ok(p)
+  assert.equal(round(p.meshScale), 2)
+  assert.equal(round(p.world.toArray()[0]), 1)
+
+  // The child's placement is NOT multiplied by the parent's size: x=1 stays x=1
+  // (previously it landed at 2), and the child's own size stays its own.
+  const c = getObjectState('cube-child')
+  assert.ok(c)
+  assert.equal(round(c.world.toArray()[12]), 1)
+  assert.equal(round(c.meshScale), 1)
+})

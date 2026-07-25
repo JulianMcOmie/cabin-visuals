@@ -44,9 +44,11 @@ export const cubeInstrument: ObjectInstrumentDef = {
   abilities: [
     { key: 'shatter', label: 'Shatter', color: '#f472b6' },
   ],
-  // Position and scale belong to the object's placement transform. Spin is applied
-  // inside each rendered copy below, so splitters duplicate a spinning solid without
-  // rotating their own layout offsets.
+  // Position is placement: movers and child tracks see it. Scale (the size) is a
+  // mesh property - the engine keeps it out of the placement transform and applies
+  // it to the mesh itself, so movers lay out in unscaled space and children don't
+  // inherit the size. Spin is applied inside each rendered copy below, so splitters
+  // duplicate a spinning solid without rotating their own layout offsets.
   localTransform: ({ params, energy }) => {
     const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
     const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')

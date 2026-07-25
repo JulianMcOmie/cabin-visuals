@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect, type ReactNode } from 'react'
 import { useFrame, useThree, createPortal } from '@react-three/fiber'
 import {
-  Scene, Group, AmbientLight, DirectionalLight, PointLight, Mesh,
+  Scene, Group, AmbientLight, DirectionalLight, PointLight, Matrix4, Mesh,
   ShaderMaterial, WebGLRenderTarget, OrthographicCamera, PlaneGeometry, Vector2, LinearFilter,
   type IUniform, type Texture,
 } from 'three'
@@ -17,6 +17,9 @@ import type { EffectInstance } from '../../types'
 // the target regardless of camera. Passthrough fragment blits the final texture.
 const QUAD_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }'
 const PASSTHROUGH_FRAG = 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ gl_FragColor = texture2D(tDiffuse, vUv); }'
+
+// Scratch for composing the object's mesh-local size scale into the holder.
+const _meshScale = new Matrix4()
 // The FBO chain works in linear space; the main scene's render to the canvas applies
 // the sRGB output encoding, but this overlay (a raw ShaderMaterial) bypasses it - so it
 // must encode itself, or the object reads darker (looks like reduced opacity).
@@ -119,11 +122,17 @@ export function ShaderWrapper({
     if (!state || state.blackedOut) return
 
     // Render the object (with its world transform composed with this
-    // occurrence's VisualCopy transform) into the source FBO.
+    // occurrence's VisualCopy transform) into the source FBO. The object's size
+    // (meshScale) stays out of the world matrix and is multiplied in AFTER the
+    // copy transform - applied to the mesh first, before the mover layout -
+    // matching ObjectRenderer's placement group.
     if (state) {
       const visualCopy = visualCopyIndex === undefined ? undefined : getVisualCopy(trackId, visualCopyIndex)
       if (visualCopy) rig.holder.matrix.multiplyMatrices(state.world, visualCopy.transform)
       else rig.holder.matrix.copy(state.world)
+      if (state.meshScale !== 1) {
+        rig.holder.matrix.multiply(_meshScale.makeScale(state.meshScale, state.meshScale, state.meshScale))
+      }
       // Non-full-frame shader objects bypass ObjectRenderer's placement group,
       // so compose object + VisualCopy opacity here before rendering the source
       // FBO. Full-frame objects keep their inner placement group and therefore
