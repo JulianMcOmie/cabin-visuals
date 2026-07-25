@@ -30,6 +30,7 @@ class PlaybackEngine {
   private callbacks: EngineCallbacks | null = null
   private playing = false
   private lastTrackedBeat: number | null = null
+  private bpmDragging = false
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
@@ -69,15 +70,42 @@ class PlaybackEngine {
 
   /** Live tempo change: future advancement changes, the position doesn't. Every
    *  audio block's beat window just moved (fixed seconds, new beat mapping), so
-   *  re-arm while playing. Audio never time-stretches - it re-anchors. */
+   *  re-arm while playing. Audio never time-stretches - it re-anchors.
+   *  During a BPM drag the re-arm is deferred to endBpmDrag (see beginBpmDrag). */
   setBpm(bpm: number) {
     Tone.getTransport().bpm.value = bpm
+    if (this.bpmDragging) return
     if (this.playing && this.callbacks) {
       const beatsPerBar = this.callbacks.getBeatsPerBar()
       const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
       const when = Tone.now() + AUDIO_LOOKAHEAD
       getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
     }
+  }
+
+  /** Let sounding audio ride out a BPM drag untouched: each move only retunes
+   *  the transport - so the playhead and visuals track the new tempo live -
+   *  while in-flight players, which are never synced to the transport and were
+   *  armed against absolute audio-clock seconds, keep playing at their natural
+   *  rate. The release re-arms once to re-anchor them.
+   *
+   *  The per-move re-arm is what has to go, not the sound: each armAll queues a
+   *  fresh set of clip starts, and at pointermove rates they stack inside the
+   *  lookahead window into a runaway gain sum (the BPM-drag "earrape"). One
+   *  re-arm at release is the same one-shot seek() already performs safely.
+   *
+   *  The tradeoff: audio drifts out of alignment with the playhead for the
+   *  length of the gesture, and re-anchoring at release is audible as a jump.
+   *  Audio never time-stretches here - it re-anchors - so that seam is
+   *  inherent; this just spends it once instead of on every move. */
+  beginBpmDrag() {
+    this.bpmDragging = true
+  }
+
+  /** End a BPM drag: re-arm once at the final tempo (no-op if not playing). */
+  endBpmDrag() {
+    this.bpmDragging = false
+    this.rearmAudio()
   }
 
   /** Jump the (possibly playing) transport to a new beat, re-arming audio if live. */

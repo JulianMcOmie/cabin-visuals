@@ -159,7 +159,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
                 aria-pressed={active}
                 className={`h-full max-w-24 truncate border-r border-[var(--border)] px-2.5 text-[10px] font-medium transition-colors cursor-pointer ${
                   active
-                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                    ? 'bg-[var(--bg-app)] text-[var(--text)]'
                     : 'bg-[var(--bg-panel)] text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
                 }`}
               >

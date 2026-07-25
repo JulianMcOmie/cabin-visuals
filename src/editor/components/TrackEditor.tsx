@@ -14,6 +14,7 @@ import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
+import { AudioTrackDetail } from './AudioTrackDetail'
 import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, ParamToggle, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
@@ -458,6 +459,17 @@ export function TrackEditor() {
   // drop zone is visible.
   useEffect(() => { if (effectDragging && track) setTab('effects') }, [effectDragging, track])
   useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
+
+  // An audio track has no instrument and no effects - the inspector's usual
+  // chrome would be two empty tabs. It gets the whole surface instead: scope on
+  // top, the waveform running through the playhead below.
+  if (track?.type === 'audio') {
+    return (
+      <div className="visualizer-glass-surface h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
+        <AudioTrackDetail track={track} />
+      </div>
+    )
+  }
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">

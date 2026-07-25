@@ -1,10 +1,20 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { AnimatePresence, motion, MotionConfig } from "framer-motion"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { MotionConfig } from "framer-motion"
+import {
+  ChevronLeft,
+  Layers3,
+  PanelLeft,
+  Pause,
+  Play,
+  Plus,
+  SlidersHorizontal,
+  Sparkles,
+  Upload,
+} from "lucide-react"
 import { CabinLogo } from "./CabinLogo"
 import { SiteHeader } from "./SiteHeader"
 import { Appear, Reveal } from "./motionPresets"
@@ -13,11 +23,11 @@ import { useAuth } from "../persistence/hooks/useAuth"
 import { getLastProjectId } from "../persistence/lastProject"
 import { track } from "../analytics/analytics"
 
-const DEMO_VIDEOS = [
-  { id: "8jPhqXtWIUw", title: "Cabin Visuals demo 1" },
-  { id: "6dU7HrvZNbY", title: "Cabin Visuals demo 2" },
-  { id: "M61NUKQFCJg", title: "Cabin Visuals demo 3" },
-  { id: "7rfGIBAizbA", title: "Cabin Visuals demo 4" },
+const VISUAL_EXAMPLES = [
+  { id: "8jPhqXtWIUw", title: "Cabin Visuals example 1" },
+  { id: "6dU7HrvZNbY", title: "Cabin Visuals example 2" },
+  { id: "M61NUKQFCJg", title: "Cabin Visuals example 3" },
+  { id: "7rfGIBAizbA", title: "Cabin Visuals example 4" },
 ]
 
 const SOCIAL_LINKS = [
@@ -72,36 +82,347 @@ function CtaGlow({ children }: { children: ReactNode }) {
   )
 }
 
+const LIBRARY_ITEMS = [
+  { label: "Laser Sphere", color: "#35a7e6" },
+  { label: "Text", color: "#9f7aea" },
+  { label: "Photo", color: "#3f7f7c" },
+]
+
+const TIMELINE_TRACKS = [
+  {
+    name: "Audio",
+    color: "#35a7e6",
+    clips: [{ left: "1%", width: "97%", label: "Midnight Drive.wav", waveform: true }],
+  },
+  {
+    name: "Laser Sphere",
+    color: "#3a7694",
+    clips: [
+      { left: "2%", width: "28%", label: "Intro" },
+      { left: "34%", width: "36%", label: "Chorus" },
+      { left: "74%", width: "24%", label: "Outro" },
+    ],
+  },
+  {
+    name: "Title",
+    color: "#76517f",
+    clips: [
+      { left: "8%", width: "19%", label: "MIDNIGHT" },
+      { left: "52%", width: "22%", label: "DRIVE" },
+    ],
+  },
+  {
+    name: "Tunnel",
+    color: "#3f7f7c",
+    clips: [
+      { left: "27%", width: "26%", label: "Orbit" },
+      { left: "66%", width: "29%", label: "Flight" },
+    ],
+  },
+]
+
+/** A faithful, lightweight facsimile of Cabin's actual editor. This is kept
+ *  entirely in the page (instead of embedding the real editor) so the landing
+ *  page stays fast and the controls cannot accidentally modify a project. */
+function AppShowcase() {
+  return (
+    <div className="relative">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-x-4 -inset-y-8 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(53,167,230,0.14),transparent_66%)] blur-2xl"
+      />
+      <div className="mb-4 flex items-end justify-between gap-4 px-1">
+        <div className="text-left">
+          <p className="m-0 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
+            The visual music workstation
+          </p>
+          <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">
+            Compose, sync, and finish the whole show in one place.
+          </p>
+        </div>
+        <span className="hidden items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)] sm:flex">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_8px_var(--accent)]" />
+          App preview
+        </span>
+      </div>
+
+      <div
+        aria-label="Preview of the Cabin Visuals music visualization editor"
+        className="overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--bg-app)] text-left shadow-[0_28px_90px_-30px_rgba(0,0,0,0.9),0_22px_70px_-40px_rgba(53,167,230,0.8)]"
+      >
+        {/* Editor top bar */}
+        <div className="relative flex h-11 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-topbar)] px-2.5 sm:h-12 sm:gap-3 sm:px-3">
+          <ChevronLeft size={13} className="shrink-0 text-[var(--text-3)]" />
+          <span className="max-w-[120px] truncate text-[10px] font-medium text-[var(--text)] sm:max-w-none sm:text-xs">
+            Midnight Drive
+          </span>
+          <div className="flex items-center gap-0.5 rounded-md bg-[var(--bg-elevated)] p-0.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded bg-[rgba(53,167,230,0.13)] text-[var(--accent)]">
+              <PanelLeft size={12} />
+            </span>
+            <span className="flex h-6 w-6 items-center justify-center rounded bg-[rgba(53,167,230,0.13)] text-[var(--accent)]">
+              <SlidersHorizontal size={12} />
+            </span>
+          </div>
+
+          <div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-0.5 overflow-hidden rounded-md bg-[var(--bg-elevated)] p-0.5 sm:flex">
+            <span className="flex h-6 w-7 items-center justify-center rounded text-[var(--text-3)]">
+              <Pause size={10} fill="currentColor" />
+            </span>
+            <span className="flex h-6 w-7 items-center justify-center rounded bg-[rgba(53,167,230,0.15)] text-[var(--accent)]">
+              <Play size={11} fill="currentColor" />
+            </span>
+            <span className="px-2 font-mono text-[9px] text-[var(--text-3)]">09.2.3</span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="hidden font-mono text-[9px] text-[var(--text-muted)] md:inline">124 BPM</span>
+            <span className="inline-flex h-7 items-center gap-1.5 rounded bg-[var(--accent)] px-2.5 text-[9px] font-bold text-[var(--on-accent)] sm:px-3 sm:text-[10px]">
+              <Upload size={11} />
+              Export
+            </span>
+          </div>
+        </div>
+
+        {/* Library, inspector, and live canvas */}
+        <div className="grid min-h-[290px] grid-cols-1 md:min-h-[385px] md:grid-cols-[180px_210px_minmax(0,1fr)]">
+          <div className="hidden flex-col border-r border-[var(--border)] bg-[var(--bg-panel)] md:flex">
+            <div className="flex h-8 items-center justify-between border-b border-[var(--border)] px-3">
+              <span className="text-[10px] font-semibold text-[var(--text-2)]">Library</span>
+              <Plus size={11} className="text-[var(--text-muted)]" />
+            </div>
+            <div className="p-2">
+              <p className="m-0 px-1 pb-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Objects
+              </p>
+              {LIBRARY_ITEMS.map((item, index) => (
+                <div
+                  key={item.label}
+                  className={`mb-1 flex h-8 items-center gap-2 rounded px-2 text-[9px] ${
+                    index === 0
+                      ? "border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text)]"
+                      : "text-[var(--text-3)]"
+                  }`}
+                >
+                  <span
+                    className="h-3.5 w-3.5 rounded-[3px] border border-white/10"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  {item.label}
+                </div>
+              ))}
+              <p className="mt-4 mb-0 px-1 pb-2 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                Movement
+              </p>
+              {["Orbit", "Tunnel", "Audio Pulse"].map((label) => (
+                <div key={label} className="flex h-7 items-center gap-2 px-2 text-[9px] text-[var(--text-3)]">
+                  <Sparkles size={10} className="text-[var(--accent-muted)]" />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden flex-col border-r border-[var(--border)] bg-[rgba(17,19,24,0.88)] md:flex">
+            <div className="flex h-8 items-center border-b border-[var(--border)] px-3 text-[10px] font-semibold text-[var(--accent)]">
+              Laser Sphere
+            </div>
+            <div className="grid h-7 grid-cols-2 border-b border-[var(--border)] text-[9px]">
+              <span className="flex items-center justify-center border-r border-[var(--border)] bg-[var(--bg-app)] text-[var(--text)]">
+                Instrument
+              </span>
+              <span className="flex items-center justify-center text-[var(--text-muted)]">Effects</span>
+            </div>
+            <div className="space-y-4 p-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--text-muted)]">In front</span>
+                <span className="flex h-3.5 w-6 items-center justify-end rounded-full bg-[var(--accent)] p-0.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-white" />
+                </span>
+              </div>
+              {[
+                ["Radius", "64"],
+                ["Thickness", "18"],
+                ["Points", "96"],
+                ["Audio gain", "72%"],
+              ].map(([label, value], index) => (
+                <div key={label}>
+                  <div className="mb-1.5 flex items-center justify-between text-[9px]">
+                    <span className="text-[var(--text-3)]">{label}</span>
+                    <span className="font-mono text-[var(--text-muted)]">{value}</span>
+                  </div>
+                  <div className="h-1 overflow-hidden rounded-full bg-[var(--border)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent-muted)]"
+                      style={{ width: `${[64, 32, 82, 72][index]}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-1 text-[9px]">
+                <span className="text-[var(--text-3)]">Color</span>
+                <span className="h-5 w-10 rounded border border-white/10 bg-[#56c6ff] shadow-[0_0_12px_rgba(86,198,255,0.35)]" />
+              </div>
+            </div>
+          </div>
+
+          <div className="relative min-h-[290px] overflow-hidden bg-[var(--bg-canvas-deep)] md:min-h-[385px]">
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(circle at 50% 48%, rgba(52, 150, 255, 0.18), transparent 23%), radial-gradient(circle at 24% 74%, rgba(139, 72, 255, 0.13), transparent 32%), linear-gradient(145deg, #05060a 10%, #080b15 58%, #080710 100%)",
+              }}
+            />
+            <div
+              className="absolute inset-0 opacity-[0.16]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px)",
+                backgroundSize: "38px 38px",
+                maskImage: "linear-gradient(to bottom, transparent, black 35%, black 75%, transparent)",
+              }}
+            />
+            <div className="absolute left-1/2 top-1/2 aspect-square w-[54%] max-w-[330px] -translate-x-1/2 -translate-y-1/2">
+              <div className="absolute inset-[4%] rounded-full border border-cyan-300/20 shadow-[0_0_70px_rgba(53,167,230,0.22),inset_0_0_50px_rgba(95,61,255,0.12)]" />
+              <div className="absolute inset-[13%] rotate-[22deg] rounded-full border border-cyan-200/50 shadow-[0_0_16px_rgba(89,211,255,0.24)]" />
+              <div className="absolute inset-[21%] -rotate-[18deg] rounded-full border border-violet-300/45" />
+              <div className="absolute inset-[29%] rotate-[38deg] rounded-full border border-cyan-100/60 shadow-[0_0_22px_rgba(89,211,255,0.28)]" />
+              <div className="absolute left-[7%] right-[7%] top-1/2 h-px rotate-[18deg] bg-gradient-to-r from-transparent via-cyan-200/70 to-transparent shadow-[0_0_10px_#56c6ff]" />
+              <div className="absolute bottom-[7%] top-[7%] left-1/2 w-px rotate-[32deg] bg-gradient-to-b from-transparent via-violet-300/60 to-transparent" />
+              <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_16px_5px_rgba(86,198,255,0.75)]" />
+              {[12, 28, 47, 67, 82].map((position, index) => (
+                <span
+                  key={position}
+                  className="absolute h-1.5 w-1.5 rounded-full bg-cyan-100 shadow-[0_0_7px_2px_rgba(86,198,255,0.62)]"
+                  style={{
+                    left: `${position}%`,
+                    top: `${[38, 75, 12, 68, 42][index]}%`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-[34%] bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded border border-white/10 bg-black/30 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.11em] text-white/45 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_6px_var(--accent)]" />
+              Main · 16:9
+            </div>
+            <div className="absolute right-3 top-3 rounded border border-white/10 bg-black/30 px-2 py-1 font-mono text-[8px] text-white/40 backdrop-blur-sm">
+              1920 × 1080
+            </div>
+            <div className="absolute inset-x-0 bottom-[15%] text-center">
+              <p className="m-0 text-[clamp(18px,3vw,38px)] font-bold tracking-[0.22em] text-white/90 drop-shadow-[0_0_18px_rgba(86,198,255,0.5)]">
+                MIDNIGHT
+              </p>
+              <p className="mt-1 mb-0 font-mono text-[8px] uppercase tracking-[0.42em] text-cyan-200/55 sm:text-[9px]">
+                audio reactive
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Real editor scene tabs */}
+        <div className="flex h-8 items-stretch border-y border-[var(--border)] bg-[var(--bg-panel)]">
+          {["Verse", "Chorus", "Bridge", "Main"].map((scene, index) => (
+            <span
+              key={scene}
+              className={`flex w-[72px] items-center justify-center border-r border-[var(--border-subtle)] text-[8px] sm:w-24 sm:text-[9px] ${
+                index === 1
+                  ? "bg-[var(--bg-app)] font-semibold text-[var(--text)]"
+                  : "text-[var(--text-muted)]"
+              }`}
+            >
+              {scene}
+            </span>
+          ))}
+          <span className="ml-1 flex w-6 items-center justify-center text-[var(--text-muted)]">
+            <Plus size={10} />
+          </span>
+          <span className="ml-auto hidden items-center gap-1.5 border-l border-[var(--border)] px-3 font-mono text-[8px] uppercase text-[var(--text-muted)] sm:flex">
+            <Layers3 size={10} />
+            All tracks
+          </span>
+        </div>
+
+        {/* Music timeline */}
+        <div className="bg-[var(--bg-timeline)]">
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] sm:grid-cols-[150px_minmax(0,1fr)]">
+            <div className="border-r border-b border-[var(--border)] bg-[var(--bg-panel-raised)]" />
+            <div className="grid h-6 grid-cols-4 border-b border-[var(--border)] px-2 font-mono text-[7px] text-[var(--text-muted)] sm:text-[8px]">
+              {["1", "5", "9", "13"].map((bar) => (
+                <span key={bar} className="border-l border-white/[0.04] pl-1 pt-1.5">{bar}</span>
+              ))}
+            </div>
+            {TIMELINE_TRACKS.map((timelineTrack, trackIndex) => (
+              <div key={timelineTrack.name} className="contents">
+                <div className="flex h-8 items-center gap-2 border-r border-b border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] px-2 sm:h-9">
+                  <span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: timelineTrack.color }} />
+                  <span className="truncate text-[7px] text-[var(--text-3)] sm:text-[9px]">{timelineTrack.name}</span>
+                </div>
+                <div
+                  className="relative h-8 overflow-hidden border-b border-[var(--border-subtle)] sm:h-9"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px)",
+                    backgroundSize: "25% 100%",
+                  }}
+                >
+                  {timelineTrack.clips.map((clip, clipIndex) => (
+                    <span
+                      key={`${clip.label}-${clipIndex}`}
+                      className="absolute top-1 bottom-1 overflow-hidden rounded-[2px] border border-white/10 px-1.5 pt-1 font-mono text-[6px] text-white/60 sm:text-[7px]"
+                      style={{
+                        left: clip.left,
+                        width: clip.width,
+                        backgroundColor: `${timelineTrack.color}b8`,
+                        backgroundImage: "waveform" in clip && clip.waveform
+                          ? "repeating-linear-gradient(90deg, transparent 0 3px, rgba(255,255,255,.28) 3px 4px, transparent 4px 7px)"
+                          : undefined,
+                      }}
+                    >
+                      <span className={"waveform" in clip && clip.waveform ? "bg-black/25 px-1" : ""}>{clip.label}</span>
+                    </span>
+                  ))}
+                  {trackIndex === 0 && (
+                    <span className="absolute inset-y-0 left-[43%] z-10 w-px bg-[var(--accent)] shadow-[0_0_6px_var(--accent)]" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VisualExamples() {
+  return (
+    <section aria-label="Examples made with Cabin Visuals" className="w-full bg-black">
+      {VISUAL_EXAMPLES.map((visual) => (
+        <div
+          key={visual.id}
+          className="relative h-[100svh] w-full overflow-hidden bg-black"
+        >
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${visual.id}?autoplay=1&mute=1&loop=1&playlist=${visual.id}&controls=0&modestbranding=1&rel=0&playsinline=1&disablekb=1&iv_load_policy=3&showinfo=0&fs=0`}
+            title={visual.title}
+            tabIndex={-1}
+            loading="lazy"
+            allow="autoplay; encrypted-media"
+            className="pointer-events-none absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 scale-[1.04] border-0"
+            style={{
+              width: "max(100vw, 177.7778vh)",
+              height: "max(56.25vw, 100vh)",
+            }}
+          />
+        </div>
+      ))}
+    </section>
+  )
+}
+
 export default function LandingPage() {
-  // Track slide direction alongside the index so the carousel can animate
-  // toward the side the user actually navigated.
-  const [[activeVideo, direction], setVideoState] = useState<[number, number]>([0, 0])
-  // A play can't be observed inside the cross-origin YouTube iframe, but
-  // clicking INTO it blurs the window with the iframe focused - the only
-  // signal that someone actually engaged the demo (bounce analysis needs it;
-  // watching alone fires no events and would count as a bounce otherwise).
-  const activeVideoRef = useRef(activeVideo)
-  activeVideoRef.current = activeVideo
-  const engagedRef = useRef(false)
-  useEffect(() => {
-    const onBlur = () => {
-      if (engagedRef.current) return
-      if (document.activeElement instanceof HTMLIFrameElement) {
-        engagedRef.current = true
-        track('demo_video_engaged', { video: DEMO_VIDEOS[activeVideoRef.current].id })
-      }
-    }
-    window.addEventListener('blur', onBlur)
-    return () => window.removeEventListener('blur', onBlur)
-  }, [])
-  const switchVideo = (index: number, dir: number, method: 'arrow' | 'dot' | 'thumb') => {
-    track('demo_video_switched', { method, video: DEMO_VIDEOS[index].id })
-    setVideoState([index, dir])
-  }
-  const previousVideoIndex = (activeVideo - 1 + DEMO_VIDEOS.length) % DEMO_VIDEOS.length
-  const nextVideoIndex = (activeVideo + 1) % DEMO_VIDEOS.length
-  const previousVideo = DEMO_VIDEOS[previousVideoIndex]
-  const nextVideo = DEMO_VIDEOS[nextVideoIndex]
   const router = useRouter()
   // Shared cached auth (not a private per-mount fetch), so navigating back to
   // the landing page renders the known sign-in state instead of re-running the
@@ -190,112 +511,14 @@ export default function LandingPage() {
           </Appear>
         </section>
 
-        {/* Video Section */}
-        <section className="mx-auto flex w-full max-w-[1200px] justify-center px-6 pb-24">
+        {/* Product showcase */}
+        <section className="mx-auto flex w-full max-w-[1240px] justify-center px-4 pb-24 sm:px-6">
           <Reveal className="w-full">
-            {/* Under sm the peek thumbnails would be ~55px slivers - the
-                carousel collapses to the main video alone, arrows always on
-                (touch has no hover to reveal them). */}
-            <div className="group/carousel relative grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,0.26fr)_minmax(0,1fr)_minmax(0,0.26fr)] sm:gap-5 lg:gap-7">
-              <button
-                type="button"
-                onClick={() => switchVideo(previousVideoIndex, -1, 'thumb')}
-                aria-label={`Show previous video: ${previousVideo.title}`}
-                className="group relative hidden aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer sm:block"
-              >
-                <AnimatePresence initial={false}>
-                  <motion.span
-                    key={previousVideo.id}
-                    aria-hidden="true"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(https://i.ytimg.com/vi/${previousVideo.id}/mqdefault.jpg)` }}
-                  />
-                </AnimatePresence>
-                <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[var(--bg-page)]/60 to-black/10 transition-opacity duration-300 group-hover:opacity-40" />
-              </button>
-
-              <div className="relative z-10 aspect-video w-full overflow-hidden rounded-xl bg-[var(--bg-canvas-deep)] ring-1 ring-white/10 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.7),0_30px_90px_-24px_rgba(53,167,230,0.28)]">
-                <AnimatePresence initial={false} mode="popLayout">
-                  <motion.div
-                    key={DEMO_VIDEOS[activeVideo].id}
-                    initial={{ opacity: 0, x: direction * 48, scale: 0.985 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: direction * -48, scale: 0.985 }}
-                    transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
-                    className="absolute inset-0"
-                  >
-                    <iframe
-                      className="absolute top-0 left-0 h-full w-full border-0"
-                      src={`https://www.youtube.com/embed/${DEMO_VIDEOS[activeVideo].id}`}
-                      title={DEMO_VIDEOS[activeVideo].title}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      loading="lazy"
-                    ></iframe>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => switchVideo(nextVideoIndex, 1, 'thumb')}
-                aria-label={`Show next video: ${nextVideo.title}`}
-                className="group relative hidden aspect-video w-full scale-[0.96] overflow-hidden rounded-lg bg-[var(--bg-canvas-deep)] opacity-45 shadow-xl ring-1 ring-white/5 saturate-[0.6] transition-all duration-300 hover:scale-100 hover:opacity-90 hover:saturate-100 hover:ring-white/15 cursor-pointer sm:block"
-              >
-                <AnimatePresence initial={false}>
-                  <motion.span
-                    key={nextVideo.id}
-                    aria-hidden="true"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(https://i.ytimg.com/vi/${nextVideo.id}/mqdefault.jpg)` }}
-                  />
-                </AnimatePresence>
-                <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-l from-[var(--bg-page)]/60 to-black/10 transition-opacity duration-300 group-hover:opacity-40" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchVideo(previousVideoIndex, -1, 'arrow')}
-                aria-label="Previous demo video"
-                className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:left-3 sm:h-10 sm:w-10 sm:opacity-0 cursor-pointer"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={() => switchVideo(nextVideoIndex, 1, 'arrow')}
-                aria-label="Next demo video"
-                className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/90 shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-105 hover:bg-black/80 hover:text-white focus-visible:opacity-100 group-hover/carousel:opacity-100 sm:right-3 sm:h-10 sm:w-10 sm:opacity-0 cursor-pointer"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-            <div className="mt-6 flex items-center justify-center gap-2.5" aria-label="Demo video selection">
-              {DEMO_VIDEOS.map((video, index) => (
-                <button
-                  key={video.id}
-                  type="button"
-                  onClick={() => switchVideo(index, index > activeVideo ? 1 : -1, 'dot')}
-                  aria-label={`Show demo video ${index + 1}`}
-                  aria-pressed={activeVideo === index}
-                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    activeVideo === index
-                      ? "w-6 bg-[var(--accent)]"
-                      : "w-1.5 bg-[var(--border-strong)] hover:bg-[var(--text-muted)] hover:scale-125"
-                  }`}
-                />
-              ))}
-            </div>
+            <AppShowcase />
           </Reveal>
         </section>
+
+        <VisualExamples />
       </main>
 
       {/* Footer */}

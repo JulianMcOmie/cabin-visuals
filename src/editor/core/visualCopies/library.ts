@@ -19,8 +19,11 @@ import { calmHueRotateColorizer } from './hueColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
 import { waveTerrainMover } from './waveTerrain'
 import { BURST_EASINGS } from './burstEasings'
+import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
+import { motionMover } from './motion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
+import { tunnelSplitter } from './tunnel'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
@@ -31,15 +34,10 @@ import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 // the note history, and the summed offset stays a closed-form function of the
 // beat (the pause invariant: scrub == playback == export).
 
-/** Burst's MIDI vocabulary: one row per cardinal direction. */
-export const BURST_DIRECTIONS: Record<number, { axis: 0 | 1 | 2; sign: 1 | -1 }> = {
-  62: { axis: 1, sign: 1 }, // Up (+Y)
-  63: { axis: 1, sign: -1 }, // Down (-Y)
-  60: { axis: 0, sign: 1 }, // Right (+X)
-  61: { axis: 0, sign: -1 }, // Left (-X)
-  64: { axis: 2, sign: 1 }, // Forward (+Z)
-  65: { axis: 2, sign: -1 }, // Back (-Z)
-}
+// The vocabulary and the offset evaluator live in burstOffset.ts so Motion can
+// reuse them without importing this library (a cycle); re-exported here because
+// the Burst UI panel and the burst tests import them from this module.
+export { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings }
 
 const BURST_ROWS: MidiRowDef[] = [
   { pitch: 62, label: 'Up (+Y)' },
@@ -50,52 +48,7 @@ const BURST_ROWS: MidiRowDef[] = [
   { pitch: 65, label: 'Back (−Z)' },
 ]
 
-export interface BurstSettings {
-  /** Beats a burst takes to land on its destination. */
-  burstBeats: number
-  /** Ease-out family (see BURST_EASINGS order). */
-  easing: number
-  /** Time-warp exponent: >1 makes the initial jump more violent. */
-  sharpness: number
-  distanceX: number
-  distanceY: number
-  distanceZ: number
-  /** Overall distance multiplier on top of the per-axis distances. */
-  distance: number
-}
-
 export { BURST_EASINGS }
-
-/**
- * The summed offset of every burst launched at or before `beat`. Each note
- * contributes `direction * axisDistance * multiplier * velocity * ease(age)`,
- * where the eased progress clamps at 1 once the burst lands. Step-family
- * curves (BURST_EASINGS entries without `returnsHome`) end at 1, so the step
- * is permanent; return-family curves end back at 0 like an ADSR envelope, so
- * the displacement is temporary and the object comes home once the burst
- * lands. Pitches outside the vocabulary are ignored.
- */
-export function evaluateBurstOffset(
-  notes: ResolvedNote[],
-  settings: BurstSettings,
-  beat: number,
-): [number, number, number] {
-  const out: [number, number, number] = [0, 0, 0]
-  const beats = Math.max(0.0001, settings.burstBeats)
-  const sharpness = Math.max(0.0001, settings.sharpness)
-  const { ease } = BURST_EASINGS[settings.easing] ?? BURST_EASINGS[0]
-  const axisDistance = [settings.distanceX, settings.distanceY, settings.distanceZ]
-  for (const note of notes) {
-    if (note.beat > beat) continue
-    const dir = BURST_DIRECTIONS[note.pitch]
-    if (!dir) continue
-    const progress = Math.min(1, (beat - note.beat) / beats)
-    const eased = ease(Math.pow(progress, 1 / sharpness))
-    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
-    out[dir.axis] += dir.sign * axisDistance[dir.axis] * settings.distance * velocity * eased
-  }
-  return out
-}
 
 export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   id: 'burst',
@@ -430,6 +383,7 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
 
 /** Every production definition, in picker order. Seeded into the registry. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
+  motionMover,
   burstMover,
   rotateBurstMover,
   orbitBurstMover,
@@ -444,4 +398,5 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   gridSplitter,
   polyhedronSplitter,
   parametricPatternSplitter,
+  tunnelSplitter,
 ]

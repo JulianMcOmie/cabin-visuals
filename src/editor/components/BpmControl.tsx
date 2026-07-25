@@ -2,6 +2,7 @@
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore, MIN_BPM, MAX_BPM } from '../store/ProjectStore'
+import { getPlaybackEngine } from '../core/playback'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
 // Vertical drag sensitivity: bpm change per pixel (up = faster).
@@ -48,6 +49,10 @@ export function BpmControl() {
     const startY = e.clientY
     const startBpm = useProjectStore.getState().bpm
     lockCursor('ns-resize')
+    // Audio keeps sounding through the drag; only the re-arm is deferred to the
+    // release. Without this the per-move tempo writes re-arm every block on
+    // every pointermove and stack into a runaway gain sum (see beginBpmDrag).
+    getPlaybackEngine().beginBpmDrag()
 
     const controller = new AbortController()
     const onMove = (ev: PointerEvent) => {
@@ -59,10 +64,14 @@ export function BpmControl() {
     }
     const onUp = () => {
       unlockCursor()
+      getPlaybackEngine().endBpmDrag()
       controller.abort()
     }
     window.addEventListener('pointermove', onMove, { signal: controller.signal })
     window.addEventListener('pointerup', onUp, { signal: controller.signal })
+    // pointercancel too: a cancelled gesture that never released would leave the
+    // drag flag set, and every later tempo change would skip its re-arm.
+    window.addEventListener('pointercancel', onUp, { signal: controller.signal })
   }
 
   // Readout and input share identical box metrics (padding, border, ch-based

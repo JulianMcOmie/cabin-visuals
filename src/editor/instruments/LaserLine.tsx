@@ -1,7 +1,8 @@
 import { useContext, useRef } from 'react'
+import { createPortal, useThree } from '@react-three/fiber'
 import { Color, DoubleSide, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { getPeakVisualCopyOpacity, getVisualCopy } from '../core/visual/VisualEngine'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
@@ -84,11 +85,27 @@ export function LaserLine({ trackId }: { trackId: string }) {
   const coreColor = useRef(new Color())
   const rimColor = useRef(new Color())
   const copyContext = useContext(InstrumentCopyContext)
+  // ONE scene light per track, not per copy. Every visual copy mounts its own
+  // instance of this component, so a splitter that makes 48 copies would
+  // otherwise put 48 point lights in the scene: every lit material's fragment
+  // shader loops over all of them, and because the placement wrapper hides a
+  // faded copy's whole group, three drops those lights from the render list -
+  // the changing light count invalidates every lit material's shader program
+  // (numPointLights is part of the program cache key). A tunnel of lasers
+  // fading in and out thrashed that cache every frame. The emitter itself is
+  // per-copy; only the fill light is shared.
+  const litCopy = (copyContext?.visualCopyIndex ?? 0) === 0
+  // It is PORTALLED to the render scene rather than left inside this copy's
+  // placement group, and driven from the object's own world placement: hosted
+  // in a copy's group it would inherit that copy's transform and, worse, that
+  // copy's visibility - a Tunnel hides copy 0 on every wrap, which killed the
+  // whole track's light once per cycle no matter where the copies were.
+  const renderScene = useThree((three) => three.scene)
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     const light = lightRef.current
-    if (!mesh || !light) return false
+    if (!mesh || (litCopy && !light)) return false
 
     const glow = state.params.glow ?? paramDefault(laserLineInstrument, 'glow')
     const whiteCore = state.params.whiteCore ?? paramDefault(laserLineInstrument, 'whiteCore')
@@ -122,8 +139,17 @@ export function LaserLine({ trackId }: { trackId: string }) {
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current).multiplyScalar(fade)
     material.uniforms.uOpacity.value = fade
 
-    light.color.copy(baseColor.current)
-    light.intensity = sceneLight * flare * fade
+    if (light) {
+      // The shared light follows the BRIGHTEST copy, not this one: it must not
+      // blink on the private schedule of whichever copy happens to host it,
+      // but must still die when a gate dims the whole track.
+      const trackFade = state.blackedOut
+        ? 0
+        : Math.max(0, Math.min(1, state.opacity * getPeakVisualCopyOpacity(trackId)))
+      light.position.setFromMatrixPosition(state.world)
+      light.color.copy(baseColor.current)
+      light.intensity = sceneLight * flare * trackFade
+    }
   })
 
   return (
@@ -143,7 +169,10 @@ export function LaserLine({ trackId }: { trackId: string }) {
           toneMapped={false}
         />
       </mesh>
-      <pointLight ref={lightRef} color={DEFAULT_COLOR} intensity={14} distance={14} decay={2} />
+      {litCopy && createPortal(
+        <pointLight ref={lightRef} color={DEFAULT_COLOR} intensity={0} distance={14} decay={2} />,
+        renderScene,
+      )}
     </>
   )
 }

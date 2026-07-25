@@ -1,7 +1,8 @@
 import { useContext, useRef } from 'react'
+import { createPortal, useThree } from '@react-three/fiber'
 import { Color, type Mesh, type PointLight, type ShaderMaterial } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
-import { getVisualCopy } from '../core/visual/VisualEngine'
+import { getPeakVisualCopyOpacity, getVisualCopy } from '../core/visual/VisualEngine'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
@@ -71,7 +72,7 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
 }
 
 /**
- * One sphere and one real point light. The material emits scene-linear HDR
+ * One sphere per copy, plus one real point light for the track. The material emits scene-linear HDR
  * color above 1.0; the compositor's luminance threshold and mip-chain bloom do
  * all halo generation. There are deliberately no glow shells or blurred cards.
  */
@@ -82,11 +83,18 @@ export function LaserSphere({ trackId }: { trackId: string }) {
   const coreColor = useRef(new Color())
   const rimColor = useRef(new Color())
   const copyContext = useContext(InstrumentCopyContext)
+  // ONE scene light per track, not per copy - see the same guard in LaserLine:
+  // per-copy point lights make every lit material loop over N lights, and the
+  // count changing as copies fade invalidates their shader programs. It is
+  // portalled out of this copy's placement group so a copy fading (a Tunnel
+  // wraps copy 0 every cycle) can't take the track's light with it.
+  const litCopy = (copyContext?.visualCopyIndex ?? 0) === 0
+  const renderScene = useThree((three) => three.scene)
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
     const light = lightRef.current
-    if (!mesh || !light) return false
+    if (!mesh || (litCopy && !light)) return false
 
     const glow = state.params.glow ?? paramDefault(laserSphereInstrument, 'glow')
     const whiteCore = state.params.whiteCore ?? paramDefault(laserSphereInstrument, 'whiteCore')
@@ -118,8 +126,17 @@ export function LaserSphere({ trackId }: { trackId: string }) {
     ;(material.uniforms.rimColor.value as Color).copy(rimColor.current).multiplyScalar(fade)
     material.uniforms.uOpacity.value = fade
 
-    light.color.copy(baseColor.current)
-    light.intensity = sceneLight * flare * fade
+    if (light) {
+      // Brightest copy, not this one - the shared light must not blink on the
+      // private schedule of whichever copy hosts it, but must still die when a
+      // gate dims the whole track.
+      const trackFade = state.blackedOut
+        ? 0
+        : Math.max(0, Math.min(1, state.opacity * getPeakVisualCopyOpacity(trackId)))
+      light.position.setFromMatrixPosition(state.world)
+      light.color.copy(baseColor.current)
+      light.intensity = sceneLight * flare * trackFade
+    }
   })
 
   return (
@@ -138,7 +155,10 @@ export function LaserSphere({ trackId }: { trackId: string }) {
           toneMapped={false}
         />
       </mesh>
-      <pointLight ref={lightRef} color={DEFAULT_COLOR} intensity={14} distance={14} decay={2} />
+      {litCopy && createPortal(
+        <pointLight ref={lightRef} color={DEFAULT_COLOR} intensity={0} distance={14} decay={2} />,
+        renderScene,
+      )}
     </>
   )
 }

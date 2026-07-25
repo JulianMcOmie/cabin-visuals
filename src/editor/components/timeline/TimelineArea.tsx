@@ -26,6 +26,7 @@ import {
 } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 import { updateMidiActivityAtBeat } from './midiActivityRegistry'
+import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
 const OUTSIDE_PROJECT_OVERSCAN_BARS = 2
@@ -69,10 +70,12 @@ export function TimelineArea() {
   const loopStartGuideRef = useRef<HTMLDivElement>(null)
   const loopEndGuideRef = useRef<HTMLDivElement>(null)
   const projectLengthEdgeRef = useRef<HTMLDivElement>(null)
+  const horizontalZoomRef = useRef({ pixelsPerBeat, scrollLeft: 0 })
 
   // Mirror the lane horizontal scroll onto the ruler via transform (no clamp, no
   // dependence on matching client widths → stays aligned to the far-right edge).
   const onTimelineScroll = (e: ReactScrollEvent<HTMLDivElement>) => {
+    horizontalZoomRef.current.scrollLeft = e.currentTarget.scrollLeft
     if (rulerContentRef.current) {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
@@ -195,8 +198,41 @@ export function TimelineArea() {
     const { tracksScrollLeft, tracksScrollTop } = useUIStore.getState()
     sc.scrollLeft = tracksScrollLeft
     sc.scrollTop = tracksScrollTop
+    horizontalZoomRef.current.scrollLeft = sc.scrollLeft
     if (rulerContentRef.current) rulerContentRef.current.style.transform = `translateX(${-tracksScrollLeft}px)`
   }, [])
+
+  // Horizontal zoom is centered on the playhead for both the H slider and
+  // Alt+horizontal-scroll. Preserve the playhead's viewport x rather than the
+  // content's left edge, then synchronously realign the detached ruler and
+  // project-end overlay so there is no one-frame jump.
+  useLayoutEffect(() => {
+    const previous = horizontalZoomRef.current
+    if (previous.pixelsPerBeat === pixelsPerBeat) return
+
+    const sc = scrollRef.current
+    if (!sc) {
+      horizontalZoomRef.current.pixelsPerBeat = pixelsPerBeat
+      return
+    }
+
+    const currentBeat = useTimeStore.getState().currentBeat
+    sc.scrollLeft = scrollLeftAroundBeat(
+      previous.scrollLeft,
+      currentBeat,
+      previous.pixelsPerBeat,
+      pixelsPerBeat,
+    )
+    const appliedScrollLeft = sc.scrollLeft
+    horizontalZoomRef.current = { pixelsPerBeat, scrollLeft: appliedScrollLeft }
+    if (rulerContentRef.current) {
+      rulerContentRef.current.style.transform = `translateX(${-appliedScrollLeft}px)`
+    }
+    if (projectLengthEdgeRef.current) {
+      projectLengthEdgeRef.current.style.transform = `translateX(${projectWidthPx - appliedScrollLeft}px)`
+    }
+    useUIStore.getState().setTracksScroll(appliedScrollLeft, sc.scrollTop)
+  }, [pixelsPerBeat, projectWidthPx])
 
   // The project-end separator lives in viewport space so one continuous handle
   // spans the ruler and every lane, but follows the content during scrolling.

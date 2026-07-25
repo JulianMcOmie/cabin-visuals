@@ -404,6 +404,20 @@ export function getVisualCopies(trackId: string): VisualCopy[] {
   return visualCopiesByTrack.get(trackId) ?? []
 }
 
+/** The brightest copy's opacity (1 for unknown tracks). What a PER-TRACK
+ *  resource must follow when the object itself is rendered many times - a
+ *  single shared scene light, say. Following one chosen copy's opacity instead
+ *  makes the resource blink on that copy's private schedule: a Tunnel wraps
+ *  copy 0 out of sight once per cycle, which would pulse the light at the
+ *  tunnel's phase. The peak still honours a gate that dims every copy. */
+export function getPeakVisualCopyOpacity(trackId: string): number {
+  const copies = visualCopiesByTrack.get(trackId)
+  if (!copies || copies.length === 0) return 1
+  let peak = 0
+  for (const copy of copies) peak = Math.max(peak, copy.opacity)
+  return peak
+}
+
 /** One occurrence's copy - what an ObjectRenderer pulls per frame. */
 export function getVisualCopy(trackId: string, visualCopyIndex: number): VisualCopy | undefined {
   return visualCopiesByTrack.get(trackId)?.[visualCopyIndex]
