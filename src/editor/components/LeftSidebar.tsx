@@ -575,8 +575,11 @@ export function LeftSidebar() {
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
+  // No border-r on the root: the PanelResizeHandle beside this panel already
+  // draws a 1px --border line, and having both made the library's divider twice
+  // the width of every other divider in the editor.
   return (
-    <div className="relative flex h-full flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--bg-panel)]">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[var(--bg-panel)]">
       {/* One warm preview canvas for all sections' hover popups. */}
       <InstrumentPreviewLayer />
       {/* All live 3D cards share this renderer, avoiding browser WebGL-context
@@ -584,22 +587,20 @@ export function LeftSidebar() {
       {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
           narrow, and icon + label once there's room for the text. */}
-      <div className="@container relative z-10 flex flex-shrink-0 border-b border-[var(--border)]">
+      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
           { id: 'loops', label: 'Loops', Icon: Repeat },
           { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
-        ] as const).map(({ id, label, Icon }, i, arr) => (
+        ] as const).map(({ id, label, Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             title={label}
-            className={`flex-1 h-7 flex items-center justify-center gap-1.5 text-[11px] transition-colors cursor-pointer ${
-              i < arr.length - 1 ? 'border-r border-[var(--border)]' : ''
-            } ${
+            className={`flex-1 h-6 flex items-center justify-center gap-1.5 rounded-full text-[11px] transition-colors cursor-pointer ${
               tab === id
-                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
-                : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
+                ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
+                : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
             <Icon size={13} className="flex-shrink-0" />

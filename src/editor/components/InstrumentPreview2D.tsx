@@ -178,7 +178,7 @@ const drawVideo: Draw2D = (ctx, w, h, t) => {
 const drawPhoto: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
   const idx = Math.floor(beat / 2)
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const m = 8
   ctx.fillStyle = '#f8fafc'
@@ -362,7 +362,7 @@ function drawChipGhost(ctx: CanvasRenderingContext2D, size: number) {
 
 const drawScaleFx: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const size = Math.min(w, h) * 0.42
   ctx.save()
@@ -375,7 +375,7 @@ const drawScaleFx: Draw2D = (ctx, w, h, t) => {
 
 const drawRotateFx: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const size = Math.min(w, h) * 0.42
   ctx.save()
@@ -393,7 +393,7 @@ const drawRotateFx: Draw2D = (ctx, w, h, t) => {
 
 const drawOffsetFx: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const size = Math.min(w, h) * 0.4
   // Every 2 beats the chip slides from home to a side (alternating), so the
@@ -434,7 +434,7 @@ const drawKaleidoscopeFx: Draw2D = (ctx, w, h, t) => {
   const wedges = 8
   const step = (Math.PI * 2) / wedges
   const radius = Math.hypot(w, h)
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   for (let i = 0; i < wedges; i++) {
     ctx.save()

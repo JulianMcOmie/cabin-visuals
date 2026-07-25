@@ -105,17 +105,13 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
   const menuScene = menu ? scenes[menu.id] : null
 
   return (
-    <div className="h-8 flex flex-shrink-0 items-stretch gap-0 border-y border-[var(--border)] bg-[var(--bg-panel)] select-none">
+    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-app)] px-2 select-none">
       {sceneOrder.map((id) => {
         const scene = scenes[id]
         if (!scene) return null
         const active = id === activeSceneId
         return (
-          <div key={id} className={`group relative flex w-24 flex-shrink-0 items-stretch border-r border-[var(--border-subtle)] transition-colors ${
-            active
-              ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
-              : 'bg-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-2)]'
-          }`}>
+          <div key={id} className="relative flex flex-shrink-0">
             <button
               onClick={() => select(id)}
               onDoubleClick={() => {
@@ -129,23 +125,28 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
                 setMenu({ x: e.clientX, y: e.clientY, id })
               }}
               title={scene.isMain ? 'Final director composition' : 'Double-click to rename · Right-click for options'}
-              className="flex-1 min-w-0 h-full px-3 text-[11px] text-center truncate cursor-pointer"
+              className={`h-6 min-w-14 max-w-36 truncate rounded-full px-3 text-[11px] transition-colors cursor-pointer ${
+                active
+                  ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
+                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+              }`}
             >
               {scene.name}
             </button>
           </div>
         )
       })}
-      <button onClick={create} title="Add scene" className="ml-1 flex h-6 w-6 items-center justify-center self-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer">
+      <button onClick={create} title="Add scene" className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text)] cursor-pointer">
         <Plus size={13} />
       </button>
-      <div className="ml-auto flex min-w-0 items-stretch">
+      <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* Canvas target, aspect and timeline sizing share the scene row instead
             of floating over the preview. Visual scenes come first, then Main. */}
+        <div className="mx-1 h-4 w-px flex-shrink-0 bg-[var(--border)]" aria-hidden="true" />
         <div
           role="group"
           aria-label="Canvas preview"
-          className="flex min-w-0 items-stretch border-l border-[var(--border)]"
+          className="flex min-w-0 items-center gap-1"
         >
           {previewSceneIds.map((id) => {
             const scene = scenes[id]
@@ -157,10 +158,10 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
                 onClick={() => onPreviewSceneChange(id)}
                 title={`Preview ${scene.name}`}
                 aria-pressed={active}
-                className={`h-full max-w-24 truncate border-r border-[var(--border)] px-2.5 text-[10px] font-medium transition-colors cursor-pointer ${
+                className={`h-6 max-w-24 truncate rounded-full px-2.5 text-[10px] font-medium transition-colors cursor-pointer ${
                   active
-                    ? 'bg-[var(--bg-app)] text-[var(--text)]'
-                    : 'bg-[var(--bg-panel)] text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                    ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
+                    : 'bg-transparent text-[var(--text-muted)] hover:bg-white/[0.05] hover:text-[var(--text)]'
                 }`}
               >
                 {scene.name}
@@ -172,7 +173,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
         <button
           onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
           title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
-          className="h-full min-w-12 border-r border-[var(--border)] bg-[var(--bg-panel)] px-2 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] cursor-pointer"
+          className="h-6 min-w-10 rounded-full px-2 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text)] cursor-pointer"
         >
           {aspect === 'fill' ? 'Fill' : aspect}
         </button>

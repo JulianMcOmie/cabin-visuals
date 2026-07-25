@@ -481,24 +481,22 @@ export function TrackEditor() {
           : <span className="text-[11px] font-semibold text-[var(--accent)] select-none">{activeScene?.name ?? '-'}</span>}
       </div>
 
-      {/* Tabs - flat segmented row with background and text emphasis for the active tab. */}
-      <div className="flex flex-shrink-0 border-b border-[var(--border)]">
-        {track ? TABS.map((t, i) => (
+      {/* Tabs - pill row; the active pill carries the elevated neutral. */}
+      <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3 py-1.5">
+        {track ? TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 h-7 text-[11px] transition-colors cursor-pointer ${
-              i < TABS.length - 1 ? 'border-r border-[var(--border)]' : ''
-            } ${
+            className={`flex-1 h-6 rounded-full text-[11px] transition-colors cursor-pointer ${
               tab === t.id
-                ? 'bg-[var(--bg-app)] text-[var(--text)] font-semibold'
-                : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
+                : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
             {t.label}
           </button>
         )) : (
-          <div className="flex-1 h-7 flex items-center justify-center bg-[var(--bg-app)] text-[11px] font-semibold text-[var(--text)]">
+          <div className="flex-1 h-6 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
             Settings
           </div>
         )}

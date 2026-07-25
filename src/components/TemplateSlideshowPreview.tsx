@@ -64,7 +64,7 @@ function drawSlide(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 function draw(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.fillStyle = '#0b0b0e'
+  ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
 
   const fw = w * 0.62

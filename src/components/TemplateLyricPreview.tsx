@@ -46,7 +46,7 @@ interface CardStyle {
   stroke?: string
 }
 
-const DEFAULT_STYLE: CardStyle = { accent: '#e4e4e7', bg: '#0b0b0e', font: 0 }
+const DEFAULT_STYLE: CardStyle = { accent: '#e4e4e7', bg: '#0b0b0b', font: 0 }
 
 // One entry per lyric style so the cards preview their actual typography and
 // palette (the accent also lights the beat dots). These are the looks the

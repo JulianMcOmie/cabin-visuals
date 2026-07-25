@@ -642,7 +642,7 @@ function Header({
   const [leavingToProjects, setLeavingToProjects] = useState(false)
 
   return (
-    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border)] bg-[var(--bg-topbar)] relative">
+    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 bg-[var(--bg-topbar)] relative">
       <Link
         href="/projects"
         aria-label="Back to projects"
@@ -950,7 +950,9 @@ export default function EditorApp() {
         onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '55%')}
         playback={playback}
       />
-      <div className="flex-1 min-h-0">
+      {/* The library's panel color fills everything below the header, so the
+          workspace reads as one card inset within the library's surface. */}
+      <div className="flex-1 min-h-0 bg-[var(--bg-panel)]">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
 
           {/* Library - dragging below its minimum snaps it closed; the matching
@@ -977,11 +979,16 @@ export default function EditorApp() {
             <LeftSidebar />
           </Panel>
 
-          <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
+          {/* No visible rule: the card's inset gap separates library from
+              workspace now. A slim invisible strip keeps the drag target,
+              tinting on hover so it stays discoverable. */}
+          <PanelResizeHandle className="w-1 cursor-col-resize bg-transparent outline-none transition-colors hover:bg-[var(--border-strong)] focus:outline-none" />
 
-          {/* Right section: inspector + canvas above, tracks + audio strip below */}
-          <Panel>
-            <div className="flex flex-col h-full">
+          {/* Right section: inspector + canvas above, tracks + audio strip below -
+              ONE inset card. The p-2 gap lets the library-colored shell show on
+              every side; rounded corners + hairline border seat it "inside". */}
+          <Panel className="p-2">
+            <div className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[var(--border)] bg-[var(--bg-app)]">
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}

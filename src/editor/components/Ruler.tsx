@@ -99,7 +99,7 @@ export function Ruler({
 
   return (
     <div className="flex border-b border-[var(--border)] bg-[var(--bg-timeline)] select-none flex-shrink-0" style={{ height, paddingRight: gutterPx }}>
-      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--border)] bg-[var(--bg-panel-raised)]">
+      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--border)] bg-[var(--bg-track-row)]">
         {corner}
       </div>
       <div
@@ -167,9 +167,11 @@ export function Ruler({
             <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[#222228]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
           ))}
 
-          {/* Short minor ticks - 4 per major span. */}
+          {/* Short minor ticks - 4 per major span (one per measure when zoomed
+              out). Clearly shorter than the numbered major lines, still a hair
+              taller than the 16th sub-ticks. */}
           {minors.map((beat) => (
-            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '65%' }} />
+            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
           ))}
 
           {bars.map((bar) => {
@@ -235,7 +237,7 @@ export function Ruler({
                 left: dimAfterBars * barWidthPx,
                 right: 0,
                 zIndex: 20,
-                backgroundColor: 'rgba(8, 8, 11, 0.46)',
+                backgroundColor: 'rgba(9, 9, 9, 0.46)',
                 backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
               }}
             />

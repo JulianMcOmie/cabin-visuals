@@ -167,7 +167,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         height: rowHeight,
       }}
       className={`flex items-stretch cursor-default transition-colors duration-100 ${
-        isSelected ? 'bg-[rgba(53,167,230,0.05)]' : 'hover:bg-white/[0.02]'
+        isSelected ? 'bg-[rgba(53,167,230,0.05)]' : ''
       }`}
     >
       <div
@@ -214,7 +214,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             bracket region while a child's highlight stops at the divider. */}
         <div
           className={`pointer-events-none absolute inset-y-0 right-0 transition-colors duration-100 ${isFirstChild ? 'rounded-tl-md' : ''} ${
-            dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : isDarkenedRow ? 'bg-[#141418]' : 'bg-[var(--bg-panel-raised)]'
+            dropInto ? 'bg-[rgba(53,167,230,0.25)] ring-1 ring-inset ring-[var(--accent)]' : isSelected ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-track-row)]'
           }`}
           style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX }}
         >
@@ -298,7 +298,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.muted
-                ? 'bg-[var(--warn)] text-[#0a0a0c]'
+                ? 'bg-[var(--warn)] text-[var(--on-accent)]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
@@ -315,7 +315,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.solo
-                ? 'bg-[var(--accent)] text-[#0a0a0c]'
+                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                 : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
@@ -372,7 +372,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             would-be block, drawn where release will land it. */}
         {loopDragHere && (
           <div
-            className="pointer-events-none absolute inset-y-[3px] z-10 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[rgba(53,167,230,0.2)]"
+            className="pointer-events-none absolute inset-y-0 z-10 flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[rgba(53,167,230,0.2)]"
             style={{ left: loopDragHere.target!.bar * barWidthPx, width: loopDragHere.durationBars * barWidthPx }}
           >
             <span className="truncate px-1.5 font-mono text-[10px] text-[var(--accent)]">{loopDragHere.name}</span>

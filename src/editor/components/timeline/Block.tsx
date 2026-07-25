@@ -31,7 +31,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
   const renderedWidth = Math.max(width, 4)
-  const renderedHeight = Math.max(rowHeight - 8, 1)
+  const renderedHeight = Math.max(rowHeight, 1)
   const totalBeatsInBlock = block.durationBars * beatsPerBar
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
@@ -50,7 +50,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       data-block-id={block.id}
       data-looped-block={hasLoopSections ? '' : undefined}
       title="Double-click to edit notes"
-      className={`absolute top-1 bottom-1 overflow-hidden ${hasLoopSections ? '' : 'rounded-[3px]'}`}
+      className={`absolute top-0 bottom-0 overflow-hidden ${hasLoopSections ? '' : 'rounded-[3px]'}`}
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
@@ -58,7 +58,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         borderTop: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
         borderRight: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
         borderBottom: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
-        borderLeft: hasLoopSections ? undefined : `2px solid ${outlineColor}`,
+        borderLeft: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
         boxShadow: !hasLoopSections && (isSelected || isEditing)
           ? `0 0 0 1px ${palette.selectedOutline}, 0 3px 10px rgba(0,0,0,0.24)`
           : undefined,

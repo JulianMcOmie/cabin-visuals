@@ -311,7 +311,7 @@ export function TutorialOverlay() {
           top: spot.y - PAD,
           width: spot.width + PAD * 2,
           height: spot.height + PAD * 2,
-          boxShadow: '0 0 0 200vmax rgba(4, 4, 6, 0.66)',
+          boxShadow: '0 0 0 200vmax rgba(4, 4, 4, 0.66)',
           transition: 'left 120ms ease-out, top 120ms ease-out, width 120ms ease-out, height 120ms ease-out',
         }}
       >

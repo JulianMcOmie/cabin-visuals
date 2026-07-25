@@ -200,13 +200,13 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
         left: `${left}px`,
         width: `${width}px`,
         backgroundColor: color,
-        borderTop: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
-        borderRight: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
-        borderBottom: isSelected ? '1px solid #fecdd6' : '1px solid #fb7185',
-        borderLeft: `2px solid ${AUDIO_WAVEFORM_COLOR}`,
+        borderTop: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
+        borderRight: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
+        borderBottom: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
+        borderLeft: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
         boxShadow: isSelected
-          ? '0 0 0 1px #fff1f3, 0 2px 10px rgba(159, 18, 57, 0.28)'
-          : '0 1px 4px rgba(74, 4, 24, 0.2)',
+          ? '0 0 0 1px #e8f4fc, 0 2px 10px rgba(12, 60, 98, 0.32)'
+          : '0 1px 4px rgba(8, 38, 62, 0.2)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -221,7 +221,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       {showOscilloscope && <AudioTrackOscilloscope trackId={trackId} />}
       <span
         className="absolute top-0.5 left-1.5 text-[10px] font-medium text-white pointer-events-none truncate max-w-full pr-2"
-        style={{ textShadow: '0 1px 2px rgba(63, 10, 23, 0.8)' }}
+        style={{ textShadow: '0 1px 2px rgba(8, 34, 56, 0.8)' }}
       >
         {clip?.fileName}
       </span>

@@ -6,13 +6,13 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
 import type { Track } from '../types'
 
-// The audio identity in this app is rose/red (see trackColors); on the dark
-// panel the timeline's ink colour is far too dark, so the detail screen uses
-// the same hue family opened up for a black background.
-const TRACE = '#fb7185'
-const TRACE_BRIGHT = '#ffe4ea'
-const GRID = 'rgba(251, 113, 133, 0.10)'
-const GRID_BAR = 'rgba(251, 113, 133, 0.22)'
+// The audio identity in this app is blue (see trackColors); on the dark
+// panel the timeline's surface colour is far too dark, so the detail screen
+// uses the same hue family opened up for a black background.
+const TRACE = '#5da9e0'
+const TRACE_BRIGHT = '#d6ecfc'
+const GRID = 'rgba(93, 169, 224, 0.10)'
+const GRID_BAR = 'rgba(93, 169, 224, 0.22)'
 
 /** Seconds of audio shown to the right of the playhead in the scrolling lane. */
 const WINDOW_SEC = 8
@@ -213,8 +213,8 @@ export function AudioTrackDetail({ track }: { track: Track }) {
 
       // Fade the incoming edge so the window doesn't end in a hard cut.
       const fade = ctx.createLinearGradient(w * 0.82, 0, w, 0)
-      fade.addColorStop(0, 'rgba(12, 13, 18, 0)')
-      fade.addColorStop(1, 'rgba(12, 13, 18, 1)')
+      fade.addColorStop(0, 'rgba(13, 13, 13, 0)')
+      fade.addColorStop(1, 'rgba(13, 13, 13, 1)')
       ctx.fillStyle = fade
       ctx.fillRect(w * 0.82, 0, w * 0.18, h)
 

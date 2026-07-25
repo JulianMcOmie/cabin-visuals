@@ -101,7 +101,7 @@ function ProjectCard({
         event.stopPropagation()
         onOpenMenu(event.clientX, event.clientY)
       }}
-      className="cursor-pointer overflow-hidden rounded-lg bg-[#030407] transition-transform duration-75 ease-out group-hover:scale-[1.012] active:scale-[0.99]"
+      className="cursor-pointer overflow-hidden rounded-lg bg-[#030303] transition-transform duration-75 ease-out group-hover:scale-[1.012] active:scale-[0.99]"
     >
       <div className="relative h-[120px] overflow-hidden bg-black">
         <div className="absolute inset-0">

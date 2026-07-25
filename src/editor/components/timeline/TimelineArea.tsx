@@ -99,26 +99,17 @@ export function TimelineArea() {
   const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds)
   const rowGuides = rowGuidesOf(visualRows)
 
-  // Vertical lane grid (DAW-style): layered repeating gradients whose intervals
-  // come from the SAME computeRulerGrid the ruler ticks use, so bar / beat / 16th
-  // lines line up exactly with the ticks above at every zoom. Rendered behind the
-  // tracks and blocks. Coincident layers are skipped to avoid doubling opacity.
+  // Vertical lane grid (DAW-style): only the numbered major bar lines - 1/4 of
+  // the ruler's marks, the minor/16th ticks stay ruler-only. Colour and 1px
+  // thickness match the ruler's near-full-height major lines above (same
+  // computeRulerGrid interval, so they line up exactly at every zoom).
   const laneGrid = (() => {
-    const { majorBars, minorBeats, subBeats } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
+    const { majorBars } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
     const majorPx = majorBars * beatsPerBar * pixelsPerBeat
-    const minorPx = minorBeats * pixelsPerBeat
-    const images: string[] = [`repeating-linear-gradient(to right, rgba(255,255,255,0.05) 0px 1px, transparent 1px ${majorPx}px)`]
-    const sizes: string[] = [`${majorPx}px 100%`]
-    if (minorPx !== majorPx) {
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.024) 0px 1px, transparent 1px ${minorPx}px)`)
-      sizes.push(`${minorPx}px 100%`)
+    return {
+      backgroundImage: `repeating-linear-gradient(to right, var(--border-strong) 0px 1px, transparent 1px ${majorPx}px)`,
+      backgroundSize: `${majorPx}px 100%`,
     }
-    if (subBeats != null && subBeats * pixelsPerBeat !== minorPx) {
-      const subPx = subBeats * pixelsPerBeat
-      images.push(`repeating-linear-gradient(to right, rgba(255,255,255,0.012) 0px 1px, transparent 1px ${subPx}px)`)
-      sizes.push(`${subPx}px 100%`)
-    }
-    return { backgroundImage: images.join(', '), backgroundSize: sizes.join(', ') }
   })()
 
   // Right-click-a-track menu (add ability / automation), positioned at the cursor.
@@ -484,7 +475,7 @@ export function TimelineArea() {
               style={{
                 left: labelWidth + PLAYHEAD_TRIANGLE_HALF + projectWidthPx,
                 width: Math.max(0, timelineWidthPx - projectWidthPx),
-                backgroundColor: 'rgba(8, 8, 11, 0.46)',
+                backgroundColor: 'rgba(9, 9, 9, 0.46)',
                 backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
               }}
             />
@@ -505,7 +496,7 @@ export function TimelineArea() {
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-panel-raised)] ${
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}
@@ -632,8 +623,8 @@ export function TimelineArea() {
             <div className="text-[11px] font-medium truncate text-[var(--text)]">{copyDrag.name}</div>
           </div>
           <div className="flex gap-1 flex-shrink-0">
-            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.muted ? 'bg-[var(--warn)] text-[#0a0a0c]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>M</div>
-            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.solo ? 'bg-[var(--accent)] text-[#0a0a0c]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>S</div>
+            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.muted ? 'bg-[var(--warn)] text-[var(--on-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>M</div>
+            <div className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center ${copyDrag.solo ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}>S</div>
           </div>
         </div>
       )}

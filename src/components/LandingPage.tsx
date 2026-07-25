@@ -151,7 +151,7 @@ function AppShowcase() {
         className="overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--bg-app)] text-left shadow-[0_28px_90px_-30px_rgba(0,0,0,0.9),0_22px_70px_-40px_rgba(53,167,230,0.8)]"
       >
         {/* Editor top bar */}
-        <div className="relative flex h-11 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-topbar)] px-2.5 sm:h-12 sm:gap-3 sm:px-3">
+        <div className="relative flex h-11 items-center gap-2 bg-[var(--bg-topbar)] px-2.5 sm:h-12 sm:gap-3 sm:px-3">
           <ChevronLeft size={13} className="shrink-0 text-[var(--text-3)]" />
           <span className="max-w-[120px] truncate text-[10px] font-medium text-[var(--text)] sm:max-w-none sm:text-xs">
             Midnight Drive
@@ -223,7 +223,7 @@ function AppShowcase() {
             </div>
           </div>
 
-          <div className="hidden flex-col border-r border-[var(--border)] bg-[rgba(17,19,24,0.88)] md:flex">
+          <div className="hidden flex-col border-r border-[var(--border)] bg-[rgba(19,19,19,0.88)] md:flex">
             <div className="flex h-8 items-center border-b border-[var(--border)] px-3 text-[10px] font-semibold text-[var(--accent)]">
               Laser Sphere
             </div>

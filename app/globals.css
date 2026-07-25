@@ -19,34 +19,40 @@ body {
    Flat panels, 1px borders, one electric-blue accent, IBM Plex.
    ============================================================ */
 :root {
-  /* Surfaces */
-  --bg-app: #0c0d12;          /* editor app background */
-  --bg-topbar: #14161c;       /* editor top bar */
-  --bg-page: #090a0e;         /* marketing/auth page background */
-  --bg-panel: #111318;        /* panels, cards, top bars */
-  --bg-panel-raised: #151820; /* label columns, corner cells */
-  --bg-elevated: #1c2029;     /* buttons, chips, hover surfaces */
-  --bg-canvas: #08090d;       /* 3D viewport */
-  --bg-canvas-deep: #05060a;
-  --bg-timeline: #090b10;
+  /* Surfaces. Every neutral here is a TRUE grey (r = g = b): the palette used
+     to carry a few points of extra blue in each channel, which read as a cold
+     tinge across the whole editor and made the odd genuinely-neutral surface
+     look wrong next to it. Each value is the grey with the same perceived
+     lightness as the tinted colour it replaced, so the surface hierarchy is
+     unchanged - only the hue is gone. THE blue lives in --accent alone. */
+  --bg-app: #0d0d0d;          /* editor app background */
+  --bg-topbar: #161616;       /* editor top bar */
+  --bg-page: #0a0a0a;         /* marketing/auth page background */
+  --bg-panel: #131313;        /* panels, cards, top bars */
+  --bg-panel-raised: #181818; /* label columns, corner cells */
+  --bg-track-row: #141414;    /* every track label row (darker than the column) */
+  --bg-elevated: #202020;     /* buttons, chips, hover surfaces */
+  --bg-canvas: #090909;       /* 3D viewport */
+  --bg-canvas-deep: #060606;
+  --bg-timeline: #0b0b0b;
 
   /* Borders */
-  --border: #26262c;
-  --border-subtle: #1c1c21;
-  --border-strong: #3a3a42;
+  --border: #262626;
+  --border-subtle: #1c1c1c;
+  --border-strong: #3a3a3a;
 
   /* Text */
-  --text: #ecedef;
-  --text-2: #c6c7cd;
-  --text-3: #9a9ba3;
-  --text-muted: #5d5e66;
-  --text-faint: #7a7b84;
+  --text: #ededed;
+  --text-2: #c7c7c7;
+  --text-3: #9b9b9b;
+  --text-muted: #5e5e5e;
+  --text-faint: #7b7b7b;
 
   /* Accent - THE blue */
   --accent: #35a7e6;
   --accent-hover: #6fc0ee;
   --accent-muted: #3f7ca6; /* dampened accent: slider fills and other quiet-active surfaces */
-  --on-accent: #0a0a0c; /* dark text on accent buttons */
+  --on-accent: #0a0a0a; /* dark text on accent buttons */
   --warn: #d0a04c;
 
   /* Track palette */
@@ -60,11 +66,11 @@ body {
      that still reference them land on-palette instead of on the old theme). */
   --highlight: #d0a04c;
   --green: #6a9955;
-  --background: #0c0d12;
-  --surface: #111318;
-  --lightSurface: #1c2029;
-  --lightSurfaceHover: #26262c;
-  --activeBg: #1c2029;
+  --background: #0d0d0d;
+  --surface: #131313;
+  --lightSurface: #202020;
+  --lightSurfaceHover: #262626;
+  --activeBg: #202020;
   --electricBlue: #35a7e6;
   --selectedBlue: #6fc0ee;
   --brightGreen: #00e676;
@@ -85,13 +91,13 @@ body {
 }
 
 .visualizer-glass-surface {
-  background: rgba(17, 19, 24, 0.84);
+  background: rgba(19, 19, 19, 0.84);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
   backdrop-filter: blur(20px) saturate(120%);
 }
 
 .visualizer-glass-control {
-  background: rgba(30, 30, 35, 0.68);
+  background: rgba(31, 31, 31, 0.68);
   -webkit-backdrop-filter: blur(12px) saturate(120%);
   backdrop-filter: blur(12px) saturate(120%);
 }
