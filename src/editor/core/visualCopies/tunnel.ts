@@ -22,6 +22,13 @@
 //    lasers - its own point light), so copy count is the expensive setting
 //    here, not depth or speed.
 //
+// The 'Mute at camera' row is the escape hatch for choreography that must never
+// touch the lens: while one of its notes is held, copies inside the camera zone
+// (the stretch from the near end back to the camera plane, plus a margin in
+// front of it) are muted to opacity zero. It is a pure opacity gate - the
+// copies keep flowing underneath and pop back wherever the note releases them,
+// so the count stays structural and scrubbing stays exact.
+//
 // Slot order is ring-major: slot = ring * copiesPerRing + spoke, ring 0 being
 // the one that starts at the near end. Downstream index-based movers (a
 // Visibility set to 'Each index') therefore walk one ring at a time.
@@ -59,10 +66,14 @@ export interface TunnelSettings {
   /** Lateral distance of the outermost origin rows from the axis. The origin
    *  rows latch fractions of this (see TUNNEL_ORIGIN_STEPS); 0 disables them. */
   originSpread: number
+  /** Extra units IN FRONT of the camera plane the 'Mute at camera' row covers,
+   *  so the huge last-frame flash before impact is hidden too. */
+  cameraMuteMargin: number
 }
 
 export const TUNNEL_FORWARD_PITCH = 60
 export const TUNNEL_REVERSE_PITCH = 61
+export const TUNNEL_CAMERA_MUTE_PITCH = 72
 
 // ── Origin rows: where the corridor comes FROM ───────────────────────────────
 // The destination (the near end, at the camera) never moves; these rows move
@@ -85,6 +96,7 @@ const TUNNEL_ROWS: MidiRowDef[] = [
   { pitch: TUNNEL_REVERSE_PITCH, label: 'Rush backward' },
   ...TUNNEL_ORIGIN_X_PITCHES.map((pitch, step) => ({ pitch, label: ORIGIN_X_LABELS[step] })),
   ...TUNNEL_ORIGIN_Y_PITCHES.map((pitch, step) => ({ pitch, label: ORIGIN_Y_LABELS[step] })),
+  { pitch: TUNNEL_CAMERA_MUTE_PITCH, label: 'Mute at camera' },
 ]
 
 /** Lateral spawn point of the corridor, in the ring plane's own axes. */
@@ -100,6 +112,9 @@ const MAX_COPIES_PER_RING = 32
 const MAX_RINGS = 64
 const DEGREES = Math.PI / 180
 const Z_AXIS = new Vector3(0, 0, 1)
+/** Where the default camera sits on the corridor axis - the same assumption
+ *  `nearEnd`'s default and docs already make. */
+export const TUNNEL_CAMERA_Z = 5
 
 /** Axis vector plus the two ring-plane vectors, per `axis` setting. */
 const TUNNEL_FRAMES: [Vector3, Vector3, Vector3][] = [
@@ -150,6 +165,32 @@ export function evaluateTunnelTravel(
     travel += direction * heldBeats * normalizedVelocity(note.velocity) * settings.midiSpeed
   }
   return travel
+}
+
+/**
+ * The 'Mute at camera' gate: true while any note on that row covers `beat`.
+ * Velocity is ignored - like the origin rows this is a switch, not a dial, so
+ * the same note can never mean two different amounts of hidden.
+ */
+export function isTunnelCameraMuteActive(notes: readonly ResolvedNote[], beat: number): boolean {
+  for (const note of notes) {
+    if (note.pitch !== TUNNEL_CAMERA_MUTE_PITCH) continue
+    if (beat >= note.beat && beat < note.beat + Math.max(0, note.durationBeats)) return true
+  }
+  return false
+}
+
+/**
+ * How far back from the near end the camera zone reaches, in corridor units:
+ * everything from the wrap point to the camera plane (`nearEnd - camera z`,
+ * clamped at 0 for a near end pulled in front of the lens), plus the margin
+ * that hides the approach. A copy with `depthIntoTunnel` inside this zone is
+ * the one that would hit the camera.
+ */
+export function tunnelCameraMuteZone(
+  settings: Pick<TunnelSettings, 'nearEnd' | 'cameraMuteMargin'>,
+): number {
+  return Math.max(0, settings.nearEnd - TUNNEL_CAMERA_Z) + Math.max(0, settings.cameraMuteMargin)
 }
 
 /**
@@ -274,8 +315,8 @@ function slotTransform(
   travel: number,
   placementScale: [number, number, number],
   originAt: (travelAtSpawn: number) => TunnelOrigin,
-): { transform: Matrix4; opacity: number } {
-  const { position, opacity } = tunnelSlotPlacement(slot, settings, travel, originAt)
+): { transform: Matrix4; opacity: number; depthIntoTunnel: number } {
+  const { position, opacity, depthIntoTunnel } = tunnelSlotPlacement(slot, settings, travel, originAt)
   const orientation = Math.round(settings.orientation)
   const transform = new Matrix4()
 
@@ -296,7 +337,7 @@ function slotTransform(
   // by the placement's scale keeps Depth and Near end in scene units. Only the
   // offsets are normalised; each copy still RENDERS at the object's own size.
   position.set(position.x / placementScale[0], position.y / placementScale[1], position.z / placementScale[2])
-  return { transform: transform.setPosition(position), opacity }
+  return { transform: transform.setPosition(position), opacity, depthIntoTunnel }
 }
 
 export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
@@ -344,6 +385,9 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     // default, so 'far left' reads as a corridor swinging in from the side
     // rather than as a slightly thicker ring.
     { key: 'originSpread', label: 'Origin spread', min: 0, max: 60, step: 0.5, default: 8 },
+    // 2 units in front of the default camera plane (near end 12 - camera 5 +
+    // margin 2 = 9 corridor units hidden while the row is held).
+    { key: 'cameraMuteMargin', label: 'Camera mute margin', min: 0, max: 20, step: 0.5, default: 2 },
   ],
   midiRows: () => TUNNEL_ROWS,
   strictMidiRows: true,
@@ -357,15 +401,21 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
       apply(visualCopy, { beat, placementTransform }) {
         const travel = evaluateTunnelTravel(notes, settings, beat)
         const placementScale = placementAxisScale(placementTransform)
+        // 'Mute at camera': a pure opacity gate over the copies that would hit
+        // the lens while the note is held - positions are untouched, so the
+        // corridor keeps flowing underneath and nothing snaps on release.
+        const cameraMuted = isTunnelCameraMuteActive(notes, beat)
+        const muteZone = tunnelCameraMuteZone(settings)
         return Array.from({ length: count }, (_, slot) => {
-          const { transform, opacity } = slotTransform(slot, settings, travel, placementScale, originAt)
+          const { transform, opacity, depthIntoTunnel } = slotTransform(slot, settings, travel, placementScale, originAt)
+          const gate = cameraMuted && depthIntoTunnel <= muteZone ? 0 : 1
           // LOCAL composition (previous * delta), the chain default: each slot's
           // transform becomes the reference frame for movers BELOW it, so a
           // Burst 'Forward (+Z)' under a Tunnel pushes every copy along its own
           // orientation rather than in world Z.
           const next: VisualCopy = {
             transform: visualCopy.transform.clone().multiply(transform),
-            opacity: visualCopy.opacity * opacity,
+            opacity: visualCopy.opacity * opacity * gate,
             colorShift: { ...visualCopy.colorShift },
           }
           return next

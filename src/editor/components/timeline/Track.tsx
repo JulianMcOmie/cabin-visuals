@@ -166,9 +166,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         position: 'relative',
         height: rowHeight,
       }}
-      className={`flex items-stretch cursor-default transition-colors duration-100 ${
-        isSelected ? 'bg-[rgba(53,167,230,0.05)]' : ''
-      }`}
+      className="flex items-stretch cursor-default transition-colors duration-100"
     >
       <div
         onClick={(e) => {
@@ -222,10 +220,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             <span
               className="absolute left-0 top-full bg-inherit"
               style={{
-                // The first child surface has a rounded top-left cutout. Let a
-                // selected parent's strip underpaint that radius so the selected
-                // fill meets the curved divider without leaving a bare notch.
-                width: (depth === 0 ? LABEL_BASE_PX : INDENT_PX) + (isSelected ? BRACKET_CORNER_RADIUS_PX : 0),
+                // The first child surface has a rounded top-left cutout. The
+                // parent's strip always underpaints that radius - selected or
+                // not - so the fill meets the curved divider without leaving
+                // a bare notch.
+                width: (depth === 0 ? LABEL_BASE_PX : INDENT_PX) + BRACKET_CORNER_RADIUS_PX,
                 height: descendantRows * rowHeight,
               }}
             />
@@ -299,7 +298,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.muted
                 ? 'bg-[var(--warn)] text-[var(--on-accent)]'
-                : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             M
@@ -316,7 +315,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.solo
                 ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                : 'bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-2)]'
+                : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             S
@@ -333,8 +332,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
       <div
         data-track-lane={track.id}
         className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--border)]'}`}
-        // A muted track's blocks fade so mute state reads from the MIDI side too.
-        style={{ width: timelineWidthPx, opacity: track.muted ? 0.4 : 1 }}
+        // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
+        // state reads from the MIDI side without the blocks fading into the lane.
+        style={{ width: timelineWidthPx, filter: track.muted ? 'grayscale(1)' : undefined }}
         // Audio lanes have no MIDI gestures (no right-click block drawing / marquee),
         // but clicking their empty space still deselects blocks, like any lane.
         onPointerDown={track.type === 'audio'
@@ -363,6 +363,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 beatsPerBar={beatsPerBar}
                 color={blockColor}
                 isSelected={selectedBlockIds.has(block.id)}
+                muted={track.muted}
                 previewRowPitches={previewRowPitches}
                 strictPreviewRows={declaredMidiRows?.strict}
                 onBlockPointerDown={onBlockPointerDown}

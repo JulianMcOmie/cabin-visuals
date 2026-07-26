@@ -25,16 +25,17 @@ body {
      look wrong next to it. Each value is the grey with the same perceived
      lightness as the tinted colour it replaced, so the surface hierarchy is
      unchanged - only the hue is gone. THE blue lives in --accent alone. */
-  --bg-app: #0d0d0d;          /* editor app background */
+  --bg-app: #121212;          /* editor app background / workspace card */
   --bg-topbar: #161616;       /* editor top bar */
+  --bg-shell: #080808;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
   --bg-page: #0a0a0a;         /* marketing/auth page background */
   --bg-panel: #131313;        /* panels, cards, top bars */
   --bg-panel-raised: #181818; /* label columns, corner cells */
-  --bg-track-row: #141414;    /* every track label row (darker than the column) */
+  --bg-track-row: #181818;    /* every track label row (a step above the lanes) */
   --bg-elevated: #202020;     /* buttons, chips, hover surfaces */
   --bg-canvas: #090909;       /* 3D viewport */
   --bg-canvas-deep: #060606;
-  --bg-timeline: #0b0b0b;
+  --bg-timeline: #151515;     /* timeline lanes + ruler - the lifted work surface above the shell */
 
   /* Borders */
   --border: #262626;
@@ -419,6 +420,7 @@ body.drag-moving * {
   50%      { box-shadow: 0 0 0 5px rgba(53, 167, 230, 0.12); }
 }
 
+
 /* Slim, dark, minimal scrollbar for timeline panels (tracks + MIDI editor) */
 .timeline-scrollbar {
   scrollbar-width: thin;                                   /* Firefox */
@@ -470,6 +472,57 @@ body.drag-moving * {
   border: 1px solid var(--border-strong);
   border-radius: 0;
   cursor: pointer;
+}
+
+/* Timeline zoom sliders (the pair on the scene row). Same rule and square thumb
+   as ParamSlider, and the same FILLED track: in a toolbar with no room for a
+   number, the fill is the only thing that says how zoomed in you are, and
+   without it the pair read as two stray hairlines. `--fill` is set per instance
+   from the value, so the native input keeps its drag and keyboard behaviour. */
+.slider-zoom {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    var(--accent-muted) var(--fill, 0%),
+    var(--border) var(--fill, 0%)
+  );
+  outline: none;
+}
+.slider-zoom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 9px;
+  height: 9px;
+  background: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.slider-zoom::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  background: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+/* The thumb brightens under the pointer, so the thing you are about to grab
+   announces itself without the row lighting up. */
+.slider-zoom:hover::-webkit-slider-thumb,
+.slider-zoom:active::-webkit-slider-thumb {
+  background: var(--text);
+}
+.slider-zoom:hover::-moz-range-thumb,
+.slider-zoom:active::-moz-range-thumb {
+  background: var(--text);
+}
+.slider-zoom:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
 }
 
 /* Loading/transition screens: the logo smokes continuously (no hover needed),

@@ -93,44 +93,56 @@ test('Orbit Burst honors an adjustable pivot', () => {
   closeVector(position(output.transform), [1, 2, 0])
 })
 
-test('Constant Rotate turns only while a signed note is held and then keeps its angle', () => {
+test('Constant Rotate spins continuously by default and held notes add extra rotation', () => {
   const settings = constantSettings({ speedZ: 90 })
   const notes = [note(0, 64, 2)]
   const atOne = evaluateConstantRotationAngles(notes, settings, 1)
   const afterRelease = evaluateConstantRotationAngles(notes, settings, 3)
-  assert.ok(Math.abs(atOne[2] - Math.PI / 2) < 1e-9)
-  assert.ok(Math.abs(afterRelease[2] - Math.PI) < 1e-9)
+  // Baseline (1 beat × 90°) + held note (1 beat × 90°).
+  assert.ok(Math.abs(atOne[2] - Math.PI) < 1e-9)
+  // Baseline (3 beats × 90°) + held note capped at its 2-beat duration (180°).
+  assert.ok(Math.abs(afterRelease[2] - (5 * Math.PI) / 2) < 1e-9)
+
+  // No notes at all: the always-on baseline spin alone.
+  const baselineOnly = evaluateConstantRotationAngles([], settings, 2)
+  assert.ok(Math.abs(baselineOnly[2] - Math.PI) < 1e-9)
 })
 
-test('Return gently removes accumulated constant rotation and stays returned', () => {
+test('Return sweeps the spin back to rest, then the baseline rotation resumes', () => {
   const settings = constantSettings({ speedZ: 90, returnBeats: 1 })
   const notes = [note(0, 64, 2), note(3, 66, 1)]
   const halfway = evaluateConstantRotationAngles(notes, settings, 3.5)
   const returned = evaluateConstantRotationAngles(notes, settings, 4)
   const later = evaluateConstantRotationAngles(notes, settings, 20)
   assert.ok(Math.abs(halfway[2] - Math.PI / 2) < 1e-9)
-  assert.ok(Math.abs(returned[2]) < 1e-9)
-  assert.ok(Math.abs(later[2]) < 1e-9)
+  // The sweep lands on the rest orientation and the baseline pauses for the
+  // sweep's duration, so the object sits returned at the end of the note.
+  assert.ok(Math.abs(returned[2] - Math.PI / 2) < 1e-9)
+  // Afterwards the always-on baseline keeps accumulating from the return point.
+  assert.ok(Math.abs(later[2] - (17 * Math.PI) / 2) < 1e-9)
 })
 
 test('Return takes the gentle shortest path after multiple accumulated turns', () => {
   const settings = constantSettings({ speedZ: 450, returnBeats: 1 })
-  const notes = [note(0, 64, 1), note(2, 66, 1)] // 450° is equivalent to +90°
+  const notes = [note(0, 64, 1), note(2, 66, 1)]
   const halfway = evaluateConstantRotationAngles(notes, settings, 2.5)
-  assert.ok(Math.abs(halfway[2] - Math.PI / 4) < 1e-9)
+  assert.ok(Math.abs(halfway[2] - Math.PI) < 1e-9)
 })
 
-test('Constant Orbit uses the same held-note and Return grammar around a pivot', () => {
+test('Constant Orbit uses the same always-on and Return grammar around a pivot', () => {
   const input = identityVisualCopy()
   input.transform.makeTranslation(2, 0, 0)
   const mover = constantOrbitMover.resolve({
-    settings: constantSettings({ speedZ: 90 }),
+    // X/Y zeroed so only the Z baseline and the held note turn the orbit.
+    settings: constantSettings({ speedX: 0, speedY: 0, speedZ: 90 }),
     notes: [note(0, 64, 2)],
   })
+  // Beat 1: baseline (90°) + held beat (90°) = half a turn; beat 3: baseline
+  // (270°) + two held beats (180°) = 450° ≡ 90°.
   const moving = mover.apply(input, { beat: 1, index: 0, count: 1 })[0]
   const stopped = mover.apply(input, { beat: 3, index: 0, count: 1 })[0]
-  closeVector(position(moving.transform), [0, 2, 0])
-  closeVector(position(stopped.transform), [-2, 0, 0])
+  closeVector(position(moving.transform), [-2, 0, 0])
+  closeVector(position(stopped.transform), [0, 2, 0])
 })
 
 test('constant rotation movers expose six signed rows plus Return', () => {

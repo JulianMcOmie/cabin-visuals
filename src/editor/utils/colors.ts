@@ -15,6 +15,9 @@ export function lighten(color: string, amount: number): string {
 
 export interface MidiBlockPalette {
   fill: string
+  /** Brighter, more saturated fill for the selected/editing block, so selection
+   *  reads from the body colour and not just the outline ring. */
+  selectedFill: string
   outline: string
   selectedOutline: string
   note: string
@@ -29,7 +32,7 @@ interface HslColor {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-function colorToHsl(color: string): HslColor | null {
+export function colorToHsl(color: string): HslColor | null {
   const hslMatch = color.match(/^hsl\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*\)$/i)
   if (hslMatch) {
     return {
@@ -68,16 +71,22 @@ function colorToHsl(color: string): HslColor | null {
 const hsl = ({ hue, saturation, lightness }: HslColor) =>
   `hsl(${hue.toFixed(1)}, ${(saturation * 100).toFixed(1)}%, ${(lightness * 100).toFixed(1)}%)`
 
-/** Opaque timeline colors derived from the track hue. Notes sit much darker
- *  than their region while selection/activity can intensify the same hue. */
+/** Opaque timeline colors derived from the track hue. Fills stay saturated -
+ *  blocks have no borders, so the hue contrast alone separates them - while
+ *  notes sit much darker than their region for legibility. */
 export function midiBlockPalette(color: string): MidiBlockPalette {
   const source = colorToHsl(color) ?? { hue: 205, saturation: 0.48, lightness: 0.42 }
   const colored = source.saturation > 0.04
-  const saturation = colored ? clamp(source.saturation * 0.76, 0.36, 0.62) : 0
-  const fillLightness = clamp(source.lightness * 0.52, 0.22, 0.34)
+  const saturation = colored ? clamp(source.saturation * 0.9, 0.5, 0.8) : 0
+  const fillLightness = clamp(source.lightness * 0.6, 0.28, 0.4)
   const base = { hue: source.hue, saturation }
   return {
     fill: hsl({ ...base, lightness: fillLightness }),
+    selectedFill: hsl({
+      ...base,
+      saturation: colored ? Math.min(0.9, saturation + 0.1) : 0,
+      lightness: Math.min(0.56, fillLightness + 0.16),
+    }),
     outline: hsl({ ...base, lightness: Math.min(0.48, fillLightness + 0.1) }),
     selectedOutline: hsl({ ...base, lightness: Math.min(0.62, fillLightness + 0.22) }),
     note: hsl({ ...base, saturation: saturation * 0.82, lightness: Math.max(0.055, fillLightness * 0.34) }),

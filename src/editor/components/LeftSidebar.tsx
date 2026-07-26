@@ -343,7 +343,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
         </button>
       </div>
       {open && (
-        <div className="grid grid-cols-1 gap-2 px-2 @[176px]:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 px-2">
           {items.map((item) => (
             <div
               key={item.id}
@@ -488,11 +488,10 @@ function TemplatesTab() {
           ? 'Double-click a style to restyle this lyric video. Your song and words stay.'
           : 'Double-click a template to switch this project onto it. Your song stays.'}
       </p>
-      {/* Same structure as the instrument sections: a container-query grid
-          that goes two-up once the sidebar has the width, cards borderless
-          with the name riding a hover gradient. */}
+      {/* Same structure as the instrument sections: always a single column,
+          cards borderless with the name riding a hover gradient. */}
       <div className="@container">
-        <div className="grid grid-cols-1 gap-2 px-2 @[176px]:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 px-2">
           {shown.map((tpl) => (
             <TemplateCard
               key={tpl.id}
@@ -579,7 +578,7 @@ export function LeftSidebar() {
   // draws a 1px --border line, and having both made the library's divider twice
   // the width of every other divider in the editor.
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[var(--bg-panel)]">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[var(--bg-shell)]">
       {/* One warm preview canvas for all sections' hover popups. */}
       <InstrumentPreviewLayer />
       {/* All live 3D cards share this renderer, avoiding browser WebGL-context

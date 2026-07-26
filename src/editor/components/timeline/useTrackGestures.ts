@@ -241,6 +241,8 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       const deltaBars = d.barWidthPx > 0 ? deltaX / d.barWidthPx : 0
       const rowDelta = Math.round((e.clientY - d.startY) / useUIStore.getState().tracksRowHeight)
       const store = useProjectStore.getState()
+      // Guide position in bars: rides the LEFT edge on moves/left-resizes, the
+      // RIGHT edge on right-resizes (assigned per mode below).
       let guideStartBar = d.origins.get(d.guideBlockId)?.startBar ?? null
       let requiredProjectEndBar = store.totalBars
 

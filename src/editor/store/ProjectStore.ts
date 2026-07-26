@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getEffect } from '../effects'
-import { MOVER_TRACK_COLOR, COLORIZER_TRACK_COLOR, AUDIO_TRACK_COLOR, OBJECT_TRACK_COLOR } from '../utils/trackColors'
+import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
@@ -15,6 +15,26 @@ export const MIN_BPM = 20
 export const MAX_BPM = 300
 export const MIN_TOTAL_BARS = 1
 export const MAX_TOTAL_BARS = 512
+
+/** The colour of the last id in the list that resolves to a track. */
+function lastColorIn(ids: string[], tracks: Record<string, Track>): string | undefined {
+  for (let i = ids.length - 1; i >= 0; i--) {
+    const track = tracks[ids[i]]
+    if (track) return track.color
+  }
+  return undefined
+}
+
+/** Colour for a track about to be created: the hue cycle continues from the
+ *  most recent sibling (a child's siblings live under its parent; a root
+ *  track's are the root rows), seeded by deep sapphire on an empty project. */
+export function resolveNextTrackColor(s: { tracks: Record<string, Track>; rootTrackIds: string[] }, parentId?: string | null): string {
+  if (parentId) {
+    const parent = s.tracks[parentId]
+    if (parent) return nextTrackColor(lastColorIn(parent.childIds, s.tracks) ?? parent.color)
+  }
+  return nextTrackColor(lastColorIn(s.rootTrackIds, s.tracks))
+}
 
 // Deep-clone with fresh IDs at every level (used by paste + alt-drag duplicate).
 const cloneNote = (n: Note): Note => ({ ...n, id: crypto.randomUUID() })
@@ -1156,7 +1176,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             inputValues: {},
             params: {},
             stringParams: {},
-            color: def.kind === 'colorizer' ? COLORIZER_TRACK_COLOR : MOVER_TRACK_COLOR,
             name,
           },
         },
@@ -1209,7 +1228,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         moverId: isSplitter ? undefined : moverId,
         splitterId: isSplitter ? moverId : undefined,
         inputValues: {},
-        color: def.kind === 'colorizer' ? COLORIZER_TRACK_COLOR : MOVER_TRACK_COLOR,
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1460,7 +1479,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           name: t.name || `MIDI ${i + 1}`,
           type: 'base',
           instrumentId: 'cube',
-          color: OBJECT_TRACK_COLOR,
+          // Chain through the partially-built maps so multi-track imports
+          // step the hue cycle per track.
+          color: resolveNextTrackColor({ tracks, rootTrackIds }),
           muted: false,
           solo: false,
           blocks: [block],
@@ -1616,7 +1637,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         name: 'Lyrics',
         type: 'base',
         instrumentId: 'textDisplay',
-        color: OBJECT_TRACK_COLOR,
+        color: resolveNextTrackColor(s),
         muted: false,
         solo: false,
         stringParams: { text },

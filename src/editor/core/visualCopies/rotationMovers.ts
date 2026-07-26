@@ -165,8 +165,15 @@ function rawConstantAngles(
   settings: ConstantRotationSettings,
   beat: number,
 ): [number, number, number] {
-  const angles: [number, number, number] = [0, 0, 0]
   const speeds = [settings.speedX, settings.speedY, settings.speedZ]
+  // Always-on baseline: the mover rotates continuously, no notes needed. Pure
+  // function of beat, so scrubbing and export stay deterministic.
+  const angles: [number, number, number] = [
+    beat * speeds[0] * settings.speed * DEG_TO_RAD,
+    beat * speeds[1] * settings.speed * DEG_TO_RAD,
+    beat * speeds[2] * settings.speed * DEG_TO_RAD,
+  ]
+  // Held notes add EXTRA rotation on top of the baseline spin.
   for (const note of notes) {
     const direction = SIGNED_BASIS_DIRECTIONS[note.pitch]
     if (!direction || beat <= note.beat) continue

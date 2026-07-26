@@ -2,11 +2,10 @@
 
 import { useCallback, useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Plus } from 'lucide-react'
-import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, useProjectStore } from '../../store/ProjectStore'
+import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, resolveNextTrackColor, useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { Track } from './Track'
-import { OBJECT_TRACK_COLOR } from '../../utils/trackColors'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
 import { usePlayhead } from '../../hooks/usePlayhead'
@@ -305,7 +304,7 @@ export function TimelineArea() {
       sceneBindings: isMain
         ? state.sceneOrder.filter((sceneId) => !state.scenes[sceneId]?.isMain).map((sceneId, i) => ({ sceneId, pitch: 60 + i }))
         : undefined,
-      color: OBJECT_TRACK_COLOR,
+      color: resolveNextTrackColor(state),
       muted: false,
       solo: false,
       blocks: [],

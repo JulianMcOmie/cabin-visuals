@@ -34,12 +34,26 @@ class AudioEngine {
   private entries = new Map<string, Entry>()
   private blocks: ScheduledBlock[] = []
   private masterGain: Tone.Gain | null = null
+  private meter: Tone.Meter | null = null
 
   // Modest headroom: overlapping clips sum at the destination and can clip.
   // Also the future seam for per-block gain / fades.
   private gain(): Tone.Gain {
-    if (!this.masterGain) this.masterGain = new Tone.Gain(0.85).toDestination()
+    if (!this.masterGain) {
+      this.masterGain = new Tone.Gain(0.85).toDestination()
+      // Tapped for UI metering (the transport's audio-reactive glow) - a pure
+      // listener on the master bus, it never alters the signal.
+      this.meter = new Tone.Meter({ normalRange: true, smoothing: 0.8 })
+      this.masterGain.connect(this.meter)
+    }
     return this.masterGain
+  }
+
+  /** Live master output level, 0..1 and smoothed. 0 before playback/silence. */
+  getOutputLevel(): number {
+    if (!this.meter) return 0
+    const v = this.meter.getValue()
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0
   }
 
   /**

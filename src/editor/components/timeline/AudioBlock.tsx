@@ -195,7 +195,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     <div
       data-audio-block-id={block.id}
       title={clip ? `${clip.fileName} - drag to move` : 'Audio block'}
-      className="absolute top-1 bottom-1 rounded-[3px] overflow-hidden"
+      className="absolute top-0 bottom-0 rounded-[3px] overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${width}px`,

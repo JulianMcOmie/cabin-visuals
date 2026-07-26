@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { FileAudio, FileMusic, Film, Image as ImageIcon } from 'lucide-react'
-import { useProjectStore } from '../store/ProjectStore'
+import { resolveNextTrackColor, useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
-import { OBJECT_TRACK_COLOR } from '../utils/trackColors'
 import { selectNewTrack } from '../utils/selection'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
 import { addVideoClipsToTrack, capError, FREE_TOTAL_BYTES, totalVideoBytes } from '../core/video/videoUploads'
@@ -101,7 +100,7 @@ function addPhotoFiles(files: File[], isPro: boolean) {
       name: 'Photo',
       type: 'base',
       instrumentId: 'photo',
-      color: OBJECT_TRACK_COLOR,
+      color: resolveNextTrackColor({ tracks, rootTrackIds }),
       muted: false,
       solo: false,
       blocks: [],
@@ -155,7 +154,7 @@ function handleDroppedFiles(files: File[], isPro: boolean) {
       name: 'Video',
       type: 'base',
       instrumentId: 'video',
-      color: OBJECT_TRACK_COLOR,
+      color: resolveNextTrackColor(useProjectStore.getState()),
       muted: false,
       solo: false,
       blocks: [],

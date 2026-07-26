@@ -136,8 +136,8 @@ export function Ruler({
                 width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
                 height: '50%',
                 backgroundColor: loopRegion.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR,
-                borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
-                borderRight: `1px solid ${loopRegion.enabled ? '#3982b3' : '#3f3f46'}`,
+                borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
+                borderRight: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
                 zIndex: 5,
               }}
             >

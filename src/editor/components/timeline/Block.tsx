@@ -14,6 +14,8 @@ interface BlockProps {
   beatsPerBar: number
   color: string
   isSelected: boolean
+  /** Muted tracks don't pulse on note hits (they're greyed and silent). */
+  muted?: boolean
   /** Semantic MIDI row order from the full editor (first pitch = top). */
   previewRowPitches?: number[]
   /** Hide pitches outside the declared vocabulary, matching strict editors. */
@@ -21,7 +23,7 @@ interface BlockProps {
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
+export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -36,13 +38,25 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
   const palette = midiBlockPalette(color)
-  const outlineColor = isEditing || isSelected ? palette.selectedOutline : palette.outline
+  const active = isSelected || isEditing
+
+  // A looped block's surface is the UNION of its touching rounded sections, so
+  // its perimeter has a small notch (divot) at every loop boundary. A box-shadow
+  // ring can't express that - it traces the bounding RECTANGLE and paves the
+  // divots over. drop-shadow is built from the rendered alpha instead, so four
+  // 1px offsets lay a ring that hugs the real silhouette, divots included. The
+  // sections meet flush, so nothing is drawn along their shared edge (which is
+  // why the ring can't live on the sections themselves - see NotePreview).
+  const silhouetteRing = (ringColor: string) =>
+    `drop-shadow(1px 0 0 ${ringColor}) drop-shadow(-1px 0 0 ${ringColor})` +
+    ` drop-shadow(0 1px 0 ${ringColor}) drop-shadow(0 -1px 0 ${ringColor})`
+  const activityFilter = 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))'
 
   useEffect(() => {
     const element = blockRef.current
     if (!element) return
-    return registerMidiActivityBlock(block, beatsPerBar, element)
-  }, [beatsPerBar, block, previewRowPitches, strictPreviewRows])
+    return registerMidiActivityBlock(block, beatsPerBar, element, muted)
+  }, [beatsPerBar, block, muted, previewRowPitches, strictPreviewRows])
 
   return (
     <div
@@ -50,19 +64,32 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       data-block-id={block.id}
       data-looped-block={hasLoopSections ? '' : undefined}
       title="Double-click to edit notes"
-      className={`absolute top-0 bottom-0 overflow-hidden ${hasLoopSections ? '' : 'rounded-[3px]'}`}
+      className="absolute top-0 bottom-0 overflow-hidden rounded-[6px]"
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
-        backgroundColor: hasLoopSections ? 'transparent' : palette.fill,
-        borderTop: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
-        borderRight: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
-        borderBottom: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
-        borderLeft: hasLoopSections ? undefined : `1px solid ${outlineColor}`,
-        boxShadow: !hasLoopSections && (isSelected || isEditing)
-          ? `0 0 0 1px ${palette.selectedOutline}, 0 3px 10px rgba(0,0,0,0.24)`
-          : undefined,
-        filter: 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))',
+        // No borders: instead each block casts a super-thin, almost-black ring
+        // shadow - significant in darkness, hairline in geometry - so it reads
+        // as a border/margin against the lane and neighbouring blocks. The ring
+        // lives on THIS outer element for looped blocks too, so a looped block
+        // has ONE perimeter border; per-section rings would double up where two
+        // sections touch and read as a hard dividing line (the loop boundary is
+        // shown by the sections' corner notch instead).
+        backgroundColor: hasLoopSections ? 'transparent' : active ? palette.selectedFill : palette.fill,
+        // Square-cornered blocks keep the cheaper box-shadow ring; only looped
+        // blocks pay for the silhouette filter, and only they need it.
+        boxShadow: hasLoopSections
+          ? undefined
+          : active
+            ? `0 0 0 1px ${palette.selectedOutline}, 0 0 0 2px rgba(0,0,0,0.6), 0 3px 10px rgba(0,0,0,0.24)`
+            : '0 0 0 1px rgba(0,0,0,0.6)',
+        filter: hasLoopSections
+          // Selected: the accent ring first, then a black ring laid around the
+          // result - the same colour order the box-shadow version stacks in.
+          ? active
+            ? `${activityFilter} ${silhouetteRing(palette.selectedOutline)} ${silhouetteRing('rgba(0,0,0,0.6)')}`
+            : `${activityFilter} ${silhouetteRing('rgba(0,0,0,0.6)')}`
+          : activityFilter,
         willChange: 'filter',
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
@@ -101,7 +128,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       {!hasLoopSections && (
         <div
           aria-hidden="true"
-          className="absolute inset-0 pointer-events-none rounded-[3px]"
+          className="absolute inset-0 pointer-events-none rounded-[6px]"
           style={{
             backgroundColor: palette.selectedOutline,
             opacity: 'var(--midi-activity-opacity, 0)',
@@ -116,9 +143,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         totalBeats={totalBeatsInBlock}
         loopBeats={loopBeats}
         palette={palette}
-        highlighted={isEditing || isSelected}
-        widthPx={renderedWidth}
-        heightPx={renderedHeight}
+        selected={isSelected || isEditing}
         rowPitches={previewRowPitches}
         strictRows={strictPreviewRows}
       />
@@ -129,53 +154,10 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
 const PREVIEW_NOTE_CAP = 512
-const LOOP_CORNER_RADIUS_PX = 4
 
 interface LoopSection {
   startBeat: number
   durationBeats: number
-}
-
-/** One closed contour around the union of all repeated sections. At each
- *  internal join the path follows the two rounded corners into a divot, but
- *  deliberately omits the tangent vertical edges because those are internal
- *  to the combined loop shape. */
-function loopOutlinePath(sections: LoopSection[], totalBeats: number, width: number, height: number, strokeWidth: number): string {
-  const inset = strokeWidth / 2
-  const left = inset
-  const top = inset
-  const right = Math.max(left, width - inset)
-  const bottom = Math.max(top, height - inset)
-  const maxVerticalRadius = Math.max(0, (bottom - top) / 2)
-  const seams = sections.slice(1).map((section, index) => {
-    const x = (section.startBeat / totalBeats) * width
-    const previousWidth = sections[index].durationBeats / totalBeats * width
-    const nextWidth = section.durationBeats / totalBeats * width
-    const radius = Math.min(LOOP_CORNER_RADIUS_PX, maxVerticalRadius, previousWidth / 2, nextWidth / 2)
-    return { x, radius }
-  })
-  const outerRadius = Math.min(
-    LOOP_CORNER_RADIUS_PX,
-    maxVerticalRadius,
-    (sections[0]?.durationBeats ?? totalBeats) / totalBeats * width / 2,
-    (sections.at(-1)?.durationBeats ?? totalBeats) / totalBeats * width / 2,
-  )
-
-  let path = `M ${left + outerRadius} ${top}`
-  for (const seam of seams) {
-    path += ` H ${seam.x - seam.radius} Q ${seam.x} ${top} ${seam.x} ${top + seam.radius}`
-    path += ` Q ${seam.x} ${top} ${seam.x + seam.radius} ${top}`
-  }
-  path += ` H ${right - outerRadius} Q ${right} ${top} ${right} ${top + outerRadius}`
-  path += ` V ${bottom - outerRadius} Q ${right} ${bottom} ${right - outerRadius} ${bottom}`
-  for (let index = seams.length - 1; index >= 0; index -= 1) {
-    const seam = seams[index]
-    path += ` H ${seam.x + seam.radius} Q ${seam.x} ${bottom} ${seam.x} ${bottom - seam.radius}`
-    path += ` Q ${seam.x} ${bottom} ${seam.x - seam.radius} ${bottom}`
-  }
-  path += ` H ${left + outerRadius} Q ${left} ${bottom} ${left} ${bottom - outerRadius}`
-  path += ` V ${top + outerRadius} Q ${left} ${top} ${left + outerRadius} ${top} Z`
-  return path
 }
 
 /** Miniature of the block's notes: x/width from time, y from the MIDI editor's
@@ -184,7 +166,7 @@ function loopOutlinePath(sections: LoopSection[], totalBeats: number, width: num
  *  tiles the pattern (repeats dimmed) across touching rounded sections. Those
  *  sections are the block surface itself, rather than decorations inside one
  *  large outer pill, so their touching corners form the familiar DAW divots. */
-function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, widthPx, heightPx, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; highlighted: boolean; widthPx: number; heightPx: number; rowPitches?: number[]; strictRows?: boolean }) {
+function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
@@ -200,10 +182,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, width
       sections.push({ startBeat, durationBeats: Math.min(loopBeats, totalBeats - startBeat) })
     }
   }
-  const outlineStrokeWidth = highlighted ? 2 : 1
-  const outlinePath = looping
-    ? loopOutlinePath(sections, totalBeats, widthPx, heightPx, outlineStrokeWidth)
-    : null
 
   return (
     <>
@@ -214,7 +192,7 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, width
           <div
             key={`loop-section:${startBeat}`}
             data-loop-section=""
-            className="absolute pointer-events-none rounded-[4px]"
+            className="absolute pointer-events-none rounded-[6px]"
             style={{
               // Adjacent border boxes meet exactly: their flat vertical portions
               // are flush while the paired rounded corners expose a small notch.
@@ -222,7 +200,11 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, width
               width: `max(${widthPct}%, 1px)`,
               top: 0,
               bottom: 0,
-              backgroundColor: palette.fill,
+              backgroundColor: selected ? palette.selectedFill : palette.fill,
+              // No per-section ring: the perimeter border lives on the outer
+              // block, so touching sections merge into one fill and the loop
+              // boundary reads only from the small corner notch their rounding
+              // leaves - never a hard dark dividing line.
             }}
           >
             <div
@@ -239,24 +221,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, highlighted, width
           </div>
         )
       })}
-      {outlinePath && (
-        <svg
-          data-loop-outline=""
-          aria-hidden="true"
-          className="absolute inset-0 pointer-events-none"
-          viewBox={`0 0 ${widthPx} ${heightPx}`}
-          preserveAspectRatio="none"
-        >
-          <path
-            d={outlinePath}
-            fill="none"
-            stroke={highlighted ? palette.selectedOutline : palette.outline}
-            strokeWidth={outlineStrokeWidth}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      )}
       {occurrences.map(({ note, startBeat, durationBeats, repeat }) => {
         const pitchPosition = pitchPositions.get(note.pitch)
         if (pitchPosition == null) return null

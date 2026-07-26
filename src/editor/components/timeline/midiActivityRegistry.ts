@@ -13,6 +13,8 @@ const MAX_GLOW_OPACITY = 0.5
 interface MidiActivityBlock {
   element: HTMLDivElement
   triggers: MidiActivityTrigger[]
+  /** Muted tracks are silent, so their blocks must not pulse on note hits. */
+  muted: boolean
   lastOpacity: string
   notes: Array<{
     element: HTMLElement
@@ -27,6 +29,7 @@ export function registerMidiActivityBlock(
   block: Block,
   beatsPerBar: number,
   element: HTMLDivElement,
+  muted = false,
 ): () => void {
   const triggers = midiActivityTriggersForBlock(block, beatsPerBar)
   const elements = new Map<string, HTMLElement>()
@@ -37,6 +40,7 @@ export function registerMidiActivityBlock(
   const registration = {
     element,
     triggers,
+    muted,
     lastOpacity: '0',
     notes: triggers.flatMap((trigger) => {
       const noteElement = trigger.previewKey ? elements.get(trigger.previewKey) : undefined
@@ -62,7 +66,10 @@ export function registerMidiActivityBlock(
  *  envelope frozen at the stopped or scrubbed beat. */
 export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void {
   for (const block of blocks.values()) {
-    const activity = isPlaying ? evaluateMidiActivity(block.triggers, beat) : 0
+    // A muted track is silent; its blocks hold at 0 (no block glow, no per-note
+    // flash) instead of pulsing along with the notes that aren't sounding.
+    const live = isPlaying && !block.muted
+    const activity = live ? evaluateMidiActivity(block.triggers, beat) : 0
     const opacity = Math.min(MAX_GLOW_OPACITY, activity * GLOW_OPACITY_SCALE).toFixed(4)
     if (block.lastOpacity !== opacity) {
       block.element.style.setProperty('--midi-activity-opacity', opacity)
@@ -70,7 +77,7 @@ export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void
     }
 
     for (const note of block.notes) {
-      const activity = evaluateMidiActivity([note.trigger], beat).toFixed(4)
+      const activity = (live ? evaluateMidiActivity([note.trigger], beat) : 0).toFixed(4)
       if (note.lastActivity === activity) continue
       note.element.style.setProperty('--midi-note-activity', activity)
       note.lastActivity = activity

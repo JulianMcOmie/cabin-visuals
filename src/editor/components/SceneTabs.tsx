@@ -1,18 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2 } from 'lucide-react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { Plus, Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
 import { useProjectStore, type ViewAspect } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 
 const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
-/** Flat right-click menu for a scene tab: duplicate or delete. Styled like the
- *  shared NestedMenu shell (backdrop-to-close, Esc, stands down editor surfaces). */
-function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
+/** Flat right-click menu for a scene tab: view it on the canvas, duplicate, or
+ *  delete. Styled like the shared NestedMenu shell (backdrop-to-close, Esc,
+ *  stands down editor surfaces). */
+function SceneTabMenu({ x, y, isViewed, canDuplicate, canDelete, onView, onDuplicate, onDelete, onClose }: {
   x: number
   y: number
+  /** This scene is already the one on the canvas - the item stays as a marker. */
+  isViewed: boolean
+  /** Main cannot be duplicated or deleted; its menu is the view item alone. */
+  canDuplicate: boolean
   canDelete: boolean
+  onView: () => void
   onDuplicate: () => void
   onDelete: () => void
   onClose: () => void
@@ -41,20 +47,91 @@ function SceneTabMenu({ x, y, canDelete, onDuplicate, onDelete, onClose }: {
         onContextMenu={(e) => e.preventDefault()}
       >
         <button
-          onClick={() => { onDuplicate(); onClose() }}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60 cursor-pointer"
+          onClick={() => { if (!isViewed) onView(); onClose() }}
+          disabled={isViewed}
+          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${
+            isViewed ? 'text-zinc-400 cursor-default' : 'text-zinc-200 hover:bg-zinc-700/60 cursor-pointer'
+          }`}
         >
-          <Copy size={12} /> Duplicate
+          <Eye size={12} /> {isViewed ? 'Viewing this scene' : 'View this scene'}
         </button>
-        <button
-          onClick={() => { if (canDelete) { onDelete(); onClose() } }}
-          disabled={!canDelete}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
-        >
-          <Trash2 size={12} /> Delete
-        </button>
+        {(canDuplicate || canDelete) && <div className="my-1 h-px bg-zinc-700" aria-hidden="true" />}
+        {canDuplicate && (
+          <button
+            onClick={() => { onDuplicate(); onClose() }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-200 hover:bg-zinc-700/60 cursor-pointer"
+          >
+            <Copy size={12} /> Duplicate
+          </button>
+        )}
+        {canDuplicate && (
+          <button
+            onClick={() => { if (canDelete) { onDelete(); onClose() } }}
+            disabled={!canDelete}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${canDelete ? 'text-red-400 hover:bg-red-500/15 cursor-pointer' : 'text-red-400/40 cursor-default'}`}
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        )}
       </div>
     </>
+  )
+}
+
+// Track positions per slider. Fine enough that a drag feels continuous, coarse
+// enough that one arrow key is a visible step.
+const ZOOM_POSITIONS = 240
+
+/**
+ * One timeline zoom slider: an icon that says which way it stretches, then a
+ * filled track in the same language as the inspector's ParamSlider (3px rule,
+ * dampened-blue fill, 9px square thumb) - so the toolbar and the panels look
+ * like one instrument rather than two.
+ *
+ * The track is LOGARITHMIC, because zoom is multiplicative: 4 → 8 px/beat is
+ * the same gesture as 40 → 80. Linearly, the levels anyone actually works at
+ * were squeezed into the first fifth of the travel - unusable for fine tuning,
+ * and it left the fill looking permanently empty at the default zoom.
+ */
+function ZoomSlider({ icon, label, value, min, max, unit, onChange }: {
+  icon: ReactNode
+  label: string
+  value: number
+  min: number
+  max: number
+  /** Spoken value for assistive tech - the raw slider positions are meaningless. */
+  unit: string
+  onChange: (value: number) => void
+}) {
+  const decades = Math.log(max / min)
+  const position = Math.round((Math.log(value / min) / decades) * ZOOM_POSITIONS)
+  const valueAt = (pos: number) => min * Math.exp((pos / ZOOM_POSITIONS) * decades)
+
+  const commit = (pos: number) => {
+    const next = Math.round(valueAt(pos))
+    // Whole-pixel rounding can swallow a step near the low end, which makes the
+    // arrow keys look dead; move a single unit instead of nothing.
+    const moved = next === value ? value + Math.sign(pos - position) : next
+    onChange(Math.max(min, Math.min(max, moved)))
+  }
+
+  return (
+    <label title={label} className="group/zoom flex items-center gap-1.5">
+      <span className="flex-shrink-0 text-[var(--text-muted)] transition-colors group-hover/zoom:text-[var(--text-3)]">
+        {icon}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={ZOOM_POSITIONS}
+        value={position}
+        aria-label={label}
+        aria-valuetext={`${value} ${unit}`}
+        onChange={(e) => commit(Number(e.target.value))}
+        style={{ '--fill': `${(position / ZOOM_POSITIONS) * 100}%` } as CSSProperties}
+        className="slider-zoom w-16 cursor-pointer"
+      />
+    </label>
   )
 }
 
@@ -79,19 +156,14 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
   const aspect = useProjectStore((s) => s.viewAspect)
   const setAspect = useProjectStore((s) => s.setViewAspect)
-  const previewSceneIds = [
-    ...sceneOrder.filter((id) => scenes[id] && !scenes[id].isMain),
-    ...sceneOrder.filter((id) => scenes[id]?.isMain),
-  ]
 
+  // Editing a scene and watching a scene are separate choices now: the tab you
+  // click is the one you edit, and the eye stays wherever you put it (Main
+  // until you move it). Nothing follows anything.
   const select = (id: string) => {
     useUIStore.getState().setEditingBlock(null)
     useUIStore.getState().setSelectedTrackId(null)
     useUIStore.getState().setSelectedBlockIds(new Set())
-    // Preserve the old "Current" behavior: while the preview is showing the
-    // scene being edited, changing tabs advances both together. A deliberately
-    // chosen different preview remains pinned.
-    if (previewSceneId === activeSceneId) onPreviewSceneChange(id)
     setActiveScene(id)
   }
 
@@ -100,7 +172,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
     select(id)
   }
 
-  // Right-click menu (duplicate / delete), positioned at the cursor.
+  // Right-click menu (view / duplicate / delete), positioned at the cursor.
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const menuScene = menu ? scenes[menu.id] : null
 
@@ -110,6 +182,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
         const scene = scenes[id]
         if (!scene) return null
         const active = id === activeSceneId
+        const viewed = id === previewSceneId
         return (
           <div key={id} className="relative flex flex-shrink-0">
             <button
@@ -120,18 +193,22 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
                 if (name) renameScene(id, name)
               }}
               onContextMenu={(e) => {
-                if (scene.isMain) return
                 e.preventDefault()
                 setMenu({ x: e.clientX, y: e.clientY, id })
               }}
-              title={scene.isMain ? 'Final director composition' : 'Double-click to rename · Right-click for options'}
-              className={`h-6 min-w-14 max-w-36 truncate rounded-full px-3 text-[11px] transition-colors cursor-pointer ${
+              title={`${scene.isMain ? 'Final director composition' : 'Double-click to rename'} · Right-click for options${
+                viewed ? ' · shown on the canvas' : ''
+              }`}
+              className={`flex h-6 min-w-14 max-w-36 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors cursor-pointer ${
                 active
                   ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
                   : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
               }`}
             >
-              {scene.name}
+              {/* The eye marks the scene the canvas is showing, which is not
+                  necessarily the one being edited. */}
+              {viewed && <Eye size={11} className="flex-shrink-0 text-[var(--text-2)]" aria-label="Shown on the canvas" />}
+              <span className="truncate">{scene.name}</span>
             </button>
           </div>
         )
@@ -140,36 +217,8 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
         <Plus size={13} />
       </button>
       <div className="ml-auto flex min-w-0 items-center gap-1">
-        {/* Canvas target, aspect and timeline sizing share the scene row instead
-            of floating over the preview. Visual scenes come first, then Main. */}
-        <div className="mx-1 h-4 w-px flex-shrink-0 bg-[var(--border)]" aria-hidden="true" />
-        <div
-          role="group"
-          aria-label="Canvas preview"
-          className="flex min-w-0 items-center gap-1"
-        >
-          {previewSceneIds.map((id) => {
-            const scene = scenes[id]
-            if (!scene) return null
-            const active = previewSceneId === id
-            return (
-              <button
-                key={id}
-                onClick={() => onPreviewSceneChange(id)}
-                title={`Preview ${scene.name}`}
-                aria-pressed={active}
-                className={`h-6 max-w-24 truncate rounded-full px-2.5 text-[10px] font-medium transition-colors cursor-pointer ${
-                  active
-                    ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
-                    : 'bg-transparent text-[var(--text-muted)] hover:bg-white/[0.05] hover:text-[var(--text)]'
-                }`}
-              >
-                {scene.name}
-              </button>
-            )
-          })}
-        </div>
-
+        {/* Which scene the canvas shows is the eye on the tabs now, not a second
+            row of scene names here. Aspect and timeline sizing stay. */}
         <button
           onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
           title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
@@ -178,30 +227,29 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
           {aspect === 'fill' ? 'Fill' : aspect}
         </button>
 
-        {/* Timeline zoom sliders live here so they never cover track content. */}
-        <div className="flex items-center gap-2.5 px-2">
-          <div className="flex items-center gap-1.5" title="Horizontal zoom">
-            <span className="text-[10px] text-zinc-600">H</span>
-            <input
-              type="range"
-              min={2}
-              max={100}
-              value={pixelsPerBeat}
-              onChange={(e) => setTracksPixelsPerBeat(Number(e.target.value))}
-              className="slider-square w-14 cursor-pointer"
-            />
-          </div>
-          <div className="flex items-center gap-1.5" title="Vertical zoom">
-            <span className="text-[10px] text-zinc-600">V</span>
-            <input
-              type="range"
-              min={28}
-              max={200}
-              value={tracksRowHeight}
-              onChange={(e) => setTracksRowHeight(Number(e.target.value))}
-              className="slider-square w-14 cursor-pointer"
-            />
-          </div>
+        {/* Timeline zoom lives here so it never covers track content. The two
+            sliders share one pill: they are one control ("how big is the
+            timeline"), not two unrelated settings. */}
+        <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 transition-colors hover:bg-white/[0.06]">
+          <ZoomSlider
+            icon={<UnfoldHorizontal size={11} strokeWidth={2} />}
+            label="Horizontal zoom - beat width"
+            value={pixelsPerBeat}
+            min={2}
+            max={100}
+            unit="pixels per beat"
+            onChange={setTracksPixelsPerBeat}
+          />
+          <div className="h-3 w-px flex-shrink-0 bg-[var(--border)]" aria-hidden="true" />
+          <ZoomSlider
+            icon={<UnfoldVertical size={11} strokeWidth={2} />}
+            label="Vertical zoom - track height"
+            value={tracksRowHeight}
+            min={28}
+            max={200}
+            unit="pixels per row"
+            onChange={setTracksRowHeight}
+          />
         </div>
       </div>
 
@@ -209,7 +257,10 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
         <SceneTabMenu
           x={menu.x}
           y={menu.y}
+          isViewed={menu.id === previewSceneId}
+          canDuplicate={!menuScene.isMain}
           canDelete={!menuScene.isMain && visualCount > 1}
+          onView={() => onPreviewSceneChange(menu.id)}
           onDuplicate={() => {
             const copyId = duplicateScene(menu.id)
             if (copyId) select(copyId)

@@ -163,26 +163,30 @@ test('Snap reads the SHARED easing table, so a return curve springs the rotation
   assert.equal(evaluateSnapAngles(notes, roundTrip, 2)[0], 0)
 })
 
-test('Spin turns the object and Return orientation brings it back', () => {
-  const config = settings({ ...NO_WRAP, spinZ: 90, spin: 1, spinReturnBeats: 1 })
-  // One beat of +Z spin at 90°/beat puts local +X on world +Y.
-  assert.deepEqual(localX(applyAt(config, [note(0, 76, 1)], 1)), [0, 1, 0])
+test('Spin adds rotation on top of the always-on baseline, and Return re-syncs it', () => {
+  const config = settings({ ...NO_WRAP, spinX: 0, spinY: 0, spinZ: 90, spin: 1, spinReturnBeats: 1 })
+  // Baseline (90°) + one held +Z beat (90°) = half a turn: local +X on world -X.
+  assert.deepEqual(localX(applyAt(config, [note(0, 76, 1)], 1)), [-1, 0, 0])
+  // The Return erases the angle it met; the baseline accrued during its sweep
+  // leaves the object a quarter turn on, spinning from there.
   const returned = applyAt(config, [note(0, 76, 1), note(2, 78, 1)], 3)
-  assert.deepEqual(localX(returned), [1, 0, 0])
+  assert.deepEqual(localX(returned), [0, 1, 0])
 })
 
 test('translation and rotation compose as previous * translation * rotation', () => {
   // The object spins in place at its drifted position: the drift is NOT steered
   // by the spin, and the spin is NOT displaced by the drift.
-  const config = settings({ ...NO_WRAP, driftX: 2, drift: 1, spinZ: 90, spin: 1 })
+  const config = settings({ ...NO_WRAP, driftX: 2, drift: 1, spinX: 0, spinY: 0, spinZ: 90, spin: 1 })
   const copy = applyAt(config, [note(0, 48, 1), note(0, 76, 1)], 1)
   assert.deepEqual(positionOf(copy), [2, 0, 0])
-  assert.deepEqual(localX(copy), [0, 1, 0])
+  // Baseline + one held spin beat = half a turn.
+  assert.deepEqual(localX(copy), [-1, 0, 0])
 })
 
 test('a pivot turns the rotation blocks into an orbit', () => {
-  const config = settings({ ...NO_WRAP, spinZ: 180, spin: 1, pivotX: 1, pivotY: 0, pivotZ: 0 })
-  // Half a turn about a pivot one unit to the +X side lands the object at +2X.
+  const config = settings({ ...NO_WRAP, spinX: 0, spinY: 0, spinZ: 90, spin: 1, pivotX: 1, pivotY: 0, pivotZ: 0 })
+  // Baseline (90°) + one held beat (90°) = half a turn about a pivot one unit
+  // to the +X side, landing the object at +2X.
   const copy = applyAt(config, [note(0, 76, 1)], 1)
   const [x, y, z] = positionOf(copy)
   assert.equal(Math.round(x * 1e6) / 1e6, 2)
@@ -191,8 +195,8 @@ test('a pivot turns the rotation blocks into an orbit', () => {
 })
 
 test('the basis re-aims every block at once', () => {
-  // Swap the X basis onto world Y: a +X drift now moves the object up, and a
-  // +X spin now turns about world Y.
+  // Swap the X basis onto world Y: a +X drift now moves the object up, and the
+  // spin turns about world Y.
   const config = settings({
     ...NO_WRAP,
     driftX: 2,
@@ -201,18 +205,24 @@ test('the basis re-aims every block at once', () => {
     basisXY: 1,
     basisXZ: 0,
     spinX: 90,
+    spinY: 0,
+    spinZ: 0,
     spin: 1,
   })
   assert.deepEqual(positionOf(applyAt(config, [note(0, 48, 1)], 1)), [0, 2, 0])
+  // Baseline (90°) + one held beat (90°) = half a turn about world Y: local +X
+  // now points down world -X.
   const spun = applyAt(config, [note(0, 72, 1)], 1)
   const [x, y, z] = localX(spun)
-  assert.equal(Math.round(x * 1e6) / 1e6, 0)
+  assert.equal(Math.round(x * 1e6) / 1e6, -1)
   assert.equal(y, 0)
-  assert.equal(Math.round(z * 1e6) / 1e6, -1, 'local +X now points down world -Z')
+  assert.equal(z, 0)
 })
 
 test('blocks are independent: a note in one never leaks into another', () => {
-  const config = settings({ ...NO_WRAP })
+  // Spin speeds zeroed so the always-on baseline is inert too: gap pitches
+  // between blocks must leave the transform exactly alone.
+  const config = settings({ ...NO_WRAP, spinX: 0, spinY: 0, spinZ: 0 })
   const identity = new Matrix4()
   for (const pitch of [48, 60, 72, 84]) {
     const others = [55, 59, 66, 71, 79, 83, 90].map((p) => note(0, p, 2))

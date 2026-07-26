@@ -7,11 +7,14 @@ import { mergeDefinitionSettings } from './definitions'
 import { getMoverOrSplitterDefinition } from './registry'
 import { resolveVisualCopies } from './resolveVisualCopies'
 import {
+  TUNNEL_CAMERA_MUTE_PITCH,
   TUNNEL_FORWARD_PITCH,
   TUNNEL_ORIGIN_X_PITCHES,
   TUNNEL_ORIGIN_Y_PITCHES,
   TUNNEL_REVERSE_PITCH,
   evaluateTunnelTravel,
+  isTunnelCameraMuteActive,
+  tunnelCameraMuteZone,
   tunnelCounts,
   tunnelOriginLookup,
   tunnelSlotPlacement,
@@ -211,15 +214,16 @@ test('orientation aims copies at or away from the corridor axis', () => {
   assert.deepEqual(forward(copiesAt(settings({ ...config, radius: 0, orientation: 1 }), 0)[0]), [0, 0, 1])
 })
 
-test('declares the two speed rows plus five origin rows per axis', () => {
+test('declares the two speed rows, five origin rows per axis, and the camera mute', () => {
   const rows = tunnelSplitter.midiRows?.(settings()) ?? []
   assert.deepEqual(rows.slice(0, 2), [
     { pitch: TUNNEL_FORWARD_PITCH, label: 'Rush forward' },
     { pitch: TUNNEL_REVERSE_PITCH, label: 'Rush backward' },
   ])
-  assert.equal(rows.length, 12)
+  assert.equal(rows.length, 13)
   assert.deepEqual(rows.slice(2, 7).map((row) => row.pitch), TUNNEL_ORIGIN_X_PITCHES)
-  assert.deepEqual(rows.slice(7).map((row) => row.pitch), TUNNEL_ORIGIN_Y_PITCHES)
+  assert.deepEqual(rows.slice(7, 12).map((row) => row.pitch), TUNNEL_ORIGIN_Y_PITCHES)
+  assert.deepEqual(rows[12], { pitch: TUNNEL_CAMERA_MUTE_PITCH, label: 'Mute at camera' })
   // Pitch rises with the value: the low row is the far negative side.
   assert.equal(rows[2].label, 'Origin X: far left')
   assert.equal(rows[6].label, 'Origin X: far right')
@@ -342,4 +346,47 @@ test('origin rows never change the copy count or the speed rows behaviour', () =
     evaluateTunnelTravel(notes, config, 3),
     evaluateTunnelTravel([note(1, TUNNEL_FORWARD_PITCH, 2)], config, 3),
   )
+})
+
+test('the camera mute zone runs from the near end back past the camera plane', () => {
+  // Defaults: near end 12, camera at z = 5 -> 7 corridor units plus the 2-unit
+  // margin hide the whole approach while the row is held.
+  assert.equal(tunnelCameraMuteZone(settings()), 9)
+  // A near end pulled in front of the lens clamps to just the margin.
+  assert.equal(tunnelCameraMuteZone(settings({ nearEnd: 3 })), 2)
+})
+
+test('the camera mute gate follows its notes, ignoring velocity', () => {
+  const notes = [note(4, TUNNEL_CAMERA_MUTE_PITCH, 2, 64)]
+  assert.equal(isTunnelCameraMuteActive(notes, 3.9999), false)
+  assert.equal(isTunnelCameraMuteActive(notes, 4), true)
+  assert.equal(isTunnelCameraMuteActive(notes, 5.9999), true)
+  assert.equal(isTunnelCameraMuteActive(notes, 6), false)
+  assert.equal(isTunnelCameraMuteActive([], 4), false)
+})
+
+test('a held Mute at camera note mutes the copies that would hit the camera', () => {
+  // Ring depths back from the near end: [0, 10, 20, 30]; zone = (6 - 5) + 2 = 3.
+  const config = settings({ copiesPerRing: 1, rings: 4, radius: 0, depth: 40, nearEnd: 6, speed: 0, fadeDistance: 0 })
+  const notes = [note(1, TUNNEL_CAMERA_MUTE_PITCH, 2)]
+  // Before the note: every ring renders.
+  assert.deepEqual(copiesAt(config, 0, notes).map((copy) => copy.opacity), [1, 1, 1, 1])
+  // While held: only ring 0 (inside the zone) is muted; the rest are untouched.
+  assert.deepEqual(copiesAt(config, 2, notes).map((copy) => copy.opacity), [0, 1, 1, 1])
+  // After release the corridor is exactly as if nothing happened.
+  assert.deepEqual(copiesAt(config, 3, notes).map((copy) => copy.opacity), [1, 1, 1, 1])
+  // A wider margin mutes deeper rings.
+  assert.deepEqual(
+    copiesAt(settings({ ...config, cameraMuteMargin: 12 }), 2, notes).map((copy) => copy.opacity),
+    [0, 0, 1, 1],
+  )
+})
+
+test('the camera mute is a pure opacity gate: copies keep flowing underneath', () => {
+  const config = settings({ copiesPerRing: 1, rings: 4, radius: 0, depth: 40, nearEnd: 6, speed: 4, fadeDistance: 0 })
+  const notes = [note(0, TUNNEL_CAMERA_MUTE_PITCH, 16)]
+  // Same beat, same positions - muted or not.
+  assert.deepEqual(copiesAt(config, 3.5, notes).map(positionOf), copiesAt(config, 3.5).map(positionOf))
+  // ...and the structural count never changes.
+  assert.equal(copiesAt(settings(), 2, notes).length, 48)
 })

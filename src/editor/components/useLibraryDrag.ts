@@ -1,12 +1,11 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { useProjectStore } from '../store/ProjectStore'
+import { resolveNextTrackColor, useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
-import { OBJECT_TRACK_COLOR, MOVER_TRACK_COLOR, COLORIZER_TRACK_COLOR } from '../utils/trackColors'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import type { Track } from '../types'
 
@@ -30,11 +29,7 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
     directorId: isDirector ? item.id : undefined,
     sceneBindings: isDirector ? visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })) : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
-    color: item.kind === 'object'
-      ? OBJECT_TRACK_COLOR
-      : item.kind === 'colorizer'
-        ? COLORIZER_TRACK_COLOR
-        : MOVER_TRACK_COLOR,
+    color: resolveNextTrackColor(state, parentId),
     muted: false,
     solo: false,
     blocks: [],
