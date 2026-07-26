@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, Sparkles, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
+import { Play, Pause, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -16,7 +16,6 @@ import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
 import { setEditorPreviewSceneId } from './core/visual/VisualEngine'
-import { ProfileMenu } from '../components/ProfileMenu'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
@@ -39,7 +38,7 @@ import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
 import { ConflictDialog } from './components/ConflictDialog'
 import * as projectStorage from '../persistence/projectStorage'
-import { usePlan, openBillingPortal } from '../billing/usePlan'
+import { usePlan } from '../billing/usePlan'
 import { useAuth } from '../persistence/hooks/useAuth'
 import { useScrub } from './hooks/useScrub'
 import { readPaneDefaults, writePaneOpen } from './uiSettings'
@@ -574,7 +573,7 @@ function EditorPanelToggle({
       title={`${open ? 'Hide' : 'Show'} ${label}`}
       className={`flex h-7 w-7 items-center justify-center rounded transition-colors cursor-pointer ${
         open
-          ? 'bg-[var(--accent)]/15 text-[var(--accent)]'
+          ? 'bg-white/10 text-[var(--text)] hover:bg-white/15'
           : 'text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]'
       }`}
     >
@@ -779,26 +778,6 @@ function Header({
             <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
           </svg>
         </a>
-        {permanent && !plan.loading && !plan.isPro && (
-          <Link
-            href="/pricing"
-            onClick={() => track('editor_upgrade_clicked')}
-            title="Cabin Visuals Pro - full HD 1080p exports, $9/mo"
-            className="flex items-center gap-1.5 h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] hover:border-[var(--border-strong)] text-[11px] font-semibold transition-colors cursor-pointer"
-          >
-            <Sparkles size={11} strokeWidth={2.5} />
-            Upgrade
-          </Link>
-        )}
-        {plan.isPro && (
-          <button
-            onClick={() => void openBillingPortal().catch(() => {})}
-            title="Manage your Pro subscription"
-            className="h-7 px-2.5 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--warn)] text-[11px] font-semibold tracking-wide hover:border-[var(--border-strong)] transition-colors cursor-pointer"
-          >
-            PRO
-          </button>
-        )}
         {/* Gated Export explains itself like the projects page's blocked
             "New project" button: an instant CSS group-hover panel, not a
             native title - titles never fire over disabled buttons in Firefox
@@ -806,9 +785,7 @@ function Header({
             appears with no tooltip dwell. Two gates share it: browser
             capability first (signing in wouldn't help there), then account
             (export requires a real sign-in; anonymous sessions don't count).
-            Ungated, the button keeps a NATIVE title like PRO and the profile
-            icon beside it - same box, same fade - kept short so the
-            OS-positioned tooltip stays inside the window. */}
+            Ungated, the button keeps a short native title. */}
         <div className="group relative">
           <button
             onClick={() => {
@@ -863,7 +840,6 @@ function Header({
             </div>
           )}
         </div>
-        <ProfileMenu size="sm" />
       </div>
       {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
     </div>
@@ -952,7 +928,7 @@ export default function EditorApp() {
       />
       {/* The library's panel color fills everything below the header, so the
           workspace reads as one card inset within the library's surface. */}
-      <div className="flex-1 min-h-0 bg-[var(--bg-panel)]">
+      <div className="flex-1 min-h-0 bg-[var(--bg-shell)]">
         <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
 
           {/* Library - dragging below its minimum snaps it closed; the matching
@@ -984,11 +960,11 @@ export default function EditorApp() {
               tinting on hover so it stays discoverable. */}
           <PanelResizeHandle className="w-1 cursor-col-resize bg-transparent outline-none transition-colors hover:bg-[var(--border-strong)] focus:outline-none" />
 
-          {/* Right section: inspector + canvas above, tracks + audio strip below -
-              ONE inset card. The p-2 gap lets the library-colored shell show on
-              every side; rounded corners + hairline border seat it "inside". */}
-          <Panel className="p-2">
-            <div className="flex h-full flex-col overflow-hidden rounded-[10px] border border-[var(--border)] bg-[var(--bg-app)]">
+          {/* Right section: inspector + canvas above, tracks + audio strip below.
+              The shell shows only along the top and left; the workspace runs
+              flush to the viewport's right and bottom edges. */}
+          <Panel className="pt-2 pl-2">
+            <div className="flex h-full flex-col overflow-hidden rounded-tl-[10px] border border-[var(--border)] bg-[var(--bg-app)]">
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}

@@ -26,8 +26,8 @@ body {
      lightness as the tinted colour it replaced, so the surface hierarchy is
      unchanged - only the hue is gone. THE blue lives in --accent alone. */
   --bg-app: #121212;          /* editor app background / workspace card */
-  --bg-topbar: #161616;       /* editor top bar */
   --bg-shell: #080808;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
+  --bg-topbar: var(--bg-shell); /* editor top bar follows the library shell */
   --bg-page: #0a0a0a;         /* marketing/auth page background */
   --bg-panel: #131313;        /* panels, cards, top bars */
   --bg-panel-raised: #181818; /* label columns, corner cells */
