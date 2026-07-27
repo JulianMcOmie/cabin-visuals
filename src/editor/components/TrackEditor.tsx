@@ -814,9 +814,9 @@ export function TrackEditor() {
                 onContextMenu={isObject ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
                 className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
               >
-                {effects.length === 0 && (
+                {effects.length === 0 && effectDragging && (
                   <p className="text-xs text-[var(--text-muted)] text-center mt-8 mb-4">
-                    {effectDragging ? 'Drop to add effect' : 'Drag an effect from the library here'}
+                    Drop to add effect
                   </p>
                 )}
                 {effects.map((inst, i) => {
