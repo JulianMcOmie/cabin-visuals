@@ -5,7 +5,6 @@
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
-import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import {

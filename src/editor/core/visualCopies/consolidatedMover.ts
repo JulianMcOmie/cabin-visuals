@@ -40,7 +40,10 @@ const MODULES: MoverModule[] = [
 ]
 
 export const CONSOLIDATED_MOVER_BANKS = Object.fromEntries(
-  MODULES.map((module) => [module.id, { start: module.bankStart, size: module.maxRows }]),
+  MODULES.map((moverModule) => [
+    moverModule.id,
+    { start: moverModule.bankStart, size: moverModule.maxRows },
+  ]),
 ) as Record<string, { start: number; size: number }>
 
 export function consolidatedMoverPitch(moduleId: string, rowIndex: number): number {
@@ -49,61 +52,61 @@ export function consolidatedMoverPitch(moduleId: string, rowIndex: number): numb
   return bank.start + rowIndex
 }
 
-function enableKey(module: MoverModule): string {
-  return `enable__${module.id}`
+function enableKey(moverModule: MoverModule): string {
+  return `enable__${moverModule.id}`
 }
 
-function settingKey(module: MoverModule, key: string): string {
-  return `${module.id}__${key}`
+function settingKey(moverModule: MoverModule, key: string): string {
+  return `${moverModule.id}__${key}`
 }
 
-function prefixedParam(module: MoverModule, param: ParamDef): ParamDef {
+function prefixedParam(moverModule: MoverModule, param: ParamDef): ParamDef {
   return {
     ...param,
-    key: settingKey(module, param.key),
-    label: `${module.label} · ${param.label}`,
-    showIf: enableKey(module),
+    key: settingKey(moverModule, param.key),
+    label: `${moverModule.label} · ${param.label}`,
+    showIf: enableKey(moverModule),
   }
 }
 
-const CONSOLIDATED_PARAMS: ParamDef[] = MODULES.flatMap((module) => [
+const CONSOLIDATED_PARAMS: ParamDef[] = MODULES.flatMap((moverModule) => [
   {
-    key: enableKey(module),
-    label: `${module.label} module`,
+    key: enableKey(moverModule),
+    label: `${moverModule.label} module`,
     type: 'boolean' as const,
-    default: module.defaultEnabled,
+    default: moverModule.defaultEnabled,
   },
-  ...module.definition.params.map((param) => prefixedParam(module, param)),
+  ...moverModule.definition.params.map((param) => prefixedParam(moverModule, param)),
 ])
 
-function moduleSettings(settings: ConsolidatedSettings, module: MoverModule): Record<string, number> {
+function moduleSettings(settings: ConsolidatedSettings, moverModule: MoverModule): Record<string, number> {
   const out: Record<string, number> = {}
-  for (const param of module.definition.params) {
+  for (const param of moverModule.definition.params) {
     if (typeof param.default !== 'number') continue
-    out[param.key] = settings[settingKey(module, param.key)] ?? param.default
+    out[param.key] = settings[settingKey(moverModule, param.key)] ?? param.default
   }
   return out
 }
 
 function nativeRows(
   settings: ConsolidatedSettings,
-  module: MoverModule,
+  moverModule: MoverModule,
 ): MidiRowDef[] {
   // Six makes Visibility's dynamic Each Index mapping consume exactly the
   // remainder of the MIDI range. Other modules ignore priorCount.
-  return (module.definition.midiRows?.(moduleSettings(settings, module), { priorCount: 6 }) ?? [])
-    .slice(0, module.maxRows)
+  return (moverModule.definition.midiRows?.(moduleSettings(settings, moverModule), { priorCount: 6 }) ?? [])
+    .slice(0, moverModule.maxRows)
 }
 
 function consolidatedMidiRows(settings: ConsolidatedSettings): MidiRowDef[] {
   const rows: MidiRowDef[] = []
-  for (const module of MODULES) {
-    if ((settings[enableKey(module)] ?? module.defaultEnabled) < 0.5) continue
-    nativeRows(settings, module).forEach((row, index) => {
+  for (const moverModule of MODULES) {
+    if ((settings[enableKey(moverModule)] ?? moverModule.defaultEnabled) < 0.5) continue
+    nativeRows(settings, moverModule).forEach((row, index) => {
       rows.push({
         ...row,
-        pitch: module.bankStart + index,
-        label: `${module.label} · ${row.label}`,
+        pitch: moverModule.bankStart + index,
+        label: `${moverModule.label} · ${row.label}`,
       })
     })
   }
@@ -113,13 +116,13 @@ function consolidatedMidiRows(settings: ConsolidatedSettings): MidiRowDef[] {
 function moduleNotes(
   notes: readonly ResolvedNote[],
   settings: ConsolidatedSettings,
-  module: MoverModule,
+  moverModule: MoverModule,
 ): ResolvedNote[] {
-  const rows = nativeRows(settings, module)
-  const end = module.bankStart + rows.length
+  const rows = nativeRows(settings, moverModule)
+  const end = moverModule.bankStart + rows.length
   return notes.flatMap((note) => {
-    if (note.pitch < module.bankStart || note.pitch >= end) return []
-    return [{ ...note, pitch: rows[note.pitch - module.bankStart].pitch }]
+    if (note.pitch < moverModule.bankStart || note.pitch >= end) return []
+    return [{ ...note, pitch: rows[note.pitch - moverModule.bankStart].pitch }]
   })
 }
 
@@ -127,11 +130,11 @@ function resolveModules(
   settings: ConsolidatedSettings,
   notes: readonly ResolvedNote[],
 ): MoverOrSplitter[] {
-  return MODULES.flatMap((module) => {
-    if ((settings[enableKey(module)] ?? module.defaultEnabled) < 0.5) return []
-    return [module.definition.resolve({
-      settings: moduleSettings(settings, module),
-      notes: moduleNotes(notes, settings, module),
+  return MODULES.flatMap((moverModule) => {
+    if ((settings[enableKey(moverModule)] ?? moverModule.defaultEnabled) < 0.5) return []
+    return [moverModule.definition.resolve({
+      settings: moduleSettings(settings, moverModule),
+      notes: moduleNotes(notes, settings, moverModule),
     })]
   })
 }
@@ -156,10 +159,10 @@ export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> 
     return {
       apply(visualCopy, context) {
         let copies: VisualCopy[] = [visualCopy]
-        for (const module of modules) {
+        for (const resolvedMover of modules) {
           const previous = copies
           const count = previous.length
-          copies = previous.flatMap((copy, index) => module.apply(copy, {
+          copies = previous.flatMap((copy, index) => resolvedMover.apply(copy, {
             ...context,
             index,
             count,
