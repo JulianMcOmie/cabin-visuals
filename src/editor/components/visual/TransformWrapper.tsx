@@ -31,14 +31,16 @@ function SingleTransform({ trackId, instance, children }: { trackId: string; ins
 }
 
 /**
- * Wrap an object in its transform-effect chain. The placement group above this (in
- * ObjectRenderer) carries the object's world transform, so these effects operate in
- * the object's own frame - rotate spins it in place, offset shifts it, etc. First
- * plugin is innermost, last is outermost (later transforms wrap earlier ones, e.g.
- * offset-then-rotate ⇒ orbital motion).
+ * Wrap an object in its ordinary transform-effect chain. Scale is the one
+ * exception: ObjectRenderer composes it outside the VisualCopy transform so it
+ * applies after movers. Rotate and Offset stay here in the object's own frame.
+ * First plugin is innermost, last is outermost (later transforms wrap earlier
+ * ones, e.g. offset-then-rotate ⇒ orbital motion).
  */
 export function TransformWrapper({ trackId, plugins, children }: { trackId: string; plugins: EffectInstance[]; children: ReactNode }) {
-  const transforms = plugins.filter((i) => getEffect(i.pluginId)?.category === 'transform')
+  const transforms = plugins.filter(
+    (i) => i.pluginId !== 'scale' && getEffect(i.pluginId)?.category === 'transform',
+  )
   let element: ReactNode = children
   for (let i = 0; i < transforms.length; i++) {
     element = <SingleTransform key={transforms[i].id} trackId={trackId} instance={transforms[i]}>{element}</SingleTransform>

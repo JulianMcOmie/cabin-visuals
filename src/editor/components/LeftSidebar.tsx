@@ -224,7 +224,10 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
+  allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
+  forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
+  radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 

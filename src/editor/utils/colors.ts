@@ -73,7 +73,7 @@ const hsl = ({ hue, saturation, lightness }: HslColor) =>
 
 /** Opaque timeline colors derived from the track hue. Fills stay saturated -
  *  blocks have no borders, so the hue contrast alone separates them - while
- *  notes sit much darker than their region for legibility. */
+ *  notes sit lighter than their region for legibility. */
 export function midiBlockPalette(color: string): MidiBlockPalette {
   const source = colorToHsl(color) ?? { hue: 205, saturation: 0.48, lightness: 0.42 }
   const colored = source.saturation > 0.04
@@ -89,7 +89,7 @@ export function midiBlockPalette(color: string): MidiBlockPalette {
     }),
     outline: hsl({ ...base, lightness: Math.min(0.48, fillLightness + 0.1) }),
     selectedOutline: hsl({ ...base, lightness: Math.min(0.62, fillLightness + 0.22) }),
-    note: hsl({ ...base, saturation: saturation * 0.82, lightness: Math.max(0.055, fillLightness * 0.34) }),
-    repeatedNote: hsl({ ...base, saturation: saturation * 0.75, lightness: Math.max(0.04, fillLightness * 0.25) }),
+    note: hsl({ ...base, saturation: saturation * 0.82, lightness: Math.min(0.82, fillLightness + 0.38) }),
+    repeatedNote: hsl({ ...base, saturation: saturation * 0.75, lightness: Math.min(0.68, fillLightness + 0.26) }),
   }
 }

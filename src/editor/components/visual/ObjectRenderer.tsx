@@ -9,14 +9,17 @@ import { InstrumentCopyContext } from '../../core/visual/instrumentColor'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
+import { getBeatOverride } from '../../core/visual/beatOverride'
+import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
+import { useTimeStore } from '../../store/TimeStore'
 import { TransformWrapper } from './TransformWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
 
 /**
  * Renders ONE OCCURRENCE of one object: the placement group carries the object's
- * world transform (composed with ancestors by the engine) times this occurrence's
- * VisualCopy transform, plus the mute blackout; the object's transform effects
- * wrap the instrument component inside it, so they operate in the object's own frame.
+ * world transform (composed with ancestors by the engine), then the Scale effect,
+ * then this occurrence's VisualCopy transform. Other transform effects wrap the
+ * instrument component inside it and continue to operate in the object's own frame.
  * The instrument component (code Cube or spec renderer) draws the mesh at local origin.
  * This component never resolves copy logic - it pulls exactly the one copy it was
  * given by index and does not know sibling occurrences exist.
@@ -55,6 +58,7 @@ export function ObjectRenderer({
   const shaderInstances = plugins.filter(
     (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
   )
+  const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
 
   const isFullFrame = !!def?.fullFrame
   const instrumentCopyContext = useMemo(() => ({
@@ -88,12 +92,10 @@ export function ObjectRenderer({
       composeScreenAnchor(camera.position, camera.quaternion, visualCopy?.transform, _composed)
       _composed.decompose(g.position, g.quaternion, g.scale)
     } else if (state) {
-      if (visualCopy) {
-        _composed.multiplyMatrices(state.world, visualCopy.transform)
-        _composed.decompose(g.position, g.quaternion, g.scale)
-      } else {
-        state.world.decompose(g.position, g.quaternion, g.scale)
-      }
+      const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+      const effectScale = evaluatePostMoverScale(scaleInstances, state.effectOverrides, beat)
+      composePostMoverScale(state.world, visualCopy?.transform, effectScale, _composed)
+      _composed.decompose(g.position, g.quaternion, g.scale)
       // The instrument's size lives OUTSIDE the world matrix (see VisualEngine):
       // it scales the mesh itself, applied inside the mover/copy layout, so
       // movers and child tracks work in unscaled placement space.
@@ -116,7 +118,7 @@ export function ObjectRenderer({
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
     return shaderInstances.length > 0
-      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances}>{frame}</ShaderWrapper>
+      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -126,11 +128,20 @@ export function ObjectRenderer({
     </TransformWrapper>
   )
 
-  // Shader path: the object is rendered offscreen (with its world transform composed
-  // with this occurrence's copy transform) and drawn back as a post-processed
-  // full-frame overlay - so no in-scene placement group here.
+  // Shader path: the object is rendered offscreen with the same world × Scale ×
+  // copy order and drawn back as a post-processed full-frame overlay, so there
+  // is no in-scene placement group here.
   if (shaderInstances.length > 0) {
-    return <ShaderWrapper trackId={trackId} visualCopyIndex={visualCopyIndex} plugins={shaderInstances}>{content}</ShaderWrapper>
+    return (
+      <ShaderWrapper
+        trackId={trackId}
+        visualCopyIndex={visualCopyIndex}
+        plugins={shaderInstances}
+        postMoverScalePlugins={scaleInstances}
+      >
+        {content}
+      </ShaderWrapper>
+    )
   }
 
   return <group ref={groupRef}>{content}</group>

@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Eye, RotateCcw } from 'lucide-react'
-import { evaluateVisibilityOpacity } from '../core/visualCopies/library'
+import { evaluateVisibilityOpacity } from '../core/visualCopies/visibility'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'

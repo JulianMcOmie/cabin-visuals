@@ -5,7 +5,7 @@ import {
   evaluateVisibilityOpacity,
   visibilityMover,
   type VisibilitySettings,
-} from './library'
+} from './visibility'
 import { resolveVisualCopies } from './resolveVisualCopies'
 
 const defaults: VisibilitySettings = {

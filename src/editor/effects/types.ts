@@ -1,9 +1,10 @@
-import type { Group, Matrix4 } from 'three'
+import type { Group } from 'three'
 import type { ParamDef } from '../instruments/types'
 
 // Effects are plugins applied to an object's rendered output, ported from Excellent DAW.
-// Two categories, chained per object: transform ▸ shader. (Clone effects were
-// replaced by VisualCopy splitters.)
+// Two categories, chained per object: transform ▸ shader. Scale is the deliberate
+// ordering exception: renderers lift it outside VisualCopy movers. (Clone effects
+// were replaced by VisualCopy splitters.)
 export type EffectCategory = 'transform' | 'shader'
 
 

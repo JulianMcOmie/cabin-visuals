@@ -12,6 +12,7 @@ import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
 import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
+import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
 // the target regardless of camera. Passthrough fragment blits the final texture.
@@ -46,6 +47,7 @@ export function ShaderWrapper({
   trackId,
   visualCopyIndex,
   plugins,
+  postMoverScalePlugins,
   children,
 }: {
   trackId: string
@@ -55,6 +57,8 @@ export function ShaderWrapper({
    *  holder composing it too would apply the copy twice. */
   visualCopyIndex?: number
   plugins: EffectInstance[]
+  /** Scale transform effects are composed outside the VisualCopy mover matrix. */
+  postMoverScalePlugins: EffectInstance[]
   children: ReactNode
 }) {
   const { gl, camera, size } = useThree()
@@ -121,15 +125,19 @@ export function ShaderWrapper({
     if (outMeshRef.current) outMeshRef.current.visible = !!state && !state.blackedOut
     if (!state || state.blackedOut) return
 
-    // Render the object (with its world transform composed with this
-    // occurrence's VisualCopy transform) into the source FBO. The object's size
+    // Same clock rule as VisualBeatSync: exports drive time through the beat
+    // override while the transport stays frozen.
+    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+
+    // Render the object (with world × Scale effect × this occurrence's
+    // VisualCopy transform) into the source FBO. The object's size
     // (meshScale) stays out of the world matrix and is multiplied in AFTER the
     // copy transform - applied to the mesh first, before the mover layout -
     // matching ObjectRenderer's placement group.
     if (state) {
       const visualCopy = visualCopyIndex === undefined ? undefined : getVisualCopy(trackId, visualCopyIndex)
-      if (visualCopy) rig.holder.matrix.multiplyMatrices(state.world, visualCopy.transform)
-      else rig.holder.matrix.copy(state.world)
+      const effectScale = evaluatePostMoverScale(postMoverScalePlugins, state.effectOverrides, beat)
+      composePostMoverScale(state.world, visualCopy?.transform, effectScale, rig.holder.matrix)
       if (state.meshScale !== 1) {
         rig.holder.matrix.multiply(_meshScale.makeScale(state.meshScale, state.meshScale, state.meshScale))
       }
@@ -141,9 +149,6 @@ export function ShaderWrapper({
         applyMaterialOpacity(rig.holder, state.opacity * (visualCopy?.opacity ?? 1))
       }
     }
-    // Same clock rule as VisualBeatSync: exports drive time through the beat
-    // override while the transport stays frozen.
-    const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
     const prev = gl.getRenderTarget()
     gl.setRenderTarget(rig.src)
     gl.setClearColor(0x000000, 0); gl.clear()
