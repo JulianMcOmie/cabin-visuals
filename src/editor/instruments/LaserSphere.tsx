@@ -83,6 +83,17 @@ export function LaserSphere({ trackId }: { trackId: string }) {
   const coreColor = useRef(new Color())
   const rimColor = useRef(new Color())
   const copyContext = useContext(InstrumentCopyContext)
+  // The uniforms object must keep ONE identity for the mesh's lifetime: an
+  // inline literal would be a new object on every React re-render, and r3f
+  // then replaces material.uniforms wholesale - but three's compiled program
+  // keeps uploading from the holder objects it captured at compile time, so
+  // the frame callback's writes land in holders the GPU never reads and the
+  // laser freezes at its last look until a remount.
+  const uniforms = useRef({
+    coreColor: { value: new Color(DEFAULT_COLOR) },
+    rimColor: { value: new Color(DEFAULT_COLOR).multiplyScalar(5.5) },
+    uOpacity: { value: 1 },
+  }).current
   // ONE scene light per track, not per copy - see the same guard in LaserLine:
   // per-copy point lights make every lit material loop over N lights, and the
   // count changing as copies fade invalidates their shader programs. It is
@@ -147,11 +158,7 @@ export function LaserSphere({ trackId }: { trackId: string }) {
           key="laser-sphere-rim-v2"
           vertexShader={LASER_VERTEX_SHADER}
           fragmentShader={LASER_FRAGMENT_SHADER}
-          uniforms={{
-            coreColor: { value: new Color(DEFAULT_COLOR) },
-            rimColor: { value: new Color(DEFAULT_COLOR).multiplyScalar(5.5) },
-            uOpacity: { value: 1 },
-          }}
+          uniforms={uniforms}
           toneMapped={false}
         />
       </mesh>
