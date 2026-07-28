@@ -230,8 +230,7 @@ for (const scene of Object.values(crazyDocument.scenes)) scene.backgroundColor =
 export const crazyEdit: TemplateDef = {
   id: 'crazyedit',
   name: 'Crazy Edit',
-  description: 'The polyester + oversharpen paper-card template: photo slots, strobe cuts, and counters - fill the slots with your own pictures.',
+  description: 'Upload photos and a cool edit will be created for you.',
   bpm: BPM,
-  hiddenFromGallery: true,
   document: crazyDocument,
 }

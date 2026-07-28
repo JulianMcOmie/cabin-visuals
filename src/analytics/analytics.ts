@@ -51,6 +51,7 @@ export type AnalyticsEvent =
   | 'template_applied' // props: { template } - switched onto a template from the editor library
   | 'lyric_style_chosen' // props: { style } - the look picked at the end of lyric setup
   | 'demo_song_used' // the "no song handy?" Borderline option on the lyric-setup upload card
+  | 'photo_setup_filled' // props: { photos, slots } - photos poured into a photo template's slots on /photo-setup
   | 'tutorial_completed'
   | 'tutorial_skipped'
 
