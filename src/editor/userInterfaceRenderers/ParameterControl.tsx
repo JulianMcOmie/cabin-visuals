@@ -8,25 +8,31 @@ import { lockCursor, unlockCursor } from '../utils/dragCursor'
  *  Console-styled: square thumb, dampened-blue fill (full accent blue was too
  *  loud for a wall of params; --accent-muted keeps the hue without the shout). */
 export function ParamSlider({
-  label, value, min, max, step, onChange,
+  label, value, min, max, step, curve = 1, onChange,
 }: {
   label: string
   value: number
   min: number
   max: number
   step: number
+  curve?: number
   onChange: (value: number) => void
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
-  const pct = ((value - min) / (max - min)) * 100
+  const norm = Math.max(0, Math.min(1, (value - min) / (max - min)))
+  const pct = Math.pow(norm, 1 / curve) * 100
 
   const setFromClientX = (clientX: number) => {
     const el = trackRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const raw = min + t * (max - min)
-    const snapped = Math.max(min, Math.min(max, Math.round(raw / step) * step))
+    const raw = min + Math.pow(t, curve) * (max - min)
+    // A curved slider exists to reach values far smaller than `step`, so it
+    // rounds to significant digits instead of snapping to the step grid.
+    const snapped = curve === 1
+      ? Math.max(min, Math.min(max, Math.round(raw / step) * step))
+      : Math.max(min, Math.min(max, raw === 0 ? 0 : Number(raw.toPrecision(3))))
     onChange(snapped)
   }
 
@@ -57,7 +63,8 @@ export function ParamSlider({
         />
       </div>
       <span className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">
-        {value.toFixed(2)}
+        {/* Curved sliders reach values a 2-decimal readout would show as 0.00. */}
+        {curve !== 1 && value !== 0 && Math.abs(value) < 0.01 ? value.toPrecision(1) : value.toFixed(2)}
       </span>
     </div>
   )
@@ -151,6 +158,7 @@ export function ParamControl({ param, numValue, strValue, onNum, onStr }: {
       min={param.min}
       max={param.max}
       step={param.step}
+      curve={param.curve}
       onChange={onNum}
     />
   )

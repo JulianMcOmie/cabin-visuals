@@ -1,3 +1,4 @@
+import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
@@ -230,6 +231,8 @@ interface SlotEventState {
   note: ResolvedNote
   /** Running velocity sum of this block's notes up to and including `note`. */
   counter: number
+  /** 0-based position of `note` among this block's notes. */
+  ordinal: number
 }
 
 /** The slot's active event at `beat`: gate = only while the note sounds,
@@ -244,16 +247,29 @@ function activeEvent(notes: ResolvedNote[], beat: number, latch: boolean): SlotE
   }
   if (!best) return null
   // Counter increments ride velocities as (delta + 1) - velocity-0 notes don't
-  // survive resolution, so a "no tick" event is velocity 1.
+  // survive resolution, so a "no tick" event is velocity 1. The ordinal counts
+  // this block's events up to the current one (photo fallback when the track
+  // carries no counter).
   let counter = 0
+  let ordinal = 0
   for (const n of notes) {
-    if (n.blockStartBeat === best.blockStartBeat && n.beat <= best.beat) counter += Math.max(0, n.velocity - 1)
+    if (n.blockStartBeat !== best.blockStartBeat || n.beat > best.beat) continue
+    counter += Math.max(0, n.velocity - 1)
+    if (n.beat < best.beat) ordinal++
   }
-  return { note: best, counter }
+  return { note: best, counter, ordinal }
+}
+
+/** Canvas height tracking the real render height (quantized so resizes don't
+ *  mint a canvas per pixel). A fixed low height blurred every photo: the slot
+ *  rasterizes to THIS canvas, so unlike a sampled WebGL texture it has to be
+ *  at output resolution to stay sharp - in the editor AND in a pinned export. */
+function useSlotTexHeight(): number {
+  return useThree((s) => Math.max(256, Math.min(1152, Math.round((s.size.height * s.viewport.dpr) / 64) * 64)))
 }
 
 function PhotoSlotVisual({ trackId }: { trackId: string }) {
-  const { viewport, meshRef, canvasRef, textureRef, unchanged, invalidate } = useFullFrameCanvas(288)
+  const { viewport, meshRef, canvasRef, textureRef, unchanged, invalidate } = useFullFrameCanvas(useSlotTexHeight())
 
   useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current
@@ -275,7 +291,16 @@ function PhotoSlotVisual({ trackId }: { trackId: string }) {
     mesh.visible = true
 
     const pads = state.photoPads ?? []
-    const padIndex = pads.length > 0 ? (((ev.note.pitch - BASE) % pads.length) + pads.length) % pads.length : -1
+    // Warm the whole bank (Photo does the same): without this, the first cut
+    // to a not-yet-loaded pad flashes the placeholder while the bytes arrive.
+    for (const pad of pads) void cachedImage(pad.ref)
+    // The picture NUMBER drives the picture: 'background pictures "39"' means
+    // photo #39 - so the counter picks the pad (mod bank), and every counter
+    // tick is a cut to a new photo, exactly like the source template. Tracks
+    // without a counter advance one pad per event instead. (Pitch keeps
+    // choosing the placeholder color only.)
+    const pictureNo = ev.counter > 0 ? ev.counter - 1 : ev.ordinal
+    const padIndex = pads.length > 0 ? ((pictureNo % pads.length) + pads.length) % pads.length : -1
     const padRef = padIndex >= 0 ? pads[padIndex].ref : null
     const img = padRef ? cachedImage(padRef) : null
     const imgReady = !!img
@@ -327,6 +352,7 @@ function PhotoSlotVisual({ trackId }: { trackId: string }) {
     if (img) {
       ctx.save()
       ctx.clip()
+      ctx.imageSmoothingQuality = 'high'
       const ia = img.width / img.height
       const ra = rw / rh
       const dw = ia > ra ? rh * ia : rw
@@ -338,18 +364,20 @@ function PhotoSlotVisual({ trackId }: { trackId: string }) {
       ctx.fill()
     }
 
-    // Label styles paint on top of photo AND placeholder alike - the source
-    // template stamps its captions over the slot either way.
+    // Labels are the PLACEHOLDER's caption ('background pictures "39"'): they
+    // exist to say what belongs in the slot, so a filled slot draws none.
     const lx = -rw / 2 + (p.labelX ?? 0.5) * rw
     const ly = -rh / 2 + (p.labelY ?? 0.5) * rh
     const size = (p.labelSize ?? 0.105) * REF_H
-    if (style === STYLE_COUNTER) {
+    if (img) {
+      // photo showing - no label
+    } else if (style === STYLE_COUNTER) {
       squishedLine(ctx, `${label} "${ev.counter}"`, lx, ly, size, textColor)
     } else if (style === STYLE_CAPS) {
       ctx.save()
       // Caps captions take their ink from the slot color itself (the source
       // template darkens whatever the placeholder is).
-      const capsInk = !img && color.startsWith('#')
+      const capsInk = color.startsWith('#')
         ? `rgb(${[1, 3, 5].map((i) => Math.round(parseInt(color.slice(i, i + 2), 16) * 0.35)).join(',')})`
         : textColor
       ctx.fillStyle = capsInk

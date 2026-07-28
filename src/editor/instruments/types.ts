@@ -26,6 +26,12 @@ export interface NumberParamDef extends ParamBase {
   max: number
   step: number
   default: number
+  /** Slider response exponent (1 = linear, the default). 2 squares the thumb
+   *  position, packing most of the travel into the low end - for params whose
+   *  useful range spans orders of magnitude (e.g. size down to 0.0001). Curved
+   *  sliders round to 3 significant digits instead of snapping to `step`,
+   *  which would erase the fine low-end values the curve exists to reach. */
+  curve?: number
 }
 export interface SelectParamDef extends ParamBase {
   type: 'select'

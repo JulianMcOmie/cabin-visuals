@@ -1,3 +1,4 @@
+import { useThree } from '@react-three/fiber'
 import { useInstrumentFrame, seededRand } from '../core/visual/instrumentFrame'
 import { useFullFrameCanvas, commitCanvasFrame } from '../core/visual/fullFrameCanvas'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
@@ -70,7 +71,10 @@ function drawJack(ctx: Ctx, color: string, width: number): void {
 }
 
 function PolyFxVisual({ trackId }: { trackId: string }) {
-  const { viewport, meshRef, canvasRef, textureRef, unchanged, invalidate } = useFullFrameCanvas(288)
+  // Same output-resolution canvas as PhotoSlot - a fixed 288p canvas left the
+  // beams/pattern edges soft at editor and export sizes.
+  const texHeight = useThree((s) => Math.max(256, Math.min(1152, Math.round((s.size.height * s.viewport.dpr) / 64) * 64)))
+  const { viewport, meshRef, canvasRef, textureRef, unchanged, invalidate } = useFullFrameCanvas(texHeight)
 
   useInstrumentFrame(trackId, (state) => {
     const canvas = canvasRef.current

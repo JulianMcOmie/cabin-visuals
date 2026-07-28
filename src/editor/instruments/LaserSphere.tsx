@@ -43,7 +43,7 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
   kind: 'object',
   userInterfaceRenderer: 'parameters',
   params: [
-    { key: 'size', label: 'Size', min: 0.01, max: 4, step: 0.05, default: 1.6 },
+    { key: 'size', label: 'Size', min: 0.0001, max: 4, step: 0.05, curve: 2, default: 1.6 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },
     { key: 'whiteCore', label: 'White-hot core', min: 0, max: 1, step: 0.01, default: DEFAULT_WHITE_CORE },
