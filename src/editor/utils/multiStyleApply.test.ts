@@ -93,6 +93,11 @@ test('multi-style apply builds two styled scenes and an alternating switcher', (
   }
   assert.equal(cursor, s.totalBars * s.beatsPerBar, 'coverage runs to the project end')
 
+  // Each scene remembers which style IT wears (the Templates tab highlights
+  // the active scene's marker, not the project-level last-write).
+  assert.equal(s.scenes[visual[0]].appliedTemplateId, 'wormhole')
+  assert.equal(s.scenes[visual[1]].appliedTemplateId, 'neonPsychedelic')
+
   // The editor lands on Main - the only view where directors composite, so
   // pressing play shows the cutting instead of a solo scene preview.
   assert.equal(s.activeSceneId, mainId)

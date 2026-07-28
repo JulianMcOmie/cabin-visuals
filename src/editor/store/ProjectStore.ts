@@ -1930,6 +1930,20 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         appliedTemplateId: templateDoc.appliedTemplateId ?? null,
       }
     })
+    // Stamp the SCENE the template landed in too: multi-scene projects wear a
+    // template per scene, and the Templates tab highlights the active scene's.
+    // (A separate patch - the live-view write-through above rebuilds the
+    // active scene record itself and would discard a scenes field.)
+    set((s) => {
+      const scene = s.scenes[s.activeSceneId]
+      if (!scene || scene.isMain) return s
+      return {
+        scenes: {
+          ...s.scenes,
+          [scene.id]: { ...scene, appliedTemplateId: templateDoc.appliedTemplateId ?? null },
+        },
+      }
+    })
   },
 
   addAudioBlock: (trackId, block) =>

@@ -173,18 +173,19 @@ export function LyricSetupScreen({
   )
 
   /** A pick just records itself; applying waits for the words. While the
-   *  pipeline is still running the pick is freely CHANGEABLE - clicking
-   *  another card simply moves the selection (in multi mode it replaces the
-   *  older of the two picks). It only locks once applying actually starts
-   *  (words in + the picks standing). */
+   *  pipeline is still running the picks are freely CHANGEABLE - clicking
+   *  another card moves the selection, clicking a SELECTED card deselects it
+   *  (the escape hatch from the pre-selected defaults). With fewer picks than
+   *  the flow needs, nothing applies when the words land - the grid waits for
+   *  the remaining pick(s). It only locks once applying actually starts. */
   const applying = picks.length >= need && phase.kind === 'ready'
   const chooseStyle = (id: string) => {
     if (applying || appliedRef.current) return
-    if (!multiStyle) {
-      setPicks([id])
-      return
-    }
-    setPicks((prev) => (prev.includes(id) ? prev : [...prev.slice(1), id]))
+    setPicks((prev) => {
+      if (prev.includes(id)) return prev.filter((p) => p !== id)
+      if (!multiStyle) return [id]
+      return prev.length >= 2 ? [...prev.slice(1), id] : [...prev, id]
+    })
   }
 
   /** Apply the chosen look(s) and hand off to the editor, once BOTH are true:

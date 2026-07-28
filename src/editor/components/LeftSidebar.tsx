@@ -443,7 +443,9 @@ function TemplatesTab() {
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const applyTemplate = useProjectStore((s) => s.applyTemplate)
   // Which template this project is on - marks the current card.
-  const appliedTemplateId = useProjectStore((s) => s.appliedTemplateId)
+  // The ACTIVE scene's template wins (multi-scene projects wear one per
+  // scene); older documents only carry the project-level marker.
+  const appliedTemplateId = useProjectStore((s) => s.scenes[s.activeSceneId]?.appliedTemplateId ?? s.appliedTemplateId)
   // A lyric project is offered lyric STYLES and nothing else - switching one
   // onto Slideshow would throw the transcription away. Detected by the applied
   // template, or by the Lyrics-track contract for projects that predate it.

@@ -49,6 +49,10 @@ export interface Scene {
   backgroundTransparent: boolean
   tracks: Record<string, Track>
   rootTrackIds: string[]
+  /** The template THIS scene wears (multi-scene projects can differ per
+   *  scene). Absent on older documents - readers fall back to the
+   *  project-level appliedTemplateId. */
+  appliedTemplateId?: string | null
 }
 
 /**
