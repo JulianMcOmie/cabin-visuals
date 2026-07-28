@@ -11,10 +11,11 @@ import { wormhole } from './library-wormhole'
 import { neonPsychedelic } from './library-neon-psychedelic'
 import { monochrome } from './library-monochrome'
 import { promoCuts } from './library-promo'
+import { crazyEdit } from './library-crazyedit'
 
 // Lyric videos lead (the product's current wedge), then the other
 // "bring your own material" starting points.
-export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, wormhole, neonPsychedelic, monochrome, slideshow, promoCuts]
+export const TEMPLATES: TemplateDef[] = [...LYRIC_TEMPLATES, silentFilm, wormhole, neonPsychedelic, monochrome, slideshow, promoCuts, crazyEdit]
 
 /** The looks a lyric project can wear, in offer order. These are ordinary
  *  templates that happen to share the Lyrics-track contract, so switching

@@ -211,6 +211,18 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="6" r="1.1" fill="none" stroke="#f9a66c" strokeWidth="0.7" strokeOpacity="0.5" />
     </svg>
   )},
+  { id: 'photoSlot', name: 'Photo Slot', description: 'A template photo slot: a region that cuts through your photo bank on MIDI, with a labeled placeholder color until you fill it.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="1" y="2.5" width="10" height="7" fill="#d800c8" stroke="#f4f4f4" strokeWidth="0.8" />
+      <rect x="4.5" y="6" width="3" height="3.5" fill="#dc4a78" />
+    </svg>
+  )},
+  { id: 'polyFx', name: 'Poly FX', description: 'Paper-edit overlay effects on MIDI rows: beam sweeps, union-jack pattern, flashes, streaks, and tabs.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M1 11 L11 1" stroke="#17c917" strokeWidth="2" />
+      <path d="M1 1 L11 11" stroke="#9adfe0" strokeWidth="1.2" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library

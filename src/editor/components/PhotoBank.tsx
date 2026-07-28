@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon, Plus, X } from 'lucide-react'
+import { claimMediaDrop } from './MediaFileDropLayer'
 import { useProjectStore } from '../store/ProjectStore'
 import { usePhotoStore } from '../store/PhotoStore'
 import { getPhotoPlayableUrl } from '../core/photo/photoSource'
@@ -91,8 +92,10 @@ export function PhotoBank({ track }: { track: Track }) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     // The editor-wide MediaFileDropLayer listens on window - a drop landing on
-    // this more-specific zone must not ALSO add tracks there.
-    e.stopPropagation()
+    // this more-specific zone must not ALSO add tracks there. Claim it rather
+    // than stopPropagation: the window-level settle listeners (this bank's and
+    // the layer's) still need the drop event to clear their hover cues.
+    claimMediaDrop(e)
     hoverDepthRef.current = 0
     setDropHover(false)
     const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))

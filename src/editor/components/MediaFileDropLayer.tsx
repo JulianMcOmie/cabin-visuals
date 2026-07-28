@@ -21,8 +21,27 @@ import { usePlan } from '../../billing/usePlan'
  * layer, so there are no dead zones or gutters where the drop indicator stalls.
  *
  * The photo/video clip BANKS keep their own more-specific drop zones; their
- * handlers stopPropagation so a drop there never double-lands here.
+ * handlers mark the drop as claimed (claimMediaDrop) so it never double-lands
+ * here. The event still PROPAGATES: every window-level listener - this layer's
+ * and the banks' own drag-state settlers - must see the drop to clear its
+ * hover cues. (stopPropagation here once left both overlays stuck after a
+ * drop on a bank, because OS file drags never fire dragend.)
  */
+
+// ── Claimed-drop marker ──────────────────────────────────────────────────────
+// A more-specific drop zone (photo/video bank) stamps the NATIVE event so this
+// layer ignores it, while still letting it propagate to every window listener.
+
+const CLAIM_KEY = '__mediaDropClaimed'
+
+/** Call from a nested drop zone's onDrop INSTEAD of stopPropagation. */
+export function claimMediaDrop(e: { nativeEvent: DragEvent }): void {
+  ;(e.nativeEvent as DragEvent & Record<string, unknown>)[CLAIM_KEY] = true
+}
+
+function isClaimedMediaDrop(e: DragEvent): boolean {
+  return (e as DragEvent & Record<string, unknown>)[CLAIM_KEY] === true
+}
 
 // ── Transient notice (module-level: the timeline's MIDI import button reports
 //    through the same slot) ─────────────────────────────────────────────────
@@ -220,6 +239,7 @@ export function MediaFileDropLayer() {
     const drop = (e: DragEvent) => {
       depthRef.current = 0
       setHover(null)
+      if (isClaimedMediaDrop(e)) return // a more-specific zone took this one
       if (!e.dataTransfer) return
       const files = Array.from(e.dataTransfer.files)
       if (files.length === 0) return

@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 import { capturePreviewClip, PREVIEW_CAPTURE_VERSION } from '../core/export/previewCapture'
+import { getFrameDriver } from '../core/export/frameDriver'
+import { useProjectStore } from '../store/ProjectStore'
 import { TEMPLATES } from '../../templates'
 
 // A content hash of a template's document, id-independent: the `tpl-…` tokens are
@@ -31,6 +33,10 @@ declare global {
     __templateIds?: string[]
     /** id -> content hash, so the automation script skips unchanged templates. */
     __templateHashes?: Record<string, string>
+    /** Render a run of exact frames as PNG data URLs (frame-comparison probe). */
+    __captureFrames?: (startFrame: number, count: number, opts?: { fps?: number; width?: number; height?: number }) => Promise<string[] | null>
+    /** Fill every photoSlot track's pad bank with the given refs (smoke test). */
+    __fillPhotoSlots?: (refs: string[]) => number
   }
 }
 
@@ -54,10 +60,61 @@ export function PreviewCaptureButton() {
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
       return btoa(binary)
     }
+    // Deterministic per-frame capture: render frame i of an `fps` walk at the
+    // project bpm and hand back lossless PNGs. Drives the same FrameDriver path
+    // as export, so what it returns is exactly what an export would encode.
+    // Used by the crazyedit template's frame-by-frame comparison script.
+    window.__captureFrames = async (startFrame, count, opts = {}) => {
+      const fps = opts.fps ?? 30
+      const width = opts.width ?? 422
+      const height = opts.height ?? 750
+      const deadline = Date.now() + 20_000
+      let driver = getFrameDriver()
+      while (Date.now() < deadline) {
+        driver = getFrameDriver()
+        const scenes = useProjectStore.getState().scenes
+        const ready = driver != null && Object.values(scenes).some((s) => !s.isMain && Object.keys(s.tracks).length > 0)
+        if (ready) break
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      if (!driver) return null
+      const { bpm } = useProjectStore.getState()
+      driver.pin(width, height)
+      try {
+        const out: string[] = []
+        for (let i = 0; i < count; i++) {
+          const frameIdx = startFrame + i
+          const beat = (frameIdx * bpm) / (60 * fps)
+          driver.renderFrame(beat, (frameIdx * 1000) / fps)
+          // Full-frame canvas instruments may return false on the first pass
+          // (font/image assets still loading); render again so the retry lands
+          // before the pixels are read.
+          driver.renderFrame(beat, (frameIdx * 1000) / fps)
+          out.push(driver.getCanvas().toDataURL('image/png'))
+        }
+        return out
+      } finally {
+        driver.unpin()
+      }
+    }
+    // Photo-slot smoke test: give every photoSlot track a pad bank so a
+    // capture shows photos where the placeholders were.
+    window.__fillPhotoSlots = (refs) => {
+      const s = useProjectStore.getState()
+      let filled = 0
+      for (const [id, t] of Object.entries(s.tracks)) {
+        if (t.instrumentId !== 'photoSlot') continue
+        s.setTrackPhotoPads(id, refs.map((ref) => ({ ref })))
+        filled++
+      }
+      return filled
+    }
     return () => {
       delete window.__capturePreview
       delete window.__templateIds
       delete window.__templateHashes
+      delete window.__captureFrames
+      delete window.__fillPhotoSlots
     }
   }, [])
 

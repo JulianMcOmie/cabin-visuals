@@ -136,6 +136,7 @@ uniform sampler2D tBloom;
 uniform vec2 resolution;
 uniform float time;
 uniform float bloomIntensity;
+uniform float rawGrade;
 varying vec2 vUv;
 
 float hash(vec2 p) {
@@ -181,17 +182,22 @@ void main() {
   vec4 source = texture2D(tScene, vUv);
   vec3 color = fxaa(vUv) + texture2D(tBloom, vUv).rgb * bloomIntensity;
 
-  float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  color = mix(vec3(luma), color, 1.08);
-  color = (color - 0.5) * 1.045 + 0.5;
+  // rawGrade bypasses the stylistic grade (saturation/contrast/vignette/
+  // grain), for instruments that reproduce external footage color-exactly
+  // (Polyester Edit). FXAA and bloom still apply.
+  if (rawGrade < 0.5) {
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(vec3(luma), color, 1.08);
+    color = (color - 0.5) * 1.045 + 0.5;
 
-  vec2 centered = vUv - 0.5;
-  centered.x *= resolution.x / max(1.0, resolution.y);
-  float vignette = smoothstep(0.92, 0.20, length(centered));
-  color *= mix(0.82, 1.0, vignette);
+    vec2 centered = vUv - 0.5;
+    centered.x *= resolution.x / max(1.0, resolution.y);
+    float vignette = smoothstep(0.92, 0.20, length(centered));
+    color *= mix(0.82, 1.0, vignette);
 
-  float grain = hash(gl_FragCoord.xy + vec2(time * 19.7, time * 7.3)) - 0.5;
-  color += grain * 0.014;
+    float grain = hash(gl_FragCoord.xy + vec2(time * 19.7, time * 7.3)) - 0.5;
+    color += grain * 0.014;
+  }
   gl_FragColor = vec4(max(color, 0.0), source.a);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -415,6 +421,7 @@ export function VisualScene() {
         resolution: { value: new Vector2(1, 1) },
         time: { value: 0 },
         bloomIntensity: { value: 0.9 },
+        rawGrade: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -625,7 +632,14 @@ export function VisualScene() {
       compositor.filterMesh.material = compositor.finalMaterial
       compositor.finalMaterial.uniforms.tBloom.value = compositor.bloomEffect.texture
       compositor.finalMaterial.uniforms.time.value = getBeatOverride() ?? useTimeStore.getState().currentBeat
-      gl.toneMapping = previousToneMapping
+      // Color-exact instruments (the Crazy Edit template's photo slots / FX)
+      // reproduce external footage: with one in the composition the stylistic
+      // grade and the ACES tone map switch off for the frame, so drawn colors
+      // reach the screen verbatim. (Same instrument-id pattern as
+      // placementKey's textDisplay case.)
+      const rawGrade = objects.some((o) => o.instrumentId === 'photoSlot' || o.instrumentId === 'polyFx')
+      compositor.finalMaterial.uniforms.rawGrade.value = rawGrade ? 1 : 0
+      gl.toneMapping = rawGrade ? NoToneMapping : previousToneMapping
       gl.setRenderTarget(previous)
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)

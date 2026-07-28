@@ -51,6 +51,8 @@ export function retryPhotoUpload(ref: string, onProgress?: (fraction: number) =>
  *  File if we have it, else the bucket's signed URL. Signed URLs expire, so
  *  hydrated photos resolve fresh per call. */
 export async function getPhotoPlayableUrl(ref: string): Promise<string> {
+  // Public app asset (same convention as audio/video refs): served as-is.
+  if (ref.startsWith('/')) return ref
   const file = memFiles.get(ref)
   if (file) {
     let url = objectUrls.get(ref)

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Film, Pause, Play, Plus, X } from 'lucide-react'
 import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput } from 'mediabunny'
+import { claimMediaDrop } from './MediaFileDropLayer'
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { useUIStore } from '../store/UIStore'
@@ -429,8 +430,10 @@ export function VideoClipBank({ track }: { track: Track }) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     // The editor-wide MediaFileDropLayer listens on window - a drop landing on
-    // this more-specific zone must not ALSO add tracks there.
-    e.stopPropagation()
+    // this more-specific zone must not ALSO add tracks there. Claim it rather
+    // than stopPropagation: the window-level settle listeners (this bank's and
+    // the layer's) still need the drop event to clear their hover cues.
+    claimMediaDrop(e)
     hoverDepthRef.current = 0
     setDropHover(false)
     if (pickerCore) return // modal open - drops belong to another flow
