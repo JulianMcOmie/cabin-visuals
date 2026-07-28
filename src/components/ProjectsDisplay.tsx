@@ -597,7 +597,7 @@ function CreateProjectModal({
                     {tpl.cardPreview === 'animatedSlideshow'
                       ? <TemplateSlideshowPreview />
                       : tpl.cardPreview === 'animatedLyric'
-                        ? <TemplateLyricPreview templateId={tpl.id} />
+                        ? <TemplateLyricPreview templateId={tpl.previewTemplateId ?? tpl.id} />
                         : <TemplatePreviewVideo id={tpl.id} />}
                   </div>
                   <div className="p-3">

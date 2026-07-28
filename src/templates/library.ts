@@ -18,6 +18,10 @@ export interface TemplateDef {
    *  exists and falls back to a canvas word-pop until then, so lyric templates
    *  are still captured by `npm run previews`. */
   cardPreview?: 'video' | 'animatedSlideshow' | 'animatedLyric'
+  /** Gallery cards preview THIS other template's clip/animation instead of the
+   *  card's own (the Lyric Video card advertising the Wormhole look). The
+   *  created project still starts from this template's document. */
+  previewTemplateId?: string
   /** A lyric template: ships a root 'Lyrics' Text Display track (the refill /
    *  carry-over contract), and applying it to a not-yet-transcribed project
    *  continues into the lyric setup flow (song → transcribe → align → style).

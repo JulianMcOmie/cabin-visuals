@@ -166,6 +166,9 @@ export const LYRIC_TEMPLATES: TemplateDef[] = [
     description: 'Upload your song, choose the style, and a lyric video will be generated for you.',
     bpm: 120,
     cardPreview: 'animatedLyric',
+    // The gallery card sells the flow with the Wormhole look (the setup step
+    // also pre-selects it) - the bare Minimal render made a poor first pitch.
+    previewTemplateId: 'wormhole',
     lyricFlow: true,
     document: bareBonesDocument(),
   },

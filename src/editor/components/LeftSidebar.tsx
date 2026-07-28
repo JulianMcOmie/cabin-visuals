@@ -548,7 +548,7 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
         {tpl.cardPreview === 'animatedSlideshow'
           ? <TemplateSlideshowPreview />
           : tpl.cardPreview === 'animatedLyric'
-            ? <TemplateLyricPreview templateId={tpl.id} />
+            ? <TemplateLyricPreview templateId={tpl.previewTemplateId ?? tpl.id} />
             : <TemplatePreviewVideo id={tpl.id} />}
         {/* The instrument cards' name treatment: a bottom gradient that
             reveals on hover - held visible on the current template so its

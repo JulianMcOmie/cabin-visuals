@@ -80,8 +80,10 @@ export function LyricSetupScreen({
   preStyled?: boolean
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' })
-  /** The style the user just clicked, held so the card can show it landed. */
-  const [chosen, setChosen] = useState<string | null>(null)
+  /** The standing pick. Wormhole starts selected - the look the gallery card
+   *  advertises - so doing nothing lands on it the moment the words are in;
+   *  while the song uploads/transcribes a click still moves the pick freely. */
+  const [chosen, setChosen] = useState<string | null>('wormhole')
   const runningRef = useRef(false)
   const closedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
