@@ -17,6 +17,9 @@ import { getDirector, type CompositionLayer } from '../directors'
 // useFrame. The only React-visible signal is the object LIST (see below).
 
 let graphs = new Map<string, ResolvedGraph>()
+/** What each scene's graph was resolved FROM, for the reuse test in setProject. */
+type GraphInputs = Parameters<typeof resolveProject>[0]
+let graphInputs = new Map<string, GraphInputs>()
 interface VisualProject {
   scenes: Record<string, Scene>
   sceneOrder: string[]
@@ -96,19 +99,44 @@ function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
 export function setProject(input: ProjectState | ProjectSnapshot) {
   const p = normalizeProject(input)
   project = p
+  // Structural resolve is the expensive step, and the debounced subscription
+  // funnels EVERY store change through here - including ones that touch no
+  // scene content at all (selecting a scene, transport fields). A scene whose
+  // inputs are identity-equal to last time keeps its previous graph: the store
+  // updates immutably, so reference equality is a sound "unchanged" test.
+  const prevGraphs = graphs
+  const prevInputs = graphInputs
+  const nextInputs = new Map<string, GraphInputs>()
+  let allReused = prevGraphs.size > 0
   graphs = new Map()
   for (const sceneId of p.sceneOrder) {
     const scene = p.scenes[sceneId]
     if (!scene || scene.isMain) continue
-    graphs.set(sceneId, resolveProject({
+    const inputs: GraphInputs = {
       tracks: scene.tracks,
       rootTrackIds: scene.rootTrackIds,
       bpm: p.bpm,
       beatsPerBar: p.beatsPerBar,
       totalBars: p.totalBars,
-    }))
+    }
+    const prev = prevInputs.get(sceneId)
+    const reusable = !!prev
+      && prev.tracks === inputs.tracks
+      && prev.rootTrackIds === inputs.rootTrackIds
+      && prev.bpm === inputs.bpm
+      && prev.beatsPerBar === inputs.beatsPerBar
+      && prev.totalBars === inputs.totalBars
+      && prevGraphs.has(sceneId)
+    if (!reusable) allReused = false
+    graphs.set(sceneId, reusable ? prevGraphs.get(sceneId)! : resolveProject(inputs))
+    nextInputs.set(sceneId, inputs)
   }
+  graphInputs = nextInputs
   bpm = p.bpm
+  // Every graph survived untouched (and no scene fell away): the object list,
+  // per-object caches and copy counts are all still valid - skip the sweep
+  // and, crucially, the re-publish that would re-render the scene tree.
+  if (allReused && graphs.size === prevGraphs.size) return
   // Drop per-object caches for tracks that no longer resolve to an object.
   const live = new Set([...graphs.values()].flatMap((graph) => graph.objects.map((o) => o.trackId)))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)

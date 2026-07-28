@@ -476,6 +476,29 @@ export function VisualScene() {
     }
   }, [mounted])
 
+  // Prewarm shaders for scenes that exist but haven't been DRAWN yet. A scene
+  // is only rendered once the composition requests it, and three compiles all
+  // of its materials on that first draw - a synchronous multi-hundred-ms hitch
+  // exactly when the user clicks into another scene (or the Scene Switcher
+  // first cuts to it mid-playback). compileAsync uses the parallel-compile
+  // extension off the render loop, so by switch time the programs are ready.
+  // Delayed a tick so the portals' meshes have committed into the runtimes.
+  const prewarmedRef = useRef(new Set<string>())
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const [sceneId, runtime] of mounted) {
+        if (prewarmedRef.current.has(sceneId)) continue
+        prewarmedRef.current.add(sceneId)
+        void gl.compileAsync(runtime.base, camera).catch(() => {})
+        void gl.compileAsync(runtime.front, camera).catch(() => {})
+      }
+      for (const sceneId of prewarmedRef.current) {
+        if (!mounted.has(sceneId)) prewarmedRef.current.delete(sceneId)
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [mounted, gl, camera])
+
   useEffect(() => () => {
     for (const runtime of prevMountedRef.current.values()) disposeMountedScene(runtime)
     prevMountedRef.current = new Map()

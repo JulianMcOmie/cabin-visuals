@@ -25,6 +25,8 @@ function LyricSetupContent() {
   // The mobile flow creates the project already ON its chosen style
   // (/start's style-first step) - no style grid, no apply at the end.
   const preStyled = search.get('styled') === '1'
+  // Multi-Style Lyric: the style step takes two picks (see multiStyleApply).
+  const multiStyle = search.get('multi') === '1'
   const projectName = useUIStore((s) => s.projectName)
   const projectLoading = !!projectId && projectName === null
 
@@ -33,7 +35,7 @@ function LyricSetupContent() {
     router.replace(projectId ? `/editor?project=${projectId}` : '/editor')
   }
 
-  return <LyricSetupScreen projectLoading={projectLoading} preStyled={preStyled} onClose={() => void done()} />
+  return <LyricSetupScreen projectLoading={projectLoading} preStyled={preStyled} multiStyle={multiStyle} onClose={() => void done()} />
 }
 
 export default function LyricSetupPage() {

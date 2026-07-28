@@ -8,6 +8,8 @@
 export const projectDestination = (templateId: string, projectId: string) =>
   templateId === 'lyricVideo'
     ? `/lyric-setup?project=${projectId}`
-    : templateId === 'crazyedit'
-      ? `/photo-setup?project=${projectId}`
-      : `/editor?project=${projectId}`
+    : templateId === 'multiStyleLyric'
+      ? `/lyric-setup?project=${projectId}&multi=1`
+      : templateId === 'crazyedit'
+        ? `/photo-setup?project=${projectId}`
+        : `/editor?project=${projectId}`

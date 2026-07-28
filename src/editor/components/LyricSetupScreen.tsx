@@ -9,7 +9,8 @@ import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
-import { placeTranscription } from '../utils/lyricPlacement'
+import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
+import { applyMultiStyle } from '../utils/multiStyleApply'
 import { firstAudioBlock, transcribeActiveSong } from '../utils/transcribeSong'
 import { track } from '../../analytics/analytics'
 import { LYRIC_STYLES } from '../../templates'
@@ -71,6 +72,7 @@ export function LyricSetupScreen({
   onClose,
   projectLoading,
   preStyled = false,
+  multiStyle = false,
 }: {
   onClose: () => void
   projectLoading: boolean
@@ -78,15 +80,23 @@ export function LyricSetupScreen({
    *  before the song), so no style grid and no apply-at-the-end - the screen
    *  is just song-in → pipeline → editor. */
   preStyled?: boolean
+  /** Multi-Style Lyric: the style step takes TWO picks; the apply builds two
+   *  styled scenes and a Scene Switcher cutting between them. */
+  multiStyle?: boolean
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' })
-  /** The standing pick. Wormhole starts selected - the look the gallery card
-   *  advertises - so doing nothing lands on it the moment the words are in;
-   *  while the song uploads/transcribes a click still moves the pick freely. */
-  const [chosen, setChosen] = useState<string | null>('wormhole')
+  /** How many looks this flow applies. */
+  const need = multiStyle ? 2 : 1
+  /** The standing pick(s), oldest first. Defaults start selected - the looks
+   *  the gallery cards advertise - so doing nothing lands on them the moment
+   *  the words are in; while the song uploads/transcribes a click still moves
+   *  the pick freely (multi mode swaps out the older of the two). */
+  const [picks, setPicks] = useState<string[]>(multiStyle ? ['wormhole', 'neonPsychedelic'] : ['wormhole'])
   const runningRef = useRef(false)
   const closedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  /** The timed words, kept for the multi-style second scene refill. */
+  const wordsRef = useRef<{ words: LyricWord[]; timing: TranscribedWord[] } | null>(null)
 
   // A song landing by ANY route (this page's drop/browse, or a pre-existing
   // track) advances the pipeline.
@@ -119,6 +129,9 @@ export function LyricSetupScreen({
       if (!placedBlock) throw new Error('The song did not land - try adding it again.')
       const { bpm, beatsPerBar } = useProjectStore.getState()
       const words = placeTranscription(alignedWords, placedBlock, bpm, beatsPerBar, true)
+      // Held for the multi-style apply, which refills the SAME words into a
+      // second scene before styling it.
+      wordsRef.current = { words, timing: alignedWords }
       // The aligner's seconds ride along as the track's source of truth, so
       // a later BPM correction re-derives the beats instead of moving words.
       const id = useProjectStore.getState().addLyricTrack(words, alignedWords)
@@ -161,17 +174,22 @@ export function LyricSetupScreen({
 
   /** A pick just records itself; applying waits for the words. While the
    *  pipeline is still running the pick is freely CHANGEABLE - clicking
-   *  another card simply moves the selection. It only locks once applying
-   *  actually starts (words in + a pick standing). */
-  const applying = !!chosen && phase.kind === 'ready'
+   *  another card simply moves the selection (in multi mode it replaces the
+   *  older of the two picks). It only locks once applying actually starts
+   *  (words in + the picks standing). */
+  const applying = picks.length >= need && phase.kind === 'ready'
   const chooseStyle = (id: string) => {
     if (applying || appliedRef.current) return
-    setChosen(id)
+    if (!multiStyle) {
+      setPicks([id])
+      return
+    }
+    setPicks((prev) => (prev.includes(id) ? prev : [...prev.slice(1), id]))
   }
 
-  /** Apply the chosen look and hand off to the editor, once BOTH are true:
-   *  a style is picked and the words are in. Picking early just queues - the
-   *  card shows "Waiting for the words…" until the pipeline lands.
+  /** Apply the chosen look(s) and hand off to the editor, once BOTH are true:
+   *  the picks are standing and the words are in. Picking early just queues -
+   *  the card shows "Waiting for the words…" until the pipeline lands.
    *
    *  The project is already on the bare template, so "Minimal" is a no-op
    *  choice. Applying is not instant (clone + re-mint + autosave before the
@@ -181,16 +199,26 @@ export function LyricSetupScreen({
    *  appliedRef guards the StrictMode double-fire. */
   const appliedRef = useRef(false)
   useEffect(() => {
-    if (!chosen || phase.kind !== 'ready' || appliedRef.current) return
+    if (picks.length < need || phase.kind !== 'ready' || appliedRef.current) return
     appliedRef.current = true
-    const style = LYRIC_STYLES.find((s) => s.id === chosen)
-    if (style) {
-      useProjectStore.getState().applyTemplate(style.document)
-      track('lyric_style_chosen', { style: chosen })
+    if (multiStyle) {
+      const styleA = LYRIC_STYLES.find((s) => s.id === picks[0])
+      const styleB = LYRIC_STYLES.find((s) => s.id === picks[1])
+      const held = wordsRef.current
+      if (styleA && styleB && held) {
+        applyMultiStyle(styleA, styleB, held.words, held.timing)
+        track('lyric_style_chosen', { style: `${picks[0]}+${picks[1]}` })
+      }
+    } else {
+      const style = LYRIC_STYLES.find((s) => s.id === picks[0])
+      if (style) {
+        useProjectStore.getState().applyTemplate(style.document)
+        track('lyric_style_chosen', { style: picks[0] })
+      }
     }
     onClose()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosen, phase.kind])
+  }, [picks, phase.kind])
 
   // Pre-styled: the project already wears its look, so words-in IS done.
   useEffect(() => {
@@ -303,11 +331,13 @@ export function LyricSetupScreen({
       {onGrid ? (
         <div className="flex flex-1 min-h-0 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
           <div className="w-full max-w-[760px]">
-            <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a look</h1>
+            <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{multiStyle ? 'Pick two looks' : 'Pick a look'}</h1>
             <p className="mx-auto mt-2 mb-5 max-w-[440px] text-[13px] leading-relaxed text-[var(--text-3)]">
-              {phase.kind === 'ready'
-                ? 'Your words are timed to the song. Choose a style - you can change it any time.'
-                : 'Choose a style while your song is transcribed - you can change it any time.'}
+              {multiStyle
+                ? 'The video cuts between your two looks through the song - clicking a card swaps out the older pick.'
+                : phase.kind === 'ready'
+                  ? 'Your words are timed to the song. Choose a style - you can change it any time.'
+                  : 'Choose a style while your song is transcribed - you can change it any time.'}
             </p>
             {/* The pipeline's live status, riding above the grid: the same
                 progress language the old wait card used, compacted. */}
@@ -329,7 +359,8 @@ export function LyricSetupScreen({
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
               {LYRIC_STYLES.map((style) => {
-                const picked = chosen === style.id
+                const pickIndex = picks.indexOf(style.id)
+                const picked = pickIndex !== -1
                 return (
                   <button
                     key={style.id}
@@ -351,6 +382,11 @@ export function LyricSetupScreen({
                   >
                     <div className="relative aspect-video bg-[var(--bg-app)]">
                       <TemplateLyricPreview templateId={style.id} />
+                      {multiStyle && picked && (
+                        <span className="absolute top-1.5 left-1.5 rounded bg-[var(--accent)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--on-accent)]">
+                          {pickIndex === 0 ? 'LOOK 1' : 'LOOK 2'}
+                        </span>
+                      )}
                     </div>
                     <div className="p-3">
                       <h3 className="m-0 text-[13px] font-semibold text-[var(--text)] group-hover:text-white">
