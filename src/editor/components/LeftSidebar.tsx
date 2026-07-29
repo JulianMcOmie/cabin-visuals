@@ -109,6 +109,13 @@ const DIRECTOR_INSTRUMENTS = withKind('director', listDirectors().map((d) => ({
   icon: <Sparkles size={12} className={DIRECTOR_ICON_COLORS[d.id] ?? 'text-indigo-400'} />,
 })))
 
+// Cut and Radial Cut are soft-deprecated: still fully working, but parked in a
+// collapsed Extras folder below the curated list (Crop's angled slicing covers
+// most of what they did). Same demote-don't-delete move as EXTRA_INSTRUMENTS.
+const DIRECTOR_EXTRA_IDS = new Set(['cut', 'radialCut'])
+const DIRECTOR_CORE = DIRECTOR_INSTRUMENTS.filter((d) => !DIRECTOR_EXTRA_IDS.has(d.id))
+const DIRECTOR_EXTRAS = DIRECTOR_INSTRUMENTS.filter((d) => DIRECTOR_EXTRA_IDS.has(d.id))
+
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
@@ -270,7 +277,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 
-const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
+const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'mover')
   .map((d) => ({
   id: d.id,
@@ -284,6 +291,16 @@ const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
     </svg>
   ),
 })))
+
+// Single-behavior movers, soft-deprecated: each is one block of the compound
+// movers (Motion's Step/Snap/Spin, the consolidated rack's banks), so they park
+// in a collapsed Mover Extras folder - demoted, not deleted, like the object
+// and director Extras.
+const MOVER_EXTRA_IDS = new Set([
+  'burst', 'rotateBurst', 'orbitBurst', 'constantRotate', 'constantOrbit', 'translationOscillator',
+])
+const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => !MOVER_EXTRA_IDS.has(d.id))
+const MOVER_EXTRA_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => MOVER_EXTRA_IDS.has(d.id))
 
 const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'splitter')
@@ -326,7 +343,7 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...MAIN_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
   ...ALL_OBJECT_INSTRUMENTS,
-  ...MOVER_INSTRUMENTS,
+  ...ALL_MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
 ]
@@ -629,7 +646,9 @@ export function LeftSidebar() {
           exhaustion when several two-column sections are visible. */}
       {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
-          narrow, and icon + label once there's room for the text. */}
+          narrow, and icon + label once there's room for the text. The 320px
+          threshold is the width where all three labels fit inside the pills'
+          px-2 padding without truncating - below it, labels would ellipsize. */}
       <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
@@ -640,14 +659,14 @@ export function LeftSidebar() {
             key={id}
             onClick={() => setTab(id)}
             title={label}
-            className={`flex-1 h-6 flex items-center justify-center gap-1.5 rounded-full text-[11px] transition-colors cursor-pointer ${
+            className={`flex-1 min-w-0 h-6 flex items-center justify-center gap-1.5 rounded-full px-2 text-[11px] transition-colors cursor-pointer ${
               tab === id
                 ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
                 : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
             <Icon size={13} className="flex-shrink-0" />
-            <span className="hidden @[224px]:inline truncate">{label}</span>
+            <span className="hidden @[320px]:inline truncate">{label}</span>
           </button>
         ))}
       </div>
@@ -656,16 +675,24 @@ export function LeftSidebar() {
         {tab === 'instruments' && (
           <>
             {activeIsMain ? (
-              <Section title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+              <>
+              {/* Keyed: the scene/Main views render different Section lists in
+                  the same slot, and unkeyed positional state reuse would hand
+                  (say) Objects' expanded state to Extras here - visibly
+                  ignoring defaultOpen on the first view switch. */}
+              <Section key="directors" title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_CORE} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+              <Section key="director-extras" title="Extras" description="Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did." items={DIRECTOR_EXTRAS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
+              </>
             ) : <>
-            <Section title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Objects" description="Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="main" title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="objects" title="Objects" description="Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
-            <Section title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
+            <Section key="movers" title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="mover-extras" title="Mover Extras" description="Single-behavior movers, still fully working - the compound movers above cover the same ground in one track." items={MOVER_EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
+            <Section key="colorizers" title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="splitters" title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="object-extras" title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}
           </>
         )}

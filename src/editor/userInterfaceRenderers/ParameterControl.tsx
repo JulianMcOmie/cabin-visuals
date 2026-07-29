@@ -4,9 +4,10 @@ import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ParamDef } from '../instruments/types'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 
-/** One param row: label | 3px slider | mono value - 100px / 1fr / 44px.
- *  Console-styled: square thumb, dampened-blue fill (full accent blue was too
- *  loud for a wall of params; --accent-muted keeps the hue without the shout). */
+/** One param row: label | 4px slider | mono value - 100px / 1fr / 44px.
+ *  Console-styled: round thumb on a rounded track, dampened-blue fill (full
+ *  accent blue was too loud for a wall of params; --accent-muted keeps the hue
+ *  without the shout). Matches .slider-console in globals.css. */
 export function ParamSlider({
   label, value, min, max, step, curve = 1, onChange,
 }: {
@@ -51,15 +52,15 @@ export function ParamSlider({
       <div
         ref={trackRef}
         onPointerDown={onPointerDown}
-        className="relative h-[3px] bg-[var(--border)] cursor-pointer select-none"
+        className="relative h-[4px] rounded-full bg-[var(--border)] cursor-pointer select-none"
       >
         <div
-          className="absolute left-0 top-0 h-full bg-[var(--accent-muted)]"
+          className="absolute left-0 top-0 h-full rounded-full bg-[var(--accent-muted)]"
           style={{ width: `${pct}%` }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-[9px] h-[9px] bg-[var(--text-2)] border border-[var(--border-strong)]"
-          style={{ left: `calc(${pct}% - 4px)` }}
+          className="absolute top-1/2 -translate-y-1/2 w-[11px] h-[11px] rounded-full bg-[var(--text-2)] border border-[var(--border-strong)]"
+          style={{ left: `calc(${pct}% - 5.5px)` }}
         />
       </div>
       <span className="font-mono text-[10px] text-[var(--text-muted)] text-right tabular-nums">

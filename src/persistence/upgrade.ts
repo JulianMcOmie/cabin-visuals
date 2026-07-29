@@ -277,7 +277,9 @@ const TRANSFORM_KEY_MIGRATIONS: Record<string, Record<string, { to: string; scal
     baseZPosition: { to: 'tfZ' },
     baseSize: { to: 'tfSize', scale: 1 / 1.6 },
   },
-  laserSphere: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' }, size: { to: 'tfSize', scale: 1 / 1.6 } },
+  // laserSphere keeps its own `size` param (the bespoke panel's SIZE knob binds
+  // to it - see LaserSphereUserInterface), so only its position migrates.
+  laserSphere: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' } },
   laserLine: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' } },
   particleSphere: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' }, size: { to: 'tfSize', scale: 1 / 1.6 } },
 }

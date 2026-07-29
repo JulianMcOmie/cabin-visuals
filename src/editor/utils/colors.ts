@@ -1,17 +1,4 @@
-export function lighten(color: string, amount: number): string {
-  const hslMatch = color.match(/^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/)
-  if (hslMatch) {
-    const h = parseFloat(hslMatch[1])
-    const s = parseFloat(hslMatch[2])
-    const l = Math.min(100, parseFloat(hslMatch[3]) + amount)
-    return `hsl(${h}, ${s}%, ${l}%)`
-  }
-  const hex = color.replace('#', '')
-  const r = Math.min(255, parseInt(hex.substring(0, 2), 16) + Math.round(amount))
-  const g = Math.min(255, parseInt(hex.substring(2, 4), 16) + Math.round(amount))
-  const b = Math.min(255, parseInt(hex.substring(4, 6), 16) + Math.round(amount))
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
-}
+import { colorToOklch, oklchToHex } from './oklch'
 
 export interface MidiBlockPalette {
   fill: string
@@ -29,8 +16,6 @@ interface HslColor {
   saturation: number
   lightness: number
 }
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 export function colorToHsl(color: string): HslColor | null {
   const hslMatch = color.match(/^hsl\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*\)$/i)
@@ -68,28 +53,24 @@ export function colorToHsl(color: string): HslColor | null {
   return { hue, saturation, lightness }
 }
 
-const hsl = ({ hue, saturation, lightness }: HslColor) =>
-  `hsl(${hue.toFixed(1)}, ${(saturation * 100).toFixed(1)}%, ${(lightness * 100).toFixed(1)}%)`
-
-/** Opaque timeline colors derived from the track hue. Fills stay saturated -
- *  blocks have no borders, so the hue contrast alone separates them - while
- *  notes sit lighter than their region for legibility. */
+/** Opaque timeline colors derived from the track hue, mixed in OKLCH so every
+ *  track's blocks sit at the same perceived depth regardless of hue. The
+ *  chroma targets run deliberately hot (past what many hues can reach in
+ *  sRGB); the gamut clamp in oklchToHex means every hue simply renders as
+ *  saturated as the screen allows at its lightness, evenly bright across the
+ *  cycle. Notes are a bright charged tint of the same hue. Emitted as hex so
+ *  any consumer (and colorToHsl) can keep parsing them. */
 export function midiBlockPalette(color: string): MidiBlockPalette {
-  const source = colorToHsl(color) ?? { hue: 205, saturation: 0.48, lightness: 0.42 }
-  const colored = source.saturation > 0.04
-  const saturation = colored ? clamp(source.saturation * 0.9, 0.5, 0.8) : 0
-  const fillLightness = clamp(source.lightness * 0.6, 0.28, 0.4)
-  const base = { hue: source.hue, saturation }
+  const source = colorToOklch(color) ?? { l: 0.5, c: 0.08, h: 240 }
+  const colored = source.c > 0.02
+  const h = source.h
+  const c = (target: number) => (colored ? target : 0)
   return {
-    fill: hsl({ ...base, lightness: fillLightness }),
-    selectedFill: hsl({
-      ...base,
-      saturation: colored ? Math.min(0.9, saturation + 0.1) : 0,
-      lightness: Math.min(0.56, fillLightness + 0.16),
-    }),
-    outline: hsl({ ...base, lightness: Math.min(0.48, fillLightness + 0.1) }),
-    selectedOutline: hsl({ ...base, lightness: Math.min(0.62, fillLightness + 0.22) }),
-    note: hsl({ ...base, saturation: saturation * 0.82, lightness: Math.min(0.82, fillLightness + 0.38) }),
-    repeatedNote: hsl({ ...base, saturation: saturation * 0.75, lightness: Math.min(0.68, fillLightness + 0.26) }),
+    fill: oklchToHex(0.48, c(0.21), h),
+    selectedFill: oklchToHex(0.6, c(0.24), h),
+    outline: oklchToHex(0.58, c(0.18), h),
+    selectedOutline: oklchToHex(0.74, c(0.2), h),
+    note: oklchToHex(0.9, c(0.15), h),
+    repeatedNote: oklchToHex(0.76, c(0.12), h),
   }
 }

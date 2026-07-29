@@ -9,9 +9,9 @@
       "autoPort": true
     },
     {
-      "name": "track-transform-panel",
+      "name": "dev-isolated",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "3001"],
+      "runtimeArgs": ["run", "dev:isolated", "--", "--port", "3001"],
       "port": 3001
     }
   ]

@@ -15,6 +15,7 @@ export type UserInterfaceRendererId =
   | 'fractalTunnel'
   | 'neonPolar'
   | 'hopfFibration'
+  | 'laserSphere'
   | 'shapeFlight'
   | 'metronomeBalls'
   | 'emojiDisplay'

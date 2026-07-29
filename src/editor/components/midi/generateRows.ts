@@ -1,5 +1,6 @@
 import type { MidiRow } from './types'
 import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, pitchToValue } from '../../core/trackTypes'
+import { midiNoteBaseColor, midiValueColor } from '../../utils/midiEditorPalette'
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -13,27 +14,31 @@ export interface MidiRowLabelOverride {
  * Generate MidiRow[] for a given pitch range.
  * Higher pitches at the top (descending order).
  * Falls back to C1–C7 (24–96) if no range provided.
+ * Every row wears the track's note color (one voice per track); label
+ * overrides with explicit colors win.
  */
 export function generateRows(
+  trackColor: string,
   noteRange?: { min: number; max: number },
   labels?: Record<number, MidiRowLabelOverride>,
 ): MidiRow[] {
   const min = noteRange?.min ?? 24
   const max = noteRange?.max ?? 96
+  const baseColor = midiNoteBaseColor(trackColor)
   const rows: MidiRow[] = []
 
   for (let pitch = max; pitch >= min; pitch--) {
     const octave = Math.floor(pitch / 12) - 1
     const noteIndex = pitch % 12
     const noteLabel = `${NOTE_NAMES[noteIndex]}${octave}`
-    const hue = (noteIndex / 12) * 360
     const label = labels?.[pitch]
     rows.push({
       pitch,
       label: label?.label ?? noteLabel,
       noteLabel: label ? noteLabel : undefined,
-      color: label?.color ?? `hsl(${hue}, 70%, 55%)`,
-      emphasized: label?.emphasized,
+      color: label?.color ?? baseColor,
+      // C rows anchor the octave: their labels light up in the track color.
+      emphasized: label?.emphasized ?? noteIndex === 0,
     })
   }
 
@@ -49,16 +54,19 @@ export function generateRows(
 export function generateInstrumentRows(
   defRows: { pitch: number; label: string; color?: string; emphasized?: boolean }[],
   notePitches: number[],
+  trackColor: string,
 ): MidiRow[] {
   const rows: MidiRow[] = []
   const known = new Set<number>()
-  defRows.forEach((r, i) => {
+  const baseColor = midiNoteBaseColor(trackColor)
+  defRows.forEach((r) => {
     known.add(r.pitch)
-    const hue = (i / Math.max(1, defRows.length)) * 300
     rows.push({
       pitch: r.pitch,
       label: r.label,
-      color: r.color ?? `hsl(${hue}, 65%, 55%)`,
+      // One voice per track: undeclared row colors all wear the track hue;
+      // only explicit per-row colors (semantic, e.g. a white flash row) win.
+      color: r.color ?? baseColor,
       emphasized: r.emphasized,
     })
   })
@@ -118,17 +126,18 @@ export function generateVideoClipRows(
   clipNames: string[],
   baseNote: number,
   notePitches: number[],
+  trackColor: string,
 ): MidiRow[] {
   const rows: MidiRow[] = []
+  const clipBaseColor = midiNoteBaseColor(trackColor)
   const clipPitches = new Set<number>()
   for (let i = clipNames.length - 1; i >= 0; i--) {
     const pitch = baseNote + i
     clipPitches.add(pitch)
-    const hue = (i / Math.max(1, clipNames.length)) * 300
     rows.push({
       pitch,
       label: `${i + 1} · ${clipNames[i]}`,
-      color: `hsl(${hue}, 65%, 55%)`,
+      color: clipBaseColor,
       emphasized: i === 0,
     })
   }
@@ -160,17 +169,18 @@ export function generatePhotoRows(
   photoNames: string[],
   baseNote: number,
   notePitches: number[],
+  trackColor: string,
 ): MidiRow[] {
   const rows: MidiRow[] = []
+  const photoBaseColor = midiNoteBaseColor(trackColor)
   const photoPitches = new Set<number>()
   for (let i = photoNames.length - 1; i >= 0; i--) {
     const pitch = baseNote + i
     photoPitches.add(pitch)
-    const hue = (i / Math.max(1, photoNames.length)) * 300
     rows.push({
       pitch,
       label: `${i + 1} · ${photoNames[i]}`,
-      color: `hsl(${hue}, 65%, 55%)`,
+      color: photoBaseColor,
       emphasized: i === 0,
     })
   }
@@ -215,6 +225,7 @@ export function generateValueRows(
   paramMin: number,
   paramMax: number,
   notePitches: number[],
+  trackColor: string,
   formatValue?: (value: number) => string,
 ): MidiRow[] {
   const rowStep = Math.abs(paramMax - paramMin) / VALUE_ROW_STEPS
@@ -231,7 +242,9 @@ export function generateValueRows(
     let label = fmt(pitchToValue(pitch, paramMin, paramMax))
     if (k === VALUE_ROW_STEPS) label += ' · max'
     if (k === 0) label += ' · min'
-    rows.push({ pitch, label, color: `hsl(${t * 240}, 60%, 50%)` })
+    // Lightness encodes the value (dim = min, bright = max) so magnitude
+    // reads at a glance while the lane keeps its track's hue.
+    rows.push({ pitch, label, color: midiValueColor(trackColor, t) })
   }
 
   // Orphans keep value labels (not note names): the engine reads them as values,
@@ -254,9 +267,9 @@ export function generateValueRows(
  * in-between pitches from saved projects appear as dimmed extra rows labelled by
  * which side of the threshold they land on.
  */
-export function generateToggleRows(notePitches: number[]): MidiRow[] {
+export function generateToggleRows(notePitches: number[], trackColor: string): MidiRow[] {
   const rows: MidiRow[] = [
-    { pitch: AUTOMATION_PITCH_MAX, label: 'On', color: 'hsl(145, 60%, 45%)' },
+    { pitch: AUTOMATION_PITCH_MAX, label: 'On', color: midiNoteBaseColor(trackColor) },
     { pitch: AUTOMATION_PITCH_MIN, label: 'Off', color: 'hsl(0, 0%, 55%)' },
   ]
   const known = new Set([AUTOMATION_PITCH_MAX, AUTOMATION_PITCH_MIN])

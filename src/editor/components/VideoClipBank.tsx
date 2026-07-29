@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowDown, ArrowUp, Film, Pause, Play, Plus, X } from 'lucide-react'
 import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput } from 'mediabunny'
 import { claimMediaDrop } from './MediaFileDropLayer'
@@ -271,7 +271,8 @@ function MomentPickerModal({
           value={Math.min(t, duration)}
           onChange={(e) => seek(Number(e.target.value))}
           disabled={!ready}
-          className="slider-square mt-2 w-full"
+          style={{ '--fill': `${duration > 0 ? (Math.min(t, duration) / duration) * 100 : 0}%` } as CSSProperties}
+          className="slider-console mt-2 w-full"
         />
 
         <div className="mt-1.5 flex items-center gap-2">

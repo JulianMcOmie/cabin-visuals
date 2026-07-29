@@ -7,10 +7,11 @@ import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 import { DEFAULT_WHITE_CORE, evaluateCoreAppearance } from './laserSphereCore'
 
-const DEFAULT_COLOR = '#25dfff'
+export const DEFAULT_LASER_SPHERE_COLOR = '#25dfff'
+const DEFAULT_COLOR = DEFAULT_LASER_SPHERE_COLOR
 const WHITE = new Color(1, 1, 1)
 
-const LASER_VERTEX_SHADER = `
+export const LASER_VERTEX_SHADER = `
 varying float vFacing;
 
 void main() {
@@ -21,7 +22,7 @@ void main() {
   gl_Position = projectionMatrix * viewPosition;
 }`
 
-const LASER_FRAGMENT_SHADER = `
+export const LASER_FRAGMENT_SHADER = `
 uniform vec3 coreColor;
 uniform vec3 rimColor;
 // A raw ShaderMaterial ignores Material.opacity, so the value the opacity
@@ -41,9 +42,9 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
   id: 'laserSphere',
   name: 'Laser Sphere',
   kind: 'object',
-  userInterfaceRenderer: 'parameters',
-  // Position and size are the canonical track transform (core/transform.ts).
+  userInterfaceRenderer: 'laserSphere',
   params: [
+    { key: 'size', label: 'Size', min: 0.0001, max: 4, step: 0.05, curve: 2, default: 1.6 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },
     { key: 'whiteCore', label: 'White-hot core', min: 0, max: 1, step: 0.01, default: DEFAULT_WHITE_CORE },
@@ -57,8 +58,9 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
     { pitch: 44, label: 'Flare · gentle' },
     { pitch: 36, label: 'Flare · faint' },
   ],
-  localTransform: ({ energy }) => ({
-    scale: 1 + energy * 0.22,
+  // Placement comes from parent tracks / movers; the sphere itself only sizes.
+  localTransform: ({ params, energy }) => ({
+    scale: (params.size ?? paramDefault(laserSphereInstrument, 'size')) / 1.6 * (1 + energy * 0.22),
   }),
   component: LaserSphere,
 }

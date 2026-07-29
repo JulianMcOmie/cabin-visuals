@@ -68,6 +68,59 @@ function drawLandscape(
 
 // ── The vignettes ────────────────────────────────────────────────────────────
 
+/** The Camera vignette's scene: a perspective field of movie-camera emojis
+ *  the viewpoint glides through, with "Camera" standing mid-scene as a tilted
+ *  3D billboard that pulses on the beat. The glide plus the punch-in above
+ *  make the MOVE the subject - this instrument drives the camera, it isn't
+ *  a picture. */
+function drawCameraScene(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  const beat = t * BEATS_PER_SEC
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#151c40')
+  bg.addColorStop(1, '#2a164f')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  const horizon = h * 0.36
+  const focal = h * 0.85
+  const rowDepth = 1 // world units between emoji rows
+  // Constant forward glide: rows recycle every rowDepth, with a gentle sway.
+  const zOffset = (t * 0.55) % rowDepth
+  const sway = Math.sin(t * 0.6) * 0.5
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  // Far to near, so close cameras draw over distant ones. Rows dissolve as
+  // they near the lens instead of swallowing the frame.
+  for (let zi = 7; zi >= 1; zi--) {
+    const z = zi * rowDepth - zOffset + 0.55
+    const size = (h * 0.3) / z
+    const y = horizon + (focal * 0.32) / z
+    ctx.font = `${size}px sans-serif`
+    ctx.globalAlpha = Math.min(1, 2.2 / z) * Math.min(1, Math.max(0, (z - 0.55) / 0.45))
+    for (let xi = -3; xi <= 3; xi++) {
+      const x = w / 2 + ((xi * 1.5 + sway) * focal * 0.35) / z
+      if (x > -size && x < w + size) ctx.fillText('🎥', x, y)
+    }
+  }
+  ctx.globalAlpha = 1
+
+  // "Camera" IN the scene: sheared like a billboard standing on the plane,
+  // pulsing with each note.
+  const titleSize = h * 0.24 * (1 + 0.1 * pulseAt(beat, 1, 3))
+  ctx.save()
+  ctx.translate(w / 2, horizon - h * 0.05)
+  ctx.transform(1, -0.05, 0, 1, 0, 0)
+  ctx.font = `900 ${titleSize}px "Arial Black", Impact, sans-serif`
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = titleSize * 0.16
+  ctx.shadowOffsetY = titleSize * 0.07
+  ctx.fillText('Camera', 0, 0)
+  ctx.restore()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
 /** Camera: the scene punches in and shakes on each note, viewed through
  *  viewfinder chrome (corner brackets + REC). */
 const drawCamera: Draw2D = (ctx, w, h, t) => {
@@ -78,10 +131,10 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
   const dy = Math.cos(t * 57) * 2.5 * p
   ctx.save()
   ctx.translate(w / 2 + dx, h / 2 + dy)
-  ctx.scale(scale, scale)
+  // Slight overscan under the punch/shake so an edge never shows.
+  ctx.scale(scale * 1.06, scale * 1.06)
   ctx.translate(-w / 2, -h / 2)
-  // Oversized so the dolly-in never reveals an edge.
-  drawLandscape(ctx, -w * 0.15, -h * 0.15, w * 1.3, h * 1.3, 1)
+  drawCameraScene(ctx, w, h, t)
   ctx.restore()
 
   ctx.strokeStyle = 'rgba(255,255,255,0.85)'
@@ -107,44 +160,86 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Video: full-frame footage (drifting sun) hard-cutting to the next clip
- *  every couple of beats, with a ticking timecode and progress bar. */
+/** Video: the video itself, nothing else - full-frame sunset footage with
+ *  mountain ridges rushing past in parallax (the far ridge slower than the
+ *  near one, like footage shot from a moving car) and "video" centered over
+ *  it. No player chrome: the instrument shows footage, it doesn't add UI. */
 const drawVideo: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const idx = Math.floor(beat / 2)
-  drawLandscape(ctx, 0, 0, w, h, idx, 0.3 + 0.08 * Math.sin(t * 0.9 + idx * 2))
+  const sky = ctx.createLinearGradient(0, 0, 0, h)
+  sky.addColorStop(0, '#fbbf24')
+  sky.addColorStop(1, '#ec4899')
+  ctx.fillStyle = sky
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#fff7ed'
+  ctx.globalAlpha = 0.9
+  ctx.beginPath()
+  ctx.arc(w * 0.72, h * 0.3, Math.min(w, h) * 0.13, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.globalAlpha = 1
 
-  const barY = h - 4
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'
-  ctx.fillRect(0, barY, w, 4)
-  ctx.fillStyle = '#f472b6'
-  ctx.fillRect(0, barY, w * ((beat % 8) / 8), 4)
+  // A zigzag ridge: two summed triangle waves over world-x, so it never tiles
+  // visibly and never ends.
+  const ridge = (scroll: number, base: number, amp: number, color: string) => {
+    const tri = (u: number, period: number, phase: number) => {
+      const f = ((u / period + phase) % 1 + 1) % 1
+      return Math.abs(f - 0.5) * 2
+    }
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.moveTo(0, h)
+    for (let x = 0; x <= w; x += 4) {
+      const u = x + scroll
+      ctx.lineTo(x, base - amp * (0.6 * tri(u, w * 0.45, 0) + 0.4 * tri(u, w * 0.23, 0.37)))
+    }
+    ctx.lineTo(w, h)
+    ctx.closePath()
+    ctx.fill()
+  }
+  // Far ridge drifts, near ridge rushes - the parallax IS the "it's playing".
+  ridge(t * w * 0.09, h * 0.82, h * 0.34, '#b0486b')
+  ridge(t * w * 0.28, h * 1.04, h * 0.5, '#7c2d12')
 
-  const sec = Math.floor(t) % 60
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'
-  ctx.fillRect(5, h - 21, 42, 12)
-  ctx.fillStyle = 'rgba(255,255,255,0.9)'
-  ctx.font = '8px monospace'
-  ctx.fillText(`0:${String(sec).padStart(2, '0')}`, 9, h - 12)
+  // Centered "video", steady - a video just plays, it doesn't beat.
+  const capSize = h * 0.2
+  ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = capSize * 0.25
+  ctx.shadowOffsetY = capSize * 0.05
+  ctx.fillText('video', w / 2, h / 2)
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
-/** Photo: a white-bordered print hard-cutting to the next photo, with a
- *  camera-flash blink on each cut. Static inside a photo - that's the tell
- *  against Video. */
-const drawPhoto: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const idx = Math.floor(beat / 2)
+/** Photo: one still, full stop - a white-bordered print of a landscape with
+ *  "photo" centered on it. Nothing animates: a photo doesn't play, and the
+ *  stillness against Video's rushing ridges IS the tell. */
+const drawPhoto: Draw2D = (ctx, w, h) => {
   ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const m = 8
   ctx.fillStyle = '#f8fafc'
   ctx.fillRect(m - 4, m - 4, w - 2 * (m - 4), h - 2 * (m - 4))
-  drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, idx)
-  const flash = 0.7 * pulseAt(beat, 2, 10)
-  if (flash > 0.02) {
-    ctx.fillStyle = `rgba(255,255,255,${flash})`
-    ctx.fillRect(m, m, w - 2 * m, h - 2 * m)
-  }
+  drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, 2)
+  const capSize = h * 0.2
+  ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = capSize * 0.25
+  ctx.shadowOffsetY = capSize * 0.05
+  ctx.fillText('photo', w / 2, h / 2)
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 /** Oscilloscope: a glowing waveform over a faint grid, amplitude pulsing on
@@ -174,40 +269,95 @@ const drawOscilloscope: Draw2D = (ctx, w, h, t) => {
     else ctx.lineTo(x, y)
   }
   ctx.stroke()
+  // The name in scope-phosphor green - terminal face, glowing like the trace.
+  let size = h * 0.16
+  const scopeFont = (s: number) => `700 ${s}px Consolas, "Lucida Console", Menlo, monospace`
+  ctx.font = scopeFont(size)
+  const measured = ctx.measureText('oscilloscope').width
+  const maxW = w * 0.86
+  if (measured > maxW) size *= maxW / measured
+  ctx.font = scopeFont(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#3aff8c'
+  ctx.shadowBlur = 10
+  ctx.fillText('oscilloscope', w / 2, h * 0.2)
   ctx.shadowBlur = 0
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
-/** Color Filters: the SAME scene remapped through a stepping filter, with a
- *  swatch row showing which filter is held. */
+/** Bass Ripple: the name run through its own effect - "bass ripple" rendered
+ *  once to a scratch layer, then redrawn in thin rows displaced by a traveling
+ *  sine whose amplitude PULSES on the bass hit every couple of beats, so the
+ *  words visibly warp like the scene does while its note is held. */
+let bassRippleScratch: HTMLCanvasElement | null = null
+
+const drawBassRipple: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#120f22')
+  bg.addColorStop(1, '#1c1233')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  // The undisturbed words, re-rendered only when the card size changes.
+  if (!bassRippleScratch) bassRippleScratch = document.createElement('canvas')
+  const scratch = bassRippleScratch
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w
+    scratch.height = h
+    const s = scratch.getContext('2d')!
+    let size = h * 0.24
+    const font = (v: number) => `900 ${v}px "Arial Black", Impact, sans-serif`
+    s.font = font(size)
+    const measured = s.measureText('bass ripple').width
+    const maxW = w * 0.86
+    if (measured > maxW) size *= maxW / measured
+    s.font = font(size)
+    s.textAlign = 'center'
+    s.textBaseline = 'middle'
+    s.fillStyle = '#a78bfa'
+    s.fillText('bass ripple', w / 2, h / 2)
+  }
+
+  // Bass hit every 2 beats: the ripple swells hard and settles, a small
+  // steady shimmer keeping the field alive between hits.
+  const amp = w * 0.005 + w * 0.045 * pulseAt(beat, 2, 3)
+  const row = Math.max(1, Math.round(h / 60))
+  for (let y = 0; y < h; y += row) {
+    const off = amp * Math.sin(y * (14 / h) - t * 7)
+    ctx.drawImage(scratch, 0, y, w, row, off, y, w, row)
+  }
+}
+
+/** Color Filters: the name run through its own effect - each held filter is a
+ *  DISCRETE look, so the card hard-swaps background and text color together
+ *  every beat instead of sweeping, exactly like the instrument's remaps. */
+const COLOR_FILTER_LOOKS: Array<{ bg: string; text: string }> = [
+  { bg: '#1e1b4b', text: '#22d3ee' },
+  { bg: '#052e16', text: '#4ade80' },
+  { bg: '#4a044e', text: '#e879f9' },
+  { bg: '#451a03', text: '#fbbf24' },
+]
 const drawColorFilters: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  const step = Math.floor(beat / 2) % 4
-  const hues = [0, 120, 220, 300]
-  ctx.save()
-  ctx.filter = step === 0 ? 'none' : `hue-rotate(${hues[step]}deg) saturate(1.4)`
-  drawLandscape(ctx, 0, 0, w, h, 0)
-  ctx.restore()
-  const flash = 0.25 * pulseAt(beat, 2, 8)
-  if (flash > 0.02) {
-    ctx.fillStyle = `rgba(255,255,255,${flash})`
-    ctx.fillRect(0, 0, w, h)
-  }
-  // Swatch row: the filter palette, active one ringed.
-  const colors = ['#e2e8f0', '#4ade80', '#60a5fa', '#e879f9']
-  for (let i = 0; i < colors.length; i++) {
-    const x = w / 2 + (i - 1.5) * 14
-    ctx.fillStyle = colors[i]
-    ctx.beginPath()
-    ctx.arc(x, h - 11, 3.5, 0, Math.PI * 2)
-    ctx.fill()
-    if (i === step) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-      ctx.lineWidth = 1.2
-      ctx.beginPath()
-      ctx.arc(x, h - 11, 5.5, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-  }
+  const look = COLOR_FILTER_LOOKS[Math.floor(beat) % COLOR_FILTER_LOOKS.length]
+  ctx.fillStyle = look.bg
+  ctx.fillRect(0, 0, w, h)
+  let size = h * 0.26
+  const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
+  ctx.font = font(size)
+  const maxW = w * 0.86
+  const measured = ctx.measureText('color filters').width
+  if (measured > maxW) size *= maxW / measured
+  ctx.font = font(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = look.text
+  ctx.fillText('color filters', w / 2, h / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 /** Scene Switcher: ONE prominent "switch", restyled every beat - each switch
@@ -293,8 +443,8 @@ const drawCut: Draw2D = (ctx, w, h, t) => {
 
 /** Radial Cut: concentric cuts POP into and out of existence over the base
  *  scene, staggered so they stack - outer circle alone, both nested, inner
- *  alone, bare scene. Each snaps in with a fast radial grow and an onset
- *  flash, so the cut itself visibly appears and leaves. */
+ *  alone, bare scene. Cuts superimpose INSTANTLY at full size, exactly like
+ *  the real director; only the onset flash marks the moment they land. */
 const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   const beat = (t * BEATS_PER_SEC) % 4
   const m = Math.min(w, h)
@@ -305,15 +455,12 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   ]
   for (const ring of rings) {
     if (beat < ring.on || beat >= ring.off) continue
-    const age = beat - ring.on
-    // Snap-in: the circle grows to size in a few frames, then holds.
-    const radius = ring.r * (1 - 0.3 * Math.exp(-10 * age))
     ctx.save()
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
     ctx.clip()
     drawWordField(ctx, w, h, t, 'radial', ring.variant)
-    const flash = 0.55 * Math.exp(-6 * age)
+    const flash = 0.55 * Math.exp(-6 * (beat - ring.on))
     if (flash > 0.02) {
       ctx.fillStyle = `rgba(255,255,255,${flash})`
       ctx.fillRect(0, 0, w, h)
@@ -322,7 +469,7 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'
     ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
     ctx.stroke()
   }
 }
@@ -339,11 +486,13 @@ const CROP_PREVIEW_SLICES = 6
 // Word-field scenery for the director vignettes: rows of a drifting bold word
 // on a deep gradient, one accent row - each palette stands in for one scene, so
 // a director composing scenes reads as compositing differently-colored fields.
-const WORD_FIELDS: Array<{ bg: [string, string]; base: string; accent: string }> = [
-  { bg: ['#101426', '#1a1033'], base: 'rgba(148,163,184,0.42)', accent: 'rgba(167,139,250,0.75)' },
-  { bg: ['#07191c', '#0c2b22'], base: 'rgba(134,197,181,0.40)', accent: 'rgba(52,211,153,0.75)' },
-  { bg: ['#1f0d1c', '#2b1030'], base: 'rgba(196,149,187,0.40)', accent: 'rgba(244,114,182,0.75)' },
-  { bg: ['#1c1206', '#2b1a08'], base: 'rgba(214,188,140,0.40)', accent: 'rgba(251,191,36,0.75)' },
+// Each scene also gets its own FONT (the same system stacks SWITCH_STYLES
+// uses), so overlapping cuts read as different scenes even where colors blur.
+const WORD_FIELDS: Array<{ font: (size: number) => string; bg: [string, string]; base: string; accent: string }> = [
+  { font: (s) => `900 ${s}px "Arial Black", Impact, sans-serif`, bg: ['#151c40', '#2a164f'], base: 'rgba(148,163,184,0.42)', accent: 'rgba(167,139,250,0.78)' },
+  { font: (s) => `italic 900 ${s}px Georgia, "Times New Roman", serif`, bg: ['#0a301d', '#12452c'], base: 'rgba(134,197,181,0.40)', accent: 'rgba(52,211,153,0.78)' },
+  { font: (s) => `700 ${s}px "Courier New", monospace`, bg: ['#3b1130', '#4e173d'], base: 'rgba(196,149,187,0.40)', accent: 'rgba(244,114,182,0.78)' },
+  { font: (s) => `700 ${s}px "Comic Sans MS", "Chalkboard SE", cursive`, bg: ['#3c260a', '#4d300d'], base: 'rgba(214,188,140,0.40)', accent: 'rgba(251,191,36,0.78)' },
 ]
 
 function drawWordField(
@@ -359,7 +508,7 @@ function drawWordField(
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, w, h)
   const size = h / 4.2
-  ctx.font = `900 ${size}px ui-sans-serif, system-ui, sans-serif`
+  ctx.font = palette.font(size)
   ctx.textBaseline = 'middle'
   const step = ctx.measureText(word).width + size * 0.45
   const rows = Math.ceil(h / size) + 1
@@ -598,6 +747,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   video: drawVideo,
   photo: drawPhoto,
   oscilloscope: drawOscilloscope,
+  bassRipple: drawBassRipple,
   colorFilters: drawColorFilters,
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
