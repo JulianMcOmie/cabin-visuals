@@ -69,6 +69,27 @@ export function midiRowLabelColor(rowColor: string): string {
   return oklchToHex(0.75, src.c === 0 ? 0 : 0.08, src.h)
 }
 
+export interface MidiToolbarAccent {
+  /** Active toggle pill fill, and text that reads against it. */
+  pillBg: string
+  pillText: string
+  /** Filled-portion color for the toolbar's mini sliders. */
+  slider: string
+}
+
+/** Toolbar accents voiced from the track color (same recipe family as the
+ *  chrome: fixed L/C, track hue, grey tracks stay grey). Active pills wear a
+ *  bright fill with same-hue near-black text; slider fills match the band. */
+export function midiToolbarAccent(color: string): MidiToolbarAccent {
+  const { c, h } = sourceOklch(color)
+  const chroma = (target: number) => (c === 0 ? 0 : target)
+  return {
+    pillBg: oklchCss(0.72, chroma(0.15), h, 1),
+    pillText: oklchCss(0.22, chroma(0.05), h, 1),
+    slider: oklchCss(0.64, chroma(0.17), h, 0.9),
+  }
+}
+
 export interface MidiEditorChrome {
   /** Ruler clip-header band (the draggable block strip under the bar numbers). */
   band: string
