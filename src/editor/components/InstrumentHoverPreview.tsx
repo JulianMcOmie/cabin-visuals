@@ -128,18 +128,25 @@ const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 
 // Preview-only param overrides for instruments whose real defaults read poorly
 // in a popup: Text Display defaults to the single word HELLO, which hides its
-// whole point - advancing a word per note.
+// whole point - advancing a word per note. The Stack layout with a 2-word card
+// makes the cycle legible: "text" lands on the left half, "display" joins it,
+// then the card clears and the pair rebuilds - words visibly ADD one per note.
 const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
-  textDisplay: { text: 'hello awesome person' },
+  textDisplay: { text: 'text display' },
+}
+const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
+  // Stack layout, 2 words per card, held until replaced (no fade dips between
+  // the tightly-spaced preview notes).
+  textDisplay: { layoutMode: 2, stackMaxWords: 2, sustain: 1 },
 }
 
 // Preview-only note overrides for instruments whose labeled vocabulary the
 // generic arc misses entirely. Text Display renders NOTHING without pitch 48
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
 // black. Near-held word notes keep a word on screen while stepping it; and
-// the note COUNT must divide by the 3 preview words, or the loop's wrap
-// restarts the word cycle mid-sequence (hello twice in a row once per loop).
-// 12 notes over the 16 beats: divisible by 3, still an even musical stride.
+// the note COUNT must divide by the 2 preview words, or the loop's wrap
+// restarts the word cycle mid-card (a card of "text text" once per loop).
+// 12 notes over the 16 beats: divisible by 2, still an even musical stride.
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
   textDisplay: makeLoopNotes([48], 1.2, 4 / 3),
 }
@@ -153,6 +160,7 @@ function makePreviewState(instrumentId: string): ObjectState {
     else if (typeof p.default === 'number') params[p.key] = p.default
   }
   Object.assign(stringParams, PREVIEW_STRING_PARAMS[instrumentId])
+  Object.assign(params, PREVIEW_NUMBER_PARAMS[instrumentId])
   return {
     beat: 0,
     secPerBeat: 60 / PREVIEW_BPM,
