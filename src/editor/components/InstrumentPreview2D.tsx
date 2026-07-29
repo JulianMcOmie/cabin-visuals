@@ -165,7 +165,6 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
  *  near one, like footage shot from a moving car) and "video" centered over
  *  it. No player chrome: the instrument shows footage, it doesn't add UI. */
 const drawVideo: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
   const sky = ctx.createLinearGradient(0, 0, 0, h)
   sky.addColorStop(0, '#fbbf24')
   sky.addColorStop(1, '#ec4899')
@@ -200,8 +199,8 @@ const drawVideo: Draw2D = (ctx, w, h, t) => {
   ridge(t * w * 0.09, h * 0.82, h * 0.34, '#b0486b')
   ridge(t * w * 0.28, h * 1.04, h * 0.5, '#7c2d12')
 
-  // Centered "video", breathing gently on the beat.
-  const capSize = h * 0.2 * (1 + 0.05 * pulseAt(beat, 1, 4))
+  // Centered "video", steady - a video just plays, it doesn't beat.
+  const capSize = h * 0.2
   ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
