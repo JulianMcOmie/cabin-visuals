@@ -30,7 +30,7 @@
 //
 // The return is the same integration running out: a spring pulls every piece
 // back to exactly where it started, so the field always resolves to its
-// composed layout. Long `settleBeats` + an instantaneous kick is the whole feel
+// composed layout. A long RECOVER plus an instantaneous kick is the whole feel
 // the brief asks for - blown apart in a frame, drifting home over bars.
 //
 // ── Keeping it a pure function of the beat ───────────────────────────────────
@@ -64,55 +64,133 @@ export const SCATTER_IMPACT_PITCH = 60
 export const SCATTER_IMPLODE_PITCH = 61
 export const SCATTER_SETTLE_PITCH = 62
 
+/**
+ * THREE knobs, because there are only three things you can hear.
+ *
+ * The physics underneath needs a dozen quantities (launch speed, spring period,
+ * damping ratio, quadratic drag, leash, lateral share, tumble rate, front
+ * speed…), but those are not independent DECISIONS - they are one gesture
+ * described in engineering units. Exposing them all made the mover feel like a
+ * simulation to be configured rather than an instrument to be played, so they
+ * move together now, along the curves in `tune()`:
+ *
+ *   IMPACT  - how hard the hit throws. Scales the launch speed, and with it the
+ *             leash and reach it needs to make that throw look intentional.
+ *   RECOVER - how long until everything is back in place, IN BEATS. It is the
+ *             actual observed return time, not a spring period, so "2" means
+ *             two beats and you can match it to the music by ear.
+ *   CHAOS   - orderly pulse → shrapnel. At 0 the field breathes out and back on
+ *             one clean radial line; turning it up trades that for sideways
+ *             scatter, tumble, swirl, springier settling, and harder pileup on
+ *             stacked hits.
+ *
+ * Placement (`center*`) and the swirl plane are not feel - they are where the
+ * hit came from - so they stay separate and out of the way.
+ */
 export interface ImpactScatterSettings {
+  /** 0 = a nudge, 1 = the room comes apart. */
+  impact: number
+  /** Beats from the hit until the field has visibly settled home. */
+  recoverBeats: number
+  /** 0 = one clean radial pulse, 1 = shrapnel. */
+  chaos: number
   centerX: number
   centerY: number
   centerZ: number
-  /** Launch speed at the impact point, in units per beat. The kick, not a
-   *  distance: how far a piece actually gets is up to the material. */
+  /** Which plane the blast swirls in. 0 = X, 1 = Y, 2 = Z. */
+  swirlAxis: number
+}
+
+/** The physics quantities the integration actually runs on. */
+interface Tuning {
+  /** Launch speed at the impact point, in units per beat. */
   blastSpeed: number
   /** Distance at which a hit retains half its power. */
   reach: number
   /** Units the blast front travels per beat, so far pieces leave late. */
   waveSpeed: number
-  /** Sideways share of the throw, on each copy's own lateral axis. 0 = a clean
-   *  radial blast, high = pieces spat off in every direction. */
+  /** Sideways share of the throw, on each copy's own lateral axis. */
   scatter: number
-  /** Extra kick a piece takes when it is ALREADY displaced. The escalation
-   *  knob: 0 = honest physics, high = a fill that gets out of hand. */
+  /** Extra kick a piece takes when it is ALREADY displaced. */
   pileup: number
-  /** Bias of the throw along world +Y, so debris is launched up and not only out. */
+  /** Bias of the throw along world +Y. */
   lift: number
-  /** Spring period back home, in beats. The drift-home knob - long is slow. */
+  /** Spring period back home, in beats. */
   settleBeats: number
-  /** 0 = critically damped (arrives and stops), 1 = loose and overshooting. */
+  /** 0 = critically damped, 1 = loose and overshooting. */
   bounce: number
-  /** Speed-squared absorption. Eats the big first flight, leaves a silky settle. */
+  /** Speed-squared absorption. */
   drag: number
-  /** Displacement at which the material starts fighting back hard (cubic). This
-   *  is what bounds compounding: stacked hits saturate here instead of exiting. */
+  /** Displacement at which the material fights back hard (cubic) - what bounds
+   *  compounding, so stacked hits saturate instead of exiting the scene. */
   leash: number
   /** Volume-conserving stretch along the direction of travel, at full speed. */
   stretch: number
   /** Tangential share of the throw, as a multiple of the radial distance. */
   swirl: number
-  /** 0 = X, 1 = Y, 2 = Z. */
-  swirlAxis: number
   /** Angular launch, degrees per beat, about each copy's own tumble axis. */
   spinKick: number
   /** Period of the unwind back to the original orientation, in beats. */
   unwindBeats: number
   /** 0 = the orientation unwinds and stops, 1 = it wobbles past home. */
   spinBounce: number
-  flashLightness: number
-  flashSaturation: number
-  flashHue: number
+}
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
+
+/**
+ * Macros → physics. Every curve here is a tuning decision, not a formula:
+ * the exponents put the interesting half of each range under the middle of the
+ * knob's travel, and the constants are the values that survived looking at it.
+ */
+export function tune(settings: ImpactScatterSettings): Tuning {
+  const impact = clamp01(settings.impact)
+  const chaos = clamp01(settings.chaos)
+  const recover = Math.max(0.1, settings.recoverBeats)
+  // A big hit has to reach further and be allowed to travel further, or it just
+  // looks like the same blast with the gain up.
+  const reach = 5 + 7 * impact
+  return {
+    // Superlinear: the top of the knob has to feel like a different event, not
+    // 20% more of the same one.
+    blastSpeed: 1.5 + 25 * Math.pow(impact, 1.6),
+    reach,
+    // Tied to reach so the front always crosses the affected field in about the
+    // same musical time - the ripple reads the same at every size.
+    waveSpeed: reach * 3,
+    scatter: 1.5 * Math.pow(chaos, 1.2),
+    pileup: 0.2 + chaos,
+    lift: 0.22,
+    // Measured, not assumed: with these damping curves the field is within 1%
+    // of home after ~0.87 of a spring period, so this is what makes RECOVER
+    // read in real beats.
+    settleBeats: recover * 1.15,
+    bounce: 0.12 + 0.45 * chaos,
+    // Chaos loosens the material as well as scattering it: less absorption
+    // means the flailing lasts, which is most of what "wild" looks like.
+    drag: 1 - 0.45 * chaos,
+    leash: 1.8 + 6.5 * impact,
+    stretch: 0.5,
+    swirl: 0.08 + 0.5 * chaos,
+    spinKick: 40 + 900 * Math.pow(chaos, 1.3),
+    // The tumble deliberately unwinds slower than the translation settles, so
+    // orientation is still quietly resolving after the positions have landed.
+    unwindBeats: recover * 2,
+    spinBounce: 0.1 + 0.3 * chaos,
+  }
 }
 
 const SWIRL_AXES = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]
 const UP = new Vector3(0, 1, 0)
 const SIDE = new Vector3(1, 0, 0)
 const DEG = Math.PI / 180
+
+// Heat is kinetic energy, and how much of it shows is the mover's character
+// rather than a decision: a flying piece runs hot and white, a settling one
+// cools. Fixed so the three knobs stay about MOTION.
+const FLASH_LIGHTNESS = 0.18
+const FLASH_SATURATION = 0.1
+const FLASH_HUE = 0.02
 
 /** Gains sampled by the channel tables: 0, 1/8 … 1. apply() interpolates between
  *  neighbours, so the quantization is invisible - gain varies smoothly with
@@ -292,21 +370,12 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
   label: 'Impact Scatter',
   kind: 'mover',
   params: [
+    { key: 'impact', label: 'Impact', min: 0, max: 1, step: 0.01, default: 0.55 },
+    { key: 'recoverBeats', label: 'Recover (beats)', min: 0.25, max: 8, step: 0.05, default: 2 },
+    { key: 'chaos', label: 'Chaos', min: 0, max: 1, step: 0.01, default: 0.45 },
     { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerZ', label: 'Center Z', min: -20, max: 20, step: 0.1, default: 0 },
-    { key: 'blastSpeed', label: 'Blast speed (units/beat)', min: 0, max: 80, step: 0.5, default: 11 },
-    { key: 'reach', label: 'Half-power radius', min: 0.5, max: 40, step: 0.5, default: 8 },
-    { key: 'waveSpeed', label: 'Front speed (units/beat)', min: 0.5, max: 80, step: 0.5, default: 26 },
-    { key: 'scatter', label: 'Scatter (× throw)', min: 0, max: 2, step: 0.01, default: 0.5 },
-    { key: 'pileup', label: 'Pileup', min: 0, max: 2, step: 0.01, default: 0.6 },
-    { key: 'lift', label: 'Lift', min: -1, max: 1, step: 0.01, default: 0.22 },
-    { key: 'settleBeats', label: 'Drift home (period, beats)', min: 0.2, max: 12, step: 0.05, default: 2.6 },
-    { key: 'bounce', label: 'Bounce', min: 0, max: 1, step: 0.01, default: 0.3 },
-    { key: 'drag', label: 'Absorption', min: 0, max: 4, step: 0.01, default: 0.7 },
-    { key: 'leash', label: 'Leash (units)', min: 0.5, max: 40, step: 0.1, default: 5 },
-    { key: 'stretch', label: 'Squash & stretch', min: 0, max: 1.5, step: 0.01, default: 0.5 },
-    { key: 'swirl', label: 'Swirl (× throw)', min: -2, max: 2, step: 0.01, default: 0.25 },
     {
       key: 'swirlAxis',
       label: 'Swirl axis',
@@ -318,12 +387,6 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
       ],
       default: 2,
     },
-    { key: 'spinKick', label: 'Tumble launch (°/beat)', min: -1440, max: 1440, step: 5, default: 320 },
-    { key: 'unwindBeats', label: 'Unwind (period, beats)', min: 0.2, max: 16, step: 0.05, default: 4.5 },
-    { key: 'spinBounce', label: 'Unwind wobble', min: 0, max: 1, step: 0.01, default: 0.12 },
-    { key: 'flashLightness', label: 'Flash lightness', min: -1, max: 1, step: 0.01, default: 0.18 },
-    { key: 'flashSaturation', label: 'Flash saturation', min: -1, max: 1, step: 0.01, default: 0.1 },
-    { key: 'flashHue', label: 'Flash hue shift', min: -1, max: 1, step: 0.01, default: 0.02 },
   ],
   midiRows: () => [
     { pitch: SCATTER_SETTLE_PITCH, label: 'Snap home (damp)' },
@@ -332,17 +395,18 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
   ],
   strictMidiRows: true,
   resolve({ settings, notes }) {
+    const tuning = tune(settings)
     const center = new Vector3(settings.centerX, settings.centerY, settings.centerZ)
-    const omega = (2 * Math.PI) / Math.max(0.05, settings.settleBeats)
+    const omega = (2 * Math.PI) / Math.max(0.05, tuning.settleBeats)
     // bounce 0 -> critically damped, bounce 1 -> zeta 0.15 (loose and ringing).
-    const zeta = 1 - 0.85 * Math.max(0, Math.min(1, settings.bounce))
-    const leash = Math.max(0.1, settings.leash)
-    const drag = Math.max(0, settings.drag)
-    const pileup = Math.max(0, settings.pileup)
-    const spinOmega = (2 * Math.PI) / Math.max(0.05, settings.unwindBeats)
-    const spinZeta = 1 - 0.85 * Math.max(0, Math.min(1, settings.spinBounce))
-    const reach = Math.max(0.0001, settings.reach)
-    const frontSpeed = Math.max(0.0001, settings.waveSpeed)
+    const zeta = 1 - 0.85 * clamp01(tuning.bounce)
+    const leash = Math.max(0.1, tuning.leash)
+    const drag = Math.max(0, tuning.drag)
+    const pileup = Math.max(0, tuning.pileup)
+    const spinOmega = (2 * Math.PI) / Math.max(0.05, tuning.unwindBeats)
+    const spinZeta = 1 - 0.85 * clamp01(tuning.spinBounce)
+    const reach = Math.max(0.0001, tuning.reach)
+    const frontSpeed = Math.max(0.0001, tuning.waveSpeed)
     const swirlAxis = SWIRL_AXES[Math.round(settings.swirlAxis)] ?? SWIRL_AXES[2]
 
     const linearConfig = (extra: Partial<ChannelConfig> = {}): ChannelConfig =>
@@ -422,16 +486,16 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
         }))
         return {
           radial: integrateChannel(
-            kicks(settings.blastSpeed, false), linearConfig(), start, step, samples,
+            kicks(tuning.blastSpeed, false), linearConfig(), start, step, samples,
           ),
           lateral: integrateChannel(
-            kicks(settings.blastSpeed * Math.max(0, settings.scatter), true), linearConfig(), start, step, samples,
+            kicks(tuning.blastSpeed * Math.max(0, tuning.scatter), true), linearConfig(), start, step, samples,
           ),
           // Tumble ignores implode/blast sign: a hit spins a piece either way.
           spin: integrateChannel(
             group.map((strike) => ({
               beat: strike.beat,
-              kick: (strike.direction === 0 ? 0 : 1) * strike.parity * strike.power * gain * settings.spinKick,
+              kick: (strike.direction === 0 ? 0 : 1) * strike.parity * strike.power * gain * tuning.spinKick,
               damp: strike.damp,
             })),
             spinConfig, start, step, samples,
@@ -441,7 +505,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
       return { start, step, end: start + (samples - 1) * step, buckets }
     })
 
-    const speedScale = Math.max(0.0001, Math.abs(settings.blastSpeed))
+    const speedScale = Math.max(0.0001, Math.abs(tuning.blastSpeed))
 
     return {
       apply(visualCopy, { beat, index, placementTransform }) {
@@ -508,8 +572,8 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
             hash(seed + 1.7) * 2 - 1,
             hash(seed + 3.3) * 2 - 1,
           ).normalize()
-        if (settings.lift !== 0) {
-          outward.addScaledVector(UP, settings.lift)
+        if (tuning.lift !== 0) {
+          outward.addScaledVector(UP, tuning.lift)
           if (outward.lengthSq() < 1e-8) outward.copy(UP)
           outward.normalize()
         }
@@ -546,9 +610,9 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
         // mid-flight, and reading it off position is the usual tell. Volume
         // conserving, so a piece thins across travel as it elongates along it.
         let stretchMatrix = new Matrix4()
-        if (settings.stretch !== 0 && speed > 1e-6) {
+        if (tuning.stretch !== 0 && speed > 1e-6) {
           const direction = travel.clone().divideScalar(speed)
-          const along = Math.max(0.05, 1 + settings.stretch * Math.tanh(speed / speedScale))
+          const along = Math.max(0.05, 1 + tuning.stretch * Math.tanh(speed / speedScale))
           const across = 1 / Math.sqrt(along)
           let sideA = new Vector3().crossVectors(direction, UP)
           if (sideA.lengthSq() < 1e-8) sideA = new Vector3().crossVectors(direction, SIDE)
@@ -575,7 +639,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
         const swirl = new Matrix4().makeTranslation(center.x, center.y, center.z)
           .multiply(new Matrix4().makeRotationAxis(
             swirlAxis,
-            (settings.swirl * extension) / Math.sqrt(distance * distance + 1),
+            (tuning.swirl * extension) / Math.sqrt(distance * distance + 1),
           ))
           .multiply(new Matrix4().makeTranslation(-center.x, -center.y, -center.z))
 
@@ -603,9 +667,9 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
           transform,
           opacity: visualCopy.opacity,
           colorShift: {
-            hue: visualCopy.colorShift.hue + settings.flashHue * heat,
-            saturation: visualCopy.colorShift.saturation + settings.flashSaturation * heat,
-            lightness: visualCopy.colorShift.lightness + settings.flashLightness * heat,
+            hue: visualCopy.colorShift.hue + FLASH_HUE * heat,
+            saturation: visualCopy.colorShift.saturation + FLASH_SATURATION * heat,
+            lightness: visualCopy.colorShift.lightness + FLASH_LIGHTNESS * heat,
           },
         }]
       },

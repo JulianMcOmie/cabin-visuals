@@ -3,8 +3,8 @@
 // Bespoke settings for the Impact Scatter mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference): a
 // full-bleed panel washed in the mover's shock-blue shade, a LIVE preview up
-// top, then rows of flat knobs grouped by what they mean - BLAST, SETTLE,
-// TUMBLE - with housekeeping params behind a MORE disclosure.
+// top, then the mover's THREE knobs - IMPACT, RECOVER, CHAOS - each captioned
+// in plain English, with placement behind a MORE disclosure.
 //
 // The preview is not a mockup: it runs the mover's real resolve() - the same
 // integrated impulse simulation, the same leash and pileup - over a looping
@@ -21,7 +21,7 @@
 // compounding escalates, and an implode. A hit ruler under the canvas marks
 // where they land so what you are watching is never a mystery.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
@@ -227,7 +227,7 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
       <div
         data-testid="impact-scatter-preview"
         title="Drag to orbit the lattice"
-        className="relative h-[196px] cursor-grab overflow-hidden active:cursor-grabbing"
+        className="relative h-[178px] cursor-grab overflow-hidden active:cursor-grabbing"
         style={{ background: ROOM }}
       >
         <Canvas
@@ -271,9 +271,14 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
 /** Flat knob per the guide: the value arc IS the light - a wide soft bloom under
  *  a hot core, white-hot tip dot at the terminus. Vertical drag, double-click
  *  resets, arrows nudge. */
-function ShockKnob({ parameter: bound, label, large = false }: {
+function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
   parameter: UserInterfaceParameter
   label: string
+  /** One plain-English line under the value. With only three controls there is
+   *  room to just SAY what each one does, which beats a clever label. */
+  hint?: string
+  /** Reads the value in the unit a person thinks in (percent, beats). */
+  format?: (definition: { min: number; max: number }, value: number) => string
   large?: boolean
 }) {
   const dragRef = useRef<{ y: number; norm: number } | null>(null)
@@ -320,7 +325,7 @@ function ShockKnob({ parameter: bound, label, large = false }: {
         aria-valuemin={definition.min}
         aria-valuemax={definition.max}
         aria-valuenow={value}
-        title={`${definition.label} · drag vertically · double-click to reset`}
+        title={`${definition.label}${hint ? ` — ${hint}` : ''} · drag vertically · double-click to reset`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -353,22 +358,15 @@ function ShockKnob({ parameter: bound, label, large = false }: {
           />
         </div>
       </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] tabular-nums text-white/70">
-        {definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
+      <span className="mt-1.5 text-[9px] font-semibold tracking-[0.14em] text-white/45">{label}</span>
+      <span className="font-mono text-[10px] tabular-nums text-white/75">
+        {format ? format(definition, value) : definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
       </span>
-    </div>
-  )
-}
-
-/** One row of the console: a section word in the gutter, knobs after. */
-function KnobRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 px-3">
-      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-white/25">
-        {label}
-      </span>
-      <div className="flex flex-1 items-end justify-between gap-1">{children}</div>
+      {hint && (
+        <span className="mt-0.5 max-w-[92px] text-center text-[7px] leading-[1.35] text-white/25">
+          {hint}
+        </span>
+      )}
     </div>
   )
 }
@@ -408,13 +406,15 @@ function AxisSelector({ bound }: { bound: UserInterfaceParameter }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-const PLACED_KEYS = new Set([
-  'blastSpeed', 'reach', 'waveSpeed', 'scatter', 'pileup',
-  'settleBeats', 'bounce', 'drag', 'leash', 'stretch',
-  'spinKick', 'unwindBeats', 'lift', 'swirl', 'swirlAxis',
-])
+// The three macros plus the swirl plane. Everything else the definition still
+// exposes is placement, and placement belongs in MORE.
+const PLACED_KEYS = new Set(['impact', 'recoverBeats', 'chaos', 'swirlAxis'])
 
 const REQUIRED_KEYS = [...PLACED_KEYS]
+
+/** Percent reads as "how much" at a glance; 0.55 does not. */
+const percentOf = (definition: { min: number; max: number }, value: number) =>
+  `${Math.round(((value - definition.min) / (definition.max - definition.min)) * 100)}%`
 
 export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -446,30 +446,36 @@ export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefin
     >
       <ScatterPreview settings={settings} />
       <div
-        className="flex flex-col gap-2 pb-3 pt-2"
+        className="flex flex-col gap-2 pb-3 pt-3"
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(SHOCK, 0.13)}, transparent)` }}
       >
-        <KnobRow label="BLAST">
-          <ShockKnob parameter={bound.blastSpeed} label="THROW" large />
-          <ShockKnob parameter={bound.reach} label="REACH" />
-          <ShockKnob parameter={bound.waveSpeed} label="FRONT" />
-          <ShockKnob parameter={bound.scatter} label="SCATTER" />
-          <ShockKnob parameter={bound.pileup} label="PILEUP" />
-        </KnobRow>
-        <KnobRow label="SETTLE">
-          <ShockKnob parameter={bound.settleBeats} label="DRIFT" />
-          <ShockKnob parameter={bound.bounce} label="BOUNCE" />
-          <ShockKnob parameter={bound.drag} label="DRAG" />
-          <ShockKnob parameter={bound.leash} label="LEASH" />
-          <ShockKnob parameter={bound.stretch} label="STRETCH" />
-        </KnobRow>
-        <KnobRow label="TUMBLE">
-          <ShockKnob parameter={bound.spinKick} label="SPIN" />
-          <ShockKnob parameter={bound.unwindBeats} label="UNWIND" />
-          <ShockKnob parameter={bound.lift} label="LIFT" />
-          <ShockKnob parameter={bound.swirl} label="SWIRL" />
-          <AxisSelector bound={bound.swirlAxis} />
-        </KnobRow>
+        {/* Three knobs, generously spaced. There is nothing else to decide. */}
+        <div className="flex items-end gap-7 px-4">
+          <ShockKnob
+            parameter={bound.impact}
+            label="IMPACT"
+            hint="how hard the hit throws"
+            format={percentOf}
+            large
+          />
+          <ShockKnob
+            parameter={bound.recoverBeats}
+            label="RECOVER"
+            hint="beats until everything is home"
+            format={(_, value) => `${value.toFixed(value < 10 ? 1 : 0)} beat${value === 1 ? '' : 's'}`}
+            large
+          />
+          <ShockKnob
+            parameter={bound.chaos}
+            label="CHAOS"
+            hint="clean pulse → shrapnel"
+            format={percentOf}
+            large
+          />
+          <div className="ml-auto">
+            <AxisSelector bound={bound.swirlAxis} />
+          </div>
+        </div>
         {unplaced.length > 0 && (
           <div className="px-3">
             <button

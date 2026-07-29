@@ -9,6 +9,7 @@ import {
   SCATTER_IMPLODE_PITCH,
   SCATTER_SETTLE_PITCH,
   impactScatterMover,
+  tune,
   type ImpactScatterSettings,
 } from './impactScatter'
 import { getMoverOrSplitterDefinition } from './registry'
@@ -44,9 +45,79 @@ function throwDistance(
   return moved.sub(new Vector3(...home)).length()
 }
 
+/** Furthest the copy gets over a window, so comparisons do not depend on phase. */
+function peakThrow(
+  config: ImpactScatterSettings,
+  notes: ResolvedNote[],
+  untilBeat = 12,
+  home: [number, number, number] = [3, 0, 0],
+): number {
+  let peak = 0
+  const steps = Math.round(untilBeat / 0.05)
+  for (let i = 0; i <= steps; i++) {
+    peak = Math.max(peak, throwDistance(config, notes, i * 0.05, home))
+  }
+  return peak
+}
+
 test('impact scatter is registered under its definition id', () => {
   assert.equal(getMoverOrSplitterDefinition('impactScatter'), impactScatterMover)
 })
+
+test('the definition exposes three feel knobs plus placement', () => {
+  const keys = impactScatterMover.params.map((p) => p.key)
+  assert.deepEqual(keys, ['impact', 'recoverBeats', 'chaos', 'centerX', 'centerY', 'centerZ', 'swirlAxis'])
+})
+
+// ── The macro mapping ────────────────────────────────────────────────────────
+
+test('IMPACT scales the throw, and what the throw needs to look intentional', () => {
+  const soft = tune(settings({ impact: 0.1 }))
+  const hard = tune(settings({ impact: 1 }))
+  assert.ok(hard.blastSpeed > soft.blastSpeed * 3, 'the top of the knob must be a different event')
+  assert.ok(hard.leash > soft.leash, 'a harder hit is allowed to travel further')
+  assert.ok(hard.reach > soft.reach, 'a harder hit reaches more of the field')
+  // The front always crosses the affected field in about the same musical time.
+  assert.ok(Math.abs(hard.waveSpeed / hard.reach - soft.waveSpeed / soft.reach) < 1e-9)
+})
+
+test('CHAOS trades an orderly pulse for shrapnel', () => {
+  const clean = tune(settings({ chaos: 0 }))
+  const wild = tune(settings({ chaos: 1 }))
+  assert.equal(clean.scatter, 0, 'zero chaos is a pure radial pulse')
+  assert.ok(wild.scatter > 1)
+  assert.ok(wild.spinKick > clean.spinKick * 5)
+  assert.ok(wild.pileup > clean.pileup)
+  assert.ok(wild.bounce > clean.bounce)
+  assert.ok(wild.drag < clean.drag, 'chaos also loosens the material')
+})
+
+test('RECOVER scales both springs and nothing else', () => {
+  const quick = tune(settings({ recoverBeats: 1 }))
+  const slow = tune(settings({ recoverBeats: 4 }))
+  assert.ok(Math.abs(slow.settleBeats / quick.settleBeats - 4) < 1e-9)
+  assert.ok(Math.abs(slow.unwindBeats / quick.unwindBeats - 4) < 1e-9)
+  assert.ok(slow.unwindBeats > slow.settleBeats, 'orientation resolves after position')
+  assert.equal(slow.blastSpeed, quick.blastSpeed)
+  assert.equal(slow.scatter, quick.scatter)
+})
+
+test('RECOVER reads in real beats: the field is home when it says it is', () => {
+  for (const recoverBeats of [1, 2, 6]) {
+    const config = settings({ recoverBeats })
+    const notes = [note(0)]
+    const peak = peakThrow(config, notes, recoverBeats * 2)
+    const atHalf = throwDistance(config, notes, recoverBeats * 0.5)
+    const atRecover = throwDistance(config, notes, recoverBeats * 1.05)
+    assert.ok(atHalf > peak * 0.25, `still visibly moving halfway there (recover ${recoverBeats})`)
+    assert.ok(
+      atRecover < peak * 0.05,
+      `should be home by ${recoverBeats} beats: ${atRecover.toFixed(3)} of peak ${peak.toFixed(3)}`,
+    )
+  }
+})
+
+// ── Behaviour ────────────────────────────────────────────────────────────────
 
 test('with no notes every copy is left exactly where it was placed', () => {
   const resolved = impactScatterMover.resolve({ settings: settings(), notes: [] })
@@ -66,8 +137,8 @@ test('the field is at rest before the impact and thrown after it', () => {
   assert.ok(throwDistance(config, notes, 4.3) > 0.5)
 })
 
-test('a copy returns home once the spring has run out', () => {
-  const config = settings({ settleBeats: 1.5, bounce: 0.2 })
+test('a copy returns home exactly, once the spring has run out', () => {
+  const config = settings({ recoverBeats: 1.5, chaos: 0.1 })
   const notes = [note(0)]
   assert.ok(throwDistance(config, notes, 0.5) > 0.5)
   // Well past the tail the table window has closed, so rest is exact.
@@ -75,84 +146,60 @@ test('a copy returns home once the spring has run out', () => {
 })
 
 test('the blast front reaches a near copy before a far one', () => {
-  const config = settings({ waveSpeed: 4, reach: 40 })
+  const config = settings({ impact: 1 })
+  const front = tune(config).waveSpeed
   const notes = [note(0)]
-  // The front covers 4 units per beat: at beat 0.8 it has passed the near copy
-  // (arrival 0.5) and is nowhere near the far one (arrival 3).
-  const near = throwDistance(config, notes, 0.8, [2, 0, 0])
-  const far = throwDistance(config, notes, 0.8, [12, 0, 0])
-  assert.ok(near > 0.2, `near copy should be flying, got ${near}`)
-  assert.equal(far, 0)
+  // Sample between the two arrival times, so only the near copy has been told.
+  const beat = (2 / front + 30 / front) / 2
+  assert.ok(throwDistance(config, notes, beat, [2, 0, 0]) > 0.1, 'near copy should be flying')
+  assert.equal(throwDistance(config, notes, beat, [30, 0, 0]), 0, 'far copy has not been reached')
 })
 
 test('power falls off with distance from the impact center', () => {
-  const config = settings({ waveSpeed: 400, reach: 4 })
+  const config = settings({ impact: 0.4 })
   const notes = [note(0)]
-  const near = throwDistance(config, notes, 0.25, [1, 0, 0])
-  const far = throwDistance(config, notes, 0.25, [9, 0, 0])
+  const near = peakThrow(config, notes, 6, [1, 0, 0])
+  const far = peakThrow(config, notes, 6, [14, 0, 0])
   assert.ok(near > far * 2, `expected strong falloff, got near ${near} far ${far}`)
 })
 
 test('rapid fire compounds: four hits throw further than one', () => {
-  const config = settings({ pileup: 0, drag: 0.2, leash: 40 })
-  const single = [note(0)]
+  const config = settings()
+  const single = peakThrow(config, [note(0)])
+  const roll = peakThrow(config, [note(0), note(0.25), note(0.5), note(0.75)])
+  assert.ok(roll > single * 1.5, `a roll should stack well past one hit: ${single} → ${roll}`)
+})
+
+test('compounding is nonlinear: stacked hits escalate but saturate', () => {
+  // Superposition would make two hits exactly twice one hit. Momentum makes
+  // them more than one; drag and the leash keep them under two.
+  const config = settings()
+  const single = peakThrow(config, [note(0)])
+  const doubled = peakThrow(config, [note(0), note(0.4)])
+  assert.ok(doubled > single * 1.15, `momentum should carry: ${single} → ${doubled}`)
+  assert.ok(doubled < single * 2, `the material must bite back: ${single} → ${doubled}`)
+})
+
+test('chaos escalates a roll harder than a clean pulse does', () => {
   const roll = [note(0), note(0.25), note(0.5), note(0.75)]
-  const singlePeak = Math.max(
-    ...Array.from({ length: 40 }, (_, i) => throwDistance(config, single, i * 0.1)),
-  )
-  const rollPeak = Math.max(
-    ...Array.from({ length: 40 }, (_, i) => throwDistance(config, roll, i * 0.1)),
-  )
-  assert.ok(
-    rollPeak > singlePeak * 1.5,
-    `a roll should stack well past one hit: single ${singlePeak}, roll ${rollPeak}`,
-  )
-})
-
-test('compounding is nonlinear, not superposition', () => {
-  // Two hits an eighth apart, against one hit of twice the impulse. A linear
-  // superposition model would make these agree at the second onset; drag and
-  // the leash mean they cannot.
-  const config = settings({ drag: 1.2, leash: 3, pileup: 0 })
-  const stacked = Math.max(
-    ...Array.from({ length: 30 }, (_, i) => throwDistance(config, [note(0), note(0.5)], i * 0.1)),
-  )
-  const doubled = Math.max(
-    ...Array.from({ length: 30 }, (_, i) => throwDistance(
-      settings({ drag: 1.2, leash: 3, pileup: 0, blastSpeed: 28 }),
-      [note(0)],
-      i * 0.1,
-    )),
-  )
-  assert.ok(Math.abs(stacked - doubled) > 0.05, 'nonlinear terms must break superposition')
-})
-
-test('pileup makes a second hit land harder than the first', () => {
-  const notes = [note(0), note(0.4)]
-  const calm = Math.max(
-    ...Array.from({ length: 30 }, (_, i) => throwDistance(settings({ pileup: 0 }), notes, i * 0.1)),
-  )
-  const wild = Math.max(
-    ...Array.from({ length: 30 }, (_, i) => throwDistance(settings({ pileup: 1.5 }), notes, i * 0.1)),
-  )
-  assert.ok(wild > calm * 1.1, `pileup should escalate: ${calm} → ${wild}`)
+  const clean = peakThrow(settings({ chaos: 0 }), roll)
+  const wild = peakThrow(settings({ chaos: 1 }), roll)
+  assert.ok(wild > clean * 1.2, `chaos should pile up harder: ${clean} → ${wild}`)
 })
 
 test('the leash bounds a long roll instead of letting it exit the scene', () => {
-  const config = settings({ leash: 2, blastSpeed: 60, pileup: 2 })
+  const config = settings({ impact: 1, chaos: 1 })
   const roll = Array.from({ length: 24 }, (_, i) => note(i * 0.125))
-  const peak = Math.max(
-    ...Array.from({ length: 80 }, (_, i) => throwDistance(config, roll, i * 0.05)),
-  )
-  assert.ok(Number.isFinite(peak) && peak < 2 * 12, `containment failed: ${peak}`)
+  const peak = peakThrow(config, roll, 8)
+  assert.ok(Number.isFinite(peak) && peak < 40, `containment failed: ${peak}`)
 })
 
 test('implode pulls inward while impact pushes outward', () => {
-  const config = settings({ scatter: 0, swirl: 0, lift: 0, spinKick: 0, waveSpeed: 400 })
+  const config = settings({ chaos: 0 })
   const home = new Vector3(4, 0, 0)
   const radialAt = (pitch: number) => {
     const resolved = impactScatterMover.resolve({ settings: config, notes: [note(0, pitch)] })
-    const [result] = resolved.apply(copyAt(4, 0, 0), { beat: 0.2, index: 0, count: 1 })
+    const [result] = resolved.apply(copyAt(4, 0, 0), { beat: 0.35, index: 0, count: 1 })
     return new Vector3().setFromMatrixPosition(result.transform).sub(home).x
   }
   assert.ok(radialAt(SCATTER_IMPACT_PITCH) > 0.2)
@@ -160,7 +207,7 @@ test('implode pulls inward while impact pushes outward', () => {
 })
 
 test('a settle note damps the field mid-flight', () => {
-  const config = settings({ settleBeats: 6, waveSpeed: 400 })
+  const config = settings({ recoverBeats: 8 })
   const flying = [note(0)]
   const damped = [note(0), note(0.5, SCATTER_SETTLE_PITCH)]
   assert.ok(
@@ -170,7 +217,7 @@ test('a settle note damps the field mid-flight', () => {
 })
 
 test('two copies at the same distance scatter in different directions', () => {
-  const config = settings({ scatter: 1 })
+  const config = settings({ chaos: 1 })
   const resolved = impactScatterMover.resolve({ settings: config, notes: [note(0)] })
   const context = { beat: 0.3, count: 2 }
   const [a] = resolved.apply(copyAt(3, 0, 0), { ...context, index: 0 })
@@ -199,7 +246,7 @@ test('evaluation is a pure function of the beat', () => {
 })
 
 test('hits far apart in time are independent clusters, not one long table', () => {
-  const config = settings({ settleBeats: 0.6, bounce: 0 })
+  const config = settings({ recoverBeats: 0.5, chaos: 0 })
   const lone = throwDistance(config, [note(0)], 0.3)
   const withDistantSibling = throwDistance(config, [note(0), note(300)], 0.3)
   assert.equal(lone, withDistantSibling)
