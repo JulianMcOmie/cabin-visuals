@@ -56,10 +56,11 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   }
 }
 
-// Shared segment styling for the header transport band: concentric radius,
-// press contraction, and a visible keyboard focus ring.
+// Shared segment styling for the header transport band. Segments are square
+// and flush - the band's overflow clipping rounds the two ends - with a press
+// contraction and a visible keyboard focus ring.
 const transportBtn =
-  'flex w-8 cursor-pointer items-center justify-center rounded-[3px] transition-[color,background-color,transform] duration-100 active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
+  'flex w-8 cursor-pointer items-center justify-center transition-[color,background-color,transform] duration-100 active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
 
 // Dev-only companion to __cabinStores: exposes the r3f state (scene, camera,
 // renderer) so console/E2E checks can inspect the scene graph. Never ships.
@@ -703,12 +704,14 @@ function Header({
       <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 pointer-events-none select-none">
         <div className="flex items-center gap-2 pointer-events-auto">
           {/* Transport band - a continuous elevated strip matching the
-              display's height and radius, segments concentric within it
-              (6px outer - 3px padding = 3px inner). Each active control has
-              its own hue: play goes green while playing; loop goes the
-              looped-region blue (LOOP_REGION_ENABLED_COLOR) while enabled.
-              Custom glyphs - see TransportIcons. */}
-          <div className="flex h-9 items-stretch gap-[3px] rounded-md bg-[var(--bg-elevated)] p-[3px]">
+              display's height and radius. Segment highlights run flush to the
+              band's edges (overflow clipping rounds the two ends); the 1px gap
+              is invisible at rest and becomes a hairline seam only between two
+              lit/hovered segments. Each active control has its own hue: play
+              goes green while playing; loop goes the looped-region blue
+              (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
+              TransportIcons. */}
+          <div className="flex h-9 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]">
             <button
               onClick={isPlaying ? pause : reset}
               title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
