@@ -339,11 +339,13 @@ const CROP_PREVIEW_SLICES = 6
 // Word-field scenery for the director vignettes: rows of a drifting bold word
 // on a deep gradient, one accent row - each palette stands in for one scene, so
 // a director composing scenes reads as compositing differently-colored fields.
-const WORD_FIELDS: Array<{ bg: [string, string]; base: string; accent: string }> = [
-  { bg: ['#101426', '#1a1033'], base: 'rgba(148,163,184,0.42)', accent: 'rgba(167,139,250,0.75)' },
-  { bg: ['#07191c', '#0c2b22'], base: 'rgba(134,197,181,0.40)', accent: 'rgba(52,211,153,0.75)' },
-  { bg: ['#1f0d1c', '#2b1030'], base: 'rgba(196,149,187,0.40)', accent: 'rgba(244,114,182,0.75)' },
-  { bg: ['#1c1206', '#2b1a08'], base: 'rgba(214,188,140,0.40)', accent: 'rgba(251,191,36,0.75)' },
+// Each scene also gets its own FONT (the same system stacks SWITCH_STYLES
+// uses), so overlapping cuts read as different scenes even where colors blur.
+const WORD_FIELDS: Array<{ font: (size: number) => string; bg: [string, string]; base: string; accent: string }> = [
+  { font: (s) => `900 ${s}px "Arial Black", Impact, sans-serif`, bg: ['#151c40', '#2a164f'], base: 'rgba(148,163,184,0.42)', accent: 'rgba(167,139,250,0.78)' },
+  { font: (s) => `italic 900 ${s}px Georgia, "Times New Roman", serif`, bg: ['#0a301d', '#12452c'], base: 'rgba(134,197,181,0.40)', accent: 'rgba(52,211,153,0.78)' },
+  { font: (s) => `700 ${s}px "Courier New", monospace`, bg: ['#3b1130', '#4e173d'], base: 'rgba(196,149,187,0.40)', accent: 'rgba(244,114,182,0.78)' },
+  { font: (s) => `700 ${s}px "Comic Sans MS", "Chalkboard SE", cursive`, bg: ['#3c260a', '#4d300d'], base: 'rgba(214,188,140,0.40)', accent: 'rgba(251,191,36,0.78)' },
 ]
 
 function drawWordField(
@@ -359,7 +361,7 @@ function drawWordField(
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, w, h)
   const size = h / 4.2
-  ctx.font = `900 ${size}px ui-sans-serif, system-ui, sans-serif`
+  ctx.font = palette.font(size)
   ctx.textBaseline = 'middle'
   const step = ctx.measureText(word).width + size * 0.45
   const rows = Math.ceil(h / size) + 1
