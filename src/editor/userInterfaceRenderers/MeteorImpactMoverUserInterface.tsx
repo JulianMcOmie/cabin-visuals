@@ -34,10 +34,6 @@ import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
-  return parameters.find((candidate) => candidate.definition.key === key)
-}
-
 // The meteor's signature ember. The mover has no color param (its flash is a
 // SHIFT of each object's own color), so the panel wears the material it
 // evokes: molten rock.
@@ -379,15 +375,10 @@ export const MeteorImpactMoverUserInterfaceRenderer: UserInterfaceRendererDefini
   const [showMore, setShowMore] = useState(false)
 
   const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
-  const required = [
-    'strength', 'reach', 'waveSpeed', 'dispersion', 'responseBeats', 'bounce', 'drag',
-    'strikeBeats', 'anticipation', 'leadBeats', 'stretch', 'tumbleDegrees', 'swirl',
-    'overlapBeats', 'swirlAxis', 'vortexRate', 'vortexTwist', 'vortexShear', 'vortexGrow', 'vortexOuter',
-  ]
-  if (required.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
 
   // The preview's settings: every bound numeric value over the definition's
   // defaults. Memoized on the VALUES so resolve() reruns only on real change.
+  // Computed before the fallback return below - hooks must run unconditionally.
   const valuesKey = parameters
     .map((p) => `${p.definition.key}:${typeof p.value === 'number' ? p.value : ''}`)
     .join('|')
@@ -397,6 +388,13 @@ export const MeteorImpactMoverUserInterfaceRenderer: UserInterfaceRendererDefini
     return mergeDefinitionSettings(meteorImpactMover, values) as unknown as MeteorImpactSettings
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuesKey])
+
+  const required = [
+    'strength', 'reach', 'waveSpeed', 'dispersion', 'responseBeats', 'bounce', 'drag',
+    'strikeBeats', 'anticipation', 'leadBeats', 'stretch', 'tumbleDegrees', 'swirl',
+    'overlapBeats', 'swirlAxis', 'vortexRate', 'vortexTwist', 'vortexShear', 'vortexGrow', 'vortexOuter',
+  ]
+  if (required.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
 
   const unplaced = parameters.filter((p) => !PLACED_KEYS.has(p.definition.key))
 
