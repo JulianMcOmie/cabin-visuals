@@ -3,8 +3,8 @@
 // Bespoke settings for the Impact Scatter mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference): a
 // full-bleed panel washed in the mover's shock-blue shade, a LIVE preview up
-// top, then the mover's THREE knobs - IMPACT, RECOVER, CHAOS - each captioned
-// in plain English, with placement behind a MORE disclosure.
+// top, then the mover's four knobs - IMPACT (a size larger, with an overdrive
+// detent at 100%), RECOVER, CHAOS, CURVE - with placement behind MORE.
 //
 // The preview is not a mockup: it runs the mover's real resolve() - the same
 // integrated impulse simulation, the same leash and pileup - over a looping
@@ -28,6 +28,7 @@ import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D, PointLight } from 'three'
 import {
+  IMPACT_DETENT,
   SCATTER_IMPACT_PITCH,
   SCATTER_IMPLODE_PITCH,
   SCATTER_SETTLE_PITCH,
@@ -268,20 +269,41 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
 
 // ── Knobs ────────────────────────────────────────────────────────────────────
 
-/** Flat knob per the guide: the value arc IS the light - a wide soft bloom under
- *  a hot core, white-hot tip dot at the terminus. Vertical drag, double-click
- *  resets, arrows nudge. */
-function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
+/**
+ * Flat knob per the guide: the value arc IS the light - a wide soft bloom under
+ * a hot core, white-hot tip dot at the terminus. Vertical drag, double-click
+ * resets, arrows nudge.
+ *
+ * Two behaviours beyond a plain knob, both for IMPACT:
+ *
+ *  - a DETENT at 100%. The knob travels to 110%, but 100% is where the effect
+ *    was designed to top out, so the arc catches there and the pointer has to
+ *    travel a further ~16px to break past it. You feel the limit before you
+ *    choose to exceed it, which is the whole point of an overdrive.
+ *  - past the detent the arc, its bloom and the readout go ORANGE. Nothing else
+ *    on the panel is warm, so overdrive is visible at a glance.
+ *
+ * `bipolar` starts the arc at twelve o'clock instead of the minimum, so a
+ * centre-default control (CURVE) reads as a deflection from neutral.
+ */
+
+/** Overdrive. The only warm colour on the panel, so it means one thing. */
+const OVERDRIVE = '#ff8a3c'
+/** Pointer travel needed to break past the detent. */
+const CATCH_PX = 16
+
+function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar = false }: {
   parameter: UserInterfaceParameter
   label: string
-  /** One plain-English line under the value. With only three controls there is
-   *  room to just SAY what each one does, which beats a clever label. */
-  hint?: string
-  /** Reads the value in the unit a person thinks in (percent, beats). */
-  format?: (definition: { min: number; max: number }, value: number) => string
-  large?: boolean
+  /** Reads the value in the unit a person thinks in (percent, beats, a word). */
+  format?: (value: number) => string
+  size?: number
+  /** Value the arc catches on, if any. */
+  detent?: number
+  /** Arc grows from the centre rather than from the minimum. */
+  bipolar?: boolean
 }) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
+  const dragRef = useRef<{ y: number; norm: number; catchY: number | null } | null>(null)
   const definition = bound.definition
   if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
 
@@ -289,21 +311,61 @@ function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
   const range = definition.max - definition.min
   const percent = range === 0 ? 0 : clamp((value - definition.min) / range, 0, 1)
   const angle = -135 + percent * 270
+  const detentPercent = detent != null && range > 0
+    ? clamp((detent - definition.min) / range, 0, 1)
+    : null
+  const overdriven = detentPercent != null && percent > detentPercent + 1e-6
+  const accent = overdriven ? OVERDRIVE : SHOCK
+
+  // Arc geometry in the conic gradient's own frame (0deg = 7 o'clock).
+  const sweep = percent * 270
+  const anchor = bipolar ? 135 : 0
+  const arcFrom = Math.min(anchor, sweep)
+  const arcTo = Math.max(anchor, sweep)
+  const detentSweep = detentPercent == null ? null : detentPercent * 270
+  /** Cool up to the detent, warm past it - one gradient, two meanings. */
+  const arc = (cool: string, warm: string) => {
+    const stops = detentSweep != null && arcTo > detentSweep
+      ? `transparent 0deg ${arcFrom}deg, ${cool} ${arcFrom}deg ${detentSweep}deg, ${warm} ${detentSweep}deg ${arcTo}deg, transparent ${arcTo}deg 360deg`
+      : `transparent 0deg ${arcFrom}deg, ${cool} ${arcFrom}deg ${arcTo}deg, transparent ${arcTo}deg 360deg`
+    return `conic-gradient(from 225deg, ${stops})`
+  }
 
   const commitNorm = (t: number) => {
     const raw = definition.min + clamp(t, 0, 1) * range
     const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
     bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
   }
+  const crosses = (target: number) => detentPercent != null
+    && ((percent < detentPercent && target > detentPercent)
+      || (percent > detentPercent && target < detentPercent))
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
+    dragRef.current = { y: event.clientY, norm: percent, catchY: null }
   }
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / 140)
+    const drag = dragRef.current
+    if (!drag) return
+    const target = drag.norm + (drag.y - event.clientY) / 140
+    if (detentPercent != null) {
+      if (drag.catchY != null) {
+        // Held on the detent until the pointer has clearly kept going.
+        if (Math.abs(event.clientY - drag.catchY) < CATCH_PX) return commitNorm(detentPercent)
+        // Broken out: re-anchor at the detent so motion resumes from there
+        // rather than jumping by the travel spent breaking free.
+        drag.norm = detentPercent
+        drag.y = event.clientY
+        drag.catchY = null
+        return
+      }
+      if (crosses(target)) {
+        drag.catchY = event.clientY
+        return commitNorm(detentPercent)
+      }
+    }
+    commitNorm(target)
   }
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragRef.current = null
@@ -313,7 +375,9 @@ function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
     if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
     event.preventDefault()
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
+    const target = percent + direction * 0.03
+    // The keyboard gets the detent too: one press lands on it, the next passes.
+    commitNorm(crosses(target) && detentPercent != null ? detentPercent : target)
   }
 
   return (
@@ -325,19 +389,21 @@ function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
         aria-valuemin={definition.min}
         aria-valuemax={definition.max}
         aria-valuenow={value}
-        title={`${definition.label}${hint ? ` — ${hint}` : ''} · drag vertically · double-click to reset`}
+        aria-valuetext={format ? format(value) : undefined}
+        title={`${definition.label} · drag vertically · double-click to reset`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onDoubleClick={() => bound.setValue(definition.default)}
         onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[50px] w-[50px]' : 'h-10 w-10'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
+        className="relative cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        style={{ width: size, height: size }}
       >
         <div
-          className="absolute inset-0 rounded-full"
+          className="absolute inset-0 rounded-full transition-shadow duration-150"
           style={{
-            background: `conic-gradient(from 225deg, ${SHOCK} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
+            background: arc(SHOCK, OVERDRIVE),
             filter: 'blur(6px)',
             transform: 'scale(1.14)',
             opacity: 0.85,
@@ -345,76 +411,74 @@ function ShockKnob({ parameter: bound, label, hint, format, large = false }: {
         />
         <div
           className="absolute inset-0 rounded-full"
+          style={{ background: arc(towardWhite(SHOCK, 0.4), towardWhite(OVERDRIVE, 0.35)) }}
+        />
+        {/* The unlit remainder of the travel, so the arc reads as a fill. */}
+        <div
+          className="absolute inset-0 rounded-full"
           style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(SHOCK, 0.4)} 0deg ${percent * 270}deg, rgba(255,255,255,0.07) ${percent * 270}deg 270deg, transparent 270deg)`,
+            background: `conic-gradient(from 225deg, transparent 0deg ${arcTo}deg, rgba(255,255,255,0.07) ${arcTo}deg 270deg, transparent 270deg)`,
           }}
         />
         <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#0f151b]" />
+        {/* Where the knob catches: the designed limit, marked. */}
+        {detentPercent != null && (
+          <div className="absolute inset-0" style={{ transform: `rotate(${-135 + detentPercent * 270}deg)` }}>
+            <span
+              className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/45"
+              style={{ top: -2, height: 4, width: 1.5 }}
+            />
+          </div>
+        )}
         <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
+          <span
+            className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/90"
+            style={{ top: size * 0.12, height: size * 0.24, width: 2 }}
+          />
           <span
             className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
-            style={{ boxShadow: `0 0 5px 1.5px ${SHOCK}` }}
+            style={{ boxShadow: `0 0 5px 1.5px ${accent}` }}
           />
         </div>
       </div>
-      <span className="mt-1.5 text-[9px] font-semibold tracking-[0.14em] text-white/45">{label}</span>
-      <span className="font-mono text-[10px] tabular-nums text-white/75">
-        {format ? format(definition, value) : definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
+      {/* Fixed line heights: knobs differ in size, their captions must not, or
+          the row stops reading as one row. */}
+      <span className="mt-1.5 text-[9px] font-semibold leading-[12px] tracking-[0.14em] text-white/45">
+        {label}
       </span>
-      {hint && (
-        <span className="mt-0.5 max-w-[92px] text-center text-[7px] leading-[1.35] text-white/25">
-          {hint}
-        </span>
-      )}
+      <span
+        className="font-mono text-[10px] leading-[13px] tabular-nums"
+        style={{ color: overdriven ? OVERDRIVE : 'rgba(255,255,255,0.75)' }}
+      >
+        {format ? format(value) : definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
+      </span>
     </div>
   )
 }
 
-/** Segmented swirl-axis selector: which plane the blast spins around. */
-function AxisSelector({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
-  const SHORT: Record<number, string> = { 2: 'FACE', 1: 'GROUND', 0: 'SIDE' }
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
-          const active = option.value === selected
-          return (
-            <button
-              key={option.value}
-              aria-label={option.label}
-              aria-pressed={active}
-              title={option.label}
-              onClick={() => bound.setValue(option.value)}
-              className={`px-1.5 py-1 text-[7px] font-bold tracking-[0.08em] transition-colors ${
-                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
-              }`}
-              style={active ? { background: SHOCK } : undefined}
-            >
-              {SHORT[option.value] ?? option.label}
-            </button>
-          )
-        })}
-      </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">AXIS</span>
-    </div>
-  )
-}
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-// The three macros plus the swirl plane. Everything else the definition still
-// exposes is placement, and placement belongs in MORE.
-const PLACED_KEYS = new Set(['impact', 'recoverBeats', 'chaos', 'swirlAxis'])
+// The four macros. Everything else the definition exposes is placement, and
+// placement belongs in MORE.
+const PLACED_KEYS = new Set(['impact', 'recoverBeats', 'chaos', 'curve'])
 
 const REQUIRED_KEYS = [...PLACED_KEYS]
 
-/** Percent reads as "how much" at a glance; 0.55 does not. */
-const percentOf = (definition: { min: number; max: number }, value: number) =>
-  `${Math.round(((value - definition.min) / (definition.max - definition.min)) * 100)}%`
+/** Percent reads as "how much" at a glance; 0.55 does not. Straight off the
+ *  value, not off the range, so IMPACT's overdrive shows as 110%. */
+const asPercent = (value: number) => `${Math.round(value * 100)}%`
+
+const asBeats = (value: number) => `${value.toFixed(value < 10 ? 1 : 0)} beat${value === 1 ? '' : 's'}`
+
+/** CURVE is bipolar and its ends are qualities, not quantities, so it reads as
+ *  a word. The knob's own deflection already carries "how much". */
+const asShape = (value: number) =>
+  value <= -0.66 ? 'gentle'
+    : value <= -0.2 ? 'softer'
+      : value < 0.2 ? 'even'
+        : value < 0.66 ? 'punchy'
+          : 'percussive'
 
 export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -449,32 +513,20 @@ export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefin
         className="flex flex-col gap-2 pb-3 pt-3"
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(SHOCK, 0.13)}, transparent)` }}
       >
-        {/* Three knobs, generously spaced. There is nothing else to decide. */}
-        <div className="flex items-end gap-7 px-4">
+        {/* IMPACT is the subject of the mover, so it is a size larger and comes
+            first; the other three qualify it. Captions align because the row is
+            bottom-aligned and every caption block is the same height. */}
+        <div className="flex items-end justify-between gap-4 px-5">
           <ShockKnob
             parameter={bound.impact}
             label="IMPACT"
-            hint="how hard the hit throws"
-            format={percentOf}
-            large
+            format={asPercent}
+            size={58}
+            detent={IMPACT_DETENT}
           />
-          <ShockKnob
-            parameter={bound.recoverBeats}
-            label="RECOVER"
-            hint="beats until everything is home"
-            format={(_, value) => `${value.toFixed(value < 10 ? 1 : 0)} beat${value === 1 ? '' : 's'}`}
-            large
-          />
-          <ShockKnob
-            parameter={bound.chaos}
-            label="CHAOS"
-            hint="clean pulse → shrapnel"
-            format={percentOf}
-            large
-          />
-          <div className="ml-auto">
-            <AxisSelector bound={bound.swirlAxis} />
-          </div>
+          <ShockKnob parameter={bound.recoverBeats} label="RECOVER" format={asBeats} size={42} />
+          <ShockKnob parameter={bound.chaos} label="CHAOS" format={asPercent} size={42} />
+          <ShockKnob parameter={bound.curve} label="CURVE" format={asShape} size={42} bipolar />
         </div>
         {unplaced.length > 0 && (
           <div className="px-3">

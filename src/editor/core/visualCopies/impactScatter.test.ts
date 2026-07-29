@@ -5,6 +5,8 @@ import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import { identityVisualCopy } from './identityVisualCopy'
 import {
+  IMPACT_DETENT,
+  IMPACT_MAX,
   SCATTER_IMPACT_PITCH,
   SCATTER_IMPLODE_PITCH,
   SCATTER_SETTLE_PITCH,
@@ -64,9 +66,11 @@ test('impact scatter is registered under its definition id', () => {
   assert.equal(getMoverOrSplitterDefinition('impactScatter'), impactScatterMover)
 })
 
-test('the definition exposes three feel knobs plus placement', () => {
+test('the definition exposes four feel knobs plus placement', () => {
   const keys = impactScatterMover.params.map((p) => p.key)
-  assert.deepEqual(keys, ['impact', 'recoverBeats', 'chaos', 'centerX', 'centerY', 'centerZ', 'swirlAxis'])
+  assert.deepEqual(keys, ['impact', 'recoverBeats', 'chaos', 'curve', 'centerX', 'centerY', 'centerZ'])
+  const impact = impactScatterMover.params.find((p) => p.key === 'impact')
+  assert.equal(impact && 'max' in impact ? impact.max : null, IMPACT_MAX, 'the knob travels into overdrive')
 })
 
 // ── The macro mapping ────────────────────────────────────────────────────────
@@ -89,7 +93,33 @@ test('CHAOS trades an orderly pulse for shrapnel', () => {
   assert.ok(wild.spinKick > clean.spinKick * 5)
   assert.ok(wild.pileup > clean.pileup)
   assert.ok(wild.bounce > clean.bounce)
-  assert.ok(wild.drag < clean.drag, 'chaos also loosens the material')
+  // Absorption belongs to CURVE now, so the two knobs stay orthogonal: CHAOS
+  // must not quietly reshape the return.
+  assert.equal(wild.drag, clean.drag)
+  assert.equal(wild.settleBeats, clean.settleBeats)
+})
+
+test('overdrive past the detent is its own escalation, not more of the curve', () => {
+  const atLimit = tune(settings({ impact: IMPACT_DETENT }))
+  const overdriven = tune(settings({ impact: IMPACT_MAX }))
+  assert.ok(
+    overdriven.blastSpeed > atLimit.blastSpeed * 1.7,
+    `the last tenth must nearly double the throw: ${atLimit.blastSpeed} → ${overdriven.blastSpeed}`,
+  )
+  assert.ok(overdriven.leash > atLimit.leash, 'and let it travel')
+  // The step up has to be steeper than the same span below the detent.
+  const belowSpan = atLimit.blastSpeed - tune(settings({ impact: 0.9 })).blastSpeed
+  assert.ok(overdriven.blastSpeed - atLimit.blastSpeed > belowSpan)
+})
+
+test('100% already hits hard: the top of the knob is not a gentle ramp', () => {
+  const quarter = peakThrow(settings({ impact: 0.25 }), [note(0)])
+  const half = peakThrow(settings({ impact: 0.5 }), [note(0)])
+  const full = peakThrow(settings({ impact: 1 }), [note(0)])
+  const over = peakThrow(settings({ impact: IMPACT_MAX }), [note(0)])
+  assert.ok(full > half * 3, `100% must dwarf 50%: ${half} → ${full}`)
+  assert.ok(half > quarter * 2, `and 50% must dwarf 25%: ${quarter} → ${half}`)
+  assert.ok(over > full * 1.7, `110% must land past 100%: ${full} → ${over}`)
 })
 
 test('RECOVER scales both springs and nothing else', () => {
@@ -100,6 +130,45 @@ test('RECOVER scales both springs and nothing else', () => {
   assert.ok(slow.unwindBeats > slow.settleBeats, 'orientation resolves after position')
   assert.equal(slow.blastSpeed, quick.blastSpeed)
   assert.equal(slow.scatter, quick.scatter)
+})
+
+// ── CURVE: the shape of the return ───────────────────────────────────────────
+
+test('CURVE changes the SHAPE of the return, not the distance', () => {
+  const shapeOf = (curve: number) => {
+    const config = settings({ curve, recoverBeats: 2 })
+    const peak = peakThrow(config, [note(0)], 5)
+    // How much of the excursion is still there at each quarter of the recovery.
+    const remaining = (fraction: number) =>
+      throwDistance(config, [note(0)], 2 * fraction) / peak
+    return { peak, half: remaining(0.5), threeQuarters: remaining(0.75) }
+  }
+  const gentle = shapeOf(-1)
+  const even = shapeOf(0)
+  const percussive = shapeOf(1)
+
+  // Gentle hangs out: most of the displacement is still there halfway home.
+  assert.ok(gentle.half > 0.6, `gentle should still be out: ${gentle.half}`)
+  // Percussive gets most of the way back almost at once, then trails.
+  assert.ok(percussive.half < 0.3, `percussive should be nearly back: ${percussive.half}`)
+  assert.ok(gentle.half > even.half && even.half > percussive.half, 'monotonic across the knob')
+  assert.ok(gentle.threeQuarters > percussive.threeQuarters * 4)
+
+  // …and none of that is allowed to read as a volume knob.
+  for (const shape of [gentle, percussive]) {
+    assert.ok(
+      shape.peak > even.peak * 0.7 && shape.peak < even.peak * 1.3,
+      `peak throw must hold across CURVE: ${even.peak} vs ${shape.peak}`,
+    )
+  }
+})
+
+test('the percussive tail is quiet, not absent', () => {
+  const config = settings({ curve: 1, recoverBeats: 2 })
+  const peak = peakThrow(config, [note(0)], 5)
+  const tail = throwDistance(config, [note(0)], 1.2)
+  assert.ok(tail > 0, 'something should still be settling')
+  assert.ok(tail < peak * 0.15, `but quietly: ${tail} of ${peak}`)
 })
 
 test('RECOVER reads in real beats: the field is home when it says it is', () => {
@@ -113,6 +182,25 @@ test('RECOVER reads in real beats: the field is home when it says it is', () => 
     assert.ok(
       atRecover < peak * 0.05,
       `should be home by ${recoverBeats} beats: ${atRecover.toFixed(3)} of peak ${peak.toFixed(3)}`,
+    )
+  }
+})
+
+test('RECOVER keeps its promise at every CURVE shape', () => {
+  // The shape knob changes how the settling time falls out of the physics, so
+  // the spring period compensates for it. Whatever the shape, nothing much is
+  // still moving once RECOVER has elapsed.
+  for (const curve of [-1, -0.5, 0, 0.5, 1]) {
+    const config = settings({ curve, recoverBeats: 2 })
+    const notes = [note(0)]
+    const peak = peakThrow(config, notes, 4)
+    let worstAfter = 0
+    for (let beat = 2; beat <= 8; beat += 0.05) {
+      worstAfter = Math.max(worstAfter, throwDistance(config, notes, beat))
+    }
+    assert.ok(
+      worstAfter < peak * 0.12,
+      `curve ${curve}: ${(worstAfter / peak * 100).toFixed(1)}% of the throw survives past RECOVER`,
     )
   }
 })
@@ -187,11 +275,16 @@ test('chaos escalates a roll harder than a clean pulse does', () => {
   assert.ok(wild > clean * 1.2, `chaos should pile up harder: ${clean} → ${wild}`)
 })
 
-test('the leash bounds a long roll instead of letting it exit the scene', () => {
-  const config = settings({ impact: 1, chaos: 1 })
+test('the leash bounds even an overdriven machine-gun roll', () => {
+  // Overdrive plus max chaos plus 24 hits in three beats is the worst case a
+  // user can build. It is allowed to be enormous - it is not allowed to be
+  // unbounded, or to produce a non-finite matrix.
+  const config = settings({ impact: IMPACT_MAX, chaos: 1 })
   const roll = Array.from({ length: 24 }, (_, i) => note(i * 0.125))
   const peak = peakThrow(config, roll, 8)
-  assert.ok(Number.isFinite(peak) && peak < 40, `containment failed: ${peak}`)
+  const leash = tune(config).leash
+  assert.ok(Number.isFinite(peak), 'must stay finite')
+  assert.ok(peak < leash * 6, `cubic containment failed: ${peak} against a leash of ${leash}`)
 })
 
 test('implode pulls inward while impact pushes outward', () => {

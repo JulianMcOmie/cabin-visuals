@@ -88,17 +88,33 @@ export const SCATTER_SETTLE_PITCH = 62
  * hit came from - so they stay separate and out of the way.
  */
 export interface ImpactScatterSettings {
-  /** 0 = a nudge, 1 = the room comes apart. */
+  /**
+   * 0 = a nudge, 1 = the room comes apart - and the knob goes to 1.1. Past 1 is
+   * OVERDRIVE: deliberately more than the effect was designed for, so it has to
+   * be pushed past a detent to get there. The last tenth roughly doubles the
+   * launch speed again, which is the point - "100%" should already be violent,
+   * and 110% should read as a decision.
+   */
   impact: number
   /** Beats from the hit until the field has visibly settled home. */
   recoverBeats: number
   /** 0 = one clean radial pulse, 1 = shrapnel. */
   chaos: number
+  /**
+   * The SHAPE of the return, from -1 to +1, centred at 0.
+   *
+   * -1 GENTLE: the field hangs out at full displacement and only comes home at
+   *  the end, in one smooth move. Low absorption, so nothing eats the excursion
+   *  and the crest of the swing is what you watch.
+   * +1 PERCUSSIVE: most of the distance is recovered almost immediately and
+   *  what is left becomes a long quiet tail. Heavy speed-squared absorption
+   *  collapses the big excursion, then all but vanishes, leaving the slow
+   *  linear settle - two timescales out of one impulse.
+   */
+  curve: number
   centerX: number
   centerY: number
   centerZ: number
-  /** Which plane the blast swirls in. 0 = X, 1 = Y, 2 = Z. */
-  swirlAxis: number
 }
 
 /** The physics quantities the integration actually runs on. */
@@ -143,17 +159,39 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
  * the exponents put the interesting half of each range under the middle of the
  * knob's travel, and the constants are the values that survived looking at it.
  */
+/** Where the knob catches, and the top of its overdrive travel. */
+export const IMPACT_DETENT = 1
+export const IMPACT_MAX = 1.1
+
 export function tune(settings: ImpactScatterSettings): Tuning {
   const impact = clamp01(settings.impact)
+  // Past the detent. The overdrive is a separate term rather than more of the
+  // same curve, so the last tenth of travel is felt as its own event.
+  const over = clamp01((Math.min(IMPACT_MAX, settings.impact) - IMPACT_DETENT) / (IMPACT_MAX - IMPACT_DETENT))
   const chaos = clamp01(settings.chaos)
   const recover = Math.max(0.1, settings.recoverBeats)
+  const curve = Math.max(-1, Math.min(1, settings.curve))
+  const gentle = Math.max(0, -curve)
+  const punch = Math.max(0, curve)
   // A big hit has to reach further and be allowed to travel further, or it just
   // looks like the same blast with the gain up.
-  const reach = 5 + 7 * impact
+  const reach = 5 + 7 * impact + 6 * over
+  // Speed-squared absorption is the whole CURVE knob. High drag eats the big
+  // excursion in a few frames and then all but vanishes, which is the fast
+  // recovery plus long tail of a percussive hit; low drag lets the swing hold
+  // its crest and come home in one smooth move.
+  const drag = 0.85 - 0.7 * gentle + 3.4 * punch
   return {
-    // Superlinear: the top of the knob has to feel like a different event, not
-    // 20% more of the same one.
-    blastSpeed: 1.5 + 25 * Math.pow(impact, 1.6),
+    // Steep on purpose (x^2.6): the bottom of the knob stays usable for a
+    // nudge while the top half escalates hard, so 100% is already violent -
+    // and the overdrive term doubles the launch speed again past the detent.
+    blastSpeed: (1.5 + 45 * Math.pow(impact, 2.6) + 40 * over)
+      // Heavy absorption would otherwise make percussive hits travel a quarter
+      // as far, and a gentle one twice as far - CURVE would read as a volume
+      // knob and IMPACT would stop meaning anything. These two factors are
+      // fitted against measured peak throw so the DISTANCE holds and only the
+      // SHAPE changes.
+      * (1 + 3.4 * Math.pow(punch, 1.35)) * (1 - 0.5 * Math.pow(gentle, 0.85)),
     reach,
     // Tied to reach so the front always crosses the affected field in about the
     // same musical time - the ripple reads the same at every size.
@@ -161,15 +199,17 @@ export function tune(settings: ImpactScatterSettings): Tuning {
     scatter: 1.5 * Math.pow(chaos, 1.2),
     pileup: 0.2 + chaos,
     lift: 0.22,
-    // Measured, not assumed: with these damping curves the field is within 1%
-    // of home after ~0.87 of a spring period, so this is what makes RECOVER
-    // read in real beats.
-    settleBeats: recover * 1.15,
-    bounce: 0.12 + 0.45 * chaos,
-    // Chaos loosens the material as well as scattering it: less absorption
-    // means the flailing lasts, which is most of what "wild" looks like.
-    drag: 1 - 0.45 * chaos,
-    leash: 1.8 + 6.5 * impact,
+    // Measured, not assumed. RECOVER promises a time, so the spring period has
+    // to absorb whatever the CURVE shape does to the settling time: a gentle
+    // return crosses home sooner in period-terms, a percussive one drags a tail
+    // behind it. These two factors are fitted to hold "within 2% of home by
+    // RECOVER beats" across the whole curve range (see the calibration test).
+    settleBeats: recover * (1.15 + 0.3 * gentle - 0.42 * punch),
+    // A gentler shape also wants a looser spring so the crest is broad; a
+    // percussive one wants to arrive and stop.
+    bounce: clamp01(0.12 + 0.45 * chaos + 0.22 * punch),
+    drag,
+    leash: 1.8 + 6.5 * impact + 7 * over,
     stretch: 0.5,
     swirl: 0.08 + 0.5 * chaos,
     spinKick: 40 + 900 * Math.pow(chaos, 1.3),
@@ -180,7 +220,9 @@ export function tune(settings: ImpactScatterSettings): Tuning {
   }
 }
 
-const SWIRL_AXES = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]
+/** The plane the blast swirls in. Fixed face-on (about Z) until there is a
+ *  reason to expose it again. */
+const FACE_ON_AXIS = new Vector3(0, 0, 1)
 const UP = new Vector3(0, 1, 0)
 const SIDE = new Vector3(1, 0, 0)
 const DEG = Math.PI / 180
@@ -370,23 +412,13 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
   label: 'Impact Scatter',
   kind: 'mover',
   params: [
-    { key: 'impact', label: 'Impact', min: 0, max: 1, step: 0.01, default: 0.55 },
+    { key: 'impact', label: 'Impact', min: 0, max: IMPACT_MAX, step: 0.01, default: 0.55 },
     { key: 'recoverBeats', label: 'Recover (beats)', min: 0.25, max: 8, step: 0.05, default: 2 },
     { key: 'chaos', label: 'Chaos', min: 0, max: 1, step: 0.01, default: 0.45 },
+    { key: 'curve', label: 'Curve (gentle → percussive)', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerZ', label: 'Center Z', min: -20, max: 20, step: 0.1, default: 0 },
-    {
-      key: 'swirlAxis',
-      label: 'Swirl axis',
-      type: 'select',
-      options: [
-        { value: 2, label: 'Z (face-on impact)' },
-        { value: 1, label: 'Y (ground impact)' },
-        { value: 0, label: 'X' },
-      ],
-      default: 2,
-    },
   ],
   midiRows: () => [
     { pitch: SCATTER_SETTLE_PITCH, label: 'Snap home (damp)' },
@@ -407,7 +439,8 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
     const spinZeta = 1 - 0.85 * clamp01(tuning.spinBounce)
     const reach = Math.max(0.0001, tuning.reach)
     const frontSpeed = Math.max(0.0001, tuning.waveSpeed)
-    const swirlAxis = SWIRL_AXES[Math.round(settings.swirlAxis)] ?? SWIRL_AXES[2]
+    // Face-on for now: the swirl plane was a knob nobody needed to reach for.
+    const swirlAxis = FACE_ON_AXIS
 
     const linearConfig = (extra: Partial<ChannelConfig> = {}): ChannelConfig =>
       ({ omega, zeta, drag, leash, pileup, ...extra })
