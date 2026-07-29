@@ -215,45 +215,64 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
   const [sx, sy] = proj(x, 0, z)
   const [dx, dy] = proj(x, y, z)
 
-  // Floor drag: invert the iso projection at y=0 (u = (x-z)·A, v = (x+z)·B).
-  const floorAt = (ev: PointerEvent): [number, number] => {
-    const rect = svgRef.current!.getBoundingClientRect()
-    const px = ((ev.clientX - rect.left) / rect.width) * ISO_W - ISO_CX
-    const py = ((ev.clientY - rect.top) / rect.height) * ISO_H - ISO_CY
-    const u = px / ISO_A
-    const v = py / ISO_B
-    return [clamp((u + v) / 2, -10, 10), clamp((v - u) / 2, -10, 10)]
-  }
-
-  const dragFloor = (e: ReactPointerEvent<Element>) => {
-    // Two axes ride one gesture: drive x through the shared driver (it owns the
-    // multi-track bookkeeping) and mirror z alongside with the same rules.
+  // One drag surface, two modes: a plain drag moves in the camera plane
+  // (horizontal = x, vertical = y - the dot follows the cursor), and holding
+  // SHIFT moves along the z axis instead (pointer motion projected onto the
+  // drawn z axis, so dragging toward the lower-left pushes closer). The mode
+  // re-reads every move, so shift can be pressed/released mid-drag; raw
+  // accumulators per axis keep snapping magnetic without losing the remainder.
+  const dragPosition = (e: ReactPointerEvent<Element>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.currentTarget as Element & { setPointerCapture: (id: number) => void }).setPointerCapture(e.pointerId)
     const project = useProjectStore.getState()
     const ids = affectedTrackIds(trackId)
-    const startZ = new Map(ids.map((id) => [id, transformValue(project.tracks[id]?.params, TF_Z)]))
-    const startPrimaryZ = startZ.get(trackId) ?? 0
-    beginTransformDrag(e, trackId, TF_X, POS_SPEC, (ev) => {
-      const [fx, fz] = floorAt(ev)
-      const zSnapped = quantize(POS_SPEC, snapValue(POS_SPEC, fz, ev.altKey))
-      const { setTrackParam } = useProjectStore.getState()
-      if (ev.metaKey || ev.ctrlKey) {
-        for (const id of ids) setTrackParam(id, TF_Z, zSnapped)
+    const startValues = new Map(
+      ids.map((id) => {
+        const p = project.tracks[id]?.params
+        return [id, { x: transformValue(p, TF_X), y: transformValue(p, TF_Y), z: transformValue(p, TF_Z) }] as const
+      }),
+    )
+    const startPrimary = startValues.get(trackId) ?? { x: 0, y: 0, z: 0 }
+    const raw = { ...startPrimary }
+    const rect = svgRef.current!.getBoundingClientRect()
+    const pxPerUnit = rect.width / ISO_W
+    let last = { x: e.clientX, y: e.clientY }
+
+    const onMove = (ev: PointerEvent) => {
+      const dPx = (ev.clientX - last.x) / pxPerUnit
+      const dPy = (ev.clientY - last.y) / pxPerUnit
+      last = { x: ev.clientX, y: ev.clientY }
+      if (ev.shiftKey) {
+        raw.z += (dPy * ISO_B - dPx * ISO_A) / (ISO_A * ISO_A + ISO_B * ISO_B)
+        raw.z = clamp(raw.z, -10, 10)
       } else {
-        const dz = zSnapped - startPrimaryZ
-        for (const id of ids) {
-          const s0 = startZ.get(id) ?? 0
-          setTrackParam(id, TF_Z, id === trackId ? zSnapped : quantize(POS_SPEC, s0 + dz))
+        raw.x = clamp(raw.x + dPx / ISO_A, -10, 10)
+        raw.y = clamp(raw.y - dPy / ISO_Y, -10, 10)
+      }
+      const { setTrackParam } = useProjectStore.getState()
+      const applyAxis = (key: string, rawValue: number, primaryStart: number, pick: (v: { x: number; y: number; z: number }) => number) => {
+        const snapped = quantize(POS_SPEC, snapValue(POS_SPEC, rawValue, ev.altKey))
+        if (ev.metaKey || ev.ctrlKey) {
+          for (const id of ids) setTrackParam(id, key, snapped)
+        } else {
+          const delta = snapped - primaryStart
+          for (const id of ids) {
+            const start = pick(startValues.get(id) ?? { x: 0, y: 0, z: 0 })
+            setTrackParam(id, key, id === trackId ? snapped : quantize(POS_SPEC, start + delta))
+          }
         }
       }
-      return fx
-    })
-  }
-
-  const dragHeight = (e: ReactPointerEvent<Element>) => {
-    beginTransformDrag(e, trackId, TF_Y, POS_SPEC, (ev, start) => {
-      const rect = svgRef.current!.getBoundingClientRect()
-      return start + ((e.clientY - ev.clientY) / rect.height) * (ISO_H / ISO_Y)
-    })
+      applyAxis(TF_X, raw.x, startPrimary.x, (v) => v.x)
+      applyAxis(TF_Y, raw.y, startPrimary.y, (v) => v.y)
+      applyAxis(TF_Z, raw.z, startPrimary.z, (v) => v.z)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   const ghosts = (multiIds ?? [])
@@ -282,12 +301,7 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
       className="cursor-crosshair touch-none rounded-md border border-[var(--border)] bg-black/30"
       onPointerDown={(e) => {
         if (e.button !== 0) return
-        // Near the dot = height drag; anywhere else = floor drag.
-        const rect = svgRef.current!.getBoundingClientRect()
-        const px = ((e.clientX - rect.left) / rect.width) * ISO_W
-        const py = ((e.clientY - rect.top) / rect.height) * ISO_H
-        if (Math.hypot(px - dx, py - dy) < 11) dragHeight(e)
-        else dragFloor(e)
+        dragPosition(e)
       }}
       onDoubleClick={() => resetTransformValues(trackId, [TF_X, TF_Y, TF_Z])}
     >
@@ -296,7 +310,7 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
       <line x1={azX1} y1={azY1} x2={azX2} y2={azY2} stroke={x === 0 ? 'var(--accent)' : 'var(--border-strong)'} strokeWidth={1} opacity={x === 0 ? 0.6 : 1} />
       {ghosts}
       <line x1={sx} y1={sy} x2={dx} y2={dy} stroke="var(--accent)" strokeWidth={1} opacity={0.5} />
-      <ellipse cx={sx} cy={sy} rx={7} ry={3.2} fill="var(--accent)" fillOpacity={0.22} stroke="var(--accent)" strokeOpacity={0.5} strokeWidth={1} style={{ cursor: 'move' }} />
+      <ellipse cx={sx} cy={sy} rx={7} ry={3.2} fill="var(--accent)" fillOpacity={0.22} stroke="var(--accent)" strokeOpacity={0.5} strokeWidth={1} />
       <circle
         cx={dx}
         cy={dy}
@@ -306,7 +320,6 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
         stroke={y === 0 ? 'var(--accent)' : 'none'}
         strokeOpacity={0.5}
         strokeWidth={1.5}
-        style={{ cursor: 'ns-resize' }}
       />
     </svg>
   )
@@ -433,7 +446,7 @@ export function TrackTransformPanel({
       <div className="flex gap-3">
         <div className="flex-shrink-0">
           <IsoViewport trackId={trackId} scale={scale} />
-          <div className="mt-1 text-center text-[10px] text-[var(--text-muted)]">shadow = x·z floor · dot = y height</div>
+          <div className="mt-1 text-center text-[10px] text-[var(--text-muted)]">drag = x·y · hold shift = z depth</div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {FIELDS.map((spec) => (
