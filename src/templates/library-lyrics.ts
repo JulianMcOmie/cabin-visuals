@@ -183,19 +183,4 @@ export const LYRIC_TEMPLATES: TemplateDef[] = [
     hiddenFromGallery: true,
     document: darkRedDocument(),
   },
-  {
-    // The two-look variant of Lyric Video: same bare document and the same
-    // setup pipeline, but /lyric-setup runs in multi mode (?multi=1) - the
-    // style step takes TWO picks and the apply builds two styled scenes plus
-    // a Scene Switcher cutting between them (utils/multiStyleApply.ts).
-    // Deliberately NOT lyricFlow: it is a flow of its own, not one of the
-    // looks the style grid offers.
-    id: 'multiStyleLyric',
-    name: 'Multi-Style Lyric',
-    description: 'Upload your song and pick two looks - the video cuts between them through the song.',
-    bpm: 120,
-    cardPreview: 'animatedLyric',
-    previewTemplateId: 'neonPsychedelic',
-    document: bareBonesDocument(),
-  },
 ]
