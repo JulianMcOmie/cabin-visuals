@@ -279,14 +279,6 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        {/* Track-color stripe, flush with the row's left edge (a child row's
-            region starts at its bracket line, matching the row background). */}
-        {isObjectTrack && (
-          <span
-            className="pointer-events-none absolute inset-y-0 w-[3px]"
-            style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX, background: track.color }}
-          />
-        )}
         {/* Rows showing the opacity fader give it the free space (DAW-style
             channel strip); other rows keep it on the name as before. */}
         <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex ${showTagBadges ? 'flex-col justify-center' : 'items-center gap-1.5'}`}>
