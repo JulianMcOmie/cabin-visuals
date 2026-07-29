@@ -36,9 +36,9 @@ export function ProjectsSkeleton() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="overflow-hidden rounded-lg bg-black"
+              className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-panel)]"
             >
-              <div className="h-[120px] animate-pulse bg-[var(--bg-app)]" />
+              <div className="h-[120px] animate-pulse bg-[var(--bg-panel-raised)]" />
               <div className="px-3.5 pb-[13px] pt-3">
                 <div className="h-3 w-24 animate-pulse rounded bg-[var(--bg-elevated)]" />
                 <div className="mt-1.5 h-2.5 w-10 animate-pulse rounded bg-[var(--bg-elevated)]" />
