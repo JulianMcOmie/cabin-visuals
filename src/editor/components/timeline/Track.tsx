@@ -269,6 +269,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
+        {/* Track-color stripe, flush with the row's left edge (a child row's
+            region starts at its bracket line, matching the row background). */}
+        {isObjectTrack && (
+          <span
+            className="pointer-events-none absolute inset-y-0 w-[3px]"
+            style={{ left: depth === 0 ? 0 : LABEL_BASE_PX + (depth - 1) * INDENT_PX, background: track.color }}
+          />
+        )}
         {/* Rows showing the opacity fader give it the free space (DAW-style
             channel strip); other rows keep it on the name as before. */}
         <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex items-center gap-1.5`}>
@@ -324,19 +332,19 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
               onDoubleClick={() => resetTransformValues(track.id, [TF_OPACITY])}
               className="group mr-2 flex h-4 min-w-[48px] flex-1 cursor-ew-resize touch-none items-center px-[3px]"
             >
-              {/* DAW-style horizontal fader: inset groove, accent fill, center
-                  detent tick, and a rectangular fader cap with a notch line. */}
-              <div className="relative h-[5px] w-full rounded-[2px] border-b border-b-white/[0.06] bg-black/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]">
+              {/* Logic-style horizontal fader: a THIN groove with a cap that
+                  stands well taller than the track it rides. */}
+              <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-l-[2px] bg-[var(--accent)] opacity-60 group-hover:opacity-80"
+                  className="absolute inset-y-0 left-0 rounded-l-full bg-[var(--accent)] opacity-60 group-hover:opacity-80"
                   style={{ width: `${opacityValue * 100}%` }}
                 />
-                <div className="absolute left-1/2 top-[-2px] h-[2px] w-px bg-white/25" />
+                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
                 <div
-                  className="absolute top-1/2 h-[13px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-black/60 bg-[#cfd2d8] shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
+                  className="absolute top-1/2 h-[15px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-[2.5px] border border-black/65 bg-gradient-to-b from-[#e3e5ea] to-[#b9bcc4] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                   style={{ left: `${opacityValue * 100}%` }}
                 >
-                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/45" />
+                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/50" />
                 </div>
               </div>
             </div>
