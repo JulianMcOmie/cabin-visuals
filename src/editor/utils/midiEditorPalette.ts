@@ -69,27 +69,6 @@ export function midiRowLabelColor(rowColor: string): string {
   return oklchToHex(0.75, src.c === 0 ? 0 : 0.08, src.h)
 }
 
-export interface MidiToolbarAccent {
-  /** Active toggle pill fill, and text that reads against it. */
-  pillBg: string
-  pillText: string
-  /** Filled-portion color for the toolbar's mini sliders. */
-  slider: string
-}
-
-/** Toolbar accents voiced from the track color (same recipe family as the
- *  chrome: fixed L/C, track hue, grey tracks stay grey). Active pills wear a
- *  bright fill with same-hue near-black text; slider fills match the band. */
-export function midiToolbarAccent(color: string): MidiToolbarAccent {
-  const { c, h } = sourceOklch(color)
-  const chroma = (target: number) => (c === 0 ? 0 : target)
-  return {
-    pillBg: oklchCss(0.72, chroma(0.15), h, 1),
-    pillText: oklchCss(0.22, chroma(0.05), h, 1),
-    slider: oklchCss(0.64, chroma(0.17), h, 0.9),
-  }
-}
-
 export interface MidiEditorChrome {
   /** Ruler clip-header band (the draggable block strip under the bar numbers). */
   band: string
@@ -110,10 +89,33 @@ export function midiEditorChrome(color: string): MidiEditorChrome {
   const chroma = (target: number) => (c === 0 ? 0 : target)
   return {
     band: oklchCss(0.64, chroma(0.17), h, 0.82),
-    regionTint: oklchCss(0.72, chroma(0.17), h, 0.1),
+    // Tint stays at the calm alpha even in the neon voice: any higher and it
+    // reads as a milky film over the beat gridlines (perceived as blur).
+    regionTint: oklchCss(0.72, chroma(0.17), h, 0.07),
     regionEdge: oklchCss(0.74, chroma(0.17), h, 0.65),
     loopDash: oklchCss(0.74, chroma(0.17), h, 0.5),
     marqueeFill: oklchCss(0.72, chroma(0.17), h, 0.15),
     marqueeEdge: oklchCss(0.78, chroma(0.17), h, 0.65),
+  }
+}
+
+export interface MidiToolbarAccent {
+  /** Active-toggle pill fill (Snap, Noise). */
+  pillBg: string
+  /** Active-toggle pill text - bright enough to read on the tinted fill. */
+  pillText: string
+  /** Slider filled-track color (feeds .slider-console's --slider-color). */
+  slider: string
+}
+
+/** Toolbar accents voiced from the track color, so the editor's controls
+ *  belong to the block being edited like the rest of the chrome. */
+export function midiToolbarAccent(color: string): MidiToolbarAccent {
+  const { c, h } = sourceOklch(color)
+  const chroma = (target: number) => (c === 0 ? 0 : target)
+  return {
+    pillBg: oklchCss(0.72, chroma(0.17), h, 0.18),
+    pillText: oklchCss(0.86, chroma(0.11), h),
+    slider: oklchCss(0.68, chroma(0.14), h, 0.9),
   }
 }

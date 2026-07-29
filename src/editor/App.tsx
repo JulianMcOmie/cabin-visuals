@@ -909,21 +909,23 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, '15%')}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, '25%')}
         onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '55%')}
         playback={playback}
       />
       {/* The library's panel color fills everything below the header, so the
           workspace reads as one card inset within the library's surface. */}
       <div className="flex-1 min-h-0 bg-[var(--bg-shell)]">
-        <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
+        {/* overflow visible so the workspace card's glow can spill past the
+            group's top edge onto the header band. */}
+        <PanelGroup orientation="horizontal" style={{ height: '100%', overflow: 'visible' }} disabled={modalOpen}>
 
           {/* Library - dragging below its minimum snaps it closed; the matching
               header icon uses the same imperative panel state. */}
           <Panel
             id="library-panel"
             panelRef={libraryPanelRef}
-            defaultSize={paneDefaults.library ? '15%' : '0%'}
+            defaultSize={paneDefaults.library ? '25%' : '0%'}
             minSize="8%"
             maxSize="30%"
             collapsible
@@ -950,8 +952,13 @@ export default function EditorApp() {
           {/* Right section: inspector + canvas above, tracks + audio strip below.
               The shell shows only along the top and left; the workspace runs
               flush to the viewport's right and bottom edges. */}
-          <Panel className="pt-2 pl-2">
-            <div className="flex h-full flex-col overflow-hidden rounded-tl-[10px] border border-[var(--border)] bg-[var(--bg-app)]">
+          {/* overflow-visible (overriding the wrapper's overflow:auto) lets the
+              card's glow bleed past the inset gap onto the shell surface. */}
+          <Panel className="pt-2 pl-2" style={{ overflow: 'visible' }}>
+            {/* relative: the header band is positioned, so the card must be
+                positioned too (and later in the DOM) for its glow to paint
+                over the header and the library rather than under them. */}
+            <div className="relative flex h-full flex-col overflow-hidden rounded-tl-[10px] border border-[var(--border)] bg-[var(--bg-app)] shadow-[0_0_28px_rgba(53,167,230,0.038),0_0_80px_12px_rgba(53,167,230,0.026),0_0_190px_45px_rgba(53,167,230,0.016)]">
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}

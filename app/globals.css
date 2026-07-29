@@ -452,7 +452,9 @@ body.drag-moving * {
    room for a number, the fill is the only thing that says where the value
    sits, and without it the slider reads as a stray hairline. `--fill` is set
    per instance from the value, so the native input keeps its drag and
-   keyboard behaviour; instances that don't set it just show the bare track. */
+   keyboard behaviour; instances that don't set it just show the bare track.
+   `--slider-color` retints the filled portion per instance (the MIDI editor
+   sets it to the edited track's color); unset, it's the global accent. */
 .slider-console {
   -webkit-appearance: none;
   appearance: none;
@@ -460,7 +462,7 @@ body.drag-moving * {
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--accent-muted) var(--fill, 0%),
+    var(--slider-color, var(--accent-muted)) var(--fill, 0%),
     var(--border) var(--fill, 0%)
   );
   outline: none;

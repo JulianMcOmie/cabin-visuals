@@ -651,14 +651,16 @@ export function MidiEditor({
             const rowIndex = pitchToRowIndex(t.note.pitch)
             if (rowIndex === -1) return null
             const row = rows[rowIndex]
+            const ghostLeft = Math.round(blockStartPx + beatToX(t.startBeat, pixelsPerBeat))
+            const ghostRight = Math.round(blockStartPx + beatToX(t.startBeat + t.durationBeats, pixelsPerBeat))
             return (
               <div
                 key={`${t.note.id}:${t.repeat}`}
                 style={{
                   position: 'absolute',
-                  left: blockStartPx + beatToX(t.startBeat, pixelsPerBeat),
+                  left: ghostLeft,
                   top: rowIndexToY(rowIndex, rowHeight) + 2,
-                  width: Math.max(beatToX(t.durationBeats, pixelsPerBeat), 8),
+                  width: Math.max(ghostRight - ghostLeft, 8),
                   height: rowHeight - 4,
                   backgroundColor: midiNoteColor(row.color, t.note.velocity),
                   opacity: 0.3,
@@ -674,16 +676,22 @@ export function MidiEditor({
             const rowIndex = pitchToRowIndex(note.pitch)
             if (rowIndex === -1) return null
             const row = rows[rowIndex]
-            const x = beatToX(note.startBeat, pixelsPerBeat)
+            // Pixel-snap the horizontal geometry: fractional lefts/widths
+            // antialias the edges, and on the bright neon fills that soft
+            // edge reads as blur. Snapping left and right independently
+            // keeps rounding drift under half a pixel at any zoom. The 1px
+            // trimmed off the right edge is the note separator - notes have
+            // NO stroke (pure flat fills), so back-to-back notes on a row
+            // read apart through the gap alone.
+            const left = Math.round(blockStartPx + beatToX(note.startBeat, pixelsPerBeat))
+            const right = Math.round(blockStartPx + beatToX(note.startBeat + note.durationBeats, pixelsPerBeat))
             const y = rowIndexToY(rowIndex, rowHeight) + 2
-            const w = Math.max(beatToX(note.durationBeats, pixelsPerBeat), 8)
+            const w = Math.max(right - left - 1, 8)
             const h = rowHeight - 4
             const isSelected = selectedNoteIds.has(note.id)
-            // Selected notes (which includes every note mid-drag) and the note
-            // being drawn read purely from the body: a lifted fill plus the
-            // laser glow, no rings. Everything else is a flat fill with a
-            // hairline dark edge so touching notes on a row stay separable
-            // without a 3D drop shadow.
+            // Selected notes (which includes every note mid-drag) and the
+            // note being drawn read purely from the body: a lifted fill plus
+            // the laser glow.
             const isLive = isSelected || note.id === drawingNote?.id
             const noteColor = midiNoteColor(row.color, note.velocity, isSelected)
 
@@ -692,7 +700,7 @@ export function MidiEditor({
                 key={note.id}
                 style={{
                   position: 'absolute',
-                  left: blockStartPx + x,
+                  left,
                   top: y,
                   width: w,
                   height: h,
@@ -700,7 +708,7 @@ export function MidiEditor({
                   borderRadius: 3,
                   boxShadow: isLive
                     ? `0 0 14px ${noteColor}, 0 0 6px ${noteColor}`
-                    : 'inset 0 0 0 1px rgba(0,0,0,0.25)',
+                    : 'none',
                   cursor: 'inherit',
                   zIndex: isSelected ? 6 : 5,
                 }}

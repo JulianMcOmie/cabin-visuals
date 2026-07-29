@@ -4,7 +4,7 @@ import { Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalS
 import { Canvas, useFrame } from '@react-three/fiber'
 import { View } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
+import { CanvasTexture, Group, LinearFilter, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -301,6 +301,17 @@ const ringSeeds = (n: number, r: number): Array<[number, number, number]> =>
     0,
   ])
 
+/** cols x rows of camera-facing seed positions, centered on the origin. */
+const gridSeeds = (cols: number, rows: number, spacing: number): Array<[number, number, number]> => {
+  const out: Array<[number, number, number]> = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out.push([(c - (cols - 1) / 2) * spacing, (r - (rows - 1) / 2) * spacing, 0])
+    }
+  }
+  return out
+}
+
 // The compound movers choreograph WHOLE ARRANGEMENTS, so their library cards
 // preview a field of small cubes instead of the single offset cube. Radial
 // Motion is structural (it mints its own copies), so one centered seed shows
@@ -312,6 +323,8 @@ interface CompoundMoverPreview {
   seedScale: number
   settings?: Record<string, number>
   notes: ResolvedNote[]
+  /** Stylized in-canvas caption naming the mover (baked into captured clips). */
+  label?: string
 }
 const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // One color layer of 6x3 copies: the outer radius steps zero → far → back
@@ -319,6 +332,7 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // arrangement BLOOMS out of the center and collapses again, while held spin
   // notes rotate the shapes, the outer ring, and the inner triads throughout.
   radialMotion: {
+    label: 'radial motion',
     seeds: [[0, 0, 0]],
     seedScale: 0.34,
     settings: { layers: 1, outerCopies: 6, innerCopies: 3 },
@@ -333,6 +347,7 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // Motion's Step block is the 60-65 signed basis the generic arc already
   // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
   motion: {
+    label: 'motion',
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: [...MOVER_NOTES, holdNote(76)],
@@ -341,10 +356,83 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // at 0 with rows drift 0-5, return 6, step 7-12, spin 13-18 - so this is the
   // same step arc + held spin as `motion`, transposed into the rack's lane.
   allMovers: {
+    label: 'all movers',
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: [...makeLoopNotes([7, 9, 11, 8, 10, 12, 7, 10], 2, 2), holdNote(17)],
   },
+  // Meteor Impact strikes the center of a camera-facing field: the shockwave
+  // front visibly travels outward through the neighbors, springs and settles
+  // (60 = Impact, once per bar).
+  meteorImpact: {
+    label: 'meteor impact',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: makeLoopNotes([60], 0.5, 4),
+  },
+  // Wave Terrain displaces along scene Z at each copy's own (x, y): the same
+  // grid rides the rolling surface while Amplitude-up (60) is held, settling
+  // as the hold ends so the loop restarts from calm water.
+  waveTerrain: {
+    label: 'wave terrain',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: [holdNote(60, 0, 12)],
+  },
+  // Force Field Pulse pushes every copy radially from the center - the grid
+  // breathes out, anticipates in-then-out, pulls in, and spiral-twists, one
+  // gesture per bar (its four note vocabularies).
+  forceFieldPush: {
+    label: 'force field pulse',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: makeLoopNotes([60, 62, 61, 64], 0.5, 4),
+  },
+  // Visibility gates existence itself: ONE full-size cube popping in and out
+  // with its note (127 = the single copy's row).
+  visibility: {
+    label: 'visibility',
+    seeds: [[0, 0, 0]],
+    seedScale: 1,
+    notes: makeLoopNotes([127], 0.5, 1),
+  },
+}
+
+/** The mover's name as a stylized caption INSIDE the GL frame - drawn to a
+ *  canvas texture, so captured clips carry it (a DOM overlay never would). */
+function MoverFieldLabel({ text }: { text: string }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1024
+    canvas.height = 192
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      let size = 116
+      const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
+      ctx.font = font(size)
+      const measured = ctx.measureText(text).width
+      if (measured > 940) size *= 940 / measured
+      ctx.font = font(size)
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = 'rgba(0,0,0,0.65)'
+      ctx.shadowBlur = 18
+      ctx.shadowOffsetY = 6
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(text, 512, 96)
+    }
+    const tex = new CanvasTexture(canvas)
+    tex.minFilter = LinearFilter
+    tex.magFilter = LinearFilter
+    return tex
+  }, [text])
+  useEffect(() => () => texture.dispose(), [texture])
+  return (
+    <mesh position={[0, -1.35, 0.7]}>
+      <planeGeometry args={[3.4, 0.6375]} />
+      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} />
+    </mesh>
+  )
 }
 
 export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
@@ -395,6 +483,9 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
   })
 
   if (!chain) return null
+  // Fields need one mesh per seed plus headroom for self-multiplying movers
+  // (Radial Motion mints copies from its single seed).
+  const poolSize = compound ? compound.seeds.length + MAX_COPIES : MAX_COPIES
   return (
     <>
       {/* Static origin marker: the fixed point orbits circle around. */}
@@ -413,7 +504,8 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
           <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
         </mesh>
       )}
-      {Array.from({ length: MAX_COPIES }, (_, i) => (
+      {compound?.label && <MoverFieldLabel text={compound.label} />}
+      {Array.from({ length: poolSize }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial color={CUBE_BASE_COLOR} />

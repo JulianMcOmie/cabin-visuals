@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X, Pencil } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
+import { tracksWithTag } from '../utils/trackTags'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { getDirector } from '../core/directors'
 import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
@@ -15,6 +16,7 @@ import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { AudioTrackDetail } from './AudioTrackDetail'
+import { SceneSettingsPanel } from './SceneSettingsPanel'
 import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
@@ -22,50 +24,6 @@ import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInt
 import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
-
-/** The track's name in the inspector header - double-click to rename, same contract
- *  as the timeline label (Enter/blur commits, Esc cancels, empty = cancel). */
-function EditableTrackName({ trackId, name }: { trackId: string; name: string }) {
-  const renameTrack = useProjectStore((s) => s.renameTrack)
-  const [renaming, setRenaming] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (renaming) inputRef.current?.select()
-  }, [renaming])
-
-  if (renaming) {
-    return (
-      <input
-        ref={inputRef}
-        defaultValue={name}
-        onBlur={(e) => { renameTrack(trackId, e.currentTarget.value); setRenaming(false) }}
-        onKeyDown={(e) => {
-          e.stopPropagation()
-          if (e.key === 'Enter') e.currentTarget.blur()
-          else if (e.key === 'Escape') { e.currentTarget.value = name; e.currentTarget.blur() }
-        }}
-        className="w-32 text-[11px] font-semibold text-left text-[var(--text)] bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1 py-0 outline-none focus:border-[var(--accent)]"
-      />
-    )
-  }
-  // The pencil only surfaces on hover - present when you look, absent when you don't.
-  return (
-    <div
-      title="Double-click to rename"
-      onDoubleClick={() => setRenaming(true)}
-      className="group flex items-center gap-1.5 min-w-0 cursor-text select-none"
-    >
-      <span className="text-[11px] font-semibold text-[var(--accent)] truncate">{name}</span>
-      <button
-        onClick={() => setRenaming(true)}
-        aria-label="Rename track"
-        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
-      >
-        <Pencil size={10} />
-      </button>
-    </div>
-  )
-}
 
 /** A select-styled dropdown for checking multiple targets (tags and/or tracks). */
 function TargetSelect({
@@ -120,125 +78,6 @@ function TargetSelect({
               </button>
             )
           })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** Add/remove a track's tags. Tags are the group labels a modulator can route to.
- *  Chips on --bg-elevated plus a dashed "+ add" chip; clicking it opens the same
- *  combobox as before (type a new tag, or pick an existing project tag). */
-function TagEditor({
-  tags, suggestions, onChange,
-}: {
-  tags: string[]
-  suggestions: string[]
-  onChange: (tags: string[]) => void
-}) {
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (adding) inputRef.current?.focus()
-  }, [adding])
-
-  useEffect(() => {
-    if (!adding) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setAdding(false)
-        setOpen(false)
-        setDraft('')
-      }
-    }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [adding])
-
-  const addTag = (value: string) => {
-    const t = value.trim()
-    if (t && !tags.includes(t)) onChange([...tags, t])
-    setDraft('')
-    setOpen(false)
-    setAdding(false)
-  }
-
-  // Existing project tags not already on this track, narrowed by what's typed.
-  const q = draft.trim().toLowerCase()
-  const matches = suggestions.filter((s) => !tags.includes(s) && s.toLowerCase().includes(q))
-
-  return (
-    <div className="mt-[18px] pt-3.5 border-t border-[var(--border)]">
-      <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">TAGS</span>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        {tags.map((t) => (
-          <span
-            key={t}
-            className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-[3px] bg-[var(--bg-elevated)] border border-[var(--border)] text-[11px] text-[var(--text-3)]"
-          >
-            {t}
-            <button
-              onClick={() => onChange(tags.filter((x) => x !== t))}
-              className="text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
-              aria-label={`Remove tag ${t}`}
-            >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
-        {!adding && (
-          <button
-            onClick={() => setAdding(true)}
-            className="px-2 py-0.5 rounded-[3px] border border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-3)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
-          >
-            + add
-          </button>
-        )}
-      </div>
-      {adding && (
-        <div ref={ref} className="relative mt-2">
-          <div className="flex items-center gap-1 h-7 pl-2 pr-1 rounded bg-[var(--bg-app)] border border-[var(--border)] focus-within:border-[var(--accent)]">
-            <input
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => { setDraft(e.target.value); setOpen(true) }}
-              onFocus={() => setOpen(true)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); addTag(draft) }
-                else if (e.key === 'Escape') { setAdding(false); setOpen(false); setDraft('') }
-              }}
-              placeholder="Add a tag…"
-              className="flex-1 min-w-0 bg-transparent text-[11px] text-[var(--text-2)] outline-none placeholder:text-[var(--text-muted)]"
-            />
-            <button
-              onClick={() => setOpen((v) => !v)}
-              className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] cursor-pointer"
-              aria-label="Show existing tags"
-            >
-              <ChevronDown size={13} />
-            </button>
-          </div>
-          {open && matches.length > 0 && (
-            <div className="absolute z-30 mt-1 w-full max-h-48 overflow-y-auto rounded bg-[var(--bg-elevated)] border border-[var(--border)] shadow-lg shadow-black/40 py-1">
-              {matches.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => addTag(s)}
-                  className="w-full px-2 h-7 flex items-center text-[11px] text-[var(--text-2)] hover:bg-[var(--border)] truncate cursor-pointer"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* While open, reserve flow space below the input so the absolutely-positioned
-              list isn't clipped against the panel's bottom edge and can scroll into view
-              (the panel's pb keeps a gap beneath it). */}
-          {open && matches.length > 0 && <div aria-hidden className="h-36" />}
         </div>
       )}
     </div>
@@ -406,12 +245,34 @@ function MoverTargets({ track }: { track: Track }) {
   const targets = track.targets ?? []
   const deadTargets = targets.filter((r) =>
     r.scope.kind === 'tag' ? !allTags.includes(r.scope.tag) : !tracks[r.scope.id])
+  // Read-only: what each checked #tag currently resolves to. Dead tags are
+  // skipped - the warning below already announces them.
+  const routedTags = targets.flatMap((r) =>
+    r.scope.kind === 'tag' && allTags.includes(r.scope.tag) ? [r.scope.tag] : [])
   return (
     <div className="mb-4">
       <p className="text-[11px] text-zinc-500 mb-2">Targets:</p>
       {options.length === 0
         ? <p className="text-[11px] text-zinc-600">No objects to target</p>
         : <TargetSelect options={options} selected={selected} onToggle={toggle} />}
+      {routedTags.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {routedTags.map((tag) => {
+            const names = tracksWithTag(tracks, tag).map((t) => t.name)
+            const shown = names.slice(0, 6).join(', ')
+            const extra = names.length - 6
+            return (
+              <p
+                key={tag}
+                className="text-[10px] text-[var(--text-muted)] truncate"
+                title={`#${tag} → ${names.join(', ')}`}
+              >
+                #{tag} → {shown}{extra > 0 ? ` +${extra} more` : ''}
+              </p>
+            )
+          })}
+        </div>
+      )}
       {options.length > 0 && targets.length === 0 && (
         <p className="text-[11px] text-[var(--warn)] mt-1.5">
           No targets checked — a global mover affects nothing until it targets a track, branch, or #tag.
@@ -433,11 +294,8 @@ export function TrackEditor() {
   const tracks = useProjectStore((s) => s.tracks)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const activeScene = useProjectStore((s) => s.scenes[s.activeSceneId])
-  const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
-  const setSceneBackgroundTransparent = useProjectStore((s) => s.setSceneBackgroundTransparent)
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
-  const setTrackTags = useProjectStore((s) => s.setTrackTags)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
   const setDirectorSceneBindings = useProjectStore((s) => s.setDirectorSceneBindings)
   const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
@@ -472,14 +330,8 @@ export function TrackEditor() {
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* A scene tab selects the scene inspector; selecting a timeline row swaps
-          this same surface back to the track inspector. */}
-      <div className="h-8 flex-shrink-0 flex items-center justify-start gap-2 px-3 border-b border-[var(--border)]">
-        {track
-          ? <EditableTrackName trackId={track.id} name={track.name} />
-          : <span className="text-[11px] font-semibold text-[var(--accent)] select-none">{activeScene?.name ?? '-'}</span>}
-      </div>
-
+      {/* No name header - the timeline row and scene tab already carry identity
+          (the guide's planned deprecation); the panel starts at its tabs. */}
       {/* Tabs - pill row; the active pill carries the elevated neutral. */}
       <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3 py-1.5">
         {track ? TABS.map((t) => (
@@ -745,7 +597,6 @@ export function TrackEditor() {
 
                   // Object track → its registered settings UI, then its common track controls.
                   const def = getInstrument(track.instrumentId)
-                  const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
                   const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
                   // Params gated behind a toggle (showIf) only appear while
                   // that toggle is on - a flight-speed slider means nothing
@@ -790,32 +641,12 @@ export function TrackEditor() {
                           parameters={userInterfaceParameters}
                         />
                       )}
-                      <TagEditor
-                        tags={track.tags ?? []}
-                        suggestions={projectTags}
-                        onChange={(tags) => setTrackTags(track.id, tags)}
-                      />
                     </>
                   )
                 })()}
               </>
             ) : activeScene ? (
-              <>
-                <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">PARAMETERS</p>
-                <ParamControl
-                  param={{ key: 'backgroundColor', label: 'Background', type: 'color', default: '#000000' }}
-                  numValue={undefined}
-                  strValue={activeScene.backgroundColor}
-                  onNum={() => {}}
-                  onStr={(color) => setSceneBackgroundColor(activeScene.id, color)}
-                />
-                <ParamControl
-                  param={{ key: 'backgroundTransparent', label: 'Transparent background', type: 'boolean', default: 0 }}
-                  numValue={activeScene.backgroundTransparent ? 1 : 0}
-                  strValue={undefined}
-                  onNum={(value) => setSceneBackgroundTransparent(activeScene.id, value >= 0.5)}
-                />
-              </>
+              <SceneSettingsPanel scene={activeScene} />
             ) : null}
           </>
         )}

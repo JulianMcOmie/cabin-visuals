@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Move3d } from 'lucide-react'
+import { ChevronDown, ChevronRight, Move3d, Tag } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
@@ -18,6 +18,7 @@ import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
 import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
+import { TrackTagsPanel } from './TrackTagsPanel'
 import { TF_OPACITY } from '../../core/transform'
 
 // The strip fader is the track's "volume": opacity 0..1, snapping at 0/50/100%.
@@ -30,6 +31,10 @@ const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], sna
 let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
 
 const BRACKET_CORNER_RADIUS_PX = 6
+
+// Tag badges under the name need a second text line; only rows the user has
+// deliberately made tall (default height is 44) get one.
+const TAG_BADGES_MIN_ROW_HEIGHT = 64
 
 function startMsPaint(kind: 'mute' | 'solo', value: boolean) {
   msPaint = { kind, value }
@@ -91,6 +96,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     isObjectTrack ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
   )
   const [panelAnchor, setPanelAnchor] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
+  const [tagsAnchor, setTagsAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   // The fader needs real room: hide it (keeping the opener) when the label
   // column is too narrow for name + fader + buttons, so it never crowds the
   // M/S cluster out of alignment.
@@ -104,6 +110,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   }, [renaming])
 
   const isSelected = selectedTrackId === track.id || inMultiSelection
+
+  // Tag badges are a second label line, shown only on deliberately-tall rows.
+  const tagList = isObjectTrack ? track.tags ?? [] : []
+  const showTagBadges = tagList.length > 0 && rowHeight >= TAG_BADGES_MIN_ROW_HEIGHT
 
   // Hovering the label plays the row's element in the shared preview popup
   // (the same warm canvas the library uses) - objects run their instrument,
@@ -279,7 +289,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Rows showing the opacity fader give it the free space (DAW-style
             channel strip); other rows keep it on the name as before. */}
-        <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex items-center gap-1.5`}>
+        <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex ${showTagBadges ? 'flex-col justify-center' : 'items-center gap-1.5'}`}>
+          {/* display:contents when single-line, so the name/chevron keep sitting
+              directly in the row flex; a real flex row when badges add line 2. */}
+          <div className={showTagBadges ? 'flex min-w-0 items-center gap-1.5' : 'contents'}>
           {renaming ? (
             <input
               ref={renameRef}
@@ -309,6 +322,27 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             >
               {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             </button>
+          )}
+          </div>
+          {showTagBadges && (
+            <div
+              className="pointer-events-none mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden"
+              title={tagList.join(', ')}
+            >
+              {tagList.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-white/10 px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
+                >
+                  {t}
+                </span>
+              ))}
+              {tagList.length > 3 && (
+                <span className="flex-shrink-0 px-1 text-[9px] leading-[13px] text-[var(--text-muted)]">
+                  +{tagList.length - 3}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -385,6 +419,27 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           </button>
           {isObjectTrack && (
             <button
+              aria-label="Edit tags"
+              title={tagList.length > 0 ? `Tags: ${tagList.join(', ')}` : 'Tags'}
+              data-tags-opener={track.id}
+              onClick={(e) => {
+                if (tagsAnchor) { setTagsAnchor(null); return }
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                setTagsAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom })
+              }}
+              className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+                tagsAnchor
+                  ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                  : tagList.length > 0
+                    ? 'bg-white/10 text-[var(--accent)] hover:text-[var(--accent-hover)]'
+                    : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+              }`}
+            >
+              <Tag size={10} />
+            </button>
+          )}
+          {isObjectTrack && (
+            <button
               aria-label="Open transform panel"
               title="Transform"
               data-transform-opener={track.id}
@@ -405,6 +460,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         </div>
         {panelAnchor && isObjectTrack && (
           <TrackTransformPanel trackId={track.id} anchor={panelAnchor} onClose={() => setPanelAnchor(null)} />
+        )}
+        {tagsAnchor && isObjectTrack && (
+          <TrackTagsPanel trackId={track.id} anchor={tagsAnchor} onClose={() => setTagsAnchor(null)} />
         )}
       </div>
 
