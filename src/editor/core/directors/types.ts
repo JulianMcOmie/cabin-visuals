@@ -71,6 +71,14 @@ export interface DirectorInstrumentDef {
    * otherwise bury its own parameters under 32 lines of list.
    */
   hideMidiRowsInSettings?: boolean
+  /**
+   * This director targets exactly ONE scene rather than composing several, so
+   * its rows mean something other than "which scene". The settings panel offers
+   * a single scene picker instead of an order list, and resolve() should read
+   * the first binding. Without this the choice is unreachable: the scene would
+   * be whichever one happens to sort first.
+   */
+  targetsSingleScene?: boolean
   resolve: (track: Track, context: DirectorResolveContext) => CompositionLayer[]
 }
 

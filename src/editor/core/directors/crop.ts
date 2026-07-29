@@ -161,6 +161,7 @@ export const cropDirector: DirectorInstrumentDef = {
     { key: 'blur', label: 'Onset blur', min: 0, max: 1, step: 0.01, default: 0 },
   ],
   hideMidiRowsInSettings: true,
+  targetsSingleScene: true,
   midiRows(track): MidiRowDef[] {
     const divisions = cropDivisions(track)
     const radial = cropRadial(track)
@@ -172,8 +173,11 @@ export const cropDirector: DirectorInstrumentDef = {
     }))
   },
   resolve(track, context) {
-    // Rows are slices, so the scene is not chosen by MIDI. The first bound
-    // visual scene is the one being masked.
+    // Rows are slices, so the scene is not chosen by MIDI. The settings panel
+    // writes the chosen scene as the single binding (targetsSingleScene), and
+    // orderedSceneBindings keeps saved bindings ahead of the ones it appends to
+    // self-heal, so the first entry IS the choice - falling back to the first
+    // visual scene when nothing has been picked yet.
     const sceneId = orderedSceneBindings(track, context.scenes, context.sceneOrder)[0]?.sceneId
     if (!sceneId) return []
     const divisions = cropDivisions(track)

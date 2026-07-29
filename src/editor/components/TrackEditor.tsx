@@ -665,7 +665,9 @@ export function TrackEditor() {
                       <>
                         <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">DIRECTOR</p>
                         <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
-                          {director?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.
+                          {director?.targetsSingleScene
+                            ? `${director?.name ?? 'This director'} renders one scene into Main. Its MIDI rows choose which pieces of that scene are visible.`
+                            : `${director?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.`}
                         </p>
                         <ParamControl
                           param={DIRECTOR_OPACITY_PARAM}
@@ -683,6 +685,32 @@ export function TrackEditor() {
                             onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                           />
                         ))}
+                        {director?.targetsSingleScene && (() => {
+                          const visualSceneIds = useProjectStore.getState().sceneOrder
+                            .filter((id) => scenes[id] && !scenes[id].isMain)
+                          const targetSceneId = bindings[0]?.sceneId
+                          return (
+                            <>
+                              <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">SCENE</p>
+                              <div className="space-y-1">
+                                {visualSceneIds.map((sceneId) => (
+                                  <button
+                                    key={sceneId}
+                                    onClick={() => setDirectorSceneBindings(track.id, [{ pitch: bindings[0]?.pitch ?? 60, sceneId }])}
+                                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[11px] cursor-pointer ${sceneId === targetSceneId ? 'bg-[var(--bg-elevated)] text-[var(--text)]' : 'text-[var(--text-2)] hover:bg-[var(--bg-elevated)]'}`}
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">{scenes[sceneId]?.name}</span>
+                                    {sceneId === targetSceneId && <Check size={11} />}
+                                  </button>
+                                ))}
+                              </div>
+                              {visualSceneIds.length === 0 && (
+                                <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">No visual scenes yet - add one to mask.</p>
+                              )}
+                              <p className="mt-3 mb-4 text-[10px] leading-relaxed text-[var(--text-muted)]">Every piece shows this scene, cropped. The MIDI rows choose which pieces are visible, not which scene.</p>
+                            </>
+                          )
+                        })()}
                         {isPartitionDirector ? (
                           <>
                             <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">SCENE ORDER</p>
