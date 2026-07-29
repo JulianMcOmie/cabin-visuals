@@ -11,7 +11,7 @@
 // cursor. The preview reuses the instrument's real rim shader and the app's
 // laser bloom pass, so what glows here is what glows on stage.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
@@ -24,6 +24,7 @@ import {
 import { evaluateCoreAppearance } from '../instruments/laserSphereCore'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
+import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -40,51 +41,6 @@ function numericValue(bound: UserInterfaceParameter | undefined, fallback: numbe
 
 function stringValue(bound: UserInterfaceParameter | undefined, fallback: string): string {
   return typeof bound?.value === 'string' ? bound.value : fallback
-}
-
-// ── Color math (HSV ↔ hex) for the wheel ────────────────────────────────────
-
-function hexToHsv(hex: string): { h: number; s: number; v: number } {
-  const n = parseInt(hex.slice(1), 16)
-  const r = ((n >> 16) & 255) / 255
-  const g = ((n >> 8) & 255) / 255
-  const b = (n & 255) / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const d = max - min
-  let h = 0
-  if (d > 0) {
-    if (max === r) h = 60 * (((g - b) / d) % 6)
-    else if (max === g) h = 60 * ((b - r) / d + 2)
-    else h = 60 * ((r - g) / d + 4)
-  }
-  return { h: (h + 360) % 360, s: max === 0 ? 0 : d / max, v: max }
-}
-
-function hsvToHex(h: number, s: number, v: number): string {
-  const c = v * s
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = v - c
-  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x]
-    : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, x, 0]
-  const to = (u: number) => Math.round((u + m) * 255).toString(16).padStart(2, '0')
-  return `#${to(r)}${to(g)}${to(b)}`
-}
-
-/** Alpha-suffixed accent (`#rrggbbaa`) from a 0..1 alpha. */
-function withAlpha(hex: string, alpha: number): string {
-  return hex + Math.round(clamp(alpha, 0, 1) * 255).toString(16).padStart(2, '0')
-}
-
-/** The accent pushed toward white - the white-hot core color of a laser whose
- *  beam is `hex`. */
-function towardWhite(hex: string, t: number): string {
-  const n = parseInt(hex.slice(1), 16)
-  const channel = (shift: number) => {
-    const c = (n >> shift) & 255
-    return Math.round(c + (255 - c) * t).toString(16).padStart(2, '0')
-  }
-  return `#${channel(16)}${channel(8)}${channel(0)}`
 }
 
 // ── Live preview ────────────────────────────────────────────────────────────
@@ -304,125 +260,22 @@ function LaserKnob({ parameter: bound, label, accent, large = false }: {
   )
 }
 
-const WHEEL_SIZE = 132
-const WHEEL_RADIUS = WHEEL_SIZE / 2
-
-/** The color pill + its continuous picker: a true HSV wheel (hue around the
- *  ring, saturation toward the center) with a brightness bar - no native
- *  swatch list. Opens upward over the preview so the panel never scrolls.
- *  The pill is the panel's emitter: a flat fill of the color wearing the halo
- *  the GLOW param dictates. */
+/** The laser's color pill: the shared HSV wheel wearing the GLOW-driven halo -
+ *  the pill is the panel's emitter, a flat fill of the color with the halo the
+ *  GLOW param dictates. */
 function ColorWheel({ bound, halo }: { bound: UserInterfaceParameter; halo: string }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const wheelRef = useRef<HTMLDivElement>(null)
-  const barRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [hsv, setHsv] = useState(() => hexToHsv(typeof bound.value === 'string' ? bound.value : DEFAULT_LASER_SPHERE_COLOR))
-
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
-
   if (typeof bound.value !== 'string') return null
-  const hex = bound.value
-
-  const commit = (h: number, s: number, v: number) => {
-    setHsv({ h, s, v })
-    bound.setValue(hsvToHex(h, s, v))
-  }
-
-  const wheelFromPointer = (clientX: number, clientY: number) => {
-    const rect = wheelRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const dx = clientX - (rect.left + rect.width / 2)
-    const dy = clientY - (rect.top + rect.height / 2)
-    const h = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360
-    const s = clamp(Math.hypot(dx, dy) / (rect.width / 2), 0, 1)
-    commit(h, s, hsv.v)
-  }
-
-  const barFromPointer = (clientX: number) => {
-    const rect = barRef.current?.getBoundingClientRect()
-    if (!rect) return
-    commit(hsv.h, hsv.s, clamp((clientX - rect.left) / rect.width, 0, 1))
-  }
-
-  const dragHandlers = (setFrom: (x: number, y: number) => void) => ({
-    onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-      setFrom(event.clientX, event.clientY)
-    },
-    onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) setFrom(event.clientX, event.clientY)
-    },
-  })
-
-  // Marker position from the CURRENT hsv (kept in state so a desaturated or
-  // dark color still remembers its hue while being edited).
-  const markerAngle = hsv.h * Math.PI / 180
-  const markerRadius = hsv.s * (WHEEL_RADIUS - 7)
-  const markerX = WHEEL_RADIUS + Math.sin(markerAngle) * markerRadius
-  const markerY = WHEEL_RADIUS - Math.cos(markerAngle) * markerRadius
-  const fullColor = hsvToHex(hsv.h, hsv.s, 1)
-
   return (
-    <div ref={hostRef} className="relative flex min-w-0 flex-col items-center">
-      <button
-        data-testid="laser-color-pill"
-        aria-label="Laser color"
-        aria-expanded={open}
-        title={`Laser color ${hex}`}
-        onClick={() => setOpen((o) => !o)}
-        className="h-8 w-8 cursor-pointer rounded-full border border-white/15 transition-transform active:scale-95"
-        style={{ background: hex, boxShadow: halo }}
-      />
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">COLOR</span>
-      <span className="font-mono text-[9px] uppercase text-white/70">{hex}</span>
-
-      {open && (
-        <div
-          data-testid="laser-color-wheel"
-          className="absolute bottom-full right-0 z-50 mb-2 rounded-md border border-white/10 bg-[#0d1017] p-3 shadow-[0_8px_24px_rgba(0,0,0,.5)]"
-        >
-          <div
-            ref={wheelRef}
-            {...dragHandlers(wheelFromPointer)}
-            className="relative cursor-crosshair touch-none rounded-full"
-            style={{
-              width: WHEEL_SIZE,
-              height: WHEEL_SIZE,
-              background: `radial-gradient(circle closest-side, #fff, rgba(255,255,255,0) 100%), conic-gradient(#f00, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg)`,
-            }}
-          >
-            <span
-              className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,.8)]"
-              style={{ left: markerX, top: markerY, background: fullColor }}
-            />
-          </div>
-          <div
-            ref={barRef}
-            {...dragHandlers((x) => barFromPointer(x))}
-            aria-label="Brightness"
-            className="relative mt-3 h-3 cursor-pointer touch-none rounded-full"
-            style={{ background: `linear-gradient(to right, #000, ${fullColor})` }}
-          >
-            <span
-              className="absolute top-1/2 h-4 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-white/60 bg-white/90"
-              style={{ left: `${hsv.v * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
+    <ColorWheelPill
+      value={bound.value}
+      onChange={(hex) => bound.setValue(hex)}
+      label="COLOR"
+      ariaLabel="Laser color"
+      halo={halo}
+      align="right"
+      pillTestId="laser-color-pill"
+      wheelTestId="laser-color-wheel"
+    />
   )
 }
 

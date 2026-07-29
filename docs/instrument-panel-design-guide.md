@@ -148,8 +148,10 @@ render `ParameterList` for everything rather than a half-empty custom layout.
 
 ## Open items
 
-- Remove the panel-top track-name header; the timeline row + panel context
-  should carry identity.
+- ~~Remove the panel-top track-name header~~ — done: the inspector starts at
+  its tabs; the timeline row and scene tab carry identity. If a panel wants
+  identity, bake it into the surface (the scene panel's etched "SCENE"
+  wordmark, the audio panel's oscilloscope label) — never a heading row.
 - A real layering solution to replace the deprecated IN FRONT toggle.
 - Migrate the other bespoke renderers (Cube, Hopf, …) to these rules: strip
   card chrome, headers, reset buttons, gradient backdrops; adopt the accent
