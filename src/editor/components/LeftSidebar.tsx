@@ -277,7 +277,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 
-const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
+const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'mover')
   .map((d) => ({
   id: d.id,
@@ -291,6 +291,16 @@ const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
     </svg>
   ),
 })))
+
+// Single-behavior movers, soft-deprecated: each is one block of the compound
+// movers (Motion's Step/Snap/Spin, the consolidated rack's banks), so they park
+// in a collapsed Mover Extras folder - demoted, not deleted, like the object
+// and director Extras.
+const MOVER_EXTRA_IDS = new Set([
+  'burst', 'rotateBurst', 'orbitBurst', 'constantRotate', 'constantOrbit', 'translationOscillator',
+])
+const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => !MOVER_EXTRA_IDS.has(d.id))
+const MOVER_EXTRA_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => MOVER_EXTRA_IDS.has(d.id))
 
 const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'splitter')
@@ -333,7 +343,7 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...MAIN_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
   ...ALL_OBJECT_INSTRUMENTS,
-  ...MOVER_INSTRUMENTS,
+  ...ALL_MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
 ]
@@ -679,6 +689,7 @@ export function LeftSidebar() {
             {/* Modulators are retired from the library (movers replace them);
                 the code stays until existing projects are migrated off ports. */}
             <Section key="movers" title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="mover-extras" title="Mover Extras" description="Single-behavior movers, still fully working - the compound movers above cover the same ground in one track." items={MOVER_EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             <Section key="colorizers" title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section key="splitters" title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section key="object-extras" title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />

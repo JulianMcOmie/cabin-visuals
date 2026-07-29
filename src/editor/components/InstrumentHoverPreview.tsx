@@ -283,37 +283,114 @@ const CUBE_BASE_COLOR = new Color('#35a7e6')
 // off-frame.
 const MOVER_BASE_OFFSET = 1.3
 
+/** One long held note - constant-rate blocks (spins, radii) read held time. */
+const holdNote = (pitch: number, beat = 0, durationBeats = LOOP_BEATS): ResolvedNote => ({
+  beat,
+  blockStartBeat: 0,
+  blockEndBeat: 1e9,
+  pitch,
+  velocity: 100,
+  durationBeats,
+})
+
+/** N seed positions around a camera-facing circle. */
+const ringSeeds = (n: number, r: number): Array<[number, number, number]> =>
+  Array.from({ length: n }, (_, i) => [
+    Math.cos((i / n) * Math.PI * 2) * r,
+    Math.sin((i / n) * Math.PI * 2) * r,
+    0,
+  ])
+
+// The compound movers choreograph WHOLE ARRANGEMENTS, so their library cards
+// preview a field of small cubes instead of the single offset cube. Radial
+// Motion is structural (it mints its own copies), so one centered seed shows
+// the full bloom; the pure movers run a ring of seeds through the chain in
+// parallel. Notes speak each definition's own vocabulary.
+interface CompoundMoverPreview {
+  seeds: Array<[number, number, number]>
+  /** Uniform scale baked into each seed - the "many smaller objects" look. */
+  seedScale: number
+  settings?: Record<string, number>
+  notes: ResolvedNote[]
+}
+const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
+  // One color layer of 6x3 copies: the outer radius steps zero → far → back
+  // (pitches 36-39 are the four radius choices), so the whole single-layer
+  // arrangement BLOOMS out of the center and collapses again, while held spin
+  // notes rotate the shapes, the outer ring, and the inner triads throughout.
+  radialMotion: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.34,
+    settings: { layers: 1, outerCopies: 6, innerCopies: 3 },
+    notes: [
+      ...[36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
+      holdNote(41), // inner radius · near
+      holdNote(64), // shape spin +1
+      holdNote(69), // outer spin +1
+      holdNote(74), // inner spin +1
+    ],
+  },
+  // Motion's Step block is the 60-65 signed basis the generic arc already
+  // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
+  motion: {
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: [...MOVER_NOTES, holdNote(76)],
+  },
+  // The consolidated rack's pitches are bank-relative: its Motion bank starts
+  // at 0 with rows drift 0-5, return 6, step 7-12, spin 13-18 - so this is the
+  // same step arc + held spin as `motion`, transposed into the rack's lane.
+  allMovers: {
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: [...makeLoopNotes([7, 9, 11, 8, 10, 12, 7, 10], 2, 2), holdNote(17)],
+  },
+}
+
 export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
   const def = getMoverOrSplitterDefinition(moverId)
+  const compound = COMPOUND_MOVER_PREVIEWS[moverId]
   const meshesRef = useRef<Mesh[]>([])
   const chain = useMemo(() => {
     if (!def) return null
     return def.resolve({
-      settings: mergeDefinitionSettings(def, inputValues),
-      notes: notes && notes.length > 0 ? notes : MOVER_NOTES,
+      settings: mergeDefinitionSettings(def, inputValues ?? compound?.settings),
+      notes: notes && notes.length > 0 ? notes : compound?.notes ?? MOVER_NOTES,
     })
-  }, [def, notes, inputValues])
-  const offsetSeed = def?.kind === 'mover'
+  }, [def, notes, inputValues, compound])
+  const offsetSeed = def?.kind === 'mover' && !compound
 
   useFrame((root) => {
     if (!chain) return
     const beat = previewBeatNow(root.clock.elapsedTime, sync)
-    const seed = identityVisualCopy()
-    if (offsetSeed) seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
-    const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
     const meshes = meshesRef.current
-    for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
-      if (!mesh) continue
-      const copy = copies[i]
-      mesh.visible = !!copy
-      if (!copy) continue
-      mesh.matrixAutoUpdate = false
-      mesh.matrix.copy(copy.transform)
-      const mat = mesh.material as MeshStandardMaterial
-      mat.transparent = true
-      mat.opacity = copy.opacity
-      mat.color.copy(CUBE_BASE_COLOR).offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+    let used = 0
+    for (const seedPosition of compound?.seeds ?? [null]) {
+      if (used >= meshes.length) break
+      const seed = identityVisualCopy()
+      if (seedPosition) {
+        seed.transform
+          .makeTranslation(seedPosition[0], seedPosition[1], seedPosition[2])
+          .multiply(_seedScaleMatrix.makeScale(compound.seedScale, compound.seedScale, compound.seedScale))
+      } else if (offsetSeed) {
+        seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
+      }
+      const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
+      for (const copy of copies) {
+        if (used >= meshes.length) break
+        const mesh = meshes[used++]
+        if (!mesh) continue
+        mesh.visible = true
+        mesh.matrixAutoUpdate = false
+        mesh.matrix.copy(copy.transform)
+        const mat = mesh.material as MeshStandardMaterial
+        mat.transparent = true
+        mat.opacity = copy.opacity
+        mat.color.copy(CUBE_BASE_COLOR).offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+      }
+    }
+    for (let i = used; i < meshes.length; i++) {
+      if (meshes[i]) meshes[i].visible = false
     }
   })
 
@@ -328,11 +405,14 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
         </mesh>
       )}
       {/* The "gone" ghost: the object exactly where it would sit WITHOUT this
-          mover/splitter - the solid copies show what adding it does. */}
-      <mesh position={offsetSeed ? [MOVER_BASE_OFFSET, 0, 0] : [0, 0, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
-      </mesh>
+          mover/splitter - the solid copies show what adding it does. A field
+          of small seeds needs no ghost; the motion itself is the story. */}
+      {!compound && (
+        <mesh position={offsetSeed ? [MOVER_BASE_OFFSET, 0, 0] : [0, 0, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
+        </mesh>
+      )}
       {Array.from({ length: MAX_COPIES }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
@@ -342,6 +422,7 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
     </>
   )
 }
+const _seedScaleMatrix = new Matrix4()
 
 // ── Project-accurate track-row previews ─────────────────────────────────────
 //
