@@ -6,6 +6,7 @@ import { TextDisplayUserInterfaceRenderer } from './TextDisplayUserInterface'
 import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
+import { BassRippleUserInterfaceRenderer } from './BassRippleUserInterface'
 import { ParticleBurstUserInterfaceRenderer } from './ParticleBurstUserInterface'
 import { PixelBlastUserInterfaceRenderer } from './PixelBlastUserInterface'
 import { IcosahedronBurstUserInterfaceRenderer } from './IcosahedronBurstUserInterface'
@@ -34,6 +35,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   cameraControl: CameraControlUserInterfaceRenderer,
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
+  bassRipple: BassRippleUserInterfaceRenderer,
   particleBurst: ParticleBurstUserInterfaceRenderer,
   pixelBlast: PixelBlastUserInterfaceRenderer,
   icosahedronBurst: IcosahedronBurstUserInterfaceRenderer,
