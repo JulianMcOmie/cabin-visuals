@@ -269,7 +269,66 @@ const drawOscilloscope: Draw2D = (ctx, w, h, t) => {
     else ctx.lineTo(x, y)
   }
   ctx.stroke()
+  // The name in scope-phosphor green - terminal face, glowing like the trace.
+  let size = h * 0.16
+  const scopeFont = (s: number) => `700 ${s}px Consolas, "Lucida Console", Menlo, monospace`
+  ctx.font = scopeFont(size)
+  const measured = ctx.measureText('oscilloscope').width
+  const maxW = w * 0.86
+  if (measured > maxW) size *= maxW / measured
+  ctx.font = scopeFont(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#3aff8c'
+  ctx.shadowBlur = 10
+  ctx.fillText('oscilloscope', w / 2, h * 0.2)
   ctx.shadowBlur = 0
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+/** Bass Ripple: the name run through its own effect - "bass ripple" rendered
+ *  once to a scratch layer, then redrawn in thin rows displaced by a traveling
+ *  sine whose amplitude PULSES on the bass hit every couple of beats, so the
+ *  words visibly warp like the scene does while its note is held. */
+let bassRippleScratch: HTMLCanvasElement | null = null
+
+const drawBassRipple: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#120f22')
+  bg.addColorStop(1, '#1c1233')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  // The undisturbed words, re-rendered only when the card size changes.
+  if (!bassRippleScratch) bassRippleScratch = document.createElement('canvas')
+  const scratch = bassRippleScratch
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w
+    scratch.height = h
+    const s = scratch.getContext('2d')!
+    let size = h * 0.24
+    const font = (v: number) => `900 ${v}px "Arial Black", Impact, sans-serif`
+    s.font = font(size)
+    const measured = s.measureText('bass ripple').width
+    const maxW = w * 0.86
+    if (measured > maxW) size *= maxW / measured
+    s.font = font(size)
+    s.textAlign = 'center'
+    s.textBaseline = 'middle'
+    s.fillStyle = '#a78bfa'
+    s.fillText('bass ripple', w / 2, h / 2)
+  }
+
+  // Bass hit every 2 beats: the ripple swells hard and settles, a small
+  // steady shimmer keeping the field alive between hits.
+  const amp = w * 0.005 + w * 0.045 * pulseAt(beat, 2, 3)
+  const row = Math.max(1, Math.round(h / 60))
+  for (let y = 0; y < h; y += row) {
+    const off = amp * Math.sin(y * (14 / h) - t * 7)
+    ctx.drawImage(scratch, 0, y, w, row, off, y, w, row)
+  }
 }
 
 /** Color Filters: the name run through its own effect - "color filters"
@@ -679,6 +738,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   video: drawVideo,
   photo: drawPhoto,
   oscilloscope: drawOscilloscope,
+  bassRipple: drawBassRipple,
   colorFilters: drawColorFilters,
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
