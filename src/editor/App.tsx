@@ -21,8 +21,7 @@ import { track } from '../analytics/analytics'
 // import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
-import { BpmControl } from './components/BpmControl'
-import { ProjectLengthControl } from './components/ProjectLengthControl'
+import { TransportDisplay } from './components/TransportDisplay'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -54,12 +53,6 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     ui: useUIStore,
     time: useTimeStore,
   }
-}
-
-function formatBeat(beat: number, beatsPerBar: number): string {
-  const bar = Math.floor(beat / beatsPerBar) + 1
-  const beatInBar = Math.floor(beat % beatsPerBar) + 1
-  return `${bar.toString().padStart(3, '0')}:${beatInBar}`
 }
 
 // Dev-only companion to __cabinStores: exposes the r3f state (scene, camera,
@@ -599,7 +592,6 @@ function Header({
   const { play, pause, reset, restart } = playback
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
-  const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const loopEnabled = useTimeStore((s) => !!s.loopRegion?.enabled)
@@ -744,22 +736,9 @@ function Header({
             </button>
           </div>
 
-          {/* One continuous pill: beat readout, BARS, and BPM share a single
-              recessed track, separated by thin dividers rather than sitting as
-              three detached chips. */}
-          <div className="flex items-stretch h-7 rounded bg-[var(--bg-app)] overflow-hidden select-none">
-            <div className="flex items-center justify-center px-2.5 min-w-[62px] font-mono text-[13px] text-[var(--text)] tabular-nums whitespace-nowrap">
-              {formatBeat(currentBeat, beatsPerBar)}
-            </div>
-            <div className="w-px bg-[var(--border)]" />
-            <div className="flex items-center px-2.5">
-              <ProjectLengthControl />
-            </div>
-            <div className="w-px bg-[var(--border)]" />
-            <div className="flex items-center px-2.5">
-              <BpmControl />
-            </div>
-          </div>
+          {/* The readout is a recessed instrument screen (position + tempo);
+              project length moved into the timeline. See TransportDisplay. */}
+          <TransportDisplay />
         </div>
       </div>
 
