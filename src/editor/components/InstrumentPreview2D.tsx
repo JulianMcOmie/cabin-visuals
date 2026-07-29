@@ -160,25 +160,77 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Video: full-frame footage (drifting sun) hard-cutting to the next clip
- *  every couple of beats, with a ticking timecode and progress bar. */
+/** Video: full-frame CLIPS hard-cutting on every beat, each with its own
+ *  palette and its own Ken Burns drift, under player chrome that spells out
+ *  the clip grammar - a chapter-segmented progress bar whose playhead jumps
+ *  one segment per cut, a ticking timecode, and a burned-in "video" caption
+ *  popping with each cut. */
+const VIDEO_LOOP_BEATS = 8
 const drawVideo: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  const idx = Math.floor(beat / 2)
-  drawLandscape(ctx, 0, 0, w, h, idx, 0.3 + 0.08 * Math.sin(t * 0.9 + idx * 2))
+  const idx = Math.floor(beat)
+  const clipT = beat - idx // 0..1 through the current clip
+  // Ken Burns: every clip is ALIVE inside - zooming in while panning a
+  // direction of its own, so each cut visibly lands in different footage.
+  const zoom = 1.12 + 0.1 * clipT
+  const panX = (idx % 2 === 0 ? -1 : 1) * (0.5 - clipT) * w * 0.05
+  const panY = (idx % 3 === 0 ? -1 : 1) * (0.5 - clipT) * h * 0.03
+  ctx.save()
+  ctx.translate(w / 2 + panX, h / 2 + panY)
+  ctx.scale(zoom, zoom)
+  ctx.translate(-w / 2, -h / 2)
+  drawLandscape(ctx, 0, 0, w, h, idx, 0.28 + 0.1 * (((idx * 7) % 5) / 5))
+  ctx.restore()
+  // Two-frame luma pop marking the cut itself.
+  const flash = 0.22 * pulseAt(beat, 1, 12)
+  if (flash > 0.02) {
+    ctx.fillStyle = `rgba(255,255,255,${flash})`
+    ctx.fillRect(0, 0, w, h)
+  }
 
-  const barY = h - 4
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'
-  ctx.fillRect(0, barY, w, 4)
-  ctx.fillStyle = '#f472b6'
-  ctx.fillRect(0, barY, w * ((beat % 8) / 8), 4)
+  // Burned-in caption, short-form style.
+  const capSize = h * 0.17 * (1 + 0.06 * pulseAt(beat, 1, 6))
+  ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.7)'
+  ctx.shadowBlur = capSize * 0.25
+  ctx.shadowOffsetY = capSize * 0.06
+  ctx.fillText('video', w / 2, h - 22)
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.textAlign = 'left'
 
+  // Chapter-segmented progress bar: one segment per clip; the playhead
+  // sweeps a segment and JUMPS at each cut - "each note cuts to a clip",
+  // in player-UI form.
+  const loopBeat = beat % VIDEO_LOOP_BEATS
+  const segW = (w - 10 - (VIDEO_LOOP_BEATS - 1) * 2) / VIDEO_LOOP_BEATS
+  for (let i = 0; i < VIDEO_LOOP_BEATS; i++) {
+    const x = 5 + i * (segW + 2)
+    ctx.fillStyle = 'rgba(255,255,255,0.28)'
+    ctx.fillRect(x, h - 8, segW, 3)
+    const fill = Math.max(0, Math.min(1, loopBeat - i))
+    if (fill > 0) {
+      ctx.fillStyle = '#f472b6'
+      ctx.fillRect(x, h - 8, segW * fill, 3)
+    }
+  }
+  const headX = 5 + Math.floor(loopBeat) * (segW + 2) + segW * (loopBeat % 1)
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.arc(headX, h - 6.5, 2.5, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Ticking frame-accurate timecode.
+  const frames = Math.floor(t * 30) % 30
   const sec = Math.floor(t) % 60
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'
-  ctx.fillRect(5, h - 21, 42, 12)
-  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'
+  ctx.fillRect(5, 5, 58, 13)
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'
   ctx.font = '8px monospace'
-  ctx.fillText(`0:${String(sec).padStart(2, '0')}`, 9, h - 12)
+  ctx.fillText(`00:${String(sec).padStart(2, '0')}:${String(frames).padStart(2, '0')}`, 9, 14.5)
 }
 
 /** Photo: a white-bordered print hard-cutting to the next photo, with a
