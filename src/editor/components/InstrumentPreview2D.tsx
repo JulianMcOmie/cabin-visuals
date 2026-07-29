@@ -331,10 +331,19 @@ const drawBassRipple: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Color Filters: the name run through its own effect - "color filters"
- *  centered, its color sweeping the hue wheel over and over. */
+/** Color Filters: the name run through its own effect - each held filter is a
+ *  DISCRETE look, so the card hard-swaps background and text color together
+ *  every beat instead of sweeping, exactly like the instrument's remaps. */
+const COLOR_FILTER_LOOKS: Array<{ bg: string; text: string }> = [
+  { bg: '#1e1b4b', text: '#22d3ee' },
+  { bg: '#052e16', text: '#4ade80' },
+  { bg: '#4a044e', text: '#e879f9' },
+  { bg: '#451a03', text: '#fbbf24' },
+]
 const drawColorFilters: Draw2D = (ctx, w, h, t) => {
-  ctx.fillStyle = '#0d0d12'
+  const beat = t * BEATS_PER_SEC
+  const look = COLOR_FILTER_LOOKS[Math.floor(beat) % COLOR_FILTER_LOOKS.length]
+  ctx.fillStyle = look.bg
   ctx.fillRect(0, 0, w, h)
   let size = h * 0.26
   const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
@@ -345,7 +354,7 @@ const drawColorFilters: Draw2D = (ctx, w, h, t) => {
   ctx.font = font(size)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillStyle = `hsl(${(t * 90) % 360}, 100%, 62%)`
+  ctx.fillStyle = look.text
   ctx.fillText('color filters', w / 2, h / 2)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
