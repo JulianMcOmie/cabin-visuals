@@ -323,6 +323,84 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   }
 }
 
+/** Crop: 6 diagonal slices masking one scene - a field of "crop" text - each
+ *  slice gated by its own note. Slices build in with the entry flash, chop
+ *  between odd/even groups, then black out so the loop restarts clean. Band
+ *  geometry mirrors the real shader: even width PERPENDICULAR to the cut, span
+ *  derived from the frame's extent along the cut normal so the end bands cover
+ *  the corners. */
+const CROP_PREVIEW_ANGLE = -Math.PI / 6
+const CROP_PREVIEW_SLICES = 6
+
+/** The scene being masked: rows of drifting "crop" text on deep indigo. */
+function drawCropField(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#101426')
+  bg.addColorStop(1, '#1a1033')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+  const size = h / 4.2
+  ctx.font = `900 ${size}px ui-sans-serif, system-ui, sans-serif`
+  ctx.textBaseline = 'middle'
+  const step = ctx.measureText('crop').width + size * 0.45
+  const rows = Math.ceil(h / size) + 1
+  for (let row = 0; row < rows; row++) {
+    const y = (row + 0.5) * size * 0.92
+    const direction = row % 2 === 0 ? 1 : -1
+    const drift = ((t * 9 * direction) % step + step) % step
+    ctx.fillStyle = row % 3 === 1 ? 'rgba(167,139,250,0.75)' : 'rgba(148,163,184,0.42)'
+    for (let x = -step * 1.5 + drift + (row % 2) * step * 0.5; x < w + step; x += step) {
+      ctx.fillText('crop', x, y)
+    }
+  }
+}
+
+/** The real flash shape at preview scale: snap to white, hold, fall away. */
+function cropPreviewFlash(beatsSinceOnset: number): number {
+  const u = beatsSinceOnset / 0.3
+  if (u <= 0 || u >= 1) return 0
+  if (u < 0.08) { const a = u / 0.08; return a * a * (3 - 2 * a) }
+  if (u < 0.22) return 1
+  return Math.exp(-(u - 0.22) / 0.2)
+}
+
+const drawCrop: Draw2D = (ctx, w, h, t) => {
+  const beat = (t * BEATS_PER_SEC) % 8
+  // Everything outside an active slice is masked out.
+  ctx.fillStyle = '#05060a'
+  ctx.fillRect(0, 0, w, h)
+  // 8-beat loop per slice: staggered build, all held, odd/even chop, blackout.
+  const intervals = (i: number): Array<[number, number]> =>
+    i % 2 === 0 ? [[i * 0.5, 5], [6, 7.5]] : [[i * 0.5, 4], [5, 7.5]]
+  const normal = { x: Math.cos(CROP_PREVIEW_ANGLE), y: Math.sin(CROP_PREVIEW_ANGLE) }
+  // Half the frame's extent along the cut normal (the shader's halfSpan) - and
+  // the half-diagonal, so strips always cover the frame across the cut.
+  const halfSpan = 0.5 * (w * Math.abs(normal.x) + h * Math.abs(normal.y))
+  const halfDiagonal = 0.5 * Math.hypot(w, h)
+  for (let i = 0; i < CROP_PREVIEW_SLICES; i++) {
+    const active = intervals(i).find(([on, off]) => beat >= on && beat < off)
+    if (!active) continue
+    const width = (2 * halfSpan) / CROP_PREVIEW_SLICES
+    ctx.save()
+    ctx.translate(w / 2, h / 2)
+    ctx.rotate(CROP_PREVIEW_ANGLE)
+    ctx.beginPath()
+    ctx.rect(-halfSpan + i * width, -halfDiagonal, width, halfDiagonal * 2)
+    ctx.clip()
+    ctx.rotate(-CROP_PREVIEW_ANGLE)
+    ctx.translate(-w / 2, -h / 2)
+    drawCropField(ctx, w, h, t)
+    const flash = cropPreviewFlash(beat - active[0])
+    if (flash > 0.003) {
+      ctx.globalAlpha = flash * 0.9
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, w, h)
+      ctx.globalAlpha = 1
+    }
+    ctx.restore()
+  }
+}
+
 // ── Effect vignettes ─────────────────────────────────────────────────────────
 //
 // The library's Effects tab previews through the same popup. Each vignette
@@ -505,6 +583,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
   radialCut: drawRadialCut,
+  crop: drawCrop,
   // Effect plugins (the library's Effects tab).
   scale: drawScaleFx,
   rotate: drawRotateFx,
