@@ -289,6 +289,9 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
 
 /** Overdrive. The only warm colour on the panel, so it means one thing. */
 const OVERDRIVE = '#ff8a3c'
+/** Laser Sphere's knob scale: the primary param one step larger than the rest. */
+const PRIMARY_KNOB = 52
+const KNOB = 44
 /** Pointer travel needed to break past the detent. */
 const CATCH_PX = 16
 
@@ -381,7 +384,10 @@ function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar
   }
 
   return (
-    <div className="flex min-w-0 flex-col items-center">
+    // Fixed column width: the readouts change length as you turn ("even" →
+    // "percussive", "55%" → "110%"), and a row that reflows while you are
+    // dragging is unusable. The knob centres inside the column instead.
+    <div className="flex w-[58px] flex-col items-center">
       <div
         role="slider"
         tabIndex={0}
@@ -441,14 +447,14 @@ function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar
           />
         </div>
       </div>
-      {/* Fixed line heights: knobs differ in size, their captions must not, or
-          the row stops reading as one row. */}
-      <span className="mt-1.5 text-[9px] font-semibold leading-[12px] tracking-[0.14em] text-white/45">
+      {/* Laser Sphere's caption scale, on fixed line heights: the knobs differ
+          in size, their captions must not, or the row stops reading as a row. */}
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
         {label}
       </span>
       <span
-        className="font-mono text-[10px] leading-[13px] tabular-nums"
-        style={{ color: overdriven ? OVERDRIVE : 'rgba(255,255,255,0.75)' }}
+        className="whitespace-nowrap font-mono text-[9px] leading-[12px] tabular-nums"
+        style={{ color: overdriven ? OVERDRIVE : 'rgba(255,255,255,0.7)' }}
       >
         {format ? format(value) : definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
       </span>
@@ -510,23 +516,23 @@ export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefin
     >
       <ScatterPreview settings={settings} />
       <div
-        className="flex flex-col gap-2 pb-3 pt-3"
+        className="flex flex-col gap-2 pb-4 pt-3"
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(SHOCK, 0.13)}, transparent)` }}
       >
-        {/* IMPACT is the subject of the mover, so it is a size larger and comes
-            first; the other three qualify it. Captions align because the row is
-            bottom-aligned and every caption block is the same height. */}
-        <div className="flex items-end justify-between gap-4 px-5">
+        {/* Laser Sphere's console row: knobs gathered at the left, one step of
+            size between the primary param and the rest (52 / 44). IMPACT is the
+            subject of the mover; the other three qualify it. */}
+        <div className="flex items-end gap-5 px-4">
           <ShockKnob
             parameter={bound.impact}
             label="IMPACT"
             format={asPercent}
-            size={58}
+            size={PRIMARY_KNOB}
             detent={IMPACT_DETENT}
           />
-          <ShockKnob parameter={bound.recoverBeats} label="RECOVER" format={asBeats} size={42} />
-          <ShockKnob parameter={bound.chaos} label="CHAOS" format={asPercent} size={42} />
-          <ShockKnob parameter={bound.curve} label="CURVE" format={asShape} size={42} bipolar />
+          <ShockKnob parameter={bound.recoverBeats} label="RECOVER" format={asBeats} size={KNOB} />
+          <ShockKnob parameter={bound.chaos} label="CHAOS" format={asPercent} size={KNOB} />
+          <ShockKnob parameter={bound.curve} label="CURVE" format={asShape} size={KNOB} bipolar />
         </div>
         {unplaced.length > 0 && (
           <div className="px-3">
