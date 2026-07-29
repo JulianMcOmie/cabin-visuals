@@ -272,37 +272,24 @@ const drawOscilloscope: Draw2D = (ctx, w, h, t) => {
   ctx.shadowBlur = 0
 }
 
-/** Color Filters: the SAME scene remapped through a stepping filter, with a
- *  swatch row showing which filter is held. */
+/** Color Filters: the name run through its own effect - "color filters"
+ *  centered, its color sweeping the hue wheel over and over. */
 const drawColorFilters: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const step = Math.floor(beat / 2) % 4
-  const hues = [0, 120, 220, 300]
-  ctx.save()
-  ctx.filter = step === 0 ? 'none' : `hue-rotate(${hues[step]}deg) saturate(1.4)`
-  drawLandscape(ctx, 0, 0, w, h, 0)
-  ctx.restore()
-  const flash = 0.25 * pulseAt(beat, 2, 8)
-  if (flash > 0.02) {
-    ctx.fillStyle = `rgba(255,255,255,${flash})`
-    ctx.fillRect(0, 0, w, h)
-  }
-  // Swatch row: the filter palette, active one ringed.
-  const colors = ['#e2e8f0', '#4ade80', '#60a5fa', '#e879f9']
-  for (let i = 0; i < colors.length; i++) {
-    const x = w / 2 + (i - 1.5) * 14
-    ctx.fillStyle = colors[i]
-    ctx.beginPath()
-    ctx.arc(x, h - 11, 3.5, 0, Math.PI * 2)
-    ctx.fill()
-    if (i === step) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-      ctx.lineWidth = 1.2
-      ctx.beginPath()
-      ctx.arc(x, h - 11, 5.5, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-  }
+  ctx.fillStyle = '#0d0d12'
+  ctx.fillRect(0, 0, w, h)
+  let size = h * 0.26
+  const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
+  ctx.font = font(size)
+  const maxW = w * 0.86
+  const measured = ctx.measureText('color filters').width
+  if (measured > maxW) size *= maxW / measured
+  ctx.font = font(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = `hsl(${(t * 90) % 360}, 100%, 62%)`
+  ctx.fillText('color filters', w / 2, h / 2)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 /** Scene Switcher: ONE prominent "switch", restyled every beat - each switch
