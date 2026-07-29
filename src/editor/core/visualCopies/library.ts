@@ -16,6 +16,7 @@ import {
 import { translationOscillatorMover } from './translationOscillator'
 import { calmHueRotateColorizer } from './hueColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
+import { meteorImpactMover } from './meteorImpact'
 import { waveTerrainMover } from './waveTerrain'
 import { visibilityMover } from './visibility'
 import { consolidatedMover } from './consolidatedMover'
@@ -268,6 +269,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   consolidatedMover,
   motionMover,
   radialMotionMover,
+  meteorImpactMover,
   burstMover,
   rotateBurstMover,
   orbitBurstMover,
