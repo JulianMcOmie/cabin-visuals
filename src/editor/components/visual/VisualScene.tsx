@@ -33,6 +33,7 @@ import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
+import { resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
 
@@ -133,6 +134,52 @@ void main() {
 
   filtered *= hdrScale;
   gl_FragColor = vec4(mix(color, clamp(filtered, 0.0, hdrScale), amount), source.a);
+}`
+
+/** Scene-wide positional warp. Displaces each pixel by a fractal value-noise
+ *  field, sampled twice at decorrelated offsets for the x and y components.
+ *  Noise rather than a radial sine: a sine has a visible center and visible
+ *  rings, noise has neither, so low strengths read as haze rather than effect. */
+const WARP_FRAGMENT = `
+uniform sampler2D tDiffuse;
+uniform float amount;
+uniform float scale;
+uniform float speed;
+uniform float time;
+uniform float aspect;
+varying vec2 vUv;
+
+float warpHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float warpNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(warpHash(i), warpHash(i + vec2(1.0, 0.0)), u.x),
+    mix(warpHash(i + vec2(0.0, 1.0)), warpHash(i + vec2(1.0, 1.0)), u.x),
+    u.y
+  );
+}
+
+// Three octaves is enough for the field to look organic rather than blobby,
+// and cheap enough to run per pixel per scene.
+float warpFbm(vec2 p) {
+  return warpNoise(p) * 0.6 + warpNoise(p * 2.03) * 0.3 + warpNoise(p * 4.01) * 0.1;
+}
+
+void main() {
+  // Aspect-corrected sampling, so the field stays round instead of stretching
+  // with the viewport.
+  vec2 p = vUv * vec2(aspect, 1.0) * scale;
+  vec2 drift = vec2(time * speed, time * speed * 0.7);
+  float nx = warpFbm(p + drift);
+  float ny = warpFbm(p + drift + vec2(41.3, 19.7));
+  // Centered on zero so the scene bends both ways rather than sliding.
+  vec2 offset = (vec2(nx, ny) - 0.5) * 2.0 * amount * 0.06;
+  gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 
 const FINAL_GRADE_FRAGMENT = `
@@ -468,6 +515,20 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    const warpMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: WARP_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        amount: { value: 0 },
+        scale: { value: 3 },
+        speed: { value: 0.6 },
+        time: { value: 0 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const filterMesh = new Mesh(new PlaneGeometry(2, 2), filterMaterial)
     filterMesh.frustumCulled = false
     filterScene.add(filterMesh)
@@ -501,7 +562,7 @@ export function VisualScene() {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -588,10 +649,26 @@ export function VisualScene() {
     }
     compositor.filterMesh.geometry.dispose()
     compositor.filterMaterial.dispose()
+    compositor.warpMaterial.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
   }, [compositor])
+
+  const bassRippleTrackIds = useMemo(() => {
+    const byScene = new Map<string, string[]>()
+    const seen = new Set<string>()
+    for (const object of objects) {
+      if (object.instrumentId !== 'bassRipple') continue
+      const key = `${object.sceneId}:${object.trackId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const ids = byScene.get(object.sceneId) ?? []
+      ids.push(object.trackId)
+      byScene.set(object.sceneId, ids)
+    }
+    return byScene
+  }, [objects])
 
   const colorFilterTrackIds = useMemo(() => {
     const byScene = new Map<string, string[]>()
@@ -644,6 +721,28 @@ export function VisualScene() {
         // choose post-process modes. Multiple tracks chain in resolved order.
         let filteredTexture: Texture = runtime.target.texture
         let filterPass = 0
+
+        // Positional warp runs BEFORE the colour filters: it decides where the
+        // pixels are, they decide what colour those pixels end up. Warping a
+        // graded image instead would drag the grade's own gradients around.
+        for (const trackId of bassRippleTrackIds.get(sceneId) ?? []) {
+          const ripple = resolveActiveBassRipple(getObjectState(trackId))
+          if (!ripple) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.warpMaterial
+          compositor.warpMaterial.uniforms.tDiffuse.value = filteredTexture
+          compositor.warpMaterial.uniforms.amount.value = ripple.amount
+          compositor.warpMaterial.uniforms.scale.value = ripple.scale
+          compositor.warpMaterial.uniforms.speed.value = ripple.speed
+          compositor.warpMaterial.uniforms.time.value = ripple.beat
+          compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
         for (const trackId of colorFilterTrackIds.get(sceneId) ?? []) {
           const filter = resolveActiveColorFilter(getObjectState(trackId))
           if (!filter) continue

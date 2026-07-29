@@ -68,6 +68,13 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <path d="M0.5 6 H2.2 L3.2 2.5 L4.7 9.5 L6.2 4 L7.5 7.5 L8.7 5 H11.5" fill="none" stroke="#22d3ee" strokeWidth="1.1" strokeLinejoin="round" />
     </svg>
   )},
+  { id: 'bassRipple', name: 'Bass Ripple', description: 'Warps the whole scene through a drifting noise field while its MIDI note is held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M0.5 3.5 Q3 1.5 6 3.5 T11.5 3.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
+      <path d="M0.5 6 Q3 4 6 6 T11.5 6" fill="none" stroke="#a78bfa" strokeWidth="1" />
+      <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
+    </svg>
+  )},
   { id: 'colorFilters', name: 'Color Filters', description: 'Applies scene-wide color remaps while its labeled MIDI notes are held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
