@@ -31,6 +31,7 @@ class PlaybackEngine {
   private playing = false
   private lastTrackedBeat: number | null = null
   private bpmDragging = false
+  private blockTrimming = false
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
@@ -121,6 +122,24 @@ class PlaybackEngine {
     }
   }
 
+  /** Silence audio for the length of an audio-block TRIM drag, the same trade the
+   *  scrub makes. Every pointermove writes trimStart/trimEnd, and the store
+   *  subscription re-arms every block on each write. A trim keeps the block
+   *  sitting under the playhead, so those re-arms restart the SAME audio at
+   *  nearly the same offset and stack inside the lookahead window into a runaway
+   *  gain sum - the trim "earrape". The release re-arms once, exactly as
+   *  endBpmDrag does. */
+  beginBlockTrim() {
+    this.blockTrimming = true
+    if (this.playing) getAudioEngine().stopAll()
+  }
+
+  /** End a trim drag: re-arm once at the final trim (no-op if not playing). */
+  endBlockTrim() {
+    this.blockTrimming = false
+    this.rearmAudio()
+  }
+
   /** Silence audio for the duration of a scrub. The transport keeps running so the
    *  playhead still follows the drag; each move uses scrubSeek (no re-arm) and the
    *  release calls seek() to resume. Re-arming on every move instead would stack
@@ -137,9 +156,10 @@ class PlaybackEngine {
     this.lastTrackedBeat = beat
   }
 
-  /** Re-arm audio at the current position (block edits / mute toggles while playing). */
+  /** Re-arm audio at the current position (block edits / mute toggles while playing).
+   *  Suppressed mid-trim - that gesture's own release re-arms (see beginBlockTrim). */
   rearmAudio() {
-    if (!this.playing || !this.callbacks) return
+    if (!this.playing || !this.callbacks || this.blockTrimming) return
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)

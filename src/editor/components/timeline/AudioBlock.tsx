@@ -5,6 +5,7 @@ import { useAudioStore } from '../../store/AudioStore'
 import { useUIStore } from '../../store/UIStore'
 import { selectNewBlock } from '../../utils/selection'
 import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
+import { getPlaybackEngine } from '../../core/playback'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
 import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
 import { AudioTrackOscilloscope } from './AudioTrackOscilloscope'
@@ -92,7 +93,16 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     mode: DragMode
     startX: number
     orig: { startBar: number; trimStart: number; trimEnd: number }
+    /** Whether this gesture has already silenced playback (trim drags only). */
+    silenced: boolean
   } | null>(null)
+
+  // A block unmounted mid-trim (deleted, track removed) never sees pointerup, so
+  // the silence would never be lifted - audio would stop tracking edits until the
+  // next play. Release it here.
+  useEffect(() => () => {
+    if (dragRef.current?.silenced) getPlaybackEngine().endBlockTrim()
+  }, [])
 
   const MIN_CLIP_SEC = 0.05
   const secPerBar = (60 / bpm) * beatsPerBar
@@ -132,6 +142,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       mode: edgeZone(e),
       startX: e.clientX,
       orig: { startBar: block.startBar, trimStart: block.trimStart, trimEnd: block.trimEnd },
+      silenced: false,
     }
   }
 
@@ -156,6 +167,16 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
         useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar })
       }
       return
+    }
+
+    // From here on this gesture is a trim, which rewrites the block under the
+    // playhead on every move: mute playback for its duration so the re-arms
+    // can't stack into a runaway gain sum (see beginBlockTrim). Done on the
+    // first MOVE, not on pointerdown, so a plain click on an edge doesn't
+    // punch a hole in the audio.
+    if (!drag.silenced) {
+      drag.silenced = true
+      getPlaybackEngine().beginBlockTrim()
     }
 
     if (mode === 'trim-r') {
@@ -187,6 +208,8 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) {
       try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
+      // Resume: one re-arm at the final trim, the same one-shot seek() performs.
+      if (dragRef.current.silenced) getPlaybackEngine().endBlockTrim()
     }
     dragRef.current = null
   }
