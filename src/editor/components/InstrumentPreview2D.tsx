@@ -210,72 +210,119 @@ const drawColorFilters: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Scene Switcher: the whole frame jumps to a different scene per held note -
- *  here three differently-colored fields of "switch". */
+/** Scene Switcher: ONE prominent "switch", restyled every beat - each switch
+ *  jumps the font AND the color AND the backdrop, so the whole frame reads as
+ *  a different scene holding the same subject. Fonts lean on system stacks
+ *  (the same families TextDisplay ships), so every style lands distinct. */
+const SWITCH_STYLES: Array<{ font: (size: number) => string; color: string; bg: [string, string] }> = [
+  { font: (s) => `900 ${s}px "Arial Black", Impact, sans-serif`, color: '#a78bfa', bg: ['#101426', '#1a1033'] },
+  { font: (s) => `italic 900 ${s}px Georgia, "Times New Roman", serif`, color: '#34d399', bg: ['#07191c', '#0c2b22'] },
+  { font: (s) => `700 ${s}px "Courier New", monospace`, color: '#f472b6', bg: ['#1f0d1c', '#2b1030'] },
+  { font: (s) => `700 ${s}px "Comic Sans MS", "Chalkboard SE", cursive`, color: '#fbbf24', bg: ['#1c1206', '#2b1a08'] },
+]
 const drawSceneSwitcher: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
-  const active = Math.floor(beat / 2) % 3
-  drawWordField(ctx, w, h, t, 'switch', active)
-  // Scene dots (same affordance as the slideshow card's pager).
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = i === active ? '#ffffff' : 'rgba(255,255,255,0.3)'
+  const active = Math.floor(beat) % SWITCH_STYLES.length
+  const style = SWITCH_STYLES[active]
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, style.bg[0])
+  bg.addColorStop(1, style.bg[1])
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+  // Fit "switch" to the frame in THIS font (scripts run wider than monos),
+  // then punch it slightly on each switch.
+  let size = h * 0.34
+  ctx.font = style.font(size)
+  const measured = ctx.measureText('switch').width
+  const maxW = w * 0.8
+  if (measured > maxW) size *= maxW / measured
+  const pop = 1 + 0.08 * pulseAt(beat, 1, 5)
+  ctx.font = style.font(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = style.color
+  ctx.save()
+  ctx.translate(w / 2, h / 2 - h * 0.04)
+  ctx.scale(pop, pop)
+  ctx.fillText('switch', 0, 0)
+  ctx.restore()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+/** Cut: cut regions POP into and out of existence over a base scene, on
+ *  staggered gates so they overlap - one cut alone, two stacked, the other
+ *  alone, then the bare scene. Each region is another scene clipped to its
+ *  polygon, flashing white at its onset like a note just landed. */
+const drawCut: Draw2D = (ctx, w, h, t) => {
+  const beat = (t * BEATS_PER_SEC) % 4
+  drawWordField(ctx, w, h, t, 'cut', 0)
+  const regions: Array<{
+    poly: Array<[number, number]>
+    line: [number, number, number, number]
+    variant: number
+    on: number
+    off: number
+  }> = [
+    { poly: [[0, 0], [w * 0.62, 0], [w * 0.38, h], [0, h]], line: [w * 0.62, 0, w * 0.38, h], variant: 1, on: 0, off: 2.5 },
+    { poly: [[w * 0.35, 0], [w, 0], [w, h], [w * 0.65, h]], line: [w * 0.35, 0, w * 0.65, h], variant: 2, on: 1, off: 3.5 },
+  ]
+  for (const r of regions) {
+    if (beat < r.on || beat >= r.off) continue
+    ctx.save()
     ctx.beginPath()
-    ctx.arc(w / 2 + (i - 1) * 10, h - 9, 2, 0, Math.PI * 2)
-    ctx.fill()
+    ctx.moveTo(r.poly[0][0], r.poly[0][1])
+    for (let i = 1; i < r.poly.length; i++) ctx.lineTo(r.poly[i][0], r.poly[i][1])
+    ctx.closePath()
+    ctx.clip()
+    drawWordField(ctx, w, h, t, 'cut', r.variant)
+    const flash = 0.55 * Math.exp(-6 * (beat - r.on))
+    if (flash > 0.02) {
+      ctx.fillStyle = `rgba(255,255,255,${flash})`
+      ctx.fillRect(0, 0, w, h)
+    }
+    ctx.restore()
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(r.line[0], r.line[1])
+    ctx.lineTo(r.line[2], r.line[3])
+    ctx.stroke()
   }
 }
 
-/** Cut: the frame partitioned between two scenes, the cut line moving between
- *  straight and diagonal configurations. */
-const drawCut: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const cfg = Math.floor(beat / 2) % 3
-  // Region A polygon + its cut line, per configuration.
-  const polys: Array<{ a: Array<[number, number]>; line: [number, number, number, number] }> = [
-    { a: [[0, 0], [w * 0.5, 0], [w * 0.5, h], [0, h]], line: [w * 0.5, 0, w * 0.5, h] },
-    { a: [[0, 0], [w * 0.68, 0], [w * 0.32, h], [0, h]], line: [w * 0.68, 0, w * 0.32, h] },
-    { a: [[0, 0], [w * 0.38, 0], [w * 0.62, h], [0, h]], line: [w * 0.38, 0, w * 0.62, h] },
-  ]
-  const { a, line } = polys[cfg]
-  drawWordField(ctx, w, h, t, 'cut', cfg + 1)
-  ctx.save()
-  ctx.beginPath()
-  ctx.moveTo(a[0][0], a[0][1])
-  for (let i = 1; i < a.length; i++) ctx.lineTo(a[i][0], a[i][1])
-  ctx.closePath()
-  ctx.clip()
-  drawWordField(ctx, w, h, t, 'cut', cfg)
-  ctx.restore()
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.moveTo(line[0], line[1])
-  ctx.lineTo(line[2], line[3])
-  ctx.stroke()
-}
-
-/** Radial Cut: concentric rings, each showing a different scene, breathing
- *  gently with the beat. */
+/** Radial Cut: concentric cuts POP into and out of existence over the base
+ *  scene, staggered so they stack - outer circle alone, both nested, inner
+ *  alone, bare scene. Each snaps in with a fast radial grow and an onset
+ *  flash, so the cut itself visibly appears and leaves. */
 const drawRadialCut: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const p = pulseAt(beat, 2, 3)
+  const beat = (t * BEATS_PER_SEC) % 4
   const m = Math.min(w, h)
   drawWordField(ctx, w, h, t, 'radial', 0)
   const rings = [
-    { r: m * 0.42 * (1 + 0.05 * p), variant: 1 },
-    { r: m * 0.22 * (1 + 0.1 * p), variant: 2 },
+    { r: m * 0.42, variant: 1, on: 0, off: 2.5 },
+    { r: m * 0.22, variant: 2, on: 1, off: 3.5 },
   ]
   for (const ring of rings) {
+    if (beat < ring.on || beat >= ring.off) continue
+    const age = beat - ring.on
+    // Snap-in: the circle grows to size in a few frames, then holds.
+    const radius = ring.r * (1 - 0.3 * Math.exp(-10 * age))
     ctx.save()
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
     ctx.clip()
     drawWordField(ctx, w, h, t, 'radial', ring.variant)
+    const flash = 0.55 * Math.exp(-6 * age)
+    if (flash > 0.02) {
+      ctx.fillStyle = `rgba(255,255,255,${flash})`
+      ctx.fillRect(0, 0, w, h)
+    }
     ctx.restore()
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'
     ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
     ctx.stroke()
   }
 }
