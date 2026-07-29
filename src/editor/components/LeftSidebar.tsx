@@ -636,7 +636,9 @@ export function LeftSidebar() {
           exhaustion when several two-column sections are visible. */}
       {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
-          narrow, and icon + label once there's room for the text. */}
+          narrow, and icon + label once there's room for the text. The 320px
+          threshold is the width where all three labels fit inside the pills'
+          px-2 padding without truncating - below it, labels would ellipsize. */}
       <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
@@ -647,14 +649,14 @@ export function LeftSidebar() {
             key={id}
             onClick={() => setTab(id)}
             title={label}
-            className={`flex-1 h-6 flex items-center justify-center gap-1.5 rounded-full text-[11px] transition-colors cursor-pointer ${
+            className={`flex-1 min-w-0 h-6 flex items-center justify-center gap-1.5 rounded-full px-2 text-[11px] transition-colors cursor-pointer ${
               tab === id
                 ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
                 : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
             <Icon size={13} className="flex-shrink-0" />
-            <span className="hidden @[224px]:inline truncate">{label}</span>
+            <span className="hidden @[320px]:inline truncate">{label}</span>
           </button>
         ))}
       </div>
