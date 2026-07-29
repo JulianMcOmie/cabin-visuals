@@ -403,6 +403,14 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
                       {item.icon}
                     </span>
                   )}
+                <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                  <span
+                    className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
+                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
+                  >
+                    {item.name}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
