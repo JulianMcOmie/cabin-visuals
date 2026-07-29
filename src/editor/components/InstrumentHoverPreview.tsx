@@ -128,10 +128,8 @@ const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 
 // Preview-only param overrides for instruments whose real defaults read poorly
 // in a popup: Text Display defaults to the single word HELLO, which hides its
-// whole point - advancing a word per note. The Stack layout with a 2-word card
-// shows the PHRASE: "text display" is on screen nearly the whole time, with
-// the card rebuilding word-by-word at each bar line so words still visibly
-// pop in and out of existence.
+// whole point. The Stack layout shows the PHRASE: "text display" stays up the
+// whole loop while the font flicker below carries all the motion.
 const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
   textDisplay: { text: 'text display' },
 }
@@ -154,20 +152,17 @@ const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, b
 // Preview-only note overrides for instruments whose labeled vocabulary the
 // generic arc misses entirely. Text Display renders NOTHING without pitch 48
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
-// black. Its rhythm: a quick two-note pickup builds the card ("text", then
-// "display" half a beat later), and the full phrase HOLDS for the rest of the
-// bar - mostly-whole-phrase, with a word-by-word rebuild at every bar line.
-// 8 notes over the 16 beats: divisible by the 2 words, so the loop's wrap
-// never restarts the cycle mid-card.
+// black. Both word notes land at beat 0, so the full phrase is up from the
+// first frame and never rebuilds - the font flicker alone is the animation.
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
-  textDisplay: Array.from({ length: 4 }, (_, bar) => [0, 0.5].map((off) => ({
-    beat: bar * 4 + off,
+  textDisplay: Array.from({ length: 2 }, () => ({
+    beat: 0,
     blockStartBeat: 0,
     blockEndBeat: 1e9,
     pitch: 48,
     velocity: 100,
     durationBeats: 0.4,
-  }))).flat(),
+  })),
 }
 
 function makePreviewState(instrumentId: string): ObjectState {
