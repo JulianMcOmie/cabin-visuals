@@ -129,8 +129,9 @@ const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 // Preview-only param overrides for instruments whose real defaults read poorly
 // in a popup: Text Display defaults to the single word HELLO, which hides its
 // whole point - advancing a word per note. The Stack layout with a 2-word card
-// makes the cycle legible: "text" lands on the left half, "display" joins it,
-// then the card clears and the pair rebuilds - words visibly ADD one per note.
+// shows the PHRASE: "text display" is on screen nearly the whole time, with
+// the card rebuilding word-by-word at each bar line so words still visibly
+// pop in and out of existence.
 const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
   textDisplay: { text: 'text display' },
 }
@@ -140,15 +141,33 @@ const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
   textDisplay: { layoutMode: 2, stackMaxWords: 2, sustain: 1 },
 }
 
+// Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
+// Display rapid-fire flickers through font stacks - system faces only, since
+// the template webfonts gate frames on their loads mid-flicker.
+const TEXT_DISPLAY_FLICKER_FONTS = [0, 1, 2, 10, 13, 14, 11]
+const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {
+  textDisplay: (params, beat) => {
+    params.font = TEXT_DISPLAY_FLICKER_FONTS[Math.floor(beat * 2) % TEXT_DISPLAY_FLICKER_FONTS.length]
+  },
+}
+
 // Preview-only note overrides for instruments whose labeled vocabulary the
 // generic arc misses entirely. Text Display renders NOTHING without pitch 48
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
-// black. Near-held word notes keep a word on screen while stepping it; and
-// the note COUNT must divide by the 2 preview words, or the loop's wrap
-// restarts the word cycle mid-card (a card of "text text" once per loop).
-// 12 notes over the 16 beats: divisible by 2, still an even musical stride.
+// black. Its rhythm: a quick two-note pickup builds the card ("text", then
+// "display" half a beat later), and the full phrase HOLDS for the rest of the
+// bar - mostly-whole-phrase, with a word-by-word rebuild at every bar line.
+// 8 notes over the 16 beats: divisible by the 2 words, so the loop's wrap
+// never restarts the cycle mid-card.
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
-  textDisplay: makeLoopNotes([48], 1.2, 4 / 3),
+  textDisplay: Array.from({ length: 4 }, (_, bar) => [0, 0.5].map((off) => ({
+    beat: bar * 4 + off,
+    blockStartBeat: 0,
+    blockEndBeat: 1e9,
+    pitch: 48,
+    velocity: 100,
+    durationBeats: 0.4,
+  }))).flat(),
 }
 
 function makePreviewState(instrumentId: string): ObjectState {
@@ -196,6 +215,7 @@ function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumen
   useFrame((root) => {
     const beat = previewBeatNow(root.clock.elapsedTime, sync)
     state.beat = beat
+    PREVIEW_PARAM_ANIMATORS[instrumentId]?.(state.params, beat)
     state.activeNotes.length = 0
     let lastOnset = -Infinity
     let lastVel = 0
