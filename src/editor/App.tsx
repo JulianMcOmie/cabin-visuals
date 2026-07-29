@@ -791,7 +791,7 @@ function Header({
             className={`flex items-center gap-1.5 h-7 px-3 rounded text-[11px] font-bold transition-colors cursor-pointer ${
               exportGate?.ok === false || !permanent
                 ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
-                : 'bg-white hover:bg-white/85 text-[var(--on-accent)]'
+                : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
             }`}
           >
             <Upload size={11} strokeWidth={2.5} />
