@@ -143,7 +143,7 @@ function ScrubField({ trackId, spec }: { trackId: string; spec: FieldSpec }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="w-8 flex-shrink-0 text-[9px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">{spec.label}</span>
+      <span className="w-9 flex-shrink-0 text-[10px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">{spec.label}</span>
       <div
         role="slider"
         aria-label={spec.label}
@@ -159,7 +159,7 @@ function ScrubField({ trackId, spec }: { trackId: string; spec: FieldSpec }) {
           })
         }}
         onDoubleClick={() => resetTransformValues(trackId, [spec.key])}
-        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-black/25 px-2 py-[3px] text-right font-mono text-[11px] tabular-nums transition-colors hover:border-[var(--border-strong)] ${
+        className={`flex-1 cursor-ns-resize touch-none select-none rounded border border-[var(--border)] bg-black/25 px-2 py-1 text-right font-mono text-[12px] tabular-nums transition-colors hover:border-[var(--border-strong)] ${
           onSnap ? 'text-[var(--accent)]' : 'text-[var(--text)]'
         }`}
       >
@@ -320,10 +320,12 @@ const PANEL_MIN_SCALE = 1
 const PANEL_MAX_SCALE = 1.8
 const PANEL_SCALE_KEY = 'trackTransformPanelScale'
 
+const PANEL_DEFAULT_SCALE = 1.25
+
 function storedPanelScale(): number {
-  if (typeof window === 'undefined') return 1
+  if (typeof window === 'undefined') return PANEL_DEFAULT_SCALE
   const raw = Number(window.localStorage.getItem(PANEL_SCALE_KEY))
-  return Number.isFinite(raw) && raw > 0 ? Math.min(PANEL_MAX_SCALE, Math.max(PANEL_MIN_SCALE, raw)) : 1
+  return Number.isFinite(raw) && raw > 0 ? Math.min(PANEL_MAX_SCALE, Math.max(PANEL_MIN_SCALE, raw)) : PANEL_DEFAULT_SCALE
 }
 
 export function TrackTransformPanel({
@@ -333,7 +335,7 @@ export function TrackTransformPanel({
 }: {
   trackId: string
   /** Viewport-space rect of the opener button (position the popover under it). */
-  anchor: { left: number; top: number; bottom: number }
+  anchor: { left: number; right: number; top: number; bottom: number }
   onClose: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -364,7 +366,10 @@ export function TrackTransformPanel({
   }
 
   useEffect(() => {
-    const onDown = (ev: MouseEvent) => {
+    // Capture-phase pointerdown: timeline gestures preventDefault() their
+    // pointerdowns (which suppresses compatibility mousedown) and stopPropagation
+    // freely, so this is the only reliable "clicked anywhere else" signal.
+    const onDown = (ev: PointerEvent) => {
       const target = ev.target as HTMLElement
       if (panelRef.current?.contains(target)) return
       // The row's own opener toggles the panel itself - let its click handler win.
@@ -375,11 +380,11 @@ export function TrackTransformPanel({
       if (ev.key === 'Escape') onClose()
     }
     // Deferred so the opener click that mounted the panel doesn't instantly close it.
-    const id = setTimeout(() => window.addEventListener('mousedown', onDown), 0)
+    const id = setTimeout(() => window.addEventListener('pointerdown', onDown, true), 0)
     window.addEventListener('keydown', onKey)
     return () => {
       clearTimeout(id)
-      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('keydown', onKey)
     }
   }, [onClose, trackId])
@@ -387,9 +392,11 @@ export function TrackTransformPanel({
   if (!trackName) return null
 
   // Clamp into the viewport: prefer below the anchor, flip above when cramped.
+  // Right-align the panel to the opener so it hangs over the label column
+  // instead of covering the timeline lanes to its right.
   const panelWidth = Math.round(PANEL_BASE_WIDTH * scale)
   const panelHeight = Math.round(PANEL_BASE_HEIGHT * scale)
-  const left = clamp(anchor.left - 8, 8, window.innerWidth - panelWidth - 8)
+  const left = clamp(anchor.right + 4 - panelWidth, 8, window.innerWidth - panelWidth - 8)
   const top = anchor.bottom + panelHeight + 8 > window.innerHeight
     ? Math.max(8, anchor.top - panelHeight - 6)
     : anchor.bottom + 6
@@ -403,11 +410,11 @@ export function TrackTransformPanel({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-[var(--text)]">Transform</span>
-        <span className="max-w-[120px] truncate text-[10px] text-[var(--text-muted)]">{trackName}</span>
+        <span className="text-[12px] font-semibold text-[var(--text)]">Transform</span>
+        <span className="max-w-[140px] truncate text-[11px] text-[var(--text-muted)]">{trackName}</span>
         {multiCount > 0 && (
           <span
-            className="rounded px-1.5 py-px text-[9px] font-semibold text-[var(--accent)]"
+            className="rounded px-1.5 py-px text-[10px] font-semibold text-[var(--accent)]"
             style={{ background: 'color-mix(in srgb, var(--accent) 15%, transparent)' }}
           >
             {multiCount} tracks
@@ -418,7 +425,7 @@ export function TrackTransformPanel({
           aria-label="Reset all transform values"
           title="Reset every value to its default"
           onClick={() => resetTransformValues(trackId, TRANSFORM_PARAM_DEFS.map((p) => p.key))}
-          className="rounded border border-[var(--border)] px-2 py-0.5 text-[9px] font-semibold tracking-[0.05em] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
+          className="rounded border border-[var(--border)] px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
         >
           Reset
         </button>
@@ -426,15 +433,15 @@ export function TrackTransformPanel({
       <div className="flex gap-3">
         <div className="flex-shrink-0">
           <IsoViewport trackId={trackId} scale={scale} />
-          <div className="mt-1 text-center text-[9px] text-[var(--text-muted)]">shadow = x·z floor · dot = y height</div>
+          <div className="mt-1 text-center text-[10px] text-[var(--text-muted)]">shadow = x·z floor · dot = y height</div>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-[5px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {FIELDS.map((spec) => (
             <ScrubField key={spec.key} trackId={trackId} spec={spec} />
           ))}
         </div>
       </div>
-      <div className="mt-2 pr-3 text-[9px] leading-relaxed text-[var(--text-muted)]">
+      <div className="mt-2 pr-3 text-[10px] leading-relaxed text-[var(--text-muted)]">
         drag numbers vertically · shift = fine · double-click = reset · alt = no snap{multiCount > 0 ? ' · cmd = align tracks' : ''}
       </div>
       <div

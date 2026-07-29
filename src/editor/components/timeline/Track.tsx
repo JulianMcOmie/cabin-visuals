@@ -90,7 +90,11 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const opacityValue = useProjectStore((s) =>
     isObjectTrack ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
   )
-  const [panelAnchor, setPanelAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
+  const [panelAnchor, setPanelAnchor] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
+  // The fader needs real room: hide it (keeping the opener) when the label
+  // column is too narrow for name + fader + buttons, so it never crowds the
+  // M/S cluster out of alignment.
+  const showFader = isObjectTrack && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210
 
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
@@ -265,9 +269,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        {/* Object tracks give the free row space to the opacity fader (DAW-style
+        {/* Rows showing the opacity fader give it the free space (DAW-style
             channel strip); other rows keep it on the name as before. */}
-        <div className={`relative ${isObjectTrack ? '' : 'flex-1'} min-w-0 flex items-center gap-1.5`}>
+        <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex items-center gap-1.5`}>
           {renaming ? (
             <input
               ref={renameRef}
@@ -300,8 +304,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           )}
         </div>
 
-        <div className={`relative flex items-center gap-1 ${isObjectTrack ? 'flex-1 min-w-0' : 'flex-shrink-0'}`} onClick={(e) => e.stopPropagation()}>
-          {isObjectTrack && (
+        <div className={`relative flex items-center gap-1 ${showFader ? 'flex-1 min-w-0' : 'flex-shrink-0'}`} onClick={(e) => e.stopPropagation()}>
+          {showFader && (
             <div
               data-strip-control
               role="slider"
@@ -318,17 +322,22 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 )
               }}
               onDoubleClick={() => resetTransformValues(track.id, [TF_OPACITY])}
-              className="mr-1.5 flex h-4 min-w-[40px] flex-1 cursor-ew-resize touch-none items-center"
+              className="group mr-2 flex h-4 min-w-[48px] flex-1 cursor-ew-resize touch-none items-center px-[3px]"
             >
-              <div className="relative h-[3px] w-full rounded-full bg-white/10">
+              {/* DAW-style horizontal fader: inset groove, accent fill, center
+                  detent tick, and a rectangular fader cap with a notch line. */}
+              <div className="relative h-[5px] w-full rounded-[2px] border-b border-b-white/[0.06] bg-black/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.6)]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-[var(--accent)]"
-                  style={{ width: `${opacityValue * 100}%`, opacity: 0.75 }}
+                  className="absolute inset-y-0 left-0 rounded-l-[2px] bg-[var(--accent)] opacity-60 group-hover:opacity-80"
+                  style={{ width: `${opacityValue * 100}%` }}
                 />
+                <div className="absolute left-1/2 top-[-2px] h-[2px] w-px bg-white/25" />
                 <div
-                  className="absolute top-1/2 h-[9px] w-[3px] -translate-y-1/2 rounded-[1px] bg-[var(--text)]"
-                  style={{ left: `calc(${opacityValue * 100}% - 1px)` }}
-                />
+                  className="absolute top-1/2 h-[13px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-black/60 bg-[#cfd2d8] shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
+                  style={{ left: `${opacityValue * 100}%` }}
+                >
+                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/45" />
+                </div>
               </div>
             </div>
           )}
@@ -374,7 +383,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
               onClick={(e) => {
                 if (panelAnchor) { setPanelAnchor(null); return }
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                setPanelAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom })
+                setPanelAnchor({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })
               }}
               className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
                 panelAnchor
