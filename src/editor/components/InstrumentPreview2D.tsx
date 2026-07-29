@@ -293,8 +293,8 @@ const drawCut: Draw2D = (ctx, w, h, t) => {
 
 /** Radial Cut: concentric cuts POP into and out of existence over the base
  *  scene, staggered so they stack - outer circle alone, both nested, inner
- *  alone, bare scene. Each snaps in with a fast radial grow and an onset
- *  flash, so the cut itself visibly appears and leaves. */
+ *  alone, bare scene. Cuts superimpose INSTANTLY at full size, exactly like
+ *  the real director; only the onset flash marks the moment they land. */
 const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   const beat = (t * BEATS_PER_SEC) % 4
   const m = Math.min(w, h)
@@ -305,15 +305,12 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   ]
   for (const ring of rings) {
     if (beat < ring.on || beat >= ring.off) continue
-    const age = beat - ring.on
-    // Snap-in: the circle grows to size in a few frames, then holds.
-    const radius = ring.r * (1 - 0.3 * Math.exp(-10 * age))
     ctx.save()
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
     ctx.clip()
     drawWordField(ctx, w, h, t, 'radial', ring.variant)
-    const flash = 0.55 * Math.exp(-6 * age)
+    const flash = 0.55 * Math.exp(-6 * (beat - ring.on))
     if (flash > 0.02) {
       ctx.fillStyle = `rgba(255,255,255,${flash})`
       ctx.fillRect(0, 0, w, h)
@@ -322,7 +319,7 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'
     ctx.lineWidth = 1.2
     ctx.beginPath()
-    ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
+    ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
     ctx.stroke()
   }
 }
