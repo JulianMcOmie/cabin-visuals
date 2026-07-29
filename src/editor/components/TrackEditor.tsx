@@ -16,7 +16,7 @@ import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { AudioTrackDetail } from './AudioTrackDetail'
 import { isNumberParam, isStringParam } from '../instruments/types'
-import { getUserInterfaceRenderer, ParamControl, ParamToggle, type UserInterfaceParameter } from '../userInterfaceRenderers'
+import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
@@ -438,7 +438,6 @@ export function TrackEditor() {
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setTrackTags = useProjectStore((s) => s.setTrackTags)
-  const setTrackOnTop = useProjectStore((s) => s.setTrackOnTop)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
   const setDirectorSceneBindings = useProjectStore((s) => s.setDirectorSceneBindings)
   const setEnvelopeAdsr = useProjectStore((s) => s.setEnvelopeAdsr)
@@ -747,7 +746,6 @@ export function TrackEditor() {
                   // Object track → its registered settings UI, then its common track controls.
                   const def = getInstrument(track.instrumentId)
                   const projectTags = [...new Set(Object.values(tracks).flatMap((t) => t.tags ?? []))].sort()
-                  const onTop = track.onTop ?? def?.defaultOnTop ?? false
                   const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
                   // Params gated behind a toggle (showIf) only appear while
                   // that toggle is on - a flight-speed slider means nothing
@@ -780,20 +778,10 @@ export function TrackEditor() {
                   }) ?? []
                   return (
                     <>
-                      {/* Layering: every object gets the switch; Text defaults on. */}
-                      <div className="mb-4 flex items-center justify-between">
-                        <span
-                          className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none"
-                          title="Draw this instrument on top of everything else in the scene"
-                        >
-                          IN FRONT
-                        </span>
-                        <ParamToggle
-                          on={onTop}
-                          onChange={(v) => setTrackOnTop(track.id, v)}
-                          label="Draw in front of everything"
-                        />
-                      </div>
+                      {/* The IN FRONT toggle is deprecated from this panel (design
+                          guide: docs/instrument-panel-design-guide.md). track.onTop
+                          and defaultOnTop still drive the engine; only the switch
+                          is gone until a better layering story exists. */}
                       {!UserInterfaceRenderer ? (
                         <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
                       ) : (

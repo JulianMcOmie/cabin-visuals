@@ -14,6 +14,7 @@ import { StarsUserInterfaceRenderer } from './StarsUserInterface'
 import { FractalTunnelUserInterfaceRenderer } from './FractalTunnelUserInterface'
 import { NeonPolarUserInterfaceRenderer } from './NeonPolarUserInterface'
 import { HopfFibrationUserInterfaceRenderer } from './HopfFibrationUserInterface'
+import { LaserSphereUserInterfaceRenderer } from './LaserSphereUserInterface'
 import { ShapeFlightUserInterfaceRenderer } from './ShapeFlightUserInterface'
 import { MetronomeBallsUserInterfaceRenderer } from './MetronomeBallsUserInterface'
 import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
@@ -41,6 +42,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   fractalTunnel: FractalTunnelUserInterfaceRenderer,
   neonPolar: NeonPolarUserInterfaceRenderer,
   hopfFibration: HopfFibrationUserInterfaceRenderer,
+  laserSphere: LaserSphereUserInterfaceRenderer,
   shapeFlight: ShapeFlightUserInterfaceRenderer,
   metronomeBalls: MetronomeBallsUserInterfaceRenderer,
   emojiDisplay: EmojiDisplayUserInterfaceRenderer,
