@@ -327,6 +327,11 @@ export interface ProjectState {
   renameScene: (sceneId: string, name: string) => void
   setSceneBackgroundColor: (sceneId: string, color: string) => void
   setSceneBackgroundTransparent: (sceneId: string, transparent: boolean) => void
+  addSceneEffect: (sceneId: string, pluginId: string) => void
+  removeSceneEffect: (sceneId: string, instanceId: string) => void
+  setSceneEffectSetting: (sceneId: string, instanceId: string, key: string, value: number) => void
+  toggleSceneEffect: (sceneId: string, instanceId: string) => void
+  reorderSceneEffect: (sceneId: string, instanceId: string, direction: -1 | 1) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
   reorderScenes: (sceneIds: string[]) => void
@@ -579,6 +584,59 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundTransparent: transparent } } }
   }),
 
+  // Scene-level effect chain - same contract as the per-track actions below, but
+  // the chain lives on the scene itself (see Scene.effects in types.ts: document
+  // + inspector only for now, the engine does not yet apply these).
+  addSceneEffect: (sceneId, pluginId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    const plugin = getEffect(pluginId)
+    if (!scene || !plugin) return s
+    const settings: Record<string, number> = {}
+    for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
+    const instance: EffectInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: [...(scene.effects ?? []), instance] } } }
+  }),
+
+  removeSceneEffect: (sceneId, instanceId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: scene.effects.filter((e) => e.id !== instanceId) } } }
+  }),
+
+  setSceneEffectSetting: (sceneId, instanceId, key, value) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
+      },
+    }
+  }),
+
+  toggleSceneEffect: (sceneId, instanceId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
+      },
+    }
+  }),
+
+  reorderSceneEffect: (sceneId, instanceId, direction) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    const from = scene.effects.findIndex((e) => e.id === instanceId)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= scene.effects.length) return s
+    const effects = scene.effects.slice()
+    effects[from] = scene.effects[to]
+    effects[to] = scene.effects[from]
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects } } }
+  }),
+
   duplicateScene: (sceneId) => {
     let nextId: string | null = null
     rawSet((s) => {
@@ -600,6 +658,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         isMain: false,
         backgroundColor: source.backgroundColor,
         backgroundTransparent: source.backgroundTransparent,
+        // Fresh instance ids, per the clone convention - duplicated chains must
+        // never share ids with the source.
+        effects: source.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),
         tracks,
         rootTrackIds,
       }

@@ -307,14 +307,19 @@ export function TrackEditor() {
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
   const reorderEffect = useProjectStore((s) => s.reorderEffect)
   const addEffect = useProjectStore((s) => s.addEffect)
+  const setSceneEffectSetting = useProjectStore((s) => s.setSceneEffectSetting)
+  const removeSceneEffect = useProjectStore((s) => s.removeSceneEffect)
+  const toggleSceneEffect = useProjectStore((s) => s.toggleSceneEffect)
+  const reorderSceneEffect = useProjectStore((s) => s.reorderSceneEffect)
+  const addSceneEffect = useProjectStore((s) => s.addSceneEffect)
   const effectDragging = useUIStore((s) => s.effectDragging)
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
   const track = selectedTrackId ? tracks[selectedTrackId] ?? null : null
 
   // Dragging an effect from the library flips this panel to its Effects tab so the
-  // drop zone is visible.
-  useEffect(() => { if (effectDragging && track) setTab('effects') }, [effectDragging, track])
+  // drop zone is visible - the scene's chain when no track is selected.
+  useEffect(() => { if (effectDragging && (track || activeScene)) setTab('effects') }, [effectDragging, track, activeScene])
   useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
 
   // An audio track has no instrument and no effects - the inspector's usual
@@ -334,7 +339,7 @@ export function TrackEditor() {
           (the guide's planned deprecation); the panel starts at its tabs. */}
       {/* Tabs - pill row; the active pill carries the elevated neutral. */}
       <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3 py-1.5">
-        {track ? TABS.map((t) => (
+        {(track || activeScene) ? TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -344,7 +349,8 @@ export function TrackEditor() {
                 : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
-            {t.label}
+            {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
+            {!track && t.id === 'instrument' ? 'Settings' : t.label}
           </button>
         )) : (
           <div className="flex-1 h-6 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
@@ -650,66 +656,85 @@ export function TrackEditor() {
             ) : null}
           </>
         )}
-        {tab === 'effects' && (
-          track ? (() => {
-            const effects = track.effects ?? []
-            // The picker only offers effects where they render: object tracks.
-            const isObject = !!getInstrument(track.instrumentId)
-            return (
-              <div
-                data-effects-drop
-                onContextMenu={isObject ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
-                className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
-              >
-                {effects.length === 0 && effectDragging && (
-                  <p className="text-xs text-[var(--text-muted)] text-center mt-8 mb-4">
-                    Drop to add effect
-                  </p>
-                )}
-                {effects.map((inst, i) => {
-                  const plugin = getEffect(inst.pluginId)
-                  if (!plugin) return null
-                  return (
-                    <EffectItem
-                      key={inst.id}
-                      plugin={plugin}
-                      inst={inst}
-                      index={i}
-                      count={effects.length}
-                      onToggle={() => toggleEffect(track.id, inst.id)}
-                      onRemove={() => removeEffect(track.id, inst.id)}
-                      onMove={(direction) => reorderEffect(track.id, inst.id, direction)}
-                      onSetSetting={(key, value) => setEffectSetting(track.id, inst.id, key, value)}
-                    />
-                  )
-                })}
-                {isObject && (
-                  <button
-                    onClick={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect()
-                      setFxMenu({ x: r.left, y: r.bottom + 4 })
-                    }}
-                    className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
-                  >
-                    <Plus size={11} />
-                    Add effect
-                  </button>
-                )}
-                {fxMenu && (
-                  <NestedMenu
-                    x={fxMenu.x}
-                    y={fxMenu.y}
-                    groups={EFFECT_MENU_GROUPS}
-                    onPick={(_, pluginId) => addEffect(track.id, pluginId)}
-                    onClose={() => setFxMenu(null)}
+        {tab === 'effects' && (() => {
+          // One chain UI, two owners: the selected track's per-object chain, or -
+          // with no track selected - the active scene's chain (document-only for
+          // now, the engine does not yet apply it; see Scene.effects in types.ts).
+          const fx = track
+            ? {
+                effects: track.effects ?? [],
+                // The picker only offers effects where they render: object tracks.
+                canAdd: !!getInstrument(track.instrumentId),
+                add: (pluginId: string) => addEffect(track.id, pluginId),
+                toggle: (instanceId: string) => toggleEffect(track.id, instanceId),
+                remove: (instanceId: string) => removeEffect(track.id, instanceId),
+                move: (instanceId: string, direction: -1 | 1) => reorderEffect(track.id, instanceId, direction),
+                setSetting: (instanceId: string, key: string, value: number) => setEffectSetting(track.id, instanceId, key, value),
+              }
+            : activeScene
+              ? {
+                  effects: activeScene.effects ?? [],
+                  canAdd: true,
+                  add: (pluginId: string) => addSceneEffect(activeScene.id, pluginId),
+                  toggle: (instanceId: string) => toggleSceneEffect(activeScene.id, instanceId),
+                  remove: (instanceId: string) => removeSceneEffect(activeScene.id, instanceId),
+                  move: (instanceId: string, direction: -1 | 1) => reorderSceneEffect(activeScene.id, instanceId, direction),
+                  setSetting: (instanceId: string, key: string, value: number) => setSceneEffectSetting(activeScene.id, instanceId, key, value),
+                }
+              : null
+          if (!fx) return <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
+          return (
+            <div
+              data-effects-drop
+              onContextMenu={fx.canAdd ? (e) => { e.preventDefault(); setFxMenu({ x: e.clientX, y: e.clientY }) } : undefined}
+              className={`min-h-full rounded transition-colors ${effectDragging ? 'ring-2 ring-inset ring-[rgba(53,167,230,0.6)] bg-[rgba(53,167,230,0.05)]' : ''}`}
+            >
+              {fx.effects.length === 0 && effectDragging && (
+                <p className="text-xs text-[var(--text-muted)] text-center mt-8 mb-4">
+                  Drop to add effect
+                </p>
+              )}
+              {fx.effects.map((inst, i) => {
+                const plugin = getEffect(inst.pluginId)
+                if (!plugin) return null
+                return (
+                  <EffectItem
+                    key={inst.id}
+                    plugin={plugin}
+                    inst={inst}
+                    index={i}
+                    count={fx.effects.length}
+                    onToggle={() => fx.toggle(inst.id)}
+                    onRemove={() => fx.remove(inst.id)}
+                    onMove={(direction) => fx.move(inst.id, direction)}
+                    onSetSetting={(key, value) => fx.setSetting(inst.id, key, value)}
                   />
-                )}
-              </div>
-            )
-          })() : (
-            <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
+                )
+              })}
+              {fx.canAdd && (
+                <button
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setFxMenu({ x: r.left, y: r.bottom + 4 })
+                  }}
+                  className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
+                >
+                  <Plus size={11} />
+                  Add effect
+                </button>
+              )}
+              {fxMenu && (
+                <NestedMenu
+                  x={fxMenu.x}
+                  y={fxMenu.y}
+                  groups={EFFECT_MENU_GROUPS}
+                  onPick={(_, pluginId) => fx.add(pluginId)}
+                  onClose={() => setFxMenu(null)}
+                />
+              )}
+            </div>
           )
-        )}
+        })()}
       </div>
     </div>
   )

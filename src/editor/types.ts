@@ -53,6 +53,9 @@ export interface Scene {
    *  scene). Absent on older documents - readers fall back to the
    *  project-level appliedTemplateId. */
   appliedTemplateId?: string | null
+  /** Scene-level effect chain. Document + inspector UI only for now: the
+   *  visual engine does not yet apply these to the scene's rendered output. */
+  effects?: EffectInstance[]
 }
 
 /**

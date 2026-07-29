@@ -71,6 +71,37 @@ test('scene background color defaults, edits, duplicates, and persists with the 
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundTransparent, true)
 })
 
+test('scene effect chain edits, reorders, duplicates with fresh ids, and persists with the scene', () => {
+  hydrate(emptyDocument())
+  const sceneId = useProjectStore.getState().activeSceneId
+
+  useProjectStore.getState().addSceneEffect(sceneId, 'pixelate')
+  useProjectStore.getState().addSceneEffect(sceneId, 'boil')
+  let effects = useProjectStore.getState().scenes[sceneId].effects!
+  assert.deepEqual(effects.map((e) => e.pluginId), ['pixelate', 'boil'])
+  assert.ok(effects.every((e) => e.enabled))
+
+  const [pixelate, boil] = effects
+  useProjectStore.getState().reorderSceneEffect(sceneId, boil.id, -1)
+  useProjectStore.getState().toggleSceneEffect(sceneId, pixelate.id)
+  useProjectStore.getState().setSceneEffectSetting(sceneId, boil.id, 'amount', 0.5)
+  effects = useProjectStore.getState().scenes[sceneId].effects!
+  assert.deepEqual(effects.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.equal(effects.find((e) => e.id === pixelate.id)!.enabled, false)
+  assert.equal(effects.find((e) => e.id === boil.id)!.settings.amount, 0.5)
+
+  const copyId = useProjectStore.getState().duplicateScene(sceneId)!
+  const copied = useProjectStore.getState().scenes[copyId].effects!
+  assert.deepEqual(copied.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.ok(copied.every((e) => !effects.some((source) => source.id === e.id)))
+
+  hydrate(serialize())
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil', 'pixelate'])
+
+  useProjectStore.getState().removeSceneEffect(sceneId, pixelate.id)
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil'])
+})
+
 test('adding a scene extends every director binding and keeps the active Main view in sync', () => {
   hydrate(emptyDocument())
   const state = useProjectStore.getState()
