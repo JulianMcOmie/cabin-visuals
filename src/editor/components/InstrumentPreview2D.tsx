@@ -66,50 +66,6 @@ function drawLandscape(
   ctx.fill()
 }
 
-// Abstract mini-scenes for the Directors - deliberately graphic (a ball, bars,
-// orbiting dots) rather than footage, so "several scenes" reads at a glance.
-function drawAbstractScene(
-  ctx: CanvasRenderingContext2D,
-  w: number, h: number,
-  variant: number, t: number,
-) {
-  const beat = t * BEATS_PER_SEC
-  const m = Math.min(w, h)
-  if (variant % 3 === 0) {
-    // Bouncing ball on indigo.
-    ctx.fillStyle = '#27255f'
-    ctx.fillRect(0, 0, w, h)
-    const cy = h * (0.78 - 0.5 * Math.abs(Math.sin((beat * Math.PI) / 2)))
-    ctx.fillStyle = '#22d3ee'
-    ctx.beginPath()
-    ctx.arc(w / 2, cy, m * 0.1, 0, Math.PI * 2)
-    ctx.fill()
-  } else if (variant % 3 === 1) {
-    // EQ bars on deep teal.
-    ctx.fillStyle = '#0f3d3a'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#facc15'
-    const n = 5
-    for (let i = 0; i < n; i++) {
-      const bh = h * (0.2 + 0.5 * Math.abs(Math.sin(t * 3 + i * 1.1)))
-      const bw = w * 0.1
-      const bx = w * 0.14 + i * ((w * 0.72) / (n - 1)) - bw / 2
-      ctx.fillRect(bx, h - bh, bw, bh)
-    }
-  } else {
-    // Orbiting dots on plum.
-    ctx.fillStyle = '#4a1d4e'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#f472b6'
-    for (let i = 0; i < 6; i++) {
-      const a = t * 1.5 + (i * Math.PI) / 3
-      ctx.beginPath()
-      ctx.arc(w / 2 + Math.cos(a) * m * 0.3, h / 2 + Math.sin(a) * m * 0.3, m * 0.05, 0, Math.PI * 2)
-      ctx.fill()
-    }
-  }
-}
-
 // ── The vignettes ────────────────────────────────────────────────────────────
 
 /** Camera: the scene punches in and shakes on each note, viewed through
@@ -254,11 +210,12 @@ const drawColorFilters: Draw2D = (ctx, w, h, t) => {
   }
 }
 
-/** Scene Switcher: the whole frame jumps to a different scene per held note. */
+/** Scene Switcher: the whole frame jumps to a different scene per held note -
+ *  here three differently-colored fields of "switch". */
 const drawSceneSwitcher: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
   const active = Math.floor(beat / 2) % 3
-  drawAbstractScene(ctx, w, h, active, t)
+  drawWordField(ctx, w, h, t, 'switch', active)
   // Scene dots (same affordance as the slideshow card's pager).
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = i === active ? '#ffffff' : 'rgba(255,255,255,0.3)'
@@ -280,14 +237,14 @@ const drawCut: Draw2D = (ctx, w, h, t) => {
     { a: [[0, 0], [w * 0.38, 0], [w * 0.62, h], [0, h]], line: [w * 0.38, 0, w * 0.62, h] },
   ]
   const { a, line } = polys[cfg]
-  drawAbstractScene(ctx, w, h, cfg + 1, t)
+  drawWordField(ctx, w, h, t, 'cut', cfg + 1)
   ctx.save()
   ctx.beginPath()
   ctx.moveTo(a[0][0], a[0][1])
   for (let i = 1; i < a.length; i++) ctx.lineTo(a[i][0], a[i][1])
   ctx.closePath()
   ctx.clip()
-  drawAbstractScene(ctx, w, h, cfg, t)
+  drawWordField(ctx, w, h, t, 'cut', cfg)
   ctx.restore()
   ctx.strokeStyle = 'rgba(255,255,255,0.9)'
   ctx.lineWidth = 1.5
@@ -303,7 +260,7 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
   const p = pulseAt(beat, 2, 3)
   const m = Math.min(w, h)
-  drawAbstractScene(ctx, w, h, 0, t)
+  drawWordField(ctx, w, h, t, 'radial', 0)
   const rings = [
     { r: m * 0.42 * (1 + 0.05 * p), variant: 1 },
     { r: m * 0.22 * (1 + 0.1 * p), variant: 2 },
@@ -313,7 +270,7 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
     ctx.beginPath()
     ctx.arc(w / 2, h / 2, ring.r, 0, Math.PI * 2)
     ctx.clip()
-    drawAbstractScene(ctx, w, h, ring.variant, t)
+    drawWordField(ctx, w, h, t, 'radial', ring.variant)
     ctx.restore()
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'
     ctx.lineWidth = 1.2
@@ -332,25 +289,40 @@ const drawRadialCut: Draw2D = (ctx, w, h, t) => {
 const CROP_PREVIEW_ANGLE = -Math.PI / 6
 const CROP_PREVIEW_SLICES = 6
 
-/** The scene being masked: rows of drifting "crop" text on deep indigo. */
-function drawCropField(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+// Word-field scenery for the director vignettes: rows of a drifting bold word
+// on a deep gradient, one accent row - each palette stands in for one scene, so
+// a director composing scenes reads as compositing differently-colored fields.
+const WORD_FIELDS: Array<{ bg: [string, string]; base: string; accent: string }> = [
+  { bg: ['#101426', '#1a1033'], base: 'rgba(148,163,184,0.42)', accent: 'rgba(167,139,250,0.75)' },
+  { bg: ['#07191c', '#0c2b22'], base: 'rgba(134,197,181,0.40)', accent: 'rgba(52,211,153,0.75)' },
+  { bg: ['#1f0d1c', '#2b1030'], base: 'rgba(196,149,187,0.40)', accent: 'rgba(244,114,182,0.75)' },
+  { bg: ['#1c1206', '#2b1a08'], base: 'rgba(214,188,140,0.40)', accent: 'rgba(251,191,36,0.75)' },
+]
+
+function drawWordField(
+  ctx: CanvasRenderingContext2D,
+  w: number, h: number, t: number,
+  word: string,
+  variant: number,
+) {
+  const palette = WORD_FIELDS[((variant % WORD_FIELDS.length) + WORD_FIELDS.length) % WORD_FIELDS.length]
   const bg = ctx.createLinearGradient(0, 0, 0, h)
-  bg.addColorStop(0, '#101426')
-  bg.addColorStop(1, '#1a1033')
+  bg.addColorStop(0, palette.bg[0])
+  bg.addColorStop(1, palette.bg[1])
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, w, h)
   const size = h / 4.2
   ctx.font = `900 ${size}px ui-sans-serif, system-ui, sans-serif`
   ctx.textBaseline = 'middle'
-  const step = ctx.measureText('crop').width + size * 0.45
+  const step = ctx.measureText(word).width + size * 0.45
   const rows = Math.ceil(h / size) + 1
   for (let row = 0; row < rows; row++) {
     const y = (row + 0.5) * size * 0.92
     const direction = row % 2 === 0 ? 1 : -1
     const drift = ((t * 9 * direction) % step + step) % step
-    ctx.fillStyle = row % 3 === 1 ? 'rgba(167,139,250,0.75)' : 'rgba(148,163,184,0.42)'
+    ctx.fillStyle = row % 3 === 1 ? palette.accent : palette.base
     for (let x = -step * 1.5 + drift + (row % 2) * step * 0.5; x < w + step; x += step) {
-      ctx.fillText('crop', x, y)
+      ctx.fillText(word, x, y)
     }
   }
 }
@@ -389,7 +361,7 @@ const drawCrop: Draw2D = (ctx, w, h, t) => {
     ctx.clip()
     ctx.rotate(-CROP_PREVIEW_ANGLE)
     ctx.translate(-w / 2, -h / 2)
-    drawCropField(ctx, w, h, t)
+    drawWordField(ctx, w, h, t, 'crop', 0)
     const flash = cropPreviewFlash(beat - active[0])
     if (flash > 0.003) {
       ctx.globalAlpha = flash * 0.9
