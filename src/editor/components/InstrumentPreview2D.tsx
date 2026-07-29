@@ -68,6 +68,59 @@ function drawLandscape(
 
 // ── The vignettes ────────────────────────────────────────────────────────────
 
+/** The Camera vignette's scene: a perspective field of movie-camera emojis
+ *  the viewpoint glides through, with "Camera" standing mid-scene as a tilted
+ *  3D billboard that pulses on the beat. The glide plus the punch-in above
+ *  make the MOVE the subject - this instrument drives the camera, it isn't
+ *  a picture. */
+function drawCameraScene(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  const beat = t * BEATS_PER_SEC
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#151c40')
+  bg.addColorStop(1, '#2a164f')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  const horizon = h * 0.36
+  const focal = h * 0.85
+  const rowDepth = 1 // world units between emoji rows
+  // Constant forward glide: rows recycle every rowDepth, with a gentle sway.
+  const zOffset = (t * 0.55) % rowDepth
+  const sway = Math.sin(t * 0.6) * 0.5
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  // Far to near, so close cameras draw over distant ones. Rows dissolve as
+  // they near the lens instead of swallowing the frame.
+  for (let zi = 7; zi >= 1; zi--) {
+    const z = zi * rowDepth - zOffset + 0.55
+    const size = (h * 0.3) / z
+    const y = horizon + (focal * 0.32) / z
+    ctx.font = `${size}px sans-serif`
+    ctx.globalAlpha = Math.min(1, 2.2 / z) * Math.min(1, Math.max(0, (z - 0.55) / 0.45))
+    for (let xi = -3; xi <= 3; xi++) {
+      const x = w / 2 + ((xi * 1.5 + sway) * focal * 0.35) / z
+      if (x > -size && x < w + size) ctx.fillText('🎥', x, y)
+    }
+  }
+  ctx.globalAlpha = 1
+
+  // "Camera" IN the scene: sheared like a billboard standing on the plane,
+  // pulsing with each note.
+  const titleSize = h * 0.24 * (1 + 0.1 * pulseAt(beat, 1, 3))
+  ctx.save()
+  ctx.translate(w / 2, horizon - h * 0.05)
+  ctx.transform(1, -0.05, 0, 1, 0, 0)
+  ctx.font = `900 ${titleSize}px "Arial Black", Impact, sans-serif`
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = titleSize * 0.16
+  ctx.shadowOffsetY = titleSize * 0.07
+  ctx.fillText('Camera', 0, 0)
+  ctx.restore()
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
 /** Camera: the scene punches in and shakes on each note, viewed through
  *  viewfinder chrome (corner brackets + REC). */
 const drawCamera: Draw2D = (ctx, w, h, t) => {
@@ -78,10 +131,10 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
   const dy = Math.cos(t * 57) * 2.5 * p
   ctx.save()
   ctx.translate(w / 2 + dx, h / 2 + dy)
-  ctx.scale(scale, scale)
+  // Slight overscan under the punch/shake so an edge never shows.
+  ctx.scale(scale * 1.06, scale * 1.06)
   ctx.translate(-w / 2, -h / 2)
-  // Oversized so the dolly-in never reveals an edge.
-  drawLandscape(ctx, -w * 0.15, -h * 0.15, w * 1.3, h * 1.3, 1)
+  drawCameraScene(ctx, w, h, t)
   ctx.restore()
 
   ctx.strokeStyle = 'rgba(255,255,255,0.85)'
