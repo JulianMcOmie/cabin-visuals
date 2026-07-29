@@ -360,14 +360,14 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
       {/* Sticky: the header stays pinned while its section scrolls, then hands
           off to the next section's header. Opaque bg so cards (and the shared
           3D preview canvas behind the scroll container) can't show through. */}
-      <div className="group/header sticky top-0 z-20 flex items-center gap-1.5 bg-[var(--bg-shell)] px-3 pt-3 pb-1.5 select-none">
+      <div className="group/header sticky top-0 z-20 flex items-center gap-2 bg-[var(--bg-shell)] px-3 pt-4 pb-2 select-none">
         <button
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          className="flex items-baseline gap-1.5 text-[13px] font-medium text-[var(--text)] cursor-pointer"
+          className="flex items-baseline gap-2 text-[18px] font-semibold tracking-[-0.01em] text-[var(--text)] cursor-pointer"
         >
           {title}
-          <span className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{items.length}</span>
+          <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{items.length}</span>
         </button>
         <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
           <TooltipPrimitive.Root>
@@ -403,7 +403,7 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
           className="ml-auto flex size-4 flex-shrink-0 cursor-pointer items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--text-2)]"
         >
           <ChevronRight
-            size={10}
+            size={14}
             className={`transition-transform ${open ? 'rotate-90' : ''}`}
           />
         </button>
