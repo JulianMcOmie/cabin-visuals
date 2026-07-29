@@ -271,14 +271,19 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
-  burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
 }
 
+// Left the library outright - Motion's Step/Snap/Spin blocks are these exact
+// movers (same pitches, same evaluators), so listing them is pure duplication.
+// Same move as Circle/Triangle above: the definitions stay registered so old
+// projects keep working.
+const MOVER_REMOVED_IDS = new Set(['burst', 'rotateBurst', 'constantRotate'])
+
 const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
-  .filter((d) => d.kind === 'mover')
+  .filter((d) => d.kind === 'mover' && !MOVER_REMOVED_IDS.has(d.id))
   .map((d) => ({
   id: d.id,
   name: d.label,
@@ -292,12 +297,11 @@ const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
   ),
 })))
 
-// Single-behavior movers, soft-deprecated: each is one block of the compound
-// movers (Motion's Step/Snap/Spin, the consolidated rack's banks), so they park
-// in a collapsed Mover Extras folder - demoted, not deleted, like the object
-// and director Extras.
+// Single-behavior movers, soft-deprecated: each is one bank of the compound
+// movers, so they park in a collapsed Mover Extras folder - demoted, not
+// deleted, like the object and director Extras.
 const MOVER_EXTRA_IDS = new Set([
-  'burst', 'rotateBurst', 'orbitBurst', 'constantRotate', 'constantOrbit', 'translationOscillator',
+  'orbitBurst', 'constantOrbit', 'translationOscillator',
 ])
 const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => !MOVER_EXTRA_IDS.has(d.id))
 const MOVER_EXTRA_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => MOVER_EXTRA_IDS.has(d.id))
@@ -352,22 +356,25 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="@container">
-      <div className="flex items-center gap-1 px-3 pt-3 pb-1 select-none">
-        {/* Caps section row - clicking the label still collapses/expands the list. */}
+    <div className="@container border-t border-[var(--border)] first:border-t-0">
+      {/* Sticky: the header stays pinned while its section scrolls, then hands
+          off to the next section's header. Opaque bg so cards (and the shared
+          3D preview canvas behind the scroll container) can't show through. */}
+      <div className="group/header sticky top-0 z-20 flex items-center gap-1.5 bg-[var(--bg-shell)] px-3 pt-3 pb-1.5 select-none">
         <button
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          className="flex items-center text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors cursor-pointer hover:text-[var(--text-2)]"
+          className="flex items-baseline gap-1.5 text-[13px] font-medium text-[var(--text)] cursor-pointer"
         >
           {title}
+          <span className="font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{items.length}</span>
         </button>
         <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
           <TooltipPrimitive.Root>
             <TooltipPrimitive.Trigger asChild>
               <button
                 type="button"
-                className="flex size-3.5 flex-shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--border-strong)] transition-colors hover:text-[var(--text-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] data-[state=delayed-open]:text-[var(--text-2)] data-[state=instant-open]:text-[var(--text-2)]"
+                className="flex size-3.5 flex-shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--border-strong)] opacity-0 transition-[color,opacity] group-hover/header:opacity-100 focus-visible:opacity-100 hover:text-[var(--text-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] data-[state=delayed-open]:opacity-100 data-[state=delayed-open]:text-[var(--text-2)] data-[state=instant-open]:opacity-100 data-[state=instant-open]:text-[var(--text-2)]"
                 aria-label={`About ${title}`}
               >
                 <CircleHelp size={11} aria-hidden="true" />
