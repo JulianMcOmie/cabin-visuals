@@ -215,12 +215,12 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
   const [sx, sy] = proj(x, 0, z)
   const [dx, dy] = proj(x, y, z)
 
-  // One drag surface, two modes: a plain drag moves in the camera plane
-  // (horizontal = x, vertical = y - the dot follows the cursor), and holding
-  // SHIFT moves along the z axis instead (pointer motion projected onto the
-  // drawn z axis, so dragging toward the lower-left pushes closer). The mode
-  // re-reads every move, so shift can be pressed/released mid-drag; raw
-  // accumulators per axis keep snapping magnetic without losing the remainder.
+  // One drag surface, two modes: a plain drag moves on the FLOOR (the pointer
+  // delta inverted through the iso projection, so the shadow chases the cursor
+  // across the x·z grid), and holding SHIFT changes the height instead (drag
+  // up = higher y). The mode re-reads every move, so shift can be
+  // pressed/released mid-drag; raw accumulators per axis keep snapping
+  // magnetic without losing the remainder.
   const dragPosition = (e: ReactPointerEvent<Element>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -244,11 +244,12 @@ function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
       const dPy = (ev.clientY - last.y) / pxPerUnit
       last = { x: ev.clientX, y: ev.clientY }
       if (ev.shiftKey) {
-        raw.z += (dPy * ISO_B - dPx * ISO_A) / (ISO_A * ISO_A + ISO_B * ISO_B)
-        raw.z = clamp(raw.z, -10, 10)
-      } else {
-        raw.x = clamp(raw.x + dPx / ISO_A, -10, 10)
         raw.y = clamp(raw.y - dPy / ISO_Y, -10, 10)
+      } else {
+        const u = dPx / ISO_A
+        const v = dPy / ISO_B
+        raw.x = clamp(raw.x + (u + v) / 2, -10, 10)
+        raw.z = clamp(raw.z + (v - u) / 2, -10, 10)
       }
       const { setTrackParam } = useProjectStore.getState()
       const applyAxis = (key: string, rawValue: number, primaryStart: number, pick: (v: { x: number; y: number; z: number }) => number) => {
@@ -446,7 +447,7 @@ export function TrackTransformPanel({
       <div className="flex gap-3">
         <div className="flex-shrink-0">
           <IsoViewport trackId={trackId} scale={scale} />
-          <div className="mt-1 text-center text-[10px] text-[var(--text-muted)]">drag = x·y · hold shift = z depth</div>
+          <div className="mt-1 text-center text-[10px] text-[var(--text-muted)]">drag = x·z floor · hold shift = y height</div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {FIELDS.map((spec) => (
