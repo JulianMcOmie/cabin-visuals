@@ -35,9 +35,13 @@ export function usePlayback() {
 
     // Seed the audio engine, then keep it fed: block/track edits reconcile the
     // player pool (and pre-decode on insert); while playing they also re-arm,
-    // so dragging a block or toggling mute reschedules the audio live. The
-    // subscription lives HERE (not in the audio engine) so the engine stays
-    // store-free.
+    // so toggling mute reschedules the audio live. The subscription lives HERE
+    // (not in the audio engine) so the engine stays store-free.
+    //
+    // The re-arm is SUPPRESSED for the length of an audio-block drag: at
+    // pointermove rates it stacks clip starts inside the lookahead window into a
+    // runaway gain sum, so the gesture mutes playback and re-arms once on
+    // release instead (see beginBlockDrag).
     const audio = getAudioEngine()
     let prev = gatherAudioTracks(useProjectStore.getState().tracks)
     audio.setBlocks(prev)

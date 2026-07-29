@@ -93,15 +93,15 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     mode: DragMode
     startX: number
     orig: { startBar: number; trimStart: number; trimEnd: number }
-    /** Whether this gesture has already silenced playback (trim drags only). */
+    /** Whether this gesture has already silenced playback. */
     silenced: boolean
   } | null>(null)
 
-  // A block unmounted mid-trim (deleted, track removed) never sees pointerup, so
+  // A block unmounted mid-drag (deleted, track removed) never sees pointerup, so
   // the silence would never be lifted - audio would stop tracking edits until the
   // next play. Release it here.
   useEffect(() => () => {
-    if (dragRef.current?.silenced) getPlaybackEngine().endBlockTrim()
+    if (dragRef.current?.silenced) getPlaybackEngine().endBlockDrag()
   }, [])
 
   const MIN_CLIP_SEC = 0.05
@@ -161,22 +161,22 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     const { mode, startX, orig } = drag
     const deltaBars = (e.clientX - startX) / barWidthPx
 
+    // Every mode here rewrites the block on each move, and the store
+    // subscription answers each write with a full re-arm: mute playback for the
+    // gesture so those clip starts can't stack into a runaway gain sum (see
+    // beginBlockDrag). Done on the first MOVE, not on pointerdown, so a plain
+    // click on a block doesn't punch a hole in the audio.
+    if (!drag.silenced) {
+      drag.silenced = true
+      getPlaybackEngine().beginBlockDrag()
+    }
+
     if (mode === 'move') {
       const startBar = Math.max(0, orig.startBar + deltaBars)
       if (startBar !== block.startBar) {
         useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar })
       }
       return
-    }
-
-    // From here on this gesture is a trim, which rewrites the block under the
-    // playhead on every move: mute playback for its duration so the re-arms
-    // can't stack into a runaway gain sum (see beginBlockTrim). Done on the
-    // first MOVE, not on pointerdown, so a plain click on an edge doesn't
-    // punch a hole in the audio.
-    if (!drag.silenced) {
-      drag.silenced = true
-      getPlaybackEngine().beginBlockTrim()
     }
 
     if (mode === 'trim-r') {
@@ -208,8 +208,8 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current) {
       try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
-      // Resume: one re-arm at the final trim, the same one-shot seek() performs.
-      if (dragRef.current.silenced) getPlaybackEngine().endBlockTrim()
+      // Resume: one re-arm at the final position, as the one-shot seek() performs.
+      if (dragRef.current.silenced) getPlaybackEngine().endBlockDrag()
     }
     dragRef.current = null
   }

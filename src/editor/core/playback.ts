@@ -31,7 +31,7 @@ class PlaybackEngine {
   private playing = false
   private lastTrackedBeat: number | null = null
   private bpmDragging = false
-  private blockTrimming = false
+  private blockDragging = false
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
@@ -122,21 +122,20 @@ class PlaybackEngine {
     }
   }
 
-  /** Silence audio for the length of an audio-block TRIM drag, the same trade the
-   *  scrub makes. Every pointermove writes trimStart/trimEnd, and the store
-   *  subscription re-arms every block on each write. A trim keeps the block
-   *  sitting under the playhead, so those re-arms restart the SAME audio at
-   *  nearly the same offset and stack inside the lookahead window into a runaway
-   *  gain sum - the trim "earrape". The release re-arms once, exactly as
-   *  endBpmDrag does. */
-  beginBlockTrim() {
-    this.blockTrimming = true
+  /** Silence audio for the length of an audio-block drag - move or trim alike -
+   *  the same trade the scrub makes. Every pointermove writes the block, and the
+   *  store subscription re-arms every block on each write; those re-arms restart
+   *  the same audio at nearly the same offset and stack inside the lookahead
+   *  window into a runaway gain sum - the drag "earrape". The release re-arms
+   *  once, exactly as endBpmDrag does. */
+  beginBlockDrag() {
+    this.blockDragging = true
     if (this.playing) getAudioEngine().stopAll()
   }
 
-  /** End a trim drag: re-arm once at the final trim (no-op if not playing). */
-  endBlockTrim() {
-    this.blockTrimming = false
+  /** End a block drag: re-arm once at the final position (no-op if not playing). */
+  endBlockDrag() {
+    this.blockDragging = false
     this.rearmAudio()
   }
 
@@ -157,9 +156,9 @@ class PlaybackEngine {
   }
 
   /** Re-arm audio at the current position (block edits / mute toggles while playing).
-   *  Suppressed mid-trim - that gesture's own release re-arms (see beginBlockTrim). */
+   *  Suppressed mid-drag - that gesture's own release re-arms (see beginBlockDrag). */
   rearmAudio() {
-    if (!this.playing || !this.callbacks || this.blockTrimming) return
+    if (!this.playing || !this.callbacks || this.blockDragging) return
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
