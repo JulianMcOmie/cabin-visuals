@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
+import { Play, Pause, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -23,6 +23,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { TransportDisplay } from './components/TransportDisplay'
 import { PlayIcon, StopIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
+import { BooksIcon, SlidersIcon } from './components/PanelToggleIcons'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -553,17 +554,22 @@ function SaveStatusChip() {
   )
 }
 
+// Styled as a transport-band segment (transportBtn): same elevated strip,
+// flush segments, press contraction, and a lit accent fill while the panel
+// is open - the header's two bands read as one family.
 function EditorPanelToggle({
   label,
   open,
   onToggle,
   controls,
+  position,
   children,
 }: {
   label: string
   open: boolean
   onToggle: () => void
   controls: string
+  position: 'first' | 'last'
   children: ReactNode
 }) {
   return (
@@ -573,10 +579,10 @@ function EditorPanelToggle({
       aria-controls={controls}
       aria-pressed={open}
       title={`${open ? 'Hide' : 'Show'} ${label}`}
-      className={`flex h-7 w-7 items-center justify-center rounded transition-colors cursor-pointer ${
+      className={`${transportBtn} ${position === 'first' ? 'rounded-l-md' : 'rounded-r-md'} ${
         open
-          ? 'bg-white/10 text-[var(--text)] hover:bg-white/15'
-          : 'text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]'
+          ? 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
+          : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
       }`}
     >
       {children}
@@ -657,7 +663,7 @@ function Header({
       <EditableProjectName />
 
       <div
-        className="flex flex-shrink-0 items-center gap-0.5 rounded-lg bg-[var(--bg-elevated)] p-0.5"
+        className="flex h-9 flex-shrink-0 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]"
         role="group"
         aria-label="Editor panels"
       >
@@ -666,16 +672,18 @@ function Header({
           open={libraryOpen}
           onToggle={onToggleLibrary}
           controls="library-panel"
+          position="first"
         >
-          <Library size={13} />
+          <BooksIcon />
         </EditorPanelToggle>
         <EditorPanelToggle
           label="scene editor"
           open={sceneEditorOpen}
           onToggle={onToggleSceneEditor}
           controls="scene-editor-panel"
+          position="last"
         >
-          <SlidersHorizontal size={13} />
+          <SlidersIcon />
         </EditorPanelToggle>
       </div>
 
@@ -960,7 +968,7 @@ export default function EditorApp() {
             {/* relative: the header band is positioned, so the card must be
                 positioned too (and later in the DOM) for its glow to paint
                 over the header and the library rather than under them. */}
-            <div className="relative flex h-full flex-col overflow-hidden rounded-tl-[10px] border border-[var(--border)] bg-[var(--bg-app)] shadow-[0_0_28px_rgba(53,167,230,0.038),0_0_80px_12px_rgba(53,167,230,0.026),0_0_190px_45px_rgba(53,167,230,0.016)]">
+            <div className="relative flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}

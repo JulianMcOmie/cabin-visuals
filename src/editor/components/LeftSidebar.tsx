@@ -655,7 +655,7 @@ export function LeftSidebar() {
           narrow, and icon + label once there's room for the text. The 320px
           threshold is the width where all three labels fit inside the pills'
           px-2 padding without truncating - below it, labels would ellipsize. */}
-      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1.5">
+      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
           { id: 'loops', label: 'Loops', Icon: Repeat },
