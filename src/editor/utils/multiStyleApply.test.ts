@@ -5,10 +5,11 @@ import { hydrate } from '../../persistence/serialize'
 import type { Track } from '../types'
 import { useProjectStore } from '../store/ProjectStore'
 import { getTemplate } from '../../templates'
-import { applyMultiStyle } from './multiStyleApply'
+import { applyLyricStyles } from './multiStyleApply'
 
-// The Multi-Style Lyric apply: two styled scenes over the same words plus a
-// Scene Switcher alternating between them for the length of the song.
+// The lyric flow's N-style apply: one scene per picked look over the same
+// words, plus a Scene Switcher cycling between them for the length of the
+// song. One pick stays the classic single-scene restyle.
 
 const audio = (): Track => ({
   id: 'aud',
@@ -33,72 +34,73 @@ const TIMING = [
   { word: 'words', start: 1, end: 1.5 },
 ]
 
-test('multi-style apply builds two styled scenes and an alternating switcher', () => {
+function freshProjectWithWords() {
   hydrate(emptyDocument())
-  const store = useProjectStore.getState()
-  store.addTrack(audio())
+  useProjectStore.getState().addTrack(audio())
   // The setup pipeline lands the words in the active (first visual) scene.
   useProjectStore.getState().addLyricTrack(WORDS, TIMING)
+}
 
-  const wormhole = getTemplate('wormhole')
-  const neon = getTemplate('neonPsychedelic')
-  assert.ok(wormhole && neon)
-  applyMultiStyle(wormhole, neon, WORDS, TIMING)
+test('three picked looks become three named scenes and a cycling switcher', () => {
+  freshProjectWithWords()
+  const styles = ['wormhole', 'neonPsychedelic', 'silentFilm'].map((id) => getTemplate(id)!)
+  assert.ok(styles.every(Boolean))
+  applyLyricStyles(styles, WORDS, TIMING)
 
   const s = useProjectStore.getState()
   const visual = s.sceneOrder.filter((id) => !s.scenes[id]?.isMain)
   const mainId = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
-  assert.equal(visual.length, 2, 'two visual scenes')
+  assert.equal(visual.length, 3, 'one scene per look')
   assert.ok(mainId)
 
-  // Both scenes carry the SAME transcribed words on a root Lyrics track.
-  for (const sceneId of visual) {
+  // Every scene: the SAME transcribed words, its own template marker, and the
+  // style's name on the scene itself.
+  visual.forEach((sceneId, i) => {
     const scene = s.scenes[sceneId]
+    assert.equal(scene.appliedTemplateId, styles[i].id, `scene ${i} wears its own style`)
+    assert.equal(scene.name, styles[i].styleName ?? styles[i].name, `scene ${i} named after its look`)
     const lyricsId = scene.rootTrackIds.find((tid) => scene.tracks[tid]?.name === 'Lyrics')
-    assert.ok(lyricsId, `scene ${scene.name} has a Lyrics track`)
+    assert.ok(lyricsId, `scene ${i} has a Lyrics track`)
     const lyrics = scene.tracks[lyricsId]
-    assert.equal(lyrics.instrumentId, 'textDisplay')
     assert.match(lyrics.stringParams?.text ?? '', /real words/)
     assert.equal(lyrics.lyricTiming?.length, TIMING.length)
-  }
+  })
 
-  // The scenes wear DIFFERENT looks. (Track sets overlap - Neon Psychedelic
-  // ships a wormhole-instrument backdrop too - so the discriminator is the
-  // Lyrics styling each template stamps: Wormhole sets font 7, Neon font 8.)
-  const lyricsFont = (sceneId: string) => {
-    const scene = s.scenes[sceneId]
-    const id = scene.rootTrackIds.find((tid) => scene.tracks[tid]?.name === 'Lyrics')!
-    return scene.tracks[id].params?.font
-  }
-  assert.equal(lyricsFont(visual[0]), 7, 'scene 1 wears the Wormhole look')
-  assert.equal(lyricsFont(visual[1]), 8, 'scene 2 wears the Neon look')
-
-  // Main holds a Scene Switcher bound to both scenes, with alternating held
-  // notes covering the whole project.
+  // Main holds a Scene Switcher bound to all three scenes, with back-to-back
+  // held notes cycling through all three rows to the project's end.
   const main = s.scenes[mainId]
   const switcher = Object.values(main.tracks).find((t) => t.directorId === 'sceneSwitcher')
   assert.ok(switcher, 'a Scene Switcher director exists on Main')
   const boundScenes = new Set((switcher.sceneBindings ?? []).map((b) => b.sceneId))
-  assert.ok(visual.every((id) => boundScenes.has(id)), 'both scenes are bound to rows')
-  const notes = switcher.blocks[0]?.notes ?? []
-  assert.ok(notes.length >= 2, 'the switcher holds alternating notes')
-  const pitches = notes.map((n) => n.pitch)
-  assert.ok(pitches.some((p) => p !== pitches[0]), 'the notes alternate between the two rows')
-  // Full coverage: back-to-back held notes from bar 0 to the project's end.
-  const sorted = [...notes].sort((a, b) => a.startBeat - b.startBeat)
+  assert.ok(visual.every((id) => boundScenes.has(id)), 'every scene is bound to a row')
+  const notes = [...(switcher.blocks[0]?.notes ?? [])].sort((a, b) => a.startBeat - b.startBeat)
+  assert.equal(new Set(notes.map((n) => n.pitch)).size, 3, 'the notes cycle all three rows')
   let cursor = 0
-  for (const n of sorted) {
+  notes.forEach((n, i) => {
     assert.equal(n.startBeat, cursor, 'notes are back-to-back')
+    assert.equal(n.pitch, 60 + (i % 3), 'rows cycle in order')
     cursor += n.durationBeats
-  }
+  })
   assert.equal(cursor, s.totalBars * s.beatsPerBar, 'coverage runs to the project end')
 
-  // Each scene remembers which style IT wears (the Templates tab highlights
-  // the active scene's marker, not the project-level last-write).
-  assert.equal(s.scenes[visual[0]].appliedTemplateId, 'wormhole')
-  assert.equal(s.scenes[visual[1]].appliedTemplateId, 'neonPsychedelic')
-
-  // The editor lands on Main - the only view where directors composite, so
-  // pressing play shows the cutting instead of a solo scene preview.
+  // The editor lands on Main - the only view where directors composite.
   assert.equal(s.activeSceneId, mainId)
+})
+
+test('one picked look stays a single restyled scene, no switcher', () => {
+  freshProjectWithWords()
+  const wormhole = getTemplate('wormhole')!
+  applyLyricStyles([wormhole], WORDS, TIMING)
+
+  const s = useProjectStore.getState()
+  const visual = s.sceneOrder.filter((id) => !s.scenes[id]?.isMain)
+  const mainId = s.sceneOrder.find((id) => s.scenes[id]?.isMain)!
+  assert.equal(visual.length, 1, 'still one scene')
+  assert.equal(s.scenes[visual[0]].appliedTemplateId, 'wormhole')
+  assert.equal(s.scenes[visual[0]].name, 'Wormhole')
+  const main = s.scenes[mainId]
+  assert.ok(
+    !Object.values(main.tracks).some((t) => t.directorId === 'sceneSwitcher'),
+    'no switcher for a single look',
+  )
 })
