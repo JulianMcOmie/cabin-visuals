@@ -1,83 +1,63 @@
 /**
- * Transport glyphs drawn on a shared 12px grid.
- *
- * Lucide's stroke-first icons turned to mush with `fill` applied (a solid
- * shape wearing a 2px rounded outline) and each button used a different size.
- * These bake the optical corrections in instead: the play triangle sits a
- * shade right of geometric center, the stop square is drawn under-size (a
- * filled square reads larger than a triangle of the same box), and the loop
- * glyph - necessarily a line drawing - carries a heavier stroke than lucide's
- * scaled default so its weight sits with the solids. Solids take a 1px
- * same-color stroke purely for the rounded joins.
+ * Transport glyphs: Tabler's outline player icons (player-play, player-stop,
+ * player-skip-back, repeat), path data inlined verbatim from
+ * @tabler/icons/outline so we don't carry the package for four glyphs.
+ * Tabler's set is drawn as uniform 2px outlines on one 24 grid, so the four
+ * read at the same optical weight without the per-glyph corrections the old
+ * hand-drawn set needed. Default size matches the 15px the band's mockups
+ * were balanced at (band is 36px tall).
  */
 
 type IconProps = { size?: number }
 
-export function PlayIcon({ size = 12 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-      <path
-        d="M4.4 3 L4.4 9 L10 6 Z"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function StopIcon({ size = 12 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-      <rect
-        x="3.85"
-        y="3.85"
-        width="4.3"
-        height="4.3"
-        rx="0.8"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function SkipBackIcon({ size = 12 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-      <rect x="3" y="3.1" width="1.2" height="5.8" rx="0.6" fill="currentColor" />
-      <path
-        d="M9.3 3.4 L9.3 8.6 L5.4 6 Z"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-export function LoopIcon({ size = 12 }: IconProps) {
-  // Lucide Repeat's geometry scaled onto the 12 grid, redrawn at 1.3px stroke.
+function TablerIcon({ size = 15, children }: IconProps & { children: React.ReactNode }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 12 12"
+      viewBox="0 0 24 24"
       aria-hidden="true"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.3"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="m8.5 1 2 2-2 2" />
-      <path d="M1.5 5.5v-.5a2 2 0 0 1 2-2h7" />
-      <path d="m3.5 11-2-2 2-2" />
-      <path d="M10.5 6.5v.5a2 2 0 0 1-2 2h-7" />
+      {children}
     </svg>
+  )
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <TablerIcon {...props}>
+      <path d="M7 4v16l13 -8z" />
+    </TablerIcon>
+  )
+}
+
+export function StopIcon(props: IconProps) {
+  return (
+    <TablerIcon {...props}>
+      <path d="M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" />
+    </TablerIcon>
+  )
+}
+
+export function SkipBackIcon(props: IconProps) {
+  return (
+    <TablerIcon {...props}>
+      <path d="M20 5v14l-12 -7z" />
+      <path d="M4 5l0 14" />
+    </TablerIcon>
+  )
+}
+
+export function LoopIcon(props: IconProps) {
+  return (
+    <TablerIcon {...props}>
+      <path d="M4 12v-3a3 3 0 0 1 3 -3h13m-3 -3l3 3l-3 3" />
+      <path d="M20 12v3a3 3 0 0 1 -3 3h-13m3 3l-3 -3l3 -3" />
+    </TablerIcon>
   )
 }

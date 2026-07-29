@@ -56,9 +56,11 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   }
 }
 
-// Shared segment styling for the header transport band. Segments are square
-// and flush - the band's overflow clipping rounds the two ends - with a press
-// contraction and a visible keyboard focus ring.
+// Shared segment styling for the header transport band. Segments are flush -
+// the band's overflow clipping rounds the two ends at rest, but the END
+// segments also carry their own matching outer radius so the press
+// contraction (scale) keeps the rounded shape instead of revealing square
+// corners as they shrink away from the clip edge.
 const transportBtn =
   'flex w-8 cursor-pointer items-center justify-center transition-[color,background-color,transform] duration-100 active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
 
@@ -708,14 +710,14 @@ function Header({
               band's edges (overflow clipping rounds the two ends); the 1px gap
               is invisible at rest and becomes a hairline seam only between two
               lit/hovered segments. Each active control has its own hue: play
-              goes green while playing; loop goes the looped-region blue
+              goes green while playing; loop goes the looped-region gold
               (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
               TransportIcons. */}
           <div className="flex h-9 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]">
             <button
               onClick={isPlaying ? pause : reset}
               title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
-              className={`${transportBtn} text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]`}
+              className={`${transportBtn} rounded-l-md text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]`}
             >
               {isPlaying ? <StopIcon /> : <SkipBackIcon />}
             </button>
@@ -734,9 +736,9 @@ function Header({
             <button
               onClick={toggleLoop}
               title={loopEnabled ? 'Loop on' : 'Loop off'}
-              className={`${transportBtn} ${
+              className={`${transportBtn} rounded-r-md ${
                 loopEnabled
-                  ? 'bg-[#4da3d9] text-[var(--on-accent)] hover:bg-[#6fb8e2]'
+                  ? 'bg-[#f2c14e] text-[var(--on-accent)] hover:bg-[#f6d072]'
                   : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
               }`}
             >
@@ -789,7 +791,7 @@ function Header({
             className={`flex items-center gap-1.5 h-7 px-3 rounded text-[11px] font-bold transition-colors cursor-pointer ${
               exportGate?.ok === false || !permanent
                 ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
-                : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
+                : 'bg-white hover:bg-white/85 text-[var(--on-accent)]'
             }`}
           >
             <Upload size={11} strokeWidth={2.5} />

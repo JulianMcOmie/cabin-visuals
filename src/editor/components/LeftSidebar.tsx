@@ -367,7 +367,6 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
           className="flex items-baseline gap-2 text-[18px] font-semibold tracking-[-0.01em] text-[var(--text)] cursor-pointer"
         >
           {title}
-          <span className="font-mono text-[11px] tabular-nums text-[var(--text-muted)]">{items.length}</span>
         </button>
         <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
           <TooltipPrimitive.Root>

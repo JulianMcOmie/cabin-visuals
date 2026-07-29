@@ -10,8 +10,9 @@ export const PLAYHEAD_TRIANGLE_HALF = 6
 /** Inset from each loop-band edge that remains outside the draggable middle. */
 export const LOOP_MOVE_EDGE_INSET = 10
 /** Shared loop-band fills, also used by its drag-alignment guides. Enabled is
- *  the accent blue; disabled is a plain grey - off reads as off. */
-export const LOOP_REGION_ENABLED_COLOR = '#4da3d9'
+ *  the loop gold (matches the transport loop button); disabled is a plain
+ *  grey - off reads as off. */
+export const LOOP_REGION_ENABLED_COLOR = '#f2c14e'
 export const LOOP_REGION_DISABLED_COLOR = 'rgba(155, 155, 155, 0.3)'
 
 /**

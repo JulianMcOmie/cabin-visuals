@@ -394,7 +394,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.muted
-                ? 'bg-[var(--warn)] text-[var(--on-accent)]'
+                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
@@ -411,7 +411,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.solo
-                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                ? 'bg-[var(--warn)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >

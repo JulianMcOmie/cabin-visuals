@@ -137,6 +137,9 @@ const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
   // Stack layout, 2 words per card, held until replaced (no fade dips between
   // the tightly-spaced preview notes).
   textDisplay: { layoutMode: 2, stackMaxWords: 2, sustain: 1 },
+  // Spin defaults to 0 (still) in real tracks; a static solid makes a dead
+  // preview, so the popup shows the classic steady tumble.
+  cube: { spinSpeed: 1 },
 }
 
 // Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
@@ -154,6 +157,12 @@ const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, b
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
 // black. Both word notes land at beat 0, so the full phrase is up from the
 // first frame and never rebuilds - the font flicker alone is the animation.
+// Object cards with a stylized in-canvas caption, same treatment as the
+// compound movers' field labels (baked into captured clips).
+const OBJECT_PREVIEW_LABELS: Record<string, string> = {
+  cube: '3d shape',
+}
+
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
   textDisplay: Array.from({ length: 2 }, () => ({
     beat: 0,
@@ -254,10 +263,12 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
       <Comp trackId={trackId} />
     </Suspense>
   )
+  const label = OBJECT_PREVIEW_LABELS[instrumentId]
   return (
     <>
       <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
+      {label && <PreviewFieldLabel text={label} />}
     </>
   )
 }
@@ -398,9 +409,12 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   },
 }
 
-/** The mover's name as a stylized caption INSIDE the GL frame - drawn to a
- *  canvas texture, so captured clips carry it (a DOM overlay never would). */
-function MoverFieldLabel({ text }: { text: string }) {
+/** An item's name as a stylized caption INSIDE the GL frame - drawn to a
+ *  canvas texture, so captured clips carry it (a DOM overlay never would).
+ *  Depth test off + late renderOrder: the caption is a title, not a scene
+ *  object, so it reads over anything the preview swings through its plane
+ *  (the 3D Shape's tumbling solid reaches it; movers' small cubes can too). */
+function PreviewFieldLabel({ text }: { text: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas')
     canvas.width = 1024
@@ -428,9 +442,9 @@ function MoverFieldLabel({ text }: { text: string }) {
   }, [text])
   useEffect(() => () => texture.dispose(), [texture])
   return (
-    <mesh position={[0, -1.35, 0.7]}>
+    <mesh position={[0, -1.35, 0.7]} renderOrder={10}>
       <planeGeometry args={[3.4, 0.6375]} />
-      <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} />
+      <meshBasicMaterial map={texture} transparent depthWrite={false} depthTest={false} toneMapped={false} />
     </mesh>
   )
 }
@@ -504,7 +518,7 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
           <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
         </mesh>
       )}
-      {compound?.label && <MoverFieldLabel text={compound.label} />}
+      {compound?.label && <PreviewFieldLabel text={compound.label} />}
       {Array.from({ length: poolSize }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
