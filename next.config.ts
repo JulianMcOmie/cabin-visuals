@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Two dev servers sharing one .next/ corrupt each other's build manifests
+  // (Internal Server Error on both). A second server (another worktree/session)
+  // sets NEXT_DIST_DIR to its own directory to stay isolated.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   transpilePackages: ['tone'],
   // Reverse proxy for PostHog: the browser sends events to our own domain
   // (/ingest/*), which Vercel forwards server-side. First-party requests

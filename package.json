@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:isolated": "NEXT_DIST_DIR=.next-isolated next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "test:visual": "node --import tsx --test --experimental-test-module-mocks src/editor/core/visual/*.test.ts src/editor/core/visualCopies/*.test.ts src/editor/core/directors/*.test.ts src/editor/core/photo/*.test.ts src/editor/store/*.test.ts src/editor/utils/*.test.ts src/persistence/*.test.ts",
