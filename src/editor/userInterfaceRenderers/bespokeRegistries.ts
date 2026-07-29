@@ -6,6 +6,7 @@ import { OrbitBurstMoverUserInterfaceRenderer } from './OrbitBurstMoverUserInter
 import { ConstantRotateMoverUserInterfaceRenderer } from './ConstantRotateMoverUserInterface'
 import { ConstantOrbitMoverUserInterfaceRenderer } from './ConstantOrbitMoverUserInterface'
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
+import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
@@ -29,6 +30,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   constantOrbit: ConstantOrbitMoverUserInterfaceRenderer,
   translationOscillator: TranslationOscillatorUserInterfaceRenderer,
   visibility: VisibilityMoverUserInterfaceRenderer,
+  meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
 }
