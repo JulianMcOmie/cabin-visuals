@@ -3,7 +3,8 @@ import { resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleLane, sampleNoiseLane } from './automation'
 import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
-import { composeMatrix, localTransformToSV } from './stateVector'
+import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
+import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
@@ -43,6 +44,11 @@ const states = new Map<string, ObjectState>()
 // of each object's parent transform during composition.
 const worldMatrices = new Map<string, Matrix4>()
 const _local = new Matrix4()
+// Scratch for the canonical track transform (core/transform.ts): composed as the
+// PARENT of the instrument's own localTransform, so panel position/rotation/size
+// inherit to child tracks and scale mover layouts (group-fader semantics).
+const _tfMat = new Matrix4()
+const _tfSV = identitySV()
 
 // Per-track VisualCopy cache - deliberately SEPARATE from ObjectState. The
 // STRUCTURAL copy count is fixed once per resolve (definitions contract: count
@@ -303,7 +309,15 @@ export function computeAtBeat(beat: number) {
     const meshScale = Math.exp(obj.scratchBase.logScale)
     obj.scratchBase.logScale = 0
     composeMatrix(obj.scratchBase, _local)
-    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate)
+    // Canonical track transform (panel/strip): parents the instrument's own
+    // local transform. Unlike the instrument mesh scale stripped above, tfSize
+    // stays IN the matrix - children and mover layouts inherit it.
+    if (!isIdentityTransform(params)) {
+      localTransformToSV(readTrackTransform(params), _tfSV)
+      composeMatrix(_tfSV, _tfMat)
+      _local.premultiply(_tfMat)
+    }
+    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate * trackOpacity(params))
     if (parentWorld) world.multiplyMatrices(parentWorld, _local)
     else world.copy(_local)
 

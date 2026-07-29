@@ -3,6 +3,7 @@ import type { VideoClip } from '../editor/store/VideoStore'
 import type { ViewAspect } from '../editor/store/ProjectStore'
 import type { ProjectDocument } from '../persistence/types'
 import { nextTrackColor } from '../editor/utils/trackColors'
+import { migrateTransformParams } from '../persistence/upgrade'
 
 // Authoring helpers for template documents. Templates are plain v2 project
 // documents built at module load; ids only need to be unique within one
@@ -126,7 +127,9 @@ export function track(spec: TrackSpec): Track & { __children?: Track[] } {
     blocks: spec.blocks ?? [],
     childIds: [],
   }
-  if (spec.params) t.params = spec.params
+  // Template specs may still use pre-canonical transform keys; normalize them
+  // the same way document upgrade does (v9 → v10).
+  if (spec.params) t.params = migrateTransformParams(t.instrumentId, spec.params)
   if (spec.stringParams) t.stringParams = spec.stringParams
   if (spec.targets) t.targets = spec.targets
   if (spec.abilityKey) t.abilityKey = spec.abilityKey

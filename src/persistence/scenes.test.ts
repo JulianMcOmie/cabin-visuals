@@ -50,7 +50,7 @@ test('v5 migration gives every existing scene a black background', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 9)
+  assert.equal(doc.schemaVersion, 10)
   assert.equal(doc.scenes.main.backgroundColor, '#000000')
   assert.equal(doc.scenes.one.backgroundColor, '#000000')
 })
@@ -85,7 +85,7 @@ test('v6 migration removes modifiers and promotes their nested tracks', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 9)
+  assert.equal(doc.schemaVersion, 10)
   assert.deepEqual(doc.scenes.one.rootTrackIds, ['visual'])
   assert.deepEqual(doc.scenes.one.tracks.visual.childIds, ['modifier-child'])
   assert.equal(doc.scenes.one.tracks.modifier, undefined)
@@ -109,7 +109,7 @@ test('v7 migration keeps existing scene backgrounds opaque', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 9)
+  assert.equal(doc.schemaVersion, 10)
   assert.equal(doc.scenes.main.backgroundTransparent, false)
   assert.equal(doc.scenes.one.backgroundTransparent, false)
 })
@@ -132,7 +132,7 @@ test('v8 migration converts basic-shape hue sliders to concrete colors', () => {
     audioClips: {},
   })
 
-  assert.equal(doc.schemaVersion, 9)
+  assert.equal(doc.schemaVersion, 10)
   assert.equal(doc.scenes.one.tracks.visual.stringParams?.baseColor, '#57afdb')
-  assert.deepEqual(doc.scenes.one.tracks.visual.params, { baseSize: 2 })
+  assert.deepEqual(doc.scenes.one.tracks.visual.params, { tfSize: 1.25 })
 })

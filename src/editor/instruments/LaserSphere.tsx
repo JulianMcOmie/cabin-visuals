@@ -42,15 +42,12 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
   name: 'Laser Sphere',
   kind: 'object',
   userInterfaceRenderer: 'parameters',
+  // Position and size are the canonical track transform (core/transform.ts).
   params: [
-    { key: 'size', label: 'Size', min: 0.0001, max: 4, step: 0.05, curve: 2, default: 1.6 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },
     { key: 'whiteCore', label: 'White-hot core', min: 0, max: 1, step: 0.01, default: DEFAULT_WHITE_CORE },
     { key: 'light', label: 'Scene Light', min: 0, max: 50, step: 1, default: 14 },
-    { key: 'x', label: 'X Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'y', label: 'Y Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'z', label: 'Z Position', min: -10, max: 10, step: 0.1, default: 0 },
   ],
   midiRows: [
     { pitch: 76, label: 'Flare · max', emphasized: true },
@@ -60,13 +57,8 @@ export const laserSphereInstrument: ObjectInstrumentDef = {
     { pitch: 44, label: 'Flare · gentle' },
     { pitch: 36, label: 'Flare · faint' },
   ],
-  localTransform: ({ params, energy }) => ({
-    position: [
-      params.x ?? paramDefault(laserSphereInstrument, 'x'),
-      params.y ?? paramDefault(laserSphereInstrument, 'y'),
-      params.z ?? paramDefault(laserSphereInstrument, 'z'),
-    ],
-    scale: (params.size ?? paramDefault(laserSphereInstrument, 'size')) / 1.6 * (1 + energy * 0.22),
+  localTransform: ({ energy }) => ({
+    scale: 1 + energy * 0.22,
   }),
   component: LaserSphere,
 }

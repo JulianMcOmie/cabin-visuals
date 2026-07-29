@@ -254,7 +254,7 @@ const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
 const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({
   key: c.key,
   label: c.label,
-  items: PLUGIN_LIST.filter((p) => p.category === c.key).map((p) => ({ id: p.id, label: p.name })),
+  items: PLUGIN_LIST.filter((p) => p.category === c.key && !p.deprecated).map((p) => ({ id: p.id, label: p.name })),
 }))
 
 /** One effect in the Effects tab: header (enable / name / reorder / remove) with
