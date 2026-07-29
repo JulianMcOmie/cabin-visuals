@@ -10,6 +10,7 @@ import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
+import { midiNoteBaseColor } from '../../utils/midiEditorPalette'
 import { useVideoStore } from '../../store/VideoStore'
 import { usePhotoStore } from '../../store/PhotoStore'
 import { getInstrument } from '../../instruments'
@@ -249,10 +250,10 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const defRows = declaredRows?.rows
   const rows = automation
     ? automation.kind === 'toggle'
-      ? generateToggleRows(notes.map((n) => n.pitch))
-      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch))
+      ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
+      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor)
     : trigger
-      ? generateTriggerRows(trigger.rowLabel, noteColor ?? trackColor, notes.map((n) => n.pitch))
+      ? generateTriggerRows(trigger.rowLabel, midiNoteBaseColor(noteColor ?? trackColor), notes.map((n) => n.pitch))
       : videoTrack
         ? generateVideoClipRows(
             (videoTrack.videoPads ?? []).map((pad, i) => {
@@ -261,18 +262,20 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             }),
             VIDEO_BASE_PITCH,
             notes.map((n) => n.pitch),
+            trackColor,
           )
         : photoTrack
         ? generatePhotoRows(
             (photoTrack.photoPads ?? []).map((pad, i) => photoClips[pad.ref]?.fileName ?? `Photo ${i + 1}`),
             PHOTO_BASE_PITCH,
             notes.map((n) => n.pitch),
+            trackColor,
           )
         : defRows
-          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch))
+          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch), trackColor)
           : noteColor
-            ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
-            : generateRows(undefined)
+            ? generateRows(noteColor)
+            : generateRows(trackColor)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
   // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
@@ -452,6 +455,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       {/* Piano roll grid */}
       <MidiEditor
         trackId={trackId}
+        trackColor={trackColor}
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type UIEvent 
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
-import { lighten } from '../../utils/colors'
+import { midiEditorChrome, midiNoteColor, midiRowLabelColor } from '../../utils/midiEditorPalette'
 import type { Block, Note } from '../../types'
 import { useNoteGestures } from './useNoteGestures'
 import { useMidiBlockGestures } from './useMidiBlockGestures'
@@ -24,6 +24,9 @@ export interface MidiEditorProps {
   notes: Note[]
   /** Track that owns the block being edited (for block move/resize writes). */
   trackId: string
+  /** The owning track's color - the editor chrome (ruler band, block region,
+   *  loop dashes, marquee) is voiced from it. */
+  trackColor: string
   block: Block
   onNotesChange: (notes: Note[]) => void
   /** Persist a gesture's result to the store as one undo step. */
@@ -52,6 +55,7 @@ export function MidiEditor({
   rows,
   notes,
   trackId,
+  trackColor,
   block,
   onNotesChange,
   onCommit,
@@ -293,6 +297,18 @@ export function MidiEditor({
   // All notes including the one being drawn
   const allNotes = drawingNote ? [...notes, drawingNote] : notes
 
+  // Editor chrome voiced from the edited track's color (replaces the old
+  // hardcoded indigo, so the editor visibly belongs to its block).
+  const chrome = useMemo(() => midiEditorChrome(trackColor), [trackColor])
+
+  // Rows holding a selected note light their gutter label up in the row color.
+  // Computed from the live local notes so labels follow notes mid-drag.
+  const selectedPitches = useMemo(() => {
+    const pitches = new Set<number>()
+    for (const n of allNotes) if (selectedNoteIds.has(n.id)) pitches.add(n.pitch)
+    return pitches
+  }, [allNotes, selectedNoteIds])
+
   // Loop ghosts: the pattern's repeats, dimmed and non-interactive, computed from
   // the live local notes so they track in-flight edits. repeat 0 is the authored
   // note itself and is skipped - except when a note sits outside the pattern
@@ -324,12 +340,12 @@ export function MidiEditor({
       top: y1,
       width: w,
       height: h,
-      backgroundColor: 'rgba(99, 102, 241, 0.15)',
-      border: '1px solid rgba(99, 102, 241, 0.6)',
+      backgroundColor: chrome.marqueeFill,
+      border: `1px solid ${chrome.marqueeEdge}`,
       pointerEvents: 'none' as const,
       zIndex: 10,
     }
-  }, [dragState])
+  }, [dragState, chrome])
 
   const barCount = Math.ceil(initialTotalBeats / beatsPerBar)
   // Only every `barInterval`th bar is numbered (matches the track ruler's thinning).
@@ -382,7 +398,7 @@ export function MidiEditor({
             bottom: 0,
             left: blockStartPx,
             width: blockWidthPx,
-            backgroundColor: 'rgba(129, 140, 248, 0.6)',
+            backgroundColor: chrome.band,
             zIndex: 10,
             pointerEvents: 'auto',
           }}
@@ -460,7 +476,13 @@ export function MidiEditor({
               <span
                 style={{
                   fontSize: row.noteLabel ? 11 : 13,
-                  color: '#666666',
+                  // Selection feedback: rows holding a selected note light up
+                  // in the row's color. Emphasized rows (octave anchors,
+                  // flagship instrument rows) sit a step brighter than the
+                  // rest, but stay neutral so color always means selection.
+                  color: selectedPitches.has(row.pitch)
+                    ? midiRowLabelColor(row.color)
+                    : row.emphasized ? '#9a9aa3' : '#666666',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -541,31 +563,6 @@ export function MidiEditor({
             if (dragStateRef.current.type === 'none') setCursor('default')
           }}
         >
-          {/* Midi block outline */}
-          {/* Background */}
-          <div
-            style={{
-              position: 'absolute',
-              backgroundColor: 'rgba(129, 140, 248, 0.08)',
-              left: blockStartPx,
-              width: blockWidthPx,
-              top: 0,
-              bottom: 0,
-            }}
-          />
-          {/* Sides */}
-          <div
-            data-midi-block-region=""
-            style={{
-              position: 'absolute',
-              borderLeft: '1px solid rgba(129, 140, 248, 0.6)',
-              borderRight: '1px solid rgba(129, 140, 248, 0.6)',
-              left: blockStartPx,
-              width: blockWidthPx,
-              top: 0,
-              bottom: 0,
-            }}
-          />
           {/* Full-height block resize handles stay below notes: where a note and
               block edge overlap, the note's move/resize gesture wins. Empty
               portions of the edge still resize the block. */}
@@ -614,6 +611,32 @@ export function MidiEditor({
             />
           ))}
 
+          {/* Midi block region: tint + edge lines. Painted ABOVE the row
+              stripes so the track hue reads cleanly instead of being greyed
+              by the stripe overlay (notes and ghosts still sit on top). */}
+          <div
+            style={{
+              position: 'absolute',
+              backgroundColor: chrome.regionTint,
+              left: blockStartPx,
+              width: blockWidthPx,
+              top: 0,
+              bottom: 0,
+            }}
+          />
+          <div
+            data-midi-block-region=""
+            style={{
+              position: 'absolute',
+              borderLeft: `1px solid ${chrome.regionEdge}`,
+              borderRight: `1px solid ${chrome.regionEdge}`,
+              left: blockStartPx,
+              width: blockWidthPx,
+              top: 0,
+              bottom: 0,
+            }}
+          />
+
           {/* Loop boundaries: dashed line at each pattern repeat inside the block. */}
           {loopBoundaries.map((b) => (
             <div
@@ -624,7 +647,7 @@ export function MidiEditor({
                 bottom: 0,
                 left: blockStartPx + beatToX(b, pixelsPerBeat),
                 width: 0,
-                borderLeft: '1px dashed rgba(129, 140, 248, 0.45)',
+                borderLeft: `1px dashed ${chrome.loopDash}`,
                 pointerEvents: 'none',
               }}
             />
@@ -646,7 +669,7 @@ export function MidiEditor({
                   top: rowIndexToY(rowIndex, rowHeight) + 2,
                   width: Math.max(beatToX(t.durationBeats, pixelsPerBeat), 8),
                   height: rowHeight - 4,
-                  backgroundColor: row.color,
+                  backgroundColor: midiNoteColor(row.color, t.note.velocity),
                   opacity: 0.3,
                   borderRadius: 3,
                   pointerEvents: 'none',
@@ -665,7 +688,13 @@ export function MidiEditor({
             const w = Math.max(beatToX(note.durationBeats, pixelsPerBeat), 8)
             const h = rowHeight - 4
             const isSelected = selectedNoteIds.has(note.id)
-            const noteColor = isSelected ? lighten(row.color, 40) : row.color
+            // Selected notes (which includes every note mid-drag) and the note
+            // being drawn read purely from the body: a lifted fill plus the
+            // laser glow, no rings. Everything else is a flat fill with a
+            // hairline dark edge so touching notes on a row stay separable
+            // without a 3D drop shadow.
+            const isLive = isSelected || note.id === drawingNote?.id
+            const noteColor = midiNoteColor(row.color, note.velocity, isSelected)
 
             return (
               <div
@@ -678,10 +707,9 @@ export function MidiEditor({
                   height: h,
                   backgroundColor: noteColor,
                   borderRadius: 3,
-                  boxShadow: isSelected
-                    ? `0 0 14px ${row.color}, 0 0 6px ${row.color}`
-                    : '1px 1px 3px rgba(0,0,0,0.3)',
-                  outline: isSelected ? '1px solid rgba(255,255,255,0.6)' : 'none',
+                  boxShadow: isLive
+                    ? `0 0 14px ${noteColor}, 0 0 6px ${noteColor}`
+                    : 'inset 0 0 0 1px rgba(0,0,0,0.25)',
                   cursor: 'inherit',
                   zIndex: isSelected ? 6 : 5,
                 }}
