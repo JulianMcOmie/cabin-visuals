@@ -10,6 +10,7 @@ import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
+import { listDirectors } from '../core/directors'
 import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -76,11 +77,30 @@ const MAIN_INSTRUMENTS = withKind('object', [
   )},
 ])
 
-const DIRECTOR_INSTRUMENTS = withKind('director', [
-  { id: 'sceneSwitcher', name: 'Scene Switcher', description: 'Shows the most recently started scene row only while its MIDI note remains held.', icon: <Sparkles size={12} className="text-indigo-400" /> },
-  { id: 'cut', name: 'Cut', description: 'Partitions the frame between held scene rows, with straight or diagonal cuts.', icon: <Sparkles size={12} className="text-fuchsia-400" /> },
-  { id: 'radialCut', name: 'Radial Cut', description: 'Partitions held scene rows into concentric rings from the center outward.', icon: <Sparkles size={12} className="text-cyan-400" /> },
-])
+const DIRECTOR_DESCRIPTIONS: Record<string, string> = {
+  sceneSwitcher: 'Shows the most recently started scene row only while its MIDI note remains held.',
+  cut: 'Partitions the frame between held scene rows, with straight or diagonal cuts.',
+  radialCut: 'Partitions held scene rows into concentric rings from the center outward.',
+  crop: 'Masks one scene into evenly spaced slices at any angle. Each held row shows its slice; the rest stays transparent.',
+}
+
+const DIRECTOR_ICON_COLORS: Record<string, string> = {
+  sceneSwitcher: 'text-indigo-400',
+  cut: 'text-fuchsia-400',
+  radialCut: 'text-cyan-400',
+  crop: 'text-amber-400',
+}
+
+// Derived from the director registry, the same way MOVER_INSTRUMENTS below is
+// derived from the mover registry - so registering a director is all it takes
+// to make it reachable. (This list used to be hand-maintained, which meant a
+// registered director simply never appeared in the menu.)
+const DIRECTOR_INSTRUMENTS = withKind('director', listDirectors().map((d) => ({
+  id: d.id,
+  name: d.name,
+  description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into Main with the ${d.name} layout.`,
+  icon: <Sparkles size={12} className={DIRECTOR_ICON_COLORS[d.id] ?? 'text-indigo-400'} />,
+})))
 
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.

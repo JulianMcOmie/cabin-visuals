@@ -699,7 +699,7 @@ export function TrackEditor() {
                             </div>
                             <p className="mt-3 text-[10px] leading-relaxed text-[var(--text-muted)]">Each active {partitionLabel.toLowerCase()} has one MIDI row. The scene exists in its partition only while that row’s note is held.</p>
                           </>
-                        ) : (
+                        ) : director?.hideMidiRowsInSettings ? null : (
                           <>
                             <p className="mb-2 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">MIDI ROWS</p>
                             <div className="space-y-1">

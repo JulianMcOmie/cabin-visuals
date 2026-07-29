@@ -50,6 +50,11 @@ interface MountedScene {
 
 interface PartitionUniforms {
   radial: { value: number }
+  slice: { value: number }
+  angle: { value: number }
+  wedge: { value: number }
+  flash: { value: number }
+  blur: { value: number }
   index: { value: number }
   count: { value: number }
   aspect: { value: number }
@@ -226,6 +231,11 @@ function setPartitionGeometry(geometry: BufferGeometry, partition?: CompositionL
 function makeCompositorMaterial(invertBehind = false) {
   const uniforms: PartitionUniforms = {
     radial: { value: 0 },
+    slice: { value: 0 },
+    angle: { value: 0 },
+    wedge: { value: 0 },
+    flash: { value: 0 },
+    blur: { value: 0 },
     index: { value: 0 },
     count: { value: 1 },
     aspect: { value: 1 },
@@ -246,6 +256,11 @@ function makeCompositorMaterial(invertBehind = false) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, {
       partitionRadial: uniforms.radial,
+      partitionSlice: uniforms.slice,
+      partitionAngle: uniforms.angle,
+      partitionWedge: uniforms.wedge,
+      partitionFlash: uniforms.flash,
+      partitionBlur: uniforms.blur,
       partitionIndex: uniforms.index,
       partitionCount: uniforms.count,
       partitionAspect: uniforms.aspect,
@@ -257,10 +272,39 @@ function makeCompositorMaterial(invertBehind = false) {
       .replace('void main() {', `
 varying vec2 vPartitionUv;
 uniform float partitionRadial;
+uniform float partitionSlice;
+uniform float partitionAngle;
+uniform float partitionWedge;
+uniform float partitionFlash;
+uniform float partitionBlur;
 uniform float partitionIndex;
 uniform float partitionCount;
 uniform float partitionAspect;
 void main() {`)
+      .replace('#include <map_fragment>', `
+#ifdef USE_MAP
+vec4 partitionSampled;
+if (partitionBlur > 0.0) {
+  vec2 pb = vPartitionUv - vec2(0.5);
+  pb.x *= partitionAspect;
+  // Smear along the axis the mask is organized by: across the bands for a
+  // linear cut, outward from the center for a radial one.
+  vec2 dir = partitionWedge > 0.5
+    ? normalize(pb + vec2(1e-6))
+    : vec2(cos(partitionAngle), sin(partitionAngle));
+  // Back to uv space, undoing the aspect correction on x.
+  vec2 step = vec2(dir.x / partitionAspect, dir.y) * partitionBlur;
+  partitionSampled = vec4(0.0);
+  for (int i = 0; i < 9; i++) {
+    partitionSampled += texture2D(map, vPartitionUv + step * (float(i) / 8.0 - 0.5));
+  }
+  partitionSampled /= 9.0;
+} else {
+  partitionSampled = texture2D(map, vPartitionUv);
+}
+diffuseColor *= partitionSampled;
+#endif
+`)
       .replace('#include <clipping_planes_fragment>', `
 #include <clipping_planes_fragment>
 if (partitionRadial > 0.5) {
@@ -270,7 +314,36 @@ if (partitionRadial > 0.5) {
   float radius = length(p) / maxRadius;
   float outerRadius = (partitionIndex + 1.0) / partitionCount;
   if (radius > outerRadius) discard;
+}
+if (partitionSlice > 0.5) {
+  // Aspect-corrected frame space, so a band's width is its true on-screen
+  // width rather than a UV width that stretches with the viewport.
+  vec2 p = vPartitionUv - vec2(0.5);
+  p.x *= partitionAspect;
+  float t;
+  if (partitionWedge > 0.5) {
+    // Radial: even wedges about the aspect-corrected center. Every pixel has an
+    // angle, so the frame is covered by construction - no span to derive.
+    t = fract((atan(p.y, p.x) - partitionAngle) / 6.2831853);
+  } else {
+    vec2 n = vec2(cos(partitionAngle), sin(partitionAngle));
+    // Half-extent of the frame measured along the cut normal - the projection of
+    // the furthest corner onto n. Deriving the band span from this (rather than
+    // from a fixed axis) is what guarantees the outermost bands reach the corners
+    // at every angle, with no uncovered wedge.
+    float halfSpan = 0.5 * (partitionAspect * abs(n.x) + abs(n.y));
+    t = (dot(p, n) + halfSpan) / (2.0 * halfSpan);
+  }
+  // Bands are even in t, which is distance along the normal - so they are even
+  // in PERPENDICULAR width at any angle.
+  float band = floor(clamp(t, 0.0, 0.999999) * partitionCount);
+  if (abs(band - partitionIndex) > 0.5) discard;
 }`)
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <premultiplied_alpha_fragment>',
+      `if (partitionFlash > 0.0) gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.15), partitionFlash);
+#include <premultiplied_alpha_fragment>`,
+    )
     if (invertBehind) {
       // Use the mask alpha as premultiplied white regardless of the offscreen
       // mask's RGB encoding, effects, or antialias interpolation.
@@ -280,7 +353,7 @@ if (partitionRadial > 0.5) {
       )
     }
   }
-  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v1' : 'scene-partition-v1'
+  material.customProgramCacheKey = () => invertBehind ? 'scene-partition-invert-v3' : 'scene-partition-v3'
   return material
 }
 
@@ -622,10 +695,18 @@ export function VisualScene() {
         setPartitionGeometry(mesh.geometry, layer.partition)
         const uniforms = material.userData.partitionUniforms as PartitionUniforms
         const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
+        const slice = layer.partition?.kind === 'slice' ? layer.partition : undefined
         uniforms.radial.value = radial ? 1 : 0
-        uniforms.index.value = radial?.radiusIndex ?? radial?.index ?? 0
-        uniforms.count.value = Math.max(1, radial?.count ?? 1)
+        uniforms.slice.value = slice ? 1 : 0
+        // Degrees on the contract (what the director exposes), radians in the
+        // shader, converted once here rather than per fragment.
+        uniforms.angle.value = ((slice?.angle ?? 0) * Math.PI) / 180
+        uniforms.index.value = slice?.index ?? radial?.radiusIndex ?? radial?.index ?? 0
+        uniforms.count.value = Math.max(1, slice?.count ?? radial?.count ?? 1)
         uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+        uniforms.wedge.value = slice?.radial ? 1 : 0
+        uniforms.flash.value = layer.flash ?? 0
+        uniforms.blur.value = layer.blur ?? 0
         if (layer.partition) {
           mesh.position.set(0, 0, -i * 0.001)
           mesh.scale.set(1, 1, 1)
@@ -693,10 +774,18 @@ export function VisualScene() {
         setPartitionGeometry(mesh.geometry, layer.partition)
         const uniforms = material.userData.partitionUniforms as PartitionUniforms
         const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
+        const slice = layer.partition?.kind === 'slice' ? layer.partition : undefined
         uniforms.radial.value = radial ? 1 : 0
-        uniforms.index.value = radial?.radiusIndex ?? radial?.index ?? 0
-        uniforms.count.value = Math.max(1, radial?.count ?? 1)
+        uniforms.slice.value = slice ? 1 : 0
+        // Degrees on the contract (what the director exposes), radians in the
+        // shader, converted once here rather than per fragment.
+        uniforms.angle.value = ((slice?.angle ?? 0) * Math.PI) / 180
+        uniforms.index.value = slice?.index ?? radial?.radiusIndex ?? radial?.index ?? 0
+        uniforms.count.value = Math.max(1, slice?.count ?? radial?.count ?? 1)
         uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+        uniforms.wedge.value = slice?.radial ? 1 : 0
+        uniforms.flash.value = layer.flash ?? 0
+        uniforms.blur.value = layer.blur ?? 0
         if (layer.partition) {
           mesh.position.set(0, 0, -i * 0.001)
           mesh.scale.set(1, 1, 1)
