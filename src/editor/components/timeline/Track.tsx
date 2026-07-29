@@ -265,7 +265,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        <div className="relative flex-1 min-w-0 flex items-center gap-1.5">
+        {/* Object tracks give the free row space to the opacity fader (DAW-style
+            channel strip); other rows keep it on the name as before. */}
+        <div className={`relative ${isObjectTrack ? '' : 'flex-1'} min-w-0 flex items-center gap-1.5`}>
           {renaming ? (
             <input
               ref={renameRef}
@@ -298,7 +300,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           )}
         </div>
 
-        <div className="relative flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className={`relative flex items-center gap-1 ${isObjectTrack ? 'flex-1 min-w-0' : 'flex-shrink-0'}`} onClick={(e) => e.stopPropagation()}>
           {isObjectTrack && (
             <div
               data-strip-control
@@ -316,7 +318,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 )
               }}
               onDoubleClick={() => resetTransformValues(track.id, [TF_OPACITY])}
-              className="flex h-4 w-11 cursor-ew-resize touch-none items-center"
+              className="mr-1.5 flex h-4 min-w-[40px] flex-1 cursor-ew-resize touch-none items-center"
             >
               <div className="relative h-[3px] w-full rounded-full bg-white/10">
                 <div
