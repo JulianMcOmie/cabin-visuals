@@ -336,8 +336,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                   stands well taller than the track it rides. */}
               <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-l-full bg-[var(--accent)] opacity-60 group-hover:opacity-80"
-                  style={{ width: `${opacityValue * 100}%` }}
+                  className="absolute inset-y-0 left-0 rounded-l-full opacity-60 group-hover:opacity-80"
+                  style={{ width: `${opacityValue * 100}%`, background: track.color }}
                 />
                 <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
                 <div
