@@ -216,23 +216,30 @@ const drawVideo: Draw2D = (ctx, w, h, t) => {
   ctx.textBaseline = 'alphabetic'
 }
 
-/** Photo: a white-bordered print hard-cutting to the next photo, with a
- *  camera-flash blink on each cut. Static inside a photo - that's the tell
- *  against Video. */
-const drawPhoto: Draw2D = (ctx, w, h, t) => {
-  const beat = t * BEATS_PER_SEC
-  const idx = Math.floor(beat / 2)
+/** Photo: one still, full stop - a white-bordered print of a landscape with
+ *  "photo" centered on it. Nothing animates: a photo doesn't play, and the
+ *  stillness against Video's rushing ridges IS the tell. */
+const drawPhoto: Draw2D = (ctx, w, h) => {
   ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const m = 8
   ctx.fillStyle = '#f8fafc'
   ctx.fillRect(m - 4, m - 4, w - 2 * (m - 4), h - 2 * (m - 4))
-  drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, idx)
-  const flash = 0.7 * pulseAt(beat, 2, 10)
-  if (flash > 0.02) {
-    ctx.fillStyle = `rgba(255,255,255,${flash})`
-    ctx.fillRect(m, m, w - 2 * m, h - 2 * m)
-  }
+  drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, 2)
+  const capSize = h * 0.2
+  ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = 'rgba(0,0,0,0.6)'
+  ctx.shadowBlur = capSize * 0.25
+  ctx.shadowOffsetY = capSize * 0.05
+  ctx.fillText('photo', w / 2, h / 2)
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetY = 0
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 /** Oscilloscope: a glowing waveform over a faint grid, amplitude pulsing on
