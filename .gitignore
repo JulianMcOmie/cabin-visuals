@@ -17,6 +17,7 @@
 /.next/
 /.next-isolated/
 /.next-build-check/
+/.next-build-commit/
 /out/
 
 # production
