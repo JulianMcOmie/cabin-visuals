@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { RotateCcw } from 'lucide-react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
 import {
@@ -190,7 +189,7 @@ const proj = (x: number, y: number, z: number): [number, number] => [
 
 const POS_SPEC = FIELDS[0]
 
-function IsoViewport({ trackId }: { trackId: string }) {
+function IsoViewport({ trackId, scale }: { trackId: string; scale: number }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const x = useProjectStore((s) => transformValue(s.tracks[trackId]?.params, TF_X))
   const y = useProjectStore((s) => transformValue(s.tracks[trackId]?.params, TF_Y))
@@ -278,8 +277,8 @@ function IsoViewport({ trackId }: { trackId: string }) {
     <svg
       ref={svgRef}
       viewBox={`0 0 ${ISO_W} ${ISO_H}`}
-      width={ISO_W}
-      height={ISO_H}
+      width={Math.round(ISO_W * scale)}
+      height={Math.round(ISO_H * scale)}
       className="cursor-crosshair touch-none rounded-md border border-[var(--border)] bg-black/30"
       onPointerDown={(e) => {
         if (e.button !== 0) return
@@ -315,6 +314,18 @@ function IsoViewport({ trackId }: { trackId: string }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
+const PANEL_BASE_WIDTH = 372
+const PANEL_BASE_HEIGHT = 250
+const PANEL_MIN_SCALE = 1
+const PANEL_MAX_SCALE = 1.8
+const PANEL_SCALE_KEY = 'trackTransformPanelScale'
+
+function storedPanelScale(): number {
+  if (typeof window === 'undefined') return 1
+  const raw = Number(window.localStorage.getItem(PANEL_SCALE_KEY))
+  return Number.isFinite(raw) && raw > 0 ? Math.min(PANEL_MAX_SCALE, Math.max(PANEL_MIN_SCALE, raw)) : 1
+}
+
 export function TrackTransformPanel({
   trackId,
   anchor,
@@ -328,6 +339,29 @@ export function TrackTransformPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const trackName = useProjectStore((s) => s.tracks[trackId]?.name)
   const multiCount = useUIStore((s) => (s.selectedTrackIds.has(trackId) && s.selectedTrackIds.size > 1 ? s.selectedTrackIds.size : 0))
+  // Drag the bottom-right corner to resize; the size sticks across opens.
+  const [scale, setScale] = useState(storedPanelScale)
+  useEffect(() => {
+    window.localStorage.setItem(PANEL_SCALE_KEY, String(scale))
+  }, [scale])
+
+  const beginResize = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startScale = scale
+    const onMove = (ev: PointerEvent) => {
+      const next = startScale + (ev.clientX - startX) / PANEL_BASE_WIDTH
+      setScale(Math.min(PANEL_MAX_SCALE, Math.max(PANEL_MIN_SCALE, next)))
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   useEffect(() => {
     const onDown = (ev: MouseEvent) => {
@@ -353,8 +387,8 @@ export function TrackTransformPanel({
   if (!trackName) return null
 
   // Clamp into the viewport: prefer below the anchor, flip above when cramped.
-  const panelWidth = 372
-  const panelHeight = 250
+  const panelWidth = Math.round(PANEL_BASE_WIDTH * scale)
+  const panelHeight = Math.round(PANEL_BASE_HEIGHT * scale)
   const left = clamp(anchor.left - 8, 8, window.innerWidth - panelWidth - 8)
   const top = anchor.bottom + panelHeight + 8 > window.innerHeight
     ? Math.max(8, anchor.top - panelHeight - 6)
@@ -382,16 +416,16 @@ export function TrackTransformPanel({
         <span className="flex-1" />
         <button
           aria-label="Reset all transform values"
-          title="Reset all"
+          title="Reset every value to its default"
           onClick={() => resetTransformValues(trackId, TRANSFORM_PARAM_DEFS.map((p) => p.key))}
-          className="flex h-5 w-5 items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          className="rounded border border-[var(--border)] px-2 py-0.5 text-[9px] font-semibold tracking-[0.05em] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
         >
-          <RotateCcw size={10} />
+          Reset
         </button>
       </div>
       <div className="flex gap-3">
         <div className="flex-shrink-0">
-          <IsoViewport trackId={trackId} />
+          <IsoViewport trackId={trackId} scale={scale} />
           <div className="mt-1 text-center text-[9px] text-[var(--text-muted)]">shadow = x·z floor · dot = y height</div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-[5px]">
@@ -400,8 +434,18 @@ export function TrackTransformPanel({
           ))}
         </div>
       </div>
-      <div className="mt-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
+      <div className="mt-2 pr-3 text-[9px] leading-relaxed text-[var(--text-muted)]">
         drag numbers vertically · shift = fine · double-click = reset · alt = no snap{multiCount > 0 ? ' · cmd = align tracks' : ''}
+      </div>
+      <div
+        aria-label="Resize panel"
+        title="Drag to resize"
+        onPointerDown={beginResize}
+        className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
+      >
+        <svg viewBox="0 0 16 16" className="h-full w-full text-[var(--text-muted)] opacity-60">
+          <path d="M14 8 L8 14 M14 12 L12 14" stroke="currentColor" strokeWidth="1.2" fill="none" />
+        </svg>
       </div>
     </div>,
     document.body,
