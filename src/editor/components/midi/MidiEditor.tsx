@@ -164,11 +164,6 @@ export function MidiEditor({
   })
 
   // Alt+scroll zoom (horizontal = pixelsPerBeat, vertical = row height).
-  // Vertical is a step function over the MIDI_ROW_HEIGHTS ladder (like Logic):
-  // wheel travel accumulates and each ROW_ZOOM_WHEEL_STEP px of it moves one
-  // rung, rather than scaling continuously.
-  const ROW_ZOOM_WHEEL_STEP = 60
-  const rowZoomAccumRef = useRef(0)
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -185,14 +180,10 @@ export function MidiEditor({
       }
 
       if (Math.abs(e.deltaY) > 2) {
-        // A direction flip discards leftover travel from the old direction.
-        const acc = rowZoomAccumRef.current
-        rowZoomAccumRef.current = (Math.sign(e.deltaY) !== Math.sign(acc) ? 0 : acc) + e.deltaY
-        while (Math.abs(rowZoomAccumRef.current) >= ROW_ZOOM_WHEEL_STEP) {
-          // Scroll up (negative deltaY) zooms in, matching the old behavior.
-          useUIStore.getState().stepMidiRowHeight(rowZoomAccumRef.current < 0 ? 1 : -1)
-          rowZoomAccumRef.current -= Math.sign(rowZoomAccumRef.current) * ROW_ZOOM_WHEEL_STEP
-        }
+        // Multiplicative so a wheel notch feels like the same zoom ratio at
+        // any row height; scroll up (negative deltaY) zooms in.
+        const current = useUIStore.getState().midiRowHeight
+        useUIStore.getState().setMidiRowHeight(current * Math.exp(-e.deltaY * 0.0015))
       }
     }
 

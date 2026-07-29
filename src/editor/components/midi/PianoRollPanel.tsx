@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { X, Magnet, Waves, Dices } from 'lucide-react'
-import { useUIStore, MIDI_ROW_HEIGHTS } from '../../store/UIStore'
+import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
@@ -22,6 +22,10 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
 import type { Block, InterpolationMode } from '../../types'
+
+/** Filled-track position for .slider-console inputs (drives the --fill var). */
+const sliderFill = (value: number, min: number, max: number) =>
+  ({ '--fill': `${((value - min) / (max - min)) * 100}%` } as CSSProperties)
 
 /** Automation editor context: the param a lane drives, and its value bounds.
  *  kind picks the row model - 'value' shows 13 value-labelled rows across the
@@ -383,19 +387,22 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
                   <span className="text-[10px] text-zinc-600">Rate</span>
                   <input type="range" min={0.5} max={16} step={0.5} value={noise.rate}
                     onChange={(e) => setTrackNoise(trackId, { ...noise, rate: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
+                    style={sliderFill(noise.rate, 0.5, 16)}
+                    className="slider-console w-10 cursor-pointer" />
                 </div>
                 <div className="flex items-center gap-1" title="0 = stepped chaos, 1 = smooth wandering">
                   <span className="text-[10px] text-zinc-600">Smooth</span>
                   <input type="range" min={0} max={1} step={0.05} value={noise.smoothness}
                     onChange={(e) => setTrackNoise(trackId, { ...noise, smoothness: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
+                    style={sliderFill(noise.smoothness, 0, 1)}
+                    className="slider-console w-10 cursor-pointer" />
                 </div>
                 <div className="flex items-center gap-1" title="Deviation around the note's value (fraction of the param range)">
                   <span className="text-[10px] text-zinc-600">Range</span>
                   <input type="range" min={0} max={1} step={0.05} value={noise.range}
                     onChange={(e) => setTrackNoise(trackId, { ...noise, range: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
+                    style={sliderFill(noise.range, 0, 1)}
+                    className="slider-console w-10 cursor-pointer" />
                 </div>
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
@@ -431,22 +438,24 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             type="range"
             min={5}
             max={200}
+            step="any"
             value={midiPixelsPerBeat}
             onChange={(e) => setMidiPixelsPerBeat(Number(e.target.value))}
-            className="slider-square w-14 cursor-pointer"
+            style={sliderFill(midiPixelsPerBeat, 5, 200)}
+            className="slider-console w-24 cursor-pointer"
           />
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
           <span className="text-[10px] text-zinc-600">V</span>
-          {/* Slider moves over the quantized ladder's indices, one rung per step. */}
           <input
             type="range"
-            min={0}
-            max={MIDI_ROW_HEIGHTS.length - 1}
-            step={1}
-            value={MIDI_ROW_HEIGHTS.indexOf(rowHeight)}
-            onChange={(e) => setMidiRowHeight(MIDI_ROW_HEIGHTS[Number(e.target.value)])}
-            className="slider-square w-14 cursor-pointer"
+            min={MIDI_ROW_HEIGHT_MIN}
+            max={MIDI_ROW_HEIGHT_MAX}
+            step="any"
+            value={rowHeight}
+            onChange={(e) => setMidiRowHeight(Number(e.target.value))}
+            style={sliderFill(rowHeight, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX)}
+            className="slider-console w-24 cursor-pointer"
           />
         </div>
 

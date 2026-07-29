@@ -129,7 +129,7 @@ function ZoomSlider({ icon, label, value, min, max, unit, onChange }: {
         aria-valuetext={`${value} ${unit}`}
         onChange={(e) => commit(Number(e.target.value))}
         style={{ '--fill': `${(position / ZOOM_POSITIONS) * 100}%` } as CSSProperties}
-        className="slider-zoom w-16 cursor-pointer"
+        className="slider-console w-16 cursor-pointer"
       />
     </label>
   )
