@@ -93,8 +93,9 @@ Other load-bearing facts:
 10. **Multi-track drag is relative by default** (formation preserved), with a
     modifier to converge to absolute (align).
 
-**Status: design converged (mockup v2 approved) → implementation draft in
-worktree branch `track-transform-panel`.**
+**Status: SHIPPED — merged to main 2026-07-29 (e62a2ca). Viewport drag:
+plain = x/z floor, shift = y height. Remaining ideas live under Future
+ideas below.**
 
 ## Converged UI spec (from mockup v2)
 
