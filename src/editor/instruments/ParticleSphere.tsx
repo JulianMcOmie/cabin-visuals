@@ -54,8 +54,8 @@ export const particleSphereInstrument: ObjectInstrumentDef = {
   name: 'Particle Sphere',
   kind: 'object',
   userInterfaceRenderer: 'parameters',
+  // Position and size are the canonical track transform (core/transform.ts).
   params: [
-    { key: 'size', label: 'Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
     { key: 'color', label: 'Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 0, max: 8, step: 0.1, default: 2.5 },
     { key: 'detail', label: 'Dots', min: 8, max: MAX_DETAIL, step: 2, default: 24 },
@@ -64,9 +64,6 @@ export const particleSphereInstrument: ObjectInstrumentDef = {
     { key: 'push', label: 'Poke Push', min: -3, max: 3, step: 0.05, default: 1.4 },
     { key: 'releaseBeats', label: 'Release (beats)', min: 0.05, max: 4, step: 0.05, default: 0.6 },
     { key: 'spin', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
-    { key: 'x', label: 'X Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'y', label: 'Y Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'z', label: 'Z Position', min: -10, max: 10, step: 0.1, default: 0 },
   ],
   midiRows: [
     { pitch: 76, label: 'Burst · center', emphasized: true },
@@ -76,13 +73,8 @@ export const particleSphereInstrument: ObjectInstrumentDef = {
     { pitch: 44, label: 'Poke · left' },
     { pitch: 36, label: 'Poke · right' },
   ],
-  localTransform: ({ params, energy }) => ({
-    position: [
-      params.x ?? paramDefault(particleSphereInstrument, 'x'),
-      params.y ?? paramDefault(particleSphereInstrument, 'y'),
-      params.z ?? paramDefault(particleSphereInstrument, 'z'),
-    ],
-    scale: ((params.size ?? paramDefault(particleSphereInstrument, 'size')) / 1.6) * (1 + energy * 0.18),
+  localTransform: ({ energy }) => ({
+    scale: 1 + energy * 0.18,
   }),
   component: ParticleSphere,
 }

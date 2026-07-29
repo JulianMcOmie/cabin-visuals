@@ -13,6 +13,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { extractKeyframes, extractNoiseGates, sampleLane, sampleNoiseLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
+import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import type { MoverOrSplitter } from '../visualCopies/types'
@@ -96,9 +97,11 @@ function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnap
   return out
 }
 
-/** Gather an object track's `automation` child tracks into resolved keyframe lanes. */
+/** Gather an object track's `automation` child tracks into resolved keyframe lanes.
+ *  The canonical transform params (core/transform.ts) are automatable on every
+ *  object track, exactly like the instrument's own params. */
 function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
-  return def ? resolveAutomationLanes(track, def.params, p) : []
+  return def ? resolveAutomationLanes(track, withTransformParams(def.params), p) : []
 }
 
 /** Sample one beat of every automation lane into a settings/params overlay.
@@ -204,7 +207,7 @@ function resolveEnvelopes(track: Track, def: ObjectInstrumentDef | undefined, p:
       })
       continue
     }
-    const pdef = def?.params.find((pd) => pd.key === target)
+    const pdef = def ? withTransformParams(def.params).find((pd) => pd.key === target) : undefined
     if (!pdef || !isNumberParam(pdef)) continue
     out.push({
       trackId: child.id,

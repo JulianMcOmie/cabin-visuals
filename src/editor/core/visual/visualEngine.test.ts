@@ -47,7 +47,7 @@ test('computeAtBeat is deterministic across repeated calls', () => {
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, baseXPosition: 0, baseYPosition: 0, baseZPosition: 0, spinSpeed: 0 },
+    params: { spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -99,7 +99,7 @@ test('scrubbing back to a beat reproduces the same object state and copies', () 
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, baseXPosition: 0.5, baseYPosition: -0.25, baseZPosition: 0, spinSpeed: 0 },
+    params: { tfX: 0.5, tfY: -0.25, spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -154,7 +154,7 @@ test('envelope track on the reserved opacity target gates the object by its note
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, spinSpeed: 0 },
+    params: { spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -201,7 +201,7 @@ test('envelope depth blends the opacity gate toward no-effect', () => {
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, spinSpeed: 0 },
+    params: { spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -243,7 +243,7 @@ test('envelope track lerps a numeric param toward its peak value', () => {
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, spinSpeed: 0 },
+    params: { spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -252,10 +252,10 @@ test('envelope track lerps a numeric param toward its peak value', () => {
   }
   const env: Track = {
     id: 'env-x',
-    name: 'Env · Base X Position',
+    name: 'Env · X',
     type: 'envelope',
     instrumentId: '',
-    targetParam: 'baseXPosition',
+    targetParam: 'tfX',
     adsr: { attackBeats: 1, decayBeats: 1, sustainLevel: 1, releaseBeats: 1 },
     envDepth: 1,
     envTarget: 2,
@@ -289,7 +289,7 @@ test('muted envelope child is ignored', () => {
     name: 'Cube',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, spinSpeed: 0 },
+    params: { spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -324,15 +324,16 @@ test('muted envelope child is ignored', () => {
 })
 
 
-test("an instrument's size is mesh-local: it never reaches movers or child tracks", () => {
-  // baseSize 3.2 = 2× the cube's 1.6 reference. Before the split, that 2× sat in
-  // the world matrix: mover layouts stretched with it and children inherited it.
+test('track size is inherited: children and mover layouts scale with the parent', () => {
+  // tfSize 2 is a group fader: it lives IN the world matrix, so child placements
+  // and mover layout distances scale with the parent. The instrument's own pulse
+  // scale is still mesh-local (state.meshScale).
   const parent: Track = {
     id: 'cube-parent',
     name: 'Parent',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 3.2, baseXPosition: 0, baseYPosition: 0, baseZPosition: 0, spinSpeed: 0 },
+    params: { tfSize: 2, spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -344,7 +345,7 @@ test("an instrument's size is mesh-local: it never reaches movers or child track
     name: 'Child',
     type: 'base',
     instrumentId: 'cube',
-    params: { baseSize: 1.6, baseXPosition: 1, baseYPosition: 0, baseZPosition: 0, spinSpeed: 0 },
+    params: { tfX: 1, spinSpeed: 0 },
     color: '#6366f1',
     muted: false,
     solo: false,
@@ -356,17 +357,18 @@ test("an instrument's size is mesh-local: it never reaches movers or child track
   setProject({ tracks: { 'cube-parent': parent, 'cube-child': child }, rootTrackIds: ['cube-parent'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
   computeAtBeat(0)
 
-  // The parent's size rides state.meshScale (applied to the mesh after the copy
-  // transform); its placement world stays scale-free for the mover chain.
+  // The parent's size sits in its world matrix; meshScale carries only the
+  // (currently idle) note pulse.
   const p = getObjectState('cube-parent')
   assert.ok(p)
-  assert.equal(round(p.meshScale), 2)
-  assert.equal(round(p.world.toArray()[0]), 1)
+  assert.equal(round(p.meshScale), 1)
+  assert.equal(round(p.world.toArray()[0]), 2)
 
-  // The child's placement is NOT multiplied by the parent's size: x=1 stays x=1
-  // (previously it landed at 2), and the child's own size stays its own.
+  // The child's placement inherits the parent's size: its x=1 lands at world
+  // x=2, and its rendered scale doubles too.
   const c = getObjectState('cube-child')
   assert.ok(c)
-  assert.equal(round(c.world.toArray()[12]), 1)
+  assert.equal(round(c.world.toArray()[12]), 2)
+  assert.equal(round(c.world.toArray()[0]), 2)
   assert.equal(round(c.meshScale), 1)
 })

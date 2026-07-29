@@ -3,6 +3,7 @@ import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
+import { withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
@@ -40,8 +41,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
   )
   const abilities = def?.abilities ?? []
-  // Only numeric params can be automated (keyframes interpolate a number).
-  const params = (def?.params ?? moverDef?.params ?? []).filter(isNumberParam)
+  // Only numeric params can be automated (keyframes interpolate a number). Object
+  // tracks also offer the canonical transform params (core/transform.ts).
+  const params = (def ? withTransformParams(def.params) : moverDef?.params ?? []).filter(isNumberParam)
   const newDefs = def ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
   const colorizers = newDefs.filter((d) => d.kind === 'colorizer')

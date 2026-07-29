@@ -12,6 +12,10 @@ export interface VisualEffect {
   id: string
   name: string
   category: EffectCategory
+  /** Hidden from the add-effect menu (existing instances keep rendering). The
+   *  base transform effects are deprecated in favor of the canonical track
+   *  transform panel (core/transform.ts). */
+  deprecated?: boolean
   /** User-facing knobs (same shape as an instrument's params). Enum/boolean settings are
    *  encoded as numeric params for now (e.g. axis 0/1/2, a toggle as 0/1). */
   params: ParamDef[]

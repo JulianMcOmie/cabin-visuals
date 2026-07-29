@@ -47,9 +47,6 @@ export const laserLineInstrument: ObjectInstrumentDef = {
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },
     { key: 'whiteCore', label: 'White-hot core', min: 0, max: 1, step: 0.01, default: DEFAULT_WHITE_CORE },
     { key: 'light', label: 'Scene Light', min: 0, max: 50, step: 1, default: 14 },
-    { key: 'x', label: 'X Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'y', label: 'Y Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'z', label: 'Z Position', min: -10, max: 10, step: 0.1, default: 0 },
   ],
   midiRows: [
     { pitch: 76, label: 'Flare · max', emphasized: true },
@@ -59,14 +56,11 @@ export const laserLineInstrument: ObjectInstrumentDef = {
     { pitch: 44, label: 'Flare · gentle' },
     { pitch: 36, label: 'Flare · faint' },
   ],
+  // Position is the canonical track transform; length/thickness stay - they are
+  // the line's shape, not its placement.
   localTransform: ({ params, energy }) => {
     const pulse = 1 + energy * 0.22
     return {
-      position: [
-        params.x ?? paramDefault(laserLineInstrument, 'x'),
-        params.y ?? paramDefault(laserLineInstrument, 'y'),
-        params.z ?? paramDefault(laserLineInstrument, 'z'),
-      ],
       scale: [
         (params.length ?? paramDefault(laserLineInstrument, 'length')) / 4 * pulse,
         (params.thickness ?? paramDefault(laserLineInstrument, 'thickness')) / 0.06 * pulse,
