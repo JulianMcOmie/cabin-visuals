@@ -10,7 +10,7 @@ import {
   ObjectPreview,
   setPreviewTimeOverride,
 } from './InstrumentHoverPreview'
-import { get2DPreview } from './InstrumentPreview2D'
+import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import { ALL_LIBRARY_ITEMS, type InstrumentItem } from './LeftSidebar'
 import { Mp4Writer } from '../core/export/mux'
 import { videoCodec } from '../core/export/types'
@@ -79,6 +79,18 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export function InstrumentPreviewCapture() {
   const [item, setItem] = useState<InstrumentItem | null>(null)
+  // ?view=<id> plays that item's live preview on the page's own clock - the
+  // eyeball-a-change URL (e.g. /dev/instrument-previews?view=textDisplay)
+  // for checking a preview BEFORE regenerating its clip. Any previewable id
+  // works: R3F items mount their live canvas, 2D vignettes their canvas-2D
+  // draw. A capture request takes over while it runs, then the view resumes.
+  const [viewItem] = useState<InstrumentItem | null>(() => {
+    if (typeof window === 'undefined') return null
+    const id = new URLSearchParams(window.location.search).get('view')
+    if (!id) return null
+    const match = ALL_LIBRARY_ITEMS.find((i) => i.id === id)
+    return match && canPreview(match) ? match : null
+  })
   const glRef = useRef<WebGLRenderer | null>(null)
 
   useEffect(() => {
@@ -161,35 +173,50 @@ export function InstrumentPreviewCapture() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#050507] text-[13px] text-neutral-400">
       <p>
         Instrument preview capture - {CAPTURABLE.length} clippable items.
-        {item ? ` Capturing: ${item.name}` : ' Idle (driven by npm run previews:instruments).'}
+        {item
+          ? ` Capturing: ${item.name}`
+          : viewItem
+            ? ` Viewing: ${viewItem.name}`
+            : ' Idle (driven by npm run previews:instruments).'}
       </p>
       {/* Exact clip pixels: dpr locked to 1 so the drawing buffer IS 640x360.
           preserveDrawingBuffer because VideoFrame reads the canvas across
           awaits (encoder backpressure), after compositing may have cleared it. */}
-      <div style={{ width: CLIP_W, height: CLIP_H }} className="border border-neutral-800">
-        {item && (
-          <Canvas
-            key={item.id}
-            dpr={1}
-            frameloop="never"
-            camera={{ position: [0, 0.9, 4.2], fov: 55 }}
-            gl={{ antialias: true, preserveDrawingBuffer: true }}
-            onCreated={(state) => { glRef.current = state.gl }}
-          >
-            {/* MP4 has no alpha, so the sidebar's --bg-panel is baked in: a
-                clip card then matches the live View cards, which render
-                transparent over that same panel. Keep in sync with
-                globals.css. */}
-            <color attach="background" args={['#111318']} />
-            <ambientLight intensity={0.7} />
-            <directionalLight position={[3, 4, 5]} intensity={1.1} />
-            {item.kind === 'object'
-              ? <ObjectPreview instrumentId={item.id} />
-              : <MoverPreview moverId={item.id} />}
-            <LaserPreviewBloom instrumentId={item.kind === 'object' ? item.id : undefined} />
-          </Canvas>
-        )}
-      </div>
+      {(() => {
+        // Captures own the canvas while they run (their stepped clock must be
+        // the only driver); otherwise the ?view item plays on the live clock.
+        const active = item ?? viewItem
+        // View mode doubles the clip's footprint - it exists to be looked at.
+        const scale = item ? 1 : 2
+        const draw2d = !item && active ? get2DPreview(active.id) : undefined
+        return (
+          <div style={{ width: CLIP_W * scale, height: CLIP_H * scale }} className="relative border border-neutral-800">
+            {draw2d && <Preview2D draw={draw2d} />}
+            {active && !draw2d && (
+              <Canvas
+                key={`${active.id}-${item ? 'capture' : 'view'}`}
+                dpr={1}
+                frameloop={item ? 'never' : 'always'}
+                camera={{ position: [0, 0.9, 4.2], fov: 55 }}
+                gl={{ antialias: true, preserveDrawingBuffer: true }}
+                onCreated={(state) => { glRef.current = state.gl }}
+              >
+                {/* MP4 has no alpha, so the sidebar's --bg-panel is baked in: a
+                    clip card then matches the live View cards, which render
+                    transparent over that same panel. Keep in sync with
+                    globals.css. */}
+                <color attach="background" args={['#111318']} />
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[3, 4, 5]} intensity={1.1} />
+                {active.kind === 'object'
+                  ? <ObjectPreview instrumentId={active.id} />
+                  : <MoverPreview moverId={active.id} />}
+                <LaserPreviewBloom instrumentId={active.kind === 'object' ? active.id : undefined} />
+              </Canvas>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
