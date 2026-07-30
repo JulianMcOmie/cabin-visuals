@@ -501,16 +501,24 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
 
   return (
     <div>
-      {current && (
+      {/* The location row is always present so entering a folder swaps its
+          label instead of inserting a row above the list (which made the whole
+          menu jump down). Same size and metrics as the folder rows - depth
+          reads from the ‹ chevron and position, not from bolder type. */}
+      {current ? (
         <button
           type="button"
           onClick={() => setPath(path.slice(0, -1))}
           aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky top-0 z-20 flex h-[34px] w-full cursor-pointer select-none items-center gap-1 bg-[var(--bg-shell)] px-1.5 text-[13px] font-semibold text-[var(--text)] transition-colors hover:text-[var(--accent)]"
+          className="sticky top-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 text-xs text-[var(--text)] transition-colors hover:bg-[var(--bg-elevated)]"
         >
-          <ChevronLeft size={14} className="flex-shrink-0 text-[var(--text-muted)]" />
+          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
           <span className="min-w-0 truncate">{current.title}</span>
         </button>
+      ) : (
+        <div className="sticky top-0 z-20 flex h-[30px] select-none items-center bg-[var(--bg-shell)] px-3 text-xs text-[var(--text-muted)]">
+          Library
+        </div>
       )}
       {items.length > 0 && (
         <div className="mt-1">
