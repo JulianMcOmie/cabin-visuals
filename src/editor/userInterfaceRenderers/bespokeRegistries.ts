@@ -10,6 +10,7 @@ import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserI
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
 import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserInterface'
 import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
+import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
@@ -39,6 +40,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   calmHueRotate: ColorizerUserInterfaceRenderer,
   gradient: GradientColorizerUserInterfaceRenderer,
   impactScatter: ImpactScatterMoverUserInterfaceRenderer,
+  conveyor: ConveyorMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
 }
