@@ -109,7 +109,14 @@ function KaleidoSkinPreview({ facets, scale, drift, hue }: {
   drift: number
   hue: number
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The canvas is created INSIDE the effect and appended here, not rendered by
+  // React. Cleanup calls loseContext() (see the bottom of the effect), which
+  // permanently kills the context of whatever canvas it ran on - and React
+  // StrictMode double-invokes effects in dev, mounting a second time onto the
+  // SAME element. A React-owned canvas therefore comes back with a dead
+  // context and every shader compile fails with an empty info log. Owning the
+  // element per mount means each run gets a genuinely fresh canvas.
+  const hostRef = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
 
   // The rAF loop reads the LIVE param values through a ref, so dragging a
@@ -118,14 +125,22 @@ function KaleidoSkinPreview({ facets, scale, drift, hue }: {
   paramsRef.current = { facets, scale, drift, hue }
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const host = hostRef.current
+    if (!host) return
+    const canvas = document.createElement('canvas')
+    canvas.dataset.testid = 'kaleido-skin-preview'
+    canvas.setAttribute('aria-label', 'Kaleido Skin preview')
+    canvas.title = 'Live preview: the effect running on a stand-in sphere'
+    canvas.style.width = `${PREVIEW_PX}px`
+    canvas.style.height = `${PREVIEW_PX}px`
+    host.appendChild(canvas)
+
     const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false })
-    if (!gl) { setFailed(true); return }
+    if (!gl || gl.isContextLost()) { setFailed(true); canvas.remove(); return }
 
     const patternProgram = link(gl, QUAD_VERT, `precision highp float;\n${kaleidoSkinPlugin.fragmentShader ?? ''}`)
     const outputProgram = link(gl, QUAD_VERT, SRGB_FRAG)
-    if (!patternProgram || !outputProgram) { setFailed(true); return }
+    if (!patternProgram || !outputProgram) { setFailed(true); canvas.remove(); return }
 
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     const size = Math.max(1, Math.round(PREVIEW_PX * dpr))
@@ -227,8 +242,10 @@ function KaleidoSkinPreview({ facets, scale, drift, hue }: {
       gl.deleteProgram(outputProgram)
       // Panels mount and unmount constantly as tracks are selected; without
       // this the browser's WebGL context budget runs out and the VIEWPORT is
-      // what loses its context.
+      // what loses its context. Safe only because this canvas is ours and is
+      // discarded on the next line.
       gl.getExtension('WEBGL_lose_context')?.loseContext()
+      canvas.remove()
     }
   }, [])
 
@@ -242,13 +259,7 @@ function KaleidoSkinPreview({ facets, scale, drift, hue }: {
           preview unavailable
         </div>
       ) : (
-        <canvas
-          ref={canvasRef}
-          data-testid="kaleido-skin-preview"
-          aria-label="Kaleido Skin preview"
-          title="Live preview: the effect running on a stand-in sphere"
-          style={{ width: PREVIEW_PX, height: PREVIEW_PX }}
-        />
+        <div ref={hostRef} style={{ width: PREVIEW_PX, height: PREVIEW_PX }} />
       )}
     </div>
   )

@@ -42,13 +42,16 @@ export const kaleidoSkinPlugin: VisualEffect = {
 
     #define TAU 6.2831853
     #define PI 3.14159265
-    // Shards live in a RADIALLY TILED lattice: concentric rings, three shards
-    // per ring across the wedge. A pixel can only be touched by its own ring
-    // and its two neighbours, so the loop is a fixed 3x3 = 9 shape tests no
-    // matter how far out the pixel sits. That is what lets the pattern stay
-    // evenly dense at every Scale instead of running out at the rim.
-    #define RINGS_EACH_SIDE 1
-    #define PER_RING 3
+    // Shards live in a POLAR LATTICE: concentric rings, each subdivided into
+    // roughly square cells, one shard per cell. A pixel is only reachable by
+    // its own cell and the neighbours around it, so this is a fixed 3x3 = 9
+    // shape tests wherever the pixel sits.
+    //
+    // The cell COUNT per ring grows with radius (see the cells term), which is the
+    // whole point: a fixed number of shards per ring spreads over an arc that
+    // grows with r, so density falls off as 1/r and the outer rings read as
+    // confetti scattered on bare tint instead of a kaleidoscope.
+    #define NEIGHBOURS 1
 
     float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453123); }
 
@@ -96,7 +99,12 @@ export const kaleidoSkinPlugin: VisualEffect = {
       // Field point, geometrically undistorted (a circle in the field stays a
       // circle on screen) - shapes get SLICED by the mirror lines, which is
       // exactly what a physical kaleidoscope does.
-      float zoom = 2.6 / max(0.3, scale);
+      // The fold is FRAME-relative, but objects occupy a small part of the
+      // frame - a default cube is maybe a fifth of it. Calibrated so Scale 1
+      // puts several rings across a typical object; a base tuned against a
+      // frame-filling shape lands every real object inside ring zero and shows
+      // one soft blob.
+      float zoom = 6.0 / max(0.3, scale);
       vec2 fp = vec2(cos(a), sin(a)) * r * zoom;
 
       // Shard size tracks the wedge width, so raising Facets subdivides the
@@ -109,50 +117,56 @@ export const kaleidoSkinPlugin: VisualEffect = {
       vec3 accum = palette(hue + 0.5) * 0.13;
       float cover = 0.0;
 
-      // One SCREEN-space edge width, converted into field units. Without the
-      // zoom factor the shards go soft as Scale rises (field units grow
-      // relative to the screen) and the pattern turns to mush at the top end.
-      float aa = 0.014 * zoom;
+      // One SCREEN-space edge width, converted into field units (a field
+      // distance covers zoom times less screen, hence the factor). Keep this
+      // SMALL: objects are a fraction of the frame, so a shard is only tens of
+      // pixels across, and a wide edge blurs neighbouring complementary shards
+      // into each other - which reads as pastel mush, not soft glass.
+      float aa = 0.0045 * zoom;
 
-      // Ring pitch shrinks with the wedge, so raising Facets subdivides the
+      // Cell pitch shrinks with the wedge, so raising Facets subdivides the
       // whole lattice - shards AND spacing together - instead of leaving small
       // shards adrift in bare tint.
-      float pitch = 0.42 * shapeScale;
+      float pitch = 0.5 * shapeScale;
       float ringHere = floor(length(fp) / pitch);
+      float aFrac = a / max(0.0001, half_);   // 0..1 across the mirrored half-wedge
 
-      for (int ro = -RINGS_EACH_SIDE; ro <= RINGS_EACH_SIDE; ro++) {
+      for (int ro = -NEIGHBOURS; ro <= NEIGHBOURS; ro++) {
         float ri = ringHere + float(ro);
         if (ri < 0.0) continue;
 
-        for (int k = 0; k < PER_RING; k++) {
-          float fk = float(k);
-          float sa = hash1(ri * 7.31 + fk * 3.17 + 1.3);
-          float sb = hash1(ri * 11.7 + fk * 5.91 + 7.7);
-          float sc = hash1(ri * 3.93 + fk * 9.13 + 13.1);
+        // Cells across the half-wedge at this radius, chosen so a cell's arc
+        // length is about one pitch - i.e. cells stay roughly square, which is
+        // what keeps shard density uniform from centre to rim.
+        float rMid = (ri + 0.5) * pitch;
+        float cells = max(1.0, floor(half_ * rMid / pitch + 0.5));
+        float cellHere = floor(aFrac * cells);
 
-          // Radial drift stays inside the ring's own band; combined with the
-          // shard radius this never exceeds one pitch, which is what makes the
-          // 3-ring window sufficient.
+        for (int co = -NEIGHBOURS; co <= NEIGHBOURS; co++) {
+          // Cells outside [0, cells-1] are deliberately NOT skipped: those are
+          // the shards straddling the mirror lines, and the fold brings them
+          // back sliced - which is what a physical kaleidoscope does.
+          float ci = cellHere + float(co);
+          float sa = hash1(ri * 7.31 + ci * 3.17 + 1.3);
+          float sb = hash1(ri * 11.7 + ci * 5.91 + 7.7);
+          float sc = hash1(ri * 3.93 + ci * 9.13 + 13.1);
+
+          // Both drifts stay inside the cell, so the 3x3 window always contains
+          // every shard that could reach this pixel.
           float rr = (ri + 0.5 + 0.3 * sin(t * (0.19 + 0.11 * sa) + sa * TAU)) * pitch;
-
-          // uu is the fraction across the mirrored half-wedge. Stratified per
-          // slot, then drifted PAST [0,1] so shards cross the mirror lines and
-          // come back sliced - continuous drift, so nothing teleports.
-          float uu = (fk + 0.5) / float(PER_RING) + 0.42 * sin(t * (0.13 + 0.09 * sb) + sb * TAU);
+          float uu = (ci + 0.5) / cells + (0.34 / cells) * sin(t * (0.13 + 0.09 * sb) + sb * TAU);
           vec2 c = vec2(cos(half_ * uu), sin(half_ * uu)) * rr;
 
           float sides = 3.0 + 3.0 * (0.5 + 0.5 * sin(t * 0.11 + sc * TAU));
-          float rad = pitch * (0.34 + 0.22 * sc) * (0.85 + 0.25 * sin(t * 0.23 + sa * TAU));
+          float rad = pitch * (0.4 + 0.22 * sc) * (0.85 + 0.25 * sin(t * 0.23 + sa * TAU));
           float rot = t * (0.12 + 0.2 * sc) + sc * TAU;
 
           float d = sdNgon(rot2(rot) * (fp - c), sides, max(0.02, rad));
           float m = smoothstep(aa, -aa * 0.35, d);
 
-          // Painted outward: later rings lie over earlier ones, slightly
-          // translucent, which builds up the stained-glass depth.
           // Per-shard lightness jitter: a field of uniformly-lit shards reads
           // flat, and this is what gives the glass its stacked depth.
-          vec3 shard = palette(hue + ri * 0.21 + fk * 0.37 + t * 0.03) * (0.72 + 0.42 * sc);
+          vec3 shard = palette(hue + ri * 0.21 + ci * 0.13 + t * 0.03) * (0.72 + 0.42 * sc);
           accum = mix(accum, shard, m * 0.9);
           cover = max(cover, m);
         }
@@ -172,10 +186,13 @@ export const kaleidoSkinPlugin: VisualEffect = {
       float lum = dot(src.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(src.a, 0.004);
       // The object's own shading modulates the texture, so lighting and depth
       // survive; the pow term adds a sheen on the lit side.
-      vec3 col = accum * mix(0.42, 1.15, smoothstep(0.02, 0.55, lum));
+      // Ceiling is 1.0 on purpose: the palette already peaks at full saturation,
+      // so a multiplier above 1 lifts every channel and the shards clip toward
+      // white. Brightly-lit objects (a flat-shaded cube face) turn pastel.
+      vec3 col = accum * mix(0.38, 1.0, smoothstep(0.02, 0.55, lum));
       // A tight sheen on the brightest facets only. Broader than this and it
       // greys the whole lit side, burying the pattern under a highlight.
-      col += pow(clamp(lum, 0.0, 1.0), 4.0) * 0.12;
+      col += pow(clamp(lum, 0.0, 1.0), 5.0) * 0.07;
 
       gl_FragColor = vec4(col, src.a);
     }
