@@ -23,9 +23,15 @@ instrument fits above the tags section in a typical window.
 
 ## Remove, don't decorate (the deprecations)
 
-- **No in-panel titles, icons, or status dots.** The panel header already says
-  "Laser Sphere"; repeating it inside the card is noise. (The panel-top header
-  itself is slated for removal later — do not add anything that depends on it.)
+- **No in-panel titles, icons, or status dots.** The panel already says which
+  track this is; repeating it inside the renderer is noise. Identity lives on
+  the TAB RAIL (`TrackEditor.tsx`): the track/scene name takes the left of the
+  tab row, the tabs shrink to the right, and the subject's display color
+  (`utils/trackDisplayColor.ts`, `var(--accent)` for scenes) tints the ACTIVE
+  tab instead of the neutral elevated fill. It costs no vertical space, which
+  is why the old standalone name header above the tabs stayed dead. The rail is
+  a `@container`: under 300px the tabs fall back to short labels so the name
+  keeps room. Renderers still start flush under the rail and own nothing above it.
 - **No reset-all buttons.** Per-control double-click reset covers it.
 - **No IN FRONT toggle.** Deprecated from the panel until a better layering
   solution exists. `track.onTop` / `defaultOnTop` still drive the engine —
@@ -148,10 +154,12 @@ render `ParameterList` for everything rather than a half-empty custom layout.
 
 ## Open items
 
-- ~~Remove the panel-top track-name header~~ — done: the inspector starts at
-  its tabs; the timeline row and scene tab carry identity. If a panel wants
-  identity, bake it into the surface (the scene panel's etched "SCENE"
-  wordmark, the audio panel's oscilloscope label) — never a heading row.
+- ~~Remove the panel-top track-name header~~ — done, and then answered
+  properly: the standalone header stayed dead, but identity came back ON the
+  tab rail (name left, tabs right, the track's color lighting the active tab).
+  A panel that wants *more* identity than that still bakes it into its own
+  surface (the scene panel's etched "SCENE" wordmark, the audio panel's
+  oscilloscope label) — never a heading row above the tabs.
 - A real layering solution to replace the deprecated IN FRONT toggle.
 - Migrate the other bespoke renderers (Cube, Hopf, …) to these rules: strip
   card chrome, headers, reset buttons, gradient backdrops; adopt the accent
