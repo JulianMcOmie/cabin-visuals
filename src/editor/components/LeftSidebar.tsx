@@ -396,12 +396,15 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
-const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter']
+// Visibility rides with Impulse - its ADSR window is exactly that shape.
+const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
+// Everything else that moves lives under Motion - the compound movers at its
+// top level, the single-behavior ones in its Extras subfolder.
 const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
 
 const CLAIMED_IDS = new Set([
@@ -410,13 +413,14 @@ const CLAIMED_IDS = new Set([
   ...COLOR_IDS,
   ...OBJECT_INSTRUMENTS.map((i) => i.id),
   ...MOTION_ITEMS.map((i) => i.id),
+  ...MOVER_EXTRA_INSTRUMENTS.map((i) => i.id),
   ...SPLITTER_INSTRUMENTS.map((i) => i.id),
 ])
 const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
 
-// The scene library's root, in shelf order. The two Extras folders keep
-// holding exactly what they held before the folder pass - demoted, never
-// deleted, just at the end of the list.
+// The scene library's root, in shelf order. Extras folders keep holding
+// exactly what they held before the folder pass - demoted, never deleted -
+// but they now sit INSIDE the folder they belong to rather than at the root.
 const SCENE_FOLDERS: LibraryFolder[] = [
   {
     id: 'impact',
@@ -429,12 +433,19 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     ],
   },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
-  { id: 'motion', title: 'Motion', description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.', items: MOTION_ITEMS },
+  {
+    id: 'motion',
+    title: 'Motion',
+    description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
+    items: MOTION_ITEMS,
+    subfolders: [
+      { id: 'motion-extras', title: 'Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS },
+    ],
+  },
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
   { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
   { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
-  { id: 'mover-extras', title: 'Mover Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS },
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
 ]
 
