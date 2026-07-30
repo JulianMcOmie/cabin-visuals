@@ -41,6 +41,11 @@ export function resolveVisualCopies(
         beat,
         index,
         count,
+        // The whole formation, so a step can measure how its copies are
+        // arranged before deciding what to do with one of them. Passed by
+        // reference and never mutated here, so this costs nothing per copy and
+        // its identity is stable for the step (see the contract in types.ts).
+        formation: previousVisualCopies,
         ...(placementTransform ? { placementTransform } : {}),
       }),
     )

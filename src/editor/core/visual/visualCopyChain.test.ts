@@ -238,14 +238,17 @@ test('a mover nested under a non-instrument track routes globally through its ta
 })
 
 test('nested globals append in depth-first order after root globals', () => {
+  // Nested under a plain group track, so both stay global: nesting a mover under
+  // another MOVER means something else entirely (see the frame tests below).
   const p = snapshot([
     track({ id: 'cube', instrumentId: 'cube' }),
     track({
-      id: 'bm', type: 'mover', moverId: 'test.chainLift', childIds: ['gm'], inputValues: { distance: 1 },
+      id: 'bm', type: 'mover', moverId: 'test.chainLift', childIds: ['group'], inputValues: { distance: 1 },
       targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
     }),
+    track({ id: 'group', parentId: 'bm', childIds: ['gm'] }),
     track({
-      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'bm', inputValues: { distance: 3 },
+      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'group', inputValues: { distance: 3 },
       targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
     }),
   ], ['cube', 'bm'])
@@ -253,6 +256,58 @@ test('nested globals append in depth-first order after root globals', () => {
   log.length = 0
   resolveVisualCopies(obj.moverAndSplitterChain, 0)
   assert.deepEqual(log, ['lift(1)', 'lift(3)'])
+})
+
+// ── Frames: a mover child of a mover moves that mover ────────────────────────
+
+test('a mover child of a mover is its frame, not a chain entry of the object', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({
+      id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube',
+      childIds: ['frame'], inputValues: { distance: 1 },
+    }),
+    track({ id: 'frame', type: 'mover', moverId: 'test.chainLift', parentId: 'parent', inputValues: { distance: 3 } }),
+  ], ['cube'])
+  const obj = objectByTrackId(p, 'cube')
+  assert.equal(obj.moverAndSplitterChain.length, 1, 'the frame does not join the object chain')
+
+  log.length = 0
+  const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  // The frame resolves first - it establishes where the parent's field is - then
+  // the parent runs inside it.
+  assert.deepEqual(log, ['lift(3)', 'lift(1)'])
+  // test.chainLift has no place in the world (it ignores placementTransform), so
+  // its frame cannot move it: 1 unit up, not 4.
+  assert.equal(copies[0].transform.elements[13], 1)
+})
+
+test('a frame child does not route globally even with targets', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({ id: 'other', instrumentId: 'cube' }),
+    track({
+      id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube',
+      childIds: ['frame'], inputValues: { distance: 1 },
+    }),
+    track({
+      id: 'frame', type: 'mover', moverId: 'test.chainLift', parentId: 'parent', inputValues: { distance: 3 },
+      targets: [{ port: '', scope: { kind: 'track', id: 'other' }, amount: 1 }],
+    }),
+  ], ['cube', 'other'])
+  assert.equal(objectByTrackId(p, 'other').moverAndSplitterChain.length, 0, 'frames answer to their parent only')
+})
+
+test('prior copy count treats a frame chain like any other chain prefix', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({ id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube', childIds: ['s', 'v'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'parent' }),
+    track({ id: 'v', type: 'mover', moverId: 'visibility', parentId: 'parent' }),
+  ], ['cube'])
+  // 'v' sits inside the frame chain, after a splitter, so its MIDI lane
+  // addresses two copies - counted off the frame, not the object's chain.
+  assert.equal(getPriorVisualCopyCount('v', p), 2)
 })
 
 test('a mover with a parent instrument stays local even when it has targets', () => {

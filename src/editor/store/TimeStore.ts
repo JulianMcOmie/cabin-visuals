@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useProjectStore } from './ProjectStore'
+import { audioPickupBars } from '../utils/audioPickup'
 import type { LoopRegion } from '../core/loopRegion'
 
 interface TimeState {
@@ -20,8 +21,11 @@ export const useTimeStore = create<TimeState>((set) => ({
   setIsPlaying: (playing) => set({ isPlaying: playing }),
   setCurrentBeat: (beat) => {
     // Clamp to the project length (bpm/beatsPerBar/totalBars live in ProjectStore).
-    const { totalBars, beatsPerBar } = useProjectStore.getState()
-    set({ currentBeat: Math.max(0, Math.min(beat, totalBars * beatsPerBar)) })
+    // The lower bound is the pickup: audio dragged before bar 0 extends the
+    // playable timeline left, so the playhead may go that far negative.
+    const { totalBars, beatsPerBar, tracks } = useProjectStore.getState()
+    const minBeat = -audioPickupBars(tracks) * beatsPerBar
+    set({ currentBeat: Math.max(minBeat, Math.min(beat, totalBars * beatsPerBar)) })
   },
   setLoopRegion: (region) => set({ loopRegion: region }),
 }))

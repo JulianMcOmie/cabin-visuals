@@ -8,13 +8,16 @@ import { ConstantOrbitMoverUserInterfaceRenderer } from './ConstantOrbitMoverUse
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
+import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserInterface'
 import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
+import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
 import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
 import { KaleidoscopeEffectUserInterfaceRenderer } from './KaleidoscopeEffectUserInterface'
+import { KaleidoSkinEffectUserInterfaceRenderer } from './KaleidoSkinEffectUserInterface'
 import { PixelateEffectUserInterfaceRenderer } from './PixelateEffectUserInterface'
 import { ChromaticAberrationEffectUserInterfaceRenderer } from './ChromaticAberrationEffectUserInterface'
 import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface'
@@ -35,7 +38,9 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.
   calmHueRotate: ColorizerUserInterfaceRenderer,
+  gradient: GradientColorizerUserInterfaceRenderer,
   impactScatter: ImpactScatterMoverUserInterfaceRenderer,
+  conveyor: ConveyorMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
 }
@@ -45,6 +50,7 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   rotate: RotateEffectUserInterfaceRenderer,
   scale: ScaleEffectUserInterfaceRenderer,
   kaleidoscope: KaleidoscopeEffectUserInterfaceRenderer,
+  kaleidoSkin: KaleidoSkinEffectUserInterfaceRenderer,
   pixelate: PixelateEffectUserInterfaceRenderer,
   chromaticAberration: ChromaticAberrationEffectUserInterfaceRenderer,
   opacity: OpacityEffectUserInterfaceRenderer,

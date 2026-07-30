@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { TRACK_LABEL_WIDTH } from '../constants'
+import type { LoopRegion } from '../core/loopRegion'
 
 interface EditingBlockRef {
   trackId: string
@@ -86,6 +87,13 @@ interface UIState {
   loopDrag: { name: string; durationBars: number; target: { trackId: string; bar: number } | null } | null
   setLoopDrag: (v: UIState['loopDrag']) => void
 
+  // Live state of an audible audio-block drag (sync mode): while set, the
+  // transport loops `loop` (overriding the user's loop region), the dragged
+  // block swaps its oscilloscope for a transient-resolution waveform, and the
+  // timeline highlights the looped span. null = no sync drag in progress.
+  audioSyncDrag: { trackId: string; blockId: string; loop: LoopRegion } | null
+  setAudioSyncDrag: (v: UIState['audioSyncDrag']) => void
+
   // The open project's row name (set at load) - display-only editor chrome, e.g.
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
@@ -166,6 +174,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   loopDrag: null,
   setLoopDrag: (v) => set({ loopDrag: v }),
+
+  audioSyncDrag: null,
+  setAudioSyncDrag: (v) => set({ audioSyncDrag: v }),
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),

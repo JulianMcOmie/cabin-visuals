@@ -9,6 +9,7 @@ import { getPlaybackEngine } from '../../core/playback'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
 import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
 import { AudioTrackOscilloscope } from './AudioTrackOscilloscope'
+import { beginAudioSyncDrag, moveAudioSyncDrag, endAudioSyncDrag } from './audioSyncDrag'
 import type { AudioBlock as AudioBlockType } from '../../types'
 
 interface AudioBlockProps {
@@ -27,6 +28,12 @@ interface AudioBlockProps {
  * tempo - so a bpm change resizes it on the spot (audio is never resampled;
  * it just takes more or fewer beats). Dragging writes startBar freely (no
  * grid snap); the audio engine reschedules via the store subscription.
+ *
+ * A MOVE drag is the sync gesture: playback keeps sounding, looping a short
+ * section (see audioSyncDrag.ts), the oscilloscope stands down, and the
+ * waveform redraws at transient resolution. startBar may go NEGATIVE - audio
+ * dragged left of bar 0 lives in the pickup (the timeline shifts to keep it
+ * flush with the left edge; the lane wrapper in Track.tsx applies the offset).
  */
 export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, showOscilloscope = false }: AudioBlockProps) {
   // Width follows tempo reactively - this subscription is the feature.
@@ -34,6 +41,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
   const clip = useAudioStore((s) => s.audioClips[block.clipRef])
   const upload = useAudioStore((s) => s.uploads[block.clipRef])
   const isSelected = useUIStore((s) => s.selectedBlockIds.has(block.id))
+  const isSyncSource = useUIStore((s) => s.audioSyncDrag?.blockId === block.id)
 
   const clipSec = Math.max(0, block.trimEnd - block.trimStart)
   // A zero-length block is a clip whose local decode hasn't landed yet (the
@@ -54,14 +62,19 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     if (!canvas || !clip || pending) return
     // Adaptive resolution: ask for more buckets when drawn wider than the base
     // serves (deep zoom) - a re-extraction from the cached buffer, not a decode.
+    // During a sync drag the block is the surface being aligned by eye, so it
+    // renders at device-pixel density with ~2 buckets per pixel - enough to
+    // resolve individual transients.
+    const dpr = isSyncSource ? Math.max(1, window.devicePixelRatio || 1) : 1
+    const bucketsPerPx = isSyncSource ? 2 : 0.5
     const visibleFrac = clip.duration > 0 ? clipSec / clip.duration : 1
-    const needed = Math.max(BASE_PEAK_BUCKETS, Math.ceil(width / 2 / Math.max(visibleFrac, 1e-6)))
+    const needed = Math.max(BASE_PEAK_BUCKETS, Math.ceil((width * dpr * bucketsPerPx) / Math.max(visibleFrac, 1e-6)))
     getPeaks(block.clipRef, Math.min(needed, 20000)).then(({ buckets, data }) => {
       if (cancelled || !canvasRef.current) return
       const c = canvasRef.current
       const rect = c.getBoundingClientRect()
-      c.width = Math.max(1, Math.round(rect.width))
-      c.height = Math.max(1, Math.round(rect.height))
+      c.width = Math.max(1, Math.round(rect.width * dpr))
+      c.height = Math.max(1, Math.round(rect.height * dpr))
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
@@ -73,17 +86,25 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       const startFrac = clip.duration > 0 ? block.trimStart / clip.duration : 0
       const endFrac = clip.duration > 0 ? block.trimEnd / clip.duration : 1
       for (let x = 0; x < c.width; x++) {
-        const frac = startFrac + (endFrac - startFrac) * (x / c.width)
-        const bi = Math.min(buckets - 1, Math.max(0, Math.floor(frac * buckets)))
-        const min = data[bi * 2]
-        const max = data[bi * 2 + 1]
+        // Aggregate every bucket the pixel spans (not just the first), so a
+        // transient never falls between sample points at low zoom.
+        const fracA = startFrac + (endFrac - startFrac) * (x / c.width)
+        const fracB = startFrac + (endFrac - startFrac) * ((x + 1) / c.width)
+        const b0 = Math.min(buckets - 1, Math.max(0, Math.floor(fracA * buckets)))
+        const b1 = Math.min(buckets - 1, Math.max(b0, Math.ceil(fracB * buckets) - 1))
+        let min = 1
+        let max = -1
+        for (let bi = b0; bi <= b1; bi++) {
+          if (data[bi * 2] < min) min = data[bi * 2]
+          if (data[bi * 2 + 1] > max) max = data[bi * 2 + 1]
+        }
         const y = mid - max * mid
         const h = Math.max(1, (max - min) * mid)
         ctx.fillRect(x, y, 1, h)
       }
     }).catch((err) => console.warn('Waveform draw failed', err))
     return () => { cancelled = true }
-  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending])
+  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending, isSyncSource])
 
   // ── Drag gestures: move (body), trim (edges) - free positioning, no snap ──
   // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
@@ -93,15 +114,25 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     mode: DragMode
     startX: number
     orig: { startBar: number; trimStart: number; trimEnd: number }
-    /** Whether this gesture has already silenced playback. */
-    silenced: boolean
+    /** Whether this gesture has begun its transport bracket (sync or silence). */
+    engaged: boolean
   } | null>(null)
 
+  // Close whichever transport bracket the gesture opened. A move drag runs the
+  // AUDIBLE sync mode; trims keep the classic silent bracket (their per-move
+  // writes reshape the sounding clip itself, where looping mid-trim just stutters).
+  const releaseDragBracket = (mode: DragMode) => {
+    if (mode === 'move') endAudioSyncDrag()
+    else getPlaybackEngine().endBlockDrag()
+  }
+
   // A block unmounted mid-drag (deleted, track removed) never sees pointerup, so
-  // the silence would never be lifted - audio would stop tracking edits until the
+  // the bracket would never be lifted - audio would stop tracking edits until the
   // next play. Release it here.
   useEffect(() => () => {
-    if (dragRef.current?.silenced) getPlaybackEngine().endBlockDrag()
+    const drag = dragRef.current
+    if (drag?.engaged) releaseDragBracket(drag.mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const MIN_CLIP_SEC = 0.05
@@ -142,7 +173,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       mode: edgeZone(e),
       startX: e.clientX,
       orig: { startBar: block.startBar, trimStart: block.trimStart, trimEnd: block.trimEnd },
-      silenced: false,
+      engaged: false,
     }
   }
 
@@ -162,20 +193,25 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
     const deltaBars = (e.clientX - startX) / barWidthPx
 
     // Every mode here rewrites the block on each move, and the store
-    // subscription answers each write with a full re-arm: mute playback for the
-    // gesture so those clip starts can't stack into a runaway gain sum (see
-    // beginBlockDrag). Done on the first MOVE, not on pointerdown, so a plain
-    // click on a block doesn't punch a hole in the audio.
-    if (!drag.silenced) {
-      drag.silenced = true
-      getPlaybackEngine().beginBlockDrag()
+    // subscription answers each write with a full re-arm: those clip starts
+    // would stack into a runaway gain sum at pointermove rates. A MOVE enters
+    // the audible sync mode (looped playback, bounded re-arms); trims mute for
+    // the gesture as before. Done on the first MOVE, not on pointerdown, so a
+    // plain click on a block doesn't punch a hole in the audio.
+    if (!drag.engaged) {
+      drag.engaged = true
+      if (mode === 'move') beginAudioSyncDrag(trackId, block.id)
+      else getPlaybackEngine().beginBlockDrag()
     }
 
     if (mode === 'move') {
-      const startBar = Math.max(0, orig.startBar + deltaBars)
+      // No lower clamp: audio may start BEFORE bar 0 (the pickup). The timeline
+      // grows a lead-in region so the clip stays flush with the left edge.
+      const startBar = orig.startBar + deltaBars
       if (startBar !== block.startBar) {
         useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar })
       }
+      moveAudioSyncDrag()
       return
     }
 
@@ -198,7 +234,7 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       orig.trimEnd - MIN_CLIP_SEC - orig.trimStart, // can't trim past the end
       Math.max(-orig.trimStart, wantedSec), // can't reveal audio before the clip starts
     )
-    const startBar = Math.max(0, orig.startBar + appliedSec / secPerBar)
+    const startBar = orig.startBar + appliedSec / secPerBar
     const trimStart = orig.trimStart + appliedSec
     if (startBar !== block.startBar || trimStart !== block.trimStart) {
       useProjectStore.getState().updateAudioBlock(trackId, block.id, { startBar, trimStart })
@@ -206,18 +242,23 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
   }
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current) {
+    const drag = dragRef.current
+    if (drag) {
       try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* synthetic pointers */ }
-      // Resume: one re-arm at the final position, as the one-shot seek() performs.
-      if (dragRef.current.silenced) getPlaybackEngine().endBlockDrag()
+      if (drag.engaged) releaseDragBracket(drag.mode)
     }
     dragRef.current = null
   }
 
+  // The sync drag is the one moment the STATIC waveform matters most: the live
+  // oscilloscope (playback view) stands down so transients hold still under the
+  // pointer while the loop keeps sounding.
+  const showStaticWaveform = !showOscilloscope || isSyncSource
+
   return (
     <div
       data-audio-block-id={block.id}
-      title={clip ? `${clip.fileName} - drag to move` : 'Audio block'}
+      title={clip ? `${clip.fileName} - drag to move (loops playback while you drag)` : 'Audio block'}
       className="absolute top-0 bottom-0 rounded-[3px] overflow-hidden"
       style={{
         left: `${left}px`,
@@ -227,9 +268,11 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
         borderRight: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
         borderBottom: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
         borderLeft: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
-        boxShadow: isSelected
-          ? '0 0 0 1px #e8f4fc, 0 2px 10px rgba(12, 60, 98, 0.32)'
-          : '0 1px 4px rgba(8, 38, 62, 0.2)',
+        boxShadow: isSyncSource
+          ? '0 0 0 1px #e8f4fc, 0 0 12px rgba(53, 167, 230, 0.55)'
+          : isSelected
+            ? '0 0 0 1px #e8f4fc, 0 2px 10px rgba(12, 60, 98, 0.32)'
+            : '0 1px 4px rgba(8, 38, 62, 0.2)',
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -239,9 +282,9 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ opacity: showOscilloscope ? 0 : 1 }}
+        style={{ opacity: showStaticWaveform ? 1 : 0 }}
       />
-      {showOscilloscope && <AudioTrackOscilloscope trackId={trackId} />}
+      {showOscilloscope && !isSyncSource && <AudioTrackOscilloscope trackId={trackId} />}
       <span
         className="absolute top-0.5 left-1.5 text-[10px] font-medium text-white pointer-events-none truncate max-w-full pr-2"
         style={{ textShadow: '0 1px 2px rgba(8, 34, 56, 0.8)' }}

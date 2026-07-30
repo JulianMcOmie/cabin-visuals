@@ -71,6 +71,115 @@ export function ParamSlider({
   )
 }
 
+/** A small-integer count, as -/+ steppers around a DETENT STRIP: one notch per
+ *  possible value, filled up to the current one. For params where the exact
+ *  integer matters and the range is short (segment/facet counts, taps) - a
+ *  smooth slider makes those a hunt. */
+export function ParamStepper({
+  label, value, min, max, step = 1, onChange, downLabel, upLabel,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+  downLabel?: string
+  upLabel?: string
+}) {
+  const n = Math.round(value)
+  const clamp = (v: number) => Math.max(min, Math.min(max, v))
+  const button = (direction: -1 | 1, glyph: string, aria: string) => (
+    <button
+      aria-label={aria}
+      onClick={() => onChange(clamp(n + direction * step))}
+      disabled={direction === -1 ? n <= min : n >= max}
+      className="flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[3px] border border-[var(--border)] bg-[var(--bg-elevated)] font-mono text-[11px] leading-none text-[var(--text-3)] transition-all hover:text-[var(--text-2)] active:scale-90 disabled:cursor-default disabled:opacity-35"
+    >
+      {glyph}
+    </button>
+  )
+
+  return (
+    <div className="mb-[13px] grid grid-cols-[100px_1fr_44px] items-center gap-2.5">
+      <span className="truncate text-[11px] text-[var(--text-3)]" title={label}>{label}</span>
+      <div className="flex items-center gap-1.5">
+        {button(-1, '−', downLabel ?? `Fewer ${label}`)}
+        <div className="relative h-[9px] min-w-0 flex-1 overflow-hidden rounded-[2px] border border-[var(--border)] bg-[var(--bg-canvas)]">
+          <div
+            className="absolute left-0 top-0 h-full"
+            style={{
+              width: `${((n - min) / Math.max(1, max - min)) * 100}%`,
+              background: 'repeating-linear-gradient(90deg, var(--accent-muted) 0 3px, transparent 3px 5px)',
+            }}
+          />
+        </div>
+        {button(1, '+', upLabel ?? `More ${label}`)}
+      </div>
+      <span className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{n}</span>
+    </div>
+  )
+}
+
+/** A hue param on a RAINBOW track, so the control shows the hues it travels
+ *  through instead of an abstract 0-6.28 number. Values are radians. */
+export function ParamHueSlider({
+  label, value, min, max, step, onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const pct = ((value - min) / Math.max(0.0001, max - min)) * 100
+
+  const setFromClientX = (clientX: number) => {
+    const rect = trackRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const t = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    const raw = min + t * (max - min)
+    onChange(Math.max(min, Math.min(max, Math.round(raw / step) * step)))
+  }
+
+  const onPointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault()
+    lockCursor('grabbing')
+    setFromClientX(e.clientX)
+    const controller = new AbortController()
+    window.addEventListener('pointermove', (ev) => setFromClientX(ev.clientX), { signal: controller.signal })
+    window.addEventListener('pointerup', () => { controller.abort(); unlockCursor() }, { signal: controller.signal })
+  }
+
+  return (
+    <div className="mb-[13px] grid grid-cols-[100px_1fr_44px] items-center gap-2.5">
+      <span className="truncate text-[11px] text-[var(--text-3)]" title={label}>{label}</span>
+      <div
+        ref={trackRef}
+        role="slider"
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        onPointerDown={onPointerDown}
+        className="relative h-[7px] cursor-pointer touch-none select-none rounded-[2px]"
+        style={{
+          background: 'linear-gradient(90deg, hsl(205 55% 46%), hsl(295 55% 46%), hsl(25 55% 46%), hsl(115 55% 46%), hsl(205 55% 46%))',
+          opacity: 0.9,
+        }}
+      >
+        <div
+          className="absolute top-1/2 h-[13px] w-[3px] -translate-y-1/2 border border-[var(--border-strong)] bg-[var(--text-2)]"
+          style={{ left: `calc(${pct}% - 1px)` }}
+        />
+      </div>
+      <span className="text-right font-mono text-[10px] tabular-nums text-[var(--text-muted)]">{value.toFixed(2)}</span>
+    </div>
+  )
+}
+
 /** THE toggle switch for settings panels (boolean params, IN FRONT, etc.) -
  *  one component so every panel gets the same tile: square-ish with rounded
  *  corners, dampened-blue when on, matching the slider family. */

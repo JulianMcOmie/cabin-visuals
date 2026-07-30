@@ -81,6 +81,23 @@ export interface MoverOrSplitterContext {
    * Treat it as immutable.
    */
   placementTransform?: Matrix4
+  /**
+   * Every copy this step is about to transform, in index order - the FORMATION
+   * the entries above it built, of which this copy is `index` of `count`.
+   *
+   * A mover needs this when what it does to one copy depends on how the others
+   * are arranged: Conveyor loops each copy at the formation's own repeat
+   * distance, which is the only way a per-copy wrap can leave the arrangement
+   * intact (wrapping at some other distance tears it apart). It is a WINDOW on
+   * the same objects, not a copy of them - treat it as immutable, and note that
+   * the array identity is stable across one step, which is what makes memoizing
+   * a derived measurement safe.
+   *
+   * Runtime evaluation supplies it; direct/test evaluation may omit it, and a
+   * definition that reads it must then treat its own copy as the whole
+   * formation.
+   */
+  formation?: readonly VisualCopy[]
 }
 
 /**

@@ -2,11 +2,13 @@ import { parametersUserInterfaceRenderer } from './ParametersUserInterface'
 import { PhotoUserInterfaceRenderer } from './PhotoUserInterface'
 import { VideoUserInterfaceRenderer } from './VideoUserInterface'
 import { CubeUserInterfaceRenderer } from './CubeUserInterface'
+import { KaleidoSolidUserInterfaceRenderer } from './KaleidoSolidUserInterface'
 import { TextDisplayUserInterfaceRenderer } from './TextDisplayUserInterface'
 import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
 import { BassRippleUserInterfaceRenderer } from './BassRippleUserInterface'
+import { StrobeUserInterfaceRenderer } from './StrobeUserInterface'
 import { ParticleBurstUserInterfaceRenderer } from './ParticleBurstUserInterface'
 import { PixelBlastUserInterfaceRenderer } from './PixelBlastUserInterface'
 import { IcosahedronBurstUserInterfaceRenderer } from './IcosahedronBurstUserInterface'
@@ -31,11 +33,13 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   video: VideoUserInterfaceRenderer,
   photo: PhotoUserInterfaceRenderer,
   cube: CubeUserInterfaceRenderer,
+  kaleidoSolid: KaleidoSolidUserInterfaceRenderer,
   textDisplay: TextDisplayUserInterfaceRenderer,
   cameraControl: CameraControlUserInterfaceRenderer,
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
   bassRipple: BassRippleUserInterfaceRenderer,
+  strobe: StrobeUserInterfaceRenderer,
   particleBurst: ParticleBurstUserInterfaceRenderer,
   pixelBlast: PixelBlastUserInterfaceRenderer,
   icosahedronBurst: IcosahedronBurstUserInterfaceRenderer,

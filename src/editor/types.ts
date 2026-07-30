@@ -39,6 +39,36 @@ export type TrackType =
 export type SceneId = string
 export const DEFAULT_SCENE_BACKGROUND = '#000000'
 
+export type SceneGradientKind = 'linear' | 'mirror' | 'radial'
+
+/** Two-stop backdrop gradient. `from` sits at the start of the CSS-style
+ * gradient line (the bottom at angle 0), at BOTH edges for mirror, and at the
+ * center for radial. `angle` is CSS convention - degrees clockwise from
+ * "to top" - and is ignored by radial. The whole object is kept around while
+ * `enabled` is false so switching backdrop modes never loses the setup. */
+export interface SceneGradient {
+  enabled: boolean
+  kind: SceneGradientKind
+  from: string
+  to: string
+  angle: number
+}
+
+export function defaultSceneGradient(): SceneGradient {
+  return { enabled: false, kind: 'linear', from: '#1b2c55', to: '#000000', angle: 0 }
+}
+
+export type SceneBackdropMode = 'color' | 'gradient' | 'transparent'
+
+/** Which backdrop the scene actually wears - transparency wins, then an
+ * enabled gradient, else the flat color. The two underlying fields never
+ * fight because ProjectStore.setSceneBackdropMode writes them together. */
+export function sceneBackdropMode(scene: Pick<Scene, 'backgroundTransparent' | 'backgroundGradient'>): SceneBackdropMode {
+  if (scene.backgroundTransparent) return 'transparent'
+  if (scene.backgroundGradient?.enabled) return 'gradient'
+  return 'color'
+}
+
 /** A self-contained editable visual world. Main is represented by the same shape,
  * but accepts director tracks instead of object instruments. */
 export interface Scene {
@@ -47,6 +77,8 @@ export interface Scene {
   isMain: boolean
   backgroundColor: string
   backgroundTransparent: boolean
+  /** Absent on older documents - readers treat that as a disabled gradient. */
+  backgroundGradient?: SceneGradient
   tracks: Record<string, Track>
   rootTrackIds: string[]
   /** The template THIS scene wears (multi-scene projects can differ per
@@ -96,6 +128,13 @@ export interface AudioBlock {
 
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
+/** What an automation lane's notes MEAN: value keyframes joined by a curve, gates
+ *  for seeded noise, or ADSR bursts. Never stored directly - it is implied by which
+ *  config the track carries (`Track.noise` / `Track.burst`); read it through
+ *  `automationMode()` in core/visual/automation.ts so the precedence stays in one
+ *  place. */
+export type AutomationMode = 'curve' | 'noise' | 'burst'
+
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
  * tag group, or a subtree of objects the mover applies to. (`port`/`amount` are
@@ -141,6 +180,11 @@ export interface Track {
    *  seeded random bursts around their pitch-value instead of keyframing.
    *  (See core/visual/automation.ts NoiseConfig.) */
   noise?: { rate: number; smoothness: number; range: number; seed: number }
+  /** Automation tracks only: flips the lane into burst mode - each note fires an
+   *  ADSR envelope that carries the param from whatever is underneath toward the
+   *  note's pitch-value, scaled by velocity and by `intensity`. Wins over `noise`
+   *  if both are somehow set. (See core/visual/automation.ts BurstConfig.) */
+  burst?: { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number }
   color: string
   muted: boolean
   solo: boolean

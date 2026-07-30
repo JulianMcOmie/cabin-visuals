@@ -24,6 +24,13 @@ Automation lanes encode value in note pitch: `pitchToValue`/`valueToPitch` over 
 
 Loop region math (`shouldLoopWrap`); MIDI file import via `@tonejs/midi` → `ImportedMidiTrack`s consumed by ProjectStore.
 
+## mediaFileKinds.ts — the ONE router for "what kind of file is this"
+
+Every drop zone and file picker asks here, and the rules exist because of Safari:
+
+- **`dragCarriesFiles(dataTransfer)` is the only legal gate for `preventDefault()`** on dragenter/dragover. Mid-drag, WebKit exposes no per-item MIME type at all (`items` empty, or `type === ''`), so sniffing kinds decides "not media", skips preventDefault — and a drag the page never accepted delivers **no drop event**, Safari just opens the file. `dataTransfer.types` containing `'Files'` is the one signal every browser gives. Kinds sniffed mid-drag (`mediaKindOfMimeType`) are for wording the overlay only; "couldn't tell" must render as "some file", never as "not ours".
+- **`mediaKindOfFile(file)` routes on drop: MIME type when the browser reports one, filename extension when it doesn't.** Safari hands over an empty `File.type` for any extension macOS has no UTI→MIME mapping for (.aif, .opus, .caf … varies by OS version), so `f.type.startsWith('audio/')` silently dropped real audio on the floor. MIDI is checked first — `'audio/midi'` would otherwise read as audio.
+
 ## directors/ — Main-scene composition
 
 Directors are Main-scene track plugins that compose the other scenes into the final frame. Registry: `directors/index.ts` (`getDirector`, `listDirectors`); defs: `sceneSwitcher`, `cut`, `radialCut`, `crop`. A director resolves per-frame into `CompositionLayer[]` (types.ts): sceneId + opacity + viewport + optional partition mask (`linear` / `radial` / `slice` — see types.ts for the geometry distinctions), `flash` (lerp-toward-white, deliberately not additive), directional `blur`. `sceneBindings.ts` binds MIDI pitches → scene ids stably. VisualScene renders each layer from its scene's render target.

@@ -15,6 +15,7 @@ import {
 } from './rotationMovers'
 import { translationOscillatorMover } from './translationOscillator'
 import { noteColorizer } from './colorizer'
+import { gradientColorizer } from './gradientColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
 import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
@@ -25,10 +26,12 @@ import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
 import { motionMover } from './motion'
+import { conveyorMover } from './conveyor'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
 import { tunnelSplitter } from './tunnel'
+import { duplicateTrailSplitter } from './duplicateTrail'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
@@ -270,6 +273,7 @@ export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } f
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   consolidatedMover,
   motionMover,
+  conveyorMover,
   radialMotionMover,
   meteorImpactMover,
   impactScatterMover,
@@ -284,9 +288,11 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   visibilityMover,
   freezeMover,
   noteColorizer,
+  gradientColorizer,
   radialSplitter,
   gridSplitter,
   polyhedronSplitter,
   parametricPatternSplitter,
   tunnelSplitter,
+  duplicateTrailSplitter,
 ]

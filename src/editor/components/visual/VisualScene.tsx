@@ -20,19 +20,22 @@ import {
   PMREMGenerator,
   NoToneMapping,
   Vector2,
+  Vector3,
   type Texture,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect } from 'postprocessing'
-import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
+import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
-import { DEFAULT_SCENE_BACKGROUND } from '../../types'
+import { isOnTopTrack } from '../../instruments/types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
+import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
@@ -82,6 +85,54 @@ void main() {
   gl_Position = vec4(position, 1.0);
 }`
 
+// Backdrop gradient, painted over the clear color before a scene's objects
+// render. Geometry (t) reproduces CSS gradients exactly - linear projects onto
+// the gradient line with CSS's |W sin| + |H cos| line length so the stops land
+// on the corners, radial is a from-center circle reaching the farthest corner -
+// and the stops MIX in sRGB (what CSS does) before converting to the
+// renderer's linear working space, so the inspector's CSS previews and the
+// real backdrop are the same picture.
+const BACKDROP_GRADIENT_FRAGMENT = `
+uniform vec3 colorFrom;
+uniform vec3 colorTo;
+uniform float kind;      // 0 linear, 1 mirror, 2 radial
+uniform float angle;     // radians, CSS convention: 0 points up, clockwise
+uniform vec2 resolution;
+varying vec2 vUv;
+
+vec3 srgbToLinear(vec3 c) {
+  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+void main() {
+  vec2 p = (vUv - 0.5) * resolution;
+  float t;
+  if (kind > 1.5) {
+    t = length(p) / max(0.5 * length(resolution), 1e-4);
+  } else {
+    vec2 dir = vec2(sin(angle), cos(angle));
+    float len = abs(resolution.x * dir.x) + abs(resolution.y * dir.y);
+    t = dot(p, dir) / max(len, 1e-4) + 0.5;
+    if (kind > 0.5) t = 1.0 - abs(2.0 * t - 1.0); // mirror: from at both edges
+  }
+  gl_FragColor = vec4(srgbToLinear(mix(colorFrom, colorTo, clamp(t, 0.0, 1.0))), 1.0);
+}`
+
+/** The scene's enabled backdrop gradient, or null when it wears a flat color
+ * or exports with alpha (same precedence as sceneBackdropMode). */
+function activeBackdropGradient(scene: Scene | undefined): SceneGradient | null {
+  if (!scene || scene.backgroundTransparent) return null
+  return scene.backgroundGradient?.enabled ? scene.backgroundGradient : null
+}
+
+/** Writes a #rrggbb hex into `out` as RAW sRGB 0..1 components - deliberately
+ * NOT converted to working space; the gradient shader mixes in sRGB and does
+ * its own conversion. */
+function setHexSrgb(out: Vector3, hex: string) {
+  const n = parseInt(hex.slice(1), 16)
+  out.set(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)
+}
+
 const COLOR_FILTER_FRAGMENT = `
 uniform sampler2D tDiffuse;
 uniform float mode;
@@ -128,8 +179,18 @@ void main() {
     filtered = floor(working * 4.0 + 0.5) / 4.0;
   } else if (mode < 8.5) {
     filtered = 0.5 + 0.5 * cos(6.28318530718 * (luma + vec3(0.0, 0.33, 0.67)));
-  } else {
+  } else if (mode < 9.5) {
     filtered = hueShift(working, 0.16 + mod(time * 0.035, 1.0));
+  } else if (mode < 10.5) {
+    // Strobe · blackout. Modes 10 and 11 belong to the Strobe instrument, which
+    // maps its styles onto this shader's numbering (instruments/Strobe.tsx).
+    // Color Filters' own rows only reach mode 9, so the two strobe-only looks
+    // stay out of that instrument's vocabulary.
+    filtered = vec3(0.0);
+  } else {
+    // Strobe · flash. hdrScale carries this back up to the frame's own headroom
+    // below, so a white flash over a bright scene is as bright as that scene.
+    filtered = vec3(1.0);
   }
 
   filtered *= hdrScale;
@@ -406,6 +467,30 @@ function lights() {
 }
 
 /**
+ * Scene id → the track ids of every object using `instrumentId`, in resolve
+ * order. The scene-wide post-process instruments (Bass Ripple, Color Filters,
+ * Strobe) all need this same grouping to drive their compositor passes.
+ *
+ * De-duplicated by track: one track resolves to an entry per VisualCopy
+ * occurrence, and these instruments post-process the whole scene once - running
+ * a pass per copy would just apply the same filter several times over.
+ */
+function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumentId: string) {
+  const byScene = new Map<string, string[]>()
+  const seen = new Set<string>()
+  for (const object of objects) {
+    if (object.instrumentId !== instrumentId) continue
+    const key = `${object.sceneId}:${object.trackId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const ids = byScene.get(object.sceneId) ?? []
+    ids.push(object.trackId)
+    byScene.set(object.sceneId, ids)
+  }
+  return byScene
+}
+
+/**
  * Every logical project scene stays mounted in its own literal THREE.Scene.
  * A second scene per runtime is the existing "In front" pass; a third holds
  * final-frame inversion masks. The compositor renders ordinary scene layers
@@ -503,6 +588,19 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    const gradientMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: BACKDROP_GRADIENT_FRAGMENT,
+      uniforms: {
+        colorFrom: { value: new Vector3() },
+        colorTo: { value: new Vector3() },
+        kind: { value: 0 },
+        angle: { value: 0 },
+        resolution: { value: new Vector2(1, 1) },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const filterMesh = new Mesh(new PlaneGeometry(2, 2), filterMaterial)
     filterMesh.frustumCulled = false
     filterScene.add(filterMesh)
@@ -536,7 +634,7 @@ export function VisualScene() {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, gradientMaterial,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -624,44 +722,19 @@ export function VisualScene() {
     compositor.filterMesh.geometry.dispose()
     compositor.filterMaterial.dispose()
     compositor.warpMaterial.dispose()
+    compositor.gradientMaterial.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
   }, [compositor])
 
-  const bassRippleTrackIds = useMemo(() => {
-    const byScene = new Map<string, string[]>()
-    const seen = new Set<string>()
-    for (const object of objects) {
-      if (object.instrumentId !== 'bassRipple') continue
-      const key = `${object.sceneId}:${object.trackId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const ids = byScene.get(object.sceneId) ?? []
-      ids.push(object.trackId)
-      byScene.set(object.sceneId, ids)
-    }
-    return byScene
-  }, [objects])
-
-  const colorFilterTrackIds = useMemo(() => {
-    const byScene = new Map<string, string[]>()
-    const seen = new Set<string>()
-    for (const object of objects) {
-      if (object.instrumentId !== 'colorFilters') continue
-      const key = `${object.sceneId}:${object.trackId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const ids = byScene.get(object.sceneId) ?? []
-      ids.push(object.trackId)
-      byScene.set(object.sceneId, ids)
-    }
-    return byScene
-  }, [objects])
+  const bassRippleTrackIds = useMemo(() => postProcessTracksByScene(objects, 'bassRipple'), [objects])
+  const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
+  const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
-    const onTop = track?.onTop ?? getInstrument(o.instrumentId)?.defaultOnTop ?? false
+    const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
     const finalInvert = onTop
       && o.instrumentId === 'textDisplay'
       && (track?.params?.colorMode ?? 0) >= 0.5
@@ -676,6 +749,19 @@ export function VisualScene() {
     // Preserve scene-linear values above 1.0 through every offscreen pass.
     // Tone mapping happens once, in the final grade after bloom is composed.
     gl.toneMapping = NoToneMapping
+    // Fullscreen gradient over whatever was just cleared into the current
+    // render target - the gradient variant of setClearColor. Writes no depth,
+    // so the scene's objects draw over it exactly as over a flat clear.
+    const paintBackdropGradient = (gradient: SceneGradient) => {
+      const uniforms = compositor.gradientMaterial.uniforms
+      setHexSrgb(uniforms.colorFrom.value as Vector3, gradient.from)
+      setHexSrgb(uniforms.colorTo.value as Vector3, gradient.to)
+      uniforms.kind.value = gradient.kind === 'radial' ? 2 : gradient.kind === 'mirror' ? 1 : 0
+      uniforms.angle.value = (gradient.angle * Math.PI) / 180
+      ;(uniforms.resolution.value as Vector2).set(Math.max(1, size.width), Math.max(1, size.height))
+      compositor.filterMesh.material = compositor.gradientMaterial
+      gl.render(compositor.filterScene, compositor.filterCam)
+    }
     try {
       const layers = getCompositionLayers()
       const requested = new Set(layers.map((layer) => layer.sceneId))
@@ -687,6 +773,8 @@ export function VisualScene() {
         gl.setRenderTarget(runtime.target)
         gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
         gl.clear(true, true, true)
+        const sceneGradient = activeBackdropGradient(projectScene)
+        if (sceneGradient) paintBackdropGradient(sceneGradient)
         gl.render(runtime.base, camera)
         gl.clearDepth()
         gl.render(runtime.front, camera)
@@ -726,6 +814,26 @@ export function VisualScene() {
           compositor.filterMaterial.uniforms.mode.value = filter.mode
           compositor.filterMaterial.uniforms.amount.value = filter.amount
           compositor.filterMaterial.uniforms.time.value = filter.beat
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
+        // Strobe runs LAST of the scene's own passes: it is a flash over the
+        // finished look, not one more colour in the grade. Inverting a graded
+        // frame is the intent; grading an inverted one would tint the flash.
+        // A dark half-cycle resolves to null, so the pass simply does not run.
+        for (const trackId of strobeTrackIds.get(sceneId) ?? []) {
+          const strobe = resolveActiveStrobe(getObjectState(trackId))
+          if (!strobe) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.filterMaterial
+          compositor.filterMaterial.uniforms.tDiffuse.value = filteredTexture
+          compositor.filterMaterial.uniforms.mode.value = strobe.mode
+          compositor.filterMaterial.uniforms.amount.value = strobe.amount
+          compositor.filterMaterial.uniforms.time.value = strobe.beat
           gl.setRenderTarget(output)
           gl.setClearColor(0x000000, 0)
           gl.clear(true, true, true)
@@ -800,6 +908,12 @@ export function VisualScene() {
       gl.setRenderTarget(compositor.compositeTarget)
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
+      // Main's own backdrop shows wherever the scene layers don't cover
+      // (viewports, partitions) - it gets the gradient treatment too. The
+      // final to-screen pass repaints the whole frame from this target, so
+      // this is the only composite-level site that needs it.
+      const mainGradient = activeBackdropGradient(main)
+      if (mainGradient) paintBackdropGradient(mainGradient)
       gl.render(compositor.scene, compositor.cam)
 
       // Luminance-thresholded, multi-resolution bloom consumes the completed

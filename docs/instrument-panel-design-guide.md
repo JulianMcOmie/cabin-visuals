@@ -2,7 +2,10 @@
 
 The rules for bespoke instrument settings UIs (`src/editor/userInterfaceRenderers/`).
 Laser Sphere (`LaserSphereUserInterface.tsx`) is the reference implementation; new
-panels and reworks of existing ones follow this guide. The point of the guide is to
+panels and reworks of existing ones follow this guide. The knob itself now lives in
+`laserKnob.tsx` (plain numbers in/out) — adopt it, don't re-derive the arc math.
+`AutomationUserInterface.tsx` is the second panel built to these rules, and the
+worked example for a panel whose subject is a SIGNAL rather than an object. The point of the guide is to
 replace "vibe-coded" styling — chrome that appears because a generator liked it,
 not because anyone decided it — with a small set of decisions we actually made.
 
@@ -26,9 +29,14 @@ instrument fits above the tags section in a typical window.
 - **No in-panel titles, icons, or status dots.** The panel already says which
   track this is; repeating it inside the renderer is noise. Identity lives on
   the TAB RAIL (`TrackEditor.tsx`): the track/scene name takes the left of the
-  tab row, the tabs shrink to the right, and the subject's display color
-  (`utils/trackDisplayColor.ts`, `var(--accent)` for scenes) tints the ACTIVE
-  tab instead of the neutral elevated fill. It costs no vertical space, which
+  tab row, the tabs shrink to the right, and the subject's own color tints the
+  ACTIVE tab instead of the neutral elevated fill. That color is
+  `resolveTrackIdentityColor` — the INSTRUMENT's declared color, achromatic
+  included — not the timeline's `resolveTrackDisplayColor`, whose achromatic
+  guard would send a white instrument to its hue-cycle color; the cycle is
+  seeded from the audio sapphire, so that came out blue and read as the app
+  accent rather than as the instrument. Scenes have no color of their own and
+  use `var(--accent)`. It costs no vertical space, which
   is why the old standalone name header above the tabs stayed dead. The rail is
   a `@container`: under 300px the tabs fall back to short labels so the name
   keeps room. Renderers still start flush under the rail and own nothing above it.
@@ -116,7 +124,8 @@ controls. For Laser Sphere that means white-hot centers and one emitter:
 
 ## Control specs
 
-**Knob** — every continuous param is a knob; one control vocabulary per panel.
+**Knob** (`laserKnob.tsx` — shared) — every continuous param is a knob; one
+control vocabulary per panel.
 - 44px, in one row (color pill pushed to the far right with `ml-auto`); the
   instrument's primary param (SIZE here) reads one step larger at 52px.
   Short 1-word labels (SIZE, GLOW, CORE, LIGHT) + mono value
@@ -132,6 +141,33 @@ controls. For Laser Sphere that means white-hot centers and one emitter:
 
 (Bespoke panels don't use sliders; the generic `ParameterList` fallback keeps
 them.)
+
+**Segmented control** — for a param whose values are KINDS, not amounts, and
+above all for a panel's biggest decision. A native `<select>` hides the options
+until clicked and makes the most important choice look like the least important
+one; segments show the whole choice at once. Recessed track (`bg-black/30`,
+hairline border, 2px padding), one lit segment wearing the accent as light
+(`accent@22%` fill, label pushed ~60% toward white), inactive segments neutral
+`white/40`. No second border on the active segment — depth stays reserved for the
+window. When the values have shapes (easing curves), the segment IS the shape:
+draw each option as a mini plot and label the active one beneath, so the choice is
+made by looking rather than by reading option names.
+
+**Signal window** — the live-preview slot for a panel whose subject is a signal
+rather than an object (an automation lane, an envelope). Same frame as the 3D
+preview: full-bleed, fixed height (~120px), square-shouldered, near-black
+`#05070c`, bottom hairline only. Rules:
+- **Plot it with the engine's own sampler.** Import the function playback uses
+  (`easeFraction`, `sampleNoiseLane`) instead of drawing an impression of it, so
+  the picture cannot drift from what plays.
+- **Light lives along the path**: three stacked strokes of the SAME geometry —
+  wide/dim, medium, thin/white-hot — not a blur filter. A `viewBox` stretched
+  with `preserveAspectRatio="none"` smears CSS blurs anisotropically; stacked
+  strokes with `vectorEffect="non-scaling-stroke"` stay clean at any panel width.
+- The window may also be the EDITOR when the shape is the thing being authored
+  (burst mode's grabbable ADSR handles). That is the one sanctioned exception to
+  one-vocabulary-per-panel: the knobs below still give the same values numeric,
+  fine control.
 
 **Live preview**
 - Render the instrument's *real* look: its actual shaders/materials and the
@@ -163,4 +199,7 @@ render `ParameterList` for everything rather than a half-empty custom layout.
 - A real layering solution to replace the deprecated IN FRONT toggle.
 - Migrate the other bespoke renderers (Cube, Hopf, …) to these rules: strip
   card chrome, headers, reset buttons, gradient backdrops; adopt the accent
-  and glow rules.
+  and glow rules (and `laserKnob.tsx` for their knobs).
+- `EnvelopeUserInterface.tsx`'s ADSR pad and `AutomationUserInterface.tsx`'s
+  burst window are the same geometry in two skins (theme vars vs. the lane's
+  accent). When the envelope panel is migrated, they should become one pad.

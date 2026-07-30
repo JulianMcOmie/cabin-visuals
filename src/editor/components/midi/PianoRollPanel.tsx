@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
-import { X, ChevronDown, Waves, Dices } from 'lucide-react'
+import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
@@ -21,8 +21,9 @@ import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
+import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
-import type { Block, InterpolationMode } from '../../types'
+import type { AutomationMode, Block, InterpolationMode } from '../../types'
 
 /** Filled-track position for .slider-console inputs (drives the --fill var);
  *  `color` retints the filled portion (--slider-color) to the edited track. */
@@ -54,6 +55,43 @@ function ToolbarSelect({ value, onChange, title, children }: {
     </div>
   )
 }
+
+/** A labelled toolbar slider - one lane param in its most compact form, wearing
+ *  the edited track's accent like the other toolbar chrome. */
+function ToolbarSlider({ label, title, value, min, max, step, accent, onChange }: {
+  label: string
+  title: string
+  value: number
+  min: number
+  max: number
+  step: number
+  accent: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex flex-shrink-0 items-center gap-1" title={title}>
+      <span className="text-[10px] text-zinc-600">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={sliderFill(value, min, max, accent)}
+        className="slider-console w-10 cursor-pointer"
+      />
+    </div>
+  )
+}
+
+/** The three things an automation lane's notes can mean. Mirrors the settings
+ *  panel's segmented control (AutomationUserInterface). */
+const MODE_OPTIONS: { value: AutomationMode; label: string; title: string; icon: typeof Waves }[] = [
+  { value: 'curve', label: 'Curve', title: 'Notes are value keyframes joined by a curve', icon: TrendingUp },
+  { value: 'noise', label: 'Noise', title: 'Held notes gate a seeded random wobble around their value', icon: Waves },
+  { value: 'burst', label: 'Burst', title: 'Each note fires an ADSR envelope toward its value', icon: Zap },
+]
 
 /** Automation editor context: the param a lane drives, and its value bounds.
  *  kind picks the row model - 'value' shows 13 value-labelled rows across the
@@ -257,7 +295,20 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
   const noise = useProjectStore((s) => s.tracks[trackId]?.noise)
+  const burst = useProjectStore((s) => s.tracks[trackId]?.burst)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
+  const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
+  const mode = automationMode({ noise, burst })
+
+  // In burst mode a row is not a value the lane HOLDS but the value each burst
+  // travels to, and velocity is that burst's intensity - the corner says so,
+  // since the value rows look identical in either mode.
+  const cornerLabel = automation
+    ? mode === 'burst'
+      ? `${automation.paramLabel} · burst target · velocity = intensity`
+      : automation.paramLabel
+    : trigger?.cornerLabel ?? trackName
 
   // Value lanes show 13 value-labelled rows (pitch → param/input value) with the
   // target name in the frozen corner; toggle lanes show exactly On/Off; trigger
@@ -391,46 +442,51 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         {automation && (
           <>
             <div className="w-px h-4 bg-zinc-800" />
-            {/* Noise mode: notes gate seeded random bursts around their value
-                instead of keyframing. Seed is fixed per take (pure function
-                of the beat - scrub/export replay the same wobble); the dice
-                re-roll a new one. */}
-            <button
-              onClick={() => setTrackNoise(trackId, noise
-                ? undefined
-                : { rate: 4, smoothness: 0.5, range: 0.5, seed: Math.floor(Math.random() * 1e9) })}
-              title={noise ? 'Noise bursts ON - notes gate random wobble around their value' : 'Noise bursts OFF - notes are value keyframes'}
-              className={`flex items-center gap-1 px-2 h-5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                noise ? '' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-              }`}
-              style={noise ? { background: accent.pillBg, color: accent.pillText } : undefined}
-            >
-              <Waves size={10} />
-              Noise
-            </button>
-            {noise ? (
+            {/* The lane's MODE, the same three the settings panel shows: value
+                keyframes on a curve, seeded noise gates, or ADSR bursts. The
+                mode's own controls follow it in the toolbar. */}
+            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-zinc-800/50 p-[2px]">
+              {MODE_OPTIONS.map((option) => {
+                const active = option.value === mode
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setAutomationMode(trackId, option.value)}
+                    title={option.title}
+                    className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium transition-colors cursor-pointer ${
+                      active ? '' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                    style={active ? { background: accent.pillBg, color: accent.pillText } : undefined}
+                  >
+                    <option.icon size={10} />
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            {mode === 'burst' && burst ? (
               <>
-                <div className="flex items-center gap-1" title="Wiggles per beat">
-                  <span className="text-[10px] text-zinc-600">Rate</span>
-                  <input type="range" min={0.5} max={16} step={0.5} value={noise.rate}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, rate: Number(e.target.value) })}
-                    style={sliderFill(noise.rate, 0.5, 16, accent.slider)}
-                    className="slider-console w-10 cursor-pointer" />
-                </div>
-                <div className="flex items-center gap-1" title="0 = stepped chaos, 1 = smooth wandering">
-                  <span className="text-[10px] text-zinc-600">Smooth</span>
-                  <input type="range" min={0} max={1} step={0.05} value={noise.smoothness}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, smoothness: Number(e.target.value) })}
-                    style={sliderFill(noise.smoothness, 0, 1, accent.slider)}
-                    className="slider-console w-10 cursor-pointer" />
-                </div>
-                <div className="flex items-center gap-1" title="Deviation around the note's value (fraction of the param range)">
-                  <span className="text-[10px] text-zinc-600">Range</span>
-                  <input type="range" min={0} max={1} step={0.05} value={noise.range}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, range: Number(e.target.value) })}
-                    style={sliderFill(noise.range, 0, 1, accent.slider)}
-                    className="slider-console w-10 cursor-pointer" />
-                </div>
+                {/* Beats per stage, then how far every burst travels. The curve
+                    itself is grabbable in the settings panel. */}
+                <ToolbarSlider label="A" title="Attack, in beats" value={burst.attackBeats} min={0} max={4} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, attackBeats: v })} />
+                <ToolbarSlider label="D" title="Decay, in beats" value={burst.decayBeats} min={0} max={8} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, decayBeats: v })} />
+                <ToolbarSlider label="S" title="Sustain level while the note is held" value={burst.sustainLevel} min={0} max={1} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, sustainLevel: v })} />
+                <ToolbarSlider label="R" title="Release, in beats after the note ends" value={burst.releaseBeats} min={0} max={8} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, releaseBeats: v })} />
+                <ToolbarSlider label="Amt" title="Intensity: how far every burst travels" value={burst.intensity} min={0} max={1} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, intensity: v })} />
+              </>
+            ) : mode === 'noise' && noise ? (
+              <>
+                <ToolbarSlider label="Rate" title="Wiggles per beat" value={noise.rate} min={0.5} max={16} step={0.5}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, rate: v })} />
+                <ToolbarSlider label="Smooth" title="0 = stepped chaos, 1 = smooth wandering" value={noise.smoothness} min={0} max={1} step={0.05}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, smoothness: v })} />
+                <ToolbarSlider label="Range" title="Deviation around the note's value (fraction of the param range)" value={noise.range} min={0} max={1} step={0.05}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, range: v })} />
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
                   title="Re-roll the noise (new random take; each take replays identically)"
@@ -494,7 +550,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}
-        cornerLabel={automation?.paramLabel ?? trigger?.cornerLabel ?? trackName}
+        cornerLabel={cornerLabel}
         block={block}
         notes={notes}
         onNotesChange={setNotes}
