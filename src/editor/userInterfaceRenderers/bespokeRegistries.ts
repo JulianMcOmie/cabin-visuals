@@ -15,6 +15,7 @@ import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
 import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
 import { KaleidoscopeEffectUserInterfaceRenderer } from './KaleidoscopeEffectUserInterface'
+import { KaleidoSkinEffectUserInterfaceRenderer } from './KaleidoSkinEffectUserInterface'
 import { PixelateEffectUserInterfaceRenderer } from './PixelateEffectUserInterface'
 import { ChromaticAberrationEffectUserInterfaceRenderer } from './ChromaticAberrationEffectUserInterface'
 import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface'
@@ -45,6 +46,7 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   rotate: RotateEffectUserInterfaceRenderer,
   scale: ScaleEffectUserInterfaceRenderer,
   kaleidoscope: KaleidoscopeEffectUserInterfaceRenderer,
+  kaleidoSkin: KaleidoSkinEffectUserInterfaceRenderer,
   pixelate: PixelateEffectUserInterfaceRenderer,
   chromaticAberration: ChromaticAberrationEffectUserInterfaceRenderer,
   opacity: OpacityEffectUserInterfaceRenderer,
