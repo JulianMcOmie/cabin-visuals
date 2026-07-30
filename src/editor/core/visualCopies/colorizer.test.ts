@@ -4,6 +4,8 @@ import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import {
   COLORIZER_FLASH_PITCH,
+  COLORIZER_RAINBOW_PITCH,
+  rainbowDiagonal,
   SHAPE_EVEN,
   SHAPE_SPIKE,
   SHAPE_SWELL,
@@ -129,15 +131,13 @@ test('silence passes an upstream tint through instead of clearing it', () => {
   assert.equal(output.colorShift.tintAmount, 0.5)
 })
 
-test('the Colorizer declares exactly one MIDI row and is scrub-deterministic', () => {
-  const rows = noteColorizer.midiRows!(settings())
-  assert.deepEqual(rows, [{ pitch: COLORIZER_FLASH_PITCH, label: 'Color flash' }])
+test('the editor is held to the declared rows, and evaluation is scrub-deterministic', () => {
   assert.equal(noteColorizer.strictMidiRows, true)
-  const notes = [note(1, 3, 0.75), note(2, 0.5)]
+  const notes = [note(1, 3, 0.75), note(2, 0.5), rainbowNote(1.5, 2, 0.8)]
   const opts = settings({ staggerBeats: 0.1 })
-  const first = evaluateColorizer(notes, opts, 2.25, 2)
-  evaluateColorizer(notes, opts, 100, 2)
-  assert.deepEqual(evaluateColorizer(notes, opts, 2.25, 2), first)
+  const first = evaluateColorizer(notes, opts, 2.25, 2, 1.75)
+  evaluateColorizer(notes, opts, 100, 2, 1.75)
+  assert.deepEqual(evaluateColorizer(notes, opts, 2.25, 2, 1.75), first)
 })
 
 test('the color param defaults through mergeDefinitionSettings and can be stored', () => {
@@ -145,4 +145,83 @@ test('the color param defaults through mergeDefinitionSettings and can be stored
   assert.equal(mergeDefinitionSettings(noteColorizer, undefined, { color: '#123456' }).color, '#123456')
   // Numeric params keep coming from inputValues, untouched by the string pass.
   assert.equal(mergeDefinitionSettings(noteColorizer, { intensity: 0.2 }, { color: '#123456' }).intensity, 0.2)
+})
+
+// ── Rainbow row ──────────────────────────────────────────────────────────────
+
+function rainbowNote(beat: number, durationBeats = 1, velocity = 1): ResolvedNote {
+  return { beat, pitch: COLORIZER_RAINBOW_PITCH, durationBeats, velocity, blockStartBeat: 0, blockEndBeat: 1024 }
+}
+
+test('the rainbow row rotates hue rapidly with the beat, from zero at note-on', () => {
+  const opts = settings({ rainbowRate: 2, rainbowSpread: 0, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  const notes = [rainbowNote(1, 4)]
+  // Phase starts at zero when the note starts, so a replay looks identical.
+  close(evaluateColorizer(notes, opts, 1).hue, 0)
+  close(evaluateColorizer(notes, opts, 1.5).hue, 1)
+  close(evaluateColorizer(notes, opts, 2).hue, 2)
+})
+
+test('position along the diagonal offsets the phase - that is the sweep', () => {
+  const opts = settings({ rainbowRate: 0, rainbowSpread: 0.25, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  const notes = [rainbowNote(0, 4)]
+  close(evaluateColorizer(notes, opts, 1, 0, 0).hue, 0)
+  close(evaluateColorizer(notes, opts, 1, 0, 4).hue, 1)
+  close(evaluateColorizer(notes, opts, 1, 0, -4).hue, -1)
+})
+
+test('the diagonal runs corner to corner, not along a single axis', () => {
+  // Equal steps in x and y advance the sweep; moving perpendicular to the
+  // diagonal (+x, -y) does not move along it at all.
+  close(rainbowDiagonal(0, 0), 0)
+  close(rainbowDiagonal(1, -1), 0)
+  close(rainbowDiagonal(1, 1), Math.SQRT2)
+  assert.ok(rainbowDiagonal(2, 2) > rainbowDiagonal(1, 1))
+})
+
+test('the rainbow fades with its envelope instead of popping off', () => {
+  const opts = settings({ rainbowRate: 1, rainbowSpread: 0, attackBeats: 0, releaseBeats: 2, shape: SHAPE_EVEN })
+  const notes = [rainbowNote(0, 0)]
+  // At note-off + half the release the envelope is 0.5, so the sweep is halved.
+  close(evaluateColorizer(notes, opts, 1).hue, 0.5)
+  assert.equal(evaluateColorizer(notes, opts, 3).hue, 0)
+})
+
+test('velocity scales the rainbow, and the two rows drive different channels', () => {
+  const opts = settings({ intensity: 1, rainbowRate: 1, rainbowSpread: 0, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  const soft = evaluateColorizer([rainbowNote(0, 4, 0.5)], opts, 1)
+  close(soft.hue, 0.5)
+  // A rainbow note alone never tints; a flash note alone never rotates hue.
+  assert.equal(soft.tintAmount, 0)
+  const flashOnly = evaluateColorizer([note(0, 4)], opts, 1)
+  assert.equal(flashOnly.hue, 0)
+  assert.ok(flashOnly.tintAmount > 0)
+})
+
+test('holding both rows composes: absolute tint plus a relative sweep', () => {
+  const opts = settings({ intensity: 1, rainbowRate: 1, rainbowSpread: 0, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  const both = evaluateColorizer([note(0, 4), rainbowNote(0, 4)], opts, 1)
+  close(both.tintAmount, 1)
+  close(both.hue, 1)
+})
+
+test('the rainbow reaches the copy as a relative hue offset on top of upstream', () => {
+  const input = identityVisualCopy()
+  input.colorShift.hue = 0.25
+  const output = noteColorizer.resolve({
+    settings: settings({ rainbowRate: 1, rainbowSpread: 0, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN }),
+    notes: [rainbowNote(0, 4)],
+  }).apply(input, { beat: 1, index: 0, count: 1 })
+  close(output[0].colorShift.hue, 1.25)
+  // The rainbow never touches the absolute channel.
+  assert.equal(output[0].colorShift.tint, null)
+})
+
+test('the Colorizer now declares two rows, flash and rainbow', () => {
+  const rows = noteColorizer.midiRows!(settings())
+  assert.deepEqual(rows, [
+    { pitch: COLORIZER_FLASH_PITCH, label: 'Color flash' },
+    { pitch: COLORIZER_RAINBOW_PITCH, label: 'Rainbow sweep' },
+  ])
+  assert.equal(COLORIZER_RAINBOW_PITCH, COLORIZER_FLASH_PITCH + 1)
 })
