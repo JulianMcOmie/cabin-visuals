@@ -22,10 +22,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactElement } from 'react'
 import {
   STROBE_RATE_ROWS,
+  STROBE_REFERENCE_FPS,
   STROBE_STYLE_BLACKOUT,
   STROBE_STYLE_FLASH,
   STROBE_STYLE_INVERT,
+  strobeCycleBeats,
   strobeGate,
+  type StrobeRateRow,
 } from '../instruments/Strobe'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
@@ -48,9 +51,17 @@ function numericValue(bound: UserInterfaceParameter | undefined, fallback: numbe
 
 // ── Live preview ────────────────────────────────────────────────────────────
 
-/** Preview beats per wall-clock second (120bpm), matching Bass Ripple's preview
- *  so the two panels tick at the same imagined tempo. */
-const PREVIEW_BEATS_PER_SECOND = 2
+/** The tempo the preview imagines (120bpm), matching Bass Ripple's preview so the
+ *  two panels tick alike. Musical rows are scaled by it; frame rows ignore it,
+ *  which is the whole distinction the preview needs to show. */
+const PREVIEW_SEC_PER_BEAT = 0.5
+
+/** How long one on/off cycle of `row` lasts in the preview, in seconds.
+ *  `strobeCycleBeats` already folds frame rows onto the beat axis, so one
+ *  conversion covers both kinds. */
+function previewSecondsPerCycle(row: StrobeRateRow): number {
+  return strobeCycleBeats(row, PREVIEW_SEC_PER_BEAT) * PREVIEW_SEC_PER_BEAT
+}
 
 /** A scrap of stage for the flash to act on. Saturated complementary-ish fills,
  *  because inversion is only legible against colour that visibly flips: the cyan
@@ -73,19 +84,19 @@ function PreviewStage() {
   )
 }
 
-function StrobePreview({ style, depth, width, beatsPerCycle }: {
+function StrobePreview({ style, depth, width, secondsPerCycle }: {
   style: number
   depth: number
   width: number
-  beatsPerCycle: number
+  secondsPerCycle: number
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
   const veilRef = useRef<HTMLDivElement>(null)
   // The loop reads the LATEST values without restarting: re-arming the animation
   // on every knob turn would reset the phase and make the flash stutter while
   // being adjusted, which is exactly when it needs to be steady.
-  const live = useRef({ style, depth, width, beatsPerCycle })
-  live.current = { style, depth, width, beatsPerCycle }
+  const live = useRef({ style, depth, width, secondsPerCycle })
+  live.current = { style, depth, width, secondsPerCycle }
 
   useEffect(() => {
     let frame = 0
@@ -95,9 +106,11 @@ function StrobePreview({ style, depth, width, beatsPerCycle }: {
     // flash a div would be absurd. The stage mutates; React owns the layout.
     const tick = (now: number) => {
       if (!origin) origin = now
-      const beat = ((now - origin) / 1000) * PREVIEW_BEATS_PER_SECOND
+      // Seconds, not beats: strobeGate is unit-agnostic, and seconds is the axis
+      // both row kinds already agree on here.
+      const seconds = (now - origin) / 1000
       const current = live.current
-      const lit = strobeGate(beat, current.beatsPerCycle, current.width) * current.depth
+      const lit = strobeGate(seconds, current.secondsPerCycle, current.width) * current.depth
       const stage = stageRef.current
       const veil = veilRef.current
       if (stage && veil) {
@@ -115,7 +128,7 @@ function StrobePreview({ style, depth, width, beatsPerCycle }: {
   return (
     <div
       data-testid="strobe-preview"
-      className="relative h-[120px] overflow-hidden border-b border-white/[0.06] bg-[#05070c]"
+      className="relative h-[76px] overflow-hidden border-b border-white/[0.06] bg-[#05070c]"
     >
       <div ref={stageRef} className="absolute inset-0">
         <PreviewStage />
@@ -127,13 +140,57 @@ function StrobePreview({ style, depth, width, beatsPerCycle }: {
 
 // ── The rate legend ─────────────────────────────────────────────────────────
 
+/** One chip per row: the division it plays, with its pitch beneath. */
+function RateChip({ row, active, onSelect }: {
+  row: StrobeRateRow
+  active: boolean
+  onSelect: (pitch: number) => void
+}) {
+  const [division] = row.label.split(' · ')
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      title={`${row.label} · pitch ${row.pitch}`}
+      onClick={() => onSelect(row.pitch)}
+      // Single line, division and pitch side by side: three stacked families of
+      // two-line chips overran the panel and pushed the knobs out of view.
+      className={`flex min-w-0 flex-1 items-baseline justify-center gap-1 overflow-hidden rounded-sm border px-1 py-[2px] transition-colors ${
+        active
+          ? 'border-transparent bg-[#fde047] text-black'
+          : 'border-white/10 bg-black/25 text-white/55 hover:bg-white/[0.06]'
+      }`}
+    >
+      <span className="font-mono text-[9px] leading-tight tabular-nums">{division}</span>
+      <span className={`font-mono text-[7px] leading-tight tabular-nums ${active ? 'text-black/50' : 'text-white/25'}`}>
+        {row.pitch}
+      </span>
+    </button>
+  )
+}
+
+/** The three families, in row order. Splitting by which axis a row is on is not
+ *  decoration: musical rows stretch with the tempo and frame rows do not, which
+ *  is the one thing a user has to know before picking between them. */
+const RATE_GROUPS: Array<{ label: string; rows: StrobeRateRow[] }> = [
+  { label: 'STRAIGHT', rows: STROBE_RATE_ROWS.filter((row) => row.beatsPerCycle !== undefined && !row.triplet) },
+  { label: 'TRIPLET', rows: STROBE_RATE_ROWS.filter((row) => row.triplet === true) },
+  { label: 'FRAMES', rows: STROBE_RATE_ROWS.filter((row) => row.framesPerCycle !== undefined) },
+]
+
 /** The rows the piano roll will show, with the pitch that plays each one. Picking
  *  a chip only aims the preview - rate is played, not set, so this writes nothing
  *  to the track. `1/16` is pre-selected: it is the row the instrument emphasizes
- *  and the "rapid fire" the strobe is for. */
+ *  and the "rapid fire" the strobe is for.
+ *
+ *  One labelled line per family. Twelve chips do not fit on a single line at the
+ *  panel's narrow end, and a labelled row also answers "why are there two kinds
+ *  of number here" without a paragraph. This pushes the panel a little past the
+ *  design guide's ~240px budget; the vocabulary tripled, so the legend earned
+ *  the height, and the preview gave some back. */
 function RateLegend({ selected, onSelect }: {
   selected: number
-  onSelect: (beatsPerCycle: number) => void
+  onSelect: (pitch: number) => void
 }) {
   return (
     <div className="px-3 pt-2">
@@ -141,31 +198,26 @@ function RateLegend({ selected, onSelect }: {
         <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">RATE</span>
         <span className="text-[8px] text-white/25">played as a MIDI row</span>
       </div>
-      <div className="flex gap-1">
-        {STROBE_RATE_ROWS.map((row) => {
-          const active = row.beatsPerCycle === selected
-          const [division] = row.label.split(' · ')
-          return (
-            <button
-              key={row.pitch}
-              type="button"
-              aria-pressed={active}
-              title={`${row.label} · pitch ${row.pitch}`}
-              onClick={() => onSelect(row.beatsPerCycle)}
-              className={`flex min-w-0 flex-1 flex-col items-center rounded-sm border py-[3px] transition-colors ${
-                active
-                  ? 'border-transparent bg-[#fde047] text-black'
-                  : 'border-white/10 bg-black/25 text-white/55 hover:bg-white/[0.06]'
-              }`}
-            >
-              <span className="font-mono text-[9px] leading-tight tabular-nums">{division}</span>
-              <span className={`font-mono text-[7px] leading-tight tabular-nums ${active ? 'text-black/55' : 'text-white/25'}`}>
-                {row.pitch}
-              </span>
-            </button>
-          )
-        })}
+      <div className="flex flex-col gap-1">
+        {RATE_GROUPS.map((group) => (
+          <div key={group.label} className="flex items-stretch gap-1">
+            <span className="w-[46px] flex-none self-center text-[7px] font-semibold leading-tight tracking-[0.1em] text-white/30">
+              {group.label}
+            </span>
+            {group.rows.map((row) => (
+              <RateChip key={row.pitch} row={row} active={row.pitch === selected} onSelect={onSelect} />
+            ))}
+            {/* Keep every family's chips the same width as the widest family's,
+                so the three lines read as one table instead of three sizes. */}
+            {Array.from({ length: 5 - group.rows.length }, (_, i) => (
+              <span key={`pad-${i}`} className="min-w-0 flex-1" aria-hidden="true" />
+            ))}
+          </div>
+        ))}
       </div>
+      <p className="mt-0.5 text-[7px] leading-snug text-white/25">
+        T = triplet. f rows flash on a {STROBE_REFERENCE_FPS}fps grid at a fixed Hz, ignoring tempo.
+      </p>
     </div>
   )
 }
@@ -340,16 +392,18 @@ function StrobeKnob({ parameter: bound, label, large = false }: {
 
 // ── The panel ───────────────────────────────────────────────────────────────
 
-/** Which rate the preview flashes at, defaulting to the row the instrument
- *  emphasizes. View state only - it never reaches the track. */
-const DEFAULT_PREVIEW_RATE = STROBE_RATE_ROWS.find((row) => row.emphasized)?.beatsPerCycle
-  ?? STROBE_RATE_ROWS[0].beatsPerCycle
+/** Which row the preview flashes at, defaulting to the one the instrument
+ *  emphasizes. Tracked by PITCH (a row's stable identity) rather than by cycle
+ *  length, which is no longer unique across the two axes. View state only - it
+ *  never reaches the track. */
+const DEFAULT_PREVIEW_PITCH = (STROBE_RATE_ROWS.find((row) => row.emphasized) ?? STROBE_RATE_ROWS[0]).pitch
 
 export const StrobeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const style = parameter(parameters, 'style')
   const depth = parameter(parameters, 'depth')
   const width = parameter(parameters, 'width')
-  const [previewRate, setPreviewRate] = useState(DEFAULT_PREVIEW_RATE)
+  const [previewPitch, setPreviewPitch] = useState(DEFAULT_PREVIEW_PITCH)
+  const previewRow = STROBE_RATE_ROWS.find((row) => row.pitch === previewPitch) ?? STROBE_RATE_ROWS[0]
 
   const shade = useMemo(() => {
     const accentHsv = hexToHsv(ACCENT)
@@ -366,11 +420,11 @@ export const StrobeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ p
         style={typeof style.value === 'number' ? Math.round(style.value) : STROBE_STYLE_INVERT}
         depth={numericValue(depth, 1)}
         width={numericValue(width, 0.5)}
-        beatsPerCycle={previewRate}
+        secondsPerCycle={previewSecondsPerCycle(previewRow)}
       />
-      <RateLegend selected={previewRate} onSelect={setPreviewRate} />
+      <RateLegend selected={previewPitch} onSelect={setPreviewPitch} />
       <div
-        className="flex items-end justify-center gap-5 px-4 pb-3 pt-2"
+        className="flex items-end justify-center gap-5 px-4 pb-2 pt-1.5"
         // The preview's light spilling through the seam onto the console - the
         // one earned gradient, per the guide.
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}

@@ -5,11 +5,11 @@ A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; 
 ## Commands
 
 - `npm run dev` — dev server (turbopack), port 3000. In a worktree, use a unique port + `NEXT_DIST_DIR` (see `dev:isolated`).
-- `npm run test:visual` — the node test suite (core/visual, visualCopies, directors, photo, store, utils, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest.
-  **Its glob does NOT include `src/editor/instruments/`**, so the colocated instrument tests
-  (BassRipple, LaserSphere, Strobe, types) never run in the normal suite and 4 BassRipple
-  release tests are currently red. Run them explicitly after touching an instrument:
-  `npx node --import tsx --test src/editor/instruments/*.test.ts`.
+  **A build must not share a running dev server's `NEXT_DIST_DIR`.** `npm run build` rewrites that
+  directory and the live server then 500s on every route with `ENOENT … build-manifest.json`, which
+  reads like a code error and is not one. Give the build its own dir (`NEXT_DIST_DIR=.next-build-<port>`);
+  recovering means stopping the server, deleting the dist dir, and restarting.
+- `npm run test:visual` — the node test suite (core/visual, visualCopies, directors, photo, **instruments**, store, utils, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest.
 - `npm run build` — production build; the `/commit` skill runs this first.
 - `npm run db:generate` / `db:migrate` — Drizzle (needs `DATABASE_URL`).
 - Single test file: `node --import tsx --test --experimental-test-module-mocks path/to/file.test.ts`.

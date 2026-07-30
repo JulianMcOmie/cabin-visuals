@@ -419,7 +419,10 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
-const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
+// Strobe files with Color Filters rather than under Impact: both are scene-wide
+// colour post-process passes held by a note, and Strobe's styles ARE colour
+// looks (inversion, blackout, flash) on a beat or frame gate.
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters', 'strobe']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its
