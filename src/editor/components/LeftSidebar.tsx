@@ -288,7 +288,18 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // covers them (the instruments stay registered for old projects).
 const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
-const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
+
+// The Instruments folder. These are object instruments like any other; what
+// they share is that a note is a PERFORMANCE on them - each one spawns its own
+// short-lived event rather than posing a standing shape - so they belong
+// together rather than scattered through Objects and Extras.
+const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop'])
+const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
+
+// Extras is the remainder: everything the curated folders above did not claim.
+const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
+  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id),
+)
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
@@ -417,6 +428,7 @@ const CLAIMED_IDS = new Set([
   ...UTILITY_IDS,
   ...COLOR_IDS,
   ...OBJECT_INSTRUMENTS.map((i) => i.id),
+  ...INSTRUMENT_FOLDER_IDS,
   ...MOTION_ITEMS.map((i) => i.id),
   ...SPLITTER_INSTRUMENTS.map((i) => i.id),
 ])
@@ -439,6 +451,7 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
   { id: 'motion', title: 'Motion', description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.', items: MOTION_ITEMS },
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
+  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
   { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
   { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
