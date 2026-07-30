@@ -33,7 +33,7 @@ import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
-import { resolveActiveBassRipple } from '../../instruments/BassRipple'
+import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
 
@@ -149,36 +149,10 @@ uniform float time;
 uniform float aspect;
 varying vec2 vUv;
 
-float warpHash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-}
-
-float warpNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(warpHash(i), warpHash(i + vec2(1.0, 0.0)), u.x),
-    mix(warpHash(i + vec2(0.0, 1.0)), warpHash(i + vec2(1.0, 1.0)), u.x),
-    u.y
-  );
-}
-
-// Three octaves is enough for the field to look organic rather than blobby,
-// and cheap enough to run per pixel per scene.
-float warpFbm(vec2 p) {
-  return warpNoise(p) * 0.6 + warpNoise(p * 2.03) * 0.3 + warpNoise(p * 4.01) * 0.1;
-}
+${BASS_RIPPLE_FIELD_GLSL}
 
 void main() {
-  // Aspect-corrected sampling, so the field stays round instead of stretching
-  // with the viewport.
-  vec2 p = vUv * vec2(aspect, 1.0) * scale;
-  vec2 drift = vec2(time * speed, time * speed * 0.7);
-  float nx = warpFbm(p + drift);
-  float ny = warpFbm(p + drift + vec2(41.3, 19.7));
-  // Centered on zero so the scene bends both ways rather than sliding.
-  vec2 offset = (vec2(nx, ny) - 0.5) * 2.0 * amount * 0.06;
+  vec2 offset = bassRippleOffset(vUv, amount, scale, speed, time, aspect);
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 

@@ -7,6 +7,7 @@ export type UserInterfaceRendererId =
   | 'cameraControl'
   | 'oscilloscope'
   | 'colorFilters'
+  | 'bassRipple'
   | 'particleBurst'
   | 'pixelBlast'
   | 'icosahedronBurst'
