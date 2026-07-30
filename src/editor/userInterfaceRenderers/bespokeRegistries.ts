@@ -8,6 +8,7 @@ import { ConstantOrbitMoverUserInterfaceRenderer } from './ConstantOrbitMoverUse
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
+import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
@@ -34,6 +35,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.
   calmHueRotate: ColorizerUserInterfaceRenderer,
+  impactScatter: ImpactScatterMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
 }
