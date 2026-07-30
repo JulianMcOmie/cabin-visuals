@@ -61,7 +61,7 @@ export function ShaderWrapper({
   postMoverScalePlugins: EffectInstance[]
   children: ReactNode
 }) {
-  const { gl, camera, size } = useThree()
+  const { gl, camera, size, scene: parentScene } = useThree()
   const outMeshRef = useRef<Mesh>(null)
 
   // Offscreen render rig: scene (+ lights + a world-transform holder), ping-pong targets,
@@ -128,6 +128,12 @@ export function ShaderWrapper({
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.
     const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+
+    // Inherit the mounting scene's env map so env-driven materials (Texturizer
+    // chrome/glass) keep their reflections inside the offscreen pass.
+    if (rig.scene.environment !== parentScene.environment) {
+      rig.scene.environment = parentScene.environment
+    }
 
     // Render the object (with world × Scale effect × this occurrence's
     // VisualCopy transform) into the source FBO. The object's size

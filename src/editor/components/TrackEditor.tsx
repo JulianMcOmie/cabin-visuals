@@ -99,8 +99,9 @@ function TargetSelect({
 }
 
 // The picker menu's groups, generated from the registry so a new plugin shows up
-// here with no extra wiring. Category order is fixed: transform, clone, shader.
+// here with no extra wiring. Category order is fixed: material, transform, shader.
 const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
+  { key: 'material', label: 'Material' },
   { key: 'transform', label: 'Transform' },
   // 'Surface' rather than 'Material': these GENERATE the object's surface (the
   // pattern is bolted to the mesh and travels with it), which is what the user is

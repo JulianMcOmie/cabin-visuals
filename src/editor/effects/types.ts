@@ -10,7 +10,10 @@ import type { ParamDef } from '../instruments/types'
 // OUTPUT, it reaches into the target's own materials and generates their surface.
 // That is the only way to get a texture that is bolted to the mesh and travels with
 // it - a screen-space `shader` pass is frame-relative, so its pattern slides across
-// a moving object instead of belonging to it.
+// a moving object instead of belonging to it. Material plugins come in two shapes:
+// a `materialField` GLSL chunk injected into built-in materials (Kaleido Skin), or
+// an `applyMaterial`/`restoreMaterial` pair that re-materials the meshes per frame
+// (Texturizer) - a plugin declares exactly one of the two.
 export type EffectCategory = 'transform' | 'shader' | 'material'
 
 
@@ -43,4 +46,11 @@ export interface VisualEffect {
    *  `#include <common>` / `vec4 diffuseColor`); instruments that draw with their
    *  own raw ShaderMaterial are left untouched. */
   materialField?: string
+  /** Material plugins re-material the wrapped group's meshes each frame (same purity
+   *  contract as applyTransform: a function of settings + beat, caching allowed). The
+   *  plugin must leave the instrument's own materials intact and restorable. */
+  applyMaterial?: (root: Group, settings: Record<string, number>, time: number) => void
+  /** Undo applyMaterial's swaps (called every frame while the instance is disabled,
+   *  and on unmount) - must be idempotent and cheap once restored. */
+  restoreMaterial?: (root: Group) => void
 }

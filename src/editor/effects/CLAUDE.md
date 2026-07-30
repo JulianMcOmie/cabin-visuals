@@ -4,7 +4,7 @@ Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism
 
 - **transform** — mutates the wrapping Group per frame.
 - **shader** — screen-space GLSL post pass over the object's rendered output.
-- **material** — GENERATES the target's surface by injecting GLSL into its own materials (`materialField`). The only way to get a pattern that is bolted to the mesh and travels with it; a screen-space pass is frame-relative, so its pattern slides across a moving object. Applied by `components/visual/MaterialWrapper.tsx`, innermost in the chain.
+- **material** — GENERATES the target's surface. The only way to get a pattern that is bolted to the mesh and travels with it; a screen-space pass is frame-relative, so its pattern slides across a moving object. Two shapes: a `materialField` GLSL chunk injected into built-in materials (Kaleido Skin, applied by `components/visual/MaterialWrapper.tsx`, innermost in the chain), or an `applyMaterial`/`restoreMaterial` pair that re-materials the meshes per frame (Texturizer, applied by `TransformWrapper`'s SingleMaterial). A plugin declares exactly one shape.
 
 Clone effects were replaced by VisualCopy splitters (`core/visualCopies/`).
 
@@ -38,6 +38,14 @@ OWN space (see `materials/kaleidoField.ts`). What to know:
 
 ## Gotchas
 
+
+Material plugins (`materials/texturizer.ts` + pure half in `texturizerCore.ts`):
+- `applyMaterial(root, settings, beat)` swaps each convertible mesh material for a cached MeshPhysicalMaterial (MeshToonMaterial for Toon) derived from the original; `restoreMaterial(root)` hands originals back — called every frame while disabled AND on unmount, so it must be idempotent/cheap once restored. Originals are never mutated.
+- **Liveness contract**: instruments animate their materials two ways. Refs captured at mount hit the ORIGINAL — a dirty-check mirrors colour/opacity-base/map onto the swap when the original changes. `mesh.material` reads hit OURS — never blind-overwrite those channels. `emissiveIntensity` uses the floor rule: the finish's value is a floor, and a value we didn't write last frame (an instrument's note flash) is combined via max, so pulses survive every finish.
+- Define-flipping props (sheen/transmission/maps) need `needsUpdate` when they cross zero — three won't recompile the program otherwise; the swap fingerprints this.
+- Chrome/glass read from `scene.environment`; ShaderWrapper's offscreen rig inherits it from its mounting scene per frame so env reflections survive shader chaining.
+
+Gotchas:
 - The base transform effects (offset/rotate/scale) are `deprecated: true` — hidden from the add menu in favor of the canonical `tf*` track transform (`core/transform.ts`); existing instances keep rendering. Don't build new features on them.
 - Scale is the deliberate chain-ordering exception: renderers lift it OUTSIDE VisualCopy movers (`core/visual/postMoverScale.ts`) so mover layout distances stay size-independent.
 - `applyTransform` must stay a pure function of `(settings, beat)` — same pause invariant as instruments.
