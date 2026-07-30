@@ -29,9 +29,14 @@ instrument fits above the tags section in a typical window.
 - **No in-panel titles, icons, or status dots.** The panel already says which
   track this is; repeating it inside the renderer is noise. Identity lives on
   the TAB RAIL (`TrackEditor.tsx`): the track/scene name takes the left of the
-  tab row, the tabs shrink to the right, and the subject's display color
-  (`utils/trackDisplayColor.ts`, `var(--accent)` for scenes) tints the ACTIVE
-  tab instead of the neutral elevated fill. It costs no vertical space, which
+  tab row, the tabs shrink to the right, and the subject's own color tints the
+  ACTIVE tab instead of the neutral elevated fill. That color is
+  `resolveTrackIdentityColor` — the INSTRUMENT's declared color, achromatic
+  included — not the timeline's `resolveTrackDisplayColor`, whose achromatic
+  guard would send a white instrument to its hue-cycle color; the cycle is
+  seeded from the audio sapphire, so that came out blue and read as the app
+  accent rather than as the instrument. Scenes have no color of their own and
+  use `var(--accent)`. It costs no vertical space, which
   is why the old standalone name header above the tabs stayed dead. The rail is
   a `@container`: under 300px the tabs fall back to short labels so the name
   keeps room. Renderers still start flush under the rail and own nothing above it.

@@ -23,7 +23,7 @@ import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } f
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
-import { resolveTrackDisplayColor } from '../utils/trackDisplayColor'
+import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { withAlpha } from '../userInterfaceRenderers/colorWheel'
 import type { Routing, EffectInstance, Scene, Track } from '../types'
 
@@ -242,7 +242,11 @@ function panelIdentity(
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
       : 'Track'
-    return { name: track.name, kind, color: resolveTrackDisplayColor(track, tracks) }
+    // The instrument's own color, not the timeline's display color: the tab is
+    // naming this instrument, so an achromatic instrument should light the tab
+    // white rather than borrow a cycle color that starts out blue and reads as
+    // the app/scene accent.
+    return { name: track.name, kind, color: resolveTrackIdentityColor(track, tracks) }
   }
   if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
   return null

@@ -59,3 +59,32 @@ export function resolveTrackDisplayColor(track: Track, tracks: Record<string, Tr
   }
   return track.color
 }
+
+/**
+ * The color for chrome that is NAMING one instrument rather than color-coding a
+ * timeline: the instrument's own declared color, achromatic or not.
+ *
+ * Same walk as the display color, minus the achromatic guard. That guard keeps a
+ * white instrument's timeline blocks from going monochrome among colored
+ * neighbours, but it costs the instrument its identity everywhere else - and
+ * because the cycle it falls back to is seeded from the audio sapphire, the
+ * first tracks in a project are BLUE. A white instrument's inspector tab
+ * therefore came out the same blue as the app accent and read as "the scene's
+ * color", which is exactly what the tab is not. Here white means white.
+ *
+ * An instrument that declares no color at all still has nothing to say, so the
+ * cycle color remains the last resort.
+ */
+export function resolveTrackIdentityColor(track: Track, tracks: Record<string, Track>): string {
+  if (track.type === 'audio') return AUDIO_TRACK_COLOR
+  if (track.type === 'base') {
+    const derived = instrumentIdentity(track)
+    return derived && colorToOklch(derived) ? derived : track.color
+  }
+  let current: Track | undefined = track
+  for (let depth = 0; current?.parentId && depth < 32; depth++) {
+    current = tracks[current.parentId]
+    if (current?.type === 'base') return resolveTrackIdentityColor(current, tracks)
+  }
+  return track.color
+}

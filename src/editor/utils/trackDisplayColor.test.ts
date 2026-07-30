@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolveTrackDisplayColor } from './trackDisplayColor'
+import { resolveTrackDisplayColor, resolveTrackIdentityColor } from './trackDisplayColor'
 import { AUDIO_TRACK_COLOR } from './trackColors'
 import type { Track } from '../types'
 
@@ -54,4 +54,36 @@ test('child lanes wear the owning instrument color via the parent walk', () => {
 test('audio tracks keep the fixed sapphire identity', () => {
   const t = baseTrack({ type: 'audio' })
   assert.equal(resolveTrackDisplayColor(t, { [t.id]: t }), AUDIO_TRACK_COLOR)
+})
+
+// ── Identity color (inspector chrome naming ONE instrument) ─────────────────
+
+test('identity color keeps an achromatic instrument achromatic', () => {
+  // The tab is naming this instrument. Sending white to the cycle color made it
+  // BLUE (the cycle is seeded from the audio sapphire) and the tab then read as
+  // the app accent rather than as Text Display.
+  const t = baseTrack({ instrumentId: 'textDisplay' })
+  assert.equal(resolveTrackDisplayColor(t, { [t.id]: t }), CYCLE_COLOR)
+  assert.equal(resolveTrackIdentityColor(t, { [t.id]: t }), '#ffffff')
+})
+
+test('identity color follows the instrument color param, like the display color', () => {
+  const t = baseTrack({ stringParams: { baseColor: '#ff3b30' } })
+  assert.equal(resolveTrackIdentityColor(t, { [t.id]: t }), '#ff3b30')
+})
+
+test('identity color falls back to the cycle when an instrument declares no color', () => {
+  const t = baseTrack({ instrumentId: 'kaleidoSolid' })
+  assert.equal(resolveTrackIdentityColor(t, { [t.id]: t }), CYCLE_COLOR)
+})
+
+test('identity color reaches the owning instrument from a child lane', () => {
+  const parent = baseTrack({ id: 'p', instrumentId: 'textDisplay' })
+  const lane = baseTrack({ id: 'lane', type: 'mover', parentId: 'p', color: '#123456' })
+  assert.equal(resolveTrackIdentityColor(lane, { p: parent, lane }), '#ffffff')
+})
+
+test('audio tracks keep the sapphire identity here too', () => {
+  const t = baseTrack({ type: 'audio' })
+  assert.equal(resolveTrackIdentityColor(t, { [t.id]: t }), AUDIO_TRACK_COLOR)
 })
