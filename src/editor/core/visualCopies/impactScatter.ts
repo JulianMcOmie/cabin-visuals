@@ -101,15 +101,19 @@ export interface ImpactScatterSettings {
   /** 0 = one clean radial pulse, 1 = shrapnel. */
   chaos: number
   /**
-   * The SHAPE of the return, from -1 to +1, centred at 0.
+   * The SHAPE of the return: three named curves, borrowed wholesale from the
+   * Colorizer's release shapes so the same word means the same thing in both
+   * panels. Stored as -1 / 0 / +1 and read as a continuum, so an automation
+   * lane can still sweep between them.
    *
-   * -1 GENTLE: the field hangs out at full displacement and only comes home at
+   * SWELL (-1): the field hangs out at full displacement and only comes home at
    *  the end, in one smooth move. Low absorption, so nothing eats the excursion
    *  and the crest of the swing is what you watch.
-   * +1 PERCUSSIVE: most of the distance is recovered almost immediately and
-   *  what is left becomes a long quiet tail. Heavy speed-squared absorption
-   *  collapses the big excursion, then all but vanishes, leaving the slow
-   *  linear settle - two timescales out of one impulse.
+   * EVEN (0): a straight, even decay home.
+   * SPIKE (+1): most of the distance is recovered almost immediately and what is
+   *  left becomes a long quiet tail. Heavy speed-squared absorption collapses
+   *  the big excursion, then all but vanishes, leaving the slow linear settle -
+   *  two timescales out of one impulse.
    */
   curve: number
   centerX: number
@@ -159,6 +163,12 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
  * the exponents put the interesting half of each range under the middle of the
  * knob's travel, and the constants are the values that survived looking at it.
  */
+/** The three return shapes, matching the Colorizer's release-curve vocabulary.
+ *  Signed so `tune()` can keep reading CURVE as a continuum. */
+export const CURVE_SWELL = -1
+export const CURVE_EVEN = 0
+export const CURVE_SPIKE = 1
+
 /** Where the knob catches, and the top of its overdrive travel. */
 export const IMPACT_DETENT = 1
 export const IMPACT_MAX = 1.1
@@ -415,7 +425,19 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
     { key: 'impact', label: 'Impact', min: 0, max: IMPACT_MAX, step: 0.01, default: 0.55 },
     { key: 'recoverBeats', label: 'Recover (beats)', min: 0.25, max: 8, step: 0.05, default: 2 },
     { key: 'chaos', label: 'Chaos', min: 0, max: 1, step: 0.01, default: 0.45 },
-    { key: 'curve', label: 'Curve (gentle → percussive)', min: -1, max: 1, step: 0.01, default: 0 },
+    {
+      key: 'curve',
+      label: 'Curve',
+      type: 'select',
+      // Ordered as the bipolar knob it replaces turned: holds-out on the left,
+      // collapses-fast on the right.
+      options: [
+        { value: CURVE_SWELL, label: 'Swell' },
+        { value: CURVE_EVEN, label: 'Even' },
+        { value: CURVE_SPIKE, label: 'Spike' },
+      ],
+      default: CURVE_EVEN,
+    },
     { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerZ', label: 'Center Z', min: -20, max: 20, step: 0.1, default: 0 },

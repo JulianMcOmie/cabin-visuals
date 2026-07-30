@@ -3,8 +3,9 @@
 // Bespoke settings for the Impact Scatter mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference): a
 // full-bleed panel washed in the mover's shock-blue shade, a LIVE preview up
-// top, then the mover's four knobs - IMPACT (a size larger, with an overdrive
-// detent at 100%), RECOVER, CHAOS, CURVE - with placement behind MORE.
+// top, then three knobs - IMPACT (a size larger, with an overdrive detent at
+// 100%), RECOVER, CHAOS - and a segmented CURVE selector, with placement behind
+// MORE.
 //
 // The preview is not a mockup: it runs the mover's real resolve() - the same
 // integrated impulse simulation, the same leash and pileup - over a looping
@@ -16,22 +17,22 @@
 // legible - it shatters into chaos and then resolves back to dead-straight
 // rows, which is the moment that sells the effect.
 //
-// The performance under it is written to show the three things a knob-turner
-// needs to feel: one clean hit out of rest, a five-hit roll where the
-// compounding escalates, and an implode. A hit ruler under the canvas marks
-// where they land so what you are watching is never a mystery.
+// Under it, a metronomic hit every two beats: the knobs are what the panel is
+// about, so the performance stays out of the way and lets every change read on
+// the next hit.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D, PointLight } from 'three'
 import {
+  CURVE_EVEN,
+  CURVE_SPIKE,
+  CURVE_SWELL,
   IMPACT_DETENT,
   SCATTER_IMPACT_PITCH,
-  SCATTER_IMPLODE_PITCH,
-  SCATTER_SETTLE_PITCH,
   impactScatterMover,
   type ImpactScatterSettings,
 } from '../core/visualCopies/impactScatter'
@@ -51,31 +52,37 @@ const SHOCK_SHADE = '#08131a'
 const ROOM = '#04070a'
 
 // ── The looping demo performance ─────────────────────────────────────────────
-// 12 beats: a full-power hit out of rest with time to drift all the way home,
-// then a five-hit roll a beat apart-and-a-half that visibly compounds, then an
-// implode, then a snap-home that guarantees the loop wraps from stillness.
+// One full-power hit every two beats, forever. The preview's job is to show what
+// the knobs do to a single blast-and-recover, and a metronomic pulse shows that
+// better than a written performance did - nothing to wait for, and every knob
+// change reads on the very next hit.
+//
+// Two details make the loop seamless:
+//
+//  - The pulse is TILED well before beat 0 rather than starting there. The mover
+//    integrates each cluster of hits from rest, so a list that began at the loop
+//    start would show a first hit landing on a dead field and then jump at the
+//    wrap. A long lead-in puts the field in steady periodic motion instead.
+//  - The loop is TWO pulses long, because consecutive hits scatter in opposite
+//    lateral senses (the mover alternates parity so a roll churns rather than
+//    repeating). The real period of the motion is therefore two hits, and a
+//    one-hit loop would visibly snap every time it wrapped.
 
-const LOOP_BEATS = 12
+const PULSE_BEATS = 2
+const LOOP_BEATS = PULSE_BEATS * 2
+const LEAD_IN_PULSES = 24
 
-const note = (beat: number, pitch: number, velocity: number): ResolvedNote => ({
-  beat,
-  pitch,
-  durationBeats: 0.25,
-  velocity,
-  blockStartBeat: 0,
-  blockEndBeat: LOOP_BEATS,
-})
-
-const PREVIEW_NOTES: ResolvedNote[] = [
-  note(0.75, SCATTER_IMPACT_PITCH, 1),
-  note(4, SCATTER_IMPACT_PITCH, 0.55),
-  note(4.25, SCATTER_IMPACT_PITCH, 0.6),
-  note(4.5, SCATTER_IMPACT_PITCH, 0.7),
-  note(4.75, SCATTER_IMPACT_PITCH, 0.8),
-  note(5, SCATTER_IMPACT_PITCH, 1),
-  note(8.25, SCATTER_IMPLODE_PITCH, 0.85),
-  note(11.25, SCATTER_SETTLE_PITCH, 1),
-]
+const PREVIEW_NOTES: ResolvedNote[] = Array.from(
+  { length: LEAD_IN_PULSES + 3 },
+  (_, index): ResolvedNote => ({
+    beat: (index - LEAD_IN_PULSES) * PULSE_BEATS,
+    pitch: SCATTER_IMPACT_PITCH,
+    durationBeats: 0.25,
+    velocity: 1,
+    blockStartBeat: -LEAD_IN_PULSES * PULSE_BEATS,
+    blockEndBeat: LOOP_BEATS + PULSE_BEATS,
+  }),
+)
 
 // ── The lattice ──────────────────────────────────────────────────────────────
 // A 5×5×5 grid with its hidden interior omitted: the shell carries the whole
@@ -102,10 +109,7 @@ const LATTICE = buildLattice()
 
 const HOT = new Color('#eaf9ff')
 
-function LatticeField({ settings, playheadRef }: {
-  settings: ImpactScatterSettings
-  playheadRef: RefObject<HTMLDivElement | null>
-}) {
+function LatticeField({ settings }: { settings: ImpactScatterSettings }) {
   const meshRef = useRef<InstancedMesh>(null)
   const coreRef = useRef<PointLight>(null)
   const scratch = useRef({
@@ -167,11 +171,6 @@ function LatticeField({ settings, playheadRef }: {
     if (coreRef.current) {
       coreRef.current.intensity = 1.5 + clamp(energy / LATTICE.length, 0, 1) * 42
     }
-    // Written straight to the DOM: the ruler's playhead must not re-render React
-    // sixty times a second.
-    if (playheadRef.current) {
-      playheadRef.current.style.left = `${(beat / LOOP_BEATS) * 100}%`
-    }
   })
 
   return (
@@ -192,52 +191,21 @@ function LatticeField({ settings, playheadRef }: {
   )
 }
 
-/** The loop's hits, so what the preview is doing is never a mystery: a tick per
- *  note (bright = impact, dim = implode, hairline = snap home) and a playhead. */
-function HitRuler({ playheadRef }: { playheadRef: RefObject<HTMLDivElement | null> }) {
-  return (
-    <div className="relative h-[9px] border-b border-white/[0.06] bg-black/40">
-      {PREVIEW_NOTES.map((hit, index) => (
-        <span
-          key={index}
-          className="absolute top-0 h-full"
-          style={{
-            left: `${(hit.beat / LOOP_BEATS) * 100}%`,
-            width: hit.pitch === SCATTER_SETTLE_PITCH ? 1 : 2,
-            background: hit.pitch === SCATTER_IMPACT_PITCH
-              ? withAlpha(SHOCK, 0.35 + hit.velocity * 0.65)
-              : hit.pitch === SCATTER_IMPLODE_PITCH
-                ? withAlpha('#ffffff', 0.35)
-                : withAlpha('#ffffff', 0.22),
-          }}
-        />
-      ))}
-      <div
-        ref={playheadRef}
-        className="absolute top-0 h-full w-[1px]"
-        style={{ background: towardWhite(SHOCK, 0.6), boxShadow: `0 0 4px 1px ${withAlpha(SHOCK, 0.7)}` }}
-      />
-    </div>
-  )
-}
-
 function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
-  const playheadRef = useRef<HTMLDivElement>(null)
   return (
-    <div>
-      <div
-        data-testid="impact-scatter-preview"
-        title="Drag to orbit the lattice"
-        className="relative h-[178px] cursor-grab overflow-hidden active:cursor-grabbing"
-        style={{ background: ROOM }}
-      >
+    <div
+      data-testid="impact-scatter-preview"
+      title="Drag to orbit the lattice"
+      className="relative h-[178px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      style={{ background: ROOM }}
+    >
         <Canvas
           dpr={[1, 1.75]}
           camera={{ position: [5.8, 4, 10.4], fov: 40 }}
           gl={{ antialias: true, alpha: true }}
         >
           <color attach="background" args={[ROOM]} />
-          <LatticeField settings={settings} playheadRef={playheadRef} />
+          <LatticeField settings={settings} />
           <directionalLight position={[5, 7, 4]} intensity={1.15} color="#dfe8ff" />
           <directionalLight position={[-6, -2, -4]} intensity={0.35} color={SHOCK} />
           <ambientLight intensity={0.14} />
@@ -260,9 +228,7 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
             minPolarAngle={0.15}
             maxPolarAngle={Math.PI * 0.78}
           />
-        </Canvas>
-      </div>
-      <HitRuler playheadRef={playheadRef} />
+      </Canvas>
     </div>
   )
 }
@@ -282,9 +248,6 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
  *    choose to exceed it, which is the whole point of an overdrive.
  *  - past the detent the arc, its bloom and the readout go ORANGE. Nothing else
  *    on the panel is warm, so overdrive is visible at a glance.
- *
- * `bipolar` starts the arc at twelve o'clock instead of the minimum, so a
- * centre-default control (CURVE) reads as a deflection from neutral.
  */
 
 /** Overdrive. The only warm colour on the panel, so it means one thing. */
@@ -295,7 +258,7 @@ const KNOB = 44
 /** Pointer travel needed to break past the detent. */
 const CATCH_PX = 16
 
-function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar = false }: {
+function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
   parameter: UserInterfaceParameter
   label: string
   /** Reads the value in the unit a person thinks in (percent, beats, a word). */
@@ -303,8 +266,6 @@ function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar
   size?: number
   /** Value the arc catches on, if any. */
   detent?: number
-  /** Arc grows from the centre rather than from the minimum. */
-  bipolar?: boolean
 }) {
   const dragRef = useRef<{ y: number; norm: number; catchY: number | null } | null>(null)
   const definition = bound.definition
@@ -321,10 +282,8 @@ function ShockKnob({ parameter: bound, label, format, size = 42, detent, bipolar
   const accent = overdriven ? OVERDRIVE : SHOCK
 
   // Arc geometry in the conic gradient's own frame (0deg = 7 o'clock).
-  const sweep = percent * 270
-  const anchor = bipolar ? 135 : 0
-  const arcFrom = Math.min(anchor, sweep)
-  const arcTo = Math.max(anchor, sweep)
+  const arcFrom = 0
+  const arcTo = percent * 270
   const detentSweep = detentPercent == null ? null : detentPercent * 270
   /** Cool up to the detent, warm past it - one gradient, two meanings. */
   const arc = (cool: string, warm: string) => {
@@ -477,14 +436,58 @@ const asPercent = (value: number) => `${Math.round(value * 100)}%`
 
 const asBeats = (value: number) => `${value.toFixed(value < 10 ? 1 : 0)} beat${value === 1 ? '' : 's'}`
 
-/** CURVE is bipolar and its ends are qualities, not quantities, so it reads as
- *  a word. The knob's own deflection already carries "how much". */
-const asShape = (value: number) =>
-  value <= -0.66 ? 'gentle'
-    : value <= -0.2 ? 'softer'
-      : value < 0.2 ? 'even'
-        : value < 0.66 ? 'punchy'
-          : 'percussive'
+/**
+ * Segmented return-curve selector, following the Colorizer's ShapeSelector: each
+ * option DRAWS its own falloff, so the choice is legible without reading the
+ * word, and the caption stack matches the knobs' so the row keeps one baseline.
+ * The glyph paths are the Colorizer's - same curve, same picture, same words.
+ */
+const SHAPE_GLYPHS: Record<number, string> = {
+  [CURVE_SPIKE]: 'M1 11 L3 1 C4.5 8 7 10 15 10.6',
+  [CURVE_EVEN]: 'M1 11 L3 1 L15 10.6',
+  [CURVE_SWELL]: 'M1 11 L3 1 C9 1.4 11 4 15 10.6',
+}
+
+function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
+  const definition = bound.definition
+  if (definition.type !== 'select') return null
+  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+  return (
+    <div className="flex w-[58px] flex-col items-center">
+      <div className="flex overflow-hidden rounded-md border border-white/10">
+        {definition.options.map((option) => {
+          const active = option.value === selected
+          return (
+            <button
+              key={option.value}
+              aria-label={option.label}
+              aria-pressed={active}
+              title={`${option.label} recovery`}
+              onClick={() => bound.setValue(option.value)}
+              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              style={active ? { background: SHOCK } : undefined}
+            >
+              <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+                <path
+                  d={SHAPE_GLYPHS[option.value] ?? SHAPE_GLYPHS[CURVE_EVEN]}
+                  stroke={active ? '#000' : 'rgba(255,255,255,0.45)'}
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )
+        })}
+      </div>
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+        CURVE
+      </span>
+      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
+        {definition.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
+      </span>
+    </div>
+  )
+}
 
 export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -532,7 +535,7 @@ export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefin
           />
           <ShockKnob parameter={bound.recoverBeats} label="RECOVER" format={asBeats} size={KNOB} />
           <ShockKnob parameter={bound.chaos} label="CHAOS" format={asPercent} size={KNOB} />
-          <ShockKnob parameter={bound.curve} label="CURVE" format={asShape} size={KNOB} bipolar />
+          <ShapeSelector bound={bound.curve} />
         </div>
         {unplaced.length > 0 && (
           <div className="px-3">

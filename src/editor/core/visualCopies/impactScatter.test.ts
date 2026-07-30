@@ -5,6 +5,9 @@ import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import { identityVisualCopy } from './identityVisualCopy'
 import {
+  CURVE_EVEN,
+  CURVE_SPIKE,
+  CURVE_SWELL,
   IMPACT_DETENT,
   IMPACT_MAX,
   SCATTER_IMPACT_PITCH,
@@ -71,6 +74,18 @@ test('the definition exposes four feel knobs plus placement', () => {
   assert.deepEqual(keys, ['impact', 'recoverBeats', 'chaos', 'curve', 'centerX', 'centerY', 'centerZ'])
   const impact = impactScatterMover.params.find((p) => p.key === 'impact')
   assert.equal(impact && 'max' in impact ? impact.max : null, IMPACT_MAX, 'the knob travels into overdrive')
+})
+
+test('CURVE offers exactly three named shapes', () => {
+  const curve = impactScatterMover.params.find((p) => p.key === 'curve')
+  assert.ok(curve && curve.type === 'select', 'a choice, not a sweep')
+  assert.deepEqual(curve.options.map((o) => o.value), [CURVE_SWELL, CURVE_EVEN, CURVE_SPIKE])
+  assert.deepEqual(curve.options.map((o) => o.label), ['Swell', 'Even', 'Spike'])
+  assert.equal(curve.default, CURVE_EVEN, 'even by default')
+  // Each option has to be a genuinely different return, or the choice is a lie.
+  const drags = curve.options.map((o) => tune(settings({ curve: o.value })).drag)
+  assert.equal(new Set(drags).size, 3)
+  assert.ok(drags[0] < drags[1] && drags[1] < drags[2], 'swell absorbs least, spike most')
 })
 
 // ── The macro mapping ────────────────────────────────────────────────────────
@@ -143,9 +158,9 @@ test('CURVE changes the SHAPE of the return, not the distance', () => {
       throwDistance(config, [note(0)], 2 * fraction) / peak
     return { peak, half: remaining(0.5), threeQuarters: remaining(0.75) }
   }
-  const gentle = shapeOf(-1)
-  const even = shapeOf(0)
-  const percussive = shapeOf(1)
+  const gentle = shapeOf(CURVE_SWELL)
+  const even = shapeOf(CURVE_EVEN)
+  const percussive = shapeOf(CURVE_SPIKE)
 
   // Gentle hangs out: most of the displacement is still there halfway home.
   assert.ok(gentle.half > 0.6, `gentle should still be out: ${gentle.half}`)
@@ -164,7 +179,7 @@ test('CURVE changes the SHAPE of the return, not the distance', () => {
 })
 
 test('the percussive tail is quiet, not absent', () => {
-  const config = settings({ curve: 1, recoverBeats: 2 })
+  const config = settings({ curve: CURVE_SPIKE, recoverBeats: 2 })
   const peak = peakThrow(config, [note(0)], 5)
   const tail = throwDistance(config, [note(0)], 1.2)
   assert.ok(tail > 0, 'something should still be settling')
