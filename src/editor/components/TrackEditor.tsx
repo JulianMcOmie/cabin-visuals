@@ -89,6 +89,10 @@ function TargetSelect({
 // here with no extra wiring. Category order is fixed: transform, clone, shader.
 const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
   { key: 'transform', label: 'Transform' },
+  // 'Surface' rather than 'Material': these GENERATE the object's surface (the
+  // pattern is bolted to the mesh and travels with it), which is what the user is
+  // choosing between - not the fact that a three material is what gets patched.
+  { key: 'material', label: 'Surface' },
   { key: 'shader', label: 'Shader' },
 ]
 const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({

@@ -19,7 +19,8 @@ Three big surfaces plus the inspector. **The timeline and the piano roll have se
 ## visual/ — the 3D viewport pipeline
 
 - `VisualScene.tsx` — mounts one `ObjectRenderer` per `ObjectListEntry` from the engine (structural list; per-frame values are pulled imperatively). Renders scenes to render targets and composites director `CompositionLayer`s (partitions/flash/blur/bloom) into the final frame.
-- `ObjectRenderer.tsx` — one OCCURRENCE of one object: placement group → post-mover scale → its VisualCopy transform; `TransformWrapper`/`ShaderWrapper` apply the effect chain inside. Never resolves copy logic itself.
+- `ObjectRenderer.tsx` — one OCCURRENCE of one object: placement group → post-mover scale → its VisualCopy transform; `MaterialWrapper`/`TransformWrapper`/`ShaderWrapper` apply the effect chain inside (material innermost, closest to the meshes). Never resolves copy logic itself.
+- `MaterialWrapper.tsx` — `material` effects: patches the target's own materials via `onBeforeCompile` so a generated surface travels WITH the mesh, and restores them on unmount/disable. See `effects/CLAUDE.md` for the contract and its limits.
 - `RenderGovernor.tsx` — paused = `frameloop='demand'`; invalidates exactly one frame on: any ProjectStore change, the debounced structural re-resolve (~80ms later), beat moves while paused, play→pause edge, canvas resize. The frameloop prop must stay a Canvas PROP (Canvas re-applies props and would clobber imperative setFrameloop).
 - `ExportDriver.tsx` — bridges the export engine to the canvas.
 

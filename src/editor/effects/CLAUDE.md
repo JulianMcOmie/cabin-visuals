@@ -1,11 +1,40 @@
 # src/editor/effects — per-object effect plugins
 
-Plugins applied to an object's rendered output, chained per track (`track.effects: EffectInstance[]`). Two categories: **transform** (mutates the wrapping Group per frame) and **shader** (screen-space GLSL post pass over the object). Clone effects were replaced by VisualCopy splitters (`core/visualCopies/`).
+Plugins attached per track (`track.effects: EffectInstance[]`) — the mechanism for "apply this to any instrument". Three categories:
+
+- **transform** — mutates the wrapping Group per frame.
+- **shader** — screen-space GLSL post pass over the object's rendered output.
+- **material** — GENERATES the target's surface by injecting GLSL into its own materials (`materialField`). The only way to get a pattern that is bolted to the mesh and travels with it; a screen-space pass is frame-relative, so its pattern slides across a moving object. Applied by `components/visual/MaterialWrapper.tsx`, innermost in the chain.
+
+Clone effects were replaced by VisualCopy splitters (`core/visualCopies/`).
 
 - `types.ts` — `VisualEffect` def: `params` (same `ParamDef` shape as instruments, enums/booleans encoded numerically), `applyTransform(group, settings, time)` where `time` IS the beat (music-synced, pure), or `fragmentShader` (samples `tDiffuse`, gets `time`/`resolution` + one uniform per param).
-- `index.ts` — the registry (`EFFECTS`/`getEffect`/`PLUGIN_LIST`). Adding an effect = one file + one entry here (+ optional bespoke UI in `userInterfaceRenderers/bespokeRegistries.ts`).
+- `index.ts` — the registry (`EFFECTS`/`getEffect`/`PLUGIN_LIST`). Adding an effect = one file + one entry here (+ optional bespoke UI in `userInterfaceRenderers/bespokeRegistries.ts`). **A new CATEGORY also needs an entry in `components/TrackEditor.tsx`'s `EFFECT_CATEGORIES`** — the add menu groups by that list, so an effect in an unlisted category is registered but unreachable.
 - `automation.ts` — effect-setting automation targets, encoded `fx:<instanceId>:<key>` in a child automation track's `targetParam` (plus the `enabled` pseudo-param as a 0/1 lane); `parseFxTarget` decodes. Sampled per frame into `ObjectState.effectOverrides`, merged over stored settings by the wrappers.
 - Rendering: `components/visual/TransformWrapper.tsx` / `ShaderWrapper.tsx`, inside `ObjectRenderer`.
+
+## Writing a `material` effect
+
+The chunk must declare `uniform float uK<Param>` per param plus `uKBeat`, and define
+`vec3 kaleidoField(vec3 objDir)` returning linear albedo for a direction in the mesh's
+OWN space (see `materials/kaleidoField.ts`). What to know:
+
+- **Object space is the point.** Inject at `#include <begin_vertex>`, the last place the
+  vertex is still in the mesh's own space. That is what makes the pattern turn and travel
+  with the object.
+- **Albedo is a REFLECTANCE.** MaterialWrapper scales the field by 0.5 before assigning
+  `diffuseColor`; a field peaking near 1.0 assigned raw saturates the lit side to a pale
+  wash under this scene's lighting.
+- **It only bites on three's built-in materials** — injection keys off `#include <common>`
+  and `vec4 diffuseColor = ...`. Instruments drawing with their own raw ShaderMaterial
+  (LaserSphere, FractalTunnel, Stars, Wormhole, DotField, ShapeFlight…) silently no-op.
+  That limit is inherent to `onBeforeCompile`. For those, a screen-space `shader` effect is
+  the only option.
+- MaterialWrapper patches materials **in place and restores on unmount/disable** rather
+  than cloning: instruments mutate their own material per frame (Cube sets `mat.color`),
+  so a clone would go stale instantly.
+- The LAST enabled material effect wins — two generated surfaces have no meaningful
+  composition, so it replaces rather than accumulates (as a VisualCopy `tint` does).
 
 ## Gotchas
 

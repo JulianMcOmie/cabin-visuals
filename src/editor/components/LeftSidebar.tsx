@@ -272,7 +272,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
 

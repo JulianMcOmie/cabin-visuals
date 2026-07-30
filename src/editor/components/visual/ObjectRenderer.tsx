@@ -14,6 +14,7 @@ import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual
 import { useTimeStore } from '../../store/TimeStore'
 import { TransformWrapper } from './TransformWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
+import { MaterialWrapper } from './MaterialWrapper'
 
 /**
  * Renders ONE OCCURRENCE of one object: the placement group carries the object's
@@ -59,6 +60,12 @@ export function ObjectRenderer({
     (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
   )
   const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
+  // Material effects generate the target's SURFACE, so they must sit innermost -
+  // closest to the meshes - and they apply on both the full-frame and normal paths.
+  // Kept mounted while an automated 'enabled' is off, same as shader instances.
+  const materialInstances = plugins.filter(
+    (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'material',
+  )
 
   const isFullFrame = !!def?.fullFrame
   const instrumentCopyContext = useMemo(() => ({
@@ -105,11 +112,14 @@ export function ObjectRenderer({
 
   if (!def) return null
   const Component = def.component
-  const instrument = (
+  const bare = (
     <InstrumentCopyContext.Provider value={instrumentCopyContext}>
       <Component trackId={trackId} />
     </InstrumentCopyContext.Provider>
   )
+  const instrument = materialInstances.length > 0
+    ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
+    : bare
 
   // Full-frame instruments (viewport-filling planes) skip the placement transform and
   // the transform effect chain; shaders may still post-process them.

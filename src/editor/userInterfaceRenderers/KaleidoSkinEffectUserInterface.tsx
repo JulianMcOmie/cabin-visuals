@@ -2,17 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { KALEIDO_FIELD_GLSL } from '../effects/materials/kaleidoField'
-import {
-  FUNDAMENTAL_GEOMETRIES,
-  normalizeFundamentalGeometry,
-  type FundamentalGeometryId,
-} from '../instruments/FundamentalGeometry'
 import { isNumberParam, type NumberParamDef } from '../instruments/types'
 import { ParamControl, ParamHueSlider, ParamSlider, ParamStepper } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
-// Kaleido Solid settings: a geometry row, a live preview, then the four knobs.
+// Kaleido Skin (material EFFECT) settings: a live preview, then the four knobs.
+// Same field, same preview technique as the KaleidoSolid instrument panel; this one
+// has no geometry row because the effect skins whatever instrument it is added to.
 //
 // The preview runs the instrument's own KALEIDO_FIELD_GLSL, so the field cannot
 // drift from what renders. It evaluates it over an orthographic sphere - the
@@ -70,7 +67,7 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.warn('[KaleidoSolid preview] shader compile failed:', gl.getShaderInfoLog(shader))
+    console.warn('[KaleidoSkin effect preview] shader compile failed:', gl.getShaderInfoLog(shader))
     gl.deleteShader(shader)
     return null
   }
@@ -89,7 +86,7 @@ function link(gl: WebGLRenderingContext, vertSource: string, fragSource: string)
   gl.deleteShader(vert)
   gl.deleteShader(frag)
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.warn('[KaleidoSolid preview] program link failed:', gl.getProgramInfoLog(program))
+    console.warn('[KaleidoSkin effect preview] program link failed:', gl.getProgramInfoLog(program))
     gl.deleteProgram(program)
     return null
   }
@@ -116,9 +113,9 @@ function KaleidoPreview({ facets, scale, drift, hue }: {
     const host = hostRef.current
     if (!host) return
     const canvas = document.createElement('canvas')
-    canvas.dataset.testid = 'kaleido-solid-preview'
-    canvas.setAttribute('aria-label', 'Kaleido Solid preview')
-    canvas.title = 'Live preview: the instrument’s own field, on a sphere'
+    canvas.dataset.testid = 'kaleido-skin-effect-preview'
+    canvas.setAttribute('aria-label', 'Kaleido Skin preview')
+    canvas.title = 'Live preview: the effect’s own field, on a sphere'
     canvas.style.width = `${PREVIEW_PX}px`
     canvas.style.height = `${PREVIEW_PX}px`
     canvas.style.borderRadius = '50%'
@@ -201,31 +198,6 @@ function KaleidoPreview({ facets, scale, drift, hue }: {
   )
 }
 
-function GeometryRow({ bound }: { bound: UserInterfaceParameter }) {
-  const selected: FundamentalGeometryId = normalizeFundamentalGeometry(bound.value)
-  return (
-    <div className="mb-3 grid grid-cols-6 gap-1">
-      {FUNDAMENTAL_GEOMETRIES.map((option) => {
-        const active = option.id === selected
-        return (
-          <button
-            key={option.id}
-            data-testid={`kaleido-geometry-${option.id}`}
-            aria-label={`Use ${option.label} geometry`}
-            aria-pressed={active}
-            onClick={() => bound.setValue(option.id)}
-            className={`flex min-w-0 items-center justify-center rounded-[3px] border py-1.5 text-[6px] font-semibold tracking-[0.06em] transition-colors ${active
-              ? 'border-violet-300/35 bg-violet-500/16 text-violet-100'
-              : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'}`}
-          >
-            <span className="max-w-full truncate">{option.shortLabel}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 function Leftovers({ parameters, placed }: { parameters: readonly UserInterfaceParameter[]; placed: readonly string[] }) {
   const placedSet = new Set(placed)
   const rest = parameters.filter((p) => !placedSet.has(p.definition.key))
@@ -249,20 +221,18 @@ function Leftovers({ parameters, placed }: { parameters: readonly UserInterfaceP
   )
 }
 
-export const KaleidoSolidUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const geometry = parameters.find((p) => p.definition.key === 'geometry')
+export const KaleidoSkinEffectUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const facets = findNumber(parameters, 'facets')
   const scale = findNumber(parameters, 'scale')
   const drift = findNumber(parameters, 'drift')
   const hue = findNumber(parameters, 'hue')
-  if (!geometry || !facets || !scale || !drift || !hue) {
+  if (!facets || !scale || !drift || !hue) {
     return <ParameterList parameters={parameters} />
   }
 
   return (
-    <section data-testid="kaleido-solid-user-interface">
+    <section data-testid="kaleido-skin-effect-user-interface">
       <KaleidoPreview facets={facets.value} scale={scale.value} drift={drift.value} hue={hue.value} />
-      <GeometryRow bound={geometry} />
       <ParamStepper
         label={facets.definition.label}
         value={facets.value}
@@ -297,7 +267,7 @@ export const KaleidoSolidUserInterfaceRenderer: UserInterfaceRendererDefinition 
         step={hue.definition.step}
         onChange={hue.setValue}
       />
-      <Leftovers parameters={parameters} placed={['geometry', 'facets', 'scale', 'drift', 'hue']} />
+      <Leftovers parameters={parameters} placed={['facets', 'scale', 'drift', 'hue']} />
     </section>
   )
 }
