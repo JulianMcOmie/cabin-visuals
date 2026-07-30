@@ -6,7 +6,7 @@ import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { resolveVisualCopies, warpChainBeat } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
@@ -254,8 +254,15 @@ export function computeAtBeat(beat: number) {
   const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
   for (const graph of activeGraphs) for (const obj of graph.objects) {
     activeTrackIds.add(obj.trackId)
+    // A chain entry may remap WHEN this object is evaluated (Freeze; see
+    // MoverOrSplitter.warpBeat). Everything below reads objBeat rather than the
+    // playhead beat, which is what makes a frozen object a true still frame
+    // instead of a still frame of a thing that is still animating. The remap
+    // itself is a pure function of the real beat, so scrub == playback ==
+    // export holds. Objects with no remap get beat back, unchanged.
+    const objBeat = warpChainBeat(obj.moverAndSplitterChain, beat)
     // The note-pulse signal (the old implicit `energy` port, now direct).
-    const energy = !obj.muted && obj.notes.length > 0 ? evaluatePulse(obj.notes, beat) : 0
+    const energy = !obj.muted && obj.notes.length > 0 ? evaluatePulse(obj.notes, objBeat) : 0
     // Automation drives params over time: overlay each lane's sampled value onto the
     // base params for this frame (a pure function of the beat, so scrub == playback).
     let params = obj.params
@@ -264,10 +271,10 @@ export function computeAtBeat(beat: number) {
       for (const auto of obj.automations) {
         if (auto.noise && auto.gates?.length) {
           // Noise lane: inert (NaN) outside its gates, wobbling inside them.
-          const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
+          const v = sampleNoiseLane(auto.noise, auto.gates, objBeat, auto.min ?? 0, auto.max ?? 1)
           if (!Number.isNaN(v)) params[auto.param] = v
         } else if (auto.keyframes.length) {
-          params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
+          params[auto.param] = sampleLane(auto.keyframes, objBeat, auto.mode)
         }
       }
     }
@@ -284,7 +291,7 @@ export function computeAtBeat(beat: number) {
     let fxEnvelopes: { env: ResolvedEnvelope; gain: number }[] | null = null
     for (const env of obj.envelopes) {
       if (env.notes.length === 0) continue
-      const gain = evaluateAdsrGain(env.notes, beat, env.adsr)
+      const gain = evaluateAdsrGain(env.notes, objBeat, env.adsr)
       if (env.kind === 'opacity') {
         opacityGate *= 1 - env.depth + env.depth * gain
       } else if (env.kind === 'param' && env.param !== undefined) {
@@ -298,7 +305,7 @@ export function computeAtBeat(beat: number) {
     let world = worldMatrices.get(obj.trackId)
     if (!world) { world = new Matrix4(); worldMatrices.set(obj.trackId, world) }
     const parentWorld = obj.parentId ? worldMatrices.get(obj.parentId) : undefined
-    const local = obj.localTransform ? obj.localTransform({ params, energy, beat }) : {}
+    const local = obj.localTransform ? obj.localTransform({ params, energy, beat: objBeat }) : {}
     localTransformToSV(local, obj.scratchBase)
     // The size scale is a MESH property, not a placement property: strip it from
     // the local matrix so the VisualCopy chain (movers) and child tracks compose
@@ -328,7 +335,7 @@ export function computeAtBeat(beat: number) {
       effectOverrides = {}
       for (const ea of obj.effectAutomations) {
         if (!ea.keyframes.length) continue
-        ;(effectOverrides[ea.instanceId] ??= {})[ea.key] = sampleLane(ea.keyframes, beat, ea.mode)
+        ;(effectOverrides[ea.instanceId] ??= {})[ea.key] = sampleLane(ea.keyframes, objBeat, ea.mode)
       }
     }
     // fx-targeted envelopes lerp on top of the sampled automation (or the stored
@@ -347,9 +354,9 @@ export function computeAtBeat(beat: number) {
     const blackedOut = obj.muted
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
-    const activeNotes = obj.notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05))
+    const activeNotes = obj.notes.filter((n) => objBeat >= n.beat && objBeat < n.beat + (n.durationBeats || 0.05))
     states.set(obj.trackId, {
-      beat,
+      beat: objBeat,
       secPerBeat,
       beatsPerBar: project?.beatsPerBar ?? 4,
       params,
@@ -377,7 +384,7 @@ export function computeAtBeat(beat: number) {
     // fixed at resolve time; a definition that varies its count with the beat
     // violates its contract, so clamp back to structure rather than let the
     // renderer's occurrence list silently disagree with React's.
-    const copies = resolveVisualCopies(obj.moverAndSplitterChain, beat, world)
+    const copies = resolveVisualCopies(obj.moverAndSplitterChain, objBeat, world)
     const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
     if (copies.length !== structuralCount) {
       if (!copyCountWarned.has(obj.trackId)) {

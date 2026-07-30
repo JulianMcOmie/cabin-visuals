@@ -99,4 +99,24 @@ export interface MoverOrSplitterContext {
  */
 export interface MoverOrSplitter {
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
+  /**
+   * OPTIONAL, and the one thing a chain entry may say about time rather than
+   * space: remap the beat the whole object is evaluated at.
+   *
+   * `apply` can only ever restate the copy it is handed, computed at the
+   * current beat - it cannot un-compute the instrument animation, automation
+   * lanes or upstream mover motion baked into the placement below it. Freezing
+   * or reversing an object therefore cannot be a transform; it has to be a
+   * change of WHEN. An entry that implements this receives the REAL playhead
+   * beat and returns the beat its object should be evaluated at instead, and
+   * `computeAtBeat` applies the result to everything about that object: energy,
+   * automation, envelopes, localTransform, active notes, and the entire chain
+   * (this entry's own position in the chain is irrelevant - the remap is
+   * object-wide, not a partition of the chain).
+   *
+   * Must be a pure function of the beat plus resolved data, like `apply`.
+   * Several entries compose by SUMMING their deltas against the real beat, so
+   * each one keeps reading its own notes at their true timeline positions.
+   */
+  warpBeat?(beat: number): number
 }

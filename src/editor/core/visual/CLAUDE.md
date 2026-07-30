@@ -9,6 +9,7 @@ Per-frame state must never trigger React re-renders; renderers pull it from `use
 - One `ResolvedGraph` per scene; `setProject` reuses a scene's graph when its inputs are referentially unchanged (`graphInputs` map).
 - `computeAtBeat(beat)`: samples automation/noise lanes, evaluates envelopes (`adsr.ts`) and note energy (`energy.ts`), composes world matrices down the track hierarchy (`stateVector.ts`: pos + axis-angle rot + logScale + opacity), applies the canonical `tf*` transform as parent of the instrument's `localTransform`, then refreshes VisualCopy values.
 - **Copy-count contract**: the number of VisualCopies is fixed at resolve; MIDI gates opacity, never slot count. Hidden copies stay mounted at opacity 0.
+- **Per-object beat remap**: before anything else, each object's chain is asked for a time warp (`warpChainBeat`; only Freeze answers today). Everything after reads `objBeat`, not the playhead `beat` — that's what makes a frozen object a genuine still frame rather than one that keeps animating. The warp is a pure function of the real beat, so the purity rule holds; note `resolve.ts`'s automation memo forwards `warpBeat` UNmemoized on purpose (it's asked for the real beat while `apply` is asked for the warped one, so sharing the cache would thrash it every frame).
 
 ## resolve.ts
 
