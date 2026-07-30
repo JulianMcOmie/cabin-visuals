@@ -3,7 +3,15 @@ import { getPlaybackEngine } from '../core/playback';
 import { getAudioEngine } from '../core/audio/AudioEngine';
 import { useTimeStore } from '../store/TimeStore';
 import { useProjectStore } from '../store/ProjectStore';
+import { useUIStore } from '../store/UIStore';
+import { audioPickupBars } from '../utils/audioPickup';
 import type { Track } from '../types';
+
+/** The earliest playable beat: 0, or further left when audio sits in the pickup. */
+function minBeat(): number {
+  const { tracks, beatsPerBar } = useProjectStore.getState()
+  return -audioPickupBars(tracks) * beatsPerBar
+}
 
 /** The current audio tracks (the engine folds mute/solo per track). */
 function gatherAudioTracks(tracks: Record<string, Track>): Track[] {
@@ -29,7 +37,9 @@ export function usePlayback() {
         const { totalBars, beatsPerBar } = useProjectStore.getState()
         return totalBars * beatsPerBar
       },
-      getLoopRegion: () => useTimeStore.getState().loopRegion,
+      // An in-progress audio sync drag overrides the user's loop region for the
+      // length of the gesture (see timeline/audioSyncDrag.ts).
+      getLoopRegion: () => useUIStore.getState().audioSyncDrag?.loop ?? useTimeStore.getState().loopRegion,
       onEnd: () => setIsPlaying(false),
     });
 
@@ -72,10 +82,11 @@ export function usePlayback() {
     const { totalBars, beatsPerBar, tracks } = useProjectStore.getState();
     const maxBeat = totalBars * beatsPerBar;
     // Starting transport with an active loop always begins at the loop's left
-    // edge. Otherwise, only wrap when parked at (or past) the project end.
+    // edge. Otherwise, only wrap when parked at (or past) the project end -
+    // back to the start of the pickup, so any early audio lead-in is heard.
     const start = loopRegion?.enabled
       ? loopRegion.startBeat
-      : currentBeat >= maxBeat ? 0 : currentBeat;
+      : currentBeat >= maxBeat ? minBeat() : currentBeat;
     // Make sure every block's buffer is decoded before the transport starts
     // (normally a no-op - clips pre-decode when their block is inserted).
     const audio = getAudioEngine();
@@ -91,19 +102,21 @@ export function usePlayback() {
     setIsPlaying(false);
   }, []);
 
-  // Return to the start. Doesn't pause: if currently playing, it keeps playing
-  // from beat 0; if paused, it just moves the playhead to 0.
+  // Return to the start (the start of the pickup when audio leads bar 0).
+  // Doesn't pause: if currently playing, it keeps playing from there; if
+  // paused, it just moves the playhead.
   const reset = useCallback(() => {
-    useTimeStore.getState().setCurrentBeat(0);
-    if (useTimeStore.getState().isPlaying) engine.play(0);
+    const start = minBeat();
+    useTimeStore.getState().setCurrentBeat(start);
+    if (useTimeStore.getState().isPlaying) engine.play(start);
   }, []);
 
   // The main Play button doubles as restart while transport is running. Keep
-  // that restart inside an active loop; without one it retains the old beat-0
-  // behavior. The separate return-to-start control still always targets 0.
+  // that restart inside an active loop; without one it retains the old
+  // start-of-song behavior. The separate return-to-start control matches reset.
   const restart = useCallback(() => {
     const { isPlaying, loopRegion } = useTimeStore.getState();
-    const start = loopRegion?.enabled ? loopRegion.startBeat : 0;
+    const start = loopRegion?.enabled ? loopRegion.startBeat : minBeat();
     useTimeStore.getState().setCurrentBeat(start);
     if (isPlaying) engine.play(start);
   }, []);

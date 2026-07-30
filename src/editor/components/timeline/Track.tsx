@@ -45,6 +45,9 @@ interface TrackProps {
   track: TrackType
   barWidthPx: number
   timelineWidthPx: number
+  /** Pickup width (px): musical bar 0 sits this far into the lane. All block
+   *  space is shifted right by this much; audio in the pickup has startBar < 0. */
+  pickupPx: number
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
@@ -75,7 +78,7 @@ interface TrackProps {
   onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
@@ -479,6 +482,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           : (e) => onLanePointerDown(e, track.id)}
         onContextMenu={(e) => e.preventDefault()}
       >
+        {/* Block space is offset by the pickup: bar 0 of the music sits pickupPx
+            into the lane, so audio with startBar < 0 still renders on-lane
+            (flush with the left edge when it defines the pickup). */}
+        <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
@@ -516,6 +523,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             <span className="truncate px-1.5 font-mono text-[10px] text-[var(--accent)]">{loopDragHere.name}</span>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

@@ -14,11 +14,18 @@
 // Each block starts on a C and uses the same in-block order (+X, -X, +Y, -Y,
 // +Z, -Z) as every other mover, with the block's Return one step above it.
 //
-// WRAPPING is what makes the drift endless: the summed translation is taken
-// modulo each axis's bound, so an object that passes +bound reappears at
-// -bound. A bound of 0 disables wrapping on that axis. Per the design call this
-// wraps the WHOLE translation (drift plus steps), so nothing this mover does
-// can push the object out of the box.
+// WRAPPING is what makes the drift endless: each copy's RESULTING position is
+// folded into [-bound, +bound) per axis, so a copy that passes +bound reappears
+// at -bound. A bound of 0 disables wrapping on that axis. The fold is per COPY
+// (Conveyor's loop trick): a copy wraps at the moment IT crosses a face, so a
+// formation from a splitter streams through the box one copy at a time instead
+// of teleporting all at once when a shared offset rolls over - which is also
+// what made a single off-origin object jump mid-frame rather than at the faces.
+// The Edge fade dissolves a copy into the face it leaves and back out of the
+// one it enters, so the seam is invisible. Because the fold acts on positions
+// it still covers the WHOLE translation (drift plus steps), and a copy that
+// STARTS outside the box is brought inside - nothing this mover touches can sit
+// outside it.
 //
 // The maths is deliberately delegated to the existing evaluators wherever the
 // shared easing tables allow, so a Motion block behaves exactly like the mover
@@ -28,7 +35,12 @@
 // mover: previous * translation * rotation. Translation therefore happens in
 // the frame above, and the rotation spins the object in place at its drifted
 // position rather than steering the drift. The two rotation blocks compose in
-// order (constant, then burst) exactly as chaining the two movers would.
+// order (constant, then burst) exactly as chaining the two movers would. The
+// one exception is the wrap's fold displacement, which PRE-multiplies: the box
+// is a set of fixed planes in the frame the chain hands this mover (so it is
+// centred on the track's placement), and the displacement that folds a copy
+// through them has to be measured in that frame, not in the copy's own rotated
+// one. With bounds off the fold is zero and the composition is exactly LOCAL.
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
@@ -94,6 +106,8 @@ export interface MotionSettings extends BasisSettings {
   boundX: number
   boundY: number
   boundZ: number
+  // Fraction of each half-extent used to fade a copy out at the face.
+  fade: number
   // Step - translate burst.
   distanceX: number
   distanceY: number
@@ -222,8 +236,32 @@ export function wrapToBound(value: number, bound: number): number {
   return ((((value + bound) % span) + span) % span) - bound
 }
 
+/**
+ * Smoothstep on [0, 1], clamped outside it - the fade's dissolve curve.
+ */
+function smoothstep(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
+}
+
+/**
+ * Opacity factor for a copy sitting at `position` along an axis whose wrap
+ * half-extent is `bound`: full in the middle, dissolving over the outer `fade`
+ * of the way to either face.
+ *
+ * Symmetric on purpose - the same curve fades a copy out of the face it leaves
+ * and in through the face it reappears at, so the two halves of the wrap match
+ * exactly and there is no seam to see. It is a function of POSITION alone, so
+ * pause, scrub, playback and export all agree.
+ */
+export function edgeFade(position: number, bound: number, fade: number): number {
+  if (!(bound > 0) || !(fade > 0)) return 1
+  return smoothstep((bound - Math.abs(position)) / (bound * fade))
+}
+
 /** The mover's total translation at `beat`, in basis-axis coordinates: drift
- *  plus steps, each axis wrapped into its bound. */
+ *  plus steps, UNWRAPPED. The wrap folds each copy's resulting position one
+ *  copy at a time, so it lives in `apply`, not here. */
 export function evaluateMotionTranslation(
   notes: readonly ResolvedNote[],
   settings: MotionSettings,
@@ -240,9 +278,7 @@ export function evaluateMotionTranslation(
     distance: settings.distance,
   }
   const step = evaluateBurstOffset(motionBlockNotes(notes, MOTION_BLOCKS.step), burstSettings, beat)
-  const bounds = [settings.boundX, settings.boundY, settings.boundZ]
-  return [0, 1, 2].map((axis) => wrapToBound(drift[axis] + step[axis], bounds[axis])) as
-    [number, number, number]
+  return [0, 1, 2].map((axis) => drift[axis] + step[axis]) as [number, number, number]
 }
 
 const MOTION_PARAMS: ParamDef[] = [
@@ -258,6 +294,7 @@ const MOTION_PARAMS: ParamDef[] = [
   { key: 'boundX', label: 'Wrap bound X (0 = off)', min: 0, max: 50, step: 0.5, default: 5 },
   { key: 'boundY', label: 'Wrap bound Y (0 = off)', min: 0, max: 50, step: 0.5, default: 3 },
   { key: 'boundZ', label: 'Wrap bound Z (0 = off)', min: 0, max: 50, step: 0.5, default: 8 },
+  { key: 'fade', label: 'Edge fade', min: 0, max: 1, step: 0.01, default: 0.3 },
   // Step (translate burst).
   { key: 'distanceX', label: 'Step X', min: 0, max: 10, step: 0.1, default: 1 },
   { key: 'distanceY', label: 'Step Y', min: 0, max: 10, step: 0.1, default: 1 },
@@ -300,6 +337,16 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const basis = resolveBasis(settings)
+    // Columns are the basis axes, so this maps basis coordinates to the chain
+    // frame; its inverse projects a position INTO basis coordinates, which
+    // stays exact even for a skewed basis where dotting the axes is not. A
+    // DEGENERATE basis (two axes aimed the same way) has no inverse - fall back
+    // to the transpose, which IS the inverse whenever the axes are orthonormal.
+    const basisMatrix = new Matrix4().makeBasis(basis[0], basis[1], basis[2])
+    const basisInverse = Math.abs(basisMatrix.determinant()) > 1e-8
+      ? basisMatrix.clone().invert()
+      : basisMatrix.clone().transpose()
+    const bounds: [number, number, number] = [settings.boundX, settings.boundY, settings.boundZ]
     const pivot: [number, number, number] = [settings.pivotX ?? 0, settings.pivotY ?? 0, settings.pivotZ ?? 0]
     // Constant Rotate's evaluator wants its own key names; the basis and pivot
     // fields it also declares come straight through the spread.
@@ -324,11 +371,26 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
         const rotation = basisRotation(basis, evaluateConstantRotationAngles(spinNotes, spinSettings, beat))
           .multiply(basisRotation(basis, evaluateSnapAngles(snapNotes, settings, beat)))
 
+        const moved = visualCopy.transform.clone()
+          .multiply(new Matrix4().makeTranslation(offset.x, offset.y, offset.z))
+
+        // Fold THIS copy's resulting position into the box and fade it at the
+        // faces - read per copy, so each one wraps on its own schedule.
+        const inBasis = new Vector3().setFromMatrixPosition(moved).applyMatrix4(basisInverse)
+        const folded = new Vector3()
+        let fade = 1
+        for (let axis = 0; axis < 3; axis++) {
+          const value = wrapToBound(inBasis.getComponent(axis), bounds[axis])
+          folded.setComponent(axis, value)
+          fade *= edgeFade(value, bounds[axis], settings.fade)
+        }
+        const delta = folded.sub(inBasis).applyMatrix4(basisMatrix)
+
         const next: VisualCopy = {
-          transform: visualCopy.transform.clone()
-            .multiply(new Matrix4().makeTranslation(offset.x, offset.y, offset.z))
+          transform: new Matrix4().makeTranslation(delta.x, delta.y, delta.z)
+            .multiply(moved)
             .multiply(pivotedRotation(rotation, pivot)),
-          opacity: visualCopy.opacity,
+          opacity: visualCopy.opacity * fade,
           colorShift: { ...visualCopy.colorShift },
         }
         return [next]

@@ -26,6 +26,7 @@ import {
 import { computeRulerGrid } from '../rulerGrid'
 import { updateMidiActivityAtBeat } from './midiActivityRegistry'
 import { scrollLeftAroundBeat } from '../../utils/zoomAroundBeat'
+import { audioPickupBars } from '../../utils/audioPickup'
 
 const MIN_OUTSIDE_PROJECT_BARS = 8
 const OUTSIDE_PROJECT_OVERSCAN_BARS = 2
@@ -52,9 +53,17 @@ export function TimelineArea() {
   const maxBeat = totalBars * beatsPerBar
   const barWidthPx = beatsPerBar * pixelsPerBeat
   const projectWidthPx = totalBars * barWidthPx
+  // The pickup: audio dragged before bar 0 extends the timeline LEFT. Musical
+  // beat 0 sits pickupPx into the content; every beat-positioned layer below
+  // offsets by it (the lanes and ruler each shift through one wrapper).
+  const pickupBars = useProjectStore((s) => audioPickupBars(s.tracks))
+  const pickupBeats = pickupBars * beatsPerBar
+  const pickupPx = pickupBars * barWidthPx
+  // The audible audio-block drag (sync mode): highlight its loop + explain it.
+  const audioSyncDrag = useUIStore((s) => s.audioSyncDrag)
   const [laneViewportWidthPx, setLaneViewportWidthPx] = useState(0)
   const displayBars = timelineDisplayBars(totalBars, barWidthPx, laneViewportWidthPx)
-  const timelineWidthPx = displayBars * barWidthPx
+  const timelineWidthPx = displayBars * barWidthPx + pickupPx
 
   // One RAF-driven playhead overlay spanning the ruler + track lanes, plus a
   // draggable scrub from the ruler. laneRef measures the lane region (excludes
@@ -79,7 +88,7 @@ export function TimelineArea() {
       rulerContentRef.current.style.transform = `translateX(${-e.currentTarget.scrollLeft}px)`
     }
     if (projectLengthEdgeRef.current) {
-      projectLengthEdgeRef.current.style.transform = `translateX(${projectWidthPx - e.currentTarget.scrollLeft}px)`
+      projectLengthEdgeRef.current.style.transform = `translateX(${pickupPx + projectWidthPx - e.currentTarget.scrollLeft}px)`
     }
     // Persist continuously so the position survives unmount (the ref may already be
     // detached by the time an unmount cleanup would run).
@@ -108,6 +117,9 @@ export function TimelineArea() {
     return {
       backgroundImage: `repeating-linear-gradient(to right, var(--border-strong) 0px 1px, transparent 1px ${majorPx}px)`,
       backgroundSize: `${majorPx}px 100%`,
+      // Phase the repeat so a line still lands exactly on musical bar 0 when
+      // the pickup shifts the content (the pattern extends back through it).
+      backgroundPosition: `${pickupPx}px 0`,
     }
   })()
 
@@ -141,12 +153,14 @@ export function TimelineArea() {
   // their boundaries always land on the same musical subdivision.
   const computeSnappedTimelineBeat = useCallback((clientX: number) => {
     if (!laneRef.current) return null
+    // laneRef starts at MUSICAL beat 0 (it sits after the pickup), so scrubbing
+    // into the pickup yields the negative beats the transport can now play.
     const rect = laneRef.current.getBoundingClientRect()
     const raw = (clientX - rect.left) / pixelsPerBeat
     const snap = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars).playheadSnapBeats
     const beat = Math.round(raw / snap) * snap
-    return Math.max(0, Math.min(maxBeat, beat))
-  }, [beatsPerBar, displayBars, maxBeat, pixelsPerBeat])
+    return Math.max(-pickupBeats, Math.min(maxBeat, beat))
+  }, [beatsPerBar, displayBars, maxBeat, pixelsPerBeat, pickupBeats])
 
   const { startScrub } = useScrub({
     computeBeat: computeSnappedTimelineBeat,
@@ -209,7 +223,8 @@ export function TimelineArea() {
     const currentBeat = useTimeStore.getState().currentBeat
     sc.scrollLeft = scrollLeftAroundBeat(
       previous.scrollLeft,
-      currentBeat,
+      // Content x is (beat + pickup) · ppb - anchor the DISPLAY beat.
+      currentBeat + pickupBeats,
       previous.pixelsPerBeat,
       pixelsPerBeat,
     )
@@ -219,18 +234,18 @@ export function TimelineArea() {
       rulerContentRef.current.style.transform = `translateX(${-appliedScrollLeft}px)`
     }
     if (projectLengthEdgeRef.current) {
-      projectLengthEdgeRef.current.style.transform = `translateX(${projectWidthPx - appliedScrollLeft}px)`
+      projectLengthEdgeRef.current.style.transform = `translateX(${pickupPx + projectWidthPx - appliedScrollLeft}px)`
     }
     useUIStore.getState().setTracksScroll(appliedScrollLeft, sc.scrollTop)
-  }, [pixelsPerBeat, projectWidthPx])
+  }, [pixelsPerBeat, projectWidthPx, pickupPx, pickupBeats])
 
   // The project-end separator lives in viewport space so one continuous handle
   // spans the ruler and every lane, but follows the content during scrolling.
   useLayoutEffect(() => {
     if (!projectLengthEdgeRef.current) return
     projectLengthEdgeRef.current.style.transform =
-      `translateX(${projectWidthPx - (scrollRef.current?.scrollLeft ?? 0)}px)`
-  }, [projectWidthPx])
+      `translateX(${pickupPx + projectWidthPx - (scrollRef.current?.scrollLeft ?? 0)}px)`
+  }, [projectWidthPx, pickupPx])
 
   // The render extent is responsive: short projects still show grid/ruler
   // across the full viewport, plus a useful horizontally scrollable overrun.
@@ -282,12 +297,13 @@ export function TimelineArea() {
       clipRef.current.style.width = `${Math.max(0, sc.clientWidth - lw - PLAYHEAD_TRIANGLE_HALF)}px`
       clipRef.current.style.height = `${sc.clientHeight}px`
     }
-    // Ruler triangle is positioned in content space (its container mirrors the lane
-    // scroll). The lane line lives in a viewport-space overlay, so offset by scroll.
+    // Ruler triangle is positioned in content space INSIDE the ruler's pickup-
+    // shifted wrapper (so beatX stays musical). The lane line lives in a
+    // viewport-space overlay, so offset by the pickup and the scroll itself.
     if (playheadHeadRef.current) playheadHeadRef.current.style.transform = `translateX(${beatX}px)`
     if (playheadRef.current) {
       const sl = sc?.scrollLeft ?? 0
-      playheadRef.current.style.transform = `translateX(${beatX - sl}px)`
+      playheadRef.current.style.transform = `translateX(${beatX + pickupPx - sl}px)`
     }
   })
 
@@ -347,6 +363,7 @@ export function TimelineArea() {
           barWidthPx={barWidthPx}
           timelineWidthPx={timelineWidthPx}
           displayBars={displayBars}
+          pickupPx={pickupPx}
           gutterPx={0}
           contentRef={rulerContentRef}
           playheadHeadRef={playheadHeadRef}
@@ -393,6 +410,35 @@ export function TimelineArea() {
                 <Plus size={12} /> drop here
               </span>
             )}
+          </div>
+        )}
+        {/* Sync-drag explainer: what the loop band is and how to steer it.
+            Viewport space, centered over the lanes, out of the pointer's way. */}
+        {audioSyncDrag && (
+          <div
+            data-audio-sync-hint=""
+            className="pointer-events-none absolute top-2 z-40 flex justify-center"
+            style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, right: 8 }}
+          >
+            <div className="max-w-[440px] rounded-md border border-[rgba(53,167,230,0.45)] bg-[var(--bg-panel)]/92 px-3 py-2 shadow-lg shadow-black/40 backdrop-blur-sm">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+                Sync mode · looping bar{' '}
+                {(() => {
+                  const a = Math.floor(audioSyncDrag.loop.startBeat / beatsPerBar) + 1
+                  const b = Math.ceil(audioSyncDrag.loop.endBeat / beatsPerBar)
+                  return a >= b ? `${a}` : `${a}–${b}`
+                })()}
+              </div>
+              <div className="mt-1 text-[11px] leading-snug text-[var(--text-2)]">
+                The highlighted section keeps playing while you drag - line the waveform&apos;s
+                transients up with your MIDI by ear and eye. Audio re-syncs each pass and
+                whenever you pause the drag.
+              </div>
+              <div className="mt-0.5 text-[10px] leading-snug text-[var(--text-muted)]">
+                Park the playhead (or set a loop region) over the section you care about
+                before dragging. Drag past bar 1 to give the audio a pickup.
+              </div>
+            </div>
           </div>
         )}
         {rootTrackIds.length === 0 && (
@@ -457,6 +503,7 @@ export function TimelineArea() {
                   onLabelContextMenu={(e, id) => setCtxMenu({ x: e.clientX, y: e.clientY, trackId: id })}
                   barWidthPx={barWidthPx}
                   timelineWidthPx={timelineWidthPx}
+                  pickupPx={pickupPx}
                   selectedBlockIds={selectedBlockIds}
                   onBlockPointerDown={handleBlockPointerDown}
                   onLanePointerDown={handleLanePointerDown}
@@ -472,12 +519,45 @@ export function TimelineArea() {
               data-outside-project-lanes=""
               className="pointer-events-none absolute top-0 bottom-0 z-[5]"
               style={{
-                left: labelWidth + PLAYHEAD_TRIANGLE_HALF + projectWidthPx,
-                width: Math.max(0, timelineWidthPx - projectWidthPx),
+                left: labelWidth + PLAYHEAD_TRIANGLE_HALF + pickupPx + projectWidthPx,
+                width: Math.max(0, timelineWidthPx - pickupPx - projectWidthPx),
                 backgroundColor: 'rgba(9, 9, 9, 0.46)',
                 backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
               }}
             />
+
+            {/* The pickup's lane-side shading - same hatch as its ruler band, so
+                the lead-in reads as one region from ruler to lanes. */}
+            {pickupPx > 0 && (
+              <div
+                data-pickup-lanes=""
+                className="pointer-events-none absolute top-0 bottom-0 z-[5]"
+                style={{
+                  left: labelWidth + PLAYHEAD_TRIANGLE_HALF,
+                  width: pickupPx,
+                  backgroundImage: 'repeating-linear-gradient(-45deg, rgba(53,167,230,0.07) 0 5px, transparent 5px 10px)',
+                  borderRight: '1px solid rgba(53,167,230,0.35)',
+                }}
+              />
+            )}
+
+            {/* Sync-drag loop highlight: the span the transport is looping while
+                an audio block is dragged, full-height so it reads against every
+                lane and the visualizer's beat at once. */}
+            {audioSyncDrag && (
+              <div
+                data-audio-sync-loop=""
+                className="pointer-events-none absolute top-0 bottom-0 z-[6]"
+                style={{
+                  left: labelWidth + PLAYHEAD_TRIANGLE_HALF + pickupPx + audioSyncDrag.loop.startBeat * pixelsPerBeat,
+                  width: (audioSyncDrag.loop.endBeat - audioSyncDrag.loop.startBeat) * pixelsPerBeat,
+                  backgroundColor: 'rgba(53, 167, 230, 0.10)',
+                  borderLeft: '1px solid rgba(53, 167, 230, 0.75)',
+                  borderRight: '1px solid rgba(53, 167, 230, 0.75)',
+                  boxShadow: 'inset 0 0 18px rgba(53, 167, 230, 0.12)',
+                }}
+              />
+            )}
 
             {/* Shared drop insertion line (nest-drag + library drag). Content-space,
                 full width so it stays visible through horizontal scroll; indented to
@@ -508,11 +588,13 @@ export function TimelineArea() {
               />
             </div>
 
-            {/* Marquee overlay (content space, so its coords match block rects). */}
+            {/* Marquee overlay (content space, so its coords match block rects).
+                Starts at MUSICAL beat 0 - after the pickup - so every clientX →
+                beat mapping derived from this rect stays in musical beats. */}
             <div
               ref={laneRef}
               className="absolute bottom-0 top-0 z-10 pointer-events-none"
-              style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF, width: timelineWidthPx }}
+              style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF + pickupPx, width: timelineWidthPx - pickupPx }}
             >
               {marqueeRect && (
                 <div

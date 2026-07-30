@@ -39,6 +39,36 @@ export type TrackType =
 export type SceneId = string
 export const DEFAULT_SCENE_BACKGROUND = '#000000'
 
+export type SceneGradientKind = 'linear' | 'mirror' | 'radial'
+
+/** Two-stop backdrop gradient. `from` sits at the start of the CSS-style
+ * gradient line (the bottom at angle 0), at BOTH edges for mirror, and at the
+ * center for radial. `angle` is CSS convention - degrees clockwise from
+ * "to top" - and is ignored by radial. The whole object is kept around while
+ * `enabled` is false so switching backdrop modes never loses the setup. */
+export interface SceneGradient {
+  enabled: boolean
+  kind: SceneGradientKind
+  from: string
+  to: string
+  angle: number
+}
+
+export function defaultSceneGradient(): SceneGradient {
+  return { enabled: false, kind: 'linear', from: '#1b2c55', to: '#000000', angle: 0 }
+}
+
+export type SceneBackdropMode = 'color' | 'gradient' | 'transparent'
+
+/** Which backdrop the scene actually wears - transparency wins, then an
+ * enabled gradient, else the flat color. The two underlying fields never
+ * fight because ProjectStore.setSceneBackdropMode writes them together. */
+export function sceneBackdropMode(scene: Pick<Scene, 'backgroundTransparent' | 'backgroundGradient'>): SceneBackdropMode {
+  if (scene.backgroundTransparent) return 'transparent'
+  if (scene.backgroundGradient?.enabled) return 'gradient'
+  return 'color'
+}
+
 /** A self-contained editable visual world. Main is represented by the same shape,
  * but accepts director tracks instead of object instruments. */
 export interface Scene {
@@ -47,6 +77,8 @@ export interface Scene {
   isMain: boolean
   backgroundColor: string
   backgroundTransparent: boolean
+  /** Absent on older documents - readers treat that as a disabled gradient. */
+  backgroundGradient?: SceneGradient
   tracks: Record<string, Track>
   rootTrackIds: string[]
   /** The template THIS scene wears (multi-scene projects can differ per
