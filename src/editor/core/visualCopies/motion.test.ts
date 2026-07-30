@@ -235,7 +235,7 @@ test('every block leaves opacity and colour untouched', () => {
   const notes = [note(0, 48, 2), note(0, 60), note(0, 72, 2), note(0, 84)]
   const copy = motionMover
     .resolve({ settings: settings(), notes })
-    .apply({ ...identityVisualCopy(), opacity: 0.5, colorShift: { hue: 0.25, saturation: 0, lightness: 0 } },
+    .apply({ ...identityVisualCopy(), opacity: 0.5, colorShift: { hue: 0.25, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
       { beat: 1, index: 0, count: 1 })[0]
   assert.equal(copy.opacity, 0.5)
   assert.equal(copy.colorShift.hue, 0.25)

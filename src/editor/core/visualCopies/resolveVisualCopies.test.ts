@@ -73,7 +73,7 @@ test('empty chain returns one identity copy', () => {
   assert.equal(copies.length, 1)
   assert.deepEqual(copies[0].transform.elements, new Matrix4().elements)
   assert.equal(copies[0].opacity, 1)
-  assert.deepEqual(copies[0].colorShift, { hue: 0, saturation: 0, lightness: 0 })
+  assert.deepEqual(copies[0].colorShift, { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 })
 })
 
 test('movers receive the current index and count', () => {
@@ -159,6 +159,7 @@ test('opacity and color shift survive copying', () => {
       const next = cloneCopy(visualCopy)
       next.opacity = visualCopy.opacity * 0.5
       next.colorShift = {
+        ...visualCopy.colorShift,
         hue: visualCopy.colorShift.hue + 0.25,
         saturation: visualCopy.colorShift.saturation + 0.1,
         lightness: visualCopy.colorShift.lightness - 0.1,
@@ -170,7 +171,7 @@ test('opacity and color shift survive copying', () => {
   assert.equal(copies.length, 2)
   for (const copy of copies) {
     assert.equal(copy.opacity, 0.5)
-    assert.deepEqual(copy.colorShift, { hue: 0.25, saturation: 0.1, lightness: -0.1 })
+    assert.deepEqual(copy.colorShift, { hue: 0.25, saturation: 0.1, lightness: -0.1, tint: null, tintAmount: 0 })
   }
 })
 

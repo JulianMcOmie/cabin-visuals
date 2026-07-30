@@ -21,7 +21,8 @@ import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
-import type { InterpolationMode, Routing, EffectInstance, Track } from '../types'
+import { resolveTrackDisplayColor } from '../utils/trackDisplayColor'
+import type { InterpolationMode, Routing, EffectInstance, Scene, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -183,10 +184,39 @@ function EffectItem({
   )
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'instrument', label: 'Instrument' },
-  { id: 'effects', label: 'Effects' },
+// Two label sets: the rail is a @container, and below ~300px the tabs drop to
+// their short forms so the identity name keeps room to read (same trick the
+// library sidebar's tabs use when it is dragged narrow).
+const TABS: { id: Tab; label: string; short: string; sceneLabel: string; sceneShort: string }[] = [
+  { id: 'instrument', label: 'Instrument', short: 'Inst', sceneLabel: 'Settings', sceneShort: 'Scene' },
+  { id: 'effects', label: 'Effects', short: 'FX', sceneLabel: 'Effects', sceneShort: 'FX' },
 ]
+
+/** What the panel is pointed at, for the identity that shares the tab rail:
+ *  the NAME it wears, the KIND behind that name (a tooltip, not a second line -
+ *  the rail has one line to give), and the COLOR that lights the active tab.
+ *  Scenes have no identity color of their own, so they borrow the theme accent. */
+function panelIdentity(
+  track: Track | null,
+  tracks: Record<string, Track>,
+  scene: Scene | undefined,
+): { name: string; kind: string; color: string } | null {
+  if (track) {
+    const kind =
+      track.type === 'base' ? getInstrument(track.instrumentId)?.name ?? 'Instrument'
+      : track.type === 'mover' || track.type === 'splitter'
+        ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)?.label
+          ?? (track.type === 'splitter' ? 'Splitter' : 'Mover')
+      : track.type === 'director' ? getDirector(track.directorId)?.name ?? 'Director'
+      : track.type === 'automation' ? 'Automation'
+      : track.type === 'envelope' ? 'Envelope'
+      : track.type === 'ability' ? 'Ability'
+      : 'Track'
+    return { name: track.name, kind, color: resolveTrackDisplayColor(track, tracks) }
+  }
+  if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
+  return null
+}
 
 const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
   { value: 'step', label: 'Step' },
@@ -316,6 +346,7 @@ export function TrackEditor() {
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
   const track = selectedTrackId ? tracks[selectedTrackId] ?? null : null
+  const identity = panelIdentity(track, tracks, activeScene)
 
   // Dragging an effect from the library flips this panel to its Effects tab so the
   // drop zone is visible - the scene's chain when no track is selected.
@@ -335,28 +366,52 @@ export function TrackEditor() {
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* No name header - the timeline row and scene tab already carry identity
-          (the guide's planned deprecation); the panel starts at its tabs. */}
-      {/* Tabs - pill row; the active pill carries the elevated neutral. */}
-      <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3 py-1.5">
-        {(track || activeScene) ? TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 h-6 rounded-full text-[11px] transition-colors cursor-pointer ${
-              tab === t.id
-                ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
-                : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
-            }`}
+      {/* Identity rides ON the tab rail: the name takes the left, the tabs shrink
+          to the right, and the subject's own color lights the ACTIVE tab instead
+          of the neutral elevated fill. Costs no vertical space, so the panel still
+          starts at its controls - which is why the standalone name header this
+          replaced was dropped. The name truncates before the tabs do; the kind
+          (instrument / mover / scene) lives in its tooltip, the rail having only
+          one line to give. */}
+      <div className="@container flex flex-shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1.5">
+        {identity && (
+          <span
+            className="min-w-0 truncate text-[11.5px] font-semibold text-[var(--text)]"
+            title={`${identity.name} · ${identity.kind}`}
           >
-            {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
-            {!track && t.id === 'instrument' ? 'Settings' : t.label}
-          </button>
-        )) : (
-          <div className="flex-1 h-6 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
-            Settings
-          </div>
+            {identity.name}
+          </span>
         )}
+        <div className="ml-auto flex flex-shrink-0 items-center gap-1">
+          {(track || activeScene) ? TABS.map((t) => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`h-6 rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
+                  active
+                    ? 'font-semibold'
+                    : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+                }`}
+                style={active && identity
+                  ? {
+                    background: `color-mix(in srgb, ${identity.color} 18%, transparent)`,
+                    color: identity.color,
+                  }
+                  : undefined}
+              >
+                {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
+                <span className="hidden @[300px]:inline">{track ? t.label : t.sceneLabel}</span>
+                <span className="@[300px]:hidden">{track ? t.short : t.sceneShort}</span>
+              </button>
+            )
+          }) : (
+            <div className="h-6 px-2.5 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
+              Settings
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
@@ -377,13 +432,22 @@ export function TrackEditor() {
                     // params come bound as UserInterfaceParameters; anything
                     // unregistered keeps the plain control list.
                     const BespokeMover = getMoverUserInterface(newMoverDef.id)
-                    const moverParameters: UserInterfaceParameter[] = newMoverDef.params
-                      .filter((p) => typeof p.default === 'number')
-                      .map((p) => ({
-                        definition: p,
-                        value: track.inputValues?.[p.key] ?? (p.default as number),
-                        setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
-                      }))
+                    // Numeric params live in inputValues, string-valued ones
+                    // (color / string) in the shared stringParams field - the
+                    // same split instruments use, so the engine's numeric paths
+                    // never see a string.
+                    const moverParameters: UserInterfaceParameter[] = newMoverDef.params.map((p) =>
+                      isStringParam(p)
+                        ? {
+                          definition: p,
+                          value: track.stringParams?.[p.key] ?? p.default,
+                          setValue: (v) => { if (typeof v === 'string') setTrackStringParam(track.id, p.key, v) },
+                        }
+                        : {
+                          definition: p,
+                          value: track.inputValues?.[p.key] ?? (p.default as number),
+                          setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
+                        })
                     return (
                       <>
                         {BespokeMover ? (
@@ -401,9 +465,10 @@ export function TrackEditor() {
                               <ParamControl
                                 key={p.key}
                                 param={p}
-                                numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
-                                strValue={undefined}
+                                numValue={isStringParam(p) ? undefined : track.inputValues?.[p.key] ?? (p.default as number)}
+                                strValue={isStringParam(p) ? track.stringParams?.[p.key] ?? p.default : undefined}
                                 onNum={(v) => setMoverInput(track.id, p.key, v)}
+                                onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                               />
                             ))}
                           </>

@@ -590,6 +590,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
           transform,
           opacity: visualCopy.opacity * flowFade,
           colorShift: {
+            ...visualCopy.colorShift,
             hue: visualCopy.colorShift.hue + settings.flashHue * heat,
             saturation: visualCopy.colorShift.saturation + settings.flashSaturation * heat,
             lightness: visualCopy.colorShift.lightness + settings.flashLightness * heat,

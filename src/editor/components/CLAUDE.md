@@ -25,7 +25,7 @@ Three big surfaces plus the inspector. **The timeline and the piano roll have se
 
 ## Inspector & the rest
 
-- `TrackEditor.tsx` — the detail/inspector panel: dispatches per track type to registered settings UIs (`userInterfaceRenderers/`), effect chains, mover routing, envelope/automation config, scene settings (`SceneSettingsPanel.tsx`).
+- `TrackEditor.tsx` — the detail/inspector panel: dispatches per track type to registered settings UIs (`userInterfaceRenderers/`), effect chains, mover routing, envelope/automation config, scene settings (`SceneSettingsPanel.tsx`). Identity rides ON the tab rail — `panelIdentity()` resolves name + kind (tooltip) + color, and the color tints the ACTIVE tab; the rail is a `@container` that drops to short tab labels under 300px. Design options were explored at `/dev/panel-header-lab`.
 - `LeftSidebar.tsx` — the library. **`ALL_OBJECT_INSTRUMENTS` is the curated instrument picker** — new instruments must be added here as well as the registry. Drag sources: `useLibraryDrag`, `useEffectDrag`.
 - Transport/header: `TransportDisplay`, `TransportIcons`, `BpmControl` (brackets `beginBpmDrag`/`endBpmDrag`), `ExportDialog`, `SceneTabs`.
 - Media: `MediaFileDropLayer` (file drops → audio/video/photo pipelines), `VideoClipBank`, `PhotoBank`, `AudioTrackDetail`.

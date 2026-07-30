@@ -145,7 +145,7 @@ function LatticeField({ settings }: { settings: ImpactScatterSettings }) {
         current.settings.centerZ + cell[2],
       )
       const [result] = current.resolved.apply(
-        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0 } },
+        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
         { beat, index: i, count: LATTICE.length },
       )
       dummy.matrix.copy(result.transform)

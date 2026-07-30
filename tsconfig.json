@@ -36,6 +36,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-build-check/types/**/*.ts",
+    ".next-build-commit/types/**/*.ts",
     ".next-build/types/**/*.ts",
     ".next-isolated-3001/types/**/*.ts",
     ".next-isolated-3003/types/**/*.ts",
@@ -43,7 +44,7 @@
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-commit/types/**/*.ts"
+    ".next-isolated-3008/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

@@ -13,10 +13,9 @@ test('copy hue changes declared instrument color params, including schema defaul
   applyColorShiftToInstrumentParams(
     { label: 'LASER' },
     params,
-    0.25,
-    0,
-    0,
+    { hue: 0.25, saturation: 0, lightness: 0, tint: null, tintAmount: 0 },
     output,
+    new Color(),
     new Color(),
   )
 
@@ -30,10 +29,9 @@ test('stored colors are shifted while non-color and intentionally empty params a
   applyColorShiftToInstrumentParams(
     { color: '#ff0000', strokeColor: '', geometry: 'cube' },
     params,
-    -1 / 3,
-    0,
-    0,
+    { hue: -1 / 3, saturation: 0, lightness: 0, tint: null, tintAmount: 0 },
     output,
+    new Color(),
     new Color(),
   )
 

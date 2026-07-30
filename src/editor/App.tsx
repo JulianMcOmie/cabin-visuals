@@ -718,7 +718,7 @@ function Header({
               band's edges (overflow clipping rounds the two ends); the 1px gap
               is invisible at rest and becomes a hairline seam only between two
               lit/hovered segments. Each active control has its own hue: play
-              goes green while playing; loop goes the looped-region gold
+              goes green while playing; loop goes the looped-region blue
               (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
               TransportIcons. */}
           <div className="flex h-9 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]">
@@ -746,7 +746,7 @@ function Header({
               title={loopEnabled ? 'Loop on' : 'Loop off'}
               className={`${transportBtn} rounded-r-md ${
                 loopEnabled
-                  ? 'bg-[#f2c14e] text-[var(--on-accent)] hover:bg-[#f6d072]'
+                  ? 'bg-[#4da3d9] text-[var(--on-accent)] hover:bg-[#6fb8e2]'
                   : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
               }`}
             >

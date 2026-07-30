@@ -722,6 +722,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
           transform,
           opacity: visualCopy.opacity,
           colorShift: {
+            ...visualCopy.colorShift,
             hue: visualCopy.colorShift.hue + FLASH_HUE * heat,
             saturation: visualCopy.colorShift.saturation + FLASH_SATURATION * heat,
             lightness: visualCopy.colorShift.lightness + FLASH_LIGHTNESS * heat,
