@@ -307,6 +307,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
 // Left the library outright - Motion's Step/Snap/Spin blocks are these exact

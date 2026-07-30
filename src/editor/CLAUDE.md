@@ -16,6 +16,8 @@ Everything inside the `/editor` route. `App.tsx` is the shell (client-only, dyna
   - `audio` — pinned audio lanes (`audioBlocks`, positioned+trimmed clip refs). Live OUTSIDE scenes (project-level, `audioTracks`/`audioRootTrackIds` in the store).
   - `director` — Main-scene-only (`directorId`, `sceneBindings` mapping MIDI pitches → scene ids).
 - **Block**: bar-positioned note container; `loop` + `loopLengthBars` tile its notes (expansion happens in `core/visual/noteFlatten.ts` at resolve time). **Note beats are relative to their block.**
+  - Field names bite when you build blocks/notes by hand (store scripting, console smoke tests, fixtures): a Block's length is **`durationBars`** (not `lengthBars`) and a Note's position is **`startBeat`** (not `beat`). `ResolvedNote` — what movers and instruments actually receive — is the *other* shape: absolute `beat`, plus `blockStartBeat`/`blockEndBeat`. Get either wrong and nothing throws: `flattenBlocks` quietly emits `beat: NaN` (or a zero-length block), so the track simply renders nothing and looks like a bug in whatever you were testing.
+  - Related console-scripting gotcha: `UIStore.selectedTrackIds` is a **Set**, not an array — handing it an array throws inside the timeline's `Track` row.
 - Video/Photo instruments keep pad banks on the track (`videoPads`/`photoPads`); pad order IS the MIDI mapping. Bytes live behind `core/video` / `core/photo`; stores hold serializable descriptors only.
 - Lyrics track: `lyricTiming` (seconds) is the source of truth; note beats are re-derived from it on BPM change so words never move off their sung time.
 
