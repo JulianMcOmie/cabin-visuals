@@ -28,6 +28,7 @@ import { photoInstrument } from './Photo'
 import { oscilloscopeInstrument } from './Oscilloscope'
 import { colorFiltersInstrument } from './ColorFilters'
 import { bassRippleInstrument } from './BassRipple'
+import { strobeInstrument } from './Strobe'
 import { laserSphereInstrument } from './LaserSphere'
 import { laserLineInstrument } from './LaserLine'
 import { wormholeInstrument } from './Wormhole'
@@ -64,6 +65,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [oscilloscopeInstrument.id]: oscilloscopeInstrument,
   [colorFiltersInstrument.id]: colorFiltersInstrument,
   [bassRippleInstrument.id]: bassRippleInstrument,
+  [strobeInstrument.id]: strobeInstrument,
   [laserSphereInstrument.id]: laserSphereInstrument,
   [laserLineInstrument.id]: laserLineInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
