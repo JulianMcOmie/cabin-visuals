@@ -9,6 +9,7 @@ import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInter
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
+import { ApproachSplitterUserInterfaceRenderer } from './ApproachSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
 import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
@@ -33,6 +34,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
+  approach: ApproachSplitterUserInterfaceRenderer,
 }
 
 export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
