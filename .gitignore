@@ -48,3 +48,4 @@ next-env.d.ts
 .claude/settings.local.json
 /.next-isolated-*/
 /.next-build/
+/.next-build-*/

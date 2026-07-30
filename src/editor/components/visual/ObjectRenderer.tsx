@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
+import { isFullFrameTrack } from '../../instruments/types'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
@@ -60,7 +61,14 @@ export function ObjectRenderer({
   )
   const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
 
-  const isFullFrame = !!def?.fullFrame
+  // Full-frame can be a per-track MODE (Oscilloscope's "Fit to screen"), so the
+  // params record is a real dependency here: flipping the mode swaps which of
+  // the two branches at the bottom of this component renders. Only instruments
+  // that declare `fullFrameParam` subscribe, so nothing else pays for it.
+  const modeParams = useProjectStore((s) => def?.fullFrameParam
+    ? s.scenes[sceneId]?.tracks[trackId]?.params
+    : undefined)
+  const isFullFrame = isFullFrameTrack(def, modeParams)
   const instrumentCopyContext = useMemo(() => ({
     visualCopyIndex,
     colorParams: (def?.params ?? []).flatMap((param) => param.type === 'color'
