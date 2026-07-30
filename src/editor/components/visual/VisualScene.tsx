@@ -25,7 +25,7 @@ import {
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js'
 import { BloomEffect } from 'postprocessing'
-import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList } from '../../core/visual/VisualEngine'
+import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribeObjects, getObjectList, type ObjectListEntry } from '../../core/visual/VisualEngine'
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
@@ -33,6 +33,7 @@ import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
+import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
@@ -128,8 +129,18 @@ void main() {
     filtered = floor(working * 4.0 + 0.5) / 4.0;
   } else if (mode < 8.5) {
     filtered = 0.5 + 0.5 * cos(6.28318530718 * (luma + vec3(0.0, 0.33, 0.67)));
-  } else {
+  } else if (mode < 9.5) {
     filtered = hueShift(working, 0.16 + mod(time * 0.035, 1.0));
+  } else if (mode < 10.5) {
+    // Strobe · blackout. Modes 10 and 11 belong to the Strobe instrument, which
+    // maps its styles onto this shader's numbering (instruments/Strobe.tsx).
+    // Color Filters' own rows only reach mode 9, so the two strobe-only looks
+    // stay out of that instrument's vocabulary.
+    filtered = vec3(0.0);
+  } else {
+    // Strobe · flash. hdrScale carries this back up to the frame's own headroom
+    // below, so a white flash over a bright scene is as bright as that scene.
+    filtered = vec3(1.0);
   }
 
   filtered *= hdrScale;
@@ -406,6 +417,30 @@ function lights() {
 }
 
 /**
+ * Scene id → the track ids of every object using `instrumentId`, in resolve
+ * order. The scene-wide post-process instruments (Bass Ripple, Color Filters,
+ * Strobe) all need this same grouping to drive their compositor passes.
+ *
+ * De-duplicated by track: one track resolves to an entry per VisualCopy
+ * occurrence, and these instruments post-process the whole scene once - running
+ * a pass per copy would just apply the same filter several times over.
+ */
+function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumentId: string) {
+  const byScene = new Map<string, string[]>()
+  const seen = new Set<string>()
+  for (const object of objects) {
+    if (object.instrumentId !== instrumentId) continue
+    const key = `${object.sceneId}:${object.trackId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const ids = byScene.get(object.sceneId) ?? []
+    ids.push(object.trackId)
+    byScene.set(object.sceneId, ids)
+  }
+  return byScene
+}
+
+/**
  * Every logical project scene stays mounted in its own literal THREE.Scene.
  * A second scene per runtime is the existing "In front" pass; a third holds
  * final-frame inversion masks. The compositor renders ordinary scene layers
@@ -629,35 +664,9 @@ export function VisualScene() {
     compositor.compositeTarget.dispose()
   }, [compositor])
 
-  const bassRippleTrackIds = useMemo(() => {
-    const byScene = new Map<string, string[]>()
-    const seen = new Set<string>()
-    for (const object of objects) {
-      if (object.instrumentId !== 'bassRipple') continue
-      const key = `${object.sceneId}:${object.trackId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const ids = byScene.get(object.sceneId) ?? []
-      ids.push(object.trackId)
-      byScene.set(object.sceneId, ids)
-    }
-    return byScene
-  }, [objects])
-
-  const colorFilterTrackIds = useMemo(() => {
-    const byScene = new Map<string, string[]>()
-    const seen = new Set<string>()
-    for (const object of objects) {
-      if (object.instrumentId !== 'colorFilters') continue
-      const key = `${object.sceneId}:${object.trackId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const ids = byScene.get(object.sceneId) ?? []
-      ids.push(object.trackId)
-      byScene.set(object.sceneId, ids)
-    }
-    return byScene
-  }, [objects])
+  const bassRippleTrackIds = useMemo(() => postProcessTracksByScene(objects, 'bassRipple'), [objects])
+  const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
+  const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
@@ -726,6 +735,26 @@ export function VisualScene() {
           compositor.filterMaterial.uniforms.mode.value = filter.mode
           compositor.filterMaterial.uniforms.amount.value = filter.amount
           compositor.filterMaterial.uniforms.time.value = filter.beat
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
+        // Strobe runs LAST of the scene's own passes: it is a flash over the
+        // finished look, not one more colour in the grade. Inverting a graded
+        // frame is the intent; grading an inverted one would tint the flash.
+        // A dark half-cycle resolves to null, so the pass simply does not run.
+        for (const trackId of strobeTrackIds.get(sceneId) ?? []) {
+          const strobe = resolveActiveStrobe(getObjectState(trackId))
+          if (!strobe) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.filterMaterial
+          compositor.filterMaterial.uniforms.tDiffuse.value = filteredTexture
+          compositor.filterMaterial.uniforms.mode.value = strobe.mode
+          compositor.filterMaterial.uniforms.amount.value = strobe.amount
+          compositor.filterMaterial.uniforms.time.value = strobe.beat
           gl.setRenderTarget(output)
           gl.setClearColor(0x000000, 0)
           gl.clear(true, true, true)

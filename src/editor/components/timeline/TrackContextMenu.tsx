@@ -44,10 +44,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // Only numeric params can be automated (keyframes interpolate a number). Object
   // tracks also offer the canonical transform params (core/transform.ts).
   const params = (def ? withTransformParams(def.params) : moverDef?.params ?? []).filter(isNumberParam)
-  const newDefs = def ? listMoverOrSplitterDefinitions() : []
+  // A mover/splitter track offers movers too, but they mean something different
+  // there: a mover child MOVES its parent rather than joining the object's chain
+  // (core/visualCopies/moverFrame.ts). Splitters and colorizers have nothing to
+  // contribute to a frame, so they stay an object-track affordance.
+  const newDefs = def || moverDef ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
-  const colorizers = newDefs.filter((d) => d.kind === 'colorizer')
-  const splitters = newDefs.filter((d) => d.kind === 'splitter')
+  const colorizers = def ? newDefs.filter((d) => d.kind === 'colorizer') : []
+  const splitters = def ? newDefs.filter((d) => d.kind === 'splitter') : []
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
@@ -106,7 +110,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     },
     {
       key: 'mover',
-      label: 'Add mover track',
+      label: def ? 'Add mover track' : 'Move this mover with',
       items: movers.map((d) => ({ id: d.id, label: d.label })),
     },
     {

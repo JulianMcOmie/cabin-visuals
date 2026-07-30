@@ -14,7 +14,7 @@ import type { VisualCopy } from '../core/visualCopies/types'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
 import { resolveProject, type ProjectSnapshot } from '../core/visual/resolve'
 import { evaluatePulse } from '../core/visual/energy'
-import { sampleLane, sampleNoiseLane } from '../core/visual/automation'
+import { sampleAutomationLane } from '../core/visual/automation'
 import { evaluateAdsrGain } from '../core/visual/adsr'
 import { composeMatrix, localTransformToSV } from '../core/visual/stateVector'
 import { composeScreenAnchor } from '../core/visual/screenAnchor'
@@ -726,12 +726,8 @@ export function computeProjectState(
   if (obj.automations.length) {
     params = { ...obj.params }
     for (const auto of obj.automations) {
-      if (auto.noise && auto.gates?.length) {
-        const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
-        if (!Number.isNaN(v)) params[auto.param] = v
-      } else if (auto.keyframes.length) {
-        params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
-      }
+      const v = sampleAutomationLane(auto, beat, params[auto.param] ?? auto.base ?? 0)
+      if (!Number.isNaN(v)) params[auto.param] = v
     }
   }
   let opacityGate = 1

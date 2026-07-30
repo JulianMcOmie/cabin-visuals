@@ -82,6 +82,11 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="7.7" r="3" fill="none" stroke="#facc15" strokeWidth="1" />
     </svg>
   )},
+  { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#fde047" />
+    </svg>
+  )},
 ])
 
 const DIRECTOR_DESCRIPTIONS: Record<string, string> = {
