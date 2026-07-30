@@ -1,5 +1,6 @@
-import type { Block, InterpolationMode } from '../../types'
+import type { AdsrEnvelope, AutomationMode, Block, InterpolationMode, Track } from '../../types'
 import { pitchToValue } from '../trackTypes'
+import { adsrGateGain, type AdsrGate } from './adsr'
 import { flattenBlocks } from './noteFlatten'
 
 /** One automation keyframe: a target param value at an absolute project beat. */
@@ -40,6 +41,14 @@ export interface NoiseConfig {
   range: number
   /** Fixed at authoring time; re-roll for a new take. */
   seed: number
+}
+
+/** What flipping a lane to noise mode starts from; the caller supplies the seed
+ *  (it is re-rolled per take, and the engine must stay free of randomness). */
+export const DEFAULT_NOISE: Omit<NoiseConfig, 'seed'> = {
+  rate: 4,
+  smoothness: 0.5,
+  range: 0.5,
 }
 
 /** One noise burst: a held note's window and its pitch-mapped center value. */
@@ -102,8 +111,83 @@ export function sampleNoiseLane(
   return Math.max(paramMin, Math.min(paramMax, value))
 }
 
-/** Ease a normalized 0..1 fraction per the interpolation mode. */
-function ease(t: number, mode: InterpolationMode): number {
+// ── Burst mode ───────────────────────────────────────────────────────────────
+// The third lane mode. Notes stop being keyframes and become ADSR BURSTS: every
+// note fires the same adjustable envelope (attack/decay/sustain/release, all in
+// BEATS), and the note's PITCH says how far that burst travels - the param
+// leaves whatever value is underneath and heads for the note's pitch-value,
+// arriving exactly at full gain. Velocity is the note's intensity, and the
+// track-level `intensity` scales every burst at once. Between bursts the lane is
+// inert (NaN) like noise mode, so the base value shows through instead of the
+// last keyframe. Closed-form over the note list (adsr.ts), so pause/scrub/export
+// replay identically.
+
+/** Track-level burst settings (stored on the automation track). */
+export interface BurstConfig extends AdsrEnvelope {
+  /** Scales every burst's travel: 0 = the lane does nothing, 1 = full reach. */
+  intensity: number
+}
+
+/** What flipping a lane to burst mode starts from: a fast hit that falls to a low
+ *  sustain, so a single tap reads as a burst while a held note still holds. */
+export const DEFAULT_BURST: BurstConfig = {
+  attackBeats: 0.05,
+  decayBeats: 0.5,
+  sustainLevel: 0.35,
+  releaseBeats: 0.5,
+  intensity: 1,
+}
+
+/** One burst: a note's gate window plus the value it reaches at full gain. */
+export interface BurstGate extends AdsrGate {
+  /** Where this burst is headed, from the note's pitch. */
+  value: number
+}
+
+/** Flatten a burst-mode track's blocks into bursts (pitch → peak value). */
+export function extractBurstGates(
+  blocks: Block[],
+  beatsPerBar: number,
+  paramMin: number,
+  paramMax: number,
+  totalBars?: number,
+): BurstGate[] {
+  return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
+    beat: note.beat,
+    durationBeats: note.durationBeats,
+    velocity: note.velocity ?? 100,
+    value: pitchToValue(note.pitch, paramMin, paramMax),
+  }))
+}
+
+/** Sample a burst lane at `beat`: NaN while no burst is live (lane inert), else
+ *  `base` travelled toward the live bursts' value. Overlapping bursts blend -
+ *  the destination is their gain-weighted average value and the total travel
+ *  clamps at 1, matching evaluateAdsrGain's sum-and-clamp stacking. */
+export function sampleBurstLane(
+  cfg: BurstConfig,
+  gates: readonly BurstGate[],
+  beat: number,
+  base: number,
+): number {
+  let gainSum = 0
+  let weightedValue = 0
+  for (const g of gates) {
+    const gain = adsrGateGain(g, beat, cfg)
+    if (gain <= 0) continue
+    gainSum += gain
+    weightedValue += gain * g.value
+  }
+  if (gainSum <= 0) return NaN
+  const target = weightedValue / gainSum
+  const travel = Math.min(1, gainSum) * Math.max(0, Math.min(1, cfg.intensity))
+  return base + (target - base) * travel
+}
+
+/** Ease a normalized 0..1 fraction per the interpolation mode. Exported so the
+ *  automation panel can PLOT the curve the lane will actually ride, instead of
+ *  drawing its own idea of one. */
+export function easeFraction(t: number, mode: InterpolationMode): number {
   switch (mode) {
     case 'step': return 0 // handled by the caller; never reached for interpolation
     case 'linear': return t
@@ -140,5 +224,56 @@ export function sampleLane(keyframes: AutomationKeyframe[], beat: number, mode: 
   if (mode === 'step') return a.value
   const span = b.beat - a.beat
   const t = span > 0 ? (beat - a.beat) / span : 0
-  return a.value + (b.value - a.value) * ease(t, mode)
+  return a.value + (b.value - a.value) * easeFraction(t, mode)
+}
+
+// ── One lane, three modes ────────────────────────────────────────────────────
+
+/** Which model a lane's notes follow. Burst wins if a document somehow carries
+ *  both configs - the same precedence resolve.ts applies, kept in one place so
+ *  the editor can never disagree with the engine about what a lane is. */
+export function automationMode(track: Pick<Track, 'noise' | 'burst'>): AutomationMode {
+  return track.burst ? 'burst' : track.noise ? 'noise' : 'curve'
+}
+
+/**
+ * The mode-bearing fields every resolved lane carries, whatever it drives (an
+ * instrument/mover param or an effect setting - see core/visual/types.ts, whose
+ * ResolvedAutomation and ResolvedEffectAutomation both extend this). Exactly one
+ * mode is populated: `noise`+`gates`, `burst`+`bursts`, or plain `keyframes`.
+ */
+export interface AutomationLane {
+  mode: InterpolationMode
+  keyframes: AutomationKeyframe[]
+  noise?: NoiseConfig
+  gates?: NoiseGate[]
+  burst?: BurstConfig
+  bursts?: BurstGate[]
+  /** Param range, for noise's deviation scaling. */
+  min?: number
+  max?: number
+  /** What a burst departs from when nothing underneath has set a value (the
+   *  param's default / the effect's stored setting). */
+  base?: number
+}
+
+/**
+ * Sample a lane at `beat` whatever its mode - THE single place that decides what
+ * mode a lane is in, so the engine, the hover preview and paramAtBeat can never
+ * disagree and a new mode lands in all of them at once.
+ *
+ * NaN means the lane is INERT this frame (a noise/burst lane between its gates,
+ * or a lane with no notes at all): callers keep whatever value was already
+ * there. `base` is what a burst travels away from; the other modes ignore it.
+ */
+export function sampleAutomationLane(lane: AutomationLane, beat: number, base: number): number {
+  if (lane.burst) {
+    return lane.bursts?.length ? sampleBurstLane(lane.burst, lane.bursts, beat, base) : NaN
+  }
+  if (lane.noise) {
+    return lane.gates?.length
+      ? sampleNoiseLane(lane.noise, lane.gates, beat, lane.min ?? 0, lane.max ?? 1)
+      : NaN
+  }
+  return lane.keyframes.length ? sampleLane(lane.keyframes, beat, lane.mode) : NaN
 }

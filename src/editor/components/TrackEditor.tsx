@@ -12,6 +12,7 @@ import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
+import { automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
 import { parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
@@ -21,9 +22,10 @@ import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
+import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
 import { resolveTrackDisplayColor } from '../utils/trackDisplayColor'
 import { withAlpha } from '../userInterfaceRenderers/colorWheel'
-import type { InterpolationMode, Routing, EffectInstance, Scene, Track } from '../types'
+import type { Routing, EffectInstance, Scene, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
 
@@ -241,17 +243,6 @@ function panelIdentity(
   return null
 }
 
-const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
-  { value: 'step', label: 'Step' },
-  { value: 'linear', label: 'Linear' },
-  { value: 'ease-in', label: 'Ease In' },
-  { value: 'ease-out', label: 'Ease Out' },
-  { value: 'ease-in-out', label: 'Ease In-Out' },
-  { value: 'exponential', label: 'Exponential' },
-  { value: 'smooth-step', label: 'Smooth Step' },
-]
-
-
 /** The top-level mover targets picker (#tag / branch / track scopes), shared by
  *  legacy movers and new-registry (VisualCopy) movers and splitters. */
 function MoverTargets({ track }: { track: Track }) {
@@ -355,6 +346,9 @@ export function TrackEditor() {
   const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
   const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
+  const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
+  const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
@@ -547,10 +541,11 @@ export function TrackEditor() {
                     )
                   }
 
-                  // Automation child track → the curve used between its value
-                  // keyframes. The same picker lives in the MIDI editor's
-                  // toolbar; it is surfaced here too so the curve types are
-                  // discoverable without opening the lane.
+                  // Automation child track → its MODE (value keyframes on a
+                  // curve / seeded noise / ADSR bursts) and that mode's shape,
+                  // drawn as the lane's own console. The MIDI editor's toolbar
+                  // carries the same controls in compact form; they live here too
+                  // so the modes are discoverable without opening the lane.
                   if (track.type === 'automation') {
                     const parent = track.parentId ? tracks[track.parentId] : undefined
                     const fx = track.targetParam ? parseFxTarget(track.targetParam) : null
@@ -569,25 +564,18 @@ export function TrackEditor() {
                       if (pdef) targetLabel = pdef.label
                     }
                     return (
-                      <>
-                        <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">AUTOMATION</p>
-                        {/* Same row shape as ParamControl's select params. */}
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-2.5 mb-[13px]">
-                          <span className="text-[11px] text-[var(--text-3)] truncate" title="Curve">Curve</span>
-                          <select
-                            value={track.interpolation ?? 'linear'}
-                            onChange={(e) => setTrackInterpolation(track.id, e.target.value as InterpolationMode)}
-                            className="w-full h-6 px-1.5 rounded bg-[var(--bg-app)] text-[11px] text-[var(--text-2)] border border-[var(--border)] outline-none cursor-pointer"
-                          >
-                            {INTERP_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-                          Drives <span className="text-[var(--text-2)]">{targetLabel}</span>. Step holds each value; the other curves glide.
-                        </p>
-                      </>
+                      <AutomationUserInterface
+                        targetLabel={targetLabel}
+                        color={resolveTrackDisplayColor(track, tracks)}
+                        mode={automationMode(track)}
+                        interpolation={track.interpolation ?? 'linear'}
+                        noise={track.noise}
+                        burst={track.burst}
+                        onMode={(mode) => setAutomationMode(track.id, mode)}
+                        onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
+                        onNoise={(noise) => setTrackNoise(track.id, noise)}
+                        onBurst={(burst) => setTrackBurst(track.id, burst)}
+                      />
                     )
                   }
 

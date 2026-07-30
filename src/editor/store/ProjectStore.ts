@@ -4,9 +4,10 @@ import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
+import { DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
@@ -393,6 +394,12 @@ export interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   /** Set (or clear, with undefined) an automation track's noise mode. */
   setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
+  /** Set (or clear, with undefined) an automation track's burst mode. Setting one
+   *  mode clears the other - a lane is in exactly one mode. */
+  setTrackBurst: (trackId: string, burst: Track['burst'] | undefined) => void
+  /** Put an automation lane in one of its three modes, in ONE action (so it is one
+   *  undo step). Re-entering a mode starts from that mode's defaults. */
+  setAutomationMode: (trackId: string, mode: AutomationMode) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
@@ -1443,11 +1450,36 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
     }),
 
+  // The two non-keyframe modes are mutually exclusive: setting one drops the
+  // other, so a lane is never ambiguous (the engine would silently prefer burst).
   setTrackNoise: (trackId, noise) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, noise } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst } } }
+    }),
+
+  setTrackBurst: (trackId, burst) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise } } }
+    }),
+
+  setAutomationMode: (trackId, mode) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      // Each mode's config is what identifies it, so switching is just choosing
+      // which one exists. A fresh noise seed per entry = a fresh random take.
+      const next: Track = {
+        ...track,
+        noise: mode === 'noise'
+          ? track.noise ?? { ...DEFAULT_NOISE, seed: Math.floor(Math.random() * 1e9) }
+          : undefined,
+        burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
+      }
+      return { tracks: { ...s.tracks, [trackId]: next } }
     }),
 
   setTrackTargets: (trackId, targets) =>

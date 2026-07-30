@@ -11,7 +11,7 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractKeyframes, extractNoiseGates, sampleLane, sampleNoiseLane } from './automation'
+import { extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
@@ -76,7 +76,22 @@ function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnap
     if (!param) continue
     const pdef = params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
-    // Noise mode: the notes become burst gates instead of keyframes.
+    // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
+    // travelling from whatever value sits underneath (hence `base`).
+    if (child.burst) {
+      out.push({
+        param,
+        mode: 'linear',
+        keyframes: [],
+        burst: child.burst,
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        min: pdef.min,
+        max: pdef.max,
+        base: pdef.default,
+      })
+      continue
+    }
+    // Noise mode: the notes become wobble gates instead of keyframes.
     if (child.noise) {
       out.push({
         param,
@@ -106,17 +121,21 @@ function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, 
 }
 
 /** Sample one beat of every automation lane into a settings/params overlay.
- *  Mirrors computeAtBeat's merge: noise lanes are inert (skipped) outside
- *  their gates; keyframe lanes hold their endpoints outside the range. */
-function sampleAutomationLanes(lanes: ResolvedAutomation[], beat: number): Record<string, number> {
+ *  Mirrors computeAtBeat's merge: an inert lane (noise/burst between its gates)
+ *  contributes nothing, so `settings` shows through; keyframe lanes hold their
+ *  endpoints outside the range. `settings` is what bursts travel away from. */
+function sampleAutomationLanes(
+  lanes: ResolvedAutomation[],
+  beat: number,
+  settings: Record<string, string | number>,
+): Record<string, number> {
   const values: Record<string, number> = {}
   for (const lane of lanes) {
-    if (lane.noise && lane.gates?.length) {
-      const v = sampleNoiseLane(lane.noise, lane.gates, beat, lane.min ?? 0, lane.max ?? 1)
-      if (!Number.isNaN(v)) values[lane.param] = v
-    } else if (lane.keyframes.length) {
-      values[lane.param] = sampleLane(lane.keyframes, beat, lane.mode)
-    }
+    // Only numeric params get lanes, so a string-valued setting can never be the
+    // base here - fall back to the param's default if one somehow collides.
+    const underneath = settings[lane.param]
+    const v = sampleAutomationLane(lane, beat, typeof underneath === 'number' ? underneath : lane.base ?? 0)
+    if (!Number.isNaN(v)) values[lane.param] = v
   }
   return values
 }
@@ -142,11 +161,30 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     if (!instance) continue
     let min = 0
     let max = 1
+    let base = instance.settings[target.key] ?? 0
     if (target.key !== 'enabled') {
       const pdef = getEffect(instance.pluginId)?.params.find((pd) => pd.key === target.key)
       if (!pdef || !isNumberParam(pdef)) continue
       min = pdef.min
       max = pdef.max
+      base = instance.settings[target.key] ?? pdef.default
+    }
+    // Burst mode: each note fires the ADSR from the stored setting toward its own
+    // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
+    // so it stays a keyframe lane whatever the track says.
+    if (child.burst && target.key !== 'enabled') {
+      out.push({
+        instanceId: target.instanceId,
+        key: target.key,
+        mode: 'linear',
+        keyframes: [],
+        burst: child.burst,
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+        min,
+        max,
+        base,
+      })
+      continue
     }
     out.push({
       instanceId: target.instanceId,
@@ -278,7 +316,7 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
     apply(visualCopy, context) {
       if (context.beat !== cachedBeat) {
         cachedBeat = context.beat
-        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat) }, notes })
+        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat, settings) }, notes })
       }
       return cached.apply(visualCopy, context)
     },
