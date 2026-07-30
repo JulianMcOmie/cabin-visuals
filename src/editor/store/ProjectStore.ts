@@ -7,7 +7,7 @@ import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
@@ -328,6 +328,10 @@ export interface ProjectState {
   renameScene: (sceneId: string, name: string) => void
   setSceneBackgroundColor: (sceneId: string, color: string) => void
   setSceneBackgroundTransparent: (sceneId: string, transparent: boolean) => void
+  setSceneBackdropMode: (sceneId: string, mode: SceneBackdropMode) => void
+  /** Merges into the scene's gradient (seeding defaults if it never had one).
+   *  Pass `enabled` only via setSceneBackdropMode - it owns mode consistency. */
+  setSceneBackgroundGradient: (sceneId: string, patch: Partial<Omit<SceneGradient, 'enabled'>>) => void
   addSceneEffect: (sceneId: string, pluginId: string) => void
   removeSceneEffect: (sceneId: string, instanceId: string) => void
   setSceneEffectSetting: (sceneId: string, instanceId: string, key: string, value: number) => void
@@ -591,6 +595,33 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundTransparent: transparent } } }
   }),
 
+  // The backdrop is ONE three-way choice (color | gradient | transparent)
+  // spread across two fields; writing both here keeps a mode switch atomic -
+  // a single undo step, never an intermediate state where transparency and an
+  // enabled gradient disagree. The gradient's setup survives leaving the mode.
+  setSceneBackdropMode: (sceneId, mode) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene || sceneBackdropMode(scene) === mode) return s
+    const gradient = scene.backgroundGradient ?? defaultSceneGradient()
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: {
+          ...scene,
+          backgroundTransparent: mode === 'transparent',
+          backgroundGradient: { ...gradient, enabled: mode === 'gradient' },
+        },
+      },
+    }
+  }),
+
+  setSceneBackgroundGradient: (sceneId, patch) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene) return s
+    const gradient = { ...(scene.backgroundGradient ?? defaultSceneGradient()), ...patch }
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundGradient: gradient } } }
+  }),
+
   // Scene-level effect chain - same contract as the per-track actions below, but
   // the chain lives on the scene itself (see Scene.effects in types.ts: document
   // + inspector only for now, the engine does not yet apply these).
@@ -665,6 +696,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         isMain: false,
         backgroundColor: source.backgroundColor,
         backgroundTransparent: source.backgroundTransparent,
+        backgroundGradient: source.backgroundGradient && { ...source.backgroundGradient },
         // Fresh instance ids, per the clone convention - duplicated chains must
         // never share ids with the source.
         effects: source.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),

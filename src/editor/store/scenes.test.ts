@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyDocument } from '../../persistence/types'
 import { hydrate, serialize } from '../../persistence/serialize'
-import type { Track } from '../types'
+import { sceneBackdropMode, type Track } from '../types'
 import { useProjectStore } from './ProjectStore'
 
 const cube = (id: string): Track => ({ id, name: id, type: 'base', instrumentId: 'cube', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] })
@@ -69,6 +69,36 @@ test('scene background color defaults, edits, duplicates, and persists with the 
   hydrate(document)
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundColor, '#123456')
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundTransparent, true)
+})
+
+test('scene backdrop gradient: atomic mode switches, config survival, duplication, persistence', () => {
+  hydrate(emptyDocument())
+  const sceneId = useProjectStore.getState().activeSceneId
+  assert.equal(sceneBackdropMode(useProjectStore.getState().scenes[sceneId]), 'color')
+
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'gradient')
+  let scene = useProjectStore.getState().scenes[sceneId]
+  assert.equal(sceneBackdropMode(scene), 'gradient')
+  assert.equal(scene.backgroundTransparent, false)
+
+  useProjectStore.getState().setSceneBackgroundGradient(sceneId, { kind: 'radial', from: '#ff8800', to: '#112233', angle: 135 })
+
+  // Leaving gradient mode keeps the setup; coming back restores it verbatim.
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'transparent')
+  scene = useProjectStore.getState().scenes[sceneId]
+  assert.equal(sceneBackdropMode(scene), 'transparent')
+  assert.equal(scene.backgroundGradient!.enabled, false)
+  assert.equal(scene.backgroundGradient!.from, '#ff8800')
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'gradient')
+
+  const expected = { enabled: true, kind: 'radial', from: '#ff8800', to: '#112233', angle: 135 }
+  const copyId = useProjectStore.getState().duplicateScene(sceneId)!
+  assert.deepEqual(useProjectStore.getState().scenes[copyId].backgroundGradient, expected)
+
+  const document = serialize()
+  hydrate(document)
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].backgroundGradient, expected)
+  assert.equal(sceneBackdropMode(useProjectStore.getState().scenes[sceneId]), 'gradient')
 })
 
 test('scene effect chain edits, reorders, duplicates with fresh ids, and persists with the scene', () => {
