@@ -3,6 +3,7 @@ export type UserInterfaceRendererId =
   | 'video'
   | 'photo'
   | 'cube'
+  | 'kaleidoSolid'
   | 'textDisplay'
   | 'cameraControl'
   | 'oscilloscope'

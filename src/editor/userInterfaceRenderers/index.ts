@@ -2,6 +2,7 @@ import { parametersUserInterfaceRenderer } from './ParametersUserInterface'
 import { PhotoUserInterfaceRenderer } from './PhotoUserInterface'
 import { VideoUserInterfaceRenderer } from './VideoUserInterface'
 import { CubeUserInterfaceRenderer } from './CubeUserInterface'
+import { KaleidoSolidUserInterfaceRenderer } from './KaleidoSolidUserInterface'
 import { TextDisplayUserInterfaceRenderer } from './TextDisplayUserInterface'
 import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
@@ -31,6 +32,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   video: VideoUserInterfaceRenderer,
   photo: PhotoUserInterfaceRenderer,
   cube: CubeUserInterfaceRenderer,
+  kaleidoSolid: KaleidoSolidUserInterfaceRenderer,
   textDisplay: TextDisplayUserInterfaceRenderer,
   cameraControl: CameraControlUserInterfaceRenderer,
   oscilloscope: OscilloscopeUserInterfaceRenderer,

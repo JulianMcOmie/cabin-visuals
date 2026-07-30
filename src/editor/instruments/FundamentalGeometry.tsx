@@ -26,6 +26,13 @@ export function normalizeFundamentalGeometry(value: unknown): FundamentalGeometr
  *  the same radius makes geometry switching preserve the instrument's scale. */
 const SOLID_RADIUS = Math.sqrt(3) * 0.8
 
+/** The geometry alone, for instruments that share this solid VOCABULARY but bring
+ *  their own material (e.g. KaleidoSolid's generated surface). Exported so the
+ *  shapes and their matched radii still cannot drift apart. */
+export function FundamentalGeometryShape({ geometry }: { geometry: FundamentalGeometryId }) {
+  return <Geometry geometry={geometry} />
+}
+
 function Geometry({ geometry }: { geometry: FundamentalGeometryId }) {
   switch (geometry) {
     case 'tetrahedron': return <tetrahedronGeometry args={[SOLID_RADIUS, 0]} />
