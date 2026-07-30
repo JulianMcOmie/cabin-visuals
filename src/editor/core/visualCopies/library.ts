@@ -30,6 +30,7 @@ import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
 import { tunnelSplitter } from './tunnel'
+import { duplicateTrailSplitter } from './duplicateTrail'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
@@ -291,4 +292,5 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   polyhedronSplitter,
   parametricPatternSplitter,
   tunnelSplitter,
+  duplicateTrailSplitter,
 ]
