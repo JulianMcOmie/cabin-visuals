@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowDown, ArrowUp, Film, Pause, Play, Plus, X } from 'lucide-react'
 import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput } from 'mediabunny'
 import { claimMediaDrop } from './MediaFileDropLayer'
+import { dragCarriesFiles, isVideoFile } from '../core/mediaFileKinds'
 import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { useUIStore } from '../store/UIStore'
@@ -438,7 +439,10 @@ export function VideoClipBank({ track }: { track: Track }) {
     hoverDepthRef.current = 0
     setDropHover(false)
     if (pickerCore) return // modal open - drops belong to another flow
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('video/'))
+    // isVideoFile, not `type.startsWith('video/')`: Safari leaves File.type
+    // empty for some extensions, and this zone CLAIMS the drop - a file it
+    // filtered out here would be dropped by everyone.
+    const files = Array.from(e.dataTransfer.files).filter(isVideoFile)
     if (files.length === 0) return
     if (files.length === 1) addSingle(files[0])
     else addMany(files)
@@ -448,7 +452,7 @@ export function VideoClipBank({ track }: { track: Track }) {
   // noisy, so a depth counter decides "a file drag is happening at all").
   useEffect(() => {
     let depth = 0
-    const isFileDrag = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
+    const isFileDrag = (e: DragEvent) => dragCarriesFiles(e.dataTransfer)
     const onEnter = (e: DragEvent) => {
       if (!isFileDrag(e)) return
       depth++
@@ -546,13 +550,13 @@ export function VideoClipBank({ track }: { track: Track }) {
     <div
       className={`relative mb-5 rounded ${dropHover ? 'bg-[var(--accent)]/10' : ''}`}
       onDragEnter={(e) => {
-        if (!Array.from(e.dataTransfer.types).includes('Files')) return
+        if (!dragCarriesFiles(e.dataTransfer)) return
         e.preventDefault()
         hoverDepthRef.current++
         setDropHover(true)
       }}
       onDragOver={(e) => {
-        if (!Array.from(e.dataTransfer.types).includes('Files')) return
+        if (!dragCarriesFiles(e.dataTransfer)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}

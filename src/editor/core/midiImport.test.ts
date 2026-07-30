@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Midi } from '@tonejs/midi'
-import { parseMidiFile, isMidiFileName, isMidiMimeType } from './midiImport'
+import { parseMidiFile } from './midiImport'
 import { useProjectStore } from '../store/ProjectStore'
 
 // The fixture is built with the library's own encoder, so the parser sees the
@@ -51,15 +51,7 @@ test('parseMidiFile throws on malformed bytes', () => {
   assert.throws(() => parseMidiFile(new TextEncoder().encode('not a midi file').buffer as ArrayBuffer))
 })
 
-test('MIDI file routing: extension always, dragover MIME types only', () => {
-  assert.ok(isMidiFileName('song.mid'))
-  assert.ok(isMidiFileName('SONG.MIDI'))
-  assert.ok(!isMidiFileName('song.mid.wav'))
-  assert.ok(!isMidiFileName('midi'))
-  assert.ok(isMidiMimeType('audio/midi'))
-  assert.ok(isMidiMimeType('audio/mid'))
-  assert.ok(!isMidiMimeType('audio/mpeg'))
-})
+// Which files ARE MIDI is tested in mediaFileKinds.test.ts.
 
 test('importMidiTracks places whole-bar blocks with block-relative notes and grows totalBars', () => {
   useProjectStore.setState({ tracks: {}, rootTrackIds: [], bpm: 120, beatsPerBar: 4, totalBars: 2 })

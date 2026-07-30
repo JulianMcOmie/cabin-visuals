@@ -1,9 +1,9 @@
 'use client'
 
 // Bespoke settings for Laser Sphere, following docs/instrument-panel-design-guide.md:
-// the UI is full-bleed in the panel (edge to edge, no card chrome, no in-panel
-// title, nothing that needs scrolling), washed with a low-alpha tint of the
-// instrument's color. A live bloomed orb you can orbit, then one row of four
+// the UI fills the rounded chassis card the settings panel wraps it in (no
+// in-panel title, nothing that needs scrolling), washed with a dark shade of
+// the instrument's color. A live bloomed orb you can orbit, then one row of four
 // flat knobs - SIZE, GLOW, CORE, LIGHT - with the color pill on the far right.
 // The pill opens a continuous HSV wheel, not the native swatch picker. Every
 // control takes its accent from the color param, and the knobs carry a passive
@@ -101,7 +101,7 @@ function OrbPreview({ color, size, glow, whiteCore, light }: {
     <div
       data-testid="laser-orb-preview"
       title="Drag to orbit the laser"
-      className="relative h-[148px] cursor-grab overflow-hidden border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
+      className="relative h-[148px] cursor-grab overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
     >
       <Canvas dpr={[1, 2]} camera={{ position: [0, 0.9, 4.3], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         {/* Opaque scene background: bloom composited onto a transparent canvas
@@ -302,12 +302,13 @@ export const LaserSphereUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const pillHalo = `0 0 ${Math.round(5 + glowValue * 1.8)}px ${withAlpha(accent, 0.18 + (glowValue / 12) * 0.55)}`
 
   return (
-    // Full-bleed: cancel the settings container's p-3 so the instrument runs
-    // edge to edge (the guide's "just another panel" rule), washed with a
-    // low-alpha tint of the instrument's own color.
+    // The instrument fills its chassis: cancel the card's p-3 on all sides so
+    // the shade wash runs to the frame. The card can't clip (the color wheel
+    // popover must escape it), so the section rounds its own background to
+    // sit inside the card's 10px border.
     <section
       data-testid="laser-sphere-user-interface"
-      className="-mx-3 -mt-3"
+      className="-m-3 rounded-[9px]"
       style={{ background: shade }}
     >
       <OrbPreview

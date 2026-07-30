@@ -22,9 +22,20 @@ import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } f
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { resolveTrackDisplayColor } from '../utils/trackDisplayColor'
+import { withAlpha } from '../userInterfaceRenderers/colorWheel'
 import type { InterpolationMode, Routing, EffectInstance, Scene, Track } from '../types'
 
 type Tab = 'instrument' | 'effects'
+
+/** The track's instrument color, if its definition exposes a `color` string
+ *  param - the accent that lights the instrument chassis and its effect LEDs.
+ *  Null for instruments without a color (they get neutral chrome). */
+function instrumentAccent(track: Track): string | null {
+  const def = getInstrument(track.instrumentId)
+  const colorParam = def?.params.find((p) => p.key === 'color' && isStringParam(p))
+  if (!colorParam) return null
+  return track.stringParams?.color ?? String(colorParam.default)
+}
 
 /** A select-styled dropdown for checking multiple targets (tags and/or tracks). */
 function TargetSelect({
@@ -97,16 +108,21 @@ const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({
   items: PLUGIN_LIST.filter((p) => p.category === c.key && !p.deprecated).map((p) => ({ id: p.id, label: p.name })),
 }))
 
-/** One effect in the Effects tab: header (enable / name / reorder / remove) with
- *  collapsible param sliders. Collapse is local per instance, so it persists across
- *  re-renders. Reordering is meaningful: the render chain follows array order. */
+/** One effect in the Effects tab, styled as a device in a rack (the Ableton
+ *  read): a chassis card whose header carries a power LED (lit by the parent
+ *  instrument's accent), the name, reorder arrows, and remove. Collapse is
+ *  local per instance, so it persists across re-renders; collapsed = header
+ *  bar only. Reordering is meaningful: the render chain follows array order.
+ *  No overflow-hidden on the card (bespoke bodies may float popovers); the
+ *  header rounds its own top corners instead. */
 function EffectItem({
-  plugin, inst, index, count, onToggle, onRemove, onMove, onSetSetting,
+  plugin, inst, index, count, accent, onToggle, onRemove, onMove, onSetSetting,
 }: {
   plugin: VisualEffect
   inst: EffectInstance
   index: number
   count: number
+  accent: string
   onToggle: () => void
   onRemove: () => void
   onMove: (direction: -1 | 1) => void
@@ -115,29 +131,32 @@ function EffectItem({
   const [collapsed, setCollapsed] = useState(false)
   const BespokeEffect = getEffectUserInterface(plugin.id)
   return (
-    <div className="mb-5">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <button
-            onClick={onToggle}
-            className={`w-3.5 h-3.5 flex-shrink-0 rounded-sm border flex items-center justify-center cursor-pointer transition-all active:scale-75 ${
-              inst.enabled ? 'bg-[var(--accent)] border-[var(--accent)]' : 'border-[var(--border-strong)]'
-            }`}
-            aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
-          >
-            {inst.enabled && <Check size={11} className="text-[var(--on-accent)]" strokeWidth={3} />}
-          </button>
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            className="flex items-center gap-1 min-w-0 cursor-pointer"
-            aria-label={collapsed ? 'Expand settings' : 'Collapse settings'}
-          >
-            <span className={`text-[11px] font-semibold truncate ${inst.enabled ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
-              {plugin.name}
-            </span>
-            {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" /> : <ChevronDown size={12} className="flex-shrink-0 text-[var(--text-muted)]" />}
-          </button>
-        </div>
+    <div className="mb-2 rounded-lg border border-[var(--border-strong)] bg-[var(--bg-track-row)]">
+      <div className={`flex h-[26px] items-center gap-2 px-2 bg-[var(--bg-elevated)] ${
+        collapsed ? 'rounded-[7px]' : 'rounded-t-[7px] border-b border-[var(--border)]'
+      }`}>
+        <button
+          onClick={onToggle}
+          className="group flex h-4 w-4 flex-shrink-0 items-center justify-center cursor-pointer"
+          aria-label={inst.enabled ? 'Disable effect' : 'Enable effect'}
+        >
+          <span
+            className="h-1.5 w-1.5 rounded-full transition-all group-active:scale-75"
+            style={inst.enabled
+              ? { background: accent, boxShadow: `0 0 5px ${accent}` }
+              : { background: 'var(--border-strong)' }}
+          />
+        </button>
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex flex-1 min-w-0 items-center gap-1 cursor-pointer"
+          aria-label={collapsed ? 'Expand settings' : 'Collapse settings'}
+        >
+          <span className={`text-[11px] font-semibold truncate ${inst.enabled ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>
+            {plugin.name}
+          </span>
+          {collapsed ? <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" /> : <ChevronDown size={12} className="flex-shrink-0 text-[var(--text-muted)]" />}
+        </button>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); onMove(-1) }}
@@ -160,7 +179,9 @@ function EffectItem({
           </button>
         </div>
       </div>
-      {!collapsed && (BespokeEffect ? (
+      {!collapsed && (
+      <div className={`px-2.5 pt-2.5 pb-1 ${inst.enabled ? '' : 'opacity-50'}`}>
+      {BespokeEffect ? (
         <BespokeEffect
           targetId={inst.id}
           parameters={plugin.params
@@ -179,7 +200,9 @@ function EffectItem({
           strValue={undefined}
           onNum={(v) => onSetSetting(p.key, v)}
         />
-      )))}
+      ))}
+      </div>
+      )}
     </div>
   )
 }
@@ -698,20 +721,37 @@ export function TrackEditor() {
                       },
                     }
                   }) ?? []
+                  const accent = instrumentAccent(track)
                   return (
                     <>
                       {/* The IN FRONT toggle is deprecated from this panel (design
                           guide: docs/instrument-panel-design-guide.md). track.onTop
                           and defaultOnTop still drive the engine; only the switch
                           is gone until a better layering story exists. */}
-                      {!UserInterfaceRenderer ? (
-                        <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
-                      ) : (
-                        <UserInterfaceRenderer
-                          targetId={track.id}
-                          parameters={userInterfaceParameters}
-                        />
-                      )}
+                      {/* The chassis: the instrument is a device in the panel, not
+                          the panel itself - a rounded frame whose border is lit by
+                          the instrument's own color param. No overflow-hidden here:
+                          the color wheel popover must escape the frame, so inner
+                          surfaces carry their own radius instead. */}
+                      <div
+                        className="rounded-[10px] border p-3"
+                        style={accent ? {
+                          borderColor: withAlpha(accent, 0.22),
+                          boxShadow: `0 0 20px ${withAlpha(accent, 0.07)}, 0 4px 18px rgba(0,0,0,0.4)`,
+                        } : {
+                          borderColor: 'var(--border-strong)',
+                          boxShadow: '0 4px 18px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        {!UserInterfaceRenderer ? (
+                          <p className="text-[11px] text-[var(--text-muted)]">No parameters</p>
+                        ) : (
+                          <UserInterfaceRenderer
+                            targetId={track.id}
+                            parameters={userInterfaceParameters}
+                          />
+                        )}
+                      </div>
                     </>
                   )
                 })()}
@@ -748,6 +788,10 @@ export function TrackEditor() {
                 }
               : null
           if (!fx) return <p className="text-xs text-[var(--text-muted)] text-center mt-8">No track selected</p>
+          // Device LEDs glow in the owner's color: the parent instrument's for
+          // a track chain (the chain is lit by the instrument it processes),
+          // the app accent for scene chains and colorless instruments.
+          const fxAccent = (track ? instrumentAccent(track) : null) ?? 'var(--accent)'
           return (
             <div
               data-effects-drop
@@ -769,6 +813,7 @@ export function TrackEditor() {
                     inst={inst}
                     index={i}
                     count={fx.effects.length}
+                    accent={fxAccent}
                     onToggle={() => fx.toggle(inst.id)}
                     onRemove={() => fx.remove(inst.id)}
                     onMove={(direction) => fx.move(inst.id, direction)}
@@ -782,7 +827,7 @@ export function TrackEditor() {
                     const r = e.currentTarget.getBoundingClientRect()
                     setFxMenu({ x: r.left, y: r.bottom + 4 })
                   }}
-                  className="mt-1 flex h-7 w-full items-center justify-center gap-1.5 rounded border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
+                  className="mt-1 flex h-[30px] w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] cursor-pointer"
                 >
                   <Plus size={11} />
                   Add effect

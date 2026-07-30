@@ -29,5 +29,6 @@ Three big surfaces plus the inspector. **The timeline and the piano roll have se
 - `LeftSidebar.tsx` — the library. **`ALL_OBJECT_INSTRUMENTS` is the curated instrument picker** — new instruments must be added here as well as the registry. Drag sources: `useLibraryDrag`, `useEffectDrag`.
 - Transport/header: `TransportDisplay`, `TransportIcons`, `BpmControl` (brackets `beginBpmDrag`/`endBpmDrag`), `ExportDialog`, `SceneTabs`.
 - Media: `MediaFileDropLayer` (file drops → audio/video/photo pipelines), `VideoClipBank`, `PhotoBank`, `AudioTrackDetail`.
+  All of these route files through `core/mediaFileKinds.ts` — never `f.type.startsWith('audio/')` and never a MIME sniff to decide whether to `preventDefault()` a drag. Safari reveals nothing about a drag until the drop and often no `File.type` at all; both shortcuts made drops do nothing there. See that file's CLAUDE.md section before touching a drop zone.
 - Setup screens: `LyricSetupScreen`, `PhotoSetupScreen` (used by `/lyric-setup`, `/photo-setup` flows).
 - `rulerGrid.ts`/`Ruler.tsx` — shared adaptive ruler math; `loops.ts` — loop badge/seam helpers; `NestedMenu.tsx` — generic nested context menu.
