@@ -65,7 +65,9 @@ vec2 bassRippleOffset(vec2 uv, float amount, float scale, float speed, float tim
   vec2 drift = vec2(time * speed, time * speed * 0.7);
   float nx = warpFbm(p + drift);
   float ny = warpFbm(p + drift + vec2(41.3, 19.7));
-  return (vec2(nx, ny) - 0.5) * 2.0 * amount * 0.06;
+  // 0.12 is what full INTENSITY means - doubled from 0.06, with the param's
+  // default halved to 0.5 so the default still bends the scene by the old amount.
+  return (vec2(nx, ny) - 0.5) * 2.0 * amount * 0.12;
 }
 `
 
@@ -80,7 +82,11 @@ export interface ActiveBassRipple {
 }
 
 const PARAMS: ParamDef[] = [
-  { key: 'amount', label: 'Intensity', min: 0, max: 1, step: 0.01, default: 1 },
+  // The knob stays a clean 0-100%; what doubled is what 100% MEANS (the warp
+  // coefficient in bassRippleOffset). The default sits at half, so it bends the
+  // scene exactly as the old default did and the whole upper half of the travel
+  // is new headroom.
+  { key: 'amount', label: 'Intensity', min: 0, max: 1, step: 0.01, default: 0.5 },
   { key: 'scale', label: 'Wave', min: 0.5, max: 12, step: 0.1, default: 3 },
   { key: 'speed', label: 'Speed', min: 0, max: 4, step: 0.05, default: 0.6 },
   { key: 'release', label: 'Release', min: 0, max: 8, step: 0.05, default: 0.5 },
@@ -130,7 +136,7 @@ export function resolveActiveBassRipple(
   }
 
   const velocity = selected.velocity <= 1 ? selected.velocity : selected.velocity / 127
-  const amount = Math.max(0, Math.min(1, (state.params.amount ?? 1) * state.opacity * velocity)) * tail
+  const amount = Math.max(0, Math.min(1, (state.params.amount ?? 0.5) * state.opacity * velocity)) * tail
   return amount > 0
     ? {
       amount,
