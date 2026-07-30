@@ -154,6 +154,13 @@ export interface ObjectInstrumentDef {
    *  than sitting at a 3D position. The renderer skips the placement transform + the
    *  transform/clone effect chain for these. */
   fullFrame?: boolean
+  /** Full-frame is a MODE this instrument's track switches, not a fixed fact:
+   *  the track is full-frame exactly while this numeric param is >= 0.5, and an
+   *  ordinary in-scene object otherwise (Oscilloscope's "Fit to screen"). The
+   *  on-top pass follows the same param - a screen-pinned overlay that also
+   *  depth-sorted against scenery would be neither one thing nor the other.
+   *  Read it through `isFullFrameTrack` / `isOnTopTrack`, never directly. */
+  fullFrameParam?: string
   /** Tracks of this instrument draw on top of everything by default (the per-track
    *  "In front" toggle overrides). Text wants this: words are captions, not scenery. */
   defaultOnTop?: boolean
@@ -163,4 +170,36 @@ export interface ObjectInstrumentDef {
 export function paramDefault(def: ObjectInstrumentDef, key: string): number {
   const p = def.params.find((p) => p.key === key)
   return p && typeof p.default === 'number' ? p.default : 0
+}
+
+/**
+ * Is this track full-frame RIGHT NOW - a viewport-filling plane pinned to the
+ * camera, with the placement transform and the transform/clone chain skipped?
+ *
+ * Two sources, deliberately in one function: a fixed `fullFrame` def always is,
+ * and a `fullFrameParam` def is whenever that param is on. Both the renderer
+ * (which subtree to mount) and the compositor (which pass to draw in) must
+ * reach the same answer, so neither reads the flags itself.
+ */
+export function isFullFrameTrack(
+  def: ObjectInstrumentDef | undefined,
+  params: Record<string, number> | undefined,
+): boolean {
+  if (!def) return false
+  if (def.fullFrame) return true
+  if (!def.fullFrameParam) return false
+  return (params?.[def.fullFrameParam] ?? paramDefault(def, def.fullFrameParam)) >= 0.5
+}
+
+/** Does this track draw in the depth-cleared on-top pass? The stored per-track
+ *  override wins; a mode-switched full-frame instrument is on top exactly while
+ *  it IS full-frame; everything else falls back to the def's `defaultOnTop`. */
+export function isOnTopTrack(
+  def: ObjectInstrumentDef | undefined,
+  params: Record<string, number> | undefined,
+  onTop: boolean | undefined,
+): boolean {
+  if (onTop !== undefined) return onTop
+  if (def?.fullFrameParam) return isFullFrameTrack(def, params)
+  return def?.defaultOnTop ?? false
 }

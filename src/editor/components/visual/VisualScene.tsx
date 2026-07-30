@@ -29,6 +29,7 @@ import { getCompositionLayers, getObjectState, setMountedRenderScenes, subscribe
 import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
+import { isOnTopTrack } from '../../instruments/types'
 import { DEFAULT_SCENE_BACKGROUND } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
@@ -670,7 +671,7 @@ export function VisualScene() {
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
-    const onTop = track?.onTop ?? getInstrument(o.instrumentId)?.defaultOnTop ?? false
+    const onTop = isOnTopTrack(getInstrument(o.instrumentId), track?.params, track?.onTop)
     const finalInvert = onTop
       && o.instrumentId === 'textDisplay'
       && (track?.params?.colorMode ?? 0) >= 0.5

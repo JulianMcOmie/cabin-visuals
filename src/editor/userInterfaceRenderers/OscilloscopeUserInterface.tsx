@@ -6,9 +6,15 @@ import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './
 
 // Bespoke settings for the Oscilloscope: a live trace preview up top - the
 // motif IS the control surface's identity - reflecting the chosen color, line
-// width, and background, with the three controls underneath. The preview wave
-// is a fixed enveloped sine (the real one follows the audio); only its styling
-// is live. Purely presentational.
+// width, and background, with the look controls underneath and PLACEMENT in its
+// own section at the bottom. The preview wave is a fixed enveloped sine (the
+// real one follows the audio); only its styling is live. Purely presentational.
+//
+// Placement is the scope's one structural choice - In scene is a real object
+// with a position, a size and a depth sort; Fit to screen is the pinned
+// viewport overlay it used to always be - so it reads as a mode switch below a
+// rule, not as one more knob. The size sliders are `showIf`-gated on it and
+// simply do not arrive while the scope is pinned.
 
 function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -30,6 +36,9 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
   const color = findParam(parameters, 'color')
   const lineWidth = findParam(parameters, 'lineWidth')
   const background = findParam(parameters, 'transparentBackground')
+  const placement = findParam(parameters, 'fitToScreen')
+  const panelWidth = findParam(parameters, 'panelWidth')
+  const panelHeight = findParam(parameters, 'panelHeight')
 
   const strokeColor = typeof color?.value === 'string' ? color.value : '#ffffff'
   const widthValue = typeof lineWidth?.value === 'number' ? lineWidth.value : 4
@@ -37,7 +46,11 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
   // Map the 1-24 render width onto a 1-7 preview stroke.
   const previewStroke = 1 + ((Math.max(1, widthValue) - 1) * 6) / 23
 
-  const placed = new Set(['color', 'lineWidth', 'transparentBackground'])
+  const pinned = typeof placement?.value === 'number' ? placement.value >= 0.5 : false
+
+  const placed = new Set([
+    'color', 'lineWidth', 'transparentBackground', 'fitToScreen', 'panelWidth', 'panelHeight',
+  ])
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
   return (
@@ -126,6 +139,56 @@ export const OscilloscopeUserInterfaceRenderer: UserInterfaceRendererDefinition 
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* --- Placement: an object in the scene, or pinned to the frame --- */}
+      {placement && typeof placement.value === 'number' && (
+        <div className="mt-3 border-t border-[var(--border-subtle)] pt-3">
+          <div className="mb-[13px] grid grid-cols-[100px_1fr] items-center gap-2.5">
+            <span className="truncate text-[11px] text-[var(--text-3)]" title={placement.definition.label}>
+              Placement
+            </span>
+            <div className="flex rounded border border-[var(--border)] p-0.5">
+              {([
+                { pinned: false, label: 'In scene', hint: 'A panel in 3D space: position it, and it sits in front of or behind other objects.' },
+                { pinned: true, label: 'Fit to screen', hint: 'Pinned to the frame and drawn over everything, ignoring position and depth.' },
+              ] as const).map((option) => {
+                const active = pinned === option.pinned
+                return (
+                  <button
+                    key={option.label}
+                    onClick={() => placement.setValue(option.pinned ? 1 : 0)}
+                    aria-pressed={active}
+                    title={option.hint}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-[2px] py-1 text-[10px] transition-colors cursor-pointer ${active
+                      ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+                  >
+                    {/* A panel floating inside the frame vs. one filling it. */}
+                    <span className="flex h-2.5 w-3 flex-shrink-0 items-center justify-center rounded-[2px] border border-[var(--border-strong)]">
+                      {!option.pinned && <span className="h-1 w-1.5 rounded-[1px] bg-current" />}
+                    </span>
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Size in world units - gated by showIf, so these are simply absent
+              while the scope is pinned to the frame. */}
+          {[panelWidth, panelHeight].map((size) => size && isNumberParam(size.definition) && typeof size.value === 'number' && (
+            <ParamSlider
+              key={size.definition.key}
+              label={size.definition.label}
+              value={size.value}
+              min={size.definition.min}
+              max={size.definition.max}
+              step={size.definition.step}
+              onChange={size.setValue}
+            />
+          ))}
         </div>
       )}
 
