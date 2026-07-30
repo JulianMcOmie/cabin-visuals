@@ -8,6 +8,7 @@ import { SiteHeader } from '../../components/SiteHeader'
 import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
 import { photoCapError, photoPadRoom, startPhotoUpload } from '../core/photo/photoUploads'
+import { dragCarriesFiles, isPhotoFile } from '../core/mediaFileKinds'
 import { usePlan } from '../../billing/usePlan'
 import { track } from '../../analytics/analytics'
 
@@ -120,13 +121,13 @@ export function PhotoSetupScreen({
   // enter/leave noise from crossing child boundaries.
   const [dragActive, setDragActive] = useState(false)
   const dragDepthRef = useRef(0)
-  const isFileDrag = (e: ReactDragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+  const isFileDrag = (e: ReactDragEvent) => dragCarriesFiles(e.dataTransfer)
 
   const onDrop = (e: ReactDragEvent) => {
     e.preventDefault()
     dragDepthRef.current = 0
     setDragActive(false)
-    addPhotos(Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/')))
+    addPhotos(Array.from(e.dataTransfer.files).filter(isPhotoFile))
   }
 
   return (

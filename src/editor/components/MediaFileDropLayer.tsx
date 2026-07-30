@@ -8,7 +8,8 @@ import { selectNewTrack } from '../utils/selection'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
 import { addVideoClipsToTrack, capError, FREE_TOTAL_BYTES, totalVideoBytes } from '../core/video/videoUploads'
 import { addPhotosToTrack } from '../core/photo/photoUploads'
-import { parseMidiFile, isMidiFileName, isMidiMimeType } from '../core/midiImport'
+import { parseMidiFile } from '../core/midiImport'
+import { dragCarriesFiles, mediaKindOfFile, mediaKindOfMimeType, type MediaKind } from '../core/mediaFileKinds'
 import { getInstrument } from '../instruments'
 import { usePlan } from '../../billing/usePlan'
 
@@ -130,12 +131,27 @@ function addPhotoFiles(files: File[], isPro: boolean) {
   void addPhotosToTrack(targetId, files, isPro, showMediaNotice)
 }
 
+// Files are sorted by mediaKindOfFile - MIME type when the browser reports one,
+// filename extension when it doesn't. Safari hands over a bare `File.type` for
+// plenty of real audio (.aif, .opus, ...); filtering on `type` alone dropped
+// those on the floor without a word.
 function handleDroppedFiles(files: File[], isPro: boolean) {
-  const isMidiFile = (f: File) => isMidiFileName(f.name) || isMidiMimeType(f.type)
-  const midiFiles = files.filter(isMidiFile)
+  const of = (kind: MediaKind) => files.filter((f) => mediaKindOfFile(f) === kind)
+  const midiFiles = of('midi')
   if (midiFiles.length > 0) importMidiFiles(midiFiles)
 
-  const audioFiles = files.filter((f) => !isMidiFile(f) && f.type.startsWith('audio/'))
+  const unknown = files.filter((f) => mediaKindOfFile(f) === null)
+  if (unknown.length === files.length) {
+    // Nothing we have a pipeline for: say so rather than swallow the drop.
+    showMediaNotice(
+      files.length === 1
+        ? `${files[0].name} isn't audio, MIDI, video, or an image`
+        : "None of those files are audio, MIDI, video, or images",
+    )
+    return
+  }
+
+  const audioFiles = of('audio')
   void (async () => {
     for (const file of audioFiles) {
       try {
@@ -147,7 +163,7 @@ function handleDroppedFiles(files: File[], isPro: boolean) {
     }
   })()
 
-  const videoFiles = files.filter((f) => f.type.startsWith('video/'))
+  const videoFiles = of('video')
   if (videoFiles.length > 0) {
     // An over-cap file cancels the whole video add (notify, add nothing) -
     // half-importing a drop is more confusing than rejecting it.
@@ -183,7 +199,7 @@ function handleDroppedFiles(files: File[], isPro: boolean) {
     void addVideoClipsToTrack(id, videoFiles, isPro, showMediaNotice)
   }
 
-  const photoFiles = files.filter((f) => f.type.startsWith('image/'))
+  const photoFiles = of('photo')
   if (photoFiles.length > 0) addPhotoFiles(photoFiles, isPro)
 }
 
@@ -191,22 +207,26 @@ function handleDroppedFiles(files: File[], isPro: boolean) {
 
 type MediaKinds = { audio: boolean; video: boolean; midi: boolean; photo: boolean }
 
-// MIDI is sniffed before the audio/ prefix - 'audio/midi' must not read as
-// audio. Empty-type .mid drags stay invisible until drop (no filename here).
+/**
+ * Whether this drag is one we take, and (best effort) of what. NULL ONLY WHEN
+ * THE DRAG CARRIES NO FILES - the caller gates preventDefault() on it, and a
+ * dragover we don't preventDefault is a drop the page never receives.
+ *
+ * Kinds are read from the items' MIME types where the browser exposes them
+ * (Chrome), purely to word the overlay. Safari exposes nothing per-item until
+ * the drop, so every flag stays false there and the overlay says "files" - it
+ * must NOT read as "not media", which is exactly the bug that made audio drops
+ * do nothing in Safari. Same for empty-type .mid drags anywhere.
+ */
 function mediaKindsOf(e: DragEvent): MediaKinds | null {
-  if (!e.dataTransfer) return null
-  let audio = false
-  let video = false
-  let midi = false
-  let photo = false
-  for (const it of Array.from(e.dataTransfer.items)) {
+  if (!dragCarriesFiles(e.dataTransfer)) return null
+  const kinds = { audio: false, video: false, midi: false, photo: false }
+  for (const it of Array.from(e.dataTransfer!.items)) {
     if (it.kind !== 'file') continue
-    if (isMidiMimeType(it.type)) midi = true
-    else if (it.type.startsWith('audio/')) audio = true
-    else if (it.type.startsWith('video/')) video = true
-    else if (it.type.startsWith('image/')) photo = true
+    const kind = mediaKindOfMimeType(it.type)
+    if (kind) kinds[kind] = true
   }
-  return audio || video || midi || photo ? { audio, video, midi, photo } : null
+  return kinds
 }
 
 /** Mounted once in the editor root. */
@@ -233,17 +253,26 @@ export function MediaFileDropLayer() {
     }
     const leave = (e: DragEvent) => {
       if (!mediaKindsOf(e)) return
-      depthRef.current = Math.max(0, depthRef.current - 1)
+      // Leaving the WINDOW clears the overlay outright. Safari's enter/leave
+      // pairs don't always balance (an unpaired enter leaves the counter
+      // stuck above zero and the overlay up for good, since an OS file drag
+      // that ends outside the page fires no dragend either); a leave at the
+      // viewport edge is the one unambiguous "it's gone".
+      const outside =
+        e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight
+      depthRef.current = outside ? 0 : Math.max(0, depthRef.current - 1)
       if (depthRef.current === 0) setHover(null)
     }
     const drop = (e: DragEvent) => {
       depthRef.current = 0
       setHover(null)
       if (isClaimedMediaDrop(e)) return // a more-specific zone took this one
-      if (!e.dataTransfer) return
-      const files = Array.from(e.dataTransfer.files)
-      if (files.length === 0) return
+      if (!dragCarriesFiles(e.dataTransfer)) return // text/internal drag: leave it alone
+      // Before any inspection of the files: an unprevented file drop navigates
+      // the window AWAY to the file (Safari opens it, replacing the editor).
       e.preventDefault()
+      const files = Array.from(e.dataTransfer!.files)
+      if (files.length === 0) return
       handleDroppedFiles(files, isProRef.current)
     }
     window.addEventListener('dragenter', enter)
@@ -264,7 +293,9 @@ export function MediaFileDropLayer() {
         <div className="pointer-events-none fixed inset-2 z-[95] flex items-center justify-center rounded border border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
           <span className="flex items-center gap-1.5 rounded bg-[var(--bg-panel)]/85 px-3 py-1.5 font-mono text-[11px] text-[var(--accent)]">
             {hover.video ? <Film size={13} /> : hover.photo ? <ImageIcon size={13} /> : hover.midi ? <FileMusic size={13} /> : <FileAudio size={13} />}
-            {[hover.audio, hover.video, hover.midi, hover.photo].filter(Boolean).length > 1
+            {/* Exactly one known kind gets specific wording; zero (Safari, which
+                reveals nothing mid-drag) and several both get the generic line. */}
+            {[hover.audio, hover.video, hover.midi, hover.photo].filter(Boolean).length !== 1
               ? 'drop files to add tracks'
               : hover.video
                 ? 'drop videos to add a video track'

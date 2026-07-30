@@ -18,18 +18,9 @@ export interface ImportedMidiTrack {
   endBeat: number
 }
 
-/** .mid drops report 'audio/midi', 'audio/mid', or an empty type depending on
- *  the OS - the extension is the reliable router (checked before any audio/*
- *  branch so MIDI never falls into the audio pipeline). */
-export function isMidiFileName(name: string): boolean {
-  return /\.midi?$/i.test(name)
-}
-
-/** The MIME types a .mid drag exposes during dragover, where filenames aren't
- *  readable yet. Empty-type drags stay invisible until drop. */
-export function isMidiMimeType(type: string): boolean {
-  return type === 'audio/midi' || type === 'audio/mid'
-}
+// Which files ARE MIDI (isMidiFileName / isMidiMimeType) lives with the rest
+// of the media-kind routing in mediaFileKinds.ts; this file only turns bytes
+// into notes.
 
 /** Parse a .mid file into one entry per MIDI track that has notes. Throws on
  *  malformed bytes. Pitch imports verbatim (full range - narrow instruments
