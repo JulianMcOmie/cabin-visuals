@@ -313,6 +313,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
 // Left the library outright - Motion's Step/Snap/Spin blocks are these exact
@@ -425,7 +426,10 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
-const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
+// Strobe files with Color Filters rather than under Impact: both are scene-wide
+// colour post-process passes held by a note, and Strobe's styles ARE colour
+// looks (inversion, blackout, flash) on a beat or frame gate.
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters', 'strobe']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its

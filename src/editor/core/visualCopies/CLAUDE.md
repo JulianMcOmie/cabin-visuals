@@ -11,6 +11,7 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 - `colorShift`'s hue/saturation/lightness match `Color.offsetHSL` units (hue = normalized turn) and are RELATIVE. `tint` (a '#rrggbb' or null) + `tintAmount` are the ABSOLUTE channel — "flash this gold" can't be said relatively, because a mover never sees the object's own color. Both are applied in `core/visual/instrumentColor.ts`, which is the only place that knows the source: tint mixes first, HSL rides on top. A tint REPLACES rather than accumulates — the last chain entry to set one owns the color. All of it retargets instrument-declared color *params*, never final materials.
 - New fields go INSIDE `colorShift`, not beside it: every definition already spreads `{ ...visualCopy.colorShift }`, so they propagate through the whole library for free. A sibling field means editing ~15 files.
 - Context gives `{ beat, index, count }` where index/count describe the COMPLETE output of the previous step, so movers can react to upstream splitter multiplicity. It also carries `formation` — the whole array of copies the step is about to transform, for movers whose treatment of one copy depends on how the others are arranged (Conveyor's belt period). Passed by reference with a stable identity per step, so measuring it is O(n) per frame, not O(n²); the copies are immutable, as everywhere else.
+- **`warpBeat` is the one escape from space into time.** `apply` can only restate the copy it is handed — it cannot un-compute the instrument animation, automation or upstream motion already baked in below it, so freeze/reverse cannot be a transform. An entry may instead implement optional `warpBeat(realBeat) → beat`, and `computeAtBeat` evaluates that object's ENTIRE state at the result (energy, automation, envelopes, localTransform, activeNotes, `state.beat`, and the whole chain). Object-wide, not a chain partition: the entry's position in the chain is irrelevant. Multiple entries compose by SUMMING deltas against the real beat (`warpChainBeat` in `resolveVisualCopies.ts`) — feeding one the other's output would make it read its own notes at the wrong times. Subtree scope comes free from a top-level mover's `targets` routing.
 
 ## Structure
 
@@ -18,7 +19,40 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 - `library.ts` — the list of shipped definitions; `registry.ts` — id → def. **Registry ownership routes migration**: ids found here go through the VisualCopy chain; unknown ids fall back to the legacy mover path. New ids must not collide with legacy mover ids. Registry never imports the legacy registry.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `moverFrame.ts` — **frames**: a mover nested under another mover MOVES it (Impact Scatter's blast center can drift) rather than becoming a second chain entry. It works by handing the parent a `placementTransform` pre-multiplied by the frame's inverse, so a world-placed mover reads its own field as moved — no contract change, and the returned transform needs no fixing up. Frames nest, and only movers that actually read `placementTransform` respond; a pure relative displacement (Burst, Motion, the rotations) has no location to move, so a frame under one is a no-op.
-- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion`, `visibility`, `grid`, `polyhedron`, `tunnel`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion`, `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+
+**`tunnel` vs `approach`** — both stream copies down the camera axis and recycle with a
+`mod`, and both must keep their near end BEHIND the camera (z = 5) so the recycle is
+off-screen. They differ in what sells the depth: Tunnel renders every copy at full size
+and fades opacity (a corridor you travel through); Approach grows each copy from scale
+ZERO to its arrival size (an object flying at you, or receding away from you). Both
+divide offsets by the placement scale to stay world-metric — see the war-story comment
+in `tunnel.ts` about a half-size instrument dragging the near end in front of the lens.
+
+Approach's NOTES mode carries a timing contract worth knowing before you touch it: a
+flight is centred on its note so the copy sits at the object's NORMAL placement
+(axial 0, `approachHomeProgress`) exactly ON the onset — it leads in from the distance
+BEFORE the note and carries on past the lens after. The note is the impact, not the
+launch, so `approachNoteFlights` deliberately admits notes with `beat < note.beat`.
+
+Its slots are a **voice allocator** (`allocateApproachFlights`), computed once per
+resolve because it is beat-independent. Two rules there are load-bearing, and both cost
+a round of "it's still capped by Density" to find:
+
+1. **A slot is released when its copy passes the LENS, not at the end of the run.** The
+   stretch from the camera plane to the near end is travelled behind the viewer; holding
+   a slot across it spends the budget on invisible copies. This is most of the apparent
+   shortfall between Density and how many copies you actually see.
+2. **Allocation is first-fit over genuinely free slots**, never round-robin over note
+   index. Round-robin is optimal only for a perfectly even stream; on uneven phrasing it
+   collides notes onto a busy slot while others sit idle.
+
+Worse than either: ranking live flights by recency and keeping the newest `density`.
+That culls the OLDEST flight — the one furthest along, about to reach the camera — so a
+dense phrase delivers nothing until its final few notes. General trap for any
+note-driven splitter with a fixed slot budget: **evict the newborn, never the one about
+to land.** With those two rules Density means exactly "copies on screen at once", and a
+phrase is only truncated when that many really are in frame together.
 
 ## Invariants
 

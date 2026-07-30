@@ -57,3 +57,21 @@ export function resolveVisualCopies(
 
   return visualCopies
 }
+
+/**
+ * The beat an object should actually be evaluated at, given the real playhead
+ * beat and the object's chain (see `MoverOrSplitter.warpBeat`).
+ *
+ * Entries compose by SUMMING their deltas against the real beat rather than by
+ * feeding each one the previous one's output: every entry closed over notes
+ * sitting at true timeline positions, so handing a second one an
+ * already-remapped beat would have it read its own notes at the wrong times.
+ */
+export function warpChainBeat(moverAndSplitterChain: MoverOrSplitter[], beat: number): number {
+  let delta = 0
+  for (const moverOrSplitter of moverAndSplitterChain) {
+    if (!moverOrSplitter.warpBeat) continue
+    delta += moverOrSplitter.warpBeat(beat) - beat
+  }
+  return delta === 0 ? beat : beat + delta
+}

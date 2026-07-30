@@ -312,7 +312,7 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   if (automation.length === 0) return framedMoverOrSplitter(resolved, frame)
   let cachedBeat = Number.NaN
   let cached = resolved
-  return framedMoverOrSplitter({
+  const wrapped: MoverOrSplitter = {
     apply(visualCopy, context) {
       if (context.beat !== cachedBeat) {
         cachedBeat = context.beat
@@ -320,7 +320,14 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
       }
       return cached.apply(visualCopy, context)
     },
-  }, frame)
+  }
+  // A time remap is deliberately taken from the UN-automated resolution: it is
+  // asked for the REAL beat (while apply is asked for the warped one), so
+  // routing it through the memo above would thrash the cache every frame. The
+  // only thing this loses is automating a remap's own params, which for Freeze
+  // means automating a two-value "on release" switch.
+  if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
+  return framedMoverOrSplitter(wrapped, frame)
 }
 
 /** Collect an object track's mover and splitter children together, in exact
