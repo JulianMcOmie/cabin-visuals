@@ -23,8 +23,10 @@ import {
   SHAPE_EVEN,
   SHAPE_SPIKE,
   SHAPE_SWELL,
+  COLORIZER_RAINBOW_PITCH,
   evaluateColorizer,
   noteColorizer,
+  rainbowDiagonal,
   type ColorizerSettings,
 } from '../core/visualCopies/colorizer'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -46,20 +48,26 @@ const ROOM = '#05070c'
 const FIELD_HEIGHT = 150
 
 // ── The looping demo performance ─────────────────────────────────────────────
-// Two bars at a notional 120 BPM on the single flash row: accents, ghost notes
-// and one held note, so dynamics (velocity) and sustain (note length) both read
-// without needing a second MIDI row to explain them.
+// Two bars at a notional 120 BPM, one per row. Bar 1 is the flash row alone:
+// accents and ghost notes, so dynamics and sustain read. Bar 2 holds the
+// rainbow row with flashes riding on top, which is the case worth seeing - the
+// two channels composing rather than one replacing the other.
 
 const LOOP_BEATS = 8
 
-const note = (beat: number, durationBeats: number, velocity: number): ResolvedNote => ({
+const at = (beat: number, durationBeats: number, velocity: number, pitch: number): ResolvedNote => ({
   beat,
-  pitch: COLORIZER_FLASH_PITCH,
+  pitch,
   durationBeats,
   velocity,
   blockStartBeat: 0,
   blockEndBeat: LOOP_BEATS,
 })
+
+const note = (beat: number, durationBeats: number, velocity: number) =>
+  at(beat, durationBeats, velocity, COLORIZER_FLASH_PITCH)
+const rainbow = (beat: number, durationBeats: number, velocity: number) =>
+  at(beat, durationBeats, velocity, COLORIZER_RAINBOW_PITCH)
 
 const PERFORMANCE: ResolvedNote[] = [
   note(0, 0.05, 1),
@@ -68,9 +76,10 @@ const PERFORMANCE: ResolvedNote[] = [
   note(2, 0.05, 1),
   note(3, 0.05, 0.5),
   note(3.5, 0.05, 0.9),
-  note(5, 1, 0.95),
-  note(6.5, 0.05, 0.6),
-  note(7, 0.05, 0.9),
+  rainbow(4.25, 3.25, 1),
+  note(5, 0.05, 0.8),
+  note(6, 0.05, 1),
+  note(7, 0.05, 0.7),
 ]
 
 // The loop is seamless: the neighbouring passes are present as real notes, so a
@@ -138,18 +147,23 @@ function ObjectField({ settings }: { settings: ColorizerSettings }) {
     for (let index = 0; index < FIELD_COUNT; index++) {
       const column = index % FIELD_COLUMNS
       const row = Math.floor(index / FIELD_COLUMNS)
-      dummy.position.set(
-        (column - (FIELD_COLUMNS - 1) / 2) * SPACING,
-        ((FIELD_ROWS - 1) / 2 - row) * SPACING,
-        0,
-      )
+      const x = (column - (FIELD_COLUMNS - 1) / 2) * SPACING
+      const y = ((FIELD_ROWS - 1) / 2 - row) * SPACING
+      dummy.position.set(x, y, 0)
       dummy.rotation.set(0.35, 0.62, 0)
       dummy.updateMatrix()
       mesh.setMatrixAt(index, dummy.matrix)
       // Row-major, the order a Grid splitter hands its copies downstream, so
-      // STAGGER sweeps the field the same way it will sweep a real split.
-      const { tintAmount } = evaluateColorizer(LOOP_NOTES, current.settings, beat, index)
+      // STAGGER sweeps the field the same way it will sweep a real split. The
+      // rainbow's phase comes from the same rainbowDiagonal() the mover uses,
+      // so the sweep angle here is the sweep angle on stage.
+      const { tintAmount, hue } = evaluateColorizer(
+        LOOP_NOTES, current.settings, beat, index, rainbowDiagonal(x, y),
+      )
+      // Same order instrumentColor.ts applies them in: absolute tint first,
+      // relative hue on top.
       color.copy(base).lerp(tint, clamp(tintAmount, 0, 1))
+      if (hue !== 0) color.offsetHSL(hue, 0, 0)
       mesh.setColorAt(index, color)
     }
     mesh.instanceMatrix.needsUpdate = true
@@ -341,7 +355,10 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-const REQUIRED_KEYS = ['intensity', 'attackBeats', 'releaseBeats', 'staggerBeats', 'color', 'shape']
+const REQUIRED_KEYS = [
+  'intensity', 'attackBeats', 'releaseBeats', 'staggerBeats', 'color', 'shape',
+  'rainbowRate', 'rainbowSpread',
+]
 
 export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
@@ -385,6 +402,16 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         <ChromaKnob parameter={bound.attackBeats} label="ATTACK" />
         <ChromaKnob parameter={bound.releaseBeats} label="RELEASE" />
         <ChromaKnob parameter={bound.staggerBeats} label="STAGGER" />
+        {/* The two rainbow knobs belong to the second MIDI row, so they get a
+            spectrum rule instead of a caption - it says "different row" in the
+            one language this panel already speaks. */}
+        <div
+          aria-hidden
+          className="mb-4 h-9 w-px flex-shrink-0 self-end rounded-full"
+          style={{ background: 'linear-gradient(#ff4d4d, #ffd166, #4dff88, #4dd2ff, #b84dff)' }}
+        />
+        <ChromaKnob parameter={bound.rainbowRate} label="SPIN" />
+        <ChromaKnob parameter={bound.rainbowSpread} label="SPREAD" />
         <ShapeSelector bound={bound.shape} />
         <div className="ml-auto">
           <ColorWheelPill

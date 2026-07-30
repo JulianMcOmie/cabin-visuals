@@ -340,7 +340,7 @@ export const BassRippleUserInterfaceRenderer: UserInterfaceRendererDefinition = 
       style={{ background: shade }}
     >
       <RipplePreview
-        amount={numericValue(amount, 1)}
+        amount={numericValue(amount, 0.5)}
         scale={numericValue(scale, 3)}
         speed={numericValue(speed, 0.6)}
         release={numericValue(release, 0.5)}

@@ -64,11 +64,14 @@ const WHEEL_RADIUS = WHEEL_SIZE / 2
 /** The floating wheel surface alone - hosts that anchor it themselves (pills,
  *  segmented controls) render it inside a `relative` wrapper while managing
  *  their own open state / outside-click close. */
-export function ColorWheelPopover({ value, onChange, align = 'right', testId }: {
+export function ColorWheelPopover({ value, onChange, align = 'right', edge = 'top', testId }: {
   value: string
   onChange: (hex: string) => void
   /** Which edge of the anchor the popover hugs. */
   align?: 'left' | 'right'
+  /** Which side of the anchor it opens on: 'top' (default) floats above,
+   *  'bottom' drops below - for anchors sitting near their panel's top. */
+  edge?: 'top' | 'bottom'
   testId?: string
 }) {
   const wheelRef = useRef<HTMLDivElement>(null)
@@ -118,7 +121,7 @@ export function ColorWheelPopover({ value, onChange, align = 'right', testId }: 
   return (
     <div
       data-testid={testId}
-      className={`absolute bottom-full z-50 mb-2 rounded-md border border-white/10 bg-[#0d1017] p-3 shadow-[0_8px_24px_rgba(0,0,0,.5)] ${align === 'right' ? 'right-0' : 'left-0'}`}
+      className={`absolute z-50 rounded-md border border-white/10 bg-[#0d1017] p-3 shadow-[0_8px_24px_rgba(0,0,0,.5)] ${edge === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} ${align === 'right' ? 'right-0' : 'left-0'}`}
     >
       <div
         ref={wheelRef}

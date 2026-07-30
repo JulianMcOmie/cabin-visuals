@@ -9,13 +9,15 @@
 //
 // The preview is not a mockup: it runs the mover's real resolve() - the same
 // integrated impulse simulation, the same leash and pileup - over a looping
-// performance, and applies the returned transforms to a lattice of small cubes.
+// performance, and applies the returned transforms to a FIELD OF OBJECTS, the
+// same wide flat grid the Colorizer's panel uses and indexed row-major exactly
+// the way a Grid splitter indexes its copies.
 //
-// Why a LATTICE and not a scatter of debris: the whole promise of this mover is
+// Why a GRID and not a scatter of debris: the whole promise of this mover is
 // "blown apart, then back into place", and you cannot see something return to
-// place unless the place is obvious. A perfect crystal grid makes both halves
-// legible - it shatters into chaos and then resolves back to dead-straight
-// rows, which is the moment that sells the effect.
+// place unless the place is obvious. A dead-straight lattice makes both halves
+// legible - it shatters into chaos and then resolves back to perfect rows, which
+// is the moment that sells the effect.
 //
 // Under it, a metronomic hit every two beats: the knobs are what the panel is
 // about, so the performance stays out of the way and lets every change read on
@@ -23,10 +25,18 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { Color, InstancedMesh, Matrix4, Object3D, PointLight } from 'three'
+import {
+  Color,
+  Euler,
+  InstancedMesh,
+  Matrix4,
+  Object3D,
+  PointLight,
+  Vector3,
+  type OrthographicCamera,
+} from 'three'
 import {
   CURVE_EVEN,
   CURVE_SPIKE,
@@ -34,6 +44,7 @@ import {
   IMPACT_DETENT,
   SCATTER_IMPACT_PITCH,
   impactScatterMover,
+  tune,
   type ImpactScatterSettings,
 } from '../core/visualCopies/impactScatter'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -84,40 +95,64 @@ const PREVIEW_NOTES: ResolvedNote[] = Array.from(
   }),
 )
 
-// ── The lattice ──────────────────────────────────────────────────────────────
-// A 5×5×5 grid with its hidden interior omitted: the shell carries the whole
-// read of a crystal, at two thirds of the per-frame cost.
+// ── The field ────────────────────────────────────────────────────────────────
+// Wide enough to bleed off both edges at any panel width - a field that stops
+// short of the frame reads as a diagram of a field rather than as one - and tall
+// enough that the blast reads as RADIAL rather than as a line being pushed
+// around.
+//
+// Flat and face-on costs the Z component of the throw, which is worth paying:
+// measured over the visible window, Z is 0% of the motion at CHAOS 0 (a pure
+// radial pulse is entirely in-plane) rising to ~40% at CHAOS 1. So depth is paid
+// back as TONE instead of geometry - a piece thrown away from the camera sinks
+// toward the room, one thrown forward lifts - which keeps CHAOS reading at full
+// strength without shearing the outer columns into a perspective view.
 
-const LATTICE_SPAN = 2
-const LATTICE_SPACING = 1.15
+const FIELD_COLUMNS = 26
+const FIELD_ROWS = 5
+const FIELD_COUNT = FIELD_COLUMNS * FIELD_ROWS
+const SPACING = 1.05
+/** World-space height the camera frames: the rows plus a little air. */
+const FIELD_WORLD_HEIGHT = (FIELD_ROWS - 1) * SPACING + 1.7
+const FIELD_HEIGHT = 168
+/** Z displacement that reads as fully receded (or fully forward). */
+const DEPTH_RANGE = 2
 
-function buildLattice(): [number, number, number][] {
-  const cells: [number, number, number][] = []
-  for (let x = -LATTICE_SPAN; x <= LATTICE_SPAN; x++) {
-    for (let y = -LATTICE_SPAN; y <= LATTICE_SPAN; y++) {
-      for (let z = -LATTICE_SPAN; z <= LATTICE_SPAN; z++) {
-        const interior = Math.abs(x) < LATTICE_SPAN && Math.abs(y) < LATTICE_SPAN && Math.abs(z) < LATTICE_SPAN
-        if (interior) continue
-        cells.push([x * LATTICE_SPACING, y * LATTICE_SPACING, z * LATTICE_SPACING])
-      }
-    }
-  }
-  return cells
-}
-
-const LATTICE = buildLattice()
+// A full-power blast throws a piece several times further than this window is
+// tall, so past a point the field simply leaves the frame and the panel goes
+// black - which is how the preview looked before this knee existed.
+//
+// Beyond PREVIEW_THROW the displacement is COMPRESSED rather than clipped or
+// normalized: on-screen travel keeps growing with IMPACT (as peak^0.45), so the
+// knob still visibly does something all the way to overdrive, instead of
+// saturating at a ceiling. Only the absolute distance is bent - shape, timing,
+// falloff and the return are the mover's own. A 168px window cannot convey an
+// absolute distance anyway; it has to convey the gesture, which is the same
+// trade Bass Ripple's preview makes.
+/** Throw, in world units, that the window shows unscaled. */
+const PREVIEW_THROW = 1.6
+const PREVIEW_COMPRESSION = 0.55
 
 const HOT = new Color('#eaf9ff')
+/** Cold steel: what the field is when nothing is happening to it. */
+const FIELD_COOL = '#6f86a8'
 
-function LatticeField({ settings }: { settings: ImpactScatterSettings }) {
+/** A neutral three-quarter rest pose, so a cube at rest reads as a solid rather
+ *  than a flat square and the mover's own tumble has something to turn. */
+const REST_POSE = new Euler(0.34, 0.6, 0)
+
+function ScatterField({ settings }: { settings: ImpactScatterSettings }) {
   const meshRef = useRef<InstancedMesh>(null)
   const coreRef = useRef<PointLight>(null)
   const scratch = useRef({
     dummy: new Object3D(),
     base: new Matrix4(),
+    rest: new Matrix4().makeRotationFromEuler(REST_POSE),
+    home: new Vector3(),
     color: new Color(),
-    cool: new Color('#6f86a8'),
+    cool: new Color(FIELD_COOL),
     warm: new Color(SHOCK),
+    room: new Color(ROOM),
   }).current
 
   // Rebuilding on settings identity is deliberate: resolve() integrates the
@@ -127,61 +162,130 @@ function LatticeField({ settings }: { settings: ImpactScatterSettings }) {
     () => impactScatterMover.resolve({ settings, notes: PREVIEW_NOTES }),
     [settings],
   )
-  const live = useRef({ resolved, settings })
-  live.current = { resolved, settings }
+  // The mover's own falloff, so the warm pool in the field IS its reach - turning
+  // IMPACT up visibly widens the area that will be hit hard, before a hit lands.
+  const reach = useMemo(() => Math.max(0.0001, tune(settings).reach), [settings])
 
-  useFrame(({ clock }) => {
+  // MEASURED, not modelled: peak throw is wildly nonlinear in the settings
+  // (quadratic drag, the cubic leash, pileup), so the knee is set by sampling one
+  // representative copy across the loop. ~64 table reads, once per settings
+  // change, next to a resolve() that already costs a few ms.
+  const throwScale = useMemo(() => {
+    const home = new Vector3(settings.centerX + SPACING, settings.centerY, settings.centerZ)
+    const probe = new Matrix4().makeTranslation(home.x, home.y, home.z)
+    const point = new Vector3()
+    let peak = 0
+    for (let beat = 0; beat < LOOP_BEATS; beat += 1 / 16) {
+      const [out] = resolved.apply(
+        { transform: probe, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
+        { beat, index: 0, count: FIELD_COUNT },
+      )
+      peak = Math.max(peak, point.setFromMatrixPosition(out.transform).sub(home).length())
+    }
+    return peak > PREVIEW_THROW ? Math.pow(PREVIEW_THROW / peak, PREVIEW_COMPRESSION) : 1
+  }, [resolved, settings])
+
+  const live = useRef({ resolved, settings, reach, throwScale })
+  live.current = { resolved, settings, reach, throwScale }
+
+  useFrame(({ clock, camera, gl }) => {
     const mesh = meshRef.current
     if (!mesh) return
-    const { dummy, base, color, cool, warm } = scratch
+    const { dummy, base, rest, home, color, cool, warm, room } = scratch
     const beat = (clock.getElapsedTime() * 2) % LOOP_BEATS
     const current = live.current
+
+    // The frustum is derived from the canvas ELEMENT rather than left to the
+    // renderer's measured size: this panel lives in a resizable pane and can
+    // mount while it is still collapsed, and a stale measurement leaves the
+    // field framed for a width the panel no longer has. Reading the DOM is the
+    // one source that cannot go stale. Re-derived per frame so that r3f's own
+    // resize handling (it rewrites a non-manual camera's projection into PIXEL
+    // units) is corrected on the next tick. Do not switch the camera to
+    // `manual` to avoid that: r3f then never initialises the projection at all
+    // and the field renders as an invisible speck.
+    const width = gl.domElement.clientWidth
+    const height = gl.domElement.clientHeight
+    const orthographic = camera as OrthographicCamera
+    if (width > 0 && height > 0) {
+      const halfHeight = FIELD_WORLD_HEIGHT / 2
+      const halfWidth = halfHeight * (width / height)
+      if (orthographic.top !== halfHeight || orthographic.right !== halfWidth) {
+        orthographic.top = halfHeight
+        orthographic.bottom = -halfHeight
+        orthographic.right = halfWidth
+        orthographic.left = -halfWidth
+        orthographic.zoom = 1
+        orthographic.updateProjectionMatrix()
+      }
+    }
+
     let energy = 0
-    for (let i = 0; i < LATTICE.length; i++) {
-      const cell = LATTICE[i]
-      base.makeTranslation(
-        current.settings.centerX + cell[0],
-        current.settings.centerY + cell[1],
-        current.settings.centerZ + cell[2],
+    // Placement is rewritten every frame rather than cached: a settings change
+    // rebuilds the instanced mesh's buffers, and a "laid out once" flag that
+    // outlives them leaves every cube stacked at the origin.
+    for (let index = 0; index < FIELD_COUNT; index++) {
+      const column = index % FIELD_COLUMNS
+      const row = Math.floor(index / FIELD_COLUMNS)
+      home.set(
+        current.settings.centerX + (column - (FIELD_COLUMNS - 1) / 2) * SPACING,
+        current.settings.centerY + ((FIELD_ROWS - 1) / 2 - row) * SPACING,
+        current.settings.centerZ,
       )
+      // The rest pose rides INSIDE the copy transform: the mover reads the home
+      // position off its translation, so the pose is invisible to the physics
+      // and the tumble composes on top of it.
+      base.makeTranslation(home.x, home.y, home.z).multiply(rest)
       const [result] = current.resolved.apply(
         { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
-        { beat, index: i, count: LATTICE.length },
+        { beat, index, count: FIELD_COUNT },
       )
       dummy.matrix.copy(result.transform)
       dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale)
+      // Only the TRAVEL is compressed - the tumble and the squash keep the
+      // magnitudes the mover gave them, so the piece still reads as flying.
+      if (current.throwScale < 1) {
+        dummy.position.sub(home).multiplyScalar(current.throwScale).add(home)
+      }
       dummy.updateMatrix()
-      mesh.setMatrixAt(i, dummy.matrix)
-      // Cool steel at rest, shock-blue toward the outside of the lattice; the
-      // flash's lightness shift is kinetic energy, so a piece burns while it is
-      // flying and cools as it drifts home.
-      const depth = (cell[0] * cell[0] + cell[1] * cell[1] + cell[2] * cell[2]) / 16
-      color.copy(cool).lerp(warm, clamp(0.2 + depth * 0.5, 0, 1))
+      mesh.setMatrixAt(index, dummy.matrix)
+
+      // Cold steel far out, shock-blue where the hit will land hardest - the
+      // mover's own distance falloff, so the center and its reach are visible.
+      const spread = Math.hypot(home.x - current.settings.centerX, home.y - current.settings.centerY)
+      const gain = 1 / (1 + (spread / current.reach) * (spread / current.reach))
+      color.copy(cool).lerp(warm, clamp(gain * 0.8, 0, 1))
+      // The flash's lightness shift IS kinetic energy, so a piece burns while it
+      // is flying and cools as it drifts home.
       const heat = clamp(result.colorShift.lightness * 3, 0, 1)
       if (heat > 0) {
         color.lerp(HOT, heat)
         energy += heat
       }
-      mesh.setColorAt(i, color)
+      // Depth as tone, standing in for the Z the flat view cannot show.
+      const depth = clamp((dummy.position.z - home.z) / DEPTH_RANGE, -1, 1)
+      if (depth < 0) color.lerp(room, -depth * 0.6)
+      else if (depth > 0) color.multiplyScalar(1 + depth * 0.3)
+      mesh.setColorAt(index, color)
     }
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     // The room is lit BY the field: the core light answers the summed heat, so
     // an impact flashes the whole space and a settle lets it go dark.
     if (coreRef.current) {
-      coreRef.current.intensity = 1.5 + clamp(energy / LATTICE.length, 0, 1) * 42
+      coreRef.current.intensity = 1.5 + clamp(energy / FIELD_COUNT, 0, 1) * 42
     }
   })
 
   return (
     <>
-      <instancedMesh ref={meshRef} args={[undefined, undefined, LATTICE.length]} frustumCulled={false}>
-        <boxGeometry args={[0.42, 0.42, 0.42]} />
-        <meshStandardMaterial metalness={0.4} roughness={0.25} color="#ffffff" />
+      <instancedMesh ref={meshRef} args={[undefined, undefined, FIELD_COUNT]} frustumCulled={false}>
+        <boxGeometry args={[0.62, 0.62, 0.62]} />
+        <meshStandardMaterial metalness={0.35} roughness={0.32} color="#ffffff" />
       </instancedMesh>
       <pointLight
         ref={coreRef}
-        position={[settings.centerX, settings.centerY, settings.centerZ]}
+        position={[settings.centerX, settings.centerY, settings.centerZ + 3]}
         color={SHOCK}
         intensity={1.5}
         distance={18}
@@ -195,39 +299,26 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
   return (
     <div
       data-testid="impact-scatter-preview"
-      title="Drag to orbit the lattice"
-      className="relative h-[178px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
-      style={{ background: ROOM }}
+      className="relative overflow-hidden border-b border-white/[0.06]"
+      style={{ height: FIELD_HEIGHT, background: ROOM }}
     >
-        <Canvas
-          dpr={[1, 1.75]}
-          camera={{ position: [5.8, 4, 10.4], fov: 40 }}
-          gl={{ antialias: true, alpha: true }}
-        >
-          <color attach="background" args={[ROOM]} />
-          <LatticeField settings={settings} />
-          <directionalLight position={[5, 7, 4]} intensity={1.15} color="#dfe8ff" />
-          <directionalLight position={[-6, -2, -4]} intensity={0.35} color={SHOCK} />
-          <ambientLight intensity={0.14} />
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -4.6, 0]}>
-            <circleGeometry args={[16, 48]} />
-            <meshStandardMaterial color="#070a10" roughness={1} metalness={0} />
-          </mesh>
-          {/* Gentler than the laser pass: the cubes are tone-mapped, so the
-              threshold sits below 1 and only white-hot pieces bloom. */}
-          <EffectComposer multisampling={0}>
-            <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
-          </EffectComposer>
-          <OrbitControls
-            makeDefault
-            target={[settings.centerX, settings.centerY, settings.centerZ]}
-            enablePan={false}
-            enableZoom={false}
-            enableDamping
-            dampingFactor={0.08}
-            minPolarAngle={0.15}
-            maxPolarAngle={Math.PI * 0.78}
-          />
+      {/* Orthographic on purpose: the panel is short and very wide, so a
+          perspective frustum wide enough to fill it shears the outer columns into
+          trapezoids and makes the same throw look bigger at the edges than at the
+          middle. Flat projection keeps every piece the same size, which is what
+          makes the falloff comparable across the field. The frustum itself is set
+          per frame in ScatterField. */}
+      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 14] }} gl={{ antialias: true, alpha: true }}>
+        <color attach="background" args={[ROOM]} />
+        <ScatterField settings={settings} />
+        <directionalLight position={[3, 6, 8]} intensity={1.35} color="#dfe8ff" />
+        <directionalLight position={[-6, -2, 4]} intensity={0.4} color={SHOCK} />
+        <ambientLight intensity={0.3} />
+        {/* Gentler than the laser pass: the cubes are tone-mapped, so the
+            threshold sits below 1 and only white-hot pieces bloom. */}
+        <EffectComposer multisampling={0}>
+          <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
+        </EffectComposer>
       </Canvas>
     </div>
   )

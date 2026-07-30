@@ -29,12 +29,14 @@ import { photoInstrument } from './Photo'
 import { oscilloscopeInstrument } from './Oscilloscope'
 import { colorFiltersInstrument } from './ColorFilters'
 import { bassRippleInstrument } from './BassRipple'
+import { strobeInstrument } from './Strobe'
 import { laserSphereInstrument } from './LaserSphere'
 import { laserLineInstrument } from './LaserLine'
 import { wormholeInstrument } from './Wormhole'
 import { particleSphereInstrument } from './ParticleSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
+import { waterDropInstrument } from './WaterDrop'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -66,12 +68,14 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [oscilloscopeInstrument.id]: oscilloscopeInstrument,
   [colorFiltersInstrument.id]: colorFiltersInstrument,
   [bassRippleInstrument.id]: bassRippleInstrument,
+  [strobeInstrument.id]: strobeInstrument,
   [laserSphereInstrument.id]: laserSphereInstrument,
   [laserLineInstrument.id]: laserLineInstrument,
   [wormholeInstrument.id]: wormholeInstrument,
   [particleSphereInstrument.id]: particleSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
+  [waterDropInstrument.id]: waterDropInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

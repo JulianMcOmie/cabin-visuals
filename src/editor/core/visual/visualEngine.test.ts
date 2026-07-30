@@ -372,3 +372,93 @@ test('track size is inherited: children and mover layouts scale with the parent'
   assert.equal(round(c.world.toArray()[0]), 2)
   assert.equal(round(c.meshScale), 1)
 })
+
+test('a burst-mode automation lane carries its param from the base to the note value', () => {
+  // spinSpeed is 0..4 on Cube, so the top automation row (pitch 84) means 4.
+  // Whole-beat stages make each expected value readable by hand.
+  const cube: Track = {
+    id: 'cube-burst',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { spinSpeed: 1 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['lane-burst'],
+  }
+  const lane: Track = {
+    id: 'lane-burst',
+    name: 'Spin Speed',
+    type: 'automation',
+    instrumentId: '',
+    targetParam: 'spinSpeed',
+    burst: { attackBeats: 1, decayBeats: 1, sustainLevel: 0.5, releaseBeats: 1, intensity: 1 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [{
+      id: 'lblock',
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [{ id: 'ln', startBeat: 0, durationBeats: 2, pitch: 84, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-burst',
+  }
+
+  setProject({ tracks: { 'cube-burst': cube, 'lane-burst': lane }, rootTrackIds: ['cube-burst'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+
+  const spinAt = (beat: number) => {
+    computeAtBeat(beat)
+    return round(getObjectState('cube-burst')!.params.spinSpeed)
+  }
+
+  assert.equal(spinAt(1), 4)      // peak: arrives exactly at the note's value
+  assert.equal(spinAt(0.5), 2.5)  // half attack: halfway from base 1 to 4
+  assert.equal(spinAt(2), 2.5)    // decayed to sustain 0.5
+  assert.equal(spinAt(2.5), 1.75) // halfway through the release
+  assert.equal(spinAt(3.5), 1)    // fully released - the lane is inert, base shows
+  assert.equal(spinAt(1), 4)      // scrubbing back reproduces the value exactly
+})
+
+test('a burst lane with intensity 0 leaves its param completely alone', () => {
+  const cube: Track = {
+    id: 'cube-burst-off',
+    name: 'Cube',
+    type: 'base',
+    instrumentId: 'cube',
+    params: { spinSpeed: 2 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [],
+    childIds: ['lane-burst-off'],
+  }
+  const lane: Track = {
+    id: 'lane-burst-off',
+    name: 'Spin Speed',
+    type: 'automation',
+    instrumentId: '',
+    targetParam: 'spinSpeed',
+    burst: { attackBeats: 1, decayBeats: 1, sustainLevel: 0.5, releaseBeats: 1, intensity: 0 },
+    color: '#6366f1',
+    muted: false,
+    solo: false,
+    blocks: [{
+      id: 'lblock',
+      startBar: 0,
+      durationBars: 1,
+      loop: false,
+      notes: [{ id: 'ln', startBeat: 0, durationBeats: 2, pitch: 84, velocity: 1 }],
+    }],
+    childIds: [],
+    parentId: 'cube-burst-off',
+  }
+
+  setProject({ tracks: { 'cube-burst-off': cube, 'lane-burst-off': lane }, rootTrackIds: ['cube-burst-off'], beatsPerBar: 4, bpm: 120, totalBars: 4 })
+  computeAtBeat(1)
+  assert.equal(round(getObjectState('cube-burst-off')!.params.spinSpeed), 2)
+})

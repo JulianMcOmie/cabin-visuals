@@ -35,9 +35,10 @@ export interface InstrumentItem {
 const withKind = (kind: LibraryKind, items: Omit<InstrumentItem, 'kind'>[]): InstrumentItem[] =>
   items.map((i) => ({ ...i, kind }))
 
-// The essentials most projects reach for first - surfaced above the object list.
-// They are ordinary object instruments; only the grouping differs.
-const MAIN_INSTRUMENTS = withKind('object', [
+// Scene-wide instruments: the camera, full-frame media, and whole-scene
+// effects. Ordinary object instruments - only the grouping differs. The
+// folders below claim them by id (Camera → Impact, Video → Utility, ...).
+const SCENE_INSTRUMENTS = withKind('object', [
   { id: 'cameraControl', name: 'Camera', description: 'Drives the scene camera - each note punches a dolly-in and a shake.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="1" y="3.5" width="7.5" height="5.5" rx="1" fill="none" stroke="#818cf8" strokeWidth="1" />
@@ -80,6 +81,11 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
       <circle cx="7.8" cy="4.5" r="3" fill="none" stroke="#f472b6" strokeWidth="1" />
       <circle cx="6" cy="7.7" r="3" fill="none" stroke="#facc15" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#fde047" />
     </svg>
   )},
 ])
@@ -159,6 +165,15 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
         <circle cx="6" cy="6" r="1.4" /><circle cx="6" cy="1.5" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
         <circle cx="2.8" cy="2.8" r="0.7" /><circle cx="9.2" cy="2.8" r="0.7" /><circle cx="2.8" cy="9.2" r="0.7" /><circle cx="9.2" cy="9.2" r="0.7" />
       </g>
+    </svg>
+  )},
+  { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
+      <circle cx="2.4" cy="4.4" r="1.1" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9.4" cy="8.4" r="1.2" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9" cy="3.2" r="0.8" fill="#bff3ff" fillOpacity="0.8" />
+      <circle cx="3.2" cy="9.4" r="0.7" fill="#bff3ff" fillOpacity="0.7" />
     </svg>
   )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', description: 'A fractal-flower tunnel - notes shift its hue and fire pulse rings.', icon: (
@@ -352,7 +367,7 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
 // to know what can be clipped - the picker arrays above stay the single source
 // of what exists in the library.
 export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
-  ...MAIN_INSTRUMENTS,
+  ...SCENE_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
   ...ALL_OBJECT_INSTRUMENTS,
   ...ALL_MOVER_INSTRUMENTS,
@@ -360,7 +375,140 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...SPLITTER_INSTRUMENTS,
 ]
 
-function Section({ title, description, items, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void; defaultOpen?: boolean }) {
+/** A library folder: a titled group of cards, nestable one level deep. */
+interface LibraryFolder {
+  id: string
+  title: string
+  /** One tooltip sentence: what belongs in this folder. */
+  description: string
+  items: InstrumentItem[]
+  subfolders?: LibraryFolder[]
+  defaultOpen?: boolean
+}
+
+// ——— Folder assignments ———
+// Items are defined once in the arrays above; the folders claim them here by
+// id. Anything no folder claims falls through to Unsorted, so a newly added
+// instrument is never invisible - it just waits there until it's given a home.
+// (Modulators are retired from the library - movers replace them; their code
+// stays until existing projects are migrated off ports.)
+
+const SCENE_ITEM_POOL: InstrumentItem[] = [
+  ...SCENE_INSTRUMENTS,
+  ...OBJECT_INSTRUMENTS,
+  ...MOVER_INSTRUMENTS,
+  ...COLORIZER_INSTRUMENTS,
+  ...SPLITTER_INSTRUMENTS,
+]
+
+const pick = (ids: readonly string[]): InstrumentItem[] =>
+  ids.flatMap((id) => SCENE_ITEM_POOL.filter((i) => i.id === id))
+
+// Impact is notes hitting the scene itself, split by envelope: Impulse
+// strikes once per note and decays; Rumble warps for as long as it's held.
+const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter']
+const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
+const UTILITY_IDS = ['video', 'photo', 'textDisplay']
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
+
+const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
+const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
+
+const CLAIMED_IDS = new Set([
+  ...IMPACT_IDS,
+  ...UTILITY_IDS,
+  ...COLOR_IDS,
+  ...OBJECT_INSTRUMENTS.map((i) => i.id),
+  ...MOTION_ITEMS.map((i) => i.id),
+  ...SPLITTER_INSTRUMENTS.map((i) => i.id),
+])
+const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
+
+// The scene library, in shelf order. The two Extras folders keep holding
+// exactly what they held before the folder pass - demoted, never deleted.
+const SCENE_FOLDERS: LibraryFolder[] = [
+  {
+    id: 'impact',
+    title: 'Impact',
+    description: 'Notes hitting the scene itself - camera punches, shockwaves, and sustained rumble.',
+    items: [],
+    subfolders: [
+      { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
+      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking or warping while the note is held.', items: pick(RUMBLE_IDS) },
+    ],
+  },
+  { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
+  { id: 'motion', title: 'Motion', description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.', items: MOTION_ITEMS },
+  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
+  { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
+  { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
+  { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
+  { id: 'mover-extras', title: 'Mover Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS, defaultOpen: false },
+  { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS, defaultOpen: false },
+]
+
+interface ItemHandlers {
+  onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void
+  onItemDoubleClick: (item: InstrumentItem) => void
+}
+
+function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: InstrumentItem[] } & ItemHandlers) {
+  return (
+    <div className="grid grid-cols-1 gap-2 px-2">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          data-instrument-id={item.id}
+          onPointerDown={(e) => onItemPointerDown(e, item)}
+          onDoubleClick={() => onItemDoubleClick(item)}
+          title={item.description}
+          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
+        >
+          <div className="relative aspect-video">
+            {canPreview(item)
+              ? <InstrumentCardPreview item={item} />
+              : (
+                <span className="absolute inset-0 flex items-center justify-center [&_svg]:h-8 [&_svg]:w-8">
+                  {item.icon}
+                </span>
+              )}
+            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+              <span
+                className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
+                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
+              >
+                {item.name}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A nested folder inside a Section: a lighter, non-sticky header - chevron on
+ *  the left, unlike the top-level rows - over the same card grid. */
+function Subfolder({ folder, onItemPointerDown, onItemDoubleClick }: { folder: LibraryFolder } & ItemHandlers) {
+  const [open, setOpen] = useState(folder.defaultOpen ?? true)
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        title={folder.description}
+        className="flex w-full cursor-pointer select-none items-center gap-1 px-2.5 pt-2.5 pb-1.5 text-[12px] font-medium text-[var(--text-2)] transition-colors hover:text-[var(--text)]"
+      >
+        <ChevronRight size={11} className={`flex-shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-90' : ''}`} />
+        {folder.title}
+      </button>
+      {open && <ItemGrid items={folder.items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />}
+    </div>
+  )
+}
+
+function Section({ title, description, items, subfolders, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; subfolders?: LibraryFolder[]; defaultOpen?: boolean } & ItemHandlers) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
@@ -416,36 +564,12 @@ function Section({ title, description, items, onItemPointerDown, onItemDoubleCli
         </button>
       </div>
       {open && (
-        <div className="grid grid-cols-1 gap-2 px-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              data-instrument-id={item.id}
-              onPointerDown={(e) => onItemPointerDown(e, item)}
-              onDoubleClick={() => onItemDoubleClick(item)}
-              title={item.description}
-              className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
-            >
-              <div className="relative aspect-video">
-                {canPreview(item)
-                  ? <InstrumentCardPreview item={item} />
-                  : (
-                    <span className="absolute inset-0 flex items-center justify-center [&_svg]:h-8 [&_svg]:w-8">
-                      {item.icon}
-                    </span>
-                  )}
-                <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                  <span
-                    className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
-                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
-                  >
-                    {item.name}
-                  </span>
-                </div>
-              </div>
-            </div>
+        <>
+          {items.length > 0 && <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />}
+          {subfolders?.map((sub) => (
+            <Subfolder key={sub.id} folder={sub} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
           ))}
-        </div>
+        </>
       )}
     </div>
   )
@@ -697,17 +821,18 @@ export function LeftSidebar() {
               <Section key="directors" title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_CORE} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
               <Section key="director-extras" title="Extras" description="Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did." items={DIRECTOR_EXTRAS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
               </>
-            ) : <>
-            <Section key="main" title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section key="objects" title="Objects" description="Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            {/* Modulators are retired from the library (movers replace them);
-                the code stays until existing projects are migrated off ports. */}
-            <Section key="movers" title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section key="mover-extras" title="Mover Extras" description="Single-behavior movers, still fully working - the compound movers above cover the same ground in one track." items={MOVER_EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
-            <Section key="colorizers" title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section key="splitters" title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section key="object-extras" title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
-            </>}
+            ) : SCENE_FOLDERS.map((folder) => (
+              <Section
+                key={folder.id}
+                title={folder.title}
+                description={folder.description}
+                items={folder.items}
+                subfolders={folder.subfolders}
+                defaultOpen={folder.defaultOpen}
+                onItemPointerDown={startLibraryDrag}
+                onItemDoubleClick={onItemDoubleClick}
+              />
+            ))}
           </>
         )}
         {tab === 'loops' && (

@@ -44,31 +44,36 @@ export interface AdsrGate {
 }
 
 /**
+ * ONE gate's velocity-scaled contribution at `beat` - 0 before it opens and once
+ * it has fully released. This is the per-note piece `evaluateAdsrGain` sums;
+ * burst automation lanes (automation.ts) need the pieces apart because each of
+ * their notes aims at its OWN target value and has to weight it by this gain.
+ */
+export function adsrGateGain(note: AdsrGate, beat: number, p: AdsrEnvelope): number {
+  const t = beat - note.beat
+  if (t < 0) return 0 // future gate
+  const attack = Math.max(EPS, p.attackBeats)
+  const release = Math.max(EPS, p.releaseBeats)
+  const hold = Math.max(note.durationBeats || 0, attack)
+  if (t >= hold + release) return 0 // fully released
+  const decay = Math.max(EPS, p.decayBeats)
+  const sustain = clamp01(p.sustainLevel)
+  // The attack/decay/sustain curve while the gate is held.
+  const held = (u: number): number => {
+    if (u < attack) return u / attack
+    if (u < attack + decay) return 1 - (1 - sustain) * ((u - attack) / decay)
+    return sustain
+  }
+  const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+  return velocity * (t <= hold ? held(t) : held(hold) * (1 - (t - hold) / release))
+}
+
+/**
  * The summed, clamped 0..1 envelope gain at `beat` from the gate notes. Pure
  * function of (beat, notes, params) - safe to call per frame at any beat.
  */
 export function evaluateAdsrGain(notes: readonly AdsrGate[], beat: number, p: AdsrEnvelope): number {
-  const attack = Math.max(EPS, p.attackBeats)
-  const decay = Math.max(EPS, p.decayBeats)
-  const release = Math.max(EPS, p.releaseBeats)
-  const sustain = clamp01(p.sustainLevel)
-
-  // The attack/decay/sustain curve while the gate is held.
-  const held = (t: number): number => {
-    if (t < attack) return t / attack
-    if (t < attack + decay) return 1 - (1 - sustain) * ((t - attack) / decay)
-    return sustain
-  }
-
   let gain = 0
-  for (const n of notes) {
-    const t = beat - n.beat
-    if (t < 0) continue // future gate
-    const hold = Math.max(n.durationBeats || 0, attack)
-    if (t >= hold + release) continue // fully released
-    const velocity = n.velocity <= 1 ? n.velocity : n.velocity / 127
-    const e = t <= hold ? held(t) : held(hold) * (1 - (t - hold) / release)
-    gain += velocity * e
-  }
+  for (const n of notes) gain += adsrGateGain(n, beat, p)
   return clamp01(gain)
 }

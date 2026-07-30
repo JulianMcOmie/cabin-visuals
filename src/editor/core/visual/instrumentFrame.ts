@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Color } from 'three'
 import { getObjectState, getVisualCopy } from './VisualEngine'
 import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
-import { sampleLane, sampleNoiseLane } from './automation'
+import { sampleAutomationLane } from './automation'
 import type { ObjectState } from './types'
 import type { VisualCopy } from '../visualCopies/types'
 
@@ -158,25 +158,23 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
  * Sampling the lane at the spawn beat pins it instead, so a fading word stays put
  * and only the next one moves.
  *
- * Safe for the pause invariant: sampleLane/sampleNoiseLane are pure functions of
- * beat, so this is still a function of (beat, document) and scrub == playback.
+ * Safe for the pause invariant: sampleAutomationLane is a pure function of beat,
+ * so this is still a function of (beat, document) and scrub == playback.
  *
  * Does NOT reproduce envelope overlay (the base ← automation ← envelope merge
  * stops at automation here). Envelopes are ADSR-gated around the CURRENT beat, so
  * latching one to a past beat would be meaningless rather than merely incomplete.
  */
 export function paramAtBeat(state: ObjectState, param: string, beat: number): number {
+  const base = state.baseParams[param] ?? state.params[param] ?? 0
   for (const auto of state.automations) {
     if (auto.param !== param) continue
-    if (auto.noise && auto.gates?.length) {
-      const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
-      // NaN = outside every gate, i.e. the lane is inert; fall back to the base.
-      if (!Number.isNaN(v)) return v
-      break
-    }
-    if (auto.keyframes.length) return sampleLane(auto.keyframes, beat, auto.mode)
+    const v = sampleAutomationLane(auto, beat, base)
+    // NaN = the lane is inert at this beat; fall back to the base value.
+    if (!Number.isNaN(v)) return v
+    break
   }
-  return state.baseParams[param] ?? state.params[param] ?? 0
+  return base
 }
 
 export function beatInBlock(state: ObjectState): boolean {

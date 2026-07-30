@@ -185,22 +185,28 @@ export function tune(settings: ImpactScatterSettings): Tuning {
   const punch = Math.max(0, curve)
   // A big hit has to reach further and be allowed to travel further, or it just
   // looks like the same blast with the gain up.
-  const reach = 5 + 7 * impact + 6 * over
+  const reach = 5 + 9 * impact + 9 * over
   // Speed-squared absorption is the whole CURVE knob. High drag eats the big
   // excursion in a few frames and then all but vanishes, which is the fast
   // recovery plus long tail of a percussive hit; low drag lets the swing hold
   // its crest and come home in one smooth move.
-  const drag = 0.85 - 0.7 * gentle + 3.4 * punch
+  const drag = 0.85 - 0.7 * gentle + 1.7 * punch
   return {
     // Steep on purpose (x^2.6): the bottom of the knob stays usable for a
     // nudge while the top half escalates hard, so 100% is already violent -
-    // and the overdrive term doubles the launch speed again past the detent.
-    blastSpeed: (1.5 + 45 * Math.pow(impact, 2.6) + 40 * over)
+    // and the overdrive term more than doubles the launch speed again past the
+    // detent.
+    blastSpeed: (1.5 + 78 * Math.pow(impact, 2.6) + 95 * over)
       // Heavy absorption would otherwise make percussive hits travel a quarter
       // as far, and a gentle one twice as far - CURVE would read as a volume
       // knob and IMPACT would stop meaning anything. These two factors are
       // fitted against measured peak throw so the DISTANCE holds and only the
       // SHAPE changes.
+      // The punch DRAG above is part of the same fit, and it is the term to
+      // reach for first: drag is quadratic in speed, so raising the launch speed
+      // costs the percussive shape ~4x more than the others and peak throw
+      // saturates hard (measured: peak grows as speed^0.2 at SPIKE). Compensating
+      // with this multiplier alone needs absurd values - retune the drag.
       * (1 + 3.4 * Math.pow(punch, 1.35)) * (1 - 0.5 * Math.pow(gentle, 0.85)),
     reach,
     // Tied to reach so the front always crosses the affected field in about the
@@ -219,7 +225,7 @@ export function tune(settings: ImpactScatterSettings): Tuning {
     // percussive one wants to arrive and stop.
     bounce: clamp01(0.12 + 0.45 * chaos + 0.22 * punch),
     drag,
-    leash: 1.8 + 6.5 * impact + 7 * over,
+    leash: 1.8 + 10 * impact + 13 * over,
     stretch: 0.5,
     swirl: 0.08 + 0.5 * chaos,
     spinKick: 40 + 900 * Math.pow(chaos, 1.3),
@@ -422,7 +428,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
   label: 'Impact Scatter',
   kind: 'mover',
   params: [
-    { key: 'impact', label: 'Impact', min: 0, max: IMPACT_MAX, step: 0.01, default: 0.55 },
+    { key: 'impact', label: 'Impact', min: 0, max: IMPACT_MAX, step: 0.01, default: 0.6 },
     { key: 'recoverBeats', label: 'Recover (beats)', min: 0.25, max: 8, step: 0.05, default: 2 },
     { key: 'chaos', label: 'Chaos', min: 0, max: 1, step: 0.01, default: 0.45 },
     {

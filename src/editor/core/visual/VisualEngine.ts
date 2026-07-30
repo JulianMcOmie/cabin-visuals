@@ -1,7 +1,7 @@
 import { Matrix4, type Scene as ThreeScene } from 'three'
 import { resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
-import { sampleLane, sampleNoiseLane } from './automation'
+import { sampleAutomationLane } from './automation'
 import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
@@ -262,13 +262,11 @@ export function computeAtBeat(beat: number) {
     if (obj.automations.length) {
       params = { ...obj.params }
       for (const auto of obj.automations) {
-        if (auto.noise && auto.gates?.length) {
-          // Noise lane: inert (NaN) outside its gates, wobbling inside them.
-          const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
-          if (!Number.isNaN(v)) params[auto.param] = v
-        } else if (auto.keyframes.length) {
-          params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
-        }
+        // NaN = the lane is inert this frame (a noise/burst lane between its
+        // gates, an empty lane) - leave the base value alone. Burst lanes travel
+        // from whatever is already in `params`, so lanes stack in order.
+        const v = sampleAutomationLane(auto, beat, params[auto.param] ?? auto.base ?? 0)
+        if (!Number.isNaN(v)) params[auto.param] = v
       }
     }
     // Envelope lanes overlay next - documented merge order: base ← automation ←
@@ -327,8 +325,12 @@ export function computeAtBeat(beat: number) {
     if (obj.effectAutomations.length) {
       effectOverrides = {}
       for (const ea of obj.effectAutomations) {
-        if (!ea.keyframes.length) continue
-        ;(effectOverrides[ea.instanceId] ??= {})[ea.key] = sampleLane(ea.keyframes, beat, ea.mode)
+        // Value first, slot second: an inert lane must not leave an empty
+        // override map behind (effectiveEffectState would then copy settings
+        // for nothing).
+        const base = effectOverrides[ea.instanceId]?.[ea.key] ?? ea.base ?? 0
+        const v = sampleAutomationLane(ea, beat, base)
+        if (!Number.isNaN(v)) (effectOverrides[ea.instanceId] ??= {})[ea.key] = v
       }
     }
     // fx-targeted envelopes lerp on top of the sampled automation (or the stored

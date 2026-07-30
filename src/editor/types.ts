@@ -96,6 +96,13 @@ export interface AudioBlock {
 
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
+/** What an automation lane's notes MEAN: value keyframes joined by a curve, gates
+ *  for seeded noise, or ADSR bursts. Never stored directly - it is implied by which
+ *  config the track carries (`Track.noise` / `Track.burst`); read it through
+ *  `automationMode()` in core/visual/automation.ts so the precedence stays in one
+ *  place. */
+export type AutomationMode = 'curve' | 'noise' | 'burst'
+
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
  * tag group, or a subtree of objects the mover applies to. (`port`/`amount` are
@@ -141,6 +148,11 @@ export interface Track {
    *  seeded random bursts around their pitch-value instead of keyframing.
    *  (See core/visual/automation.ts NoiseConfig.) */
   noise?: { rate: number; smoothness: number; range: number; seed: number }
+  /** Automation tracks only: flips the lane into burst mode - each note fires an
+   *  ADSR envelope that carries the param from whatever is underneath toward the
+   *  note's pitch-value, scaled by velocity and by `intensity`. Wins over `noise`
+   *  if both are somehow set. (See core/visual/automation.ts BurstConfig.) */
+  burst?: { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number }
   color: string
   muted: boolean
   solo: boolean

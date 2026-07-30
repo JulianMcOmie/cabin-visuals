@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { strobeGate } from '../instruments/Strobe'
 
 /**
  * Purpose-built canvas-2D previews for instruments whose real render needs
@@ -358,6 +359,43 @@ const drawColorFilters: Draw2D = (ctx, w, h, t) => {
   ctx.fillText('color filters', w / 2, h / 2)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
+}
+
+/** Strobe: a scrap of stage flipping polarity on the beat grid. It runs the
+ *  instrument's OWN gate at its emphasized 1/16 row, so the card flashes at the
+ *  rate the instrument actually would (8Hz at the previews' 120bpm) rather than
+ *  at a hand-picked blink speed. Inverting means swapping the palette rather
+ *  than reading pixels back: same result, no getImageData per frame. */
+const STROBE_SHAPES: Array<{ fill: string; flipped: string }> = [
+  { fill: '#22d3ee', flipped: '#dd2c11' },
+  { fill: '#f472b6', flipped: '#0b8d49' },
+  { fill: '#a78bfa', flipped: '#587405' },
+]
+const drawStrobe: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const lit = strobeGate(beat, 1 / 4, 0.5) > 0
+  ctx.fillStyle = lit ? '#f7f8fa' : '#05070c'
+  ctx.fillRect(0, 0, w, h)
+  const r = h * 0.17
+  const cy = h * 0.46
+  const circle = STROBE_SHAPES[0]
+  ctx.fillStyle = lit ? circle.flipped : circle.fill
+  ctx.beginPath()
+  ctx.arc(w * 0.28, cy, r, 0, Math.PI * 2)
+  ctx.fill()
+  const triangle = STROBE_SHAPES[1]
+  ctx.fillStyle = lit ? triangle.flipped : triangle.fill
+  ctx.beginPath()
+  ctx.moveTo(w * 0.52, cy - r)
+  ctx.lineTo(w * 0.62, cy + r)
+  ctx.lineTo(w * 0.42, cy + r)
+  ctx.closePath()
+  ctx.fill()
+  const square = STROBE_SHAPES[2]
+  ctx.fillStyle = lit ? square.flipped : square.fill
+  ctx.fillRect(w * 0.72 - r, cy - r, r * 2, r * 2)
+  ctx.fillStyle = lit ? '#0219b8' : '#fde047'
+  ctx.fillRect(w * 0.2, h * 0.76, w * 0.6, Math.max(2, h * 0.05))
 }
 
 /** Scene Switcher: ONE prominent "switch", restyled every beat - each switch
@@ -749,6 +787,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   oscilloscope: drawOscilloscope,
   bassRipple: drawBassRipple,
   colorFilters: drawColorFilters,
+  strobe: drawStrobe,
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
   radialCut: drawRadialCut,
