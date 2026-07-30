@@ -153,6 +153,15 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
+      <circle cx="2.4" cy="4.4" r="1.1" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9.4" cy="8.4" r="1.2" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9" cy="3.2" r="0.8" fill="#bff3ff" fillOpacity="0.8" />
+      <circle cx="3.2" cy="9.4" r="0.7" fill="#bff3ff" fillOpacity="0.7" />
+    </svg>
+  )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', description: 'A fractal-flower tunnel - notes shift its hue and fire pulse rings.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <g fill="none" stroke="#8b5cf6" strokeWidth="1">

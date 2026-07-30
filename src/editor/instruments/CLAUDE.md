@@ -14,6 +14,53 @@ No `useFrame`, `performance.now`, `Date.now`, `Math.random`, clock/delta. Per-fr
 4. Settings UI: `'parameters'` (generic list) or a bespoke renderer — new id in `userInterfaceRenderers/ids.ts` + component + entry in its `index.ts` (see that dir's CLAUDE.md).
 5. Preview clip (library hover): `npm run previews:instruments`.
 
+## Testing an instrument: put the pure math in a `*Core.ts`
+
+A colocated test that imports the `.tsx` **crashes with "Cannot access X before
+initialization"**: the component imports `core/visual/instrumentFrame`, which
+reaches `VisualEngine` and back around to `instruments/index.ts`, which imports
+the component again. Only instruments whose file pulls in nothing but types
+(BassRipple) can be tested directly. Everything else splits the pure half into a
+sibling module with type-only imports — `laserSphereCore.ts`, `waterDropCore.ts`
+— and the test imports that. Name the test after the core file, not the
+instrument, so the pairing is obvious.
+
+## Per-instance opacity on an InstancedMesh
+
+`instanceColor` / `vertexColors` carry RGB only — there is no built-in per-instance
+alpha, so one InstancedMesh cannot fade its instances independently (the usual
+reason: N note-spawned things of different ages sharing one mesh). **Encode the
+fade into the instance colour and blend additively** — ParticleBurst and WaterDrop
+both do this. Dimming is fading under additive blending; under normal blending it
+would darken toward black instead, so this choice picks the blend mode too.
+
+### Do not reach for `onBeforeCompile`
+
+Patching three's own GLSL to add a per-instance alpha attribute *looks* like the
+cleaner answer and cost most of a session. Every failure mode is silent — no
+console error, just a plain opaque quad:
+
+- `uv` is **not declared** in the shader unless the material carries a map, so
+  `vUv = uv;` fails to compile and the whole patch is dropped. (`position` and
+  `normalMatrix` *are* always in the prefix.)
+- GLSL `smoothstep(edge0, edge1, x)` is **undefined when edge0 > edge1** and
+  returns 1.0 here, so an inverted ramp silently becomes a no-op. Write it
+  increasing and subtract from 1.
+- MeshBasicMaterial's vertex shader computes no normal varying at all.
+
+A soft round bead is far more robustly had from a baked `CanvasTexture` radial
+gradient on a camera-facing quad (`dummy.quaternion.copy(camera.quaternion)`,
+camera via `useThree`). It also beats a tessellated sphere on looks: a sphere's
+polygon silhouette makes clusters read as marbles, a soft disc has no silhouette
+and neighbours merge.
+
+## Keep runtime fallbacks and schema defaults in ONE place
+
+`state.params` only carries what the TRACK stored, so `par.x ?? 0.3` runs whenever
+a track predates a param. Repeating the number there means the instrument renders
+at settings the panel isn't showing — and re-tuning the schema silently changes
+nothing. Read the schema instead: `par[key] ?? paramDefault(theInstrument, key)`.
+
 ## Def semantics worth knowing (full contracts in `types.ts`)
 
 - Numeric params → `track.params`; `color`/`string` params → `track.stringParams`. **Only plain numeric params are automatable.** `showIf` gates visibility (`'key'` = on when ≥0.5, `'key=2'` pins a select value); hiding is presentation only. `curve: 2` makes a slider quadratic for orders-of-magnitude ranges.
