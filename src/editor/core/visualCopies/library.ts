@@ -21,6 +21,7 @@ import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
 import { waveTerrainMover } from './waveTerrain'
 import { visibilityMover } from './visibility'
+import { freezeMover } from './freeze'
 import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
@@ -286,6 +287,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   forceFieldPushMover,
   waveTerrainMover,
   visibilityMover,
+  freezeMover,
   noteColorizer,
   gradientColorizer,
   radialSplitter,

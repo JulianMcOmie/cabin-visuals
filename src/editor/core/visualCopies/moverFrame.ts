@@ -41,7 +41,7 @@ export function framedMoverOrSplitter(
   frame: MoverOrSplitter[],
 ): MoverOrSplitter {
   if (frame.length === 0) return inner
-  return {
+  const framedEntry: MoverOrSplitter = {
     apply(visualCopy, context) {
       // Resolved from identity, so F is the frame's own accumulated motion. It
       // sees the object's placement too, so a world-placed mover can itself be
@@ -53,4 +53,9 @@ export function framedMoverOrSplitter(
       return inner.apply(visualCopy, { ...context, placementTransform })
     },
   }
+  // A frame reinterprets WHERE an entry acts, never when, so a time remap has to
+  // pass straight through - dropping it here would silently un-freeze any Freeze
+  // that happens to have a mover child.
+  if (inner.warpBeat) framedEntry.warpBeat = (beat) => inner.warpBeat!(beat)
+  return framedEntry
 }
