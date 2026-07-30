@@ -8,7 +8,7 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { RowGuide } from './trackTree'
-import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
@@ -164,7 +164,9 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   }
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
-  const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
+  // Instrument-derived identity (falls back to track.color's hue cycle);
+  // selector returns a string so rows only re-render when the color changes.
+  const blockColor = useProjectStore((s) => resolveTrackDisplayColor(track, s.tracks))
   const declaredMidiRows = track.type === 'audio'
     ? undefined
     : resolveDeclaredMidiRows(track, useProjectStore.getState())
@@ -363,7 +365,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
               <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
                 <div
                   className="absolute inset-y-0 left-0 rounded-l-full opacity-60 group-hover:opacity-80"
-                  style={{ width: `${opacityValue * 100}%`, background: track.color }}
+                  style={{ width: `${opacityValue * 100}%`, background: blockColor }}
                 />
                 <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
                 <div

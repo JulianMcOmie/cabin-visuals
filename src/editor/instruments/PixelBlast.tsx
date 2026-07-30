@@ -141,6 +141,7 @@ export const pixelBlastInstrument: ObjectInstrumentDef = {
   id: 'pixelBlast',
   name: 'Pixel Blast',
   kind: 'object',
+  identityColor: '#ff3d81',
   userInterfaceRenderer: 'pixelBlast',
   params: PARAMS,
   // Pitch class = X column (0 far left … 11 far right), octave = Y band

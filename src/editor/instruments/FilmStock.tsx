@@ -445,6 +445,7 @@ export const filmStockInstrument: ObjectInstrumentDef = {
   id: 'filmStock',
   name: 'Film Stock',
   kind: 'object',
+  identityColor: { param: 'flashColor' },
   userInterfaceRenderer: 'parameters',
   params: STOCK_PARAMS,
   midiRows: [
@@ -557,6 +558,7 @@ export const filmGrainInstrument: ObjectInstrumentDef = {
   id: 'filmGrain',
   name: 'Film Grain',
   kind: 'object',
+  identityColor: '#c9a86b',
   userInterfaceRenderer: 'parameters',
   params: GRAIN_PARAMS,
   midiRows: [

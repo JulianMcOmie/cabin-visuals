@@ -581,6 +581,7 @@ export const fractalTunnelInstrument: ObjectInstrumentDef = {
   id: 'fractalTunnel',
   name: 'Fractal Tunnel',
   kind: 'object',
+  identityColor: '#c084fc',
   userInterfaceRenderer: 'fractalTunnel',
   params: PARAMS,
   // Every note does the same thing regardless of pitch: it steps the flower's

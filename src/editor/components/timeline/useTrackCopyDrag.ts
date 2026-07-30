@@ -5,6 +5,7 @@ import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
 import { computeDropTarget } from './trackDrop'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 
 interface CopyDragState {
   /** The VISUAL row index the reflow gap opens at (root tracks aren't at
@@ -78,7 +79,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       gapRow: null,
       hasTarget: false,
     }
-    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: track.color, muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: resolveTrackDisplayColor(track, useProjectStore.getState().tracks), muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
     lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {

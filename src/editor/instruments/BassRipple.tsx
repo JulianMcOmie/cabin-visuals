@@ -151,6 +151,7 @@ export const bassRippleInstrument: ObjectInstrumentDef = {
   id: 'bassRipple',
   name: 'Bass Ripple',
   kind: 'object',
+  identityColor: '#5865f2',
   params: PARAMS,
   userInterfaceRenderer: 'bassRipple',
   midiRows: BASS_RIPPLE_ROWS,

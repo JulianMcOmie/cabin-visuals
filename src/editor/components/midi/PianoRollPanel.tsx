@@ -11,6 +11,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
 import { midiNoteBaseColor, midiToolbarAccent } from '../../utils/midiEditorPalette'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { useVideoStore } from '../../store/VideoStore'
 import { usePhotoStore } from '../../store/PhotoStore'
 import { getInstrument } from '../../instruments'
@@ -198,7 +199,7 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={track.color}
+      trackColor={resolveTrackDisplayColor(track, tracks)}
       noteColor={abilityColor}
       automation={automation}
       trigger={trigger}

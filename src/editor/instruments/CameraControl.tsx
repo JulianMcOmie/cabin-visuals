@@ -133,6 +133,7 @@ export const cameraControlInstrument: ObjectInstrumentDef = {
   id: 'cameraControl',
   name: 'Camera',
   kind: 'object',
+  identityColor: '#ef4444',
   userInterfaceRenderer: 'cameraControl',
   params: PARAMS,
   midiRows: [

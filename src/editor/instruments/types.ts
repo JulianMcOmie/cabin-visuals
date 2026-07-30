@@ -127,6 +127,15 @@ export interface ObjectInstrumentDef {
   name: string
   kind: 'object'
   params: ParamDef[]
+  /** The instrument's color identity - what its track wears in the timeline,
+   *  piano roll, and editor chrome (all re-voiced through the OKLCH recipes).
+   *  A hex literal is a fixed identity; `{ param }` follows that color param's
+   *  current value, so recoloring the instrument recolors its MIDI. Omitted:
+   *  an instrument with exactly ONE color param follows it automatically;
+   *  otherwise the track keeps its hue-cycle color. Near-achromatic derived
+   *  values (white/black/grey) also fall back to the cycle - see
+   *  utils/trackDisplayColor.ts. */
+  identityColor?: string | { param: string }
   /** Registered settings UI. Every instrument explicitly chooses one. */
   userInterfaceRenderer: UserInterfaceRendererId
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row

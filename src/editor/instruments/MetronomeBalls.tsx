@@ -410,6 +410,7 @@ export const metronomeBallsInstrument: ObjectInstrumentDef = {
   id: 'metronomeBalls',
   name: 'Metronome Balls',
   kind: 'object',
+  identityColor: '#f59e0b',
   userInterfaceRenderer: 'metronomeBalls',
   params: PARAMS,
   midiRows: [
