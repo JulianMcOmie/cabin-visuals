@@ -287,6 +287,7 @@ export const filmCardInstrument: ObjectInstrumentDef = {
   id: 'filmCard',
   name: 'Film Card',
   kind: 'object',
+  identityColor: { param: 'paperColor' },
   userInterfaceRenderer: 'parameters',
   params: PARAMS,
   midiRows: [

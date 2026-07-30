@@ -530,6 +530,7 @@ export const emojiDisplayInstrument: ObjectInstrumentDef = {
   id: 'emojiDisplay',
   name: 'Emoji Display',
   kind: 'object',
+  identityColor: '#fbbf24',
   userInterfaceRenderer: 'emojiDisplay',
   params: PARAMS,
   midiRows: [

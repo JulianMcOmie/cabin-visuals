@@ -167,6 +167,7 @@ export const polyFxInstrument: ObjectInstrumentDef = {
   id: 'polyFx',
   name: 'Poly FX',
   kind: 'object',
+  identityColor: '#17c917',
   userInterfaceRenderer: 'parameters',
   params: PARAMS,
   midiRows: [

@@ -97,6 +97,7 @@ export const icosahedronBurstInstrument: ObjectInstrumentDef = {
   id: 'icosahedronBurst',
   name: 'Icosahedron Burst',
   kind: 'object',
+  identityColor: '#7c5cff',
   userInterfaceRenderer: 'icosahedronBurst',
   params: PARAMS,
   // Every note spawns one expanding shell regardless of pitch (hue steps per note in

@@ -1527,6 +1527,7 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   id: 'textDisplay',
   name: 'Text Display',
   kind: 'object',
+  identityColor: { param: 'color' },
   userInterfaceRenderer: 'textDisplay',
   params: PARAMS,
   midiRows: [

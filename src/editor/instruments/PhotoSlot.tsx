@@ -468,6 +468,7 @@ export const photoSlotInstrument: ObjectInstrumentDef = {
   id: 'photoSlot',
   name: 'Photo Slot',
   kind: 'object',
+  identityColor: '#eab308',
   userInterfaceRenderer: 'photo',
   params: PARAMS,
   component: PhotoSlotVisual,

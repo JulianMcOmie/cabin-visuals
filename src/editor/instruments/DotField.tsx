@@ -662,6 +662,7 @@ export const dotFieldInstrument: ObjectInstrumentDef = {
   id: 'dotField',
   name: 'Dot Field',
   kind: 'object',
+  identityColor: '#3ddc97',
   userInterfaceRenderer: 'dotField',
   params: PARAMS,
   // Held notes in 36-47 shake the field - higher rows shake harder and sharper
