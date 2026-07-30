@@ -2,10 +2,10 @@ import type { Group } from 'three'
 import type { ParamDef } from '../instruments/types'
 
 // Effects are plugins applied to an object's rendered output, ported from Excellent DAW.
-// Two categories, chained per object: transform ▸ shader. Scale is the deliberate
-// ordering exception: renderers lift it outside VisualCopy movers. (Clone effects
-// were replaced by VisualCopy splitters.)
-export type EffectCategory = 'transform' | 'shader'
+// Three categories, chained per object: material ▸ transform ▸ shader. Scale is the
+// deliberate ordering exception: renderers lift it outside VisualCopy movers. (Clone
+// effects were replaced by VisualCopy splitters.)
+export type EffectCategory = 'transform' | 'shader' | 'material'
 
 
 export interface VisualEffect {
@@ -26,4 +26,11 @@ export interface VisualEffect {
    *  `time`/`resolution` + a uniform per param). Applied as an FBO post-process pass. */
   fragmentShader?: string
   vertexShader?: string
+  /** Material plugins re-material the wrapped group's meshes each frame (same purity
+   *  contract as applyTransform: a function of settings + beat, caching allowed). The
+   *  plugin must leave the instrument's own materials intact and restorable. */
+  applyMaterial?: (root: Group, settings: Record<string, number>, time: number) => void
+  /** Undo applyMaterial's swaps (called every frame while the instance is disabled,
+   *  and on unmount) - must be idempotent and cheap once restored. */
+  restoreMaterial?: (root: Group) => void
 }
