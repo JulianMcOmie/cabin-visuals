@@ -13,6 +13,7 @@ import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUse
 import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
+import { SymmetrySplitterUserInterfaceRenderer } from './SymmetrySplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
 import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
@@ -42,6 +43,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   impactScatter: ImpactScatterMoverUserInterfaceRenderer,
   conveyor: ConveyorMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
+  symmetry: SymmetrySplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
 }
 
