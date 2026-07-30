@@ -15,6 +15,7 @@ import {
 } from './rotationMovers'
 import { translationOscillatorMover } from './translationOscillator'
 import { noteColorizer } from './colorizer'
+import { gradientColorizer } from './gradientColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
 import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
@@ -282,6 +283,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   waveTerrainMover,
   visibilityMover,
   noteColorizer,
+  gradientColorizer,
   radialSplitter,
   gridSplitter,
   polyhedronSplitter,
