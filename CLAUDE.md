@@ -9,7 +9,7 @@ A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; 
   directory and the live server then 500s on every route with `ENOENT … build-manifest.json`, which
   reads like a code error and is not one. Give the build its own dir (`NEXT_DIST_DIR=.next-build-<port>`);
   recovering means stopping the server, deleting the dist dir, and restarting.
-- `npm run test:visual` — the node test suite (core/visual, visualCopies, directors, photo, **instruments**, store, utils, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest.
+- `npm run test:visual` — the node test suite (core, core/visual, visualCopies, directors, photo, **instruments**, store, utils, persistence). Tests are colocated `*.test.ts` run with `node --test` + tsx; no jest/vitest. 550 pass, none red (verified 2026-07-30) — a new instrument's colocated test runs in the normal suite with no extra step.
 - `npm run build` — production build; the `/commit` skill runs this first.
 - `npm run db:generate` / `db:migrate` — Drizzle (needs `DATABASE_URL`).
 - Single test file: `node --import tsx --test --experimental-test-module-mocks path/to/file.test.ts`.
