@@ -126,7 +126,7 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
       const angle = (point / RING_POINTS) * Math.PI * 2
       base.makeTranslation(Math.cos(angle) * RING_RADIUS, Math.sin(angle) * RING_RADIUS, 0)
       const copies = current.resolved.apply(
-        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0 } },
+        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
         { beat, index: 0, count: 1 },
       )
       for (let slot = 0; slot < MAX_PREVIEW_SLOTS; slot++) {
