@@ -3,9 +3,12 @@ import test from 'node:test'
 import { Matrix4 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import {
+  GROUP_LOOP,
   conveyorMover,
   edgeFade,
   evaluateConveyorTravel,
+  fadeWidth,
+  latticeAlong,
   rampArea,
   type ConveyorSettings,
 } from './conveyor'
@@ -53,7 +56,36 @@ const RIGHT = 60
 const LEFT = 61
 const UP = 62
 const NO_LOOP = { spanX: 0, spanY: 0, spanZ: 0 }
-const INSTANT = { glide: 0, fade: 0 }
+const INSTANT = { glide: 0, fadeBeats: 0 }
+
+/** Applies to a whole formation at once, the way the resolver does. */
+function applyFormation(
+  config: ConveyorSettings,
+  notes: ResolvedNote[],
+  beat: number,
+  formation: VisualCopy[],
+): VisualCopy[] {
+  const resolved = conveyorMover.resolve({ settings: config, notes })
+  return formation.flatMap((copy, index) =>
+    resolved.apply(copy, { beat, index, count: formation.length, formation }),
+  )
+}
+
+/** A row of copies, evenly spaced along X — what a Grid splitter hands over. */
+function lattice(count: number, spacing: number): VisualCopy[] {
+  return Array.from({ length: count }, (_, index) =>
+    copyAt([(index - (count - 1) / 2) * spacing, 0, 0]),
+  )
+}
+
+const xs = (copies: VisualCopy[]) => copies.map((copy) => positionOf(copy)[0])
+
+/** Gaps between adjacent positions once sorted — the shape of the formation,
+ *  independent of which copy currently sits where. */
+const spacings = (copies: VisualCopy[]) => {
+  const sorted = xs(copies).slice().sort((a, b) => a - b)
+  return sorted.slice(1).map((value, index) => Math.round((value - sorted[index]) * 1e6) / 1e6)
+}
 
 test('registered as a mover with the six-direction vocabulary at Burst pitches', () => {
   const def = getMoverOrSplitterDefinition('conveyor')
@@ -107,7 +139,7 @@ test('velocity scales the speed', () => {
 })
 
 test('glide eases the belt up to speed without costing distance', () => {
-  const glided = settings({ ...NO_LOOP, fade: 0, glide: 1, speed: 1 })
+  const glided = settings({ ...NO_LOOP, fadeBeats: 0, glide: 1, speed: 1 })
   const instant = settings({ ...NO_LOOP, ...INSTANT, speed: 1 })
   const notes = [note(0, RIGHT, 4)]
   const half = positionOf(applyAt(glided, notes, 0.5))[0]
@@ -119,39 +151,95 @@ test('glide eases the belt up to speed without costing distance', () => {
   assert.equal(rampArea(3), 2.5)
 })
 
-test('each copy loops on its OWN position, so a formation streams as a belt', () => {
-  // Three copies laid out by a splitter above, all carried 4 units right in a
-  // box 5 wide: the leading copy wraps to the far side, the others do not.
-  const config = settings({ spanX: 5, spanY: 0, spanZ: 0, ...INSTANT, speed: 1 })
-  const notes = [note(0, RIGHT, 4)]
-  const at = (x: number) => positionOf(applyAt(config, notes, 4, copyAt([x, 0, 0])))[0]
-  assert.equal(at(-4), 0)
-  assert.equal(at(0), 4)
-  assert.equal(at(2), -4, 'past the leading face, reappeared at the trailing one')
-  // Spacing survives the wrap: the belt stays evenly spread, which is what makes
-  // it read as endless rather than as copies jumping.
-  assert.equal(at(3) - at(2), 1)
+test('a belt loops each copy at the FORMATION\'s period, never tearing it', () => {
+  // The bug this replaces: with a loop box of its own choosing, a copy hit the
+  // face while its neighbours were mid-frame and teleported ten units out of its
+  // own row. The period comes from the formation, so the lattice maps onto
+  // itself and the gaps are the same at every beat.
+  const config = settings({ ...INSTANT, speed: 1 })
+  const notes = [note(0, RIGHT, 64)]
+  const formation = lattice(4, 2.2)
+  for (const beat of [0, 0.5, 1.1, 2.7, 4.4, 9.9, 40]) {
+    const out = applyFormation(config, notes, beat, formation)
+    assert.deepEqual(spacings(out), [2.2, 2.2, 2.2], `beat ${beat}`)
+  }
+  // And the whole picture repeats every spacing of travel, which is what makes
+  // the wrap invisible: one spacing later it is the same set of positions.
+  const start = xs(applyFormation(config, notes, 1, formation)).slice().sort()
+  const later = xs(applyFormation(config, notes, 3.2, formation)).slice().sort()
+  start.forEach((value, index) => assert.ok(Math.abs(value - later[index]) < 1e-9))
 })
 
-test('a copy fades out into the face it leaves and in through the one it enters', () => {
-  const config = settings({ spanX: 5, spanY: 0, spanZ: 0, glide: 0, fade: 0.4, speed: 1 })
-  const fadeAt = (x: number) => applyAt(config, [], 0, copyAt([x, 0, 0])).opacity
-  assert.equal(fadeAt(0), 1, 'full in the middle')
-  assert.equal(fadeAt(3), 1, 'full up to the fade band')
-  assert.ok(fadeAt(4) > 0 && fadeAt(4) < 1, 'dissolving into the face')
-  assert.equal(fadeAt(5), 0, 'gone at the face')
-  // Symmetric, so the copy that vanished at +5 reappears at −5 equally invisible
-  // and comes back at the same rate: no seam.
-  assert.equal(fadeAt(-4), fadeAt(4))
-  assert.equal(fadeAt(-5), 0)
-  assert.equal(edgeFade(0, 0, 0.4), 1, 'no looping on the axis, no fade')
+test('a belt needs no fade, because the copy that leaves IS the one that arrives', () => {
+  const config = settings({ glide: 0, speed: 3 })
+  const formation = lattice(5, 1.5)
+  const out = applyFormation(config, [note(0, RIGHT, 32)], 7.3, formation)
+  assert.deepEqual(out.map((copy) => copy.opacity), [1, 1, 1, 1, 1])
+})
+
+test('an uneven formation falls back to moving as a group rather than guessing', () => {
+  const config = settings({ spanX: 5, spanY: 0, spanZ: 0, ...INSTANT, speed: 1 })
+  const uneven = [copyAt([-3, 0, 0]), copyAt([-0.5, 0, 0]), copyAt([2.5, 0, 0])]
+  const out = applyFormation(config, [note(0, RIGHT, 64)], 7, uneven)
+  // Same displacement for everyone: the arrangement is preserved exactly. Seven
+  // units of travel in a ±5 loop leaves the group three units BEHIND home.
+  assert.deepEqual(xs(out), [-6, -3.5, -0.5])
+  assert.equal(latticeAlong(uneven, 0).period, 0, 'no period is claimed')
+})
+
+test('a group loops out and back as one rigid body, dissolving through the turn', () => {
+  const config = settings({
+    loopStyle: GROUP_LOOP, spanX: 5, spanY: 0, spanZ: 0, glide: 0, speed: 1, fadeBeats: 2,
+  })
+  const notes = [note(0, RIGHT, 64)]
+  const formation = lattice(3, 1)
+  const shape = spacings(formation)
+  for (const beat of [1, 4.9, 5.05, 9, 12]) {
+    const out = applyFormation(config, notes, beat, formation)
+    assert.deepEqual(spacings(out), shape, `beat ${beat}`)
+    // Every copy carries the same offset, so the group never distorts.
+    const offsets = out.map((copy, index) => positionOf(copy)[0] - positionOf(formation[index])[0])
+    assert.ok(offsets.every((offset) => Math.abs(offset - offsets[0]) < 1e-9), `beat ${beat}`)
+  }
+  // It is invisible AT the turn and back to full in the middle.
+  assert.equal(applyFormation(config, notes, 5, formation)[0].opacity, 0)
+  assert.equal(applyFormation(config, notes, 1, formation)[0].opacity, 1)
+})
+
+test('the fade lasts a fixed number of BEATS, so speed cannot outrun it', () => {
+  // The reported jump: a fraction-of-span band is crossed in two frames at speed,
+  // so the copy was still ~40% visible when it teleported. Tie the band to the
+  // speed and the dissolve always takes fadeBeats, whatever the speed.
+  const at = (speed: number, beat: number) => applyAt(
+    settings({ loopStyle: GROUP_LOOP, spanX: 5, spanY: 0, spanZ: 0, glide: 0, speed }),
+    [note(0, RIGHT, 64)],
+    beat,
+  ).opacity
+  // One 24th of a beat before the turn, at any speed, it is essentially gone.
+  for (const speed of [1, 3, 12]) {
+    assert.ok(at(speed, 5 / speed - 1 / 24) < 0.05, `speed ${speed}`)
+  }
+  assert.equal(fadeWidth(settings({ speed: 4, fadeBeats: 0.5 }), 5), 2)
+  assert.equal(fadeWidth(settings({ speed: 4, fadeBeats: 4 }), 5), 5, 'never wider than the span')
+  assert.equal(edgeFade(0, 0, 1), 1, 'no looping on the axis, no fade')
   assert.equal(edgeFade(4.9, 5, 0), 1, 'fade off')
 })
 
+test('an axis with no travel is left completely alone', () => {
+  // Adding the mover must not rearrange a splitter's layout in the axes it is
+  // not running along - it used to fold all three into a box.
+  const config = settings({ speed: 3, spanX: 1, spanY: 1, spanZ: 1, fadeBeats: 4 })
+  const tall = [copyAt([0, 9, -14]), copyAt([0, -9, 14])]
+  const out = applyFormation(config, [], 4, tall)
+  assert.deepEqual(positionOf(out[0]), [0, 9, -14])
+  assert.deepEqual(positionOf(out[1]), [0, -9, 14])
+  assert.deepEqual(out.map((copy) => copy.opacity), [1, 1])
+})
+
 test('the fade multiplies whatever opacity arrives, and never colours anything', () => {
-  const config = settings({ spanX: 5, spanY: 0, spanZ: 0, fade: 0.4 })
-  const incoming: VisualCopy = { ...copyAt([4.5, 0, 0]), opacity: 0.5 }
-  const out = applyAt(config, [], 0, incoming)
+  const config = settings({ loopStyle: GROUP_LOOP, spanX: 5, spanY: 0, spanZ: 0, glide: 0, speed: 1 })
+  const incoming: VisualCopy = { ...copyAt([1, 0, 0]), opacity: 0.5 }
+  const out = applyAt(config, [note(0, RIGHT, 64)], 4.9, incoming)
   assert.ok(out.opacity > 0 && out.opacity < 0.5)
   assert.deepEqual(out.colorShift, incoming.colorShift)
 });

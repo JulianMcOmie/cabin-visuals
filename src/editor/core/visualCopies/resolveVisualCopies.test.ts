@@ -79,11 +79,30 @@ test('empty chain returns one identity copy', () => {
 test('movers receive the current index and count', () => {
   const seen: MoverOrSplitterContext[] = []
   resolveVisualCopies([splitter(3, 1), recordingMover(seen)], 7.5)
-  assert.deepEqual(seen, [
-    { beat: 7.5, index: 0, count: 3 },
-    { beat: 7.5, index: 1, count: 3 },
-    { beat: 7.5, index: 2, count: 3 },
-  ])
+  assert.deepEqual(
+    seen.map(({ beat, index, count }) => ({ beat, index, count })),
+    [
+      { beat: 7.5, index: 0, count: 3 },
+      { beat: 7.5, index: 1, count: 3 },
+      { beat: 7.5, index: 2, count: 3 },
+    ],
+  )
+})
+
+test('movers receive the whole formation, as one shared array', () => {
+  // A mover that reads how its copies are arranged (Conveyor loops each one at
+  // the formation's own repeat distance) needs the siblings, and needs the array
+  // IDENTITY to be stable so it can measure them once per step instead of once
+  // per copy.
+  const seen: MoverOrSplitterContext[] = []
+  const copies = resolveVisualCopies([splitter(3, 2), recordingMover(seen)], 0)
+  assert.equal(seen.length, 3)
+  assert.equal(seen[0].formation?.length, 3)
+  assert.ok(seen.every((context) => context.formation === seen[0].formation), 'one array per step')
+  // It is the INPUT of the step, so the positions are pre-mover ones - and the
+  // copy at each index is the one that context belongs to.
+  assert.deepEqual(seen[0].formation?.map(positionOf), [[0, 0, 0], [2, 0, 0], [4, 0, 0]])
+  assert.equal(copies.length, 3)
 })
 
 test('a splitter expands one copy into multiple copies', () => {

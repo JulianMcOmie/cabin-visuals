@@ -3,35 +3,43 @@
 // Bespoke settings for the Conveyor mover, following
 // docs/instrument-panel-design-guide.md (Laser Sphere is the reference, Impact
 // Scatter the nearest sibling): a full-bleed panel washed in the mover's
-// current-mint shade, a LIVE preview up top, then four knobs - SPEED, GLIDE,
-// FADE, SPAN X - with the other two spans behind MORE.
+// current-mint shade, a LIVE preview up top, then SPEED, GLIDE, the LOOP style,
+// the group loop distance and FADE - with the other two distances behind MORE.
 //
-// The preview is not a mockup: it runs the mover's real resolve() over a belt of
-// copies laid out exactly the way a splitter above it would, so the dissolve at
-// one face and the reappearance at the other are the mover's own arithmetic. That
-// matters more here than on most panels, because the whole point of this mover is
-// a seam you cannot see - and a mocked preview would be drawing the seam it is
-// supposed to prove is absent.
+// The preview is not a mockup: it runs the mover's real resolve() over a whole
+// FORMATION, the same array the resolver hands over, because that is what the
+// mover measures. One copy at a time would tell it nothing about the arrangement
+// and it would silently fall back to group looping - so a per-copy preview would
+// be showing the wrong behaviour, not merely a rougher one.
 //
-// The performance is one held note per loop: run the belt, then let it coast to a
-// stop, forever. Two things make the loop invisible, both derived rather than
-// tuned (see cycle()):
+// The performance is one held note per loop: run, then coast to a stop, forever.
+// Two things make the loop invisible, both derived rather than tuned (see
+// cycle()):
 //
-//  - the run carries the belt a whole number of SPACINGS. A uniformly spaced belt
-//    shifted by one spacing is the same picture, so the wrap needs no crossfade;
-//  - the rest is longer than the glide, so the belt is at a dead stop at both
-//    ends of the cycle and the velocity matches across the seam too.
+//  - the run covers a whole number of REPEAT distances - one lattice spacing for
+//    a belt, one out-and-back for a group - so the picture at the end of the
+//    cycle is the picture at its start;
+//  - the rest is longer than the glide, so it is at a dead stop at both ends of
+//    the cycle and the velocity matches across the seam too.
 //
 // Which is why the note is not simply held forever: a stop is the only way to see
 // what GLIDE does, and the ease-out into it is half of what the knob buys you.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, Euler, InstancedMesh, Matrix4, Object3D, type OrthographicCamera } from 'three'
-import { conveyorMover, type ConveyorSettings } from '../core/visualCopies/conveyor'
+import { BELT_LOOP, GROUP_LOOP, conveyorMover, type ConveyorSettings } from '../core/visualCopies/conveyor'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
+import type { VisualCopy } from '../core/visualCopies/types'
 import type { ResolvedNote } from '../core/visual/types'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
@@ -55,48 +63,64 @@ const RIGHT_PITCH = 60
 // the clearest possible statement of it: you can follow ONE copy all the way to
 // the face it dissolves into and find it again at the other side.
 //
-// The copies are laid out to FILL the loop box, evenly - exactly what a Grid
-// splitter above this mover produces, and the arrangement the loop is designed
-// for. Cube size is fixed while the framing follows the span, so SPAN reads the
-// way it actually behaves: as how many objects fit in the loop before it repeats.
+// The copies are an evenly spaced lattice - exactly what a Grid splitter above
+// this mover produces, and the arrangement BELT looping is built for. In belt
+// style the lattice runs a little past both edges of the window, so the fold
+// happens off-frame and the picture is a genuinely endless stream. In group style
+// a short clump sits in the middle and the window widens to the loop distance, so
+// you watch the whole trip out and back and see what the fade is doing.
 
-/** Target world distance between copies; the count is derived from the span. */
-const TARGET_SPACING = 1.5
+/** World distance between copies in the preview lattice. */
+const SPACING = 1.5
 const CUBE = 0.62
-/** Span past which the box is wider than the preview can usefully frame. */
+/** Half-width the window frames in belt style, where the loop is the lattice. */
+const BELT_HALF_WIDTH = 5.5
+/** Loop distance past which the group's whole trip stops being worth framing. */
 const FRAMED_SPAN = 9
 const PREVIEW_HEIGHT = 148
 
 /** A three-quarter rest pose, so a cube reads as a solid rather than a square. */
 const REST_POSE = new Euler(0.3, 0.62, 0)
 
-function beltCount(span: number): number {
-  if (!(span > 0)) return 7
-  return clamp(Math.round((span * 2) / TARGET_SPACING), 3, 40)
-}
+const isBelt = (settings: ConveyorSettings) => settings.loopStyle !== GROUP_LOOP
 
 /** Half-width of the world the camera frames. */
-function framedHalfWidth(span: number): number {
-  return (span > 0 ? Math.min(span, FRAMED_SPAN) : FRAMED_SPAN * 0.6) * 1.12
+function framedHalfWidth(settings: ConveyorSettings): number {
+  if (isBelt(settings)) return BELT_HALF_WIDTH
+  return (settings.spanX > 0 ? Math.min(settings.spanX, FRAMED_SPAN) : FRAMED_SPAN * 0.7) * 1.15
+}
+
+/** Home positions, centred, in the order a splitter would emit them. */
+function homes(settings: ConveyorSettings): number[] {
+  // Belt: overfill the window by a copy at each end so the lattice - and the
+  // fold, which happens at its far end - continues outside the frame.
+  // Group: a clump small enough to read as one travelling object.
+  const count = isBelt(settings)
+    ? clamp(Math.round((framedHalfWidth(settings) * 2) / SPACING) + 2, 4, 24)
+    : 4
+  return Array.from({ length: count }, (_, index) => (index - (count - 1) / 2) * SPACING)
 }
 
 /**
  * The looping performance, derived from the settings so the loop is seamless at
- * any speed and glide: one note held long enough to carry the belt a whole
- * number of spacings, then a rest long enough for the glide to finish.
+ * any speed, glide and loop style: one note held long enough to carry the field
+ * a whole number of REPEAT distances, then a rest long enough for the glide to
+ * finish (both ramps have to complete inside the cycle, or the travel would not
+ * come out to a whole number of repeats).
+ *
+ * The repeat distance is what returns the picture to itself: one lattice spacing
+ * for a belt, one full out-and-back sawtooth for a group.
  */
 function cycle(settings: ConveyorSettings) {
-  const span = settings.spanX > 0 ? settings.spanX : FRAMED_SPAN
-  const spacing = (span * 2) / beltCount(settings.spanX)
   const glide = Math.max(0, settings.glide)
   const rest = Math.max(0.5, glide * 1.2)
   if (!(settings.speed > 0)) return { hold: 4, loopBeats: 4 + rest }
-  // Long enough to be a run rather than a twitch, and long enough for both
-  // glide ramps to complete inside it (or the belt would never reach speed and
-  // the cycle would not cover a whole number of spacings).
+  const repeat = isBelt(settings)
+    ? SPACING
+    : (settings.spanX > 0 ? settings.spanX * 2 : FRAMED_SPAN * 2)
   const minimumHold = Math.max(3, glide * 2.2)
-  const spacings = Math.max(2, Math.ceil((minimumHold * settings.speed) / spacing))
-  const hold = (spacings * spacing) / settings.speed
+  const repeats = Math.max(1, Math.ceil((minimumHold * settings.speed) / repeat))
+  const hold = (repeats * repeat) / settings.speed
   return { hold, loopBeats: hold + rest }
 }
 
@@ -111,9 +135,8 @@ function ConveyorBelt({ settings }: { settings: ConveyorSettings }) {
     room: new Color(ROOM),
   }).current
 
-  const count = beltCount(settings.spanX)
-  // Rebuilt on settings change: resolve() closes over the notes, and the notes
-  // themselves are derived from the settings.
+  // Rebuilt on settings change: resolve() closes over the notes, and the notes,
+  // the layout and the framing are all derived from the settings.
   const belt = useMemo(() => {
     const { hold, loopBeats } = cycle(settings)
     const notes: ResolvedNote[] = [{
@@ -124,11 +147,20 @@ function ConveyorBelt({ settings }: { settings: ConveyorSettings }) {
       blockStartBeat: 0,
       blockEndBeat: loopBeats,
     }]
-    return { settings, count, resolved: conveyorMover.resolve({ settings, notes }), loopBeats }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, count])
+    // The FORMATION the mover measures, built once: belt looping folds each copy
+    // at this lattice's own period, so the preview has to hand over the same
+    // array the resolver would - one copy at a time tells the mover nothing about
+    // the arrangement, and it would fall back to moving the clump as a group.
+    const formation: VisualCopy[] = homes(settings).map((home) => ({
+      transform: new Matrix4().makeTranslation(home, 0, 0),
+      opacity: 1,
+      colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 },
+    }))
+    return { settings, formation, resolved: conveyorMover.resolve({ settings, notes }), loopBeats }
+  }, [settings])
   const live = useRef(belt)
   live.current = belt
+  const count = belt.formation.length
 
   useFrame(({ clock, camera, gl }) => {
     const mesh = meshRef.current
@@ -147,7 +179,7 @@ function ConveyorBelt({ settings }: { settings: ConveyorSettings }) {
     const height = gl.domElement.clientHeight
     const orthographic = camera as OrthographicCamera
     if (width > 0 && height > 0) {
-      const halfWidth = framedHalfWidth(state.settings.spanX)
+      const halfWidth = framedHalfWidth(state.settings)
       const halfHeight = halfWidth * (height / width)
       if (orthographic.right !== halfWidth || orthographic.top !== halfHeight) {
         orthographic.right = halfWidth
@@ -159,20 +191,17 @@ function ConveyorBelt({ settings }: { settings: ConveyorSettings }) {
       }
     }
 
-    const span = state.settings.spanX > 0 ? state.settings.spanX : FRAMED_SPAN
-    const spacing = (span * 2) / state.count
-    for (let index = 0; index < state.count; index++) {
-      // Home positions fill the box from its trailing face, evenly - a Grid
-      // splitter's layout, which is the arrangement the loop is built for.
-      const home = -span + (index + 0.5) * spacing
-      // The rest pose rides INSIDE the copy transform: the mover reads the home
-      // position off the transform's translation, so the pose is invisible to it.
-      base.makeTranslation(home, 0, 0).multiply(rest)
+    const formation = state.formation
+    for (let index = 0; index < formation.length; index++) {
+      // The rest pose rides OUTSIDE the copy the mover is handed: it reads home
+      // positions off the formation's translations, and a pose baked into them
+      // would be invisible to the maths but is cleaner kept apart. It is applied
+      // to the result instead, below.
       const [result] = state.resolved.apply(
-        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
-        { beat, index, count: state.count },
+        formation[index],
+        { beat, index, count: formation.length, formation },
       )
-      dummy.matrix.copy(result.transform)
+      dummy.matrix.copy(base.copy(result.transform).multiply(rest))
       dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale)
       dummy.updateMatrix()
       mesh.setMatrixAt(index, dummy.matrix)
@@ -334,14 +363,82 @@ function CurrentKnob({ parameter: bound, label, format, size = KNOB }: {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-// The four macros. The other two spans are the same idea on axes the preview is
-// not looking down, so they belong in MORE.
-const PLACED_KEYS = new Set(['speed', 'glide', 'fade', 'spanX'])
+// The macros. The other two loop distances are the same idea on axes the preview
+// is not looking down, so they belong in MORE.
+const PLACED_KEYS = new Set(['speed', 'glide', 'loopStyle', 'fadeBeats', 'spanX'])
 
-const asPercent = (value: number) => `${Math.round(value * 100)}%`
 const asBeats = (value: number) => (value <= 0 ? 'instant' : `${value.toFixed(2)} beat${value === 1 ? '' : 's'}`)
+const asFade = (value: number) => (value <= 0 ? 'cut' : `${value.toFixed(2)} beat${value === 1 ? '' : 's'}`)
 const perBeat = (value: number) => `${value.toFixed(1)} /beat`
 const asSpan = (value: number) => (value <= 0 ? 'off' : `±${value.toFixed(1)}`)
+
+/**
+ * The panel's biggest decision, so it is a segmented control rather than a
+ * select: BELT tiles the formation the chain above built, GROUP flies that
+ * formation out and back as one body. Each segment DRAWS its behaviour - three
+ * marks marching on, versus three marks travelling together - because the
+ * difference is spatial and a word for it would need a paragraph.
+ */
+function LoopSelector({ bound }: { bound: UserInterfaceParameter }) {
+  const definition = bound.definition
+  if (definition.type !== 'select') return null
+  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+  const glyphs: Record<number, ReactNode> = {
+    [BELT_LOOP]: (
+      <>
+        <rect x="1" y="5" width="3" height="3" rx="0.5" />
+        <rect x="6.5" y="5" width="3" height="3" rx="0.5" />
+        <rect x="12" y="5" width="3" height="3" rx="0.5" opacity="0.35" />
+      </>
+    ),
+    [GROUP_LOOP]: (
+      <>
+        <rect x="2" y="5" width="3" height="3" rx="0.5" />
+        <rect x="6" y="5" width="3" height="3" rx="0.5" />
+        <rect x="10" y="5" width="3" height="3" rx="0.5" />
+        <path d="M1 10.5 H14" strokeWidth="1" stroke="currentColor" opacity="0.45" fill="none" />
+      </>
+    ),
+  }
+  return (
+    <div className="flex w-[58px] flex-col items-center">
+      <div className="flex overflow-hidden rounded-md border border-white/10">
+        {definition.options.map((option) => {
+          const active = option.value === selected
+          return (
+            <button
+              key={option.value}
+              aria-label={option.label}
+              aria-pressed={active}
+              title={option.value === BELT_LOOP
+                ? 'Belt · each copy loops at the formation\'s own spacing, so the arrangement never breaks'
+                : 'Group · the whole formation travels out and back together, dissolving through the turn'}
+              onClick={() => bound.setValue(option.value)}
+              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              style={active ? { background: CURRENT } : undefined}
+            >
+              <svg
+                width="16"
+                height="12"
+                viewBox="0 0 16 12"
+                fill={active ? '#000' : 'rgba(255,255,255,0.45)'}
+                color={active ? '#000' : 'rgba(255,255,255,0.45)'}
+              >
+                {glyphs[option.value]}
+              </svg>
+            </button>
+          )
+        })}
+      </div>
+      <span className="mt-1 whitespace-nowrap text-[8px] font-semibold leading-[11px] tracking-[0.12em] text-white/40">
+        LOOP
+      </span>
+      <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
+        {definition.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
+      </span>
+    </div>
+  )
+}
 
 export const ConveyorMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -376,12 +473,16 @@ export const ConveyorMoverUserInterfaceRenderer: UserInterfaceRendererDefinition
         className="flex flex-col gap-2 pb-4 pt-3"
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(CURRENT, 0.13)}, transparent)` }}
       >
-        {/* SPEED is the subject of the mover; the other three qualify it. */}
-        <div className="flex items-end gap-5 px-4">
+        {/* SPEED is the subject of the mover; the rest qualify it. FADE and the
+            loop distance only bite when there is no lattice to tile (a lone
+            object, an uneven formation) or when LOOP is set to GROUP - which the
+            preview shows, so the pair is left visible rather than hidden. */}
+        <div className="flex items-end gap-4 px-4">
           <CurrentKnob parameter={bound.speed} label="SPEED" format={perBeat} size={PRIMARY_KNOB} />
           <CurrentKnob parameter={bound.glide} label="GLIDE" format={asBeats} />
-          <CurrentKnob parameter={bound.fade} label="FADE" format={asPercent} />
-          <CurrentKnob parameter={bound.spanX} label="SPAN X" format={asSpan} />
+          <LoopSelector bound={bound.loopStyle} />
+          <CurrentKnob parameter={bound.spanX} label="GROUP X" format={asSpan} />
+          <CurrentKnob parameter={bound.fadeBeats} label="FADE" format={asFade} />
         </div>
         {unplaced.length > 0 && (
           <div className="px-3">
