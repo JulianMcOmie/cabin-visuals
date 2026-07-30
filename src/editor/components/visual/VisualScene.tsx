@@ -20,6 +20,7 @@ import {
   PMREMGenerator,
   NoToneMapping,
   Vector2,
+  Vector3,
   type Texture,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -30,7 +31,7 @@ import type { CompositionLayer } from '../../core/directors'
 import { useProjectStore } from '../../store/ProjectStore'
 import { getInstrument } from '../../instruments'
 import { isOnTopTrack } from '../../instruments/types'
-import { DEFAULT_SCENE_BACKGROUND } from '../../types'
+import { DEFAULT_SCENE_BACKGROUND, type Scene, type SceneGradient } from '../../types'
 import { ObjectRenderer } from './ObjectRenderer'
 import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
@@ -83,6 +84,54 @@ void main() {
   vUv = uv;
   gl_Position = vec4(position, 1.0);
 }`
+
+// Backdrop gradient, painted over the clear color before a scene's objects
+// render. Geometry (t) reproduces CSS gradients exactly - linear projects onto
+// the gradient line with CSS's |W sin| + |H cos| line length so the stops land
+// on the corners, radial is a from-center circle reaching the farthest corner -
+// and the stops MIX in sRGB (what CSS does) before converting to the
+// renderer's linear working space, so the inspector's CSS previews and the
+// real backdrop are the same picture.
+const BACKDROP_GRADIENT_FRAGMENT = `
+uniform vec3 colorFrom;
+uniform vec3 colorTo;
+uniform float kind;      // 0 linear, 1 mirror, 2 radial
+uniform float angle;     // radians, CSS convention: 0 points up, clockwise
+uniform vec2 resolution;
+varying vec2 vUv;
+
+vec3 srgbToLinear(vec3 c) {
+  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+void main() {
+  vec2 p = (vUv - 0.5) * resolution;
+  float t;
+  if (kind > 1.5) {
+    t = length(p) / max(0.5 * length(resolution), 1e-4);
+  } else {
+    vec2 dir = vec2(sin(angle), cos(angle));
+    float len = abs(resolution.x * dir.x) + abs(resolution.y * dir.y);
+    t = dot(p, dir) / max(len, 1e-4) + 0.5;
+    if (kind > 0.5) t = 1.0 - abs(2.0 * t - 1.0); // mirror: from at both edges
+  }
+  gl_FragColor = vec4(srgbToLinear(mix(colorFrom, colorTo, clamp(t, 0.0, 1.0))), 1.0);
+}`
+
+/** The scene's enabled backdrop gradient, or null when it wears a flat color
+ * or exports with alpha (same precedence as sceneBackdropMode). */
+function activeBackdropGradient(scene: Scene | undefined): SceneGradient | null {
+  if (!scene || scene.backgroundTransparent) return null
+  return scene.backgroundGradient?.enabled ? scene.backgroundGradient : null
+}
+
+/** Writes a #rrggbb hex into `out` as RAW sRGB 0..1 components - deliberately
+ * NOT converted to working space; the gradient shader mixes in sRGB and does
+ * its own conversion. */
+function setHexSrgb(out: Vector3, hex: string) {
+  const n = parseInt(hex.slice(1), 16)
+  out.set(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)
+}
 
 const COLOR_FILTER_FRAGMENT = `
 uniform sampler2D tDiffuse;
@@ -539,6 +588,19 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    const gradientMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: BACKDROP_GRADIENT_FRAGMENT,
+      uniforms: {
+        colorFrom: { value: new Vector3() },
+        colorTo: { value: new Vector3() },
+        kind: { value: 0 },
+        angle: { value: 0 },
+        resolution: { value: new Vector2(1, 1) },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const filterMesh = new Mesh(new PlaneGeometry(2, 2), filterMaterial)
     filterMesh.frustumCulled = false
     filterScene.add(filterMesh)
@@ -572,7 +634,7 @@ export function VisualScene() {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, gradientMaterial,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -660,6 +722,7 @@ export function VisualScene() {
     compositor.filterMesh.geometry.dispose()
     compositor.filterMaterial.dispose()
     compositor.warpMaterial.dispose()
+    compositor.gradientMaterial.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
     compositor.compositeTarget.dispose()
@@ -686,6 +749,19 @@ export function VisualScene() {
     // Preserve scene-linear values above 1.0 through every offscreen pass.
     // Tone mapping happens once, in the final grade after bloom is composed.
     gl.toneMapping = NoToneMapping
+    // Fullscreen gradient over whatever was just cleared into the current
+    // render target - the gradient variant of setClearColor. Writes no depth,
+    // so the scene's objects draw over it exactly as over a flat clear.
+    const paintBackdropGradient = (gradient: SceneGradient) => {
+      const uniforms = compositor.gradientMaterial.uniforms
+      setHexSrgb(uniforms.colorFrom.value as Vector3, gradient.from)
+      setHexSrgb(uniforms.colorTo.value as Vector3, gradient.to)
+      uniforms.kind.value = gradient.kind === 'radial' ? 2 : gradient.kind === 'mirror' ? 1 : 0
+      uniforms.angle.value = (gradient.angle * Math.PI) / 180
+      ;(uniforms.resolution.value as Vector2).set(Math.max(1, size.width), Math.max(1, size.height))
+      compositor.filterMesh.material = compositor.gradientMaterial
+      gl.render(compositor.filterScene, compositor.filterCam)
+    }
     try {
       const layers = getCompositionLayers()
       const requested = new Set(layers.map((layer) => layer.sceneId))
@@ -697,6 +773,8 @@ export function VisualScene() {
         gl.setRenderTarget(runtime.target)
         gl.setClearColor(projectScene?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, projectScene?.backgroundTransparent ? 0 : 1)
         gl.clear(true, true, true)
+        const sceneGradient = activeBackdropGradient(projectScene)
+        if (sceneGradient) paintBackdropGradient(sceneGradient)
         gl.render(runtime.base, camera)
         gl.clearDepth()
         gl.render(runtime.front, camera)
@@ -830,6 +908,12 @@ export function VisualScene() {
       gl.setRenderTarget(compositor.compositeTarget)
       gl.setClearColor(main?.backgroundColor ?? DEFAULT_SCENE_BACKGROUND, main?.backgroundTransparent ? 0 : 1)
       gl.clear(true, true, true)
+      // Main's own backdrop shows wherever the scene layers don't cover
+      // (viewports, partitions) - it gets the gradient treatment too. The
+      // final to-screen pass repaints the whole frame from this target, so
+      // this is the only composite-level site that needs it.
+      const mainGradient = activeBackdropGradient(main)
+      if (mainGradient) paintBackdropGradient(mainGradient)
       gl.render(compositor.scene, compositor.cam)
 
       // Luminance-thresholded, multi-resolution bloom consumes the completed
