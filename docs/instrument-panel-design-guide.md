@@ -138,9 +138,31 @@ control vocabulary per panel.
 - Honors the param's response `curve` exactly like `ParamSlider`: position maps
   through the curve, and curved params round to 3 significant digits instead of
   the step grid (the low end is why the curve exists).
+- **A SIGNED param whose zero is the middle of its travel takes `bipolar`**: the
+  arc grows out of 12 o'clock toward the value instead of filling from 7
+  o'clock. A rate that can run either way is half-lit at zero otherwise, which
+  reads as half ON — a lie, and the worse one when the param's default is 0
+  (Radial Motion's SPIN X/Y rows).
+- `label=""` drops the caption row entirely. For a panel that labels its rows
+  and columns, a caption per knob is noise that also costs a line of height on
+  every one of them.
 
 (Bespoke panels don't use sliders; the generic `ParameterList` fallback keeps
 them.)
+
+**Grid console** — when a panel's params are a MATRIX rather than a list (the
+same question asked once per depth/stage/axis), rows are the question, columns
+are the subject, and the labels move out to a left rail and column headers.
+`RadialMotionMoverUserInterface.tsx` is the reference: RADIUS / SPIN Z / SPIN X /
+SPIN Y × outer / middle / inner, with each column headed by its name and a small
+−/+ count stepper.
+- The rail label sits in an `h-11` flex box so it centres on the KNOB, not on
+  the knob-plus-readout column.
+- **A grid busts the height budget, and that is the decision to weigh.** Four
+  rows of three plus a preview lands near 450px against a pane that opens around
+  300px, so half the console starts below the fold. Prefer two visible rows and
+  a disclosure for the rest; only build the full grid when everything really is
+  meant to be visible at once.
 
 **Segmented control** — for a param whose values are KINDS, not amounts, and
 above all for a panel's biggest decision. A native `<select>` hides the options

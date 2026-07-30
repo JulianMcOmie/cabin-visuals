@@ -305,7 +305,7 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
-  radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
+  radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
