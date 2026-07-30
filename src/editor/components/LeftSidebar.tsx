@@ -2,8 +2,7 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import * as TooltipPrimitive from '@radix-ui/react-tooltip'
-import { Check, ChevronRight, Plus, Sparkles, CircleHelp, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Folder, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
@@ -375,7 +374,7 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...SPLITTER_INSTRUMENTS,
 ]
 
-/** A library folder: a titled group of cards, nestable one level deep. */
+/** A library folder: a row you click into, holding items and/or subfolders. */
 interface LibraryFolder {
   id: string
   title: string
@@ -383,7 +382,6 @@ interface LibraryFolder {
   description: string
   items: InstrumentItem[]
   subfolders?: LibraryFolder[]
-  defaultOpen?: boolean
 }
 
 // ——— Folder assignments ———
@@ -424,8 +422,9 @@ const CLAIMED_IDS = new Set([
 ])
 const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
 
-// The scene library, in shelf order. The two Extras folders keep holding
-// exactly what they held before the folder pass - demoted, never deleted.
+// The scene library's root, in shelf order. The two Extras folders keep
+// holding exactly what they held before the folder pass - demoted, never
+// deleted, just at the end of the list.
 const SCENE_FOLDERS: LibraryFolder[] = [
   {
     id: 'impact',
@@ -443,8 +442,15 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
   { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
   { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
-  { id: 'mover-extras', title: 'Mover Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS, defaultOpen: false },
-  { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS, defaultOpen: false },
+  { id: 'mover-extras', title: 'Mover Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS },
+  { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
+]
+
+// The Main scene's library: the curated directors ARE the root view (no
+// folder to click through first), with the soft-deprecated ones one level in.
+const MAIN_ROOT_ITEMS = DIRECTOR_CORE
+const MAIN_FOLDERS: LibraryFolder[] = [
+  { id: 'director-extras', title: 'Extras', description: "Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did.", items: DIRECTOR_EXTRAS },
 ]
 
 interface ItemHandlers {
@@ -487,90 +493,62 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
   )
 }
 
-/** A nested folder inside a Section: a lighter, non-sticky header - chevron on
- *  the left, unlike the top-level rows - over the same card grid. */
-function Subfolder({ folder, onItemPointerDown, onItemDoubleClick }: { folder: LibraryFolder } & ItemHandlers) {
-  const [open, setOpen] = useState(folder.defaultOpen ?? true)
+/** Logic-style drill-down browser. Every folder is a plain row you click
+ *  into; a sticky back row returns one level; instrument cards appear only at
+ *  the level that holds them. `rootItems` lets a view keep items at the very
+ *  top level (the Main scene's directors) without a folder to click through. */
+function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubleClick }: { folders: LibraryFolder[]; rootItems?: InstrumentItem[] } & ItemHandlers) {
+  // The trail of entered folders, root-first. The folder trees are module
+  // constants, so a held reference can never go stale.
+  const [path, setPath] = useState<LibraryFolder[]>([])
+  const current = path[path.length - 1]
+  const folderRows = (current ? current.subfolders ?? [] : folders)
+    // An empty folder is a dead-end click - hide it until it has contents.
+    .filter((f) => f.items.length > 0 || (f.subfolders?.length ?? 0) > 0)
+  const items = current ? current.items : rootItems
+
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        title={folder.description}
-        className="flex w-full cursor-pointer select-none items-center gap-1 px-2.5 pt-2.5 pb-1.5 text-[12px] font-medium text-[var(--text-2)] transition-colors hover:text-[var(--text)]"
-      >
-        <ChevronRight size={11} className={`flex-shrink-0 text-[var(--text-muted)] transition-transform ${open ? 'rotate-90' : ''}`} />
-        {folder.title}
-      </button>
-      {open && <ItemGrid items={folder.items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />}
-    </div>
-  )
-}
-
-function Section({ title, description, items, subfolders, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; subfolders?: LibraryFolder[]; defaultOpen?: boolean } & ItemHandlers) {
-  const [open, setOpen] = useState(defaultOpen)
-
-  return (
-    <div className="@container border-t border-[var(--border)] first:border-t-0">
-      {/* Sticky: the header stays pinned while its section scrolls, then hands
-          off to the next section's header. Opaque bg so cards (and the shared
-          3D preview canvas behind the scroll container) can't show through. */}
-      <div className="group/header sticky top-0 z-20 flex items-center gap-2 bg-[var(--bg-shell)] px-3 pt-4 pb-2 select-none">
-        <button
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          className="flex items-baseline gap-2 text-[18px] font-semibold tracking-[-0.01em] text-[var(--text)] cursor-pointer"
-        >
-          {title}
-        </button>
-        <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
-          <TooltipPrimitive.Root>
-            <TooltipPrimitive.Trigger asChild>
-              <button
-                type="button"
-                className="flex size-3.5 flex-shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--border-strong)] opacity-0 transition-[color,opacity] group-hover/header:opacity-100 focus-visible:opacity-100 hover:text-[var(--text-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] data-[state=delayed-open]:opacity-100 data-[state=delayed-open]:text-[var(--text-2)] data-[state=instant-open]:opacity-100 data-[state=instant-open]:text-[var(--text-2)]"
-                aria-label={`About ${title}`}
-              >
-                <CircleHelp size={11} aria-hidden="true" />
-              </button>
-            </TooltipPrimitive.Trigger>
-            <TooltipPrimitive.Portal>
-              <TooltipPrimitive.Content
-                side="right"
-                align="start"
-                sideOffset={8}
-                collisionPadding={8}
-                avoidCollisions
-                sticky="always"
-                className="z-[100] max-h-[calc(100vh-1rem)] w-52 max-w-[calc(100vw-1rem)] overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-[var(--text-2)] shadow-lg shadow-black/50"
-              >
-                {description}
-              </TooltipPrimitive.Content>
-            </TooltipPrimitive.Portal>
-          </TooltipPrimitive.Root>
-        </TooltipPrimitive.Provider>
+      {/* The location row is always present so entering a folder swaps its
+          label instead of inserting a row above the list (which made the whole
+          menu jump down). Same size and metrics as the folder rows - depth
+          reads from the ‹ chevron and position, not from bolder type. */}
+      {current ? (
         <button
           type="button"
-          onClick={() => setOpen(!open)}
-          aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-          aria-expanded={open}
-          className="ml-auto flex size-4 flex-shrink-0 cursor-pointer items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--text-2)]"
+          onClick={() => setPath(path.slice(0, -1))}
+          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
+          className="sticky top-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 text-xs text-[var(--text)] transition-colors hover:bg-[var(--bg-elevated)]"
         >
-          <ChevronRight
-            size={14}
-            className={`transition-transform ${open ? 'rotate-90' : ''}`}
-          />
+          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          <span className="min-w-0 truncate">{current.title}</span>
         </button>
-      </div>
-      {open && (
-        <>
-          {items.length > 0 && <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />}
-          {subfolders?.map((sub) => (
-            <Subfolder key={sub.id} folder={sub} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
-          ))}
-        </>
+      ) : (
+        <div className="sticky top-0 z-20 flex h-[30px] select-none items-center bg-[var(--bg-shell)] px-3 text-xs text-[var(--text-muted)]">
+          Library
+        </div>
       )}
+      {items.length > 0 && (
+        <div className="mt-1">
+          <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
+        </div>
+      )}
+      {/* Folder rows sit BELOW any cards: the only level that mixes them is
+          the Main root, where the deprecated Extras must not lead. */}
+      <div className={items.length > 0 ? 'mt-2' : ''}>
+        {folderRows.map((folder) => (
+          <div
+            key={folder.id}
+            onClick={() => setPath([...path, folder])}
+            title={folder.description}
+            className="flex h-[30px] cursor-default select-none items-center gap-2.5 px-3 transition-colors hover:bg-[var(--bg-elevated)]"
+          >
+            <Folder size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+            <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{folder.title}</span>
+            <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -811,29 +789,16 @@ export function LeftSidebar() {
 
       <div className="timeline-scrollbar relative z-10 flex-1 overflow-y-auto pb-4">
         {tab === 'instruments' && (
-          <>
-            {activeIsMain ? (
-              <>
-              {/* Keyed: the scene/Main views render different Section lists in
-                  the same slot, and unkeyed positional state reuse would hand
-                  (say) Objects' expanded state to Extras here - visibly
-                  ignoring defaultOpen on the first view switch. */}
-              <Section key="directors" title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_CORE} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-              <Section key="director-extras" title="Extras" description="Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did." items={DIRECTOR_EXTRAS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
-              </>
-            ) : SCENE_FOLDERS.map((folder) => (
-              <Section
-                key={folder.id}
-                title={folder.title}
-                description={folder.description}
-                items={folder.items}
-                subfolders={folder.subfolders}
-                defaultOpen={folder.defaultOpen}
-                onItemPointerDown={startLibraryDrag}
-                onItemDoubleClick={onItemDoubleClick}
-              />
-            ))}
-          </>
+          // Keyed: the scene/Main views are different folder trees rendered in
+          // the same slot - remount so a drill-down path into one never
+          // carries over into the other.
+          <FolderBrowser
+            key={activeIsMain ? 'main' : 'scene'}
+            folders={activeIsMain ? MAIN_FOLDERS : SCENE_FOLDERS}
+            rootItems={activeIsMain ? MAIN_ROOT_ITEMS : undefined}
+            onItemPointerDown={startLibraryDrag}
+            onItemDoubleClick={onItemDoubleClick}
+          />
         )}
         {tab === 'loops' && (
           <div className="pt-1">
