@@ -24,6 +24,7 @@ import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
 import { motionMover } from './motion'
+import { conveyorMover } from './conveyor'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
@@ -269,6 +270,7 @@ export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } f
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   consolidatedMover,
   motionMover,
+  conveyorMover,
   radialMotionMover,
   meteorImpactMover,
   impactScatterMover,

@@ -9,4 +9,6 @@ Three registries:
 
 Adding a bespoke instrument UI: add the id to `ids.ts` (union type), create `<Name>UserInterface.tsx`, register in `index.ts`, point the instrument def at it. For movers/effects: just add to the right map in `bespokeRegistries.ts`.
 
+**A panel's live 3D preview may not animate until the transport PLAYS.** Observed 2026-07-29 on both Impact Scatter's and Conveyor's previews: the canvas is created and sized, but `useFrame` never fires while paused, so the window stays BLACK — hitting play starts it, pausing freezes the last frame. Likely because r3f's render loop is global and the main canvas runs `frameloop='demand'` (RenderGovernor), so once the loop stops nothing restarts it for a panel root that mounted later. It is app-wide, not a panel bug: **smoke-test previews with the transport running** before suspecting your own preview code.
+
 Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`; `colorWheel.tsx` is the shared color picker (also used by SceneSettingsPanel). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
