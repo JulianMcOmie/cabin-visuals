@@ -41,10 +41,11 @@
     ".next-isolated-3001/types/**/*.ts",
     ".next-isolated-3003/types/**/*.ts",
     ".next-isolated-3004/types/**/*.ts",
+    ".next-isolated-3008/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-isolated-3008/types/**/*.ts"
+    ".next-isolated-3021/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
