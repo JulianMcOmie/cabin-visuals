@@ -33,6 +33,9 @@ interface RulerProps {
   /** Sub-pixel nudge for the playhead triangle (aligns it with a lane line that
    *  renders in a separate viewport-space overlay). */
   playheadNudgePx?: number
+  /** Pickup width (px): beat 0 sits this far into the content, and the span
+   *  before it renders as a shaded lead-in band (audio dragged before bar 0). */
+  leadInPx?: number
   /** Inner content element - translated horizontally to mirror the lane/grid scroll. */
   contentRef: RefObject<HTMLDivElement | null>
   /** Playhead triangle element (the head), positioned by the caller's RAF loop. */
@@ -71,6 +74,7 @@ export function Ruler({
   dimAfterBars,
   totalBeats,
   playheadNudgePx = 0,
+  leadInPx = 0,
   contentRef,
   playheadHeadRef,
   onScrubStart,
@@ -123,6 +127,30 @@ export function Ruler({
 
           {/* mid divider between top and bottom half of the ruler */}
           <div className="absolute left-0 right-0 h-px bg-[var(--border-strong)] opacity-40 pointer-events-none" style={{ top: '50%' }} />
+
+          {/* Everything beat-positioned lives in this wrapper: beat 0 sits
+              leadInPx into the content, so the pickup needs no per-item math. */}
+          <div className="absolute top-0 bottom-0" style={{ left: leadInPx, right: 0 }}>
+
+          {/* The pickup band: the lead-in span before bar 1, holding audio that
+              starts ahead of the music. Hatched so it reads as "outside the
+              song" without hiding the waveform's edge beside it. */}
+          {leadInPx > 0 && (
+            <div
+              data-pickup-ruler=""
+              className="pointer-events-none absolute top-0 bottom-0 overflow-hidden"
+              style={{
+                left: -leadInPx,
+                width: leadInPx,
+                backgroundImage: 'repeating-linear-gradient(-45deg, rgba(53,167,230,0.16) 0 5px, rgba(53,167,230,0.05) 5px 10px)',
+                borderRight: '1px solid rgba(53,167,230,0.55)',
+              }}
+            >
+              <span className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--accent)]" style={{ top: 3 }}>
+                pickup
+              </span>
+            </div>
+          )}
 
           {/* Loop region band - top half only (the loop lane), content space so
               it scrolls with the ruler. Region set = looping on. */}
@@ -278,6 +306,7 @@ export function Ruler({
                 )
               })()}
             </svg>
+          </div>
           </div>
         </div>
       </div>
