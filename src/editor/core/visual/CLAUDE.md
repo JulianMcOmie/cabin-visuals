@@ -29,7 +29,7 @@ Flattens each scene's track forest depth-first (cycle-guarded), expands looped b
 - `beatOverride.ts` — export's hook: overrides the beat the engine computes at, bypassing the transport.
 - `automation.ts` — keyframe extraction/sampling + noise-gate model.
 - `energy.ts` — the note-pulse "energy" signal instruments receive.
-- `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`).
+- `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint.
 - `screenAnchor.ts` / `postMoverScale.ts` / `fullFrameCanvas.ts` — screen-space anchoring, scale lifted outside mover chains, full-frame canvas plumbing.
 - `finalInvertMask.ts`, `animatedColor.ts`, `animatedOpacity.ts`, `fonts.ts` — final-pass invert, color/opacity tweening helpers, font loading.
 

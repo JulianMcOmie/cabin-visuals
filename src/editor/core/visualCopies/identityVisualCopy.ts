@@ -11,6 +11,8 @@ export function identityVisualCopy(): VisualCopy {
       hue: 0,
       saturation: 0,
       lightness: 0,
+      tint: null,
+      tintAmount: 0,
     },
   }
 }

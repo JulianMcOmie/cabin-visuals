@@ -432,13 +432,22 @@ export function TrackEditor() {
                     // params come bound as UserInterfaceParameters; anything
                     // unregistered keeps the plain control list.
                     const BespokeMover = getMoverUserInterface(newMoverDef.id)
-                    const moverParameters: UserInterfaceParameter[] = newMoverDef.params
-                      .filter((p) => typeof p.default === 'number')
-                      .map((p) => ({
-                        definition: p,
-                        value: track.inputValues?.[p.key] ?? (p.default as number),
-                        setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
-                      }))
+                    // Numeric params live in inputValues, string-valued ones
+                    // (color / string) in the shared stringParams field - the
+                    // same split instruments use, so the engine's numeric paths
+                    // never see a string.
+                    const moverParameters: UserInterfaceParameter[] = newMoverDef.params.map((p) =>
+                      isStringParam(p)
+                        ? {
+                          definition: p,
+                          value: track.stringParams?.[p.key] ?? p.default,
+                          setValue: (v) => { if (typeof v === 'string') setTrackStringParam(track.id, p.key, v) },
+                        }
+                        : {
+                          definition: p,
+                          value: track.inputValues?.[p.key] ?? (p.default as number),
+                          setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
+                        })
                     return (
                       <>
                         {BespokeMover ? (
@@ -456,9 +465,10 @@ export function TrackEditor() {
                               <ParamControl
                                 key={p.key}
                                 param={p}
-                                numValue={typeof p.default === 'number' ? track.inputValues?.[p.key] ?? p.default : undefined}
-                                strValue={undefined}
+                                numValue={isStringParam(p) ? undefined : track.inputValues?.[p.key] ?? (p.default as number)}
+                                strValue={isStringParam(p) ? track.stringParams?.[p.key] ?? p.default : undefined}
                                 onNum={(v) => setMoverInput(track.id, p.key, v)}
+                                onStr={(v) => setTrackStringParam(track.id, p.key, v)}
                               />
                             ))}
                           </>

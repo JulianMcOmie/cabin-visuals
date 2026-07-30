@@ -328,7 +328,7 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
     id: d.id,
     name: d.label,
     description: d.id === 'calmHueRotate'
-      ? 'Turns hue calmly with signed MIDI, optionally spreading the amount across splitter-copy indices.'
+      ? 'Every note flashes its objects toward a color you pick - velocity sets how hard, an attack/release envelope shapes the hit, and Stagger rolls it across split copies.'
       : `Changes its object's color with the ${d.label} colorizer.`,
     icon: (
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" strokeWidth="1.2" strokeLinecap="round">
@@ -696,7 +696,7 @@ export function LeftSidebar() {
                 the code stays until existing projects are migrated off ports. */}
             <Section key="movers" title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section key="mover-extras" title="Mover Extras" description="Single-behavior movers, still fully working - the compound movers above cover the same ground in one track." items={MOVER_EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
-            <Section key="colorizers" title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
+            <Section key="colorizers" title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section key="splitters" title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
             <Section key="object-extras" title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
             </>}

@@ -143,7 +143,7 @@ function GemField({ settings }: { settings: MeteorImpactSettings }) {
         current.settings.centerZ + slot.offset[2],
       )
       const [result] = current.resolved.apply(
-        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0 } },
+        { transform: base, opacity: 1, colorShift: { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
         { beat, index: i, count: current.field.length },
       )
       dummy.matrix.copy(result.transform)

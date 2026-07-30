@@ -252,7 +252,8 @@ function moverOrSplitterId(track: Track): string | undefined {
 }
 
 /** Resolve one mover/splitter track through the registry: merge the
- *  definition's numeric param defaults with the track's stored inputValues,
+ *  definition's param defaults with the track's stored inputValues (numeric)
+ *  and stringParams (color/string),
  *  flatten its notes, and let the definition close over both. Returns null for
  *  unknown ids. Automation children overlay their params per beat: the resolved
  *  closure re-resolves with the beat-sampled settings, memoized per beat. The
@@ -261,7 +262,7 @@ function moverOrSplitterId(track: Track): string | undefined {
 function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
   if (!def) return null
-  const settings = mergeDefinitionSettings(def, track.inputValues)
+  const settings = mergeDefinitionSettings(def, track.inputValues, track.stringParams)
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
   const automation = resolveAutomationLanes(track, def.params, p)

@@ -5,6 +5,12 @@ import { getObjectState, getVisualCopy } from './VisualEngine'
 import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
 import { sampleLane, sampleNoiseLane } from './automation'
 import type { ObjectState } from './types'
+import type { VisualCopy } from '../visualCopies/types'
+
+/** What an object with no VisualCopy sees: the identity shift. Frozen module
+ *  constant so the per-frame signature compares by identity, not by allocation. */
+const NO_COLOR_SHIFT: VisualCopy['colorShift'] =
+  { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 }
 
 /**
  * THE per-frame entry point for instrument visuals - instruments use this, never
@@ -45,6 +51,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
   const shiftedStringParams = useRef<Record<string, string>>({}).current
   const shiftedState = useRef<ObjectState | null>(null)
   const scratchColor = useRef(new Color()).current
+  const scratchTint = useRef(new Color()).current
   useFrame((root) => {
     const state = getObjectState(trackId)
     if (!state) {
@@ -55,9 +62,12 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const visualCopy = copyContext
       ? getVisualCopy(trackId, copyContext.visualCopyIndex)
       : undefined
-    const hueShift = visualCopy?.colorShift.hue ?? 0
-    const saturationShift = visualCopy?.colorShift.saturation ?? 0
-    const lightnessShift = visualCopy?.colorShift.lightness ?? 0
+    const colorShift = visualCopy?.colorShift ?? NO_COLOR_SHIFT
+    const hueShift = colorShift.hue
+    const saturationShift = colorShift.saturation
+    const lightnessShift = colorShift.lightness
+    const tint = colorShift.tint
+    const tintAmount = colorShift.tintAmount
     let i = 0
     let dirty = false
     const put = (v: unknown) => {
@@ -85,6 +95,8 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(hueShift)
     put(saturationShift)
     put(lightnessShift)
+    put(tint)
+    put(tintAmount)
     put(visualCopy?.opacity ?? 1)
     put(state.abilityEvents)
     put(state.videoPads)
@@ -106,7 +118,8 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     }
     if (dirty) {
       const colorShiftActive = copyContext && copyContext.colorParams.length > 0 &&
-        Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001
+        (Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001 ||
+          (tint !== null && tintAmount > 0.0001))
       if (!colorShiftActive) {
         // Couldn't apply yet: drop the committed signature so next frame retries.
         if (cb(state) === false) buf.length = 0
@@ -115,11 +128,10 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       applyColorShiftToInstrumentParams(
         state.stringParams,
         copyContext.colorParams,
-        hueShift,
-        saturationShift,
-        lightnessShift,
+        colorShift,
         shiftedStringParams,
         scratchColor,
+        scratchTint,
       )
       const nextState = shiftedState.current ?? { ...state, stringParams: shiftedStringParams }
       Object.assign(nextState, state)

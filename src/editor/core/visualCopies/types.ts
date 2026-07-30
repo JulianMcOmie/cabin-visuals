@@ -45,6 +45,25 @@ export interface VisualCopy {
     hue: number
     saturation: number
     lightness: number
+    /**
+     * An ABSOLUTE color to pull the object's declared colors toward, as
+     * '#rrggbb', or null for none. The HSL fields above can only ever nudge a
+     * color relative to whatever it already is, which cannot express "flash
+     * this gold" - a mover never sees the object's own color. The mix therefore
+     * happens where the source IS known (instrumentColor.ts): lerp toward
+     * `tint` by `tintAmount` FIRST, then apply the HSL offsets on top.
+     *
+     * Still not a material tint: it retargets the same instrument-declared
+     * color *params*, so instruments keep ownership of emissive, lighting,
+     * shader, and HDR calculations.
+     *
+     * Chain rule: a tint REPLACES rather than accumulates - the last entry to
+     * set one owns the color. Two colorizers averaging their targets would make
+     * neither one's setting mean what it says.
+     */
+    tint: string | null
+    /** How far toward `tint` to pull, 0..1. Ignored when `tint` is null. */
+    tintAmount: number
   }
 }
 

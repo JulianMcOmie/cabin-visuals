@@ -11,7 +11,8 @@ import { identityVisualCopy } from './identityVisualCopy'
 import { getMoverOrSplitterDefinition } from './registry'
 
 const MODULE_IDS = Object.keys(CONSOLIDATED_MOVER_BANKS)
-const DEFAULTS = mergeDefinitionSettings(consolidatedMover, undefined)
+// Consolidated has no string params, so its merged settings are all numeric.
+const DEFAULTS = mergeDefinitionSettings(consolidatedMover, undefined) as Record<string, number>
 
 function settings(
   enabled: string[],
