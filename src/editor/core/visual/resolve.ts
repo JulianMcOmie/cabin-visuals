@@ -16,6 +16,7 @@ import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../in
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
+import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
@@ -265,10 +266,14 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
   const automation = resolveAutomationLanes(track, def.params, p)
-  if (automation.length === 0) return resolved
+  // This track's own mover/splitter children are not chain entries of the object:
+  // they are this entry's FRAME, and they move it (visualCopies/moverFrame.ts).
+  // Collected by the same function as an object's chain, so frames nest.
+  const frame = resolveMoverAndSplitterChain(track, p)
+  if (automation.length === 0) return framedMoverOrSplitter(resolved, frame)
   let cachedBeat = Number.NaN
   let cached = resolved
-  return {
+  return framedMoverOrSplitter({
     apply(visualCopy, context) {
       if (context.beat !== cachedBeat) {
         cachedBeat = context.beat
@@ -276,7 +281,7 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
       }
       return cached.apply(visualCopy, context)
     },
-  }
+  }, frame)
 }
 
 /** Collect an object track's mover and splitter children together, in exact
@@ -296,15 +301,20 @@ function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOr
   return chain
 }
 
-/** True when this mover/splitter resolves as a LOCAL chain entry of its parent
- *  instrument (see resolveMoverAndSplitterChain) - i.e. its parent is a valid
- *  instrument track. Everything else (root level, nested under a plain group
- *  track or another mover, or under an instrument the registry no longer knows)
- *  is a mover "without a parent instrument": it routes globally through its
- *  `targets`, appended to the end of each target object's chain. */
-function isLocalChainChild(track: Track, p: ProjectSnapshot): boolean {
+/** True when this mover/splitter belongs to a parent's chain rather than routing
+ *  itself: either a LOCAL entry of its parent instrument's chain, or a FRAME
+ *  entry of a parent mover/splitter, which moves that parent
+ *  (visualCopies/moverFrame.ts). Both are collected by
+ *  resolveMoverAndSplitterChain from the parent's childIds, so the same prefix
+ *  logic counts either one. Everything else (root level, nested under a plain
+ *  group track, or under an instrument the registry no longer knows) is a mover
+ *  "without a parent": it routes globally through its `targets`, appended to the
+ *  end of each target object's chain. */
+function isChainChild(track: Track, p: ProjectSnapshot): boolean {
   const parent = track.parentId ? p.tracks[track.parentId] : undefined
-  return !!parent && !!getInstrument(parent.instrumentId)
+  if (!parent) return false
+  return !!getInstrument(parent.instrumentId)
+    || !!getMoverOrSplitterDefinition(moverOrSplitterId(parent))
 }
 
 function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
@@ -330,10 +340,10 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   const target = p.tracks[trackId]
   if (!target) return 1
 
-  // A local chain child counts the entries above it within its parent
-  // instrument's chain; a global entry (no parent instrument) counts each
-  // target's local chain plus every preceding global that hits it.
-  if (isLocalChainChild(target, p)) {
+  // A chain child counts the entries above it within its parent's chain -
+  // an instrument's local chain, or a parent mover's frame chain; a global entry
+  // counts each target's local chain plus every preceding global that hits it.
+  if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
     if (!parent) return 1
     const candidates = (parent.childIds ?? [])
@@ -363,7 +373,7 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       if (
         !global || global.muted ||
         !getMoverOrSplitterDefinition(moverOrSplitterId(global)) ||
-        isLocalChainChild(global, p) ||
+        isChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
       const resolved = resolveMoverOrSplitterTrack(global, p)
@@ -465,7 +475,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   for (const trackId of flattenTree(p)) {
     const track = p.tracks[trackId]
     if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
-    if (isLocalChainChild(track, p)) continue
+    if (isChainChild(track, p)) continue
     const resolved = resolveMoverOrSplitterTrack(track, p)
     if (!resolved) continue
     const seenTargets = new Set<string>()

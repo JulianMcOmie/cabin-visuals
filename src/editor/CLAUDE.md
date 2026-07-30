@@ -12,7 +12,7 @@ Everything inside the `/editor` route. `App.tsx` is the shell (client-only, dyna
   - `automation` — child lane keyframing a parent numeric param. **Value is encoded in note PITCH** (`core/trackTypes.ts`: pitch 36–84 maps linearly onto the param's [min,max]); `targetParam` + `interpolation` select what/how. `noise` flips it to gated seeded-random wander.
   - `ability` — child lane driving a parent instrument's bespoke ability (`abilityKey`, e.g. Cube's Shatter). Expressed inside the instrument's own component.
   - `envelope` — child ADSR lane (`adsr` in beats, `envDepth`, `envTarget`, `targetParam`; reserved target `'opacity'` multiplies).
-  - `mover` / `splitter` — VisualCopy chain rows (`moverId`/`splitterId` + `inputValues`); top-level movers target other tracks via `targets: Routing[]` (track / tag / subtree scopes).
+  - `mover` / `splitter` — VisualCopy chain rows (`moverId`/`splitterId` + `inputValues`); top-level movers target other tracks via `targets: Routing[]` (track / tag / subtree scopes). Nested under ANOTHER mover/splitter a mover is that parent's **frame** and moves it instead of joining the object's chain (`core/visualCopies/moverFrame.ts`) — its own `targets` are ignored.
   - `audio` — pinned audio lanes (`audioBlocks`, positioned+trimmed clip refs). Live OUTSIDE scenes (project-level, `audioTracks`/`audioRootTrackIds` in the store).
   - `director` — Main-scene-only (`directorId`, `sceneBindings` mapping MIDI pitches → scene ids).
 - **Block**: bar-positioned note container; `loop` + `loopLengthBars` tile its notes (expansion happens in `core/visual/noteFlatten.ts` at resolve time). **Note beats are relative to their block.**
