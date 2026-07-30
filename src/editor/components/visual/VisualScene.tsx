@@ -37,6 +37,7 @@ import { FinalInvertMaskContext } from '../../core/visual/finalInvertMask'
 import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
+import { IMPACT_WARP_FIELD_GLSL, resolveActiveImpactWarp } from '../../instruments/ImpactWarp'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
 
@@ -215,6 +216,31 @@ ${BASS_RIPPLE_FIELD_GLSL}
 void main() {
   vec2 offset = bassRippleOffset(vUv, amount, scale, speed, time, aspect);
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
+}`
+
+/** The percussive counterpart: a triggered, single-strike displacement in one of
+ *  four shapes, plus the channel split that makes a hit read as a hit
+ *  (instruments/ImpactWarp.tsx owns the field, the split and the style enum). */
+const IMPACT_WARP_FRAGMENT = `
+uniform sampler2D tDiffuse;
+uniform float style;
+uniform float amount;
+uniform vec2 dir;
+uniform float phase;
+uniform float size;
+uniform float seed;
+uniform float aspect;
+varying vec2 vUv;
+
+${IMPACT_WARP_FIELD_GLSL}
+
+void main() {
+  vec2 offset = impactWarpOffset(vUv, style, amount, dir, phase, size, seed, aspect);
+  vec2 split = impactWarpSplit(offset);
+  vec4 mid = texture2D(tDiffuse, impactWarpWrap(vUv + offset));
+  float red = texture2D(tDiffuse, impactWarpWrap(vUv + offset + split)).r;
+  float blue = texture2D(tDiffuse, impactWarpWrap(vUv + offset - split)).b;
+  gl_FragColor = vec4(red, mid.g, blue, mid.a);
 }`
 
 const FINAL_GRADE_FRAGMENT = `
@@ -588,6 +614,22 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    const impactWarpMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: IMPACT_WARP_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        style: { value: 0 },
+        amount: { value: 0 },
+        dir: { value: new Vector2() },
+        phase: { value: 0 },
+        size: { value: 0.5 },
+        seed: { value: 0 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const gradientMaterial = new ShaderMaterial({
       vertexShader: COLOR_FILTER_VERTEX,
       fragmentShader: BACKDROP_GRADIENT_FRAGMENT,
@@ -634,7 +676,7 @@ export function VisualScene() {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, gradientMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, gradientMaterial,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -722,6 +764,7 @@ export function VisualScene() {
     compositor.filterMesh.geometry.dispose()
     compositor.filterMaterial.dispose()
     compositor.warpMaterial.dispose()
+    compositor.impactWarpMaterial.dispose()
     compositor.gradientMaterial.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
@@ -729,6 +772,7 @@ export function VisualScene() {
   }, [compositor])
 
   const bassRippleTrackIds = useMemo(() => postProcessTracksByScene(objects, 'bassRipple'), [objects])
+  const impactWarpTrackIds = useMemo(() => postProcessTracksByScene(objects, 'impactWarp'), [objects])
   const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
   const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
 
@@ -798,6 +842,30 @@ export function VisualScene() {
           compositor.warpMaterial.uniforms.speed.value = ripple.speed
           compositor.warpMaterial.uniforms.time.value = ripple.beat
           compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
+        // Impact Warp is the OUTERMOST positional gesture: it runs after the
+        // ripple, so a scene already rumbling gets punched as one image rather
+        // than the punch being fed into the rumble. Both still precede colour.
+        for (const trackId of impactWarpTrackIds.get(sceneId) ?? []) {
+          const hit = resolveActiveImpactWarp(getObjectState(trackId))
+          if (!hit) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.impactWarpMaterial
+          const uniforms = compositor.impactWarpMaterial.uniforms
+          uniforms.tDiffuse.value = filteredTexture
+          uniforms.style.value = hit.style
+          uniforms.amount.value = hit.amount
+          ;(uniforms.dir.value as Vector2).set(hit.dirX, hit.dirY)
+          uniforms.phase.value = hit.phase
+          uniforms.size.value = hit.size
+          uniforms.seed.value = hit.seed
+          uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
           gl.setRenderTarget(output)
           gl.setClearColor(0x000000, 0)
           gl.clear(true, true, true)
