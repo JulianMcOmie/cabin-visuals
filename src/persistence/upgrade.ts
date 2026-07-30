@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 10
+export const CURRENT_VERSION = 11
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -323,6 +323,29 @@ UPGRADES[9] = (doc) => {
         if (m) next = { ...next, targetParam: m.to }
       }
       tracks[trackId] = next
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v10 → v11 ────────────────────────────────────────────────────────────────
+// The Oscilloscope stopped being a fixed full-frame instrument and became a real
+// object in the scene (a positioned, depth-sorted, billboarding panel), with the
+// old viewport-pinned overlay kept as its "Fit to screen" placement mode. New
+// scopes default to In scene; every scope that already exists was authored
+// against the pinned look, so it is pinned explicitly here. `fitToScreen` also
+// decides the on-top pass (isOnTopTrack), so this one param restores the whole
+// of the previous behaviour - nothing already made changes.
+UPGRADES[10] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      tracks[trackId] = track.instrumentId === 'oscilloscope'
+        ? { ...track, params: { ...track.params, fitToScreen: 1 } }
+        : track
     }
     scenes[sceneId] = { ...scene, tracks }
   }
