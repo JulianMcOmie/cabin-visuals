@@ -12,7 +12,10 @@ function stateAt(beat: number, notes: ResolvedNote[], params: Record<string, num
     beat,
     notes,
     activeNotes: notes.filter((n) => beat >= n.beat && beat < n.beat + (n.durationBeats || 0.05)),
-    params,
+    // These tests pin INTENSITY to full scale so the release-tail assertions
+    // read as plain fractions; the shipped default is deliberately 0.5 (full
+    // Intensity means twice the old warp, with the default half of the travel).
+    params: { amount: 1, ...params },
     opacity: 1,
     blackedOut: false,
   }
