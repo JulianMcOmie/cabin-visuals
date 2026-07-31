@@ -4,12 +4,14 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 
 ## The contract (`types.ts`)
 
-`VisualCopy = { transform: Matrix4, opacity, colorShift {hue, saturation, lightness, tint, tintAmount} }` — closed and small ON PURPOSE. Do not add instrument data, MIDI notes, splitter ancestry, or metadata channels.
+`VisualCopy = { transform: Matrix4, opacity, colorShift {hue, saturation, lightness, tint, tintAmount, tintPerceptual?} }` — closed and small ON PURPOSE. Do not add instrument data, MIDI notes, splitter ancestry, or metadata channels.
 
 - `transform` applies on top of existing placement: `final = placement * transform`.
 - **Composition convention**: DEFAULT is LOCAL (`previous * delta`) — each chain entry re-frames the ones below it, so the accumulated transform IS the copy's reference frame. Frame-independent (chain-root) motion opts out by PRE-multiplying (`delta * previous`). Every definition must document which it uses.
 - `colorShift`'s hue/saturation/lightness match `Color.offsetHSL` units (hue = normalized turn) and are RELATIVE. `tint` (a '#rrggbb' or null) + `tintAmount` are the ABSOLUTE channel — "flash this gold" can't be said relatively, because a mover never sees the object's own color. Both are applied in `core/visual/instrumentColor.ts`, which is the only place that knows the source: tint mixes first, HSL rides on top. A tint REPLACES rather than accumulates — the last chain entry to set one owns the color. All of it retargets instrument-declared color *params*, never final materials.
-- New fields go INSIDE `colorShift`, not beside it: every definition already spreads `{ ...visualCopy.colorShift }`, so they propagate through the whole library for free. A sibling field means editing ~15 files.
+- **`tintPerceptual` picks how that mix WALKS** — optional, default false (a straight channel lerp, what every pre-existing definition and save expects). It matters at partial `tintAmount`, where a note colorizer lives: three's `Color.lerp` runs in LINEAR light, so a quarter-strength flash from a dark object toward a bright color is already most of the way up in *perceived* brightness (measured, `#2c3760`→`#ffd166` at t=0.25: L 0.587 linear vs 0.481 perceptual). The object therefore blows out well before it arrives at the color — which is what "the flash just goes white" actually is. OKLab's L is perceived lightness, so a quarter of the way looks a quarter of the way. Set by the Colorizer's MIX param; `utils/oklch.ts`'s `mixOklabLinearRgb` does it in place on three's linear values, no hex round trip.
+- **The rest of that whiteness is NOT the mix and cannot be fixed from here.** `components/visual/VisualScene.tsx` composites `scene + bloom * 0.9` with `luminanceThreshold: 1.15` — a literal add that saturates all three channels, so past the clip point every picked color converges on the same white core with a colored halo. On top of it an instrument's own material adds white specular (Cube: `clearcoat 0.9`, `envMapIntensity 1.25`). Verified end to end: at INTENSITY 1 the Colorizer delivers `#ffd166` to the Cube's albedo *exactly*, and the cube still renders as a near-white face ringed in gold. The contract is deliberate — instruments keep ownership of emissive, lighting and HDR — so "my flash looks white at high intensity on an emissive instrument" is an instrument/bloom question, not a colorizer one.
+- New fields go INSIDE `colorShift`, not beside it: every definition already spreads `{ ...visualCopy.colorShift }`, so they propagate through the whole library for free. A sibling field means editing ~15 files. **And every new field must also be `put()` into `core/visual/instrumentFrame.ts`'s signature buffer**, or editing it while paused changes nothing on screen (the frame is skipped as unchanged) and you will chase a phantom bug.
 - Context gives `{ beat, index, count }` where index/count describe the COMPLETE output of the previous step, so movers can react to upstream splitter multiplicity. It also carries `formation` — the whole array of copies the step is about to transform, for movers whose treatment of one copy depends on how the others are arranged (Conveyor's belt period). Passed by reference with a stable identity per step, so measuring it is O(n) per frame, not O(n²); the copies are immutable, as everywhere else.
 - **`warpBeat` is the one escape from space into time.** `apply` can only restate the copy it is handed — it cannot un-compute the instrument animation, automation or upstream motion already baked in below it, so freeze/reverse cannot be a transform. An entry may instead implement optional `warpBeat(realBeat) → beat`, and `computeAtBeat` evaluates that object's ENTIRE state at the result (energy, automation, envelopes, localTransform, activeNotes, `state.beat`, and the whole chain). Object-wide, not a chain partition: the entry's position in the chain is irrelevant. Multiple entries compose by SUMMING deltas against the real beat (`warpChainBeat` in `resolveVisualCopies.ts`) — feeding one the other's output would make it read its own notes at the wrong times. Subtree scope comes free from a top-level mover's `targets` routing.
 
@@ -19,7 +21,48 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 - `library.ts` — the list of shipped definitions; `registry.ts` — id → def. **Registry ownership routes migration**: ids found here go through the VisualCopy chain; unknown ids fall back to the legacy mover path. New ids must not collide with legacy mover ids. Registry never imports the legacy registry.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `moverFrame.ts` — **frames**: a mover nested under another mover MOVES it (Impact Scatter's blast center can drift) rather than becoming a second chain entry. It works by handing the parent a `placementTransform` pre-multiplied by the frame's inverse, so a world-placed mover reads its own field as moved — no contract change, and the returned transform needs no fixing up. Frames nest, and only movers that actually read `placementTransform` respond; a pure relative displacement (Burst, Motion, the rotations) has no location to move, so a frame under one is a no-op.
-- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion`, `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion` (three nested rings that all turn passively; MIDI only MULTIPLIES — see below), `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color; a PALETTE of five color slots, one MIDI row each, plus the rainbow row), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `impactPulse` (note → a percussive SIZE punch; see below), `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+
+**`radialMotion` — passive by default, MIDI as a MULTIPLIER.** Three nested depths
+(`copies0/1/2` = 8/4/2, `radius0/1/2`, and per-axis `spinX/Y/Z 0/1/2` in °/beat), each
+resolved as `spin · Rz(seat) · Tx(radius)` and composed LOCAL, so a depth's rotation
+carries everything nested below it. Two things about the MIDI vocabulary are the whole
+design and are easy to undo by accident:
+
+- **The rows scale the knobs; they do not replace them.** Radius rows latch ×0/×0.5/×1/×2
+  and spin rows latch ×−1/×0/×0.5/×1/×2, both with a resting value of ×1. That is why the
+  arrangement sits at its set radii and turns on its own with an empty lane — the panel
+  says what the piece looks like, MIDI bends it. Rows that set absolute values (what the
+  old layer-based version did) make the knobs meaningless the moment one note exists.
+- **Spin integrates the shared MULTIPLIER into "spin beats", not each axis separately.**
+  `evaluateRadialMotionSpinBeats` returns a phase the three axis rates are multiplied by,
+  so freezing a tumbling ring stops all three axes at the pose they were in. Integrating
+  per axis lets them drift apart and a freeze becomes a lurch.
+
+Its bank in `consolidatedMover.ts` is still 69 pitches wide for 27 rows. Do not reclaim
+the slack: the bank sizes are what fix every module below it, so shrinking it silently
+retunes every existing project's All Movers lane.
+
+**Scale movers (`impactPulse`) carry two rules the translation movers never hit:**
+
+1. **Size must be an EXPONENT, not a summand.** `scale = (1 + HIT)^pulse` makes a
+   swell and its mirror-image squash exact reciprocals, and nothing can cross zero.
+   Adding the signed pulse instead is asymmetric (+0.5 grows by half, −0.5 shrinks by
+   half — twice as violent), and a large enough squash drives the scale negative,
+   inverting the object's winding.
+2. **LOCAL composition is load-bearing here, not merely the default.** Post-multiplying
+   (`previous * scale`) scales about the copy's OWN origin in its OWN axes, so a
+   splitter above it makes every copy pulse in place. PRE-multiplying would scale each
+   copy's POSITION too and the whole formation would breathe toward the world origin.
+   The same convention hands anisotropic squash-and-stretch its axis for free: local Y
+   is each copy's own up, so a rotated copy stretches along its own.
+
+`impactPulse` is also the one note-driven entry that **deliberately ignores note
+duration**. Everything else here gates on the written note (Visibility's sustain,
+Colorizer's wash, Conveyor's belt); a snare's amplitude envelope has no sustain, so
+this one peaks on the onset frame and decays, and a 16th and a whole note hit
+identically. Follow it for any other percussion-shaped mover — and say so in the file,
+because it contradicts the module's normal reading of a note.
 
 **`tunnel` vs `approach`** — both stream copies down the camera axis and recycle with a
 `mod`, and both must keep their near end BEHIND the camera (z = 5) so the recycle is
@@ -65,5 +108,16 @@ phrase is only truncated when that many really are in frame together.
 - **Hiding a teleport with a fade means tying the fade to SPEED, not to the box.** A fade band expressed as a fraction of the span is crossed in two frames by a fast belt, so the copy is still ~40% visible when it jumps (measured: 0.376 at speed 3). Derive the band from `speed × fadeBeats` and the dissolve always lasts the same number of beats.
 
 - Chain ORDER matters for world-placed movers, because they read the live chained position: a Motion **above** an Impact Scatter drifts the object away from the blast, weakening and delaying the hit; **below** it, the blast stays full strength and the drift rides on top. Put the drift in the Scatter's frame instead to move the blast WITH it.
+
+## The Colorizer's palette
+
+Five flash rows (one per color slot) + the rainbow row. Two things constrain the pitches and are easy to get wrong:
+
+- **Slot 1 keeps pitch 60 and the un-suffixed `color` key**, so every project saved before the palette existed keeps its notes and its color with no migration. The rainbow already owned 61, so slots 2-5 take **62-65** — the pitches are deliberately non-contiguous.
+- **Row ORDER is not pitch order.** `generateInstrumentRows` renders rows in the order `midiRows()` returns them (it does not sort), so the five colors are listed together with the rainbow underneath. Rows carry their own live `color`, which is why `midiRows` takes settings: the piano roll IS the palette, and repainting a slot repaints its notes.
+
+Overlap rules differ by axis, and both matter: notes on ONE row take the loudest (two flashes at once are still one flash), while notes on DIFFERENT rows **blend** — each row's color weighted by its own gain, averaged in OKLab — with the overall strength still the loudest row's, never the sum. Hue is averaged as a Cartesian a/b pair, never as an angle (350° and 10° average to 180°, the opposite color). The single-sounding-slot case short-circuits and returns the user's hex verbatim, so the common path does no color math at all; `colorizerPalette()` pre-parses the five slots once per resolve rather than per copy per frame.
+
+`identityColor` on a definition (same contract as an instrument's) makes the chain entry WEAR that color in the UI — device row, timeline block, drag ghost. Chain entries otherwise inherit their instrument's color so a lane family reads as one voice; the Colorizer opts out via `{ param: 'color' }` because it HAS a color the user picked. Resolved in `utils/trackDisplayColor.ts`, and it still loses to the achromatic guard.
 
 Adding one: new file with a definition + entry in `library.ts` + (optional) bespoke settings UI in `userInterfaceRenderers/bespokeRegistries.ts` keyed by the definition id; the generic param list is the fallback.

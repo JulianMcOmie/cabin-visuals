@@ -87,3 +87,38 @@ test('audio tracks keep the sapphire identity here too', () => {
   const t = baseTrack({ type: 'audio' })
   assert.equal(resolveTrackIdentityColor(t, { [t.id]: t }), AUDIO_TRACK_COLOR)
 })
+
+// ── Chain entries with a color of their own ──────────────────────────────────
+
+test('a Colorizer wears its own primary color, not its instrument`s', () => {
+  const parent = baseTrack({ id: 'p', stringParams: { baseColor: '#ff2200' } })
+  const colorizer = baseTrack({
+    id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p',
+    stringParams: { color: '#06d6a0' },
+  })
+  assert.equal(resolveTrackDisplayColor(colorizer, { p: parent, c: colorizer }), '#06d6a0')
+  assert.equal(resolveTrackIdentityColor(colorizer, { p: parent, c: colorizer }), '#06d6a0')
+})
+
+test('a Colorizer with nothing picked yet wears the palette`s declared first color', () => {
+  const parent = baseTrack({ id: 'p', stringParams: { baseColor: '#ff2200' } })
+  const colorizer = baseTrack({ id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p' })
+  assert.equal(resolveTrackDisplayColor(colorizer, { p: parent, c: colorizer }), '#ffd166')
+})
+
+test('an achromatic primary sends the Colorizer back to its instrument`s color', () => {
+  // Same guard the instruments get: a white flash color says nothing about
+  // which voice this is, so the lane family wins again.
+  const parent = baseTrack({ id: 'p', stringParams: { baseColor: '#ff2200' } })
+  const colorizer = baseTrack({
+    id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p',
+    stringParams: { color: '#ffffff' },
+  })
+  assert.equal(resolveTrackDisplayColor(colorizer, { p: parent, c: colorizer }), '#ff2200')
+})
+
+test('movers that declare no color of their own still inherit the instrument', () => {
+  const parent = baseTrack({ id: 'p', stringParams: { baseColor: '#ff2200' } })
+  const mover = baseTrack({ id: 'm', type: 'mover', moverId: 'motion', parentId: 'p', color: '#123456' })
+  assert.equal(resolveTrackDisplayColor(mover, { p: parent, m: mover }), '#ff2200')
+})
