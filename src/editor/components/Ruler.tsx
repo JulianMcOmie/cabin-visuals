@@ -5,6 +5,7 @@ import {
   LOOP_REGION_DISABLED_COLOR,
   LOOP_REGION_ENABLED_COLOR,
   PLAYHEAD_TRIANGLE_HALF,
+  edgeHitPx,
 } from '../constants'
 import { computeRulerGrid } from './rulerGrid'
 import type { LoopResizeEdge } from '../hooks/useLoopDrag'
@@ -85,6 +86,12 @@ export function Ruler({
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
+  // The band's own width is content space (it shrinks as you zoom out), but its
+  // resize handles are screen space. Without the cap, a band narrower than two
+  // insets hands its whole width to the LAST handle painted (the end one), and
+  // the start edge + the move middle become ungrabbable at low zoom.
+  const loopBandWidthPx = loopRegion ? (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat : 0
+  const loopEdgeInset = edgeHitPx(loopBandWidthPx, LOOP_MOVE_EDGE_INSET)
   const beatExtent = totalBeats ?? totalBars * beatsPerBar
 
   // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
@@ -161,7 +168,7 @@ export function Ruler({
               className="absolute top-0 pointer-events-none"
               style={{
                 left: loopRegion.startBeat * pixelsPerBeat,
-                width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
+                width: loopBandWidthPx,
                 height: '50%',
                 backgroundColor: loopRegion.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR,
                 borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
@@ -172,19 +179,19 @@ export function Ruler({
               <div
                 data-loop-resize-handle="start"
                 className="absolute top-0 bottom-0 left-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                style={{ width: loopEdgeInset }}
                 onPointerDown={(e) => onLoopResizeStart(e, 'start')}
               />
               <div
                 data-loop-move-handle=""
                 className="absolute top-0 bottom-0 cursor-grab pointer-events-auto"
-                style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET }}
+                style={{ left: loopEdgeInset, right: loopEdgeInset }}
                 onPointerDown={onLoopMoveStart}
               />
               <div
                 data-loop-resize-handle="end"
                 className="absolute top-0 bottom-0 right-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                style={{ width: loopEdgeInset }}
                 onPointerDown={(e) => onLoopResizeStart(e, 'end')}
               />
             </div>
