@@ -22,6 +22,7 @@ import { LaserSphereUserInterfaceRenderer } from './LaserSphereUserInterface'
 import { ShapeFlightUserInterfaceRenderer } from './ShapeFlightUserInterface'
 import { MetronomeBallsUserInterfaceRenderer } from './MetronomeBallsUserInterface'
 import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
+import { FlashWallUserInterfaceRenderer } from './FlashWallUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 import type { UserInterfaceRendererId } from './ids'
 
@@ -54,6 +55,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   shapeFlight: ShapeFlightUserInterfaceRenderer,
   metronomeBalls: MetronomeBallsUserInterfaceRenderer,
   emojiDisplay: EmojiDisplayUserInterfaceRenderer,
+  flashWall: FlashWallUserInterfaceRenderer,
 }
 
 export function getUserInterfaceRenderer(id: UserInterfaceRendererId): UserInterfaceRendererDefinition {

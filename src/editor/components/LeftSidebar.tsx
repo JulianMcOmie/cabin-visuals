@@ -172,6 +172,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       </g>
     </svg>
   )},
+  { id: 'flashWall', name: 'Flash Wall', description: 'A screen-filling wall of light - each note flashes its own slice of the frame through an ADSR envelope.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="0.5" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.25" />
+      <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
+      <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
+      <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
+    </svg>
+  )},
   { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
@@ -299,7 +307,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // they share is that a note is a PERFORMANCE on them - each one spawns its own
 // short-lived event rather than posing a standing shape - so they belong
 // together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop'])
+const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // Extras is the remainder: everything the curated folders above did not claim.

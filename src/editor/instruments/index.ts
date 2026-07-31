@@ -38,6 +38,7 @@ import { particleSphereInstrument } from './ParticleSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
 import { waterDropInstrument } from './WaterDrop'
+import { flashWallInstrument } from './FlashWall'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -78,6 +79,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
   [waterDropInstrument.id]: waterDropInstrument,
+  [flashWallInstrument.id]: flashWallInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

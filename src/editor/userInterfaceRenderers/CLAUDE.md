@@ -57,6 +57,14 @@ that same panel:
   instead squeezes short values into the left fifth. Use a proportional span WITH a
   beat grid behind it: the shape fills the window and the grid says how long it lasted.
 
+**TrackEditor filters `showIf`-gated params BEFORE the renderer sees them.** A
+bespoke panel's `parameters` array only contains params whose gate is currently
+satisfied - so a panel that lists a gated param (Flash Wall's `panelWidth`,
+gated on `fitToScreen=0`) in its "all keys present, else ParameterList" check
+silently renders the generic fallback whenever the gate is off, which looks
+like the registration failed. Treat gated params as optional bindings; only
+ungated keys belong in the fallback check.
+
 **Give a stage zone a FIXED width, never a percentage.** The settings panel is
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
 empty field with a 34px object marooned in the middle of it the moment the panel was

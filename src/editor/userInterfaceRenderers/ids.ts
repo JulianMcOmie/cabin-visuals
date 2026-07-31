@@ -23,3 +23,4 @@ export type UserInterfaceRendererId =
   | 'shapeFlight'
   | 'metronomeBalls'
   | 'emojiDisplay'
+  | 'flashWall'
