@@ -183,7 +183,10 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
   const menuScene = menu ? scenes[menu.id] : null
 
   return (
-    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-app)] px-2 select-none">
+    // Slightly translucent (the /85) so the workspace's ambient light passes
+    // through the seam between visualizer and timeline instead of stopping at
+    // an opaque bar - the strip sits exactly on that boundary.
+    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-app)]/85 px-2 select-none">
       {sceneOrder.map((id) => {
         const scene = scenes[id]
         if (!scene) return null
