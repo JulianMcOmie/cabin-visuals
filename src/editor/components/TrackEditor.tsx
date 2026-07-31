@@ -403,14 +403,14 @@ export function TrackEditor() {
   // top, the waveform running through the playhead below.
   if (track?.type === 'audio') {
     return (
-      <div className="h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
+      <div className="visualizer-glass-surface h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
         <AudioTrackDetail track={track} />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
+    <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
       {/* Identity rides ON the tab rail: the name takes the left, the tabs shrink
           to the right, and the subject's own color lights the ACTIVE tab instead
           of the neutral elevated fill. Costs no vertical space, so the panel still
