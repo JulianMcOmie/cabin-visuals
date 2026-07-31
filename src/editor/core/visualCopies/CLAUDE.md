@@ -19,7 +19,48 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 - `library.ts` — the list of shipped definitions; `registry.ts` — id → def. **Registry ownership routes migration**: ids found here go through the VisualCopy chain; unknown ids fall back to the legacy mover path. New ids must not collide with legacy mover ids. Registry never imports the legacy registry.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `moverFrame.ts` — **frames**: a mover nested under another mover MOVES it (Impact Scatter's blast center can drift) rather than becoming a second chain entry. It works by handing the parent a `placementTransform` pre-multiplied by the frame's inverse, so a world-placed mover reads its own field as moved — no contract change, and the returned transform needs no fixing up. Frames nest, and only movers that actually read `placementTransform` respond; a pure relative displacement (Burst, Motion, the rotations) has no location to move, so a frame under one is a no-op.
-- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion`, `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+- Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion` (three nested rings that all turn passively; MIDI only MULTIPLIES — see below), `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `impactPulse` (note → a percussive SIZE punch; see below), `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.
+
+**`radialMotion` — passive by default, MIDI as a MULTIPLIER.** Three nested depths
+(`copies0/1/2` = 8/4/2, `radius0/1/2`, and per-axis `spinX/Y/Z 0/1/2` in °/beat), each
+resolved as `spin · Rz(seat) · Tx(radius)` and composed LOCAL, so a depth's rotation
+carries everything nested below it. Two things about the MIDI vocabulary are the whole
+design and are easy to undo by accident:
+
+- **The rows scale the knobs; they do not replace them.** Radius rows latch ×0/×0.5/×1/×2
+  and spin rows latch ×−1/×0/×0.5/×1/×2, both with a resting value of ×1. That is why the
+  arrangement sits at its set radii and turns on its own with an empty lane — the panel
+  says what the piece looks like, MIDI bends it. Rows that set absolute values (what the
+  old layer-based version did) make the knobs meaningless the moment one note exists.
+- **Spin integrates the shared MULTIPLIER into "spin beats", not each axis separately.**
+  `evaluateRadialMotionSpinBeats` returns a phase the three axis rates are multiplied by,
+  so freezing a tumbling ring stops all three axes at the pose they were in. Integrating
+  per axis lets them drift apart and a freeze becomes a lurch.
+
+Its bank in `consolidatedMover.ts` is still 69 pitches wide for 27 rows. Do not reclaim
+the slack: the bank sizes are what fix every module below it, so shrinking it silently
+retunes every existing project's All Movers lane.
+
+**Scale movers (`impactPulse`) carry two rules the translation movers never hit:**
+
+1. **Size must be an EXPONENT, not a summand.** `scale = (1 + HIT)^pulse` makes a
+   swell and its mirror-image squash exact reciprocals, and nothing can cross zero.
+   Adding the signed pulse instead is asymmetric (+0.5 grows by half, −0.5 shrinks by
+   half — twice as violent), and a large enough squash drives the scale negative,
+   inverting the object's winding.
+2. **LOCAL composition is load-bearing here, not merely the default.** Post-multiplying
+   (`previous * scale`) scales about the copy's OWN origin in its OWN axes, so a
+   splitter above it makes every copy pulse in place. PRE-multiplying would scale each
+   copy's POSITION too and the whole formation would breathe toward the world origin.
+   The same convention hands anisotropic squash-and-stretch its axis for free: local Y
+   is each copy's own up, so a rotated copy stretches along its own.
+
+`impactPulse` is also the one note-driven entry that **deliberately ignores note
+duration**. Everything else here gates on the written note (Visibility's sustain,
+Colorizer's wash, Conveyor's belt); a snare's amplitude envelope has no sustain, so
+this one peaks on the onset frame and decays, and a 16th and a whole note hit
+identically. Follow it for any other percussion-shaped mover — and say so in the file,
+because it contradicts the module's normal reading of a note.
 
 **`tunnel` vs `approach`** — both stream copies down the camera axis and recycle with a
 `mod`, and both must keep their near end BEHIND the camera (z = 5) so the recycle is

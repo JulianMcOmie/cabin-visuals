@@ -19,6 +19,7 @@ import { gradientColorizer } from './gradientColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
 import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
+import { impactPulseMover } from './impactPulse'
 import { waveTerrainMover } from './waveTerrain'
 import { visibilityMover } from './visibility'
 import { freezeMover } from './freeze'
@@ -278,6 +279,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   radialMotionMover,
   meteorImpactMover,
   impactScatterMover,
+  impactPulseMover,
   burstMover,
   rotateBurstMover,
   orbitBurstMover,

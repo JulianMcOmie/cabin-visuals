@@ -338,22 +338,19 @@ interface CompoundMoverPreview {
   label?: string
 }
 const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
-  // One color layer of 6x3 copies: the outer radius steps zero → far → back
-  // (pitches 36-39 are the four radius choices), so the whole single-layer
-  // arrangement BLOOMS out of the center and collapses again, while held spin
-  // notes rotate the shapes, the outer ring, and the inner triads throughout.
+  // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
+  // on their own - the mover needs no notes to move - so the only notes here
+  // step the OUTER radius multiplier (36-39 = collapse/half/home/double) and
+  // the arrangement BLOOMS out of the center and folds back in while it spins.
   radialMotion: {
     label: 'radial motion',
     seeds: [[0, 0, 0]],
     seedScale: 0.34,
-    settings: { layers: 1, outerCopies: 6, innerCopies: 3 },
-    notes: [
-      ...[36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
-      holdNote(41), // inner radius · near
-      holdNote(64), // shape spin +1
-      holdNote(69), // outer spin +1
-      holdNote(74), // inner spin +1
-    ],
+    settings: {
+      copies0: 6, copies1: 3, copies2: 2,
+      radius0: 1.9, radius1: 0.85, radius2: 0.38,
+    },
+    notes: [36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
   },
   // Motion's Step block is the 60-65 signed basis the generic arc already
   // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
