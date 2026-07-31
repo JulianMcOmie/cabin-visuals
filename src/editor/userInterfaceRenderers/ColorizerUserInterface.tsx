@@ -8,22 +8,28 @@
 // the definition's real evaluateColorizer() over a looping performance. What
 // you see is what the colorizer does - INTENSITY is how far the objects go,
 // ATTACK and RELEASE and SHAPE are how they get there and back, STAGGER rakes
-// the flash across the field, and COLOR is the color they flash.
+// the flash across the field, and the PALETTE is the colors they flash.
 //
-// The accent is the instrument's own color param, per the guide: the COLOR pill
-// is both the panel's light source and the input for it, and it wears the
+// The accent is color slot 1, per the guide: the palette's first pill is both
+// the panel's light source and an input for it, and it wears the
 // INTENSITY-driven halo.
+//
+// The demo performance deliberately plays SEVERAL slots, including one genuine
+// two-slot chord, because the palette and the blend between its colors are the
+// things a single-color preview cannot show.
 
 import { useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, InstancedMesh, Object3D, type OrthographicCamera } from 'three'
 import {
-  COLORIZER_FLASH_PITCH,
+  BLEND_LINEAR,
+  COLORIZER_FLASH_SLOTS,
   SHAPE_EVEN,
   SHAPE_SPIKE,
   SHAPE_SWELL,
   COLORIZER_RAINBOW_PITCH,
+  colorizerPalette,
   evaluateColorizer,
   noteColorizer,
   rainbowDiagonal,
@@ -32,6 +38,7 @@ import {
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
 import { isNumberParam } from '../instruments/types'
+import { mixOklabLinearRgb } from '../utils/oklch'
 import { ParameterList } from './ParametersUserInterface'
 import { ColorWheelPill, towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
@@ -48,10 +55,12 @@ const ROOM = '#05070c'
 const FIELD_HEIGHT = 150
 
 // ── The looping demo performance ─────────────────────────────────────────────
-// Two bars at a notional 120 BPM, one per row. Bar 1 is the flash row alone:
-// accents and ghost notes, so dynamics and sustain read. Bar 2 holds the
-// rainbow row with flashes riding on top, which is the case worth seeing - the
-// two channels composing rather than one replacing the other.
+// Two bars at a notional 120 BPM. Bar 1 is the palette alone: a phrase walking
+// through slots 1-3 with accents and ghost notes, so both the colors and the
+// dynamics read, ending on a genuine two-slot chord (slot 1 loud, slot 4 soft)
+// - the blend, which is the case a single-color preview cannot show. Bar 2
+// holds the rainbow row with flashes riding on top, the other case worth
+// seeing: the two channels composing rather than one replacing the other.
 
 const LOOP_BEATS = 8
 
@@ -64,22 +73,26 @@ const at = (beat: number, durationBeats: number, velocity: number, pitch: number
   blockEndBeat: LOOP_BEATS,
 })
 
-const note = (beat: number, durationBeats: number, velocity: number) =>
-  at(beat, durationBeats, velocity, COLORIZER_FLASH_PITCH)
+/** `slot` is a 0-based index into the palette, not a pitch - the panel should
+ *  not have to know which pitches the definition happened to pick. */
+const flash = (slot: number, beat: number, durationBeats: number, velocity: number) =>
+  at(beat, durationBeats, velocity, COLORIZER_FLASH_SLOTS[slot].pitch)
 const rainbow = (beat: number, durationBeats: number, velocity: number) =>
   at(beat, durationBeats, velocity, COLORIZER_RAINBOW_PITCH)
 
 const PERFORMANCE: ResolvedNote[] = [
-  note(0, 0.05, 1),
-  note(1, 0.05, 0.45),
-  note(1.5, 0.05, 0.75),
-  note(2, 0.05, 1),
-  note(3, 0.05, 0.5),
-  note(3.5, 0.05, 0.9),
+  flash(0, 0, 0.05, 1),
+  flash(1, 1, 0.05, 0.45),
+  flash(1, 1.5, 0.05, 0.75),
+  flash(2, 2, 0.05, 1),
+  // The chord: two slots at once, unequal, so the field lands between their
+  // colors and leans toward the louder.
+  flash(0, 3, 0.05, 0.9),
+  flash(3, 3, 0.05, 0.55),
   rainbow(4.25, 3.25, 1),
-  note(5, 0.05, 0.8),
-  note(6, 0.05, 1),
-  note(7, 0.05, 0.7),
+  flash(1, 5, 0.05, 0.8),
+  flash(4, 6, 0.05, 1),
+  flash(2, 7, 0.05, 0.7),
 ]
 
 // The loop is seamless: the neighbouring passes are present as real notes, so a
@@ -108,16 +121,18 @@ function ObjectField({ settings }: { settings: ColorizerSettings }) {
     tint: new Color(),
   }).current
 
-  const resolved = useMemo(() => noteColorizer.resolve({ settings, notes: LOOP_NOTES }), [settings])
-  const live = useRef({ resolved, settings })
-  live.current = { resolved, settings }
+  // Parsed once per settings change, exactly as resolve() does it on stage -
+  // the field evaluates the palette once per cube per frame.
+  const palette = useMemo(() => colorizerPalette(settings), [settings])
+  const live = useRef({ palette, settings })
+  live.current = { palette, settings }
 
   useFrame(({ clock, camera, gl }) => {
     const mesh = meshRef.current
     if (!mesh) return
     const { dummy, color, base, tint } = scratch
     const current = live.current
-    tint.set(current.settings.color)
+    const perceptual = current.settings.blend !== BLEND_LINEAR
     const beat = (clock.getElapsedTime() * 2) % LOOP_BEATS
 
     // The frustum is derived from the canvas ELEMENT rather than left to the
@@ -157,12 +172,18 @@ function ObjectField({ settings }: { settings: ColorizerSettings }) {
       // STAGGER sweeps the field the same way it will sweep a real split. The
       // rainbow's phase comes from the same rainbowDiagonal() the mover uses,
       // so the sweep angle here is the sweep angle on stage.
-      const { tintAmount, hue } = evaluateColorizer(
-        LOOP_NOTES, current.settings, beat, index, rainbowDiagonal(x, y),
+      const { tintAmount, hue, tint: target } = evaluateColorizer(
+        LOOP_NOTES, current.settings, beat, index, rainbowDiagonal(x, y), current.palette,
       )
-      // Same order instrumentColor.ts applies them in: absolute tint first,
-      // relative hue on top.
-      color.copy(base).lerp(tint, clamp(tintAmount, 0, 1))
+      // Same order and the same two mixes instrumentColor.ts uses: absolute
+      // tint first (perceptual or straight, per MIX), relative hue on top.
+      color.copy(base)
+      if (target && tintAmount > 0) {
+        tint.set(target)
+        const amount = clamp(tintAmount, 0, 1)
+        if (perceptual) mixOklabLinearRgb(color, tint, amount)
+        else color.lerp(tint, amount)
+      }
       if (hue !== 0) color.offsetHSL(hue, 0, 0)
       mesh.setColorAt(index, color)
     }
@@ -355,9 +376,40 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
+/** Word-labelled segmented control, for a select whose options are not curves.
+ *  Same chassis as ShapeSelector so the two read as one family. */
+function WordSelector({ bound, label }: { bound: UserInterfaceParameter; label: string }) {
+  const definition = bound.definition
+  if (definition.type !== 'select') return null
+  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex overflow-hidden rounded-md border border-white/10">
+        {definition.options.map((option) => {
+          const active = option.value === selected
+          return (
+            <button
+              key={option.value}
+              aria-pressed={active}
+              onClick={() => bound.setValue(option.value)}
+              className={`px-1.5 py-[3px] text-[8px] font-semibold tracking-[0.1em] transition-colors ${
+                active ? 'bg-[var(--cz-accent)] text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'
+              }`}
+            >
+              {option.label.slice(0, 4).toUpperCase()}
+            </button>
+          )
+        })}
+      </div>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+    </div>
+  )
+}
+
 const REQUIRED_KEYS = [
-  'intensity', 'attackBeats', 'releaseBeats', 'staggerBeats', 'color', 'shape',
+  'intensity', 'attackBeats', 'releaseBeats', 'staggerBeats', 'shape', 'blend',
   'rainbowRate', 'rainbowSpread',
+  ...COLORIZER_FLASH_SLOTS.map((slot) => slot.key),
 ]
 
 export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
@@ -414,18 +466,30 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         <ChromaKnob parameter={bound.rainbowSpread} label="SPREAD" />
         <ShapeSelector bound={bound.shape} />
         <div className="ml-auto">
-          <ColorWheelPill
-            value={accent}
-            onChange={(hex) => bound.color.setValue(hex)}
-            label="COLOR"
-            ariaLabel="Flash color"
-            title="The color every note flashes toward"
-            // The pill is the emitter: turn INTENSITY up and it blazes, while
-            // the rest of the console stays calm.
-            halo={`0 0 ${5 + intensity * 16}px ${withAlpha(accent, 0.2 + intensity * 0.5)}`}
-            pillTestId="colorizer-color-pill"
-          />
+          <WordSelector bound={bound.blend} label="MIX" />
         </div>
+      </div>
+      {/* The palette gets its own shelf rather than a slot in the knob row:
+          five pills are the panel's second subject, and the piano roll shows
+          these same five colors on its five rows, so they need to read as a
+          set you can scan against it. */}
+      <div className="flex items-end gap-1.5 border-t border-white/[0.06] px-3 pb-3 pt-2.5">
+        {COLORIZER_FLASH_SLOTS.map((slot, index) => (
+          <ColorWheelPill
+            key={slot.key}
+            value={settings[slot.key]}
+            onChange={(hex) => bound[slot.key].setValue(hex)}
+            label={String(index + 1)}
+            ariaLabel={`${slot.label} flash color`}
+            title={`${slot.label} - the color that row's notes flash toward`}
+            align={index < 3 ? 'left' : 'right'}
+            // Slot 1 is the panel's light source, so it alone wears the
+            // INTENSITY halo; five blazing pills would just be noise.
+            halo={index === 0 ? `0 0 ${5 + intensity * 16}px ${withAlpha(accent, 0.2 + intensity * 0.5)}` : undefined}
+            pillTestId={index === 0 ? 'colorizer-color-pill' : `colorizer-color-pill-${index + 1}`}
+          />
+        ))}
+        <span className="mb-1 ml-auto text-[8px] font-semibold tracking-[0.12em] text-white/25">PALETTE</span>
       </div>
     </section>
   )
