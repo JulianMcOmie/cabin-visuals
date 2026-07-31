@@ -51,6 +51,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 import { wrapToBound } from './motion'
 import { SIGNED_BASIS_DIRECTIONS, normalizedVelocity } from './motionBasis'
 import type { VisualCopy } from './types'
+import { CONVEYOR_COLOR } from './identityColors'
 
 export interface ConveyorSettings {
   /** Units travelled per beat while a direction note is held. */
@@ -234,6 +235,7 @@ export const conveyorMover: MoverOrSplitterDefinition<ConveyorSettings> = {
   id: 'conveyor',
   label: 'Conveyor',
   kind: 'mover',
+  identityColor: CONVEYOR_COLOR,
   params: [
     { key: 'speed', label: 'Speed (/beat)', min: 0, max: 20, step: 0.1, default: 3 },
     { key: 'glide', label: 'Glide (beats)', min: 0, max: 4, step: 0.05, default: 0.25 },

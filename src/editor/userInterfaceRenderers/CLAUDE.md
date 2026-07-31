@@ -29,6 +29,14 @@ Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` 
 
 Driving `time` from rAF is fine in panel code: the pause invariant governs the rendered visual (where `time` is the beat); a panel canvas is chrome, like the animated disc in `KaleidoscopeEffectUserInterface`.
 
+**A mover/splitter/colorizer panel's accent is NOT the panel's to choose.** It comes
+from the definition's `identityColor` (`core/visualCopies/identityColors.ts`), which is
+the same value its timeline blocks and piano-roll notes wear - so the console and the
+notes you write in it are one colour by construction. Import the constant; never
+re-declare the hex locally, which is exactly the drift the shared module exists to
+prevent. (The nine panels that had hard-coded accents kept their exact colours - the
+palette was built around them - they just import them now.)
+
 **A panel whose subject is MOTION should use plain DOM transforms, not r3f.**
 `ImpactPulseMoverUserInterface` animates its subject with `element.style.transform` off
 one rAF loop rather than a `<Canvas>`, precisely because of the black-until-play note

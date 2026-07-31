@@ -90,7 +90,7 @@ const SCENE_INSTRUMENTS = withKind('object', [
   )},
   { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#fde047" />
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#ffffff" />
     </svg>
   )},
 ])
@@ -425,12 +425,12 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 // strikes once per note and decays; Rumble warps for as long as it's held.
 // Visibility rides with Impulse - its ADSR window is exactly that shape.
 const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
-const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
+// Strobe sits in Rumble rather than Color: it is scene-wide and sustained -
+// it keeps flashing for exactly as long as the note is held, which is the
+// envelope Rumble is defined by.
+const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
-// Strobe files with Color Filters rather than under Impact: both are scene-wide
-// colour post-process passes held by a note, and Strobe's styles ARE colour
-// looks (inversion, blackout, flash) on a beat or frame gate.
-const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters', 'strobe']
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its

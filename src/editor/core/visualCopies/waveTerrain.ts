@@ -10,6 +10,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { BURST_EASINGS } from './burstEasings'
 import { normalizedVelocity } from './motionBasis'
+import { WAVE_TERRAIN_COLOR } from './identityColors'
 
 export const WAVE_TERRAIN_AMP_UP_PITCH = 60
 export const WAVE_TERRAIN_AMP_DOWN_PITCH = 61
@@ -187,6 +188,7 @@ export const waveTerrainMover: MoverOrSplitterDefinition<WaveTerrainSettings> = 
   id: 'waveTerrain',
   label: 'Wave Terrain',
   kind: 'mover',
+  identityColor: WAVE_TERRAIN_COLOR,
   params: [
     {
       key: 'shape',

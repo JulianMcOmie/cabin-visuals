@@ -228,7 +228,6 @@ const TABS: { id: Tab; label: string; short: string; sceneLabel: string; sceneSh
  *  Scenes have no identity color of their own, so they borrow the theme accent. */
 function panelIdentity(
   track: Track | null,
-  identityColor: string | null,
   scene: Scene | null | undefined,
 ): { name: string; kind: string; color: string } | null {
   if (track) {
@@ -246,7 +245,7 @@ function panelIdentity(
     // naming this instrument, so an achromatic instrument should light the tab
     // white rather than borrow a cycle color that starts out blue and reads as
     // the app/scene accent.
-    return { name: track.name, kind, color: identityColor ?? track.color }
+    return { name: track.name, kind, color: resolveTrackIdentityColor(track) }
   }
   if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
   return null
@@ -360,13 +359,10 @@ export function TrackEditor() {
   // The inspector subscribes to the SELECTED track and its parent, never the
   // whole tracks record - a whole-record selector here re-renders every bespoke
   // settings panel (some carrying canvases) on every pointermove of a timeline
-  // drag. The color selectors return strings, so they re-render only on a real
-  // color change even though they walk the (immutable) record to compute it.
+  // drag.
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const track = useProjectStore((s) => (selectedTrackId ? s.tracks[selectedTrackId] ?? null : null))
   const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
-  const identityColor = useProjectStore((s) => (track ? resolveTrackIdentityColor(track, s.tracks) : null))
-  const displayColor = useProjectStore((s) => (track ? resolveTrackDisplayColor(track, s.tracks) : ''))
   // With a track selected the scene object is unused (the track wins every
   // branch below), so skip the subscription: the active scene's identity
   // changes on every edit to any of its tracks.
@@ -395,7 +391,7 @@ export function TrackEditor() {
   const effectDragging = useUIStore((s) => s.effectDragging)
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
-  const identity = panelIdentity(track, identityColor, activeScene)
+  const identity = panelIdentity(track, activeScene)
 
   // Dragging an effect from the library flips this panel to its Effects tab so the
   // drop zone is visible - the scene's chain when no track is selected.
@@ -598,7 +594,7 @@ export function TrackEditor() {
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
-                        color={displayColor}
+                        color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}

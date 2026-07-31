@@ -173,9 +173,10 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   }
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
-  // Instrument-derived identity (falls back to track.color's hue cycle);
-  // selector returns a string so rows only re-render when the color changes.
-  const blockColor = useProjectStore((s) => resolveTrackDisplayColor(track, s.tracks))
+  // The row's own identity: its definition's declared color for a mover /
+  // splitter / colorizer, the instrument's for an object, else its hue cycle.
+  // Derived purely from the `track` prop, so no store subscription is needed.
+  const blockColor = resolveTrackDisplayColor(track)
   // Recomputed only when THIS track changes, and the pitch array keeps its
   // identity (it is a prop of every memoized Block and a dep of their activity
   // effects). Mover-lane rows technically also depend on sibling chains for

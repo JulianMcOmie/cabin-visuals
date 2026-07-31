@@ -21,6 +21,7 @@
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { FREEZE_COLOR } from './identityColors'
 
 /** Freeze sits on middle C with Reverse a whole step above it: two rows the
  *  user reads as one gesture and its undo, not a keyboard to decode. */
@@ -195,6 +196,7 @@ export const freezeMover: MoverOrSplitterDefinition<FreezeSettings> = {
   id: 'freeze',
   label: 'Freeze',
   kind: 'mover',
+  identityColor: FREEZE_COLOR,
   params: FREEZE_PARAMS,
   midiRows: () => FREEZE_ROWS,
   strictMidiRows: true,

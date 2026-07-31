@@ -28,6 +28,7 @@ import { Vector3 } from 'three'
 import type { ParamDef } from '../../instruments/types'
 import { colorToOklch, oklchToHex } from '../../utils/oklch'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { GRADIENT_COLORIZER_COLOR } from './identityColors'
 
 export const GRADIENT_MODE_POSITION = 0
 export const GRADIENT_MODE_INDEX = 1
@@ -160,6 +161,7 @@ export const gradientColorizer: MoverOrSplitterDefinition<GradientColorizerSetti
   id: 'gradient',
   label: 'Gradient',
   kind: 'colorizer',
+  identityColor: GRADIENT_COLORIZER_COLOR,
   params: GRADIENT_PARAMS,
   // Passive on purpose: no MIDI vocabulary at all. Declaring zero strict rows
   // keeps the piano roll from offering notes that would do nothing.

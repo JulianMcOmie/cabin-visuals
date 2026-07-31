@@ -3,6 +3,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
+import { RADIAL_MOTION_COLOR } from './identityColors'
 
 export interface RadialMotionSettings {
   /** Copies per nesting depth, outermost first. Powers of two nest cleanly. */
@@ -253,6 +254,7 @@ export const radialMotionMover: MoverOrSplitterDefinition<RadialMotionSettings> 
   id: 'radialMotion',
   label: 'Radial Motion',
   kind: 'mover',
+  identityColor: RADIAL_MOTION_COLOR,
   params: [
     // Powers of two by default: a ring whose seat count divides its parent's
     // lines the copies up into readable arms instead of a uniform haze.

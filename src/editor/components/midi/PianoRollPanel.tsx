@@ -161,9 +161,6 @@ export function PianoRollPanel() {
   // the entire piano roll per pointermove of any timeline gesture.
   const track = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
   const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
-  // String-valued selector: recomputed per store write (cheap ancestor walk),
-  // but only a real color change re-renders.
-  const trackColor = useProjectStore((s) => (track ? resolveTrackDisplayColor(track, s.tracks) : ''))
 
   const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
 
@@ -247,7 +244,7 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={trackColor}
+      trackColor={resolveTrackDisplayColor(track)}
       noteColor={abilityColor}
       automation={automation}
       trigger={trigger}

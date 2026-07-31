@@ -34,6 +34,7 @@ import {
   pulseFalloff,
   type ImpactPulseSettings,
 } from '../core/visualCopies/impactPulse'
+import { IMPACT_PULSE_COLOR } from '../core/visualCopies/identityColors'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
@@ -50,12 +51,12 @@ function numericValue(bound: UserInterfaceParameter | undefined, fallback = 0): 
   return typeof bound?.value === 'number' ? bound.value : fallback
 }
 
-// The mover has no color param (it resizes whatever object it sits under), so
-// the panel picks its own accent, as Visibility and Meteor Impact do. Rose
-// rather than another warm orange or cyan: the Impact folder already wears
-// ember (Meteor) and shock blue (Scatter), and a panel is easier to recognise
-// by colour than by title.
-const STRIKE = '#ff6b9d'
+// The accent comes FROM THE DEFINITION, which also hands it to the track as
+// `identityColor` - so this console, the mover's timeline blocks, its
+// piano-roll notes and the inspector's tab rail are all one colour by
+// construction. Never re-declare the hex here; that is exactly the drift the
+// shared constant exists to prevent.
+const STRIKE = IMPACT_PULSE_COLOR
 const STRIKE_HSV = hexToHsv(STRIKE)
 /** Hue-true dark shade per the guide - never an alpha tint over panel gray. */
 const SHADE = hsvToHex(STRIKE_HSV.h, Math.min(STRIKE_HSV.s, 0.5), 0.075)

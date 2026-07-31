@@ -12,10 +12,11 @@ move. Two rules keep it fixed:
 1. **No whole-record subscriptions in always-mounted components.** `s.tracks` and
    `s.scenes` change identity on every edit (so does `s.scenes[activeSceneId]`).
    Subscribe to primitives, per-id slices (`s.tracks[id]` keeps its reference when
-   other tracks change), string-valued derivations (`resolveTrackDisplayColor` as a
-   selector), or a string fingerprint + `getState()` in a `useMemo` (see SceneTabs,
-   MoverTargets). `TimelineArea` is the one legitimate whole-`tracks` subscriber —
-   it maps the rows.
+   other tracks change), string-valued derived selectors, or a string fingerprint +
+   `getState()` in a `useMemo` (see SceneTabs, MoverTargets). `TimelineArea` is the
+   one legitimate whole-`tracks` subscriber — it maps the rows. (The color
+   resolvers in `utils/trackDisplayColor.ts` are pure functions of the track now —
+   no subscription needed at all.)
 2. **`Track`, `Block`, `NotePreview`, `AudioBlock` are `memo()`d, and every prop they
    take must be referentially stable across foreign edits.** The traps that would
    silently undo it: inline closures in TimelineArea's row map, per-render arrays
