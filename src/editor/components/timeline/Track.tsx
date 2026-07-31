@@ -167,9 +167,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBl
   }
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
-  // Instrument-derived identity (falls back to track.color's hue cycle);
-  // selector returns a string so rows only re-render when the color changes.
-  const blockColor = useProjectStore((s) => resolveTrackDisplayColor(track, s.tracks))
+  // The row's own identity: its definition's declared color for a mover /
+  // splitter / colorizer, the instrument's for an object, else its hue cycle.
+  // Derived purely from the `track` prop, so no store subscription is needed.
+  const blockColor = resolveTrackDisplayColor(track)
   const declaredMidiRows = track.type === 'audio'
     ? undefined
     : resolveDeclaredMidiRows(track, useProjectStore.getState())

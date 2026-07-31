@@ -17,6 +17,21 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
 
 - `definitions.ts` — `MoverOrSplitterDefinition` shape (id, params, evaluate) + settings merging. Numeric params come from the track's `inputValues`; **color/string params come from the shared `stringParams` field** (same split instruments use, so automation/envelope paths never meet a string). `mergeDefinitionSettings(def, inputValues, stringParams)` folds both.
 - `library.ts` — the list of shipped definitions; `registry.ts` — id → def. **Registry ownership routes migration**: ids found here go through the VisualCopy chain; unknown ids fall back to the legacy mover path. New ids must not collide with legacy mover ids. Registry never imports the legacy registry.
+- `identityColors.ts` — the colour every definition WEARS: its timeline blocks, its
+  piano-roll rows and notes, and its settings panel's accent. **Every shipped
+  definition declares one** (`identityColor` on the def), and as of 2026-07-31 lanes
+  no longer inherit their object instrument's colour — see `utils/trackDisplayColor.ts`.
+  Three things bite here:
+  - **Only the HUE survives.** `utils/midiEditorPalette.ts` re-voices a track colour
+    through OKLCH at a fixed lightness and chroma, so two definitions separated by
+    lightness alone render IDENTICALLY. Place new colours by hue, ≥11° from every
+    neighbour; `identityColors.test.ts` enforces that and will name the pair.
+  - **Chroma is a cliff at 0.02, not a slope.** At or below it the re-voicing leaves a
+    colour grey; anything above is resurrected to FULL chroma. A tasteful slate at
+    0.035 comes back a saturated blue — which is how All Movers first shipped, looking
+    exactly like Tunnel.
+  - A definition with a bespoke panel must have the panel IMPORT its constant rather
+    than re-declare the hex. Keeping those two in sync is the whole point of the file.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `moverFrame.ts` — **frames**: a mover nested under another mover MOVES it (Impact Scatter's blast center can drift) rather than becoming a second chain entry. It works by handing the parent a `placementTransform` pre-multiplied by the frame's inverse, so a world-placed mover reads its own field as moved — no contract change, and the returned transform needs no fixing up. Frames nest, and only movers that actually read `placementTransform` respond; a pure relative displacement (Burst, Motion, the rotations) has no location to move, so a frame under one is a no-op.
 - Individual movers/splitters: `rotationMovers`, `translationOscillator`, `burst*`, `radialMotion` (three nested rings that all turn passively; MIDI only MULTIPLIES — see below), `visibility`, `grid`, `polyhedron`, `tunnel`, `approach`, `parametricPattern`, `waveTerrain`, `forceFieldPush`, `colorizer` (note → envelope-shaped flash toward an absolute color), `gradientColorizer` (passive two-stop OKLCH ramp across copies, by world position or copy index; no MIDI), `duplicateTrail` (note → copies peeling off the object and receding), `consolidatedMover`, `meteorImpact`, `impactPulse` (note → a percussive SIZE punch; see below), `freeze` (the only `warpBeat` definition: hold-time / reverse-time rows), `conveyor` (held note = belt running, six directions; loops the formation either as a tiled BELT or as a GROUP that dissolves through the turn), `splitterMidi` (MIDI gating), `motionBasis`/`motion` (shared math; Motion's wrap folds each copy's OWN chained position into the box — one copy at a time, with an edge fade — so the fold displacement pre-multiplies while everything else stays LOCAL. The user-set basis can be degenerate, so never `invert()` a basis matrix without a determinant guard), `burstEasings`.

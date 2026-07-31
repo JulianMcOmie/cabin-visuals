@@ -37,6 +37,20 @@ export interface MoverOrSplitterDefinition<Settings> {
    *  category because they alter appearance rather than spatial transforms. */
   kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
+  /**
+   * OPTIONAL '#rrggbb' that this definition's tracks WEAR in the UI - timeline
+   * blocks, piano-roll rows and notes, the inspector's tab rail.
+   *
+   * Declaring one OPTS OUT of the default, which is that every child lane wears
+   * its owning object instrument's color so a track's whole lane family reads
+   * as one voice (see `utils/trackDisplayColor.ts`). That default is right for a
+   * mover that simply moves whatever sits above it; it is wrong for one with a
+   * strong identity of its own, where the notes on the timeline should match the
+   * console you write them in. Only declare one when the definition has a
+   * bespoke panel with its own accent, and make that panel IMPORT this constant
+   * instead of repeating the hex - the whole point is that the two cannot drift.
+   */
+  identityColor?: string
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

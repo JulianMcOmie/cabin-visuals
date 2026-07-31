@@ -42,12 +42,13 @@ import { ParameterList } from './ParametersUserInterface'
 import { withAlpha } from './colorWheel'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { RADIAL_MOTION_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // The mover has no colour of its own (it only arranges and turns), so the panel
 // wears what it evokes: an orbit, violet at the rim and cold blue at the core.
-const ORBIT = '#8b7bff'
+const ORBIT = RADIAL_MOTION_COLOR
 const ORBIT_CORE = '#43dcff'
 const ORBIT_SHADE = '#0c0a1a'
 const ROOM = '#05070c'

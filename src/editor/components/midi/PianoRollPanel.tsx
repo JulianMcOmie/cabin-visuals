@@ -237,7 +237,7 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={resolveTrackDisplayColor(track, tracks)}
+      trackColor={resolveTrackDisplayColor(track)}
       noteColor={abilityColor}
       automation={automation}
       trigger={trigger}

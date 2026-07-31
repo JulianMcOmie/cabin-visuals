@@ -24,6 +24,7 @@ import { Vector3 } from 'three'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { COLORIZER_COLOR } from './identityColors'
 
 /** One row per function, so every declared note has a meaning the user can read
  *  off the piano roll instead of guessing at a keyboard. */
@@ -232,6 +233,7 @@ export const noteColorizer: MoverOrSplitterDefinition<ColorizerSettings> = {
   id: 'calmHueRotate',
   label: 'Colorizer',
   kind: 'colorizer',
+  identityColor: COLORIZER_COLOR,
   params: COLORIZER_PARAMS,
   midiRows: () => COLORIZER_ROWS,
   strictMidiRows: true,

@@ -61,6 +61,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { METEOR_IMPACT_COLOR } from './identityColors'
 
 // ── The held vortex ──────────────────────────────────────────────────────────
 //
@@ -308,6 +309,7 @@ export const meteorImpactMover: MoverOrSplitterDefinition<MeteorImpactSettings> 
   id: 'meteorImpact',
   label: 'Meteor Impact',
   kind: 'mover',
+  identityColor: METEOR_IMPACT_COLOR,
   params: [
     { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },

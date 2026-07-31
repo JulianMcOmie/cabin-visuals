@@ -40,6 +40,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import { placementAxisScale } from './tunnel'
 import type { VisualCopy } from './types'
+import { APPROACH_COLOR } from './identityColors'
 
 export interface ApproachSettings {
   /** Copies in flight at once - and so how often the next arrival lands. */
@@ -366,6 +367,7 @@ export const approachSplitter: MoverOrSplitterDefinition<ApproachSettings> = {
   id: 'approach',
   label: 'Approach',
   kind: 'splitter',
+  identityColor: APPROACH_COLOR,
   params: [
     // 8 in flight over a 24-unit run at 5/beat: an arrival every ~0.6 beats,
     // and the run is short enough that copies are already legibly large by the

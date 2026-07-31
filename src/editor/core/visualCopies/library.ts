@@ -35,6 +35,7 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import { BURST_COLOR, GRID_COLOR, RADIAL_COLOR } from './identityColors'
 
 // ── Burst ────────────────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
@@ -64,6 +65,7 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   id: 'burst',
   label: 'Burst',
   kind: 'mover',
+  identityColor: BURST_COLOR,
   params: [
     { key: 'burstBeats', label: 'Burst beats', min: 0.05, max: 16, step: 0.05, default: 1 },
     {
@@ -124,6 +126,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
   label: 'Radial',
   kind: 'splitter',
+  identityColor: RADIAL_COLOR,
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
     { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 0 },
@@ -211,6 +214,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   id: 'grid',
   label: 'Grid',
   kind: 'splitter',
+  identityColor: GRID_COLOR,
   params: [
     { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },

@@ -1369,7 +1369,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         instrumentId: '',
         targetParam: paramKey,
         interpolation: 'linear',
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1405,7 +1407,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         adsr: { ...DEFAULT_ADSR },
         envDepth: 1,
         envTarget,
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1459,7 +1463,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         type: 'ability',
         instrumentId: '',
         abilityKey,
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
