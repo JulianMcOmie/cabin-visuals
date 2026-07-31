@@ -21,11 +21,18 @@
 // is the thing being authored, so the handles ride the curve (the same
 // interaction as EnvelopeUserInterface's pad) while the knobs below give the
 // same four values fine, numeric control. Everything else keeps the guide's one
-// vocabulary - knobs, no sliders.
+// vocabulary - knobs, no sliders, with ONE deliberate exception: AMOUNT, the
+// lane's master gain, is a full-width fader under the mode's own controls. It
+// belongs to the lane rather than to a mode, and a gain you ride deserves a
+// long horizontal throw - the fill grows from its 100% detent, so attenuation
+// and boost read at a glance. The curve and noise windows scale with it, so
+// the picture above always shows the values the lane will actually emit.
 
 import { useRef, type JSX, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { Dices } from 'lucide-react'
 import {
+  AUTOMATION_AMOUNT_MAX,
+  DEFAULT_AUTOMATION_AMOUNT,
   DEFAULT_BURST,
   DEFAULT_NOISE,
   easeFraction,
@@ -80,14 +87,16 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
 ]
 
 /** The path an easing traces from a low keyframe to a high one, in plot space.
- *  Step is its own shape - it HOLDS the old value, then jumps at the keyframe. */
-function easePath(mode: InterpolationMode, x0: number, x1: number, steps = 40): string {
-  if (mode === 'step') return `M ${x0} ${Y_BASE} L ${x1} ${Y_BASE} L ${x1} ${Y_PEAK}`
+ *  Step is its own shape - it HOLDS the old value, then jumps at the keyframe.
+ *  `yPeak` is where the high keyframe lands - the amount fader lowers it, so
+ *  the plot shows the scaled travel against the dashed full-range line. */
+function easePath(mode: InterpolationMode, x0: number, x1: number, steps = 40, yPeak = Y_PEAK): string {
+  if (mode === 'step') return `M ${x0} ${Y_BASE} L ${x1} ${Y_BASE} L ${x1} ${yPeak}`
   let d = `M ${x0} ${Y_BASE}`
   for (let i = 1; i <= steps; i++) {
     const t = i / steps
     const x = x0 + (x1 - x0) * t
-    const y = Y_BASE - easeFraction(t, mode) * Y_SPAN
+    const y = Y_BASE - easeFraction(t, mode) * (Y_BASE - yPeak)
     d += ` L ${x.toFixed(2)} ${y.toFixed(2)}`
   }
   return d
@@ -95,13 +104,16 @@ function easePath(mode: InterpolationMode, x0: number, x1: number, steps = 40): 
 
 /** The seeded wobble the engine will actually play, plotted over a few beats. A
  *  synthetic 0..1 param held by one long gate: the deviation formula then spans
- *  the whole window height at range 1, so the picture is the real signal. */
-function noisePath(cfg: NoiseConfig, steps = 200): string {
-  const gates = [{ beat: 0, endBeat: NOISE_WINDOW_BEATS, center: 0.5, amp: 1 }]
+ *  the whole window height at range 1, so the picture is the real signal.
+ *  `amount` scales the gate's center and the deviation exactly the way
+ *  resolve.ts does, so the fader moves this plot the way it moves playback. */
+function noisePath(cfg: NoiseConfig, amount: number, steps = 200): string {
+  const scaled = amount === 1 ? cfg : { ...cfg, range: cfg.range * amount }
+  const gates = [{ beat: 0, endBeat: NOISE_WINDOW_BEATS, center: clamp(0.5 * amount, 0, 1), amp: 1 }]
   let d = ''
   for (let i = 0; i <= steps; i++) {
     const t = i / steps
-    const value = sampleNoiseLane(cfg, gates, t * NOISE_WINDOW_BEATS, 0, 1)
+    const value = sampleNoiseLane(scaled, gates, t * NOISE_WINDOW_BEATS, 0, 1)
     const x = PX0 + (PX1 - PX0) * t
     const y = Y_BASE - clamp(value, 0, 1) * Y_SPAN
     d += `${i === 0 ? 'M' : ' L'} ${x.toFixed(2)} ${y.toFixed(2)}`
@@ -367,10 +379,106 @@ function CurveSegmented({ interpolation, accent, onInterpolation }: {
   )
 }
 
+// ── The amount fader ────────────────────────────────────────────────────────
+
+/** AMOUNT: the lane's master gain, the panel's one horizontal control (see the
+ *  header comment for why it breaks the knob vocabulary). Neutral is a 100%
+ *  detent at the rail's center; the lit fill grows FROM that mark, so pulling
+ *  the lane down reads as light retreating toward the detent and boosting as
+ *  light past it - the same "never half-lit for neutral" rule as LaserKnob's
+ *  bipolar arc. Drag anywhere on the rail; it snaps onto 100% when close;
+ *  double-click resets. */
+function AmountFader({ amount, accent, onAmount }: {
+  amount: number
+  accent: string
+  onAmount: (amount: number) => void
+}) {
+  const railRef = useRef<HTMLDivElement>(null)
+  const frac = clamp(amount / AUTOMATION_AMOUNT_MAX, 0, 1)
+  const neutralFrac = DEFAULT_AUTOMATION_AMOUNT / AUTOMATION_AMOUNT_MAX
+  const percent = Math.round(amount * 100)
+
+  const valueFromX = (clientX: number) => {
+    const rect = railRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return amount
+    const t = clamp((clientX - rect.left) / rect.width, 0, 1)
+    const value = snap(t * AUTOMATION_AMOUNT_MAX)
+    // The detent: 100% catches the thumb, so neutral is easy to land exactly.
+    return Math.abs(value - DEFAULT_AUTOMATION_AMOUNT) < 0.04 ? DEFAULT_AUTOMATION_AMOUNT : value
+  }
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+    onAmount(valueFromX(event.clientX))
+  }
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+    onAmount(valueFromX(event.clientX))
+  }
+  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const delta = (event.key === 'ArrowRight' ? 1 : -1) * 0.05
+    onAmount(snap(clamp(amount + delta, 0, AUTOMATION_AMOUNT_MAX)))
+  }
+
+  const fillLeft = Math.min(frac, neutralFrac)
+  const fillWidth = Math.abs(frac - neutralFrac)
+  return (
+    <div className="flex items-center gap-2.5" data-testid="automation-amount-row">
+      <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-white/40">AMOUNT</span>
+      <div
+        role="slider"
+        tabIndex={0}
+        aria-label="Amount: scales every value this lane produces"
+        aria-valuemin={0}
+        aria-valuemax={AUTOMATION_AMOUNT_MAX}
+        aria-valuenow={amount}
+        aria-valuetext={`${percent}%`}
+        title="Amount · multiplies the whole lane · drag · double-click for 100%"
+        data-testid="automation-amount-fader"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onDoubleClick={() => onAmount(DEFAULT_AUTOMATION_AMOUNT)}
+        onKeyDown={onKeyDown}
+        className="relative h-4 min-w-0 flex-1 cursor-ew-resize touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+      >
+        {/* The recessed rail, in the segmented controls' chassis language. */}
+        <div ref={railRef} className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 rounded-full border border-white/[0.07] bg-black/30" />
+        {/* Lit fill from the neutral detent to the thumb. */}
+        <div
+          className="absolute top-1/2 h-[5px] -translate-y-1/2 rounded-full"
+          style={{
+            left: `${fillLeft * 100}%`,
+            width: `${fillWidth * 100}%`,
+            background: withAlpha(accent, 0.4),
+            boxShadow: `0 0 8px ${withAlpha(accent, 0.35)}`,
+          }}
+        />
+        {/* The 100% detent mark. */}
+        <span
+          className="absolute top-1/2 h-[9px] w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25"
+          style={{ left: `${neutralFrac * 100}%` }}
+        />
+        <span
+          className="absolute top-1/2 h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70"
+          style={{ left: `${frac * 100}%`, background: towardWhite(accent, 0.55), boxShadow: `0 0 6px 1px ${withAlpha(accent, 0.8)}` }}
+        />
+      </div>
+      <span className="w-[30px] shrink-0 text-right font-mono text-[9px] tabular-nums text-white/70">{percent}%</span>
+    </div>
+  )
+}
+
 // ── The panel ───────────────────────────────────────────────────────────────
 
 export function AutomationUserInterface({
-  targetLabel, color, mode, interpolation, noise, burst, onMode, onInterpolation, onNoise, onBurst,
+  targetLabel, color, mode, interpolation, noise, burst, amount, onMode, onInterpolation, onNoise, onBurst, onAmount,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -380,16 +488,22 @@ export function AutomationUserInterface({
   interpolation: InterpolationMode
   noise: NoiseConfig | undefined
   burst: BurstConfig | undefined
+  /** The lane's output gain (Track.automationAmount, defaulted to 1). */
+  amount: number
   onMode: (mode: AutomationMode) => void
   onInterpolation: (mode: InterpolationMode) => void
   onNoise: (noise: NoiseConfig) => void
   onBurst: (burst: BurstConfig) => void
+  onAmount: (amount: number) => void
 }): JSX.Element {
   const accent = hexAccent(color)
   const accentHsv = hexToHsv(accent)
   // A hue-true DARK SHADE, not an alpha tint: low-alpha color over the panel's
   // mid-gray mixes into mud, while the hue kept at low value stays alive.
   const shade = hsvToHex(accentHsv.h, Math.min(accentHsv.s, 0.5), 0.075)
+  // Where a full-height note lands after the amount fader. Boosts past 100%
+  // pin at the top - that IS the clamp the engine applies, not a plot limit.
+  const yAmountPeak = Y_BASE - clamp(amount, 0, 1) * Y_SPAN
 
   return (
     // The lane fills its chassis: cancel the settings container's p-3 so the
@@ -401,9 +515,10 @@ export function AutomationUserInterface({
       ) : mode === 'noise' && noise ? (
         <LaneWindow testId="automation-noise-plot" title={`${NOISE_WINDOW_BEATS} beats of this seed`}>
           <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-            {/* The note's own value: the wobble happens AROUND this line. */}
-            <line x1={PX0} y1={(Y_PEAK + Y_BASE) / 2} x2={PX1} y2={(Y_PEAK + Y_BASE) / 2} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-            <GlowPath d={noisePath(noise)} accent={accent} />
+            {/* The note's own value: the wobble happens AROUND this line (the
+                amount fader pulls the center down and the wobble in with it). */}
+            <line x1={PX0} y1={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} x2={PX1} y2={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            <GlowPath d={noisePath(noise, amount)} accent={accent} />
           </svg>
         </LaneWindow>
       ) : (
@@ -411,10 +526,10 @@ export function AutomationUserInterface({
           <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
             <line x1={PX0} y1={Y_BASE} x2={PX1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             <line x1={PX0} y1={Y_PEAK} x2={PX1} y2={Y_PEAK} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-            <GlowPath d={easePath(interpolation, PX0, PX1)} accent={accent} area />
+            <GlowPath d={easePath(interpolation, PX0, PX1, 40, yAmountPeak)} accent={accent} area />
             {/* The two keyframes the curve runs between. */}
             <circle cx={PX0} cy={Y_BASE} r={1.6} fill={towardWhite(accent, 0.7)} />
-            <circle cx={PX1} cy={Y_PEAK} r={1.6} fill={towardWhite(accent, 0.7)} />
+            <circle cx={PX1} cy={yAmountPeak} r={1.6} fill={towardWhite(accent, 0.7)} />
           </svg>
         </LaneWindow>
       )}
@@ -498,6 +613,10 @@ export function AutomationUserInterface({
         {mode === 'curve' && (
           <CurveSegmented interpolation={interpolation} accent={accent} onInterpolation={onInterpolation} />
         )}
+
+        {/* The lane's master gain, below whichever mode console is up: it
+            belongs to the lane, not the mode, so it keeps one seat. */}
+        <AmountFader amount={amount} accent={accent} onAmount={onAmount} />
 
         {/* What this lane does, in the mode it is in. */}
         <p className="text-[10px] leading-relaxed text-white/40">

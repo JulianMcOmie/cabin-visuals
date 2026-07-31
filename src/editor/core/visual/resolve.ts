@@ -11,7 +11,7 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
@@ -78,6 +78,9 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (!param) continue
     const pdef = params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
+    // The lane's output gain, applied at extraction so every consumer of the
+    // resolved lane (engine, hover preview, paramAtBeat) agrees on the values.
+    const amount = automationAmount(child)
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
     if (child.burst) {
@@ -86,21 +89,23 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
         min: pdef.min,
         max: pdef.max,
         base: pdef.default,
       })
       continue
     }
-    // Noise mode: the notes become wobble gates instead of keyframes.
+    // Noise mode: the notes become wobble gates instead of keyframes. Amount
+    // scales the wobble's deviation along with its centers - a tamed lane
+    // shrinks as a whole, not just where its notes sit.
     if (child.noise) {
       out.push({
         param,
         mode: 'linear',
         keyframes: [],
-        noise: child.noise,
-        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
         min: pdef.min,
         max: pdef.max,
       })
@@ -109,7 +114,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
     })
   }
   return out
@@ -171,6 +176,10 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       max = pdef.max
       base = instance.settings[target.key] ?? pdef.default
     }
+    // The lane's output gain. 'enabled' is exempt: it is a 0/1 switch read
+    // against a 0.5 threshold, and a gain there would just be a surprise
+    // off-switch.
+    const amount = target.key === 'enabled' ? 1 : automationAmount(child)
     // Burst mode: each note fires the ADSR from the stored setting toward its own
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
@@ -181,7 +190,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
         min,
         max,
         base,
@@ -192,7 +201,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
     })
   }
   return out

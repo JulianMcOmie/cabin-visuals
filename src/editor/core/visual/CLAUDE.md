@@ -44,6 +44,14 @@ Burst works on `fx:` lanes too, taking the effect's stored setting as its base. 
 through). Noise on `fx:` lanes is NOT wired — such a lane silently behaves as
 keyframes, as it always has.
 
+**AMOUNT** (`Track.automationAmount`, default 1, 0..`AUTOMATION_AMOUNT_MAX`) is a
+whole-lane output gain, mode-independent: applied at EXTRACTION in resolve.ts (the
+one choke point every consumer shares), it multiplies keyframe values, noise centers
++ deviation (`range` is scaled alongside), and burst target values, each clamped back
+to the param's range. It deliberately does NOT touch `fx:` `enabled` lanes — that's a
+0/1 switch read against a 0.5 threshold, and a gain there is just a surprise
+off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
+
 ## instrumentFrame.ts — the per-frame entry point for instruments
 
 `useInstrumentFrame(trackId, cb)` is the ONLY way instruments do per-frame work (lint-enforced). Contract:
