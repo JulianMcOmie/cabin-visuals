@@ -8,6 +8,7 @@ import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import { snapStepBeats } from '../../utils/snapStep'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { suppressNextContextMenu } from '../../utils/contextMenuGuard'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
@@ -30,7 +31,6 @@ interface BlockOrigin {
   patternBars: number
 }
 
-const EDGE_PX = 8
 const PROJECT_END_EPSILON_BARS = 1e-9
 
 function rootAncestorId(tracks: Record<string, Track>, id: string): string {
@@ -409,12 +409,14 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       return
     }
 
-    // Near an edge → resize that edge; otherwise move. Edge zones shrink on
-    // narrow blocks so the middle stays a move target.
+    // Near an edge → resize that edge; otherwise move. A constant screen-space
+    // zone (see edgeHitPx), so the handle feels identical at every zoom; only a
+    // block too narrow to seat two of them gives any of it back to the middle.
+    // Keep this in step with Block.tsx, which paints the cursor for the zone.
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
     const localX = e.clientX - rect.left
     const w = rect.width
-    const edge = Math.min(EDGE_PX, w / 4)
+    const edge = edgeHitPx(w, BLOCK_EDGE_HIT)
     const type: DragState['type'] =
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a

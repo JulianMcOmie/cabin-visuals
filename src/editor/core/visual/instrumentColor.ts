@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 import { Color } from 'three'
+import { mixOklabLinearRgb } from '../../utils/oklch'
 import type { VisualCopy } from '../visualCopies/types'
 
 export interface InstrumentColorParam {
@@ -26,7 +27,13 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i
  * Order matters: the absolute `tint` is mixed in FIRST and the relative HSL
  * offsets ride on top of the result. This is the only place that knows both the
  * object's own color and the copy's target, which is why the mix lives here
- * rather than in the mover that asked for it. */
+ * rather than in the mover that asked for it.
+ *
+ * `tintPerceptual` picks how the mix walks: straight channel lerp (the historic
+ * behaviour, still the default) or OKLab, which keeps a partial mix looking
+ * like the color it is heading for instead of sagging through a desaturated
+ * middle. Both run on three's LINEAR working values, so neither round-trips
+ * through hex. */
 export function applyColorShiftToInstrumentParams(
   stringParams: Readonly<Record<string, string>>,
   colorParams: readonly InstrumentColorParam[],
@@ -53,7 +60,10 @@ export function applyColorShiftToInstrumentParams(
       continue
     }
     scratchColor.set(source)
-    if (tintMix > 0) scratchColor.lerp(scratchTint, tintMix)
+    if (tintMix > 0) {
+      if (shift.tintPerceptual) mixOklabLinearRgb(scratchColor, scratchTint, tintMix)
+      else scratchColor.lerp(scratchTint, tintMix)
+    }
     scratchColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
     output[param.key] = `#${scratchColor.getHexString()}`
   }

@@ -37,6 +37,17 @@ export interface MoverOrSplitterDefinition<Settings> {
    *  category because they alter appearance rather than spatial transforms. */
   kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
+  /** The color this entry WEARS in the UI - same contract as an instrument's
+   *  (instruments/types.ts, resolved in utils/trackDisplayColor.ts): a fixed
+   *  hex, or `{ param }` to follow one of its own color params live.
+   *
+   *  Chain entries normally inherit their owning instrument's color, so a
+   *  track's whole lane family reads as one voice. A definition declares this
+   *  only when it HAS a color of its own that the user picked - the Colorizer's
+   *  palette is the case it exists for, where its device row, its notes and its
+   *  panel all showing the same color is the difference between reading a chain
+   *  and decoding it. Near-achromatic values fall back to the instrument. */
+  identityColor?: string | { param: string }
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean
