@@ -222,7 +222,6 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
                 opacity: 'var(--midi-activity-opacity, 0)',
                 boxShadow: `inset 0 0 16px ${palette.outline}`,
                 mixBlendMode: 'screen',
-                willChange: 'opacity',
               }}
             />
           </div>
@@ -247,8 +246,11 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               top: `${topPct}%`,
               height: 2,
               backgroundColor: repeat > 0 ? palette.repeatedNote : palette.note,
+              // No will-change here (or on the spans below): these hint-promoted
+              // compositor layers numbered in the tens of thousands on a large
+              // project. A 2px dash repaints trivially when its activity var
+              // moves; the block-level layers above are hint enough.
               filter: 'brightness(calc(1 + var(--midi-note-activity, 0) * 2.6)) saturate(1.25)',
-              willChange: 'filter',
             }}
           >
             <span
@@ -258,7 +260,6 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
                 backgroundColor: palette.selectedOutline,
                 opacity: 'var(--midi-note-activity, 0)',
                 boxShadow: `0 0 6px ${palette.outline}`,
-                willChange: 'opacity',
               }}
             />
           </div>
