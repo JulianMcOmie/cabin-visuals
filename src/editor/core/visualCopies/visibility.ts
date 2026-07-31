@@ -1,6 +1,7 @@
 import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { VISIBILITY_COLOR } from './identityColors'
 
 export interface VisibilitySettings {
   /** -1 = one row gates ALL copies; 0 = one note per index; positive = each
@@ -84,6 +85,7 @@ export const visibilityMover: MoverOrSplitterDefinition<VisibilitySettings> = {
   id: 'visibility',
   label: 'Visibility',
   kind: 'mover',
+  identityColor: VISIBILITY_COLOR,
   params: [
     {
       key: 'grouping',

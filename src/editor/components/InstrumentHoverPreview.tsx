@@ -338,22 +338,19 @@ interface CompoundMoverPreview {
   label?: string
 }
 const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
-  // One color layer of 6x3 copies: the outer radius steps zero → far → back
-  // (pitches 36-39 are the four radius choices), so the whole single-layer
-  // arrangement BLOOMS out of the center and collapses again, while held spin
-  // notes rotate the shapes, the outer ring, and the inner triads throughout.
+  // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
+  // on their own - the mover needs no notes to move - so the only notes here
+  // step the OUTER radius multiplier (36-39 = collapse/half/home/double) and
+  // the arrangement BLOOMS out of the center and folds back in while it spins.
   radialMotion: {
     label: 'radial motion',
     seeds: [[0, 0, 0]],
     seedScale: 0.34,
-    settings: { layers: 1, outerCopies: 6, innerCopies: 3 },
-    notes: [
-      ...[36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
-      holdNote(41), // inner radius · near
-      holdNote(64), // shape spin +1
-      holdNote(69), // outer spin +1
-      holdNote(74), // inner spin +1
-    ],
+    settings: {
+      copies0: 6, copies1: 3, copies2: 2,
+      radius0: 1.9, radius1: 0.85, radius2: 0.38,
+    },
+    notes: [36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
   },
   // Motion's Step block is the 60-65 signed basis the generic arc already
   // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
@@ -398,6 +395,37 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     notes: makeLoopNotes([60, 62, 61, 64], 0.5, 4),
+  },
+  // Impact Scatter integrates hits into the field's momentum, so the loop
+  // tells that story: one clean blast, a rapid triple that visibly compounds
+  // (each kick lands on pieces already flying), an implode, then a blast
+  // yanked home mid-flight by the settle row. IMPACT is preview-tamed so the
+  // throw stays inside the popup's frame.
+  impactScatter: {
+    label: 'impact scatter',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { impact: 0.5, recoverBeats: 2, chaos: 0.6 },
+    notes: [
+      holdNote(60, 0, 0.25),
+      holdNote(60, 4, 0.25),
+      holdNote(60, 4.5, 0.25),
+      holdNote(60, 5, 0.25),
+      holdNote(61, 8, 0.25),
+      holdNote(60, 12, 0.25),
+      holdNote(62, 13.5, 0.25),
+    ],
+  },
+  // Impact Pulse punches SIZE, so the whole field pops together like a drum
+  // hit: swell and squash alternate, with enough STRETCH that grow reads
+  // tall-and-narrow and shrink short-and-wide, and a decay long enough to
+  // watch fall away at popup scale.
+  impactPulse: {
+    label: 'impact pulse',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { hit: 0.55, decayBeats: 1, stretch: 0.6 },
+    notes: makeLoopNotes([60, 61], 0.5, 2),
   },
   // Visibility gates existence itself: ONE full-size cube popping in and out
   // with its note (127 = the single copy's row).

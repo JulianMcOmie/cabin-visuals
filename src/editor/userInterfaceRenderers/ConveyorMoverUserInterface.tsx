@@ -45,12 +45,13 @@ import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { CONVEYOR_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // The mover has no colour of its own (it only moves and dims), so the panel
 // wears what it evokes: a cool moving current.
-const CURRENT = '#48e5c2'
+const CURRENT = CONVEYOR_COLOR
 const CURRENT_SHADE = '#081a16'
 const ROOM = '#05070c'
 

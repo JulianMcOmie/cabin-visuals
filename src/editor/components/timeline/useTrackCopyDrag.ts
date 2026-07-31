@@ -79,7 +79,7 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       gapRow: null,
       hasTarget: false,
     }
-    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: resolveTrackDisplayColor(track, useProjectStore.getState().tracks), muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: resolveTrackDisplayColor(track), muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
     lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {

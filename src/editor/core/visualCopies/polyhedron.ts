@@ -10,6 +10,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import { POLYHEDRON_COLOR } from './identityColors'
 
 export interface PolyhedronSettings {
   /** Index into POLYHEDRON_SHAPES. */
@@ -110,6 +111,7 @@ export const polyhedronSplitter: MoverOrSplitterDefinition<PolyhedronSettings> =
   id: 'polyhedron',
   label: 'Polyhedron',
   kind: 'splitter',
+  identityColor: POLYHEDRON_COLOR,
   params: [
     {
       key: 'shape',

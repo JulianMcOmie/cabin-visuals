@@ -4,6 +4,7 @@ import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { withTransformParams } from '../../core/transform'
+import { directorAutomatableParams, getDirector } from '../../core/directors'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
@@ -40,10 +41,16 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const moverDef = getMoverOrSplitterDefinition(
     track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
   )
+  // Director tracks likewise: their def's params plus the shared Opacity are
+  // automatable (sampled per frame in VisualEngine's resolveComposition).
+  const directorDef = track.type === 'director' ? getDirector(track.directorId) : undefined
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number). Object
   // tracks also offer the canonical transform params (core/transform.ts).
-  const params = (def ? withTransformParams(def.params) : moverDef?.params ?? []).filter(isNumberParam)
+  const params = (def
+    ? withTransformParams(def.params)
+    : moverDef?.params ?? directorAutomatableParams(directorDef)
+  ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
   // there: a mover child MOVES its parent rather than joining the object's chain
   // (core/visualCopies/moverFrame.ts). Splitters and colorizers have nothing to

@@ -39,6 +39,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import type { VisualCopy } from './types'
+import { TUNNEL_COLOR } from './identityColors'
 
 export interface TunnelSettings {
   /** Copies evenly spaced around each ring (1 collapses the tunnel to single file). */
@@ -344,6 +345,7 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
   id: 'tunnel',
   label: 'Tunnel',
   kind: 'splitter',
+  identityColor: TUNNEL_COLOR,
   params: [
     // 6 x 8 = 48 copies: enough for a corridor wall, and in the same weight
     // class as the other splitters (Parametric Pattern defaults to 48). Every

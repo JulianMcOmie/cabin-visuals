@@ -1,6 +1,7 @@
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
@@ -98,7 +99,9 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         // relative to whatever child is under the pointer (e.g. a note sliver).
         const rect = e.currentTarget.getBoundingClientRect()
         const w = rect.width
-        const edge = Math.min(8, w / 4)
+        // Same zone the gesture uses (useTrackGestures) - shared so the cursor
+        // can't advertise a handle the pointerdown wouldn't honour.
+        const edge = edgeHitPx(w, BLOCK_EDGE_HIT)
         const localX = e.clientX - rect.left
         const onRightEdge = localX > w - edge
         const onLeftEdge = localX < edge

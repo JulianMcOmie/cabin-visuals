@@ -3,6 +3,7 @@ import { useProjectStore } from '../../store/ProjectStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { snapStepBeats } from '../../utils/snapStep'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import type { Block, Note } from '../../types'
 
 interface UseMidiBlockGesturesOptions {
@@ -17,7 +18,6 @@ interface UseMidiBlockGesturesOptions {
   onHeaderClick: (clientX: number) => void
 }
 
-const EDGE_PX = 8
 const DRAG_THRESHOLD_PX = 3
 
 interface DragState {
@@ -59,7 +59,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     if (dragRef.current) return
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const edge = Math.min(EDGE_PX, rect.width / 4)
+    const edge = edgeHitPx(rect.width, BLOCK_EDGE_HIT)
     const onRightEdge = x > rect.width - edge
     e.currentTarget.style.cursor = x < edge || onRightEdge ? 'ew-resize' : 'default'
   }, [])
@@ -145,7 +145,7 @@ export function useMidiBlockGestures({ trackId, block, notes, pixelsPerBeat, bea
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const edge = Math.min(EDGE_PX, rect.width / 4)
+    const edge = edgeHitPx(rect.width, BLOCK_EDGE_HIT)
     const mode: DragState['mode'] = x < edge ? 'resizing-left' : x > rect.width - edge ? 'resizing-right' : 'moving'
     beginDrag(e.clientX, e.clientY, mode, true)
   }, [beginDrag])

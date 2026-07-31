@@ -7,7 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { tracksWithTag } from '../utils/trackTags'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
-import { getDirector } from '../core/directors'
+import { directorAutomatableParams, getDirector } from '../core/directors'
 import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
@@ -246,7 +246,7 @@ function panelIdentity(
     // naming this instrument, so an achromatic instrument should light the tab
     // white rather than borrow a cycle color that starts out blue and reads as
     // the app/scene accent.
-    return { name: track.name, kind, color: resolveTrackIdentityColor(track, tracks) }
+    return { name: track.name, kind, color: resolveTrackIdentityColor(track) }
   }
   if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
   return null
@@ -569,13 +569,15 @@ export function TrackEditor() {
                         ?? (parent.type === 'mover' || parent.type === 'splitter'
                           ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)
                               ?.params.find((p) => p.key === track.targetParam)
-                          : undefined)
+                          : parent.type === 'director'
+                            ? directorAutomatableParams(getDirector(parent.directorId)).find((p) => p.key === track.targetParam)
+                            : undefined)
                       if (pdef) targetLabel = pdef.label
                     }
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
-                        color={resolveTrackDisplayColor(track, tracks)}
+                        color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}
