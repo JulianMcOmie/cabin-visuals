@@ -906,13 +906,15 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
-  const scenes = useProjectStore((s) => s.scenes)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const [previewSceneId, setPreviewSceneId] = useState(activeSceneId)
   // Project hydration and scene deletion can invalidate a local preview id.
-  // Falling back at render time keeps the canvas and segmented control live
-  // without writing an ephemeral viewing choice into the project document.
-  const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
+  // Falling back keeps the canvas and segmented control live without writing
+  // an ephemeral viewing choice into the project document. Subscribed as a
+  // primitive (never the scenes record, whose identity changes on every track
+  // edit): this is the editor ROOT, and a whole-record selector here re-renders
+  // the entire shell on every pointermove of a drag.
+  const resolvedPreviewSceneId = useProjectStore((s) => (s.scenes[previewSceneId] ? previewSceneId : s.activeSceneId))
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
