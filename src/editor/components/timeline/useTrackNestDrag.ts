@@ -14,6 +14,7 @@ interface Session {
   rows: VisualRow[]
   subtree: Set<string>
   listTop: number
+  listLeft: number
   rowHeight: number
   /** Resolved drop, applied on pointer-up. null = no valid target. */
   target: { parentId: string | null; index: number | undefined } | null
@@ -26,10 +27,11 @@ function isPinnedChildType(type: string | undefined): boolean {
 
 /**
  * Drag-to-nest for tracks. Grab a track's label and drag: the row under the cursor's
- * top/bottom edge gives a sibling drop (an insertion line), its middle gives a nest
- * (the row highlights, the track becomes its child), and below everything drops at the
- * top level last. Committed via setTrackParent on release. The drop indicator is shared
- * with the library drag through UIStore.trackDrop. `scrollRef` = lane scroll.
+ * top/bottom edge gives a sibling drop (an insertion line whose nesting depth follows
+ * the pointer's X - any valid level at that boundary, arbitrarily deep), its middle
+ * gives a nest (the row highlights, the track becomes its last child). Committed via
+ * setTracksParent on release. The drop indicator is shared with the library drag
+ * through UIStore.trackDrop. `scrollRef` = lane scroll.
  */
 export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
   const sessionRef = useRef<Session | null>(null)
@@ -77,6 +79,7 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       rows,
       subtree,
       listTop: scRect.top - sc.scrollTop, // screen-y of content row 0's top
+      listLeft: scRect.left, // labels are sticky at the container's left edge
       rowHeight,
       target: null,
     }
@@ -91,8 +94,8 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       if (!s) return
       const { tracks, rootTrackIds } = useProjectStore.getState()
       const drop = computeDropTarget({
-        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, rowHeight: s.rowHeight,
-        clientY: ev.clientY, excludeSubtree: s.subtree,
+        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, listLeft: s.listLeft,
+        rowHeight: s.rowHeight, clientX: ev.clientX, clientY: ev.clientY, excludeSubtree: s.subtree,
       })
       s.target = drop ? { parentId: drop.parentId, index: drop.index } : null
       useUIStore.getState().setTrackDrop({ activeId: s.activeId, line: drop?.line ?? null, intoId: drop?.intoId ?? null })
