@@ -3,10 +3,13 @@ import test from 'node:test'
 import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import {
+  RADIAL_MOTION_SPIN_DETENTS,
   evaluateRadialMotionRadiusScale,
   evaluateRadialMotionSpinBeats,
   radialMotionMover,
   radialMotionRadiusPitch,
+  radialMotionSpinDetentIndex,
+  radialMotionSpinDetentLabel,
   radialMotionSpinPitch,
   type RadialMotionSettings,
 } from './radialMotion'
@@ -76,10 +79,43 @@ test('every depth turns on its own, with no MIDI at all', () => {
   const later = positionsAt(s, 1)
   assert.ok(rest.some((position, index) => position.join() !== later[index].join()))
 
-  // The rate is exactly the knob: one beat of the default 18°/beat outer spin
-  // puts a lone copy 18° around from where it started.
+  // The rate is exactly the knob: one beat of a 90°/beat outer spin (a turn
+  // per 4 beats) puts a lone copy a quarter-turn around from where it started.
   const spun = positionsAt(singleRing({ spinZ0: 90 }), 1)
   assert.deepEqual(spun, [[0, 1, 0]])
+})
+
+test('spin detents are signed powers-of-two beat divisions, symmetric about a zero centre', () => {
+  const detents = RADIAL_MOTION_SPIN_DETENTS
+  assert.equal(detents.length % 2, 1)
+  assert.equal(detents[(detents.length - 1) / 2], 0)
+  for (let index = 1; index < detents.length; index++) {
+    assert.ok(detents[index] > detents[index - 1], 'detents ascend, one knob click apart')
+    assert.equal(detents[index] + detents[detents.length - 1 - index], 0, 'every rate has its mirror')
+  }
+  for (const rate of detents) {
+    if (rate === 0) continue
+    const beatsPerTurn = 360 / Math.abs(rate)
+    assert.ok(Number.isInteger(Math.log2(beatsPerTurn)), `${rate}°/beat is a power-of-two division`)
+  }
+})
+
+test('the default spin rates sit ON detents and read out as beats per turn', () => {
+  const s = settings()
+  for (const rate of [s.spinZ0, s.spinZ1, s.spinZ2]) {
+    assert.equal(RADIAL_MOTION_SPIN_DETENTS[radialMotionSpinDetentIndex(rate)], rate)
+  }
+  assert.equal(radialMotionSpinDetentLabel(s.spinZ0), '16b')
+  assert.equal(radialMotionSpinDetentLabel(s.spinZ1), '−8b')
+  assert.equal(radialMotionSpinDetentLabel(s.spinZ2), '4b')
+  assert.equal(radialMotionSpinDetentLabel(0), '0')
+})
+
+test('an off-grid legacy rate resolves to its nearest detent without leaving the range', () => {
+  // 18°/beat was the pre-quantization outer default; the knob shows it at 16b.
+  assert.equal(RADIAL_MOTION_SPIN_DETENTS[radialMotionSpinDetentIndex(18)], 22.5)
+  assert.equal(RADIAL_MOTION_SPIN_DETENTS[radialMotionSpinDetentIndex(-500)], -180)
+  assert.equal(RADIAL_MOTION_SPIN_DETENTS[radialMotionSpinDetentIndex(0.0001)], 0)
 })
 
 test('X and Y spin default to zero, so the resting nest stays in the XY plane', () => {

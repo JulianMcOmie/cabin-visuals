@@ -58,6 +58,12 @@ design and are easy to undo by accident:
   `evaluateRadialMotionSpinBeats` returns a phase the three axis rates are multiplied by,
   so freezing a tumbling ring stops all three axes at the pose they were in. Integrating
   per axis lets them drift apart and a freeze becomes a lurch.
+- **Spin rates are QUANTIZED to beat divisions at the UI, not in storage.** The panel's
+  spin knobs are stepped over `RADIAL_MOTION_SPIN_DETENTS` (one full turn per 2/4/8/16/32
+  beats, either direction, or 0), but the stored unit stays °/beat so old saves,
+  automation lanes and the ×0.5/×2/×−1 MIDI multipliers keep working — halving or
+  doubling a power-of-two division is still one. An off-grid legacy value (the old
+  18°/beat default) renders at its nearest detent with an honest °-readout until touched.
 
 Its bank in `consolidatedMover.ts` is still 69 pitches wide for 27 rows. Do not reclaim
 the slack: the bank sizes are what fix every module below it, so shrinking it silently
