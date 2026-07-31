@@ -6,6 +6,7 @@ export type UserInterfaceRendererId =
   | 'kaleidoSolid'
   | 'textDisplay'
   | 'cameraControl'
+  | 'cameraOrbit'
   | 'oscilloscope'
   | 'colorFilters'
   | 'bassRipple'

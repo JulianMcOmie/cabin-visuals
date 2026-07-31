@@ -72,7 +72,35 @@ nothing. Read the schema instead: `par[key] ?? paramDefault(theInstrument, key)`
 - VisualCopy color shifts arrive via `applyColorShiftToInstrumentParams` / `InstrumentCopyContext` — declare color params properly and this is automatic.
 - `identityColor` — what the track WEARS in the timeline/piano-roll UI (`utils/trackDisplayColor.ts` resolves; OKLCH recipes re-voice it). A hex literal = fixed identity; `{ param: 'key' }` = follow that color param's current value. Omit it and an instrument with exactly ONE color param follows it automatically; near-achromatic values (white/black text or bg defaults) fall back to the track's hue-cycle color, so a white-defaulting param is safe to point at. Instruments with multiple color params (or an unrepresentative sole one, e.g. a background) must declare explicitly.
 
-Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). Camera is an instrument too (`CameraControl`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
+Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
+
+## Camera instruments own the camera, and only one can
+
+The Canvas ships a plain default camera at `[0, 0, 5]`, fov 55, and there are no
+OrbitControls — nothing else writes it per frame. A camera instrument is
+therefore the sole author while its track is active, and two camera tracks at
+once fight, last-mounted winning. Accepted trade, not a bug to guard against.
+
+Two of them exist because they parameterise the rig differently, and the
+parameterisation IS the feature:
+
+- **`CameraControl`** ("Camera") — a position and a rotation, plus an optional
+  "look at origin" mode. Free, but aim is something the user maintains.
+- **`CameraOrbit`** ("Camera Orbit") — a center, a distance, and two angles;
+  position *and* aim are DERIVED from those every frame, so losing the subject is
+  not expressible. Elevation is clamped to ±89° (`ELEVATION_LIMIT`): at the pole
+  the rig sits on its own up axis, `lookAt` has no roll left to choose, and the
+  frame flips. Notes are hold-to-orbit (travel while held, stay where released,
+  chord two rows for a diagonal, hold Return home to ease back), summed
+  closed-form over the note history in `cameraOrbitCore.ts` — never accumulated
+  per frame, or scrub would disagree with playback. Its `up` vector is re-asserted
+  every frame, because the other camera instrument may have left it elsewhere and
+  a stale up is exactly how a high orbit ends up rolled.
+
+**Writing the camera is safe against the `useInstrumentFrame` skip.** The camera
+pose is part of the per-frame signature, so writing it dirties the next frame's
+comparison — but because the write is a pure function of the beat, that frame
+computes the same pose and the signature settles. One extra callback, not a loop.
 
 ## Scene post-process instruments (ColorFilters, BassRipple, Strobe)
 

@@ -5,6 +5,7 @@ import { CubeUserInterfaceRenderer } from './CubeUserInterface'
 import { KaleidoSolidUserInterfaceRenderer } from './KaleidoSolidUserInterface'
 import { TextDisplayUserInterfaceRenderer } from './TextDisplayUserInterface'
 import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface'
+import { CameraOrbitUserInterfaceRenderer } from './CameraOrbitUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
 import { BassRippleUserInterfaceRenderer } from './BassRippleUserInterface'
@@ -36,6 +37,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   kaleidoSolid: KaleidoSolidUserInterfaceRenderer,
   textDisplay: TextDisplayUserInterfaceRenderer,
   cameraControl: CameraControlUserInterfaceRenderer,
+  cameraOrbit: CameraOrbitUserInterfaceRenderer,
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
   bassRipple: BassRippleUserInterfaceRenderer,
