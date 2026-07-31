@@ -88,26 +88,7 @@ function PreviewSceneSync({ sceneId }: { sceneId: string }) {
   return null
 }
 
-function CanvasSourceBridge({ sourceRef }: { sourceRef: RefObject<HTMLCanvasElement | null> }) {
-  const canvas = useThree((s) => s.gl.domElement)
-
-  useEffect(() => {
-    sourceRef.current = canvas
-    return () => {
-      if (sourceRef.current === canvas) sourceRef.current = null
-    }
-  }, [canvas, sourceRef])
-
-  return null
-}
-
-function Scene({
-  previewSceneId,
-  sourceCanvasRef,
-}: {
-  previewSceneId: string
-  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
-}) {
+function Scene({ previewSceneId }: { previewSceneId: string }) {
   // Paused → 'demand': the render loop idles instead of redrawing a static
   // frame 60×/s (heavy instruments were starving the editor UI even while
   // paused). RenderGovernor requests single frames when an input changes.
@@ -115,7 +96,6 @@ function Scene({
   return (
     <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
-      <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
       <VisualBeatSync />
       <ExportDriver />
@@ -127,44 +107,6 @@ function Scene({
       </Suspense>
     </Canvas>
   )
-}
-
-/** A deliberately low-resolution copy of the finished WebGL frame. It is
- * stretched and heavily blurred behind the upper workspace, extending the
- * scene's color into otherwise blank UI space without rendering the Three
- * scene a second time or changing the visualizer's viewport calculations. */
-function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
-  const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const bleed = bleedCanvasRef.current
-    const ctx = bleed?.getContext('2d')
-    if (!bleed || !ctx) return
-
-    let frame = 0
-    let lastPaint = 0
-    const paint = (now: number) => {
-      // 15fps is plenty once the 128px copy has passed through an 80px blur.
-      // The WebGL scene itself remains on its existing render schedule.
-      if (now - lastPaint >= 1000 / 15) {
-        const source = sourceCanvasRef.current
-        if (source?.width && source.height) {
-          try {
-            ctx.drawImage(source, 0, 0, bleed.width, bleed.height)
-          } catch {
-            // A temporarily unavailable video-backed WebGL frame should not
-            // take down the editor; the previous ambient frame can stay put.
-          }
-        }
-        lastPaint = now
-      }
-      frame = requestAnimationFrame(paint)
-    }
-    frame = requestAnimationFrame(paint)
-    return () => cancelAnimationFrame(frame)
-  }, [sourceCanvasRef])
-
-  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
 }
 
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect
@@ -270,11 +212,9 @@ function CanvasTransportBar({
 
 function VisualPanel({
   previewSceneId,
-  sourceCanvasRef,
   playback,
 }: {
   previewSceneId: string
-  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
   playback: PlaybackControls
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -404,7 +344,7 @@ function VisualPanel({
         className={`absolute ${box ? 'border border-[var(--border-subtle)]' : 'inset-0'}`}
         style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
       >
-        <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
+        <Scene previewSceneId={previewSceneId} />
       </div>
       {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
           Re-enable by uncommenting this and its import at the top of the file -
@@ -870,7 +810,6 @@ export default function EditorApp() {
     useTimeStore.getState().setIsPlaying(false)
   }, [])
   const { topFrac, containerRef, startResize } = useVerticalSplit()
-  const visualCanvasRef = useRef<HTMLCanvasElement>(null)
   const libraryPanelRef = useRef<PanelImperativeHandle>(null)
   const sceneEditorPanelRef = useRef<PanelImperativeHandle>(null)
   // One engine wiring for the whole editor: the header band and the canvas
@@ -978,7 +917,6 @@ export default function EditorApp() {
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
                 <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
                   <PanelGroup
                     orientation="horizontal"
                     style={{ height: '100%' }}
@@ -1006,10 +944,8 @@ export default function EditorApp() {
 
                     <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
 
-                    {/* The visualizer keeps its original panel and dimensions;
-                        only the cheap ambient copy extends behind its sibling. */}
                     <Panel>
-                      <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} playback={playback} />
+                      <VisualPanel previewSceneId={resolvedPreviewSceneId} playback={playback} />
                     </Panel>
                   </PanelGroup>
                 </div>
