@@ -531,8 +531,13 @@ export function TimelineArea() {
               style={{
                 left: labelWidth + PLAYHEAD_TRIANGLE_HALF + pickupPx + projectWidthPx,
                 width: Math.max(0, timelineWidthPx - pickupPx - projectWidthPx),
-                backgroundColor: 'rgba(9, 9, 9, 0.46)',
-                backdropFilter: 'grayscale(0.85) saturate(0.3) brightness(0.68)',
+                // A flat fill, not backdrop-filter: the filter re-composited
+                // everything beneath the (viewport-sized) region on every
+                // scroll/paint, and what's beneath is almost always the empty
+                // grid - which a translucent black dims just the same. Content
+                // poking past the boundary keeps its hue, merely darkened;
+                // that read ("this part is outside the song") survives.
+                backgroundColor: 'rgba(9, 9, 9, 0.62)',
               }}
             />
 
