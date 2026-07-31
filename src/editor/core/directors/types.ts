@@ -86,3 +86,11 @@ export const FULL_FRAME = { x: 0, y: 0, width: 1, height: 1 } as const
 export const DIRECTOR_OPACITY_PARAM: ParamDef = {
   key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1,
 }
+
+/** The params an automation child lane may target on a director track: the
+ *  shared Opacity plus the director's own params. The single source for the
+ *  context menu, the lane's piano-roll value rows and the engine's lane
+ *  resolution, so they can never disagree about a param's [min,max]. */
+export function directorAutomatableParams(def: DirectorInstrumentDef | undefined): ParamDef[] {
+  return def ? [DIRECTOR_OPACITY_PARAM, ...def.params] : []
+}
