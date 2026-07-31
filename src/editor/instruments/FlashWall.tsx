@@ -4,6 +4,7 @@ import { Color, Mesh, ShaderMaterial } from 'three'
 import { beatInBlock, useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { getVisualCopy } from '../core/visual/VisualEngine'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
+import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import {
   DEFAULT_FLASH_WALL_COLOR,
   FLASH_WALL_BASE_PITCH,
@@ -212,12 +213,18 @@ function FlashWallVisual({ trackId }: { trackId: string }) {
   return (
     <mesh ref={meshRef}>
       <planeGeometry args={[1, 1]} />
+      {/* FORCE_TRANSPARENT is load-bearing for Fill mode: the placement
+          wrapper's applyMaterialOpacity resets `transparent` to false at full
+          fade, and an opaque full-frame plane REPLACES the frame instead of
+          blending - the whole scene behind the wall (background included)
+          reads black. With it, seams and unlit cells are truly see-through. */}
       <shaderMaterial
         vertexShader={FLASH_WALL_VERTEX_SHADER}
         fragmentShader={FLASH_WALL_FRAGMENT_SHADER}
         uniforms={uniforms}
         transparent
         depthWrite={false}
+        userData={{ [FORCE_TRANSPARENT_KEY]: true }}
       />
     </mesh>
   )

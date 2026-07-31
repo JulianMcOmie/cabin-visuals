@@ -54,6 +54,21 @@ camera via `useThree`). It also beats a tessellated sphere on looks: a sphere's
 polygon silhouette makes clusters read as marbles, a soft disc has no silhouette
 and neighbours merge.
 
+## An always-transparent material must declare FORCE_TRANSPARENT_KEY
+
+The placement wrapper's `applyMaterialOpacity` (core/visual/animatedOpacity.ts)
+runs every frame and RESETS `material.transparent` to `opacity < 0.999` — so
+`<shaderMaterial transparent>` silently goes opaque whenever the track is at
+full fade, and the shader's alpha channel stops blending entirely. On a small
+mesh that's a subtle artifact; on a FULL-FRAME plane the opaque quad replaces
+every pixel of the frame, so the whole scene behind it (background included)
+reads solid black — which looks exactly like a compositing bug and is the
+symptom the components guide describes as "a full-frame instrument in the
+front pass hides the whole scene". The fix is one prop:
+`userData={{ [FORCE_TRANSPARENT_KEY]: true }}` on the material (TextDisplay,
+Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall all carry it). Any instrument
+whose material must keep blending at full opacity needs it.
+
 ## Keep runtime fallbacks and schema defaults in ONE place
 
 `state.params` only carries what the TRACK stored, so `par.x ?? 0.3` runs whenever
