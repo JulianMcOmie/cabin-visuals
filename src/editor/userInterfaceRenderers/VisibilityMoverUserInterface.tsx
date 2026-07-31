@@ -25,6 +25,7 @@ import { ParameterList } from './ParametersUserInterface'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { VISIBILITY_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -52,7 +53,7 @@ function keyStep(bound: UserInterfaceParameter, shiftKey: boolean): number {
 
 // The mover has no color param (it gates whatever object it sits under), so
 // the panel keeps the emerald it has always worn in the app's chrome.
-const EMERALD = '#34d399'
+const EMERALD = VISIBILITY_COLOR
 const EMERALD_HSV = hexToHsv(EMERALD)
 /** Hue-true dark shade per the guide - never an alpha tint over panel gray. */
 const SHADE = hsvToHex(EMERALD_HSV.h, Math.min(EMERALD_HSV.s, 0.5), 0.075)

@@ -2,6 +2,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { FORCE_FIELD_PUSH_COLOR } from './identityColors'
 
 export const FORCE_FIELD_OUTWARD_PITCH = 60
 export const FORCE_FIELD_INWARD_PITCH = 61
@@ -132,6 +133,7 @@ export const forceFieldPushMover: MoverOrSplitterDefinition<ForceFieldPushSettin
   id: 'forceFieldPush',
   label: 'Force Field Pulse',
   kind: 'mover',
+  identityColor: FORCE_FIELD_PUSH_COLOR,
   params: [
     { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
     { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },

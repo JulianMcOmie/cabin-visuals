@@ -5,9 +5,11 @@ import { CubeUserInterfaceRenderer } from './CubeUserInterface'
 import { KaleidoSolidUserInterfaceRenderer } from './KaleidoSolidUserInterface'
 import { TextDisplayUserInterfaceRenderer } from './TextDisplayUserInterface'
 import { CameraControlUserInterfaceRenderer } from './CameraControlUserInterface'
+import { CameraOrbitUserInterfaceRenderer } from './CameraOrbitUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
 import { BassRippleUserInterfaceRenderer } from './BassRippleUserInterface'
+import { ImpactWarpUserInterfaceRenderer } from './ImpactWarpUserInterface'
 import { StrobeUserInterfaceRenderer } from './StrobeUserInterface'
 import { ParticleBurstUserInterfaceRenderer } from './ParticleBurstUserInterface'
 import { PixelBlastUserInterfaceRenderer } from './PixelBlastUserInterface'
@@ -21,6 +23,7 @@ import { LaserSphereUserInterfaceRenderer } from './LaserSphereUserInterface'
 import { ShapeFlightUserInterfaceRenderer } from './ShapeFlightUserInterface'
 import { MetronomeBallsUserInterfaceRenderer } from './MetronomeBallsUserInterface'
 import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
+import { FlashWallUserInterfaceRenderer } from './FlashWallUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 import type { UserInterfaceRendererId } from './ids'
 
@@ -36,9 +39,11 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   kaleidoSolid: KaleidoSolidUserInterfaceRenderer,
   textDisplay: TextDisplayUserInterfaceRenderer,
   cameraControl: CameraControlUserInterfaceRenderer,
+  cameraOrbit: CameraOrbitUserInterfaceRenderer,
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
   bassRipple: BassRippleUserInterfaceRenderer,
+  impactWarp: ImpactWarpUserInterfaceRenderer,
   strobe: StrobeUserInterfaceRenderer,
   particleBurst: ParticleBurstUserInterfaceRenderer,
   pixelBlast: PixelBlastUserInterfaceRenderer,
@@ -52,6 +57,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   shapeFlight: ShapeFlightUserInterfaceRenderer,
   metronomeBalls: MetronomeBallsUserInterfaceRenderer,
   emojiDisplay: EmojiDisplayUserInterfaceRenderer,
+  flashWall: FlashWallUserInterfaceRenderer,
 }
 
 export function getUserInterfaceRenderer(id: UserInterfaceRendererId): UserInterfaceRendererDefinition {

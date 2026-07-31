@@ -9,18 +9,43 @@ export interface AutomationKeyframe {
   value: number
 }
 
+// ── Amount (lane output gain) ────────────────────────────────────────────────
+// A whole-lane multiplier applied at extraction, whatever the mode: keyframe
+// values, noise centers (resolve.ts scales the deviation to match) and burst
+// targets all scale by it, then clamp back to the param's range. It is a GAIN
+// on what the notes say, not a remap of the pitch rows - the piano roll's row
+// labels keep meaning "the value at 100%".
+
+/** The amount fader's top: 2 = the lane can double what its notes wrote. */
+export const AUTOMATION_AMOUNT_MAX = 2
+export const DEFAULT_AUTOMATION_AMOUNT = 1
+
+/** A track's effective amount: absent = 1, and never negative (a document edited
+ *  by hand can't flip a lane upside down by surprise). */
+export function automationAmount(track: Pick<Track, 'automationAmount'>): number {
+  return Math.max(0, track.automationAmount ?? DEFAULT_AUTOMATION_AMOUNT)
+}
+
+/** Apply the lane's amount to one pitch-derived value. */
+function scaleValue(value: number, amount: number, paramMin: number, paramMax: number): number {
+  if (amount === 1) return value
+  return Math.max(paramMin, Math.min(paramMax, value * amount))
+}
+
 /** Flatten an automation track's blocks into value keyframes (absolute beats, sorted).
- *  Each note is a keyframe: its beat is the time, its pitch encodes the value. */
+ *  Each note is a keyframe: its beat is the time, its pitch encodes the value
+ *  (scaled by the lane's `amount` and clamped back to the param's range). */
 export function extractKeyframes(
   blocks: Block[],
   beatsPerBar: number,
   paramMin: number,
   paramMax: number,
   totalBars?: number,
+  amount = 1,
 ): AutomationKeyframe[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
-    value: pitchToValue(note.pitch, paramMin, paramMax),
+    value: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
   }))
 }
 
@@ -67,11 +92,12 @@ export function extractNoiseGates(
   paramMin: number,
   paramMax: number,
   totalBars?: number,
+  amount = 1,
 ): NoiseGate[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     endBeat: note.beat + note.durationBeats,
-    center: pitchToValue(note.pitch, paramMin, paramMax),
+    center: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
     amp: Math.max(0, Math.min(1, (note.velocity ?? 100) / 127)),
   }))
 }
@@ -151,12 +177,13 @@ export function extractBurstGates(
   paramMin: number,
   paramMax: number,
   totalBars?: number,
+  amount = 1,
 ): BurstGate[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     durationBeats: note.durationBeats,
     velocity: note.velocity ?? 100,
-    value: pitchToValue(note.pitch, paramMin, paramMax),
+    value: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
   }))
 }
 

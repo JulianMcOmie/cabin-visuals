@@ -29,7 +29,7 @@ export function formatKnobValue(value: number, step: number): string {
 
 export function LaserKnob({
   value, min, max, step, defaultValue, curve = 1, label, ariaLabel, accent,
-  large = false, suffix, format, onChange,
+  large = false, bipolar = false, suffix, format, onChange,
 }: {
   value: number
   min: number
@@ -46,6 +46,13 @@ export function LaserKnob({
   accent: string
   /** The panel's primary param reads one step larger. */
   large?: boolean
+  /**
+   * For a SIGNED param whose zero is the middle of its travel (a spin rate that
+   * can run either way). The arc grows out of 12 o'clock toward the value
+   * instead of filling from 7 o'clock, so "off" is dark and the direction is
+   * visible - a half-lit ring for zero reads as half ON, which is a lie.
+   */
+  bipolar?: boolean
   /** Appended to the readout (e.g. 'b' for beats). */
   suffix?: string
   format?: (value: number) => string
@@ -57,6 +64,12 @@ export function LaserKnob({
   const norm = range === 0 ? 0 : clamp((value - min) / range, 0, 1)
   const percent = Math.pow(norm, 1 / curve)
   const angle = -135 + percent * 270
+  // Where the lit span begins and ends, in degrees from the 225deg origin.
+  const anchor = bipolar ? 0.5 : 0
+  const litFrom = Math.min(percent, anchor) * 270
+  const litTo = Math.max(percent, anchor) * 270
+  const litArc = (color: string) =>
+    `conic-gradient(from 225deg, transparent 0deg ${litFrom}deg, ${color} ${litFrom}deg ${litTo}deg, transparent ${litTo}deg 360deg)`
 
   const commitNorm = (t: number) => {
     const raw = min + Math.pow(clamp(t, 0, 1), curve) * range
@@ -90,7 +103,11 @@ export function LaserKnob({
     if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
     event.preventDefault()
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
+    // Never nudge less than one step: on a coarse stepped knob (a detent
+    // selector spanning a handful of indices) 3% of the travel rounds back to
+    // the value it started from and the arrows read as dead.
+    const nudge = Math.max(0.03, range === 0 ? 0 : step / range)
+    commitNorm(percent + direction * nudge)
   }
 
   return (
@@ -117,7 +134,7 @@ export function LaserKnob({
         <div
           className="absolute inset-0 rounded-full"
           style={{
-            background: `conic-gradient(from 225deg, ${accent} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
+            background: litArc(accent),
             filter: 'blur(6px)',
             transform: 'scale(1.16)',
             opacity: 0.9,
@@ -125,15 +142,15 @@ export function LaserKnob({
         />
         <div
           className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(accent, 0.35)} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(1.5px)',
-          }}
+          style={{ background: litArc(towardWhite(accent, 0.35)), filter: 'blur(1.5px)' }}
         />
+        <div className="absolute inset-0 rounded-full" style={{ background: litArc(towardWhite(accent, 0.82)) }} />
+        {/* The unlit remainder of the travel, so the arc reads as a fill in a
+            ring rather than as a stray stroke. */}
         <div
           className="absolute inset-0 rounded-full"
           style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(accent, 0.82)} 0deg ${percent * 270}deg, rgba(255,255,255,0.08) ${percent * 270}deg 270deg, transparent 270deg)`,
+            background: `conic-gradient(from 225deg, rgba(255,255,255,0.08) 0deg ${litFrom}deg, transparent ${litFrom}deg ${litTo}deg, rgba(255,255,255,0.08) ${litTo}deg 270deg, transparent 270deg)`,
           }}
         />
         <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#14171f]" />
@@ -146,7 +163,12 @@ export function LaserKnob({
           />
         </div>
       </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      {/* Omitted entirely when blank: a grid panel that labels its ROWS and
+          COLUMNS instead has nothing to say per knob, and an empty caption
+          would still cost a line of height on every one of them. */}
+      {label !== '' && (
+        <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
+      )}
       <span className="font-mono text-[9px] tabular-nums text-white/70">
         {(format ?? ((v: number) => formatKnobValue(v, step)))(value)}{suffix}
       </span>

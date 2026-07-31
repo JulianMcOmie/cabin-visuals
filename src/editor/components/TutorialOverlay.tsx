@@ -79,7 +79,10 @@ function rectsDiffer(a: DOMRect | null, b: DOMRect | null): boolean {
 }
 
 export function TutorialOverlay() {
-  const tracks = useProjectStore((s) => s.tracks)
+  // The tutorial only tracks the cube: subscribe to that one track so the
+  // overlay skips the per-pointermove re-renders every whole-record subscriber
+  // pays during timeline drags.
+  const cube = useProjectStore((s) => Object.values(s.tracks).find((t) => t.instrumentId === 'cube'))
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const editingBlock = useUIStore((s) => s.editingBlock)
   const libraryDragging = useUIStore((s) => s.libraryDragging)
@@ -106,7 +109,6 @@ export function TutorialOverlay() {
   // Progress, derived live from the document. The notes step wants at least
   // TWO notes (one note isn't a rhythm), and the MIDI editor must be CLOSED
   // again before the play step - reopening it drops back to the close step.
-  const cube = Object.values(tracks).find((t) => t.instrumentId === 'cube')
   const firstBlock = cube?.blocks[0]
   const hasNotes = !!cube && cube.blocks.reduce((n, b) => n + b.notes.length, 0) >= 2
   const pianoRollOpen = !!editingBlock

@@ -54,6 +54,21 @@ camera via `useThree`). It also beats a tessellated sphere on looks: a sphere's
 polygon silhouette makes clusters read as marbles, a soft disc has no silhouette
 and neighbours merge.
 
+## An always-transparent material must declare FORCE_TRANSPARENT_KEY
+
+The placement wrapper's `applyMaterialOpacity` (core/visual/animatedOpacity.ts)
+runs every frame and RESETS `material.transparent` to `opacity < 0.999` — so
+`<shaderMaterial transparent>` silently goes opaque whenever the track is at
+full fade, and the shader's alpha channel stops blending entirely. On a small
+mesh that's a subtle artifact; on a FULL-FRAME plane the opaque quad replaces
+every pixel of the frame, so the whole scene behind it (background included)
+reads solid black — which looks exactly like a compositing bug and is the
+symptom the components guide describes as "a full-frame instrument in the
+front pass hides the whole scene". The fix is one prop:
+`userData={{ [FORCE_TRANSPARENT_KEY]: true }}` on the material (TextDisplay,
+Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall all carry it). Any instrument
+whose material must keep blending at full opacity needs it.
+
 ## Keep runtime fallbacks and schema defaults in ONE place
 
 `state.params` only carries what the TRACK stored, so `par.x ?? 0.3` runs whenever
@@ -70,16 +85,81 @@ nothing. Read the schema instead: `par[key] ?? paramDefault(theInstrument, key)`
 - `fullFrame` — screen-filling plane; renderer skips placement + transform/clone chain. `defaultOnTop` — depth-ignored overlay by default (Text).
 - **Never read those two flags directly** — go through `isFullFrameTrack(def, params)` / `isOnTopTrack(def, params, track.onTop)` in `types.ts`. Full-frame can also be a per-track MODE via `fullFrameParam: 'someParam'` (Oscilloscope's "Fit to screen"): the track is full-frame while that param is ≥ 0.5, and the on-top pass follows the SAME param, because a screen-pinned overlay that also depth-sorted against scenery would be neither one thing nor the other. ObjectRenderer and VisualScene both resolve through those helpers so they cannot disagree about which pass an object belongs to. Switching an instrument from fixed `fullFrame` to a mode needs a persistence upgrade step that writes the param on existing tracks (see UPGRADES[10]) — otherwise every saved project silently changes look.
 - VisualCopy color shifts arrive via `applyColorShiftToInstrumentParams` / `InstrumentCopyContext` — declare color params properly and this is automatic.
-- `identityColor` — what the track WEARS in the timeline/piano-roll UI (`utils/trackDisplayColor.ts` resolves; OKLCH recipes re-voice it). A hex literal = fixed identity; `{ param: 'key' }` = follow that color param's current value. Omit it and an instrument with exactly ONE color param follows it automatically; near-achromatic values (white/black text or bg defaults) fall back to the track's hue-cycle color, so a white-defaulting param is safe to point at. Instruments with multiple color params (or an unrepresentative sole one, e.g. a background) must declare explicitly.
+- `identityColor` — what the track WEARS in the timeline/piano-roll UI (`utils/trackDisplayColor.ts` resolves; OKLCH recipes re-voice it). Movers/splitters/colorizers have their own counterpart - a required `identityColor` on the definition, from `core/visualCopies/identityColors.ts` - and since 2026-07-31 child lanes no longer inherit their instrument's colour at all. A hex literal = fixed identity; `{ param: 'key' }` = follow that color param's current value. Omit it and an instrument with exactly ONE color param follows it automatically; near-achromatic values (white/black text or bg defaults) fall back to the track's hue-cycle color, so a white-defaulting param is safe to point at. Instruments with multiple color params (or an unrepresentative sole one, e.g. a background) must declare explicitly.
 
-Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). Camera is an instrument too (`CameraControl`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
+Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
 
-## Scene post-process instruments (ColorFilters, BassRipple, Strobe)
+## Camera instruments own the camera, and only one can
 
-These three render `null` and post-process their scene's render target instead. The pattern: export a pure `resolveActiveX(state)` that reads `activeNotes`/`params`/`opacity`/`beat` and returns either the pass's uniforms or `null` for "don't run a pass at all"; `components/visual/VisualScene.tsx` collects the tracks per scene (`postProcessTracksByScene`) and runs the passes. Things you cannot see from one file:
+The Canvas ships a plain default camera at `[0, 0, 5]`, fov 55, and there are no
+OrbitControls — nothing else writes it per frame. A camera instrument is
+therefore the sole author while its track is active, and two camera tracks at
+once fight, last-mounted winning. Accepted trade, not a bug to guard against.
 
-- **Pass order is deliberate**: warp (BassRipple) → colour (ColorFilters) → Strobe. Position before colour, because the grade's own gradients shouldn't be dragged around; Strobe last, because it flashes over the finished look rather than being one more colour in it.
-- **`COLOR_FILTER_FRAGMENT`'s `mode` numbering is shared and partitioned**: ColorFilters owns modes **1–9** (one per MIDI row), Strobe owns **10 (blackout)** and **11 (flash)** and reuses 1 for invert. Adding a mode means appending, never renumbering. Strobe's `style` param is its OWN 0/1/2 enum mapped through `STROBE_STYLE_MODES` precisely so a shader renumber can't repaint saved projects — keep new styles on that side of the boundary. BassRipple's `pattern` select (0 noise · 1 twist · 2 waves · 3 weave · 4 bloom, branched inside `bassRippleOffset`) follows the same append-only rule, and every field keeps full INTENSITY in the same ~0.1–0.2 frame-fraction band so switching patterns never jumps the warp's violence.
+Two of them exist because they parameterise the rig differently, and the
+parameterisation IS the feature:
+
+- **`CameraControl`** ("Camera") — a position and a rotation, plus an optional
+  "look at origin" mode. Free, but aim is something the user maintains.
+- **`CameraOrbit`** ("Camera Orbit") — a center, an axis to circle, and a ring;
+  position *and* aim are DERIVED from those every frame, so losing the subject is
+  not expressible. Notes are hold-to-orbit (travel while held, stay where
+  released, chord two rows for a diagonal, hold Return home to ease back), summed
+  closed-form over the note history in `cameraOrbitCore.ts` — never accumulated
+  per frame, or scrub would disagree with playback.
+
+  **The size knobs are cylindrical, not spherical, and that IS the feature.**
+  STANDOFF (how far off the plane, along the axis) and RADIUS (how wide a circle)
+  replace a distance/height pair, because standoff is the number a shot holds
+  still for a whole lap and a spherical pair hides it. Distance is derived
+  (`orbitDistance`), and so is the angle off the ring (`restingElevation`) — so
+  the resting pose is described in exactly one place.
+
+  **`ORBIT_AXES` is an ordered, index-saved list** (a track stores the index):
+  append, never resequence. Each preset is an axis plus a `reference` direction,
+  and `right` is derived by cross product — never write it by hand. The whole
+  pose is the canonical pose (pole +Y, angle 0 at +Z) carried into the preset's
+  frame, which is what makes sweeping the angle a RIGID rotation about the chosen
+  axis: the component along the axis is untouched, so the standoff holds for the
+  lap and the travel stays parallel to the plane while the frame rolls. Turntable
+  IS the canonical frame, so it must stay byte-identical to the plain spherical
+  formula — there is a test pinning exactly that, and it is the regression guard
+  for anything done to this code.
+
+  One non-obvious constraint on adding a preset: the frame's up at the pole comes
+  out as the NEGATIVE of `reference`, so a preset meant to be used pole-on
+  (Face-on, Side, where radius 0 is the money pose) must reference `-Y` to come
+  out upright there. Getting this backwards ships an upside-down default.
+
+  **Neither angle is clamped or wrapped, and that is only safe because the rig
+  carries its OWN up vector** (`orbitCameraUp`, the elevation tangent) instead of
+  borrowing world +Y. With a fixed +Y, ±90° elevation is a singularity: the camera
+  sits on its own up axis, `lookAt` has no roll left to choose, and the frame
+  snaps around — so the first version parked a degree short of the pole and the
+  vertical orbit could not lap. The tangent is perpendicular to the view
+  direction by construction, so there is no pole to avoid and crossing overhead
+  ROLLS through, coming out the far side upside down. Verify a change here by
+  sampling the per-frame quaternion delta across a full vertical lap: it must stay
+  at `speed × step` the whole way (a flip shows up as one ~180° spike).
+
+  Consequence for `CameraControl`: it re-asserts `camera.up` to +Y before its own
+  `lookAt`, or swapping between the two rigs inherits Camera Orbit's roll.
+
+**Writing the camera is safe against the `useInstrumentFrame` skip.** The camera
+pose is part of the per-frame signature, so writing it dirties the next frame's
+comparison — but because the write is a pure function of the beat, that frame
+computes the same pose and the signature settles. One extra callback, not a loop.
+
+## Scene post-process instruments (ColorFilters, BassRipple, ImpactWarp, Strobe)
+
+These four render `null` and post-process their scene's render target instead. The pattern: export a pure `resolveActiveX(state)` that reads `activeNotes`/`notes`/`params`/`opacity`/`beat` and returns either the pass's uniforms or `null` for "don't run a pass at all"; `components/visual/VisualScene.tsx` collects the tracks per scene (`postProcessTracksByScene`) and runs the passes. Adding one is: the resolve + the exported GLSL in the instrument file, then a `ShaderMaterial` + a loop + a `dispose()` in VisualScene's compositor. Things you cannot see from one file:
+
+- **Pass order is deliberate**: ripple (BassRipple) → impact (ImpactWarp) → colour (ColorFilters) → Strobe. Both positional passes precede colour, because the grade's own gradients shouldn't be dragged around; Impact after the ripple because a punch is the outermost gesture (a rumbling scene gets punched as one image, rather than the punch being fed into the rumble); Strobe last, because it flashes over the finished look rather than being one more colour in it.
+- **Held vs triggered is the axis that separates two warps.** BassRipple reads `activeNotes` and bends for as long as a note lasts; ImpactWarp reads note ONSETS out of the full stream and ignores duration entirely, summing an envelope per hit so a roll compounds. That is also what sorts them into the library's Rumble vs Impulse shelves. A percussive pass wants an instantaneous attack (full displacement on the frame of the onset, no ramp) and a *signed* envelope, so the rebound past zero is free.
+- **Displacement offsets are SAMPLING offsets** — the image moves opposite to them. Write each branch so a positive amount moves the picture the way its name says, and say so at the function (`impactWarpOffset` does). Sampling outside the frame is unavoidable once you translate or zoom out, and clamping smears the edge row into a bar of streaks that reads as a rendering fault: mirror instead (`impactWarpWrap`).
+- **A channel split is what makes a hit read as a hit**, and it needs no knob: take it as a fixed fraction of whatever displacement the field already asked for and it is exactly as violent as the strike and gone at rest. **Cap it in absolute uv** (`impactWarpSplit`) — past a couple of screen pixels the three channels land on three different objects and anything fine-grained (a dot field, small text) turns to rainbow confetti instead of getting a hot fringe.
+- **A style enum may need its own envelope, not just its own shape.** ImpactWarp's Shockwave is amplitude `(1 - phase)` and does not compound, while the other three styles share the rebounding sum — because a wavefront *passing through* the frame weakens as it spreads and gets replaced by the next hit, where a deformed frame springs back. Sharing the deformation envelope killed the ring at a third of its travel, so it was never once seen crossing the frame.
+- **`COLOR_FILTER_FRAGMENT`'s `mode` numbering is shared and partitioned**: ColorFilters owns modes **1–9** (one per MIDI row), Strobe owns **10 (blackout)** and **11 (flash)** and reuses 1 for invert. Adding a mode means appending, never renumbering. Strobe's `style` param is its OWN 0/1/2 enum mapped through `STROBE_STYLE_MODES` precisely so a shader renumber can't repaint saved projects — keep new styles on that side of the boundary. BassRipple's `pattern` select (0 noise · 1 twist · 2 waves · 3 weave · 4 bloom, branched inside `bassRippleOffset`) follows the same append-only rule; its FREQUENCY param multiplies the polar patterns' angular symmetry (Twist arms, Bloom petals), rounded to whole harmonics or the atan branch cut tears a seam, and every field keeps full INTENSITY in the same ~0.1–0.2 frame-fraction band so switching patterns never jumps the warp's violence.
 - **These are instruments, not directors**, because they act on ONE scene before compositing — so a filtered scene still slots into a Crop mask or Cut partition normally.
 - **Rate can be the MIDI vocabulary.** Strobe puts its rates on labelled rows instead of a knob, so speed is *played* (the eighths→sixty-fourths build is the gesture) and the panel keeps only real settings. Its phase comes from the ABSOLUTE beat, not the note start, so several strobes stay locked to each other and off-grid notes still flash on the grid. Past ~1/32 the flash outruns a 60fps frame and reads as a shimmer whose texture depends on frame rate — that is the honest ceiling, not a bug to fix.
 - **A row's PITCH is the saved value, so shipped pitches are frozen.** Strobe's straight rows own 68–72 (1/4 … 1/64) and cannot be renumbered: a project stores the pitch, so remapping would silently re-time every existing strobe. Later families were appended *below* that block — triplets at 67–65, frame rows at 64–61 — which keeps pitch monotonically descending down the row list. Extending a row vocabulary means appending new pitches at one end, never resequencing for a tidier order: the same append-only discipline as the shader modes above. A colocated test pins the frozen five.
@@ -95,6 +175,6 @@ These three render `null` and post-process their scene's render target instead. 
 - **On a sphere-mapped field, fold in the surface metric.** A wedge's arc length at polar angle `phi` scales as `sin(phi)`, so ignoring it crowds cells into a smear at the poles. Same reason cells-per-ring must grow with radius: a fixed count per ring thins out to confetti as the ring grows.
 - **Export the GLSL** (`KALEIDO_FIELD_GLSL`) so the settings panel's preview runs the very same field — see `userInterfaceRenderers/CLAUDE.md` for that preview harness and its StrictMode trap.
 
-Note-driven state must stay a **pure function of the note stream and the beat** — `barrelTwist()` sums an eased contribution from every note already played rather than accumulating across frames. Per-frame accumulation would make scrubbing disagree with playback and break export.
+Note-driven state must stay a **pure function of the note stream and the beat** — `barrelTwist()` sums an eased contribution from every note already played rather than accumulating across frames. Per-frame accumulation would make scrubbing disagree with playback and break export. Same reason a per-hit *choice* (which way ImpactWarp's Slam shoves) is indexed off the note's position in the stream rather than stored: `impactShoveDirection(index)` walks the golden angle, so consecutive hits are 137.5° apart and a roll never repeats a direction — which a hash of the note would, and two identical shoves in a row read as the effect having failed to retrigger.
 
-Colocated `*.test.ts` here ARE run by `npm run test:visual` — the glob was widened when `KaleidoSolid.test.ts` landed, which also picked up two earlier instrument tests that had been sitting unrun.
+Colocated `*.test.ts` here ARE run by `npm run test:visual` — the glob was widened when `KaleidoSolid.test.ts` landed, which also picked up two earlier instrument tests that had been sitting unrun. All green as of 2026-07-30; no separate command needed.

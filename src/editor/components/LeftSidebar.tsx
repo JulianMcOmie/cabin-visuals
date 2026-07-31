@@ -45,6 +45,14 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
     </svg>
   )},
+  { id: 'cameraOrbit', name: 'Camera Orbit', description: 'Circles the camera around a point it never stops looking at - hold a note to swing, tilt, or come home.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <ellipse cx="6" cy="7" rx="4.6" ry="2.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <circle cx="6" cy="7" r="1.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <rect x="8.2" y="1.6" width="3.2" height="2.6" rx="0.7" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <path d="M8.2 3 L7 5.9" fill="none" stroke="#818cf8" strokeWidth="0.9" strokeDasharray="1.4 1.1" />
+    </svg>
+  )},
   { id: 'video', name: 'Video', description: 'Plays your uploaded video clips full-frame - each note cuts to a clip.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
@@ -75,6 +83,12 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
     </svg>
   )},
+  { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene on every MIDI hit — zoom slam, shockwave, sideways shove or torn slabs — then lets it recover.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="4" y="4" width="4" height="4" rx="0.5" fill="none" stroke="#ff6a00" strokeWidth="1.1" />
+      <path d="M3.1 3.1 L0.8 0.8M8.9 3.1 L11.2 0.8M3.1 8.9 L0.8 11.2M8.9 8.9 L11.2 11.2" fill="none" stroke="#ff6a00" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )},
   { id: 'colorFilters', name: 'Color Filters', description: 'Applies scene-wide color remaps while its labeled MIDI notes are held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
@@ -84,7 +98,7 @@ const SCENE_INSTRUMENTS = withKind('object', [
   )},
   { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#fde047" />
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#ffffff" />
     </svg>
   )},
 ])
@@ -164,6 +178,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
         <circle cx="6" cy="6" r="1.4" /><circle cx="6" cy="1.5" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
         <circle cx="2.8" cy="2.8" r="0.7" /><circle cx="9.2" cy="2.8" r="0.7" /><circle cx="2.8" cy="9.2" r="0.7" /><circle cx="9.2" cy="9.2" r="0.7" />
       </g>
+    </svg>
+  )},
+  { id: 'flashWall', name: 'Flash Wall', description: 'A screen-filling wall of light - each note flashes its own slice of the frame through an ADSR envelope.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="0.5" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.25" />
+      <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
+      <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
+      <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
     </svg>
   )},
   { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
@@ -293,7 +315,7 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 // they share is that a note is a PERFORMANCE on them - each one spawns its own
 // short-lived event rather than posing a standing shape - so they belong
 // together rather than scattered through Objects and Extras.
-const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop'])
+const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
 // Extras is the remainder: everything the curated folders above did not claim.
@@ -305,8 +327,9 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
-  radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
+  radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
@@ -417,13 +440,15 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
 // Visibility rides with Impulse - its ADSR window is exactly that shape.
-const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
-const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
+const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
+// Both of the odd ones here file by ENVELOPE, which is what the Impact split is
+// for. Strobe sits in Rumble rather than Color because it is scene-wide and
+// sustained - it keeps flashing for exactly as long as the note is held. Camera
+// Orbit sits here rather than beside Camera in Impulse for the same reason:
+// holding a row to swing the rig is the held shape, not a strike that decays.
+const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
-// Strobe files with Color Filters rather than under Impact: both are scene-wide
-// colour post-process passes held by a note, and Strobe's styles ARE colour
-// looks (inversion, blackout, flash) on a beat or frame gate.
-const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters', 'strobe']
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its

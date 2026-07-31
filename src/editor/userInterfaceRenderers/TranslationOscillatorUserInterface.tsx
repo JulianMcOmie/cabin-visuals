@@ -18,6 +18,7 @@ import {
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { TRANSLATION_OSCILLATOR_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -37,7 +38,7 @@ function commitNumber(bound: UserInterfaceParameter, raw: number) {
   bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
 }
 
-const CYAN = '#2bd4e8'
+const CYAN = TRANSLATION_OSCILLATOR_COLOR
 const AXIS_COLORS = ['#f87171', '#4ade80', '#60a5fa'] as const
 const AXIS_NAMES = ['X', 'Y', 'Z'] as const
 

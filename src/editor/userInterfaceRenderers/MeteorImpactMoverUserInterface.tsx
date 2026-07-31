@@ -31,13 +31,14 @@ import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { METEOR_IMPACT_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // The meteor's signature ember. The mover has no color param (its flash is a
 // SHIFT of each object's own color), so the panel wears the material it
 // evokes: molten rock.
-const EMBER = '#ff8a3c'
+const EMBER = METEOR_IMPACT_COLOR
 const EMBER_SHADE = '#140b06'
 const ROOM = '#05070c'
 

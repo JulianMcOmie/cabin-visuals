@@ -59,6 +59,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { IMPACT_SCATTER_COLOR } from './identityColors'
 
 export const SCATTER_IMPACT_PITCH = 60
 export const SCATTER_IMPLODE_PITCH = 61
@@ -427,6 +428,7 @@ export const impactScatterMover: MoverOrSplitterDefinition<ImpactScatterSettings
   id: 'impactScatter',
   label: 'Impact Scatter',
   kind: 'mover',
+  identityColor: IMPACT_SCATTER_COLOR,
   params: [
     { key: 'impact', label: 'Impact', min: 0, max: IMPACT_MAX, step: 0.01, default: 0.6 },
     { key: 'recoverBeats', label: 'Recover (beats)', min: 0.25, max: 8, step: 0.05, default: 2 },

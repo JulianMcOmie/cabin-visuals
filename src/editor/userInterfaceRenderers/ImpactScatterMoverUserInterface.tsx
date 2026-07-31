@@ -53,12 +53,13 @@ import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { IMPACT_SCATTER_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // The mover has no color param (its flash is a SHIFT of each object's own
 // colour), so the panel wears the material it evokes: cold kinetic shock.
-const SHOCK = '#5ad8ff'
+const SHOCK = IMPACT_SCATTER_COLOR
 const SHOCK_SHADE = '#08131a'
 const ROOM = '#04070a'
 

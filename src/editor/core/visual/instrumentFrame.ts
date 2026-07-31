@@ -68,6 +68,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const lightnessShift = colorShift.lightness
     const tint = colorShift.tint
     const tintAmount = colorShift.tintAmount
+    const tintPerceptual = colorShift.tintPerceptual ?? false
     let i = 0
     let dirty = false
     const put = (v: unknown) => {
@@ -97,6 +98,10 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(lightnessShift)
     put(tint)
     put(tintAmount)
+    // Which mix the tint walks changes the rendered color at a fixed beat, so
+    // flipping the Colorizer's MIX while paused has to repaint like any other
+    // colorShift field.
+    put(tintPerceptual)
     put(visualCopy?.opacity ?? 1)
     put(state.abilityEvents)
     put(state.videoPads)

@@ -1,5 +1,5 @@
 import { Matrix4, type Scene as ThreeScene } from 'three'
-import { resolveProject, type ProjectSnapshot } from './resolve'
+import { resolveAutomationLanes, resolveProject, type ProjectSnapshot } from './resolve'
 import { evaluatePulse } from './energy'
 import { sampleAutomationLane } from './automation'
 import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
@@ -11,7 +11,7 @@ import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
-import { getDirector, type CompositionLayer } from '../directors'
+import { directorAutomatableParams, getDirector, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -105,6 +105,9 @@ function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
 export function setProject(input: ProjectState | ProjectSnapshot) {
   const p = normalizeProject(input)
   project = p
+  // Dev-only cost trace: `performance.getEntriesByName('cabin:setProject')`
+  // from the console shows what each debounced structural resolve cost.
+  const tStart = process.env.NODE_ENV !== 'production' ? performance.now() : 0
   // Structural resolve is the expensive step, and the debounced subscription
   // funnels EVERY store change through here - including ones that touch no
   // scene content at all (selecting a scene, transport fields). A scene whose
@@ -139,6 +142,9 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   }
   graphInputs = nextInputs
   bpm = p.bpm
+  if (process.env.NODE_ENV !== 'production') {
+    performance.measure('cabin:setProject', { start: tStart, end: performance.now() })
+  }
   // Every graph survived untouched (and no scene fell away): the object list,
   // per-object caches and copy counts are all still valid - skip the sweep
   // and, crucially, the re-publish that would re-render the scene tree.
@@ -221,11 +227,37 @@ function resolveComposition(beat: number): CompositionLayer[] {
 
   const directors = main.rootTrackIds.map((id) => main.tracks[id]).filter((track) => track?.type === 'director' && !track.muted)
   const anySolo = directors.some((track) => track.solo)
+  // Automation lanes under a director keyframe its params (opacity + the def's
+  // own) exactly like object-track lanes. Directors never enter the resolved
+  // graph, so their lanes are gathered and sampled right here, per frame - a
+  // pure function of the beat (like the note flattening the defs already do
+  // every frame), so scrub == playback == export holds.
+  const mainSnapshot = {
+    tracks: main.tracks,
+    rootTrackIds: main.rootTrackIds,
+    beatsPerBar: project.beatsPerBar,
+    bpm: project.bpm,
+    totalBars: project.totalBars,
+  }
   // Timeline rows are a visual stack: the first/topmost director renders last.
   // Resolve bottom-to-top, preserving each director's own internal layer order.
-  const layers = directors.slice().reverse().flatMap((track) => {
-    if (anySolo && !track.solo) return []
-    const def = getDirector(track.directorId)
+  const layers = directors.slice().reverse().flatMap((rawTrack) => {
+    if (anySolo && !rawTrack.solo) return []
+    const def = getDirector(rawTrack.directorId)
+    let track = rawTrack
+    if (def && rawTrack.childIds.length) {
+      const lanes = resolveAutomationLanes(rawTrack, directorAutomatableParams(def), mainSnapshot)
+      if (lanes.length) {
+        const params = { ...rawTrack.params }
+        for (const lane of lanes) {
+          // NaN = inert lane this frame (noise/burst between gates) - keep the
+          // value underneath. Bursts travel from it, so lanes stack in order.
+          const v = sampleAutomationLane(lane, beat, params[lane.param] ?? lane.base ?? 0)
+          if (!Number.isNaN(v)) params[lane.param] = v
+        }
+        track = { ...rawTrack, params }
+      }
+    }
     const opacity = clampOpacity(track.params?.opacity ?? 1)
     return (def?.resolve(track, {
       beat,

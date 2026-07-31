@@ -37,12 +37,13 @@ import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import { towardWhite, withAlpha } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { APPROACH_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 // The splitter has no color param (it only moves and scales copies), so the
 // panel wears the sensation it produces: warp-drive blue.
-const WARP = '#5cc8ff'
+const WARP = APPROACH_COLOR
 const WARP_SHADE = '#050b14'
 const ROOM = '#03060b'
 
