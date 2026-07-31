@@ -2,18 +2,23 @@
 
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { isNumberParam } from '../instruments/types'
+import { DEFAULT_ORBIT_AXIS, ORBIT_AXES } from '../instruments/cameraOrbitCore'
 import { ParamControl } from './ParameterControl'
 import { LaserKnob } from './laserKnob'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
-// Bespoke settings for Camera Orbit, built around the two angles: a top-down
-// ORBIT plan (drag the rig around the ring to set the angle, in or out to set
-// the distance) and a side HEIGHT arc (drag up the arc to lift the rig).
+// Bespoke settings for Camera Orbit, built around the ring the rig walks: an
+// axis picker (which axis it circles, and so which plane its travel stays
+// parallel to), then the two views a camera department would draw - the RING
+// looking straight down that axis, and the PROFILE from the side.
 //
 // Both views draw the aim as a dashed line back to the center, because that is
-// the instrument's whole promise - move the rig anywhere on either diagram and
-// the line still lands on the subject. Making the invariant visible is the point
-// of the panel; a stack of numeric fields would hide it.
+// the instrument's whole promise: move the rig anywhere on either diagram and
+// the line still lands on the subject. The profile draws a second dashed line
+// straight across at the rig's standoff, because "circles parallel to the plane"
+// is a claim about that line, and a picture states it where a number cannot.
+// Making the invariants visible is the point of the panel; a stack of numeric
+// fields would hide both of them.
 //
 // Purely presentational: every value flows through the passed parameters.
 
@@ -149,41 +154,40 @@ function Subject({ x, y }: { x: number; y: number }) {
 }
 
 /**
- * Pad radius for a distance, so the ring visibly grows as the rig backs off.
+ * Pad offset for a world distance. Signed, and 0 maps to 0 so the rig sits
+ * exactly on the axis at radius 0 and exactly on the plane at standoff 0 -
+ * which are the two poses the diagrams have to state clearly.
  *
- * Curved, not linear: the range runs to 60 but almost every useful shot lives
+ * Curved, not linear: the ranges run to 60 but almost every useful shot lives
  * under 15, and a linear map crushes all of those into the first quarter-inch of
  * travel - the ring barely clears the subject and dragging it is a nudge war.
  */
-const MIN_RADIUS = 12
-const MAX_RADIUS = 42
-const RADIUS_CURVE = 2.5
-function radiusFor(distance: NumericBound) {
-  const span = distance.max - distance.min
-  const norm = span === 0 ? 0 : clampValue((distance.value - distance.min) / span, 0, 1)
-  return MIN_RADIUS + Math.pow(norm, 1 / RADIUS_CURVE) * (MAX_RADIUS - MIN_RADIUS)
+const PAD_REACH = 42
+const PAD_SCALE = 60
+const PAD_CURVE = 2.5
+function padOffset(worldValue: number) {
+  const norm = clampValue(Math.abs(worldValue) / PAD_SCALE, 0, 1)
+  return Math.sign(worldValue) * Math.pow(norm, 1 / PAD_CURVE) * PAD_REACH
 }
-function distanceForRadius(distance: NumericBound, radius: number) {
-  const norm = clampValue((radius - MIN_RADIUS) / (MAX_RADIUS - MIN_RADIUS), 0, 1)
-  return distance.min + Math.pow(norm, RADIUS_CURVE) * (distance.max - distance.min)
+function worldOffset(padValue: number) {
+  const norm = clampValue(Math.abs(padValue) / PAD_REACH, 0, 1)
+  return Math.sign(padValue) * Math.pow(norm, PAD_CURVE) * PAD_SCALE
 }
 
-/** Top-down plan: the ring the rig travels, with the rig on it. Up the pad is
- *  -Z (deep stage), matching the Camera panel's stage pad. */
-function OrbitPad({ azimuth, distance }: { azimuth: NumericBound; distance: NumericBound }) {
-  const radius = radiusFor(distance)
+/** Looking straight down the orbit axis: the ring the rig walks, with the rig on
+ *  it. Drag around for the angle, in and out for the radius. */
+function OrbitPad({ azimuth, radius }: { azimuth: NumericBound; radius: NumericBound }) {
+  const ring = padOffset(radius.value)
   const angle = azimuth.value * DEG
-  // World +Z is toward the viewer, which is DOWN the pad - so azimuth 0 parks
-  // the rig at the bottom, exactly where the scene's stock camera stands.
-  const x = 50 + Math.sin(angle) * radius
-  const y = 50 + Math.cos(angle) * radius
+  const x = 50 + Math.sin(angle) * ring
+  const y = 50 + Math.cos(angle) * ring
 
   return (
     <Pad
-      label="ORBIT"
-      hint="top view · drag around"
-      readout={`${azimuth.value.toFixed(0)}°   ${distance.value.toFixed(1)} away`}
-      ariaLabel="Orbit angle and distance"
+      label="RING"
+      hint="down the axis · drag around"
+      readout={`${azimuth.value.toFixed(0)}°   r ${radius.value.toFixed(1)}`}
+      ariaLabel="Orbit angle and radius"
       aria={{ min: azimuth.min, max: azimuth.max, now: azimuth.value }}
       onPoint={(nx, ny) => {
         const dx = nx - 50
@@ -192,69 +196,92 @@ function OrbitPad({ azimuth, distance }: { azimuth: NumericBound; distance: Nume
         // Dead zone at the middle: an angle derived from a two-pixel radius is
         // noise, and dropping the pointer on the subject shouldn't spin the rig.
         if (length > 3) commit(azimuth, (Math.atan2(dx, dy) * 180) / Math.PI)
-        commit(distance, distanceForRadius(distance, length))
+        commit(radius, worldOffset(length))
       }}
       onArrow={(direction, axis) => {
         if (axis === 'horizontal') commit(azimuth, azimuth.value + direction * azimuth.step)
-        else commit(distance, distance.value - direction * distance.step)
+        else commit(radius, radius.value - direction * radius.step)
       }}
-      onReset={() => { azimuth.setValue(azimuth.default); distance.setValue(distance.default) }}
+      onReset={() => { azimuth.setValue(azimuth.default); radius.setValue(radius.default) }}
     >
-      <circle cx={50} cy={50} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <circle cx={50} cy={50} r={Math.max(0.5, ring)} fill="none" stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <Subject x={50} y={50} />
       <Rig x={x} y={y} aimX={50} aimY={50} />
     </Pad>
   )
 }
 
-/** Side elevation: the full ring the rig climbs - over the top, upside down
- *  underneath, and round again. A half-arc would say the travel stops at the
- *  poles, and it does not. */
-function HeightPad({ elevation, distance }: { elevation: NumericBound; distance: NumericBound }) {
-  const radius = radiusFor(distance)
-  const angle = elevation.value * DEG
-  const x = 50 + Math.cos(angle) * radius
-  const y = 50 - Math.sin(angle) * radius
+/**
+ * The side profile, and the pad that makes the shot legible: the plane the
+ * subject sits in runs across, the orbit axis runs up, and the rig is placed by
+ * radius (across) and standoff (up). The dashed line through the rig is the
+ * standoff it HOLDS - the whole lap happens along that line, which is the
+ * property "circles parallel to the plane" actually means.
+ */
+function ProfilePad({ standoff, radius }: { standoff: NumericBound; radius: NumericBound }) {
+  const x = 50 + padOffset(radius.value)
+  const y = 50 - padOffset(standoff.value)
 
   return (
     <Pad
-      label="HEIGHT"
-      hint="side view · drag around"
-      readout={`${elevation.value.toFixed(0)}° ${heightWord(elevation.value)}`}
-      ariaLabel="Orbit height angle"
-      aria={{ min: elevation.min, max: elevation.max, now: elevation.value }}
+      label="PROFILE"
+      hint="side view · drag to place"
+      readout={`${standoff.value.toFixed(1)} off plane`}
+      ariaLabel="Standoff from the plane, and orbit radius"
+      aria={{ min: standoff.min, max: standoff.max, now: standoff.value }}
       onPoint={(nx, ny) => {
-        const dx = nx - 50
-        const dy = 50 - ny
-        if (Math.hypot(dx, dy) <= 3) return
-        commit(elevation, (Math.atan2(dy, dx) * 180) / Math.PI)
+        commit(radius, worldOffset(nx - 50))
+        commit(standoff, worldOffset(50 - ny))
       }}
       onArrow={(direction, axis) => {
-        if (axis === 'vertical') commit(elevation, elevation.value + direction * elevation.step)
+        if (axis === 'vertical') commit(standoff, standoff.value + direction * standoff.step)
+        else commit(radius, radius.value + direction * radius.step)
       }}
-      onReset={() => elevation.setValue(elevation.default)}
+      onReset={() => { standoff.setValue(standoff.default); radius.setValue(radius.default) }}
     >
-      {/* The horizon the subject stands on, for a sense of up. */}
-      <line x1={6} y1={50} x2={94} y2={50} stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-      <circle cx={50} cy={50} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      {/* The subject's plane, edge-on. */}
+      <line x1={4} y1={50} x2={96} y2={50} stroke="var(--border-strong)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      {/* The orbit axis, standing off it. */}
+      <line x1={50} y1={4} x2={50} y2={96} stroke="var(--border-subtle)" strokeWidth={1} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+      {/* The standoff the lap holds. */}
+      <line
+        x1={4} y1={y} x2={96} y2={y}
+        stroke={ACCENT} strokeOpacity={0.3} strokeWidth={1} strokeDasharray="1 3" vectorEffect="non-scaling-stroke"
+      />
       <Subject x={50} y={50} />
       <Rig x={x} y={y} aimX={50} aimY={50} />
     </Pad>
   )
 }
 
-/** Plain words for where the rig is on the vertical ring, including the half of
- *  it where the picture is upside down. */
-function heightWord(degrees: number): string {
-  const wrapped = ((degrees % 360) + 360) % 360
-  if (wrapped < 1 || wrapped > 359) return 'level'
-  if (wrapped < 89) return 'above'
-  if (wrapped < 91) return 'overhead'
-  if (wrapped < 179) return 'above · inverted'
-  if (wrapped < 181) return 'behind · inverted'
-  if (wrapped < 269) return 'below · inverted'
-  if (wrapped < 271) return 'underneath'
-  return 'below'
+/** The segmented axis picker: which axis the rig circles, and so which plane its
+ *  travel stays parallel to. The whole character of the shot is this control. */
+function AxisPicker({ bound }: { bound: UserInterfaceParameter | undefined }) {
+  if (!bound || bound.definition.type !== 'select') return null
+  const active = Math.round(numberOf(bound, DEFAULT_ORBIT_AXIS))
+  return (
+    <div className="mb-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">ORBIT AXIS</span>
+        <span className="truncate text-[8px] text-[var(--text-muted)]">{ORBIT_AXES[active]?.plane}</span>
+      </div>
+      <div className="flex rounded border border-[var(--border)] p-0.5">
+        {bound.definition.options.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => bound.setValue(option.value)}
+            aria-pressed={active === option.value}
+            title={ORBIT_AXES[option.value]?.hint}
+            className={`flex-1 cursor-pointer rounded-[2px] py-1 text-[10px] transition-colors ${active === option.value
+              ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 /** One coordinate of the center, dragged vertically - the Camera panel's cell. */
@@ -353,24 +380,32 @@ function Segmented({ bound }: { bound: UserInterfaceParameter | undefined }) {
 }
 
 const PLACED = new Set([
-  'centerX', 'centerY', 'centerZ', 'distance', 'azimuth', 'elevation',
+  'centerX', 'centerY', 'centerZ', 'orbitAxis', 'standoff', 'radius', 'azimuth',
   'fov', 'swingSpeed', 'tiltSpeed', 'returnBeats', 'returnEase',
 ])
 
 export const CameraOrbitUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const azimuth = numeric(findParam(parameters, 'azimuth'))
-  const elevation = numeric(findParam(parameters, 'elevation'))
-  const distance = numeric(findParam(parameters, 'distance'))
+  const standoff = numeric(findParam(parameters, 'standoff'))
+  const radius = numeric(findParam(parameters, 'radius'))
   const fov = numberOf(findParam(parameters, 'fov'), 55)
   const leftovers = parameters.filter((bound) => !PLACED.has(bound.definition.key))
+  const distance = standoff && radius ? Math.hypot(standoff.value, radius.value) : 0
 
   return (
     <section data-testid="camera-orbit-user-interface" className="mb-3">
-      {azimuth && elevation && distance && (
-        <div className="mb-3 flex gap-2">
-          <OrbitPad azimuth={azimuth} distance={distance} />
-          <HeightPad elevation={elevation} distance={distance} />
-        </div>
+      <AxisPicker bound={findParam(parameters, 'orbitAxis')} />
+
+      {azimuth && standoff && radius && (
+        <>
+          <div className="mb-1.5 flex gap-2">
+            <OrbitPad azimuth={azimuth} radius={radius} />
+            <ProfilePad standoff={standoff} radius={radius} />
+          </div>
+          <div className="mb-3 text-right font-mono text-[8px] text-[var(--text-muted)]">
+            {distance.toFixed(1)} from center
+          </div>
+        </>
       )}
 
       {/* --- What it circles, and what it therefore points at --- */}

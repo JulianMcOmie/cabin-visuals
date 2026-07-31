@@ -86,12 +86,35 @@ parameterisation IS the feature:
 
 - **`CameraControl`** ("Camera") — a position and a rotation, plus an optional
   "look at origin" mode. Free, but aim is something the user maintains.
-- **`CameraOrbit`** ("Camera Orbit") — a center, a distance, and two angles;
+- **`CameraOrbit`** ("Camera Orbit") — a center, an axis to circle, and a ring;
   position *and* aim are DERIVED from those every frame, so losing the subject is
   not expressible. Notes are hold-to-orbit (travel while held, stay where
   released, chord two rows for a diagonal, hold Return home to ease back), summed
   closed-form over the note history in `cameraOrbitCore.ts` — never accumulated
   per frame, or scrub would disagree with playback.
+
+  **The size knobs are cylindrical, not spherical, and that IS the feature.**
+  STANDOFF (how far off the plane, along the axis) and RADIUS (how wide a circle)
+  replace a distance/height pair, because standoff is the number a shot holds
+  still for a whole lap and a spherical pair hides it. Distance is derived
+  (`orbitDistance`), and so is the angle off the ring (`restingElevation`) — so
+  the resting pose is described in exactly one place.
+
+  **`ORBIT_AXES` is an ordered, index-saved list** (a track stores the index):
+  append, never resequence. Each preset is an axis plus a `reference` direction,
+  and `right` is derived by cross product — never write it by hand. The whole
+  pose is the canonical pose (pole +Y, angle 0 at +Z) carried into the preset's
+  frame, which is what makes sweeping the angle a RIGID rotation about the chosen
+  axis: the component along the axis is untouched, so the standoff holds for the
+  lap and the travel stays parallel to the plane while the frame rolls. Turntable
+  IS the canonical frame, so it must stay byte-identical to the plain spherical
+  formula — there is a test pinning exactly that, and it is the regression guard
+  for anything done to this code.
+
+  One non-obvious constraint on adding a preset: the frame's up at the pole comes
+  out as the NEGATIVE of `reference`, so a preset meant to be used pole-on
+  (Face-on, Side, where radius 0 is the money pose) must reference `-Y` to come
+  out upright there. Getting this backwards ships an upside-down default.
 
   **Neither angle is clamped or wrapped, and that is only safe because the rig
   carries its OWN up vector** (`orbitCameraUp`, the elevation tangent) instead of

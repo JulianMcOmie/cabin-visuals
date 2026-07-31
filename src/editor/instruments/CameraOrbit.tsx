@@ -4,6 +4,8 @@ import { PerspectiveCamera, Vector3 } from 'three'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import {
   CAMERA_ORBIT_ROWS,
+  DEFAULT_ORBIT_AXIS,
+  ORBIT_AXES,
   RETURN_EASINGS,
   evaluateOrbitAngles,
   orbitCameraPosition,
@@ -14,11 +16,11 @@ import { paramDefault, type ObjectInstrumentDef, type ParamDef } from './types'
 
 // Camera Orbit renders no mesh - like Camera, it drives the scene camera each
 // frame. Where Camera exposes a position and a rotation, this one exposes an aim
-// point plus two angles and derives the rest, so the rig physically cannot stop
-// looking at the center: height, swing and tilt all change where it STANDS, and
-// the aim is recomputed from the center every frame. That is the difference
-// worth having two camera instruments for. All the math lives in
-// cameraOrbitCore.ts so it can be tested.
+// point plus a ring to walk and derives the rest, so the rig physically cannot
+// stop looking at the center: every control changes where it STANDS, and the aim
+// is recomputed from the center every frame. That is the difference worth having
+// two camera instruments for. All the math lives in cameraOrbitCore.ts so it can
+// be tested.
 //
 // Notes drive it in the hold-to-orbit grammar: while a direction row is held the
 // rig travels at Speed °/beat (scaled by velocity) and STAYS where it was
@@ -42,13 +44,20 @@ const PARAMS: ParamDef[] = [
   { key: 'centerX', label: 'Center X', min: -20, max: 20, step: 0.1, default: 0 },
   { key: 'centerY', label: 'Center Y', min: -20, max: 20, step: 0.1, default: 0 },
   { key: 'centerZ', label: 'Center Z', min: -20, max: 20, step: 0.1, default: 0 },
-  { key: 'distance', label: 'Distance', min: 0.5, max: 60, step: 0.25, default: DEFAULT_DISTANCE },
-  // The resting pose. 0 / 0 / 5 IS the scene's stock camera, so dropping the
-  // instrument in changes nothing until one of these moves.
+  {
+    key: 'orbitAxis',
+    label: 'Orbit axis',
+    type: 'select',
+    options: ORBIT_AXES.map((axis, value) => ({ value, label: axis.label })),
+    default: DEFAULT_ORBIT_AXIS,
+  },
+  // The ring. Standoff is the number the shot holds still for a whole lap;
+  // radius is how wide a circle it walks. Turntable with standoff 0 and radius 5
+  // IS the scene's stock camera, so dropping the instrument in changes nothing
+  // until a knob moves - and so is Face-on with standoff 5 and radius 0.
+  { key: 'standoff', label: 'Standoff', min: -60, max: 60, step: 0.25, default: 0 },
+  { key: 'radius', label: 'Radius', min: 0, max: 60, step: 0.25, default: DEFAULT_DISTANCE },
   { key: 'azimuth', label: 'Angle (°)', min: -180, max: 180, step: 1, default: 0 },
-  // A full turn, not a hemisphere: the rig can sit overhead or upside down, and
-  // MIDI can drive it there and keep going.
-  { key: 'elevation', label: 'Height (°)', min: -180, max: 180, step: 1, default: 0 },
   { key: 'fov', label: 'Field of View', min: 10, max: 120, step: 5, default: DEFAULT_FOV },
   { key: 'swingSpeed', label: 'Swing speed (°/beat)', min: 0, max: 720, step: 5, default: 90 },
   { key: 'tiltSpeed', label: 'Tilt speed (°/beat)', min: 0, max: 720, step: 5, default: 45 },
@@ -71,9 +80,10 @@ function readSettings(params: Record<string, number>): CameraOrbitSettings {
     centerX: read('centerX'),
     centerY: read('centerY'),
     centerZ: read('centerZ'),
-    distance: read('distance'),
+    orbitAxis: read('orbitAxis'),
+    standoff: read('standoff'),
+    radius: read('radius'),
     azimuth: read('azimuth'),
-    elevation: read('elevation'),
     swingSpeed: read('swingSpeed'),
     tiltSpeed: read('tiltSpeed'),
     returnBeats: read('returnBeats'),
@@ -97,7 +107,7 @@ function CameraOrbitVisual({ trackId }: { trackId: string }) {
     // direction at the poles and `lookAt` snaps the frame around, while the
     // elevation tangent stays perpendicular at every height, so passing overhead
     // rolls smoothly through. lookAt then builds the rest of the basis from it.
-    const [upX, upY, upZ] = orbitCameraUp(azimuth, elevation)
+    const [upX, upY, upZ] = orbitCameraUp(settings, azimuth, elevation)
     camera.up.set(upX, upY, upZ)
     lookTarget.current.set(settings.centerX, settings.centerY, settings.centerZ)
     camera.lookAt(lookTarget.current)

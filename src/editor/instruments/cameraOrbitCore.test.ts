@@ -2,26 +2,42 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   CAMERA_ORBIT_ROWS,
+  ORBIT_AXES,
   RETURN_HOME_PITCH,
   evaluateOrbitAngles,
   orbitCameraPosition,
   orbitCameraUp,
+  restingElevation,
   type CameraOrbitSettings,
   type OrbitNote,
 } from './cameraOrbitCore'
 
+const FACE_ON = ORBIT_AXES.findIndex((axis) => axis.key === 'faceOn')
+const TURNTABLE = ORBIT_AXES.findIndex((axis) => axis.key === 'turntable')
+
+/** Turntable at radius 5, on the plane: the scene's stock camera at [0, 0, 5]. */
 const SETTINGS: CameraOrbitSettings = {
   centerX: 0,
   centerY: 0,
   centerZ: 0,
-  distance: 5,
+  orbitAxis: TURNTABLE,
+  standoff: 0,
+  radius: 5,
   azimuth: 0,
-  elevation: 0,
   swingSpeed: 90,
   tiltSpeed: 45,
   returnBeats: 1,
   returnEase: 2, // Linear, so the tests assert the schedule and not the curve.
   fov: 55,
+}
+
+/** The same rig, parked dead on the face-on axis 5 in front of an XY-plane
+ *  billboard - the pose the Face-on preset exists for. */
+const FACE_ON_SETTINGS: CameraOrbitSettings = {
+  ...SETTINGS,
+  orbitAxis: FACE_ON,
+  standoff: 5,
+  radius: 0,
 }
 
 function note(pitch: number, beat: number, durationBeats: number, velocity = 1): OrbitNote {
@@ -35,10 +51,17 @@ const ORBIT_UP = 64
 const near = (actual: number, expected: number, tolerance = 1e-9) =>
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} ≉ ${expected}`)
 
-test('with no notes the rig sits at the resting angles', () => {
-  const pose = evaluateOrbitAngles([], { ...SETTINGS, azimuth: 30, elevation: -12 }, 8)
+test('with no notes the rig sits at the resting pose', () => {
+  const pose = evaluateOrbitAngles([], { ...SETTINGS, azimuth: 30, standoff: 5, radius: 5 }, 8)
   near(pose.azimuth, 30)
-  near(pose.elevation, -12)
+  // standoff == radius is 45° off the ring.
+  near(pose.elevation, 45)
+})
+
+test('standoff and radius are the two the operator sets; distance follows', () => {
+  near(restingElevation(SETTINGS), 0, 1e-12)
+  near(restingElevation(FACE_ON_SETTINGS), 90, 1e-12)
+  near(restingElevation({ ...SETTINGS, standoff: 3, radius: 3 }), 45, 1e-12)
 })
 
 test('the defaults reproduce the scene camera at [0, 0, 5]', () => {
@@ -81,11 +104,13 @@ test('a held Return home note eases back to the resting angles over Return beats
   near(evaluateOrbitAngles(notes, SETTINGS, 8).azimuth, 0)
 })
 
-test('returning goes home to the RESTING angle, not to zero', () => {
-  const settings = { ...SETTINGS, azimuth: 40, elevation: 20 }
-  const notes = [note(ORBIT_RIGHT, 0, 1), note(RETURN_HOME_PITCH, 2, 4)]
+test('returning goes home to the RESTING pose, not to zero', () => {
+  // A raised turntable: standoff 3 over radius 4 rests at 36.87° off the ring.
+  const settings = { ...SETTINGS, azimuth: 40, standoff: 3, radius: 4 }
+  const notes = [note(ORBIT_RIGHT, 0, 1), note(ORBIT_UP, 0, 1), note(RETURN_HOME_PITCH, 2, 4)]
   near(evaluateOrbitAngles(notes, settings, 3).azimuth, 40)
-  near(evaluateOrbitAngles(notes, settings, 3).elevation, 20)
+  near(evaluateOrbitAngles(notes, settings, 3).elevation, restingElevation(settings))
+  near(restingElevation(settings), (Math.atan2(3, 4) * 180) / Math.PI, 1e-12)
 })
 
 test('letting the Return row go early stops the rig partway home', () => {
@@ -133,7 +158,7 @@ test('a vertical lap comes home the short way too', () => {
 })
 
 test('the rig keeps its distance from the center at every angle', () => {
-  const settings = { ...SETTINGS, centerX: 2, centerY: -1, centerZ: 3, distance: 7 }
+  const settings = { ...SETTINGS, centerX: 2, centerY: -1, centerZ: 3, standoff: 0, radius: 7 }
   for (const azimuth of [-180, -37, 0, 90, 179]) {
     for (const elevation of [-270, -90, -45, 0, 12, 90, 180, 450]) {
       const [x, y, z] = orbitCameraPosition(settings, azimuth, elevation)
@@ -156,27 +181,106 @@ test('elevation 90 puts the rig exactly overhead, and 180 out the far side', () 
   near(over[2], -5, 1e-9)
 })
 
-test('the up vector is unit length and perpendicular to the view at every height', () => {
+test('the up vector is unit length and perpendicular to the view, on every axis', () => {
   // The reason there is no pole to avoid: up can never collapse into the
   // direction the camera is looking, so lookAt always has a roll to choose.
-  for (const azimuth of [-140, 0, 37, 90, 210]) {
-    for (const elevation of [-180, -90, -20, 0, 45, 89, 90, 91, 180, 270, 400]) {
-      const up = orbitCameraUp(azimuth, elevation)
-      const radial = orbitCameraPosition({ ...SETTINGS, distance: 1 }, azimuth, elevation)
-      near(Math.hypot(...up), 1, 1e-9)
-      near(up[0] * radial[0] + up[1] * radial[1] + up[2] * radial[2], 0, 1e-9)
+  for (let orbitAxis = 0; orbitAxis < ORBIT_AXES.length; orbitAxis++) {
+    const settings = { ...SETTINGS, orbitAxis, standoff: 0, radius: 1 }
+    for (const azimuth of [-140, 0, 37, 90, 210]) {
+      for (const elevation of [-180, -90, -20, 0, 45, 89, 90, 91, 180, 270, 400]) {
+        const up = orbitCameraUp(settings, azimuth, elevation)
+        const radial = orbitCameraPosition(settings, azimuth, elevation)
+        near(Math.hypot(...up), 1, 1e-9)
+        near(up[0] * radial[0] + up[1] * radial[1] + up[2] * radial[2], 0, 1e-9)
+      }
     }
   }
 })
 
-test('crossing overhead rolls the camera through instead of flipping it', () => {
+test('crossing the axis rolls the camera through instead of flipping it', () => {
   // Just below the pole up is still nearly +Y; just above it has tipped past
   // level and keeps going, rather than snapping back the way a fixed +Y would.
-  near(orbitCameraUp(0, 0)[1], 1, 1e-9)
-  assert.ok(orbitCameraUp(0, 89)[1] > 0, 'still upright approaching the pole')
-  near(orbitCameraUp(0, 90)[1], 0, 1e-9)
-  assert.ok(orbitCameraUp(0, 91)[1] < 0, 'tipped past level just after it')
-  near(orbitCameraUp(0, 180)[1], -1, 1e-9)
+  near(orbitCameraUp(SETTINGS, 0, 0)[1], 1, 1e-9)
+  assert.ok(orbitCameraUp(SETTINGS, 0, 89)[1] > 0, 'still upright approaching the pole')
+  near(orbitCameraUp(SETTINGS, 0, 90)[1], 0, 1e-9)
+  assert.ok(orbitCameraUp(SETTINGS, 0, 91)[1] < 0, 'tipped past level just after it')
+  near(orbitCameraUp(SETTINGS, 0, 180)[1], -1, 1e-9)
+})
+
+// ── The Face-on preset: the billboard shot ───────────────────────────────────
+
+test('face-on at radius 0 is the stock camera, upright and dead in front', () => {
+  const [x, y, z] = orbitCameraPosition(FACE_ON_SETTINGS, 0, restingElevation(FACE_ON_SETTINGS))
+  near(x, 0, 1e-9)
+  near(y, 0, 1e-9)
+  near(z, 5, 1e-9)
+  const up = orbitCameraUp(FACE_ON_SETTINGS, 0, restingElevation(FACE_ON_SETTINGS))
+  near(up[0], 0, 1e-9)
+  near(up[1], 1, 1e-9)
+  near(up[2], 0, 1e-9)
+})
+
+test('face-on holds its standoff for the whole lap, travelling parallel to XY', () => {
+  // THE property the preset exists for: a billboard in the XY plane stays the
+  // same distance away all the way round, and the rig's path is a circle in a
+  // plane parallel to it.
+  const settings = { ...FACE_ON_SETTINGS, standoff: 4, radius: 3 }
+  const elevation = restingElevation(settings)
+  for (const azimuth of [0, 17, 90, 180, 271, 359, 720]) {
+    const [x, y, z] = orbitCameraPosition(settings, azimuth, elevation)
+    near(z, 4, 1e-9)
+    near(Math.hypot(x, y), 3, 1e-9)
+  }
+})
+
+test('face-on at radius 0 turns the lap into a pure roll about the subject', () => {
+  const elevation = restingElevation(FACE_ON_SETTINGS)
+  for (const azimuth of [0, 45, 90, 180]) {
+    const [x, y, z] = orbitCameraPosition(FACE_ON_SETTINGS, azimuth, elevation)
+    near(x, 0, 1e-9)
+    near(y, 0, 1e-9)
+    near(z, 5, 1e-9)
+  }
+  // The rig has not moved, but the frame has turned all the way over.
+  near(orbitCameraUp(FACE_ON_SETTINGS, 180, elevation)[1], -1, 1e-9)
+})
+
+test('turntable holds its height for the whole lap, travelling parallel to XZ', () => {
+  const settings = { ...SETTINGS, standoff: 2, radius: 6 }
+  const elevation = restingElevation(settings)
+  for (const azimuth of [0, 33, 90, 200, 359]) {
+    const [x, y, z] = orbitCameraPosition(settings, azimuth, elevation)
+    near(y, 2, 1e-9)
+    near(Math.hypot(x, z), 6, 1e-9)
+  }
+})
+
+test('turntable is the canonical frame, so the axis select cannot have moved it', () => {
+  // The generalisation must be a strict superset: this preset has to reproduce
+  // the plain spherical formula it replaced, exactly.
+  for (const azimuth of [-90, 0, 40, 180]) {
+    for (const elevation of [-60, 0, 25, 90]) {
+      const distance = 5
+      const expected = [
+        Math.sin(azimuth * (Math.PI / 180)) * Math.cos(elevation * (Math.PI / 180)) * distance,
+        Math.sin(elevation * (Math.PI / 180)) * distance,
+        Math.cos(azimuth * (Math.PI / 180)) * Math.cos(elevation * (Math.PI / 180)) * distance,
+      ]
+      const actual = orbitCameraPosition(SETTINGS, azimuth, elevation)
+      for (let i = 0; i < 3; i++) near(actual[i], expected[i], 1e-9)
+    }
+  }
+})
+
+test('every preset keeps the rig at its distance and names its plane', () => {
+  for (let orbitAxis = 0; orbitAxis < ORBIT_AXES.length; orbitAxis++) {
+    const settings = { ...SETTINGS, orbitAxis, standoff: 3, radius: 4, centerX: 1, centerY: -2, centerZ: 5 }
+    assert.ok(ORBIT_AXES[orbitAxis].plane.length > 0)
+    for (const azimuth of [0, 61, 145, 300]) {
+      const [x, y, z] = orbitCameraPosition(settings, azimuth, restingElevation(settings))
+      near(Math.hypot(x - 1, y + 2, z - 5), 5, 1e-9)
+    }
+  }
 })
 
 test('the row vocabulary is five rows in descending pitch order', () => {

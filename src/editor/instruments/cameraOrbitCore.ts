@@ -4,12 +4,30 @@
 // instrumentFrame cycle - see the directory guide.
 //
 // The rig is described the way a camera operator thinks about it - a point to
-// look at, how far back to stand, and two angles - rather than as a position and
-// a rotation. That is the whole reason this instrument exists next to Camera:
-// with an aim point and two angles, "still looking at the center" is not
-// something the user has to maintain, it is the only thing the parameterisation
-// can express. Height, swing and tilt cannot break the aim because the aim is
-// not stored anywhere to be broken.
+// look at, an axis to circle, how far off that axis to swing, and how far back
+// to hold - rather than as a position and a rotation. That is the whole reason
+// this instrument exists next to Camera: with an aim point and a ring, "still
+// looking at the center" is not something the user has to maintain, it is the
+// only thing the parameterisation can express. Nothing here can break the aim,
+// because the aim is not stored anywhere to be broken.
+//
+// The ring is the other half of the design. An orbit is a circle about SOME
+// axis, and which axis you pick is the shot:
+//
+//   Turntable (about Y) - the classic level walk-around.
+//   Face-on   (about Z) - the axis pointing at the viewer. A billboard sitting
+//                         in the XY plane keeps the same size and the same
+//                         standoff the whole way round while the frame rolls
+//                         about it; the rig's travel stays PARALLEL to the
+//                         billboard rather than swinging behind it.
+//   Side      (about X) - the same, for something facing along X.
+//
+// So the two size knobs are cylindrical, not spherical: STANDOFF is how far the
+// rig holds off the plane (measured along the axis, and constant for the whole
+// lap - that is the property the shot is named for) and RADIUS is how wide the
+// circle it walks is. Distance from the center is whatever those two imply. A
+// spherical distance-plus-height pair can describe the same poses but hides the
+// one number the operator actually wants to hold still.
 
 import type { MidiRowDef } from './types'
 
@@ -34,12 +52,17 @@ export interface CameraOrbitSettings {
   centerX: number
   centerY: number
   centerZ: number
-  /** How far back the rig stands from the center, in world units. */
-  distance: number
-  /** Resting angles - where the rig sits with no notes playing. Azimuth 0 with
-   *  elevation 0 and distance 5 reproduces the scene's default camera exactly. */
+  /** Index into ORBIT_AXES: which axis the rig circles, and therefore which
+   *  plane its travel stays parallel to. */
+  orbitAxis: number
+  /** How far the rig holds off that plane, along the axis. Constant for the
+   *  whole lap - this is the number the shot is built to keep still. */
+  standoff: number
+  /** How wide a circle the rig walks around the axis. Zero parks it dead on the
+   *  axis, where orbiting becomes a pure roll about the subject. */
+  radius: number
+  /** Resting angle around the ring, in degrees. */
   azimuth: number
-  elevation: number
   /** Degrees per beat a held note travels, before velocity scaling. */
   swingSpeed: number
   tiltSpeed: number
@@ -47,6 +70,123 @@ export interface CameraOrbitSettings {
   returnBeats: number
   returnEase: number
   fov: number
+}
+
+type Vector3 = readonly [number, number, number]
+
+/**
+ * An orbit preset: the axis the rig circles, plus where on the ring angle 0 sits.
+ *
+ * `axis` is the pole - the direction STANDOFF is measured along, and the normal
+ * of the plane the rig's travel stays parallel to. `reference` is the in-plane
+ * direction the rig sits in at angle 0 with no standoff, and it also fixes the
+ * roll: the frame's up at the pole comes out as its NEGATIVE, which is why the
+ * two axes that are used pole-on (Face-on, Side) reference -Y and so come out
+ * upright there.
+ *
+ * `right` completes a right-handed frame and is derived, never written by hand.
+ */
+export interface OrbitAxisPreset {
+  key: string
+  label: string
+  /** The plane the rig's travel stays parallel to, named for the panel. */
+  plane: string
+  /** What the shot is, in one clause, for the panel's tooltip. */
+  hint: string
+  axis: Vector3
+  reference: Vector3
+  right: Vector3
+}
+
+const cross = (a: Vector3, b: Vector3): Vector3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+]
+
+function preset(
+  key: string,
+  label: string,
+  plane: string,
+  hint: string,
+  axis: Vector3,
+  reference: Vector3,
+): OrbitAxisPreset {
+  return { key, label, plane, hint, axis, reference, right: cross(axis, reference) }
+}
+
+/**
+ * The shipped orbit axes. ORDER IS THE SAVED VALUE - a track stores the index,
+ * so these may be appended to but never resequenced.
+ *
+ * Turntable is the default because it is the familiar walk-around and its
+ * defaults reproduce the scene's stock camera; Face-on is first in the list
+ * because it is the one people come looking for.
+ */
+export const ORBIT_AXES: OrbitAxisPreset[] = [
+  preset(
+    'faceOn',
+    'Face-on',
+    'parallel to the XY plane',
+    'Circles the Z axis, the one pointing at you: travel stays parallel to a billboard in the XY plane at a constant standoff, and the frame rolls around it.',
+    [0, 0, 1],
+    [0, -1, 0],
+  ),
+  preset(
+    'turntable',
+    'Turntable',
+    'parallel to the XZ floor',
+    'The level walk-around: circles the Y axis, holding a constant height above the floor.',
+    [0, 1, 0],
+    [0, 0, 1],
+  ),
+  preset(
+    'side',
+    'Side',
+    'parallel to the YZ plane',
+    'Circles the X axis - for a subject facing along X, or an over-and-under tumble.',
+    [1, 0, 0],
+    [0, -1, 0],
+  ),
+]
+
+export const DEFAULT_ORBIT_AXIS = 1
+
+export function resolveOrbitAxis(settings: CameraOrbitSettings): OrbitAxisPreset {
+  return ORBIT_AXES[Math.round(settings.orbitAxis)] ?? ORBIT_AXES[DEFAULT_ORBIT_AXIS]
+}
+
+/** Rotate a vector out of the canonical orbit frame (pole +Y, angle 0 at +Z)
+ *  into world space. Turntable's frame IS the canonical one, so that preset
+ *  passes everything through untouched. */
+function toWorld(frame: OrbitAxisPreset, v: Vector3): [number, number, number] {
+  return [
+    v[0] * frame.right[0] + v[1] * frame.axis[0] + v[2] * frame.reference[0],
+    v[0] * frame.right[1] + v[1] * frame.axis[1] + v[2] * frame.reference[1],
+    v[0] * frame.right[2] + v[1] * frame.axis[2] + v[2] * frame.reference[2],
+  ]
+}
+
+/**
+ * How far the rig is from the center - derived, because standoff and radius are
+ * the two the operator sets. Floored so a rig configured at the center still has
+ * a direction to look along.
+ */
+export function orbitDistance(settings: CameraOrbitSettings): number {
+  return Math.max(0.01, Math.hypot(settings.standoff, settings.radius))
+}
+
+/**
+ * The resting angle off the ring, in degrees: 0 sits on the ring at zero
+ * standoff, 90 parks dead on the axis. Also derived from standoff/radius, so
+ * there is exactly one place the resting pose is described.
+ *
+ * This is the angle a held Orbit up/down note adds to - which is why holding one
+ * trades standoff for radius rather than sliding the rig along the axis: the
+ * distance from the center is what stays put.
+ */
+export function restingElevation(settings: CameraOrbitSettings): number {
+  return Math.atan2(settings.standoff, Math.max(0, settings.radius)) / DEG
 }
 
 /**
@@ -171,55 +311,70 @@ export function evaluateOrbitAngles(
   const accumulated = accumulatedAngles(notes, settings, beat)
   return {
     azimuth: settings.azimuth + accumulated.azimuth - erasedAzimuth,
-    elevation: settings.elevation + accumulated.elevation - erasedElevation,
+    elevation: restingElevation(settings) + accumulated.elevation - erasedElevation,
   }
 }
 
+/** The unit direction from the center to the rig, in the canonical frame:
+ *  pole +Y, angle 0 at +Z. Everything world-facing goes through `toWorld`. */
+function canonicalDirection(azimuth: number, elevation: number): Vector3 {
+  const horizontal = Math.cos(elevation)
+  return [Math.sin(azimuth) * horizontal, Math.sin(elevation), Math.cos(azimuth) * horizontal]
+}
+
 /**
- * Where the rig stands for a given pose. Azimuth 0 / elevation 0 puts it on +Z
- * looking down -Z, so the defaults (center at the origin, distance 5) reproduce
- * the scene's own default camera and adding the instrument changes nothing until
- * a knob moves.
+ * Where the rig stands for a given pose.
+ *
+ * The whole pose - position and orientation both - is the canonical pose turned
+ * into the preset's frame, which is what makes sweeping the angle a RIGID
+ * rotation about the chosen axis. That rigidity is the property the Face-on shot
+ * is asking for: the component along the axis is untouched by the angle, so the
+ * standoff holds for the entire lap and the travel stays parallel to the plane,
+ * while the frame rolls with the rig.
+ *
+ * Turntable's frame is the canonical one, so it comes out byte-identical to the
+ * plain spherical formula this generalises.
  */
 export function orbitCameraPosition(
   settings: CameraOrbitSettings,
   azimuthDegrees: number,
   elevationDegrees: number,
 ): [number, number, number] {
-  const azimuth = azimuthDegrees * DEG
-  const elevation = elevationDegrees * DEG
-  const radius = Math.max(0.01, settings.distance)
-  const horizontal = Math.cos(elevation) * radius
+  const frame = resolveOrbitAxis(settings)
+  const distance = orbitDistance(settings)
+  const direction = toWorld(frame, canonicalDirection(azimuthDegrees * DEG, elevationDegrees * DEG))
   return [
-    settings.centerX + Math.sin(azimuth) * horizontal,
-    settings.centerY + Math.sin(elevation) * radius,
-    settings.centerZ + Math.cos(azimuth) * horizontal,
+    settings.centerX + direction[0] * distance,
+    settings.centerY + direction[1] * distance,
+    settings.centerZ + direction[2] * distance,
   ]
 }
 
 /**
- * The rig's OWN up vector: the direction it would move if elevation kept rising.
+ * The rig's OWN up vector: the direction it would move if elevation kept rising,
+ * carried into the preset's frame alongside the position.
  *
- * This is what lets the vertical orbit run forever. World +Y works only while
- * the rig stays off the poles - directly overhead it IS the view direction,
- * `lookAt` has no roll left to choose, and the picture snaps around. The
- * elevation tangent is perpendicular to the view direction by construction (it
- * is the derivative of the position with respect to elevation, and the position
- * is unit-radius), so there is no pole to avoid: crossing overhead rolls the
+ * This is what lets an orbit run forever. World +Y works only while the rig
+ * stays off the poles - dead on the axis it IS the view direction, `lookAt` has
+ * no roll left to choose, and the picture snaps around. The elevation tangent is
+ * perpendicular to the view direction by construction (it is the derivative of a
+ * unit-length position), so there is no pole to avoid: crossing over rolls the
  * camera smoothly through and out the far side upside down, which is exactly
- * what a continuous vertical lap looks like.
+ * what a continuous lap looks like. It is also why parking at radius 0 - dead on
+ * the axis, face-on - is a legal pose rather than a singularity.
  *
- * Unit length, and independent of distance - only the two angles matter.
+ * Unit length, and independent of standoff and radius: only the angles matter.
  */
 export function orbitCameraUp(
+  settings: CameraOrbitSettings,
   azimuthDegrees: number,
   elevationDegrees: number,
 ): [number, number, number] {
   const azimuth = azimuthDegrees * DEG
   const elevation = elevationDegrees * DEG
-  return [
+  return toWorld(resolveOrbitAxis(settings), [
     -Math.sin(azimuth) * Math.sin(elevation),
     Math.cos(elevation),
     -Math.cos(azimuth) * Math.sin(elevation),
-  ]
+  ])
 }
