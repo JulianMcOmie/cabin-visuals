@@ -12,6 +12,7 @@ import { BURST_DIRECTIONS, BURST_EASINGS } from '../core/visualCopies/library'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { BURST_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -31,7 +32,7 @@ function commitNumber(bound: UserInterfaceParameter, raw: number) {
   bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
 }
 
-const AMBER = '#f5a623'
+const AMBER = BURST_COLOR
 
 // ── Easing selector ──────────────────────────────────────────────────────────
 

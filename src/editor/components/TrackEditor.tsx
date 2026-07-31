@@ -246,7 +246,7 @@ function panelIdentity(
     // naming this instrument, so an achromatic instrument should light the tab
     // white rather than borrow a cycle color that starts out blue and reads as
     // the app/scene accent.
-    return { name: track.name, kind, color: resolveTrackIdentityColor(track, tracks) }
+    return { name: track.name, kind, color: resolveTrackIdentityColor(track) }
   }
   if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
   return null
@@ -577,7 +577,7 @@ export function TrackEditor() {
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
-                        color={resolveTrackDisplayColor(track, tracks)}
+                        color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}

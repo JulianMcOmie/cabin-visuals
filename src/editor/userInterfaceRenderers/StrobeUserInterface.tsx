@@ -37,9 +37,11 @@ import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-/** Strobe exposes no color param, so its accent is the flash-bulb yellow its
- *  identity color and library icon already use - one identity across the app. */
-const ACCENT = '#fde047'
+/** Strobe exposes no color param, so its accent is the white of the flash its
+ *  identity color and library icon already use - one identity across the app,
+ *  and a black/white panel for an instrument whose whole vocabulary (invert,
+ *  blackout, flash) is black and white. */
+const ACCENT = '#ffffff'
 
 function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -63,9 +65,10 @@ function previewSecondsPerCycle(row: StrobeRateRow): number {
   return strobeCycleBeats(row, PREVIEW_SEC_PER_BEAT) * PREVIEW_SEC_PER_BEAT
 }
 
-/** A scrap of stage for the flash to act on. Saturated complementary-ish fills,
- *  because inversion is only legible against colour that visibly flips: the cyan
- *  goes red, the pink goes green, and the near-black ground goes white.
+/** A scrap of stage for the flash to act on. A greyscale value ramp, keeping
+ *  the panel on the instrument's black/white theme - inversion stays legible
+ *  because VALUE visibly flips: the near-white circle goes near-black, the two
+ *  mid greys trade places, and the near-black ground goes white.
  *
  *  The viewBox is deliberately WIDE (the panel is a letterbox roughly 5:1) and
  *  every shape stays inside the middle band: `slice` scales to cover, so a
@@ -75,9 +78,9 @@ function PreviewStage() {
   return (
     <svg viewBox="0 0 520 120" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
       <rect width="520" height="120" fill="#05070c" />
-      <circle cx="150" cy="56" r="27" fill="#22d3ee" />
-      <path d="M260 27 L289 79 L231 79 Z" fill="#f472b6" />
-      <rect x="330" y="34" width="52" height="46" rx="5" fill="#a78bfa" />
+      <circle cx="150" cy="56" r="27" fill="#e8e8e8" />
+      <path d="M260 27 L289 79 L231 79 Z" fill="#b3b3b3" />
+      <rect x="330" y="34" width="52" height="46" rx="5" fill="#404040" />
       <rect x="150" y="94" width="232" height="7" rx="3.5" fill={ACCENT} />
       <path d="M0 110 H520" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
     </svg>
@@ -157,7 +160,7 @@ function RateChip({ row, active, onSelect }: {
       // two-line chips overran the panel and pushed the knobs out of view.
       className={`flex min-w-0 flex-1 items-baseline justify-center gap-1 overflow-hidden rounded-sm border px-1 py-[2px] transition-colors ${
         active
-          ? 'border-transparent bg-[#fde047] text-black'
+          ? 'border-transparent bg-white text-black'
           : 'border-white/10 bg-black/25 text-white/55 hover:bg-white/[0.06]'
       }`}
     >
@@ -261,7 +264,7 @@ function StyleSelector({ bound }: { bound: UserInterfaceParameter }) {
               aria-pressed={active}
               title={`${option.label} on every flash`}
               onClick={() => bound.setValue(option.value)}
-              className={`px-1.5 pb-0.5 pt-1 transition-colors ${active ? 'bg-[#fde047] text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'}`}
+              className={`px-1.5 pb-0.5 pt-1 transition-colors ${active ? 'bg-white text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'}`}
             >
               <svg width="16" height="16" viewBox="0 0 16 16">
                 {STYLE_GLYPHS[option.value] ?? STYLE_GLYPHS[STROBE_STYLE_INVERT]}

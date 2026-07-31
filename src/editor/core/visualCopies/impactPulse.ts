@@ -41,10 +41,12 @@ import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { IMPACT_PULSE_COLOR } from './identityColors'
 
 /** One row per direction, so the piano roll reads as the score for the hit. */
 export const PULSE_SWELL_PITCH = 60
 export const PULSE_SQUASH_PITCH = 61
+
 
 /** How the size falls back after the onset - cliff, ramp, or hang. Three
  *  shapes for the same reason the Colorizer has three, but NOT its curves: its
@@ -196,6 +198,7 @@ export const impactPulseMover: MoverOrSplitterDefinition<ImpactPulseSettings> = 
   label: 'Impact Pulse',
   kind: 'mover',
   params: IMPACT_PULSE_PARAMS,
+  identityColor: IMPACT_PULSE_COLOR,
   midiRows: () => IMPACT_PULSE_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {

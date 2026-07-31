@@ -9,6 +9,7 @@ import { translationOscillatorMover } from './translationOscillator'
 import type { MoverOrSplitter, VisualCopy } from './types'
 import { visibilityMover } from './visibility'
 import { waveTerrainMover } from './waveTerrain'
+import { CONSOLIDATED_MOVER_COLOR } from './identityColors'
 
 type ConsolidatedSettings = Record<string, number>
 
@@ -155,6 +156,7 @@ export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> 
   id: 'allMovers',
   label: 'All Movers',
   kind: 'mover',
+  identityColor: CONSOLIDATED_MOVER_COLOR,
   params: CONSOLIDATED_PARAMS,
   midiRows: consolidatedMidiRows,
   strictMidiRows: true,

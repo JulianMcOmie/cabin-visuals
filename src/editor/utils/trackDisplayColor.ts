@@ -1,6 +1,6 @@
-import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { getInstrument } from '../instruments'
 import type { ObjectInstrumentDef } from '../instruments/types'
+import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { colorToOklch } from './oklch'
 import { AUDIO_TRACK_COLOR } from './trackColors'
 import type { Track } from '../types'
@@ -10,15 +10,19 @@ import type { Track } from '../types'
 // which stays untouched as the hue-cycle fallback. Instrument tracks derive
 // their identity from the instrument (Tyler's P0, 2026-07-29): a def-declared
 // identityColor, else the instrument's sole color param, else the cycle.
-// Child lanes (automation / ability / envelope / nested movers) wear their
-// owning instrument's color so a track's whole lane family reads as one voice.
 //
-// The ONE exception is a chain entry whose definition declares an identityColor
-// of its own, which means the user picked a color for it and the entry IS about
-// that color (the Colorizer's palette). Inheriting there would show the wrong
-// color next to notes drawn in the right one, so its own declaration wins over
-// the family - and only over the family: it still loses to the achromatic guard
-// below, and an entry declaring nothing still inherits as before.
+// EVERY CHILD LANE IS INDEPENDENT (Tyler, 2026-07-31). Lanes used to inherit
+// their owning instrument's color so a track's whole family read as one voice;
+// they no longer do. A mover/splitter/colorizer wears the color its DEFINITION
+// declares (core/visualCopies/identityColors.ts) - so Impact Pulse's notes are
+// the same rose as the console you write them in, in every project - and the
+// param lanes (automation / envelope / ability), which have no definition to
+// declare anything, wear their own hue-cycle color instead.
+//
+// What that trades away is real and was the old rule's whole point: a glance no
+// longer tells you which instrument a lane belongs to, only what the lane IS.
+// Nesting already says the former (a lane sits under its parent), and nothing
+// said the latter.
 
 // Below this OKLCH chroma a derived color is basically white/black/grey
 // (e.g. TextDisplay's default white) - hue is meaningless there, so the
@@ -45,19 +49,32 @@ function instrumentIdentity(track: Track): string | undefined {
   return track.stringParams?.[key] ?? (def.params.find((p) => p.key === key) as { default?: string } | undefined)?.default
 }
 
-/** A mover/splitter's OWN declared identity, when its definition has one.
- *  Undefined for every definition that declares nothing, which is all of them
- *  but the Colorizer - those keep inheriting their instrument's color. */
-function chainEntryIdentity(track: Track): string | undefined {
-  const id = track.type === 'splitter' ? track.splitterId : track.type === 'mover' ? track.moverId : undefined
-  const def = getMoverOrSplitterDefinition(id)
+
+/**
+ * A mover / splitter / colorizer row's OWN color, from its definition.
+ *
+ * Either a fixed hex or, for a definition whose subject IS a color the user
+ * picked, the live value of one of its own color params (the Colorizer's
+ * palette slot 1). A `{ param }` identity that resolves to something
+ * near-achromatic says nothing about which lane this is, so it falls through to
+ * the lane's own cycle color rather than showing a white row.
+ *
+ * Every shipped definition declares one (identityColors.ts); the optional
+ * return covers a legacy id that no longer resolves and test fakes, which fall
+ * through to the cycle color like any other lane.
+ */
+function moverIdentity(track: Track): string | undefined {
+  if (track.type !== 'mover' && track.type !== 'splitter') return undefined
+  const def = getMoverOrSplitterDefinition(track.moverId ?? track.splitterId)
   const identity = def?.identityColor
   if (!identity) return undefined
   if (typeof identity === 'string') return identity
   // Live: the stored value if the user has picked one, else the param default,
   // so a freshly added Colorizer already wears its palette's first color.
-  return track.stringParams?.[identity.param]
-    ?? (def.params.find((p) => p.key === identity.param) as { default?: string } | undefined)?.default
+  const picked = track.stringParams?.[identity.param]
+    ?? (def!.params.find((pd) => pd.key === identity.param) as { default?: string } | undefined)?.default
+  if (!picked) return undefined
+  return (colorToOklch(picked)?.c ?? 0) > ACHROMATIC_CHROMA ? picked : undefined
 }
 
 /**
@@ -65,24 +82,16 @@ function chainEntryIdentity(track: Track): string | undefined {
  * - audio → the fixed sapphire identity
  * - base → the instrument identity (fixed or param-derived), unless it is
  *   near-achromatic or unparseable - then the track's cycle color
- * - a mover/splitter declaring its own identityColor → that, unless it is
- *   near-achromatic - then it inherits like any other child lane
- * - anything else with a parent → the nearest base ancestor's display color
- * - everything else (top-level movers, directors, groups) → track.color
+ * - mover / splitter / colorizer → its definition's declared color
+ * - everything else (param lanes, directors, groups) → its own track.color
  */
-export function resolveTrackDisplayColor(track: Track, tracks: Record<string, Track>): string {
+export function resolveTrackDisplayColor(track: Track): string {
   if (track.type === 'audio') return AUDIO_TRACK_COLOR
+  const declared = moverIdentity(track)
+  if (declared) return declared
   if (track.type === 'base') {
     const derived = instrumentIdentity(track)
     if (derived && (colorToOklch(derived)?.c ?? 0) > ACHROMATIC_CHROMA) return derived
-    return track.color
-  }
-  const own = chainEntryIdentity(track)
-  if (own && (colorToOklch(own)?.c ?? 0) > ACHROMATIC_CHROMA) return own
-  let current: Track | undefined = track
-  for (let depth = 0; current?.parentId && depth < 32; depth++) {
-    current = tracks[current.parentId]
-    if (current?.type === 'base') return resolveTrackDisplayColor(current, tracks)
   }
   return track.color
 }
@@ -91,8 +100,8 @@ export function resolveTrackDisplayColor(track: Track, tracks: Record<string, Tr
  * The color for chrome that is NAMING one instrument rather than color-coding a
  * timeline: the instrument's own declared color, achromatic or not.
  *
- * Same walk as the display color, minus the achromatic guard. That guard keeps a
- * white instrument's timeline blocks from going monochrome among colored
+ * Same resolution as the display color, minus the achromatic guard. That guard
+ * keeps a white instrument's timeline blocks from going monochrome among colored
  * neighbours, but it costs the instrument its identity everywhere else - and
  * because the cycle it falls back to is seeded from the audio sapphire, the
  * first tracks in a project are BLUE. A white instrument's inspector tab
@@ -102,18 +111,13 @@ export function resolveTrackDisplayColor(track: Track, tracks: Record<string, Tr
  * An instrument that declares no color at all still has nothing to say, so the
  * cycle color remains the last resort.
  */
-export function resolveTrackIdentityColor(track: Track, tracks: Record<string, Track>): string {
+export function resolveTrackIdentityColor(track: Track): string {
   if (track.type === 'audio') return AUDIO_TRACK_COLOR
+  const declared = moverIdentity(track)
+  if (declared) return declared
   if (track.type === 'base') {
     const derived = instrumentIdentity(track)
-    return derived && colorToOklch(derived) ? derived : track.color
-  }
-  const own = chainEntryIdentity(track)
-  if (own && colorToOklch(own)) return own
-  let current: Track | undefined = track
-  for (let depth = 0; current?.parentId && depth < 32; depth++) {
-    current = tracks[current.parentId]
-    if (current?.type === 'base') return resolveTrackIdentityColor(current, tracks)
+    if (derived && colorToOklch(derived)) return derived
   }
   return track.color
 }

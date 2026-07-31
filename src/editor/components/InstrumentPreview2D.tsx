@@ -424,11 +424,13 @@ const drawColorFilters: Draw2D = (ctx, w, h, t) => {
  *  instrument's OWN gate at its emphasized 1/16 row, so the card flashes at the
  *  rate the instrument actually would (8Hz at the previews' 120bpm) rather than
  *  at a hand-picked blink speed. Inverting means swapping the palette rather
- *  than reading pixels back: same result, no getImageData per frame. */
+ *  than reading pixels back: same result, no getImageData per frame. The stage
+ *  is greyscale (the instrument's theme is black/white), and each flipped grey
+ *  is the exact 255−x inversion of its fill, so the swap IS the invert. */
 const STROBE_SHAPES: Array<{ fill: string; flipped: string }> = [
-  { fill: '#22d3ee', flipped: '#dd2c11' },
-  { fill: '#f472b6', flipped: '#0b8d49' },
-  { fill: '#a78bfa', flipped: '#587405' },
+  { fill: '#e8e8e8', flipped: '#171717' },
+  { fill: '#b3b3b3', flipped: '#4c4c4c' },
+  { fill: '#404040', flipped: '#bfbfbf' },
 ]
 const drawStrobe: Draw2D = (ctx, w, h, t) => {
   const beat = t * BEATS_PER_SEC
@@ -453,7 +455,7 @@ const drawStrobe: Draw2D = (ctx, w, h, t) => {
   const square = STROBE_SHAPES[2]
   ctx.fillStyle = lit ? square.flipped : square.fill
   ctx.fillRect(w * 0.72 - r, cy - r, r * 2, r * 2)
-  ctx.fillStyle = lit ? '#0219b8' : '#fde047'
+  ctx.fillStyle = lit ? '#000000' : '#ffffff'
   ctx.fillRect(w * 0.2, h * 0.76, w * 0.6, Math.max(2, h * 0.05))
 }
 
