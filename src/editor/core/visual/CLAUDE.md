@@ -59,7 +59,7 @@ keyframes, as it always has.
 - `beatOverride.ts` — export's hook: overrides the beat the engine computes at, bypassing the transport.
 - `automation.ts` — the three automation-lane MODES and the one function that dispatches between them.
 - `energy.ts` — the note-pulse "energy" signal instruments receive.
-- `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint.
+- `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. `tintPerceptual` chooses how that mix walks: `Color.lerp` (default) runs in LINEAR light and so overshoots perceived brightness at partial amounts, while `mixOklabLinearRgb` tracks it honestly — see the visualCopies guide for why that reads as "the flash goes white". Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint; `tintPerceptual` is in there for exactly that reason (flipping MIX at a frozen beat has to repaint).
 - `screenAnchor.ts` / `postMoverScale.ts` / `fullFrameCanvas.ts` — screen-space anchoring, scale lifted outside mover chains, full-frame canvas plumbing.
 - `finalInvertMask.ts`, `animatedColor.ts`, `animatedOpacity.ts`, `fonts.ts` — final-pass invert, color/opacity tweening helpers, font loading.
 
