@@ -207,46 +207,54 @@ function OrbitPad({ azimuth, distance }: { azimuth: NumericBound; distance: Nume
   )
 }
 
-/** Side elevation: the arc the rig climbs, from below the subject to above it. */
+/** Side elevation: the full ring the rig climbs - over the top, upside down
+ *  underneath, and round again. A half-arc would say the travel stops at the
+ *  poles, and it does not. */
 function HeightPad({ elevation, distance }: { elevation: NumericBound; distance: NumericBound }) {
   const radius = radiusFor(distance)
   const angle = elevation.value * DEG
   const x = 50 + Math.cos(angle) * radius
   const y = 50 - Math.sin(angle) * radius
-  const top = { x: 50 + Math.cos(elevation.max * DEG) * radius, y: 50 - Math.sin(elevation.max * DEG) * radius }
-  const bottom = { x: 50 + Math.cos(elevation.min * DEG) * radius, y: 50 - Math.sin(elevation.min * DEG) * radius }
-  // Sweep flag 0: the arc must bulge RIGHT, through the level shot at 0°, which
-  // is the half of the circle the rig actually travels.
-  const arcPath = `M ${bottom.x.toFixed(2)} ${bottom.y.toFixed(2)} A ${radius} ${radius} 0 0 0 ${top.x.toFixed(2)} ${top.y.toFixed(2)}`
 
   return (
     <Pad
       label="HEIGHT"
-      hint="side view · drag up the arc"
-      readout={`${elevation.value.toFixed(0)}° ${elevation.value > 1 ? 'above' : elevation.value < -1 ? 'below' : 'level'}`}
+      hint="side view · drag around"
+      readout={`${elevation.value.toFixed(0)}° ${heightWord(elevation.value)}`}
       ariaLabel="Orbit height angle"
       aria={{ min: elevation.min, max: elevation.max, now: elevation.value }}
       onPoint={(nx, ny) => {
         const dx = nx - 50
         const dy = 50 - ny
         if (Math.hypot(dx, dy) <= 3) return
-        commit(elevation, clampValue((Math.atan2(dy, Math.abs(dx)) * 180) / Math.PI, elevation.min, elevation.max))
+        commit(elevation, (Math.atan2(dy, dx) * 180) / Math.PI)
       }}
       onArrow={(direction, axis) => {
         if (axis === 'vertical') commit(elevation, elevation.value + direction * elevation.step)
       }}
       onReset={() => elevation.setValue(elevation.default)}
     >
-      {/* The ground the subject stands on, for a sense of up. */}
+      {/* The horizon the subject stands on, for a sense of up. */}
       <line x1={6} y1={50} x2={94} y2={50} stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-      <path
-        d={arcPath}
-        fill="none" stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke"
-      />
+      <circle cx={50} cy={50} r={radius} fill="none" stroke="var(--border-subtle)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       <Subject x={50} y={50} />
       <Rig x={x} y={y} aimX={50} aimY={50} />
     </Pad>
   )
+}
+
+/** Plain words for where the rig is on the vertical ring, including the half of
+ *  it where the picture is upside down. */
+function heightWord(degrees: number): string {
+  const wrapped = ((degrees % 360) + 360) % 360
+  if (wrapped < 1 || wrapped > 359) return 'level'
+  if (wrapped < 89) return 'above'
+  if (wrapped < 91) return 'overhead'
+  if (wrapped < 179) return 'above · inverted'
+  if (wrapped < 181) return 'behind · inverted'
+  if (wrapped < 269) return 'below · inverted'
+  if (wrapped < 271) return 'underneath'
+  return 'below'
 }
 
 /** One coordinate of the center, dragged vertically - the Camera panel's cell. */

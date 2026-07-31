@@ -17,13 +17,16 @@ const DEG = Math.PI / 180
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-/**
- * Elevation never reaches the poles. At exactly ±90° the camera sits on its own
- * up axis, `lookAt` has no way left to choose a roll, and the frame flips over.
- * Parking a degree short keeps "always aimed at the center" true at every
- * height, which is the promise of the whole instrument.
- */
-export const ELEVATION_LIMIT = 89
+// BOTH axes run forever. Neither angle is clamped or wrapped: a held note keeps
+// travelling for as long as it is held, so vertical laps over the top are as
+// available as horizontal ones.
+//
+// That is only possible because the rig carries its own up vector
+// (`orbitCameraUp`) instead of borrowing world +Y. With a fixed up, ±90° is
+// where the camera sits ON its own up axis, `lookAt` has no roll left to choose,
+// and the frame snaps over - which is why elevation used to park a degree short
+// of the pole. Deriving up from the orbit frame removes the singularity
+// entirely, so passing overhead ROLLS through and the tumble is continuous.
 
 export interface CameraOrbitSettings {
   /** The point orbited AND looked at. Defaults to the origin, where an
@@ -105,9 +108,9 @@ function shortestAngle(degrees: number): number {
  * so a scrub lands on exactly the pose playback would show and export is
  * frame-exact - the one rule.
  *
- * Elevation is clamped HERE rather than at the end so that over-holding an
- * Orbit up note parks the rig at the top instead of banking invisible degrees
- * that a later Return would have to unwind through.
+ * Unbounded on both axes: hold a row for eight beats at 90°/beat and the rig
+ * turns twice, vertically as readily as horizontally. Nothing here knows about
+ * 360° - the angles are only ever read through sin/cos.
  */
 function accumulatedAngles(
   notes: readonly OrbitNote[],
@@ -124,11 +127,7 @@ function accumulatedAngles(
     if (direction.axis === 'azimuth') azimuth += travel * settings.swingSpeed
     else elevation += travel * settings.tiltSpeed
   }
-  const restingElevation = settings.elevation
-  return {
-    azimuth,
-    elevation: clamp(restingElevation + elevation, -ELEVATION_LIMIT, ELEVATION_LIMIT) - restingElevation,
-  }
+  return { azimuth, elevation }
 }
 
 /**
@@ -162,21 +161,17 @@ export function evaluateOrbitAngles(
     const elapsed = beat - note.beat
     const heldBeats = Math.max(0, note.durationBeats)
     const progress = easing.ease(clamp(Math.min(elapsed, heldBeats) / returnBeats, 0, 1))
-    // Unwind a multi-turn swing the SHORT way: 350° banked comes home as -10°,
-    // not as most of a lap back. The 360° that disappears is invisible - only
-    // sin/cos of the angle is ever used.
+    // Unwind a multi-turn swing the SHORT way, on both axes: 350° banked comes
+    // home as -10°, not as most of a lap back. The 360° that disappears is
+    // invisible - only sin/cos of the angle is ever used.
     erasedAzimuth = target.azimuth - shortestAngle(target.azimuth - erasedAzimuth) * (1 - progress)
-    erasedElevation = target.elevation - (target.elevation - erasedElevation) * (1 - progress)
+    erasedElevation = target.elevation - shortestAngle(target.elevation - erasedElevation) * (1 - progress)
   }
 
   const accumulated = accumulatedAngles(notes, settings, beat)
   return {
     azimuth: settings.azimuth + accumulated.azimuth - erasedAzimuth,
-    elevation: clamp(
-      settings.elevation + accumulated.elevation - erasedElevation,
-      -ELEVATION_LIMIT,
-      ELEVATION_LIMIT,
-    ),
+    elevation: settings.elevation + accumulated.elevation - erasedElevation,
   }
 }
 
@@ -192,12 +187,39 @@ export function orbitCameraPosition(
   elevationDegrees: number,
 ): [number, number, number] {
   const azimuth = azimuthDegrees * DEG
-  const elevation = clamp(elevationDegrees, -ELEVATION_LIMIT, ELEVATION_LIMIT) * DEG
+  const elevation = elevationDegrees * DEG
   const radius = Math.max(0.01, settings.distance)
   const horizontal = Math.cos(elevation) * radius
   return [
     settings.centerX + Math.sin(azimuth) * horizontal,
     settings.centerY + Math.sin(elevation) * radius,
     settings.centerZ + Math.cos(azimuth) * horizontal,
+  ]
+}
+
+/**
+ * The rig's OWN up vector: the direction it would move if elevation kept rising.
+ *
+ * This is what lets the vertical orbit run forever. World +Y works only while
+ * the rig stays off the poles - directly overhead it IS the view direction,
+ * `lookAt` has no roll left to choose, and the picture snaps around. The
+ * elevation tangent is perpendicular to the view direction by construction (it
+ * is the derivative of the position with respect to elevation, and the position
+ * is unit-radius), so there is no pole to avoid: crossing overhead rolls the
+ * camera smoothly through and out the far side upside down, which is exactly
+ * what a continuous vertical lap looks like.
+ *
+ * Unit length, and independent of distance - only the two angles matter.
+ */
+export function orbitCameraUp(
+  azimuthDegrees: number,
+  elevationDegrees: number,
+): [number, number, number] {
+  const azimuth = azimuthDegrees * DEG
+  const elevation = elevationDegrees * DEG
+  return [
+    -Math.sin(azimuth) * Math.sin(elevation),
+    Math.cos(elevation),
+    -Math.cos(azimuth) * Math.sin(elevation),
   ]
 }

@@ -7,6 +7,7 @@ import {
   RETURN_EASINGS,
   evaluateOrbitAngles,
   orbitCameraPosition,
+  orbitCameraUp,
   type CameraOrbitSettings,
 } from './cameraOrbitCore'
 import { paramDefault, type ObjectInstrumentDef, type ParamDef } from './types'
@@ -22,7 +23,9 @@ import { paramDefault, type ObjectInstrumentDef, type ParamDef } from './types'
 // Notes drive it in the hold-to-orbit grammar: while a direction row is held the
 // rig travels at Speed °/beat (scaled by velocity) and STAYS where it was
 // released; holding two rows at once combines their axes into a diagonal sweep;
-// a held Return home row eases everything back to the resting angles.
+// a held Return home row eases everything back to the resting angles. Neither
+// axis has an end - hold a row long enough and the rig laps, vertically as
+// readily as horizontally.
 //
 // Like Camera, this instrument OWNS the camera while its track is active -
 // nothing else in the scene writes it (the Canvas ships a plain default camera
@@ -43,7 +46,9 @@ const PARAMS: ParamDef[] = [
   // The resting pose. 0 / 0 / 5 IS the scene's stock camera, so dropping the
   // instrument in changes nothing until one of these moves.
   { key: 'azimuth', label: 'Angle (°)', min: -180, max: 180, step: 1, default: 0 },
-  { key: 'elevation', label: 'Height (°)', min: -89, max: 89, step: 1, default: 0 },
+  // A full turn, not a hemisphere: the rig can sit overhead or upside down, and
+  // MIDI can drive it there and keep going.
+  { key: 'elevation', label: 'Height (°)', min: -180, max: 180, step: 1, default: 0 },
   { key: 'fov', label: 'Field of View', min: 10, max: 120, step: 5, default: DEFAULT_FOV },
   { key: 'swingSpeed', label: 'Swing speed (°/beat)', min: 0, max: 720, step: 5, default: 90 },
   { key: 'tiltSpeed', label: 'Tilt speed (°/beat)', min: 0, max: 720, step: 5, default: 45 },
@@ -87,10 +92,13 @@ function CameraOrbitVisual({ trackId }: { trackId: string }) {
     const [x, y, z] = orbitCameraPosition(settings, azimuth, elevation)
 
     camera.position.set(x, y, z)
-    // Re-asserted every frame: another camera instrument may have left the up
-    // axis somewhere else, and a stale up vector is exactly how a high-elevation
-    // orbit ends up rolled.
-    camera.up.set(0, 1, 0)
+    // The rig carries its OWN up vector rather than borrowing world +Y, which is
+    // what lets the vertical orbit lap forever: +Y collapses into the view
+    // direction at the poles and `lookAt` snaps the frame around, while the
+    // elevation tangent stays perpendicular at every height, so passing overhead
+    // rolls smoothly through. lookAt then builds the rest of the basis from it.
+    const [upX, upY, upZ] = orbitCameraUp(azimuth, elevation)
+    camera.up.set(upX, upY, upZ)
     lookTarget.current.set(settings.centerX, settings.centerY, settings.centerZ)
     camera.lookAt(lookTarget.current)
 

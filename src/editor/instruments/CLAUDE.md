@@ -88,14 +88,24 @@ parameterisation IS the feature:
   "look at origin" mode. Free, but aim is something the user maintains.
 - **`CameraOrbit`** ("Camera Orbit") — a center, a distance, and two angles;
   position *and* aim are DERIVED from those every frame, so losing the subject is
-  not expressible. Elevation is clamped to ±89° (`ELEVATION_LIMIT`): at the pole
-  the rig sits on its own up axis, `lookAt` has no roll left to choose, and the
-  frame flips. Notes are hold-to-orbit (travel while held, stay where released,
-  chord two rows for a diagonal, hold Return home to ease back), summed
+  not expressible. Notes are hold-to-orbit (travel while held, stay where
+  released, chord two rows for a diagonal, hold Return home to ease back), summed
   closed-form over the note history in `cameraOrbitCore.ts` — never accumulated
-  per frame, or scrub would disagree with playback. Its `up` vector is re-asserted
-  every frame, because the other camera instrument may have left it elsewhere and
-  a stale up is exactly how a high orbit ends up rolled.
+  per frame, or scrub would disagree with playback.
+
+  **Neither angle is clamped or wrapped, and that is only safe because the rig
+  carries its OWN up vector** (`orbitCameraUp`, the elevation tangent) instead of
+  borrowing world +Y. With a fixed +Y, ±90° elevation is a singularity: the camera
+  sits on its own up axis, `lookAt` has no roll left to choose, and the frame
+  snaps around — so the first version parked a degree short of the pole and the
+  vertical orbit could not lap. The tangent is perpendicular to the view
+  direction by construction, so there is no pole to avoid and crossing overhead
+  ROLLS through, coming out the far side upside down. Verify a change here by
+  sampling the per-frame quaternion delta across a full vertical lap: it must stay
+  at `speed × step` the whole way (a flip shows up as one ~180° spike).
+
+  Consequence for `CameraControl`: it re-asserts `camera.up` to +Y before its own
+  `lookAt`, or swapping between the two rigs inherits Camera Orbit's roll.
 
 **Writing the camera is safe against the `useInstrumentFrame` skip.** The camera
 pose is part of the per-frame signature, so writing it dirties the next frame's
