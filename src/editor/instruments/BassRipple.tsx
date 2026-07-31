@@ -70,7 +70,13 @@ float warpFbm(vec2 p) {
 // frequency, SPEED is how fast it travels, and full INTENSITY lands in the
 // same ~0.1-0.2 frame-fraction band as the noise field so switching patterns
 // never jumps the violence of the warp.
-vec2 bassRippleOffset(vec2 uv, float pattern, float amount, float scale, float speed, float time, float aspect) {
+//
+// \`frequency\` multiplies the angular symmetry of the polar patterns - Twist's
+// arm count (3 at 1x) and Bloom's petal count (6 at 1x) - rounded to whole
+// arms/petals, because a fractional harmonic tears a seam at the atan
+// branch cut. The planar fields have no angular symmetry to multiply, so it
+// deliberately does nothing there (and the panel dims the knob).
+vec2 bassRippleOffset(vec2 uv, float pattern, float amount, float scale, float speed, float frequency, float time, float aspect) {
   float t = time * speed;
 
   if (pattern < 0.5) {
@@ -90,13 +96,14 @@ vec2 bassRippleOffset(vec2 uv, float pattern, float amount, float scale, float s
 
   if (pattern < 1.5) {
     // 1 · TWIST - a polar swirl. Each pixel rotates about the center by an
-    // angle that waves with radius, and shearing the wave by 3θ winds the
-    // alternating rings into three spiral arms that churn as they travel.
+    // angle that waves with radius, and shearing the wave by the arm count
+    // winds the alternating rings into spiral arms that churn as they travel.
     // The 1/(1+6r) falloff keeps the outer frame from tearing while the
     // middle wrings itself.
+    float arms = max(1.0, floor(3.0 * frequency + 0.5));
     float r = length(q);
     float theta = atan(q.y, q.x);
-    float wave = sin(r * scale * 2.6 - theta * 3.0 - t * 2.0);
+    float wave = sin(r * scale * 2.6 - theta * arms - t * 2.0);
     float ang = wave * amount * 1.5 / (1.0 + 6.0 * r);
     float c = cos(ang);
     float s = sin(ang);
@@ -128,17 +135,18 @@ vec2 bassRippleOffset(vec2 uv, float pattern, float amount, float scale, float s
     return (d1 * g1 + d2 * g2) * (0.55 + 0.45 * cell) * amount * 0.085;
   }
 
-  // 4 · BLOOM - a six-petal mandala. Concentric rings breathe outward, a
+  // 4 · BLOOM - a petaled mandala. Concentric rings breathe outward, a
   // cosine rose scallops them into petals that sway slowly, and a quiet
   // tangential counter-swirl keeps the flower turning instead of just
   // pulsing. The smoothstep pins the very center still - a mandala holds
   // its heart.
+  float petals = max(2.0, floor(6.0 * frequency + 0.5));
   float r = length(q) + 1e-4;
   float theta = atan(q.y, q.x);
   float rings = sin(r * scale * 3.2 - t * 1.8);
-  float rose = cos(theta * 6.0 + sin(t * 0.7) * 1.2);
+  float rose = cos(theta * petals + sin(t * 0.7) * 1.2);
   float radial = rings * (0.55 + 0.45 * rose);
-  float swirl = 0.35 * sin(theta * 6.0 - t * 0.9) * cos(r * scale * 1.6);
+  float swirl = 0.35 * sin(theta * petals - t * 0.9) * cos(r * scale * 1.6);
   vec2 outward = q / r;
   vec2 tangent = vec2(-outward.y, outward.x);
   return (outward * radial + tangent * swirl) * amount * 0.1 * smoothstep(0.0, 0.18, r);
@@ -154,6 +162,8 @@ export interface ActiveBassRipple {
   scale: number
   /** How fast the field drifts, in field-widths per beat. */
   speed: number
+  /** Angular-symmetry multiplier for the polar patterns (1 = stock arms/petals). */
+  frequency: number
   beat: number
 }
 
@@ -176,6 +186,9 @@ const PARAMS: ParamDef[] = [
   // is new headroom.
   { key: 'amount', label: 'Intensity', min: 0, max: 1, step: 0.01, default: 0.5 },
   { key: 'scale', label: 'Wave', min: 0.5, max: 12, step: 0.1, default: 3 },
+  // Multiplies the polar patterns' angular symmetry: Twist grows arms
+  // (3 at 1x), Bloom grows petals (6 at 1x). Planar fields ignore it.
+  { key: 'frequency', label: 'Frequency', min: 0.25, max: 3, step: 0.05, default: 1 },
   { key: 'speed', label: 'Speed', min: 0, max: 4, step: 0.05, default: 0.6 },
   { key: 'release', label: 'Release', min: 0, max: 8, step: 0.05, default: 0.5 },
 ]
@@ -231,6 +244,7 @@ export function resolveActiveBassRipple(
       amount,
       scale: Math.max(0.1, state.params.scale ?? 3),
       speed: Math.max(0, state.params.speed ?? 0.6),
+      frequency: Math.max(0.25, state.params.frequency ?? 1),
       beat: state.beat,
     }
     : null

@@ -207,6 +207,7 @@ uniform float pattern;
 uniform float amount;
 uniform float scale;
 uniform float speed;
+uniform float frequency;
 uniform float time;
 uniform float aspect;
 varying vec2 vUv;
@@ -214,7 +215,7 @@ varying vec2 vUv;
 ${BASS_RIPPLE_FIELD_GLSL}
 
 void main() {
-  vec2 offset = bassRippleOffset(vUv, pattern, amount, scale, speed, time, aspect);
+  vec2 offset = bassRippleOffset(vUv, pattern, amount, scale, speed, frequency, time, aspect);
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 
@@ -584,6 +585,7 @@ export function VisualScene() {
         amount: { value: 0 },
         scale: { value: 3 },
         speed: { value: 0.6 },
+        frequency: { value: 1 },
         time: { value: 0 },
         aspect: { value: 1 },
       },
@@ -799,6 +801,7 @@ export function VisualScene() {
           compositor.warpMaterial.uniforms.amount.value = ripple.amount
           compositor.warpMaterial.uniforms.scale.value = ripple.scale
           compositor.warpMaterial.uniforms.speed.value = ripple.speed
+          compositor.warpMaterial.uniforms.frequency.value = ripple.frequency
           compositor.warpMaterial.uniforms.time.value = ripple.beat
           compositor.warpMaterial.uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
           gl.setRenderTarget(output)

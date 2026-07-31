@@ -21,7 +21,7 @@ import { Uniform, type Group } from 'three'
 import { BASS_RIPPLE_FIELD_GLSL } from '../instruments/BassRipple'
 import { isNumberParam } from '../instruments/types'
 import { ParameterList } from './ParametersUserInterface'
-import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { hexToHsv, hsvToHex, towardWhite } from './colorWheel'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -73,13 +73,14 @@ uniform float pattern;
 uniform float amount;
 uniform float scale;
 uniform float speed;
+uniform float frequency;
 uniform float time;
 uniform float aspect;
 
 ${BASS_RIPPLE_FIELD_GLSL}
 
 void mainUv(inout vec2 uv) {
-  uv = clamp(uv + bassRippleOffset(uv, pattern, amount, scale, speed, time, aspect), 0.0, 1.0);
+  uv = clamp(uv + bassRippleOffset(uv, pattern, amount, scale, speed, frequency, time, aspect), 0.0, 1.0);
 }`
 
 class BassRippleWarpEffect extends Effect {
@@ -90,6 +91,7 @@ class BassRippleWarpEffect extends Effect {
         ['amount', new Uniform(0)],
         ['scale', new Uniform(3)],
         ['speed', new Uniform(0.6)],
+        ['frequency', new Uniform(1)],
         ['time', new Uniform(0)],
         ['aspect', new Uniform(1)],
       ]),
@@ -97,11 +99,12 @@ class BassRippleWarpEffect extends Effect {
   }
 }
 
-function WarpPass({ pattern, amount, scale, speed, release }: {
+function WarpPass({ pattern, amount, scale, speed, frequency, release }: {
   pattern: number
   amount: number
   scale: number
   speed: number
+  frequency: number
   release: number
 }) {
   const effect = useMemo(() => new BassRippleWarpEffect(), [])
@@ -112,6 +115,7 @@ function WarpPass({ pattern, amount, scale, speed, release }: {
     uniforms.get('time')!.value = beat
     uniforms.get('scale')!.value = scale
     uniforms.get('speed')!.value = speed
+    uniforms.get('frequency')!.value = frequency
     uniforms.get('amount')!.value = amount * previewEnvelope(beat, release) * PREVIEW_AMOUNT_SCALE
     uniforms.get('aspect')!.value = size.width / Math.max(1, size.height)
   })
@@ -167,11 +171,12 @@ function PreviewCubes() {
   )
 }
 
-function RipplePreview({ pattern, amount, scale, speed, release }: {
+function RipplePreview({ pattern, amount, scale, speed, frequency, release }: {
   pattern: number
   amount: number
   scale: number
   speed: number
+  frequency: number
   release: number
 }) {
   return (
@@ -191,7 +196,7 @@ function RipplePreview({ pattern, amount, scale, speed, release }: {
         <pointLight position={[-3, -1.5, 2.5]} color={ACCENT} intensity={22} distance={14} decay={2} />
         <PreviewCubes />
         <EffectComposer multisampling={0}>
-          <WarpPass pattern={pattern} amount={amount} scale={scale} speed={speed} release={release} />
+          <WarpPass pattern={pattern} amount={amount} scale={scale} speed={speed} frequency={frequency} release={release} />
         </EffectComposer>
         <OrbitControls
           makeDefault
@@ -211,10 +216,24 @@ function RipplePreview({ pattern, amount, scale, speed, release }: {
 
 // ── Controls ────────────────────────────────────────────────────────────────
 
-/** The pattern picker, to the design guide's segmented-control spec: recessed
- *  track, one lit segment wearing the accent as light, inactive labels neutral.
- *  Segments rather than a <select> because the field's KIND is this panel's
- *  biggest decision - all five choices should be visible at once. */
+/** One stroke glyph per field, drawn like the Colorizer's SHAPE falloffs so
+ *  the choice is legible without reading the word: a squiggle (noise), a
+ *  spiral (twist), a sine (waves), a grid (weave), a flower (bloom).
+ *  `currentColor` strokes follow the segment's label color, so active glyphs
+ *  go dark on the accent automatically. */
+const PATTERN_GLYPHS: Record<number, string> = {
+  0: 'M1 8 C3 2.5 4.5 9.5 7 6 C9 3.2 10.5 9 13 4.5',
+  1: 'M7 6 C7.9 5.1 8.2 7 7 7.2 C5.3 7.5 5 5 6.4 4.2 C8.4 3.1 10.2 4.8 9.7 6.9 C9.1 9.2 5.9 9.6 4.4 8',
+  2: 'M1 6 C3 2 5 2 7 6 C9 10 11 10 13 6',
+  3: 'M4.5 1 V11 M9.5 1 V11 M1 4 H13 M1 8 H13',
+  4: 'M7 6 m-1.1 0 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M7 3.4 V1.6 M7 8.6 V10.4 M4.7 4.7 L3.4 3.4 M9.3 4.7 L10.6 3.4 M4.7 7.3 L3.4 8.6 M9.3 7.3 L10.6 8.6',
+}
+
+/** The pattern picker, in the Colorizer's flat segmented idiom (its SHAPE
+ *  selector): hard-cornered segments in one bordered strip, the active one a
+ *  solid accent fill carrying a dark label, the rest near-black. No gradients,
+ *  no glow, no sliding thumb - the switch is instant, and the accent block
+ *  itself is the state. */
 function PatternSegments({ parameter: bound }: { parameter: UserInterfaceParameter }) {
   const definition = bound.definition
   if (definition.type !== 'select' || typeof bound.value !== 'number') return null
@@ -223,7 +242,7 @@ function PatternSegments({ parameter: bound }: { parameter: UserInterfaceParamet
     <div
       role="radiogroup"
       aria-label={definition.label}
-      className="mx-4 mt-3 flex rounded-md border border-white/[0.08] bg-black/30 p-[2px]"
+      className="mx-4 mt-3 flex overflow-hidden rounded-md border border-white/10"
     >
       {definition.options.map((option) => {
         const selected = option.value === active
@@ -234,11 +253,20 @@ function PatternSegments({ parameter: bound }: { parameter: UserInterfaceParamet
             role="radio"
             aria-checked={selected}
             onClick={() => bound.setValue(option.value)}
-            className="min-w-0 flex-1 rounded px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors"
-            style={selected
-              ? { background: withAlpha(ACCENT, 0.22), color: towardWhite(ACCENT, 0.6) }
-              : { color: 'rgba(255,255,255,0.4)' }}
+            className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+              selected ? '' : 'bg-black/25 text-white/40 hover:bg-white/5 hover:text-white/60'
+            }`}
+            style={selected ? { background: ACCENT, color: '#0c0a1a' } : undefined}
           >
+            <svg width="14" height="12" viewBox="0 0 14 12" fill="none" aria-hidden>
+              <path
+                d={PATTERN_GLYPHS[option.value] ?? ''}
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             {option.label}
           </button>
         )
@@ -365,10 +393,16 @@ export const BassRippleUserInterfaceRenderer: UserInterfaceRendererDefinition = 
   const pattern = parameter(parameters, 'pattern')
   const amount = parameter(parameters, 'amount')
   const scale = parameter(parameters, 'scale')
+  const frequency = parameter(parameters, 'frequency')
   const speed = parameter(parameters, 'speed')
   const release = parameter(parameters, 'release')
 
-  if (!pattern || !amount || !scale || !speed || !release) return <ParameterList parameters={parameters} />
+  if (!pattern || !amount || !scale || !frequency || !speed || !release) return <ParameterList parameters={parameters} />
+
+  // FREQ multiplies angular symmetry, which only the polar patterns have -
+  // dimmed elsewhere rather than hidden, so the console doesn't reflow.
+  const activePattern = Math.round(numericValue(pattern, 0))
+  const frequencyApplies = activePattern === 1 || activePattern === 4
 
   const accentHsv = hexToHsv(ACCENT)
   // A hue-true dark shade, not an alpha tint - low-alpha accent over the
@@ -382,22 +416,26 @@ export const BassRippleUserInterfaceRenderer: UserInterfaceRendererDefinition = 
       style={{ background: shade }}
     >
       <RipplePreview
-        pattern={Math.round(numericValue(pattern, 0))}
+        pattern={activePattern}
         amount={numericValue(amount, 0.5)}
         scale={numericValue(scale, 3)}
         speed={numericValue(speed, 0.6)}
+        frequency={numericValue(frequency, 1)}
         release={numericValue(release, 0.5)}
       />
-      <div
-        // The preview's light spilling through the seam onto the console - the
-        // one earned gradient, per the guide. Wraps segments AND knobs so the
-        // spill stays at the seam under the preview.
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
-      >
+      {/* Solid console below the preview - no light-spill gradient. The flat
+          segments read as blocks of state, and a wash behind them muddied that. */}
+      <div>
         <PatternSegments parameter={pattern} />
         <div className="flex items-end gap-5 px-4 pb-4 pt-3">
           <RippleKnob parameter={amount} label="INTENSITY" large />
           <RippleKnob parameter={scale} label="WAVE" />
+          <div
+            className={frequencyApplies ? 'transition-opacity' : 'pointer-events-none opacity-35 transition-opacity'}
+            title={frequencyApplies ? undefined : 'Frequency shapes the Twist and Bloom patterns'}
+          >
+            <RippleKnob parameter={frequency} label="FREQ" />
+          </div>
           <RippleKnob parameter={speed} label="SPEED" />
           <RippleKnob parameter={release} label="RELEASE" />
         </div>
