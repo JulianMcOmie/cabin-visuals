@@ -20,6 +20,7 @@ import { dotFieldInstrument } from './DotField'
 import { metronomeBallsInstrument } from './MetronomeBalls'
 import { emojiDisplayInstrument } from './EmojiDisplay'
 import { cameraControlInstrument } from './CameraControl'
+import { cameraOrbitInstrument } from './CameraOrbit'
 import { filmStockInstrument, filmGrainInstrument } from './FilmStock'
 import { scribbleInstrument } from './Scribble'
 import { filmCardInstrument } from './FilmCard'
@@ -59,6 +60,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [metronomeBallsInstrument.id]: metronomeBallsInstrument,
   [emojiDisplayInstrument.id]: emojiDisplayInstrument,
   [cameraControlInstrument.id]: cameraControlInstrument,
+  [cameraOrbitInstrument.id]: cameraOrbitInstrument,
   [filmStockInstrument.id]: filmStockInstrument,
   [filmGrainInstrument.id]: filmGrainInstrument,
   [scribbleInstrument.id]: scribbleInstrument,

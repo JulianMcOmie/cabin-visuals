@@ -27,6 +27,19 @@ Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` 
 - Call `WEBGL_lose_context.loseContext()` on unmount — panels mount and unmount on every track selection, and exhausting the browser's WebGL context budget takes out the main VIEWPORT, not the panel.
 - **The canvas must be created inside the effect and appended to a host div, NOT rendered by React.** `loseContext()` permanently kills that canvas's context, and React StrictMode double-invokes effects in dev: the second mount lands on the same element, `getContext` hands back the dead context, and every compile fails with a null/empty info log — which surfaces only as the "preview unavailable" fallback. Owning the element per mount gives each run a genuinely fresh canvas.
 
+**A drag pad that draws circles must be SQUARE in CSS, not just in its viewBox.**
+`CameraOrbitUserInterface`'s two pads (top-down orbit ring, side elevation arc)
+use a `0 0 100 100` viewBox; dropped into the inspector's full-width column with
+`preserveAspectRatio="none"` the ring becomes a flat ellipse the rig visibly
+slides around at the wrong speed, and the camera glyph shears. Constrain the pad
+itself (`aspect-square w-full max-w-[…] mx-auto`) and cap its header to the same
+width, or the right-aligned hint drifts away from the thing it labels. Two more
+from that panel: an SVG arc between near-vertical endpoints has two valid halves,
+so pick the sweep flag by asking which half the value actually travels through
+(0° = level, the RIGHT half) rather than trying flags until one draws; and map a
+pad radius to a range like distance's 0.5–60 on a CURVE, because a linear map
+crushes every useful shot into the first few pixels of travel.
+
 Driving `time` from rAF is fine in panel code: the pause invariant governs the rendered visual (where `time` is the beat); a panel canvas is chrome, like the animated disc in `KaleidoscopeEffectUserInterface`.
 
 **A mover/splitter/colorizer panel's accent is NOT the panel's to choose.** It comes
