@@ -19,6 +19,8 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
+import { directorAutomatableParams, getDirector } from '../../core/directors'
+import { withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
@@ -217,16 +219,20 @@ export function PianoRollPanel() {
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else {
-      // Param automation: the range comes from the parent's instrument def, or
-      // from the parent's mover/splitter definition when automating a mover.
+      // Param automation: the range comes from the parent's instrument def
+      // (plus the canonical tf* transform params), from the parent's
+      // mover/splitter definition when automating a mover, or from the
+      // director's def (plus Opacity) when the lane sits under a director.
       const moverDef = parent?.type === 'mover'
         ? getMoverOrSplitterDefinition(parent.moverId)
         : parent?.type === 'splitter'
           ? getMoverOrSplitterDefinition(parent.splitterId)
           : undefined
-      const pdef = parent
-        ? (getInstrument(parent.instrumentId)?.params ?? moverDef?.params)?.find((p) => p.key === track.targetParam)
-        : undefined
+      const instrumentDef = parent ? getInstrument(parent.instrumentId) : undefined
+      const parentParams = instrumentDef
+        ? withTransformParams(instrumentDef.params)
+        : moverDef?.params ?? (parent?.type === 'director' ? directorAutomatableParams(getDirector(parent.directorId)) : undefined)
+      const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }
@@ -237,7 +243,7 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={resolveTrackDisplayColor(track, tracks)}
+      trackColor={resolveTrackDisplayColor(track)}
       noteColor={abilityColor}
       automation={automation}
       trigger={trigger}

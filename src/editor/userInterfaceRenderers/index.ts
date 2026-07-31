@@ -9,6 +9,7 @@ import { CameraOrbitUserInterfaceRenderer } from './CameraOrbitUserInterface'
 import { OscilloscopeUserInterfaceRenderer } from './OscilloscopeUserInterface'
 import { ColorFiltersUserInterfaceRenderer } from './ColorFiltersUserInterface'
 import { BassRippleUserInterfaceRenderer } from './BassRippleUserInterface'
+import { ImpactWarpUserInterfaceRenderer } from './ImpactWarpUserInterface'
 import { StrobeUserInterfaceRenderer } from './StrobeUserInterface'
 import { ParticleBurstUserInterfaceRenderer } from './ParticleBurstUserInterface'
 import { PixelBlastUserInterfaceRenderer } from './PixelBlastUserInterface'
@@ -41,6 +42,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   oscilloscope: OscilloscopeUserInterfaceRenderer,
   colorFilters: ColorFiltersUserInterfaceRenderer,
   bassRipple: BassRippleUserInterfaceRenderer,
+  impactWarp: ImpactWarpUserInterfaceRenderer,
   strobe: StrobeUserInterfaceRenderer,
   particleBurst: ParticleBurstUserInterfaceRenderer,
   pixelBlast: PixelBlastUserInterfaceRenderer,

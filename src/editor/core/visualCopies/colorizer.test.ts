@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
+import { colorToOklch } from '../../utils/oklch'
 import {
+  BLEND_LINEAR,
   COLORIZER_FLASH_PITCH,
+  COLORIZER_FLASH_SLOTS,
   COLORIZER_RAINBOW_PITCH,
   rainbowDiagonal,
   SHAPE_EVEN,
@@ -217,11 +220,114 @@ test('the rainbow reaches the copy as a relative hue offset on top of upstream',
   assert.equal(output[0].colorShift.tint, null)
 })
 
-test('the Colorizer now declares two rows, flash and rainbow', () => {
+test('the Colorizer declares one row per color slot, plus the rainbow', () => {
   const rows = noteColorizer.midiRows!(settings())
-  assert.deepEqual(rows, [
-    { pitch: COLORIZER_FLASH_PITCH, label: 'Color flash' },
-    { pitch: COLORIZER_RAINBOW_PITCH, label: 'Rainbow sweep' },
-  ])
-  assert.equal(COLORIZER_RAINBOW_PITCH, COLORIZER_FLASH_PITCH + 1)
+  assert.deepEqual(rows.map((row) => row.pitch), [60, 62, 63, 64, 65, COLORIZER_RAINBOW_PITCH])
+  // Slot 1 keeps the original pitch and stays first, so a Colorizer saved
+  // before the palette existed opens with its notes on the row it wrote them to.
+  assert.equal(rows[0].pitch, COLORIZER_FLASH_PITCH)
+  // 61 was already the rainbow's, which is why the color rows skip it.
+  assert.ok(!COLORIZER_FLASH_SLOTS.some((slot) => slot.pitch === COLORIZER_RAINBOW_PITCH))
+})
+
+test('each color row wears its own live color, so the piano roll IS the palette', () => {
+  const rows = noteColorizer.midiRows!(settings({ color: '#123456' }))
+  assert.equal(rows[0].color, '#123456')
+  assert.equal(rows[1].color, '#ef476f')
+  // The rainbow has no single color to show, so it takes the track hue.
+  assert.equal(rows[5].color, undefined)
+})
+
+// ── The palette ──────────────────────────────────────────────────────────────
+
+const slotNote = (slot: number, beat: number, durationBeats = 0.25, velocity = 1) =>
+  note(beat, durationBeats, velocity, COLORIZER_FLASH_SLOTS[slot].pitch)
+
+test('every slot flashes its own color', () => {
+  const opts = settings({ intensity: 1, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  for (let slot = 0; slot < COLORIZER_FLASH_SLOTS.length; slot++) {
+    const out = evaluateColorizer([slotNote(slot, 0, 4)], opts, 1)
+    close(out.tintAmount, 1)
+    // A lone slot hands back the user's exact string - no round trip.
+    assert.equal(out.tint, opts[COLORIZER_FLASH_SLOTS[slot].key])
+  }
+})
+
+test('nothing sounding means no color to flash toward', () => {
+  assert.equal(evaluateColorizer([], settings(), 0).tint, null)
+})
+
+test('two slots at once blend toward the louder one, at the louder one`s strength', () => {
+  const opts = settings({
+    intensity: 1, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN,
+    color: '#ff0000', color2: '#0000ff',
+  })
+  const notes = [slotNote(0, 0, 4, 1), slotNote(1, 0, 4, 0.25)]
+  const out = evaluateColorizer(notes, opts, 1)
+  // STRENGTH is the loudest row's, never the sum: two flashes are one flash.
+  close(out.tintAmount, 1)
+  const blended = colorToOklch(out.tint!)!
+  const red = colorToOklch('#ff0000')!
+  const blue = colorToOklch('#0000ff')!
+  // The blend sits between the two hues and nearer the louder red.
+  assert.ok(out.tint !== '#ff0000' && out.tint !== '#0000ff', `${out.tint} is one of the endpoints`)
+  const toward = (h: number) => Math.abs(((h - blended.h + 540) % 360) - 180)
+  assert.ok(toward(red.h) < toward(blue.h), 'blend should lean toward the louder slot')
+})
+
+test('an equal-gain pair lands between the two colors, not on either', () => {
+  const opts = settings({
+    intensity: 1, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN,
+    color: '#ff0000', color2: '#00ff00',
+  })
+  const out = evaluateColorizer([slotNote(0, 0, 4), slotNote(1, 0, 4)], opts, 1)
+  const mid = colorToOklch(out.tint!)!
+  // Halfway between red (~29 deg) and green (~142 deg) in OKLab: a real color
+  // in between, and NOT the desaturated mud a channel average would give.
+  assert.ok(mid.h > 40 && mid.h < 135, `hue ${mid.h} should sit between the endpoints`)
+  assert.ok(mid.c > 0.08, `chroma ${mid.c} collapsed - the blend went through grey`)
+})
+
+test('releasing one slot crossfades into the other rather than snapping', () => {
+  const opts = settings({
+    intensity: 1, attackBeats: 0, releaseBeats: 2, shape: SHAPE_EVEN,
+    color: '#ff0000', color2: '#0000ff',
+  })
+  // Slot 1 is a hit that decays; slot 2 is held underneath it.
+  const notes = [slotNote(0, 0, 0), slotNote(1, 0, 8)]
+  const hues = [0, 0.5, 1, 1.5].map((beat) => colorToOklch(evaluateColorizer(notes, opts, beat).tint!)!.h)
+  const blue = colorToOklch('#0000ff')!.h
+  const distance = hues.map((h) => Math.abs(((h - blue + 540) % 360) - 180))
+  // Every step moves closer to the held color - a crossfade, not a switch.
+  for (let i = 1; i < distance.length; i++) {
+    assert.ok(distance[i] < distance[i - 1], `step ${i} did not move toward the held color`)
+  }
+})
+
+test('overlapping notes on ONE row still take the loudest rather than summing', () => {
+  const opts = settings({ intensity: 1, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN })
+  const out = evaluateColorizer([slotNote(0, 0, 4, 0.5), slotNote(0, 0, 4, 0.75)], opts, 1)
+  close(out.tintAmount, 0.75)
+  assert.equal(out.tint, opts.color)
+})
+
+test('the flash asks for a perceptual mix by default, and a linear one on request', () => {
+  const notes = [slotNote(0, 0, 4)]
+  const run = (blend?: number) => noteColorizer.resolve({
+    settings: settings({ intensity: 1, attackBeats: 0, releaseBeats: 0, shape: SHAPE_EVEN, ...(blend === undefined ? {} : { blend }) }),
+    notes,
+  }).apply(identityVisualCopy(), { beat: 1, index: 0, count: 1 })[0]
+  assert.equal(run().colorShift.tintPerceptual, true)
+  assert.equal(run(BLEND_LINEAR).colorShift.tintPerceptual, false)
+})
+
+test('a silent colorizer leaves the upstream tint - and its mix - untouched', () => {
+  const input = identityVisualCopy()
+  input.colorShift.tint = '#123456'
+  input.colorShift.tintAmount = 0.5
+  const output = noteColorizer.resolve({ settings: settings(), notes: [] })
+    .apply(input, { beat: 0, index: 0, count: 1 })
+  assert.equal(output[0].colorShift.tint, '#123456')
+  close(output[0].colorShift.tintAmount, 0.5)
+  assert.equal(output[0].colorShift.tintPerceptual, undefined)
 })

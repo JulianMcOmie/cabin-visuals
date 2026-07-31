@@ -60,6 +60,7 @@ import type { MoverOrSplitterDefinition } from './definitions'
 // where the lens actually is.
 import { TUNNEL_CAMERA_Z as CAMERA_Z, placementAxisScale } from './tunnel'
 import type { VisualCopy } from './types'
+import { DUPLICATE_TRAIL_COLOR } from './identityColors'
 
 /** The one row this definition answers: everything it does is one function. */
 export const DUPLICATE_PITCH = 60
@@ -219,6 +220,7 @@ export const duplicateTrailSplitter: MoverOrSplitterDefinition<DuplicateTrailSet
   id: 'duplicateTrail',
   label: 'Duplicate',
   kind: 'splitter',
+  identityColor: DUPLICATE_TRAIL_COLOR,
   params: [
     // 1 is the invisible identity (a copy exactly behind the original), so the
     // default sits well clear of it: 2.5 blooms the trail outward into a halo

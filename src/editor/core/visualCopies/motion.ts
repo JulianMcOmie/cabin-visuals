@@ -60,6 +60,7 @@ import {
 } from './motionBasis'
 import { evaluateConstantRotationAngles, type ConstantRotationSettings } from './rotationMovers'
 import type { VisualCopy } from './types'
+import { MOTION_COLOR } from './identityColors'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -332,6 +333,7 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
   id: 'motion',
   label: 'Motion',
   kind: 'mover',
+  identityColor: MOTION_COLOR,
   params: MOTION_PARAMS,
   midiRows: () => MOTION_ROWS,
   strictMidiRows: true,

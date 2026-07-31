@@ -83,6 +83,12 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
     </svg>
   )},
+  { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene on every MIDI hit — zoom slam, shockwave, sideways shove or torn slabs — then lets it recover.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="4" y="4" width="4" height="4" rx="0.5" fill="none" stroke="#ff6a00" strokeWidth="1.1" />
+      <path d="M3.1 3.1 L0.8 0.8M8.9 3.1 L11.2 0.8M3.1 8.9 L0.8 11.2M8.9 8.9 L11.2 11.2" fill="none" stroke="#ff6a00" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )},
   { id: 'colorFilters', name: 'Color Filters', description: 'Applies scene-wide color remaps while its labeled MIDI notes are held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
@@ -92,7 +98,7 @@ const SCENE_INSTRUMENTS = withKind('object', [
   )},
   { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#fde047" />
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#ffffff" />
     </svg>
   )},
 ])
@@ -313,8 +319,9 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 const MOVER_DESCRIPTIONS: Record<string, string> = {
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
-  radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
+  radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
@@ -425,7 +432,7 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
 // Visibility rides with Impulse - its ADSR window is exactly that shape.
-const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
+const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
 // Camera Orbit files under Rumble rather than beside Camera in Impulse: the
 // Impact split is by ENVELOPE, and holding a row to swing the rig is the held
 // shape, not a strike that decays.

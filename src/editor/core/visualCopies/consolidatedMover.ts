@@ -9,6 +9,7 @@ import { translationOscillatorMover } from './translationOscillator'
 import type { MoverOrSplitter, VisualCopy } from './types'
 import { visibilityMover } from './visibility'
 import { waveTerrainMover } from './waveTerrain'
+import { CONSOLIDATED_MOVER_COLOR } from './identityColors'
 
 type ConsolidatedSettings = Record<string, number>
 
@@ -28,6 +29,10 @@ interface MoverModule {
  */
 const MODULES: MoverModule[] = [
   { id: 'motion', label: 'Motion', definition: motionMover, bankStart: 0, maxRows: 26, defaultEnabled: 1 },
+  // Radial Motion emits 27 rows since its rework (three depths, no colour
+  // layers), but the bank stays 69 wide: these sizes are what fix every module
+  // BELOW it, so reclaiming the slack would silently retune every existing
+  // project's All Movers lane. The spare 42 pitches are simply never issued.
   { id: 'radialMotion', label: 'Radial Motion', definition: radialMotionMover, bankStart: 26, maxRows: 69, defaultEnabled: 0 },
   { id: 'orbitBurst', label: 'Orbit Burst', definition: orbitBurstMover, bankStart: 95, maxRows: 6, defaultEnabled: 1 },
   { id: 'constantOrbit', label: 'Constant Orbit', definition: constantOrbitMover, bankStart: 101, maxRows: 7, defaultEnabled: 0 },
@@ -151,6 +156,7 @@ export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> 
   id: 'allMovers',
   label: 'All Movers',
   kind: 'mover',
+  identityColor: CONSOLIDATED_MOVER_COLOR,
   params: CONSOLIDATED_PARAMS,
   midiRows: consolidatedMidiRows,
   strictMidiRows: true,
