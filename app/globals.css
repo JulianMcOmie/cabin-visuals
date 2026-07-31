@@ -79,33 +79,33 @@ body {
   --windowSelectionColor: rgba(53, 167, 230, 0.35);
 }
 
-/* A tiny copy of the finished visualizer frame creates a low-frequency color
-   wash behind the inspector. The real WebGL canvas keeps its normal size. */
+/* A tiny copy of the finished visualizer frame creates ONE low-frequency field
+   of light behind the whole workspace card. Anchored high (the image's center
+   sits in the upper band, where the visualizer actually is) and masked so it
+   fades as it runs down through the timeline: the translucent surfaces below
+   read as the same light continuing, not as their own copy of the frame. It
+   sits at z-index -1 inside the card's isolated stacking context, above the
+   card's background and beneath everything else. */
 .visual-ambient-bleed {
   position: absolute;
-  inset: -25%;
-  width: 150%;
-  height: 150%;
-  pointer-events: none;
-  opacity: 0.24;
-  filter: blur(80px) saturate(135%) brightness(0.78);
-}
-
-/* The timeline's copy of the ambient wash: same painter, dimmer and pushed
-   below the timeline content (z-index: -1 inside the host's isolated stacking
-   context) so it only reads through the surfaces the host makes translucent. */
-.visual-ambient-bleed--timeline {
   z-index: -1;
-  opacity: 0.65;
-  filter: blur(80px) saturate(130%) brightness(0.7);
+  top: -30%;
+  left: -15%;
+  width: 130%;
+  height: 118%;
+  pointer-events: none;
+  opacity: 0.3;
+  filter: blur(80px) saturate(135%) brightness(0.78);
+  -webkit-mask-image: linear-gradient(to bottom, black 45%, rgba(0, 0, 0, 0.5) 100%);
+  mask-image: linear-gradient(to bottom, black 45%, rgba(0, 0, 0, 0.5) 100%);
 }
 
 /* Scopes the timeline's see-through treatment: the lanes and ruler strip both
    paint --bg-timeline, so overriding it here (and only here) lets the ambient
-   bleed underneath glow through the whole work surface. Label rows and the
-   frozen corner keep their opaque --bg-track-row - solid chrome over glass,
-   the same split the inspector makes. */
-.timeline-ambient-host {
+   field's tail glow through the whole work surface. Label rows and the frozen
+   corner keep their opaque --bg-track-row - solid chrome over glass, the same
+   split the inspector makes. */
+.timeline-glass-scope {
   --bg-timeline: rgba(21, 21, 21, 0.8);
 }
 

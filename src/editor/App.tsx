@@ -130,18 +130,13 @@ function Scene({
 }
 
 /** A deliberately low-resolution copy of the finished WebGL frame. It is
- * stretched and heavily blurred behind the upper workspace, extending the
- * scene's color into otherwise blank UI space without rendering the Three
- * scene a second time or changing the visualizer's viewport calculations.
- * One painter serves both ambient layers - the inspector wash and the dimmer
- * timeline wash - differing only in the class that places and tints them. */
-function VisualAmbientBleed({
-  sourceCanvasRef,
-  className = 'visual-ambient-bleed',
-}: {
-  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
-  className?: string
-}) {
+ * stretched and heavily blurred behind the ENTIRE workspace card - anchored to
+ * the top, where the visualizer lives, and fading as it runs down through the
+ * timeline - so every translucent surface (inspector glass, timeline lanes) is
+ * a window onto the same continuous field of light rather than its own copy of
+ * the frame. One canvas, one 15fps painter; the Three scene is never rendered
+ * a second time and the visualizer's viewport calculations are untouched. */
+function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
   const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -172,7 +167,7 @@ function VisualAmbientBleed({
     return () => cancelAnimationFrame(frame)
   }, [sourceCanvasRef])
 
-  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className={className} />
+  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
 }
 
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect
@@ -981,12 +976,15 @@ export default function EditorApp() {
             {/* relative: the header band is positioned, so the card must be
                 positioned too (and later in the DOM) for its glow to paint
                 over the header and the library rather than under them. */}
-            <div className="relative flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+            {/* isolate: the ambient bleed paints at z-index -1, and the card's
+                stacking context keeps that above the card's own background
+                instead of letting it vanish beneath it. */}
+            <div className="relative isolate flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+              <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
                 <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
                   <PanelGroup
                     orientation="horizontal"
                     style={{ height: '100%' }}
@@ -1034,19 +1032,12 @@ export default function EditorApp() {
 
                 {/* Tracks / Piano Roll */}
                 <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
-                {/* timeline-ambient-host gives the timeline the inspector's
-                    glass treatment: it makes --bg-timeline (the lanes + ruler
-                    strip) slightly translucent and slips a dim ambient copy of
-                    the frame beneath, so the scene's color washes through the
-                    work surface while label rows and blocks stay solid chrome.
-                    `isolate` pins the bleed's z-index:-1 above this wrapper's
-                    backdrop instead of letting it escape below the workspace
-                    card; overflow-hidden clips the bleed's oversized inset. */}
-                <div className="timeline-ambient-host relative isolate flex-1 min-h-0 overflow-hidden">
-                  <VisualAmbientBleed
-                    sourceCanvasRef={visualCanvasRef}
-                    className="visual-ambient-bleed visual-ambient-bleed--timeline"
-                  />
+                {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
+                    strip) slightly translucent, so the card-level ambient
+                    bleed's fading tail reads through the work surface - the
+                    same light as the inspector's glass, continued downward.
+                    Label rows and blocks keep their opaque chrome. */}
+                <div className="timeline-glass-scope flex-1 min-h-0">
                   <BottomArea />
                 </div>
 
