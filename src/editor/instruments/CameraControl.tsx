@@ -109,6 +109,10 @@ function CameraControlVisual({ trackId }: { trackId: string }) {
     camera.position.set(px, posY, pz)
 
     if (lookAtOrigin) {
+      // Reclaim the up axis before aiming: Camera Orbit gives the camera its own
+      // rolled up vector, so without this, swapping to this rig inherits that
+      // roll and "look at origin" comes out tilted.
+      camera.up.set(0, 1, 0)
       camera.lookAt(lookTarget.current)
     } else {
       camera.rotation.set(rotX * DEG, rotY * DEG, rotZ * DEG)

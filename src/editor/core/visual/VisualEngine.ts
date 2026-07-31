@@ -105,6 +105,9 @@ function normalizeProject(p: ProjectState | ProjectSnapshot): VisualProject {
 export function setProject(input: ProjectState | ProjectSnapshot) {
   const p = normalizeProject(input)
   project = p
+  // Dev-only cost trace: `performance.getEntriesByName('cabin:setProject')`
+  // from the console shows what each debounced structural resolve cost.
+  const tStart = process.env.NODE_ENV !== 'production' ? performance.now() : 0
   // Structural resolve is the expensive step, and the debounced subscription
   // funnels EVERY store change through here - including ones that touch no
   // scene content at all (selecting a scene, transport fields). A scene whose
@@ -139,6 +142,9 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   }
   graphInputs = nextInputs
   bpm = p.bpm
+  if (process.env.NODE_ENV !== 'production') {
+    performance.measure('cabin:setProject', { start: tStart, end: performance.now() })
+  }
   // Every graph survived untouched (and no scene fell away): the object list,
   // per-object caches and copy counts are all still valid - skip the sweep
   // and, crucially, the re-publish that would re-render the scene tree.

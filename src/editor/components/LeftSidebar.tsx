@@ -45,6 +45,14 @@ const SCENE_INSTRUMENTS = withKind('object', [
       <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
     </svg>
   )},
+  { id: 'cameraOrbit', name: 'Camera Orbit', description: 'Circles the camera around a point it never stops looking at - hold a note to swing, tilt, or come home.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <ellipse cx="6" cy="7" rx="4.6" ry="2.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <circle cx="6" cy="7" r="1.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <rect x="8.2" y="1.6" width="3.2" height="2.6" rx="0.7" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <path d="M8.2 3 L7 5.9" fill="none" stroke="#818cf8" strokeWidth="0.9" strokeDasharray="1.4 1.1" />
+    </svg>
+  )},
   { id: 'video', name: 'Video', description: 'Plays your uploaded video clips full-frame - each note cuts to a clip.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="1" y="2.5" width="10" height="7" rx="1" fill="none" stroke="#f472b6" strokeWidth="1.1" />
@@ -433,12 +441,14 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 // strikes once per note and decays; Rumble warps for as long as it's held.
 // Visibility rides with Impulse - its ADSR window is exactly that shape.
 const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
-const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
+// Both of the odd ones here file by ENVELOPE, which is what the Impact split is
+// for. Strobe sits in Rumble rather than Color because it is scene-wide and
+// sustained - it keeps flashing for exactly as long as the note is held. Camera
+// Orbit sits here rather than beside Camera in Impulse for the same reason:
+// holding a row to swing the rig is the held shape, not a strike that decays.
+const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
-// Strobe files with Color Filters rather than under Impact: both are scene-wide
-// colour post-process passes held by a note, and Strobe's styles ARE colour
-// looks (inversion, blackout, flash) on a beat or frame gate.
-const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters', 'strobe']
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
 // Everything else that moves lives under Motion - the compound movers at its

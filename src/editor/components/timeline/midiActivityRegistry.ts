@@ -61,10 +61,23 @@ export function registerMidiActivityBlock(
   }
 }
 
+// Once a paused sweep has zeroed every block, later paused frames skip the
+// whole walk - the RAF calls this every frame forever, and iterating every
+// note of a large project just to confirm zeros is real per-frame cost.
+// Blocks registered while paused start at 0 (registerMidiActivityBlock), so
+// the cleared state stays truthful without re-sweeping.
+let idleCleared = false
+
 /** Called by TimelineArea's shared playhead RAF; this never re-renders React.
  *  An inactive transport explicitly clears every block instead of leaving the
  *  envelope frozen at the stopped or scrubbed beat. */
 export function updateMidiActivityAtBeat(beat: number, isPlaying: boolean): void {
+  if (!isPlaying) {
+    if (idleCleared) return
+    idleCleared = true
+  } else {
+    idleCleared = false
+  }
   for (const block of blocks.values()) {
     // A muted track is silent; its blocks hold at 0 (no block glow, no per-note
     // flash) instead of pulsing along with the notes that aren't sounding.

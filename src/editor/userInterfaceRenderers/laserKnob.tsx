@@ -103,7 +103,11 @@ export function LaserKnob({
     if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
     event.preventDefault()
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
+    // Never nudge less than one step: on a coarse stepped knob (a detent
+    // selector spanning a handful of indices) 3% of the travel rounds back to
+    // the value it started from and the arrows read as dead.
+    const nudge = Math.max(0.03, range === 0 ? 0 : step / range)
+    commitNorm(percent + direction * nudge)
   }
 
   return (

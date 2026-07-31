@@ -18,6 +18,7 @@ Adding a bespoke instrument UI: add the id to `ids.ts` (union type), create `<Na
 - **A grid panel busts the ~240px height budget and that is a real cost, not a rounding error.** 4 rows × 3 knobs plus a preview lands near 450px, and the inspector pane opens around 300px — half the console starts below the fold. It scrolls and the pane drags, but reach for a disclosure first; only go to a grid when the caller has explicitly asked for everything visible at once.
 - Its preview runs the mover's real `resolve()` with **NO NOTES**, which is the claim the mover makes (passive choreography, MIDI as accent). A preview that needs notes to move would be hiding the actual behaviour.
 - The preview frames by **HEIGHT, not width** — the subject is a disc in a short wide window, and fitting the width pushes the top and bottom off-frame. (Conveyor frames by width for the opposite reason: its subject is a line.) Same per-frame re-derivation from `gl.domElement.client*` as Conveyor, for the same reason.
+- **A stepped (detent) knob is a LaserKnob driven in INDEX units**, not a new control: its spin knobs walk `RADIAL_MOTION_SPIN_DETENTS` by binding `value`/`min`/`max`/`step` to `0…detents.length−1`/`1` and converting index⟷rate in the wrapper's `format`/`onChange` — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are, and `bipolar` still works when the zero detent is the middle index. The keyboard nudge in laserKnob.tsx is `max(3%, one step)` for exactly this case; don't shrink it back.
 
 Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker (also used by SceneSettingsPanel); `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out) — every panel that follows the guide turns the SAME knob, so don't re-derive the arc math. Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
 
@@ -26,6 +27,19 @@ Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` 
 - Match however the real path produces colour. Previewing a screen-space EFFECT means mirroring `ShaderWrapper`'s stages (byte FBO, then a linear→sRGB output pass) or it reads far darker than the viewport; previewing a lit MATERIAL means a stand-in lighting term, so treat it as a character preview, not an exact colour match.
 - Call `WEBGL_lose_context.loseContext()` on unmount — panels mount and unmount on every track selection, and exhausting the browser's WebGL context budget takes out the main VIEWPORT, not the panel.
 - **The canvas must be created inside the effect and appended to a host div, NOT rendered by React.** `loseContext()` permanently kills that canvas's context, and React StrictMode double-invokes effects in dev: the second mount lands on the same element, `getContext` hands back the dead context, and every compile fails with a null/empty info log — which surfaces only as the "preview unavailable" fallback. Owning the element per mount gives each run a genuinely fresh canvas.
+
+**A drag pad that draws circles must be SQUARE in CSS, not just in its viewBox.**
+`CameraOrbitUserInterface`'s two pads (top-down orbit ring, side elevation arc)
+use a `0 0 100 100` viewBox; dropped into the inspector's full-width column with
+`preserveAspectRatio="none"` the ring becomes a flat ellipse the rig visibly
+slides around at the wrong speed, and the camera glyph shears. Constrain the pad
+itself (`aspect-square w-full max-w-[…] mx-auto`) and cap its header to the same
+width, or the right-aligned hint drifts away from the thing it labels. Two more
+from that panel: an SVG arc between near-vertical endpoints has two valid halves,
+so pick the sweep flag by asking which half the value actually travels through
+(0° = level, the RIGHT half) rather than trying flags until one draws; and map a
+pad radius to a range like distance's 0.5–60 on a CURVE, because a linear map
+crushes every useful shot into the first few pixels of travel.
 
 Driving `time` from rAF is fine in panel code: the pause invariant governs the rendered visual (where `time` is the beat); a panel canvas is chrome, like the animated disc in `KaleidoscopeEffectUserInterface`.
 

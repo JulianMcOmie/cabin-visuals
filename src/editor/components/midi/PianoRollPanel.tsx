@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
 import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
 import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
@@ -156,9 +156,12 @@ function quantizeLabel(beats: number, beatsPerBar: number): string {
 export function PianoRollPanel() {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  const tracks = useProjectStore((s) => s.tracks)
+  // Subscribe to the edited track and its parent only - never the whole tracks
+  // record, whose identity changes on EVERY project edit and would re-render
+  // the entire piano roll per pointermove of any timeline gesture.
+  const track = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
+  const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
 
-  const track = editingBlock ? tracks[editingBlock.trackId] : undefined
   const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
 
   // Auto-close if the block disappeared (track/block deleted)
@@ -194,7 +197,6 @@ export function PianoRollPanel() {
     // reads beat/duration/velocity off abilityEvents, never pitch), so they get the
     // short trigger rows. An ability that wants real pitches must declare
     // editor: 'pitched' on its AbilityLaneDef to keep the full piano.
-    const parent = track.parentId ? tracks[track.parentId] : undefined
     const ability = parent
       ? getInstrument(parent.instrumentId)?.abilities?.find((a) => a.key === track.abilityKey)
       : undefined
@@ -204,7 +206,6 @@ export function PianoRollPanel() {
       abilityColor = ability?.color
     }
   } else if (track.type === 'automation' && track.targetParam) {
-    const parent = track.parentId ? tracks[track.parentId] : undefined
     const fx = parseFxTarget(track.targetParam)
     if (fx) {
       // Effect automation: value range from the plugin's param. The enabled
@@ -271,8 +272,6 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const bpm = useProjectStore((s) => s.bpm)
-  const tracks = useProjectStore((s) => s.tracks)
-  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const track = useProjectStore((s) => s.tracks[trackId])
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
@@ -326,19 +325,29 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const photoClips = usePhotoStore((s) => s.photoClips)
-  const scenes = useProjectStore((s) => s.scenes)
-  const sceneOrder = useProjectStore((s) => s.sceneOrder)
-  const declaredRows = !automation && !trigger && track
-    ? resolveDeclaredMidiRows(track, {
-        tracks,
-        rootTrackIds,
-        scenes,
-        sceneOrder,
-        bpm,
-        beatsPerBar,
-        totalBars,
-      })
-    : undefined
+  // Director rows are labelled with scene names; this string fingerprint keeps
+  // them fresh without subscribing to the scenes record itself (whose identity
+  // changes on every track edit anywhere).
+  const sceneNamesKey = useProjectStore((s) => s.sceneOrder.map((id) => s.scenes[id]?.name).join(' '))
+  // Declared rows read the wider project (mover chains, scenes) but must not
+  // subscribe to it: recompute only when the edited track itself changes. A
+  // sibling chain edit can in principle change a mover lane's prior copy count
+  // mid-session; the next edit to THIS track catches up - acceptable staleness
+  // for keeping foreign edits from re-rendering the roll.
+  const declaredRows = useMemo(() => {
+    if (automation || trigger || !track) return undefined
+    const s = useProjectStore.getState()
+    return resolveDeclaredMidiRows(track, {
+      tracks: s.tracks,
+      rootTrackIds: s.rootTrackIds,
+      scenes: s.scenes,
+      sceneOrder: s.sceneOrder,
+      bpm,
+      beatsPerBar,
+      totalBars,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [automation, trigger, track, bpm, beatsPerBar, totalBars, sceneNamesKey])
   const defRows = declaredRows?.rows
   const rows = automation
     ? automation.kind === 'toggle'

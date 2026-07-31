@@ -50,8 +50,8 @@
     ".next-isolated-3031/types/**/*.ts",
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-build-3002/types/**/*.ts"
+    ".next-build-3002/types/**/*.ts",
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules"

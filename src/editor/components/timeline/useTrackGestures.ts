@@ -186,7 +186,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       ? LOOP_CURSOR
       : t === 'resizing-left' || t === 'resizing-right' ? 'ew-resize' : 'default')
 
-    const handleMove = (e: PointerEvent) => {
+    const processMove = (e: PointerEvent) => {
       const d = dragRef.current
       if (!d) return
       // Any in-flight drag (marquee, move, resize, draw) ends with a click on
@@ -340,7 +340,34 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       if (guideStartBar != null) placeDragGuideAtBar(guideStartBar, d.barWidthPx)
     }
 
+    // Coalesce to one processed move per animation frame. High-poll-rate mice
+    // (and 120Hz displays) can deliver pointermoves faster than frames, and
+    // every processed move is one-or-more store writes with a full subscriber
+    // fan-out - work beyond frame rate is invisible. Only the LATEST event
+    // matters (positions are absolute, never deltas between events).
+    let pendingMove: PointerEvent | null = null
+    let moveRaf = 0
+    const handleMove = (e: PointerEvent) => {
+      pendingMove = e
+      if (moveRaf) return
+      moveRaf = requestAnimationFrame(() => {
+        moveRaf = 0
+        const pending = pendingMove
+        pendingMove = null
+        // The gesture may have been torn down (release, unmount) between
+        // scheduling and this frame - a trailing write would edit post-gesture.
+        if (pending && abortRef.current === controller) processMove(pending)
+      })
+    }
+
     const handleUp = () => {
+      // Flush the last unprocessed move BEFORE tearing down, so release always
+      // lands on the final pointer position (also what keeps synthetic drags,
+      // whose up can arrive before any frame renders, working at all).
+      if (moveRaf) cancelAnimationFrame(moveRaf)
+      moveRaf = 0
+      if (pendingMove) processMove(pendingMove)
+      pendingMove = null
       // A right-button draw released outside the lane would otherwise open the
       // browser context menu on whatever sits under the pointer.
       if (dragRef.current?.type === 'drawing') suppressNextContextMenu()

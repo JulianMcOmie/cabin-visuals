@@ -49,6 +49,41 @@ export const RADIAL_MOTION_SPIN_MULTIPLIERS = [-1, 0, 0.5, 1, 2] as const
 const RADIUS_HOME_CHOICE = 2
 const SPIN_HOME_CHOICE = 3
 
+/**
+ * The spin knobs are STEPPED, like a tempo-synced rate switch on an audio
+ * plugin: each detent is one full turn per a power-of-two number of beats, so
+ * every rate is a musical division of the tempo rather than an arbitrary
+ * degrees figure. The STORED unit stays °/beat — old saves, automation lanes
+ * and the MIDI ×0.5/×2/×−1 multipliers all keep working, and halving or
+ * doubling a power-of-two division is still a power-of-two division.
+ */
+export const RADIAL_MOTION_SPIN_BEATS_PER_TURN = [32, 16, 8, 4, 2] as const
+
+/** Every knob position, ascending, zero dead centre: −(fast…slow), 0, slow…fast. */
+export const RADIAL_MOTION_SPIN_DETENTS: readonly number[] = (() => {
+  const rates = RADIAL_MOTION_SPIN_BEATS_PER_TURN.map((beats) => 360 / beats)
+  return [...[...rates].reverse().map((rate) => -rate), 0, ...rates]
+})()
+
+/** Nearest detent for a stored rate — how the stepped knob reads a value that
+ *  predates quantization (e.g. the old 18°/beat default). */
+export function radialMotionSpinDetentIndex(rate: number): number {
+  let best = 0
+  for (let index = 1; index < RADIAL_MOTION_SPIN_DETENTS.length; index++) {
+    if (Math.abs(RADIAL_MOTION_SPIN_DETENTS[index] - rate) < Math.abs(RADIAL_MOTION_SPIN_DETENTS[best] - rate)) {
+      best = index
+    }
+  }
+  return best
+}
+
+/** A detent's readout: beats per full turn, signed — "16b" is one rotation
+ *  every 16 beats, "−8b" the same the other way. Zero is simply "0". */
+export function radialMotionSpinDetentLabel(rate: number): string {
+  if (rate === 0) return '0'
+  return `${rate < 0 ? '−' : ''}${360 / Math.abs(rate)}b`
+}
+
 /** Pitch for one of four radius multipliers on one depth. 36-47. */
 export function radialMotionRadiusPitch(depth: number, choice: number): number {
   return RADIUS_BASE_PITCH + depth * RADIAL_MOTION_RADIUS_MULTIPLIERS.length + choice
@@ -266,16 +301,18 @@ export const radialMotionMover: MoverOrSplitterDefinition<RadialMotionSettings> 
     { key: 'radius2', label: 'Inner radius', min: 0, max: 12, step: 0.05, default: 0.65 },
     // Different rates AND different signs per depth: equal rates would make the
     // whole thing read as one rigid object turning, which is the one thing a
-    // three-deep nest should never look like.
-    { key: 'spinZ0', label: 'Outer spin Z (°/beat)', min: -180, max: 180, step: 1, default: 18 },
-    { key: 'spinZ1', label: 'Middle spin Z (°/beat)', min: -180, max: 180, step: 1, default: -45 },
-    { key: 'spinZ2', label: 'Inner spin Z (°/beat)', min: -180, max: 180, step: 1, default: 90 },
-    { key: 'spinX0', label: 'Outer spin X (°/beat)', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'spinX1', label: 'Middle spin X (°/beat)', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'spinX2', label: 'Inner spin X (°/beat)', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'spinY0', label: 'Outer spin Y (°/beat)', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'spinY1', label: 'Middle spin Y (°/beat)', min: -180, max: 180, step: 1, default: 0 },
-    { key: 'spinY2', label: 'Inner spin Y (°/beat)', min: -180, max: 180, step: 1, default: 0 },
+    // three-deep nest should never look like. Defaults sit ON spin detents
+    // (turns per 16 / 8 / 4 beats), and the step is the detent lattice's own
+    // pitch so even the generic fallback slider walks the division grid.
+    { key: 'spinZ0', label: 'Outer spin Z (°/beat)', min: -180, max: 180, step: 11.25, default: 22.5 },
+    { key: 'spinZ1', label: 'Middle spin Z (°/beat)', min: -180, max: 180, step: 11.25, default: -45 },
+    { key: 'spinZ2', label: 'Inner spin Z (°/beat)', min: -180, max: 180, step: 11.25, default: 90 },
+    { key: 'spinX0', label: 'Outer spin X (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
+    { key: 'spinX1', label: 'Middle spin X (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
+    { key: 'spinX2', label: 'Inner spin X (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
+    { key: 'spinY0', label: 'Outer spin Y (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
+    { key: 'spinY1', label: 'Middle spin Y (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
+    { key: 'spinY2', label: 'Inner spin Y (°/beat)', min: -180, max: 180, step: 11.25, default: 0 },
     { key: 'transitionBeats', label: 'Radius glide (beats)', min: 0, max: 8, step: 0.05, default: 0.75 },
     { key: 'curve', label: 'Exponential curve', min: 0, max: 16, step: 0.25, default: 6 },
   ],

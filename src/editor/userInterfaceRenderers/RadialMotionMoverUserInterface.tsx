@@ -15,7 +15,12 @@
 //
 // The spin knobs are BIPOLAR: their zero sits at 12 o'clock and the arc grows
 // either way from it, so the X and Y rows read as dark/off at their defaults
-// rather than as half-full.
+// rather than as half-full. They are also STEPPED, like a tempo-synced rate
+// switch on a plugin: the knob walks RADIAL_MOTION_SPIN_DETENTS (one turn per
+// 2/4/8/16/32 beats, either way, or off) over an index domain, so the detents
+// sit evenly on the arc and the readout speaks beats-per-turn, not degrees. A
+// pre-quantization value that sits off the grid keeps its °-readout until the
+// knob is touched, at which point it snaps.
 //
 // The preview is not a mockup - it runs the mover's real resolve() with NO
 // NOTES AT ALL, which is precisely the claim the rework is making: the
@@ -32,9 +37,12 @@ import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
 import {
   RADIAL_MOTION_DEPTHS,
   RADIAL_MOTION_DEPTH_LABELS,
+  RADIAL_MOTION_SPIN_DETENTS,
   radialMotionCopies,
   radialMotionMover,
   radialMotionRadius,
+  radialMotionSpinDetentIndex,
+  radialMotionSpinDetentLabel,
   type RadialMotionSettings,
 } from '../core/visualCopies/radialMotion'
 import { isNumberParam } from '../instruments/types'
@@ -208,22 +216,57 @@ const PLACED_KEYS = new Set(DEPTHS.flatMap((depth) => [
 ]))
 
 const GRID_ROWS = [
-  { key: 'radius', label: 'RADIUS', bipolar: false, format: undefined },
-  { key: 'spinZ', label: 'SPIN Z', bipolar: true, format: (value: number) => `${value}°` },
-  { key: 'spinX', label: 'SPIN X', bipolar: true, format: (value: number) => `${value}°` },
-  { key: 'spinY', label: 'SPIN Y', bipolar: true, format: (value: number) => `${value}°` },
+  { key: 'radius', label: 'RADIUS', bipolar: false, stepped: false },
+  { key: 'spinZ', label: 'SPIN Z', bipolar: true, stepped: true },
+  { key: 'spinX', label: 'SPIN X', bipolar: true, stepped: true },
+  { key: 'spinY', label: 'SPIN Y', bipolar: true, stepped: true },
 ] as const
 
-function GridKnob({ bound, rowLabel, depth, bipolar, format }: {
+function GridKnob({ bound, rowLabel, depth, bipolar, stepped }: {
   bound: UserInterfaceParameter | undefined
   rowLabel: string
   depth: number
   bipolar: boolean
-  format?: (value: number) => string
+  stepped: boolean
 }) {
   const definition = bound?.definition
   if (!bound || !definition || !isNumberParam(definition) || typeof bound.value !== 'number') {
     return <span />
+  }
+  const ariaLabel = `${RADIAL_MOTION_DEPTH_LABELS[depth]} ${rowLabel.toLowerCase()}`
+  if (stepped) {
+    // The knob turns in DETENT INDICES, not degrees: evenly spaced clicks on
+    // the arc, converted back to the stored °/beat rate on the way out. Zero
+    // is the middle index by construction, so the bipolar anchor lands on it.
+    const value = bound.value
+    const index = radialMotionSpinDetentIndex(value)
+    const onGrid = RADIAL_MOTION_SPIN_DETENTS[index] === value
+    return (
+      <div className="flex justify-center">
+        <LaserKnob
+          value={index}
+          min={0}
+          max={RADIAL_MOTION_SPIN_DETENTS.length - 1}
+          step={1}
+          defaultValue={radialMotionSpinDetentIndex(definition.default)}
+          label=""
+          ariaLabel={ariaLabel}
+          accent={ORBIT}
+          bipolar
+          // An off-grid value from before quantization keeps an honest degree
+          // readout until the knob is touched and snaps it to a division.
+          format={(knobIndex) => (onGrid
+            ? radialMotionSpinDetentLabel(RADIAL_MOTION_SPIN_DETENTS[Math.round(knobIndex)] ?? 0)
+            : `${value}°`)}
+          onChange={(knobIndex) => {
+            const detent = RADIAL_MOTION_SPIN_DETENTS[
+              clamp(Math.round(knobIndex), 0, RADIAL_MOTION_SPIN_DETENTS.length - 1)
+            ]
+            if (detent !== value) bound.setValue(detent)
+          }}
+        />
+      </div>
+    )
   }
   return (
     <div className="flex justify-center">
@@ -237,10 +280,9 @@ function GridKnob({ bound, rowLabel, depth, bipolar, format }: {
         // Captions live on the rail and the column headers; the knob itself
         // only needs a spoken name.
         label=""
-        ariaLabel={`${RADIAL_MOTION_DEPTH_LABELS[depth]} ${rowLabel.toLowerCase()}`}
+        ariaLabel={ariaLabel}
         accent={ORBIT}
         bipolar={bipolar}
-        format={format}
         onChange={bound.setValue}
       />
     </div>
@@ -371,7 +413,7 @@ function RowCells({ row, bound }: {
           rowLabel={row.label}
           depth={depth}
           bipolar={row.bipolar}
-          format={row.format}
+          stepped={row.stepped}
         />
       ))}
     </>
