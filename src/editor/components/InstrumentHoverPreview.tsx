@@ -396,6 +396,37 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seedScale: 0.3,
     notes: makeLoopNotes([60, 62, 61, 64], 0.5, 4),
   },
+  // Impact Scatter integrates hits into the field's momentum, so the loop
+  // tells that story: one clean blast, a rapid triple that visibly compounds
+  // (each kick lands on pieces already flying), an implode, then a blast
+  // yanked home mid-flight by the settle row. IMPACT is preview-tamed so the
+  // throw stays inside the popup's frame.
+  impactScatter: {
+    label: 'impact scatter',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { impact: 0.5, recoverBeats: 2, chaos: 0.6 },
+    notes: [
+      holdNote(60, 0, 0.25),
+      holdNote(60, 4, 0.25),
+      holdNote(60, 4.5, 0.25),
+      holdNote(60, 5, 0.25),
+      holdNote(61, 8, 0.25),
+      holdNote(60, 12, 0.25),
+      holdNote(62, 13.5, 0.25),
+    ],
+  },
+  // Impact Pulse punches SIZE, so the whole field pops together like a drum
+  // hit: swell and squash alternate, with enough STRETCH that grow reads
+  // tall-and-narrow and shrink short-and-wide, and a decay long enough to
+  // watch fall away at popup scale.
+  impactPulse: {
+    label: 'impact pulse',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { hit: 0.55, decayBeats: 1, stretch: 0.6 },
+    notes: makeLoopNotes([60, 61], 0.5, 2),
+  },
   // Visibility gates existence itself: ONE full-size cube popping in and out
   // with its note (127 = the single copy's row).
   visibility: {

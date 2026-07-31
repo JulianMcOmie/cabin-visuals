@@ -57,11 +57,13 @@ function flattenTrackNotes(track: Track, p: ProjectSnapshot): ResolvedNote[] {
 
 /** Gather a track's `automation` child tracks into resolved keyframe lanes over
  *  the given params (an instrument def's for object tracks, a MoverOrSplitter
- *  def's for mover/splitter tracks). Each lane maps one param (its note pitch →
- *  the param's [min,max]); the engine samples them per frame. Children with no
- *  target param or an unknown param are skipped. Muted automation children are
- *  ignored (a quick disable); solo pools per parent. */
-function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
+ *  def's for mover/splitter tracks, a director def's for director tracks -
+ *  the latter resolved per frame by VisualEngine's resolveComposition, since
+ *  director tracks never enter the resolved graph). Each lane maps one param
+ *  (its note pitch → the param's [min,max]); the engine samples them per frame.
+ *  Children with no target param or an unknown param are skipped. Muted
+ *  automation children are ignored (a quick disable); solo pools per parent. */
+export function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
   // Per-parent solo pool among this track's automation children.
   const anyAutoSolo = (track.childIds ?? []).some((cid) => {

@@ -111,3 +111,32 @@ test('identity color falls back to the cycle when an instrument declares no colo
 test('audio tracks keep the sapphire identity here too', () => {
   assert.equal(resolveTrackIdentityColor(baseTrack({ type: 'audio' })), AUDIO_TRACK_COLOR)
 })
+
+// ── Chain entries that follow a live color param ────────────────────────────
+// The Colorizer's subject IS a color the user picked, so it declares
+// `{ param: 'color' }` instead of taking a constant from identityColors.ts.
+
+test('a Colorizer wears its own primary color', () => {
+  const colorizer = baseTrack({
+    id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p',
+    stringParams: { color: '#06d6a0' },
+  })
+  assert.equal(resolveTrackDisplayColor(colorizer), '#06d6a0')
+  assert.equal(resolveTrackIdentityColor(colorizer), '#06d6a0')
+})
+
+test('a Colorizer with nothing picked yet wears the palette`s declared first color', () => {
+  const colorizer = baseTrack({ id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p' })
+  assert.equal(resolveTrackDisplayColor(colorizer), '#ffd166')
+})
+
+test('an achromatic primary sends the Colorizer to its own cycle color', () => {
+  // Same guard the instruments get - a white flash color says nothing about
+  // which lane this is - but the fallback is the lane's OWN cycle color now,
+  // since nothing inherits from the parent instrument any more.
+  const colorizer = baseTrack({
+    id: 'c', type: 'mover', moverId: 'calmHueRotate', parentId: 'p',
+    color: '#123456', stringParams: { color: '#ffffff' },
+  })
+  assert.equal(resolveTrackDisplayColor(colorizer), '#123456')
+})

@@ -49,17 +49,32 @@ function instrumentIdentity(track: Track): string | undefined {
   return track.stringParams?.[key] ?? (def.params.find((p) => p.key === key) as { default?: string } | undefined)?.default
 }
 
+
 /**
  * A mover / splitter / colorizer row's OWN color, from its definition.
  *
+ * Either a fixed hex or, for a definition whose subject IS a color the user
+ * picked, the live value of one of its own color params (the Colorizer's
+ * palette slot 1). A `{ param }` identity that resolves to something
+ * near-achromatic says nothing about which lane this is, so it falls through to
+ * the lane's own cycle color rather than showing a white row.
+ *
  * Every shipped definition declares one (identityColors.ts); the optional
  * return covers a legacy id that no longer resolves and test fakes, which fall
- * through to the track's cycle color like any other lane.
+ * through to the cycle color like any other lane.
  */
 function moverIdentity(track: Track): string | undefined {
   if (track.type !== 'mover' && track.type !== 'splitter') return undefined
   const def = getMoverOrSplitterDefinition(track.moverId ?? track.splitterId)
-  return def?.identityColor
+  const identity = def?.identityColor
+  if (!identity) return undefined
+  if (typeof identity === 'string') return identity
+  // Live: the stored value if the user has picked one, else the param default,
+  // so a freshly added Colorizer already wears its palette's first color.
+  const picked = track.stringParams?.[identity.param]
+    ?? (def!.params.find((pd) => pd.key === identity.param) as { default?: string } | undefined)?.default
+  if (!picked) return undefined
+  return (colorToOklch(picked)?.c ?? 0) > ACHROMATIC_CHROMA ? picked : undefined
 }
 
 /**

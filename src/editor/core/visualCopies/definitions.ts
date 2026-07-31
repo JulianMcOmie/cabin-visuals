@@ -38,19 +38,24 @@ export interface MoverOrSplitterDefinition<Settings> {
   kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
   /**
-   * OPTIONAL '#rrggbb' that this definition's tracks WEAR in the UI - timeline
-   * blocks, piano-roll rows and notes, the inspector's tab rail.
+   * The color this definition's tracks WEAR in the UI - timeline blocks,
+   * piano-roll rows and notes, the inspector's tab rail, and its settings
+   * panel's accent. A fixed '#rrggbb', or `{ param }` to follow one of its own
+   * color params live (same contract as an instrument's, in instruments/types).
    *
-   * Declaring one OPTS OUT of the default, which is that every child lane wears
-   * its owning object instrument's color so a track's whole lane family reads
-   * as one voice (see `utils/trackDisplayColor.ts`). That default is right for a
-   * mover that simply moves whatever sits above it; it is wrong for one with a
-   * strong identity of its own, where the notes on the timeline should match the
-   * console you write them in. Only declare one when the definition has a
-   * bespoke panel with its own accent, and make that panel IMPORT this constant
-   * instead of repeating the hex - the whole point is that the two cannot drift.
+   * REQUIRED in practice: every shipped definition declares one, because chain
+   * entries no longer inherit their object instrument's color - see the
+   * independence note in `utils/trackDisplayColor.ts`. The fixed values live
+   * together in `identityColors.ts` (a palette is only reviewable as a whole),
+   * and a definition with a bespoke panel must have the panel IMPORT its
+   * constant rather than repeat the hex, so console and notes cannot drift.
+   *
+   * Use `{ param }` when the entry genuinely IS about a color the user picked -
+   * the Colorizer's palette is the case it exists for, where its device row,
+   * its notes and its panel all showing the same color is the difference
+   * between reading a chain and decoding it.
    */
-  identityColor?: string
+  identityColor?: string | { param: string }
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

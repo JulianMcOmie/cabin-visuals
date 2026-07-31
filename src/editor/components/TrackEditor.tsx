@@ -7,7 +7,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { tracksWithTag } from '../utils/trackTags'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
-import { getDirector } from '../core/directors'
+import { directorAutomatableParams, getDirector } from '../core/directors'
 import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
@@ -569,7 +569,9 @@ export function TrackEditor() {
                         ?? (parent.type === 'mover' || parent.type === 'splitter'
                           ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)
                               ?.params.find((p) => p.key === track.targetParam)
-                          : undefined)
+                          : parent.type === 'director'
+                            ? directorAutomatableParams(getDirector(parent.directorId)).find((p) => p.key === track.targetParam)
+                            : undefined)
                       if (pdef) targetLabel = pdef.label
                     }
                     return (

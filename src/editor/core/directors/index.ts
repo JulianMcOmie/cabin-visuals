@@ -16,3 +16,4 @@ export function listDirectors(): DirectorInstrumentDef[] {
 }
 
 export type { CompositionLayer, DirectorInstrumentDef } from './types'
+export { directorAutomatableParams } from './types'

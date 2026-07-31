@@ -6,9 +6,13 @@
 //
 // A palette is the one kind of constant that cannot be reviewed a file at a
 // time: the only interesting property is how each colour relates to the other
-// twenty-five, and two definitions in different files silently landing on the
+// twenty-four, and two definitions in different files silently landing on the
 // same blue is invisible until you see them side by side in a timeline. So the
 // values live here, together, and each definition imports its own.
+//
+// (The Colorizer is the one definition NOT listed here. Its subject is a colour
+// the user picked, so it declares `{ param: 'color' }` and wears its live
+// palette slot instead of a constant - see the note at hue 86 below.)
 //
 // ── ONLY THE HUE SURVIVES ────────────────────────────────────────────────────
 //
@@ -50,10 +54,11 @@
 //
 // ── Adding one ───────────────────────────────────────────────────────────────
 //
-// Pick a hue ≥12° from every existing entry (the test will tell you if you did
-// not) and generate the hex at 0.73/0.19, or 0.82/0.16 in the 60-158° band. If
-// the definition has a bespoke panel, make the panel import the constant rather
-// than repeating the value.
+// Pick a hue ≥11° from every existing entry - including the Colorizer's default
+// at 86° (the test checks the fixed ones and will name the pair) - and generate
+// the hex at 0.73/0.19, or 0.82/0.16 in the 60-158° band. If the definition has
+// a bespoke panel, make the panel import the constant rather than repeating the
+// value.
 
 // ── Already a panel accent: copied exactly, panels import these ──────────────
 /** Impact Pulse's strike rose. Hue 2°. */
@@ -80,8 +85,11 @@ export const RADIAL_MOTION_COLOR = '#8b7bff'
 export const FORCE_FIELD_PUSH_COLOR = '#ff767f'
 /** Hue 35°. */
 export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
-/** Hue 86° - the gold of the Colorizer's own default `color` param. */
-export const COLORIZER_COLOR = '#f2bb25'
+// Hue ~86° is deliberately left free for the COLORIZER, which is the one
+// definition that does not take a fixed colour from this file: its subject IS
+// a colour the user picked, so it declares `{ param: 'color' }` and wears its
+// live palette slot 1 (default '#ffd166', hue 86°). Nothing else may claim that
+// hue, or a Colorizer left on its default would collide with it.
 /** Hue 99°. */
 export const ROTATE_BURST_COLOR = '#dec52a'
 /** Hue 112°. */
