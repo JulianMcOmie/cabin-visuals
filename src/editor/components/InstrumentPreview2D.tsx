@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { strobeGate } from '../instruments/Strobe'
+import { impactEnvelope } from '../instruments/ImpactWarp'
 
 /**
  * Purpose-built canvas-2D previews for instruments whose real render needs
@@ -330,6 +331,64 @@ const drawBassRipple: Draw2D = (ctx, w, h, t) => {
     const off = amp * Math.sin(y * (14 / h) - t * 7)
     ctx.drawImage(scratch, 0, y, w, row, off, y, w, row)
   }
+}
+
+/** Impact Warp: the name run through its own effect - punched every two beats
+ *  by the instrument's REAL envelope, so the card shows the thing that makes it
+ *  a different instrument from Bass Ripple: a single-frame attack, and a
+ *  rebound that crosses back the other way before it settles. The channel split
+ *  is the stage pass's, in miniature - a fringe that is exactly as wide as the
+ *  displacement and gone the moment the frame recovers. */
+const drawImpactWarp: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  const hitEvery = 2
+  // Long enough that the rebound is legible at 120bpm; the instrument's own
+  // default is shorter, but a card is watched, not played.
+  const release = 0.9
+  const envelope = impactEnvelope((((beat % hitEvery) + hitEvery) % hitEvery) / release)
+
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#1a0a02')
+  bg.addColorStop(1, '#2a1005')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  let size = h * 0.24
+  const font = (v: number) => `900 ${v}px "Arial Black", Impact, sans-serif`
+  ctx.font = font(size)
+  // Fitted to 70% rather than the usual 86%: the punch below scales the word UP,
+  // and a word fitted to the card at rest loses its first and last letters off
+  // the sides at the peak of every hit.
+  const maxW = w * 0.7
+  const measured = ctx.measureText('impact warp').width
+  if (measured > maxW) size *= maxW / measured
+  ctx.font = font(size)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+
+  const word = (scale: number, color: string, alpha: number) => {
+    ctx.save()
+    ctx.translate(w / 2, h / 2)
+    ctx.scale(scale, scale)
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = color
+    ctx.fillText('impact warp', 0, 0)
+    ctx.restore()
+  }
+
+  // The punch itself: a zoom about the center, signed, so the rebound pulls the
+  // word back through smaller-than-life before it settles.
+  const zoom = 1 + envelope * 0.34
+  const split = Math.abs(envelope) * 0.9
+  ctx.globalCompositeOperation = 'lighter'
+  word(zoom * (1 + 0.06 * split), '#ff2200', 0.85)
+  word(zoom * (1 - 0.06 * split), '#00b7ff', 0.85)
+  ctx.globalCompositeOperation = 'source-over'
+  word(zoom, '#ff6a00', 1)
+
+  ctx.globalAlpha = 1
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
 }
 
 /** Color Filters: the name run through its own effect - each held filter is a
@@ -786,6 +845,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   photo: drawPhoto,
   oscilloscope: drawOscilloscope,
   bassRipple: drawBassRipple,
+  impactWarp: drawImpactWarp,
   colorFilters: drawColorFilters,
   strobe: drawStrobe,
   sceneSwitcher: drawSceneSwitcher,
