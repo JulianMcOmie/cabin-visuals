@@ -98,7 +98,9 @@ export function useLibraryDrag() {
             tracks, rootTrackIds,
             rows: flattenVisualRows(tracks, rootTrackIds, useUIStore.getState().collapsedTrackIds),
             listTop: r.top - sc.scrollTop,
+            listLeft: r.left,
             rowHeight: useUIStore.getState().tracksRowHeight,
+            clientX: ev.clientX,
             clientY: ev.clientY,
           })
         }
