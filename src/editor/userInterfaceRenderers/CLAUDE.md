@@ -22,3 +22,28 @@ Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` 
 - **The canvas must be created inside the effect and appended to a host div, NOT rendered by React.** `loseContext()` permanently kills that canvas's context, and React StrictMode double-invokes effects in dev: the second mount lands on the same element, `getContext` hands back the dead context, and every compile fails with a null/empty info log — which surfaces only as the "preview unavailable" fallback. Owning the element per mount gives each run a genuinely fresh canvas.
 
 Driving `time` from rAF is fine in panel code: the pause invariant governs the rendered visual (where `time` is the beat); a panel canvas is chrome, like the animated disc in `KaleidoscopeEffectUserInterface`.
+
+**A panel whose subject is MOTION should use plain DOM transforms, not r3f.**
+`ImpactPulseMoverUserInterface` animates its subject with `element.style.transform` off
+one rAF loop rather than a `<Canvas>`, precisely because of the black-until-play note
+above: a size punch is exactly the thing you need to watch while the transport is
+parked. Reach for a canvas only when the preview genuinely needs shaders, lighting, or
+real geometry.
+
+**Sizing a signal window's axes is a design decision, not arithmetic.** Two mistakes
+that each make a mathematically correct curve look like a broken panel, both found in
+that same panel:
+
+- *Vertical.* Scaling the axis to the param's theoretical maximum leaves ordinary
+  settings in the bottom fifth — at the default HIT the curve was a 13%-tall bump on an
+  empty field. Put the value through a saturating map (`v / (|v| + knee)`) instead:
+  every setting is legible, extremes never clip, and the knob still moves the picture.
+- *Horizontal.* An x-axis proportional to the param it plots is self-similar, so that
+  param becomes invisible — every DECAY draws the identical shape. An absolute axis
+  instead squeezes short values into the left fifth. Use a proportional span WITH a
+  beat grid behind it: the shape fills the window and the grid says how long it lasted.
+
+**Give a stage zone a FIXED width, never a percentage.** The settings panel is
+user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
+empty field with a 34px object marooned in the middle of it the moment the panel was
+dragged out to 700px.

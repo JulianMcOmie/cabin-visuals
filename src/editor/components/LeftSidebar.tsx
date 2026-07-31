@@ -307,6 +307,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
@@ -417,7 +418,7 @@ const pick = (ids: readonly string[]): InstrumentItem[] =>
 // Impact is notes hitting the scene itself, split by envelope: Impulse
 // strikes once per note and decays; Rumble warps for as long as it's held.
 // Visibility rides with Impulse - its ADSR window is exactly that shape.
-const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'visibility']
+const IMPULSE_IDS = ['cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain']
 const UTILITY_IDS = ['video', 'photo', 'textDisplay']
 // Strobe files with Color Filters rather than under Impact: both are scene-wide
