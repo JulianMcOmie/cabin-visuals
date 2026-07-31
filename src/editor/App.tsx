@@ -132,8 +132,16 @@ function Scene({
 /** A deliberately low-resolution copy of the finished WebGL frame. It is
  * stretched and heavily blurred behind the upper workspace, extending the
  * scene's color into otherwise blank UI space without rendering the Three
- * scene a second time or changing the visualizer's viewport calculations. */
-function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
+ * scene a second time or changing the visualizer's viewport calculations.
+ * One painter serves both ambient layers - the inspector wash and the dimmer
+ * timeline wash - differing only in the class that places and tints them. */
+function VisualAmbientBleed({
+  sourceCanvasRef,
+  className = 'visual-ambient-bleed',
+}: {
+  sourceCanvasRef: RefObject<HTMLCanvasElement | null>
+  className?: string
+}) {
   const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -164,7 +172,7 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
     return () => cancelAnimationFrame(frame)
   }, [sourceCanvasRef])
 
-  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className="visual-ambient-bleed" />
+  return <canvas ref={bleedCanvasRef} width={128} height={72} aria-hidden className={className} />
 }
 
 // The visual panel: the canvas plus fullscreen (button or F) and an aspect
@@ -1026,7 +1034,19 @@ export default function EditorApp() {
 
                 {/* Tracks / Piano Roll */}
                 <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
-                <div className="flex-1 min-h-0">
+                {/* timeline-ambient-host gives the timeline the inspector's
+                    glass treatment: it makes --bg-timeline (the lanes + ruler
+                    strip) slightly translucent and slips a dim ambient copy of
+                    the frame beneath, so the scene's color washes through the
+                    work surface while label rows and blocks stay solid chrome.
+                    `isolate` pins the bleed's z-index:-1 above this wrapper's
+                    backdrop instead of letting it escape below the workspace
+                    card; overflow-hidden clips the bleed's oversized inset. */}
+                <div className="timeline-ambient-host relative isolate flex-1 min-h-0 overflow-hidden">
+                  <VisualAmbientBleed
+                    sourceCanvasRef={visualCanvasRef}
+                    className="visual-ambient-bleed visual-ambient-bleed--timeline"
+                  />
                   <BottomArea />
                 </div>
 

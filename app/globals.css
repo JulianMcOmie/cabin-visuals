@@ -91,6 +91,24 @@ body {
   filter: blur(80px) saturate(135%) brightness(0.78);
 }
 
+/* The timeline's copy of the ambient wash: same painter, dimmer and pushed
+   below the timeline content (z-index: -1 inside the host's isolated stacking
+   context) so it only reads through the surfaces the host makes translucent. */
+.visual-ambient-bleed--timeline {
+  z-index: -1;
+  opacity: 0.65;
+  filter: blur(80px) saturate(130%) brightness(0.7);
+}
+
+/* Scopes the timeline's see-through treatment: the lanes and ruler strip both
+   paint --bg-timeline, so overriding it here (and only here) lets the ambient
+   bleed underneath glow through the whole work surface. Label rows and the
+   frozen corner keep their opaque --bg-track-row - solid chrome over glass,
+   the same split the inspector makes. */
+.timeline-ambient-host {
+  --bg-timeline: rgba(21, 21, 21, 0.8);
+}
+
 .visualizer-glass-surface {
   background: rgba(19, 19, 19, 0.84);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
