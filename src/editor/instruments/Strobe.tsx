@@ -216,10 +216,12 @@ export const strobeInstrument: ObjectInstrumentDef = {
   id: 'strobe',
   name: 'Strobe',
   kind: 'object',
-  // A strobe's own light is white, but an achromatic identity falls back to the
-  // track hue cycle (utils/trackDisplayColor.ts) - so the identity is the hot
-  // yellow of a flash bulb, matching the bolt the library icon wears.
-  identityColor: '#fde047',
+  // A strobe's own light is white, and the identity is that white - matching
+  // the bolt the library icon wears. Being achromatic, timeline blocks fall
+  // back to the track hue cycle (utils/trackDisplayColor.ts) so they stay
+  // legible among colored neighbours, while chrome that NAMES the instrument
+  // (resolveTrackIdentityColor) wears the true white of the flash.
+  identityColor: '#ffffff',
   params: PARAMS,
   userInterfaceRenderer: 'strobe',
   midiRows: STROBE_RATE_ROWS,
