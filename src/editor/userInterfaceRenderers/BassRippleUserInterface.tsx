@@ -69,6 +69,7 @@ function previewEnvelope(beat: number, release: number): number {
 // right hook: the effect moves where each pixel is sampled from and contributes
 // no color of its own, which is what the instrument does on stage.
 const PREVIEW_WARP_FRAGMENT = `
+uniform float pattern;
 uniform float amount;
 uniform float scale;
 uniform float speed;
@@ -78,13 +79,14 @@ uniform float aspect;
 ${BASS_RIPPLE_FIELD_GLSL}
 
 void mainUv(inout vec2 uv) {
-  uv = clamp(uv + bassRippleOffset(uv, amount, scale, speed, time, aspect), 0.0, 1.0);
+  uv = clamp(uv + bassRippleOffset(uv, pattern, amount, scale, speed, time, aspect), 0.0, 1.0);
 }`
 
 class BassRippleWarpEffect extends Effect {
   constructor() {
     super('BassRippleWarpEffect', PREVIEW_WARP_FRAGMENT, {
       uniforms: new Map<string, Uniform>([
+        ['pattern', new Uniform(0)],
         ['amount', new Uniform(0)],
         ['scale', new Uniform(3)],
         ['speed', new Uniform(0.6)],
@@ -95,7 +97,8 @@ class BassRippleWarpEffect extends Effect {
   }
 }
 
-function WarpPass({ amount, scale, speed, release }: {
+function WarpPass({ pattern, amount, scale, speed, release }: {
+  pattern: number
   amount: number
   scale: number
   speed: number
@@ -105,6 +108,7 @@ function WarpPass({ amount, scale, speed, release }: {
   useFrame(({ clock, size }) => {
     const beat = clock.getElapsedTime() * PREVIEW_BEATS_PER_SECOND
     const uniforms = effect.uniforms
+    uniforms.get('pattern')!.value = pattern
     uniforms.get('time')!.value = beat
     uniforms.get('scale')!.value = scale
     uniforms.get('speed')!.value = speed
@@ -163,7 +167,8 @@ function PreviewCubes() {
   )
 }
 
-function RipplePreview({ amount, scale, speed, release }: {
+function RipplePreview({ pattern, amount, scale, speed, release }: {
+  pattern: number
   amount: number
   scale: number
   speed: number
@@ -186,7 +191,7 @@ function RipplePreview({ amount, scale, speed, release }: {
         <pointLight position={[-3, -1.5, 2.5]} color={ACCENT} intensity={22} distance={14} decay={2} />
         <PreviewCubes />
         <EffectComposer multisampling={0}>
-          <WarpPass amount={amount} scale={scale} speed={speed} release={release} />
+          <WarpPass pattern={pattern} amount={amount} scale={scale} speed={speed} release={release} />
         </EffectComposer>
         <OrbitControls
           makeDefault
@@ -205,6 +210,42 @@ function RipplePreview({ amount, scale, speed, release }: {
 }
 
 // ── Controls ────────────────────────────────────────────────────────────────
+
+/** The pattern picker, to the design guide's segmented-control spec: recessed
+ *  track, one lit segment wearing the accent as light, inactive labels neutral.
+ *  Segments rather than a <select> because the field's KIND is this panel's
+ *  biggest decision - all five choices should be visible at once. */
+function PatternSegments({ parameter: bound }: { parameter: UserInterfaceParameter }) {
+  const definition = bound.definition
+  if (definition.type !== 'select' || typeof bound.value !== 'number') return null
+  const active = Math.round(bound.value)
+  return (
+    <div
+      role="radiogroup"
+      aria-label={definition.label}
+      className="mx-4 mt-3 flex rounded-md border border-white/[0.08] bg-black/30 p-[2px]"
+    >
+      {definition.options.map((option) => {
+        const selected = option.value === active
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => bound.setValue(option.value)}
+            className="min-w-0 flex-1 rounded px-1 py-[5px] text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors"
+            style={selected
+              ? { background: withAlpha(ACCENT, 0.22), color: towardWhite(ACCENT, 0.6) }
+              : { color: 'rgba(255,255,255,0.4)' }}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 /** The panel's one control vocabulary, to the design guide's knob spec: flat
  *  face, 270° accent arc from 7 o'clock built as three stacked copies so the
@@ -321,12 +362,13 @@ function RippleKnob({ parameter: bound, label, large = false }: {
 // ── The panel ───────────────────────────────────────────────────────────────
 
 export const BassRippleUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+  const pattern = parameter(parameters, 'pattern')
   const amount = parameter(parameters, 'amount')
   const scale = parameter(parameters, 'scale')
   const speed = parameter(parameters, 'speed')
   const release = parameter(parameters, 'release')
 
-  if (!amount || !scale || !speed || !release) return <ParameterList parameters={parameters} />
+  if (!pattern || !amount || !scale || !speed || !release) return <ParameterList parameters={parameters} />
 
   const accentHsv = hexToHsv(ACCENT)
   // A hue-true dark shade, not an alpha tint - low-alpha accent over the
@@ -340,21 +382,25 @@ export const BassRippleUserInterfaceRenderer: UserInterfaceRendererDefinition = 
       style={{ background: shade }}
     >
       <RipplePreview
+        pattern={Math.round(numericValue(pattern, 0))}
         amount={numericValue(amount, 0.5)}
         scale={numericValue(scale, 3)}
         speed={numericValue(speed, 0.6)}
         release={numericValue(release, 0.5)}
       />
       <div
-        className="flex items-end gap-5 px-4 pb-4 pt-3"
         // The preview's light spilling through the seam onto the console - the
-        // one earned gradient, per the guide.
+        // one earned gradient, per the guide. Wraps segments AND knobs so the
+        // spill stays at the seam under the preview.
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
       >
-        <RippleKnob parameter={amount} label="INTENSITY" large />
-        <RippleKnob parameter={scale} label="WAVE" />
-        <RippleKnob parameter={speed} label="SPEED" />
-        <RippleKnob parameter={release} label="RELEASE" />
+        <PatternSegments parameter={pattern} />
+        <div className="flex items-end gap-5 px-4 pb-4 pt-3">
+          <RippleKnob parameter={amount} label="INTENSITY" large />
+          <RippleKnob parameter={scale} label="WAVE" />
+          <RippleKnob parameter={speed} label="SPEED" />
+          <RippleKnob parameter={release} label="RELEASE" />
+        </div>
       </div>
     </section>
   )

@@ -203,6 +203,7 @@ void main() {
  *  rings, noise has neither, so low strengths read as haze rather than effect. */
 const WARP_FRAGMENT = `
 uniform sampler2D tDiffuse;
+uniform float pattern;
 uniform float amount;
 uniform float scale;
 uniform float speed;
@@ -213,7 +214,7 @@ varying vec2 vUv;
 ${BASS_RIPPLE_FIELD_GLSL}
 
 void main() {
-  vec2 offset = bassRippleOffset(vUv, amount, scale, speed, time, aspect);
+  vec2 offset = bassRippleOffset(vUv, pattern, amount, scale, speed, time, aspect);
   gl_FragColor = texture2D(tDiffuse, clamp(vUv + offset, 0.0, 1.0));
 }`
 
@@ -579,6 +580,7 @@ export function VisualScene() {
       fragmentShader: WARP_FRAGMENT,
       uniforms: {
         tDiffuse: { value: null as Texture | null },
+        pattern: { value: 0 },
         amount: { value: 0 },
         scale: { value: 3 },
         speed: { value: 0.6 },
@@ -793,6 +795,7 @@ export function VisualScene() {
           const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
           compositor.filterMesh.material = compositor.warpMaterial
           compositor.warpMaterial.uniforms.tDiffuse.value = filteredTexture
+          compositor.warpMaterial.uniforms.pattern.value = ripple.pattern
           compositor.warpMaterial.uniforms.amount.value = ripple.amount
           compositor.warpMaterial.uniforms.scale.value = ripple.scale
           compositor.warpMaterial.uniforms.speed.value = ripple.speed
