@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Move3d, Tag } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
@@ -78,7 +78,13 @@ interface TrackProps {
   onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+/** Memoized: the timeline re-renders on every ProjectStore write (every
+ *  pointermove of a drag), and rows whose track didn't change must skip. All
+ *  props stay referentially stable across foreign edits - `track` by the
+ *  store's per-track immutability, `guides` via TimelineArea's rowsKey memo,
+ *  handlers via useCallback - and the row's own store subscriptions all
+ *  select primitives. */
+export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
@@ -170,10 +176,21 @@ export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBl
   // Instrument-derived identity (falls back to track.color's hue cycle);
   // selector returns a string so rows only re-render when the color changes.
   const blockColor = useProjectStore((s) => resolveTrackDisplayColor(track, s.tracks))
-  const declaredMidiRows = track.type === 'audio'
-    ? undefined
-    : resolveDeclaredMidiRows(track, useProjectStore.getState())
-  const previewRowPitches = declaredMidiRows?.rows.map((row) => row.pitch)
+  // Recomputed only when THIS track changes, and the pitch array keeps its
+  // identity (it is a prop of every memoized Block and a dep of their activity
+  // effects). Mover-lane rows technically also depend on sibling chains for
+  // their prior copy count; a sibling edit leaves this preview stale until the
+  // track itself changes - cosmetic row placement, accepted so foreign edits
+  // don't touch this row (the full MIDI editor resolves its own rows fresh).
+  const { previewRowPitches, strictPreviewRows } = useMemo(() => {
+    const declared = track.type === 'audio'
+      ? undefined
+      : resolveDeclaredMidiRows(track, useProjectStore.getState())
+    return {
+      previewRowPitches: declared?.rows.map((row) => row.pitch),
+      strictPreviewRows: declared?.strict,
+    }
+  }, [track])
   // Automation, envelope and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
@@ -509,7 +526,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBl
                 isSelected={selectedBlockIds.has(block.id)}
                 muted={track.muted}
                 previewRowPitches={previewRowPitches}
-                strictPreviewRows={declaredMidiRows?.strict}
+                strictPreviewRows={strictPreviewRows}
                 onBlockPointerDown={onBlockPointerDown}
               />
             ))}
@@ -527,4 +544,4 @@ export function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBl
       </div>
     </div>
   )
-}
+})

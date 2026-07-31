@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, resolveNextTrackColor, useProjectStore } from '../../store/ProjectStore'
 import { useUIStore } from '../../store/UIStore'
@@ -105,7 +105,13 @@ export function TimelineArea() {
   // interleaved as track-like sub-rows right after it (same row height).
   const collapsedTrackIds = useUIStore((s) => s.collapsedTrackIds)
   const visualRows = flattenVisualRows(tracks, rootTrackIds, collapsedTrackIds)
-  const rowGuides = rowGuidesOf(visualRows)
+  // The guide arrays must keep their identities while the row STRUCTURE is
+  // unchanged - they are props of the memoized Track rows, and this component
+  // re-renders on every store write (any note edit). Keyed on the flattened
+  // id:depth sequence rather than `tracks`, whose identity changes per edit.
+  const rowsKey = visualRows.map((r) => `${r.id}:${r.depth}`).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rowGuides = useMemo(() => rowGuidesOf(visualRows), [rowsKey])
 
   // Vertical lane grid (DAW-style): only the numbered major bar lines - 1/4 of
   // the ruler's marks, the minor/16th ticks stay ruler-only. Colour and 1px
@@ -125,6 +131,10 @@ export function TimelineArea() {
 
   // Right-click-a-track menu (add ability / automation), positioned at the cursor.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null)
+  // Stable handler: an inline closure here would defeat every Track row's memo.
+  const handleLabelContextMenu = useCallback((e: ReactMouseEvent, trackId: string) => {
+    setCtxMenu({ x: e.clientX, y: e.clientY, trackId })
+  }, [])
 
   // Two hand-rolled label gestures, distinguished in Track's pointer-down: a plain
   // drag re-nests/reorders (setTrackParent), Alt+drag duplicates.
@@ -500,7 +510,7 @@ export function TimelineArea() {
                   dropInto={trackDrop?.intoId === row.id}
                   onCopyDragStart={startTrackCopyDrag}
                   onNestDragStart={startNestDrag}
-                  onLabelContextMenu={(e, id) => setCtxMenu({ x: e.clientX, y: e.clientY, trackId: id })}
+                  onLabelContextMenu={handleLabelContextMenu}
                   barWidthPx={barWidthPx}
                   timelineWidthPx={timelineWidthPx}
                   pickupPx={pickupPx}

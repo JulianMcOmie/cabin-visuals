@@ -2,6 +2,37 @@
 
 Three big surfaces plus the inspector. **The timeline and the piano roll have separate gesture systems on purpose** — don't try to unify them.
 
+## The render budget (load-bearing)
+
+Timeline gestures write ProjectStore on **every pointermove**, so per-edit React work
+must stay O(one row), not O(project). Measured before this contract existed: ~450ms
+of JS per single `updateBlock` at 30 dense tracks — the entire editor re-rendered per
+move. Two rules keep it fixed:
+
+1. **No whole-record subscriptions in always-mounted components.** `s.tracks` and
+   `s.scenes` change identity on every edit (so does `s.scenes[activeSceneId]`).
+   Subscribe to primitives, per-id slices (`s.tracks[id]` keeps its reference when
+   other tracks change), string-valued derivations (`resolveTrackDisplayColor` as a
+   selector), or a string fingerprint + `getState()` in a `useMemo` (see SceneTabs,
+   MoverTargets). `TimelineArea` is the one legitimate whole-`tracks` subscriber —
+   it maps the rows.
+2. **`Track`, `Block`, `NotePreview`, `AudioBlock` are `memo()`d, and every prop they
+   take must be referentially stable across foreign edits.** The traps that would
+   silently undo it: inline closures in TimelineArea's row map, per-render arrays
+   (`previewRowPitches`, `guides` — both flow into `Block`'s activity-registry effect
+   deps, so instability also re-registers every block per move), and the palette
+   object in `Block`. A NEW prop must come with a stability story; `npx eslint` won't
+   catch it, a re-measure will (workspace CLAUDE.md has the MessageChannel probe;
+   steady state ≈11ms/edit at 30 dense tracks in dev — regressions read as a jump
+   back toward hundreds).
+
+Known accepted staleness from rule 1: a mover lane's *timeline preview* row order
+(prior-copy-count) and the roll's declared rows refresh when their own track next
+changes, not on sibling chain edits — cosmetic, and the full editor re-resolves on
+open. The debounced structural resolve (`VisualBeatSync.setProject`, ~40ms on a big
+project) still re-resolves the whole scene per edit burst; per-track graph reuse in
+`core/visual/resolve` is the open follow-up if gesture-end hitches ever matter.
+
 ## timeline/ — the arrangement view
 
 - `TimelineArea.tsx` orchestrates: ruler, playhead (`usePlayhead` writes px via RAF, no re-render per frame), scrub, loop-region drag, track rows.

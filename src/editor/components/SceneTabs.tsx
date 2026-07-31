@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Plus, Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
 import { useProjectStore, type ViewAspect } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
@@ -141,7 +141,13 @@ interface SceneTabsProps {
 }
 
 export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsProps) {
-  const scenes = useProjectStore((s) => s.scenes)
+  // Tabs show scene NAMES and main-ness only. Subscribing to the scenes record
+  // itself would re-render the tab strip on every track edit anywhere (its
+  // identity changes per edit); this string fingerprint re-renders exactly on
+  // rename / add / remove / reorder.
+  const scenesKey = useProjectStore((s) => s.sceneOrder.map((id) => `${id}:${s.scenes[id]?.name}:${s.scenes[id]?.isMain}`).join('|'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const scenes = useMemo(() => useProjectStore.getState().scenes, [scenesKey])
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const setActiveScene = useProjectStore((s) => s.setActiveScene)
