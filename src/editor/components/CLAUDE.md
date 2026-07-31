@@ -30,9 +30,9 @@ move. Two rules keep it fixed:
 Known accepted staleness from rule 1: a mover lane's *timeline preview* row order
 (prior-copy-count) and the roll's declared rows refresh when their own track next
 changes, not on sibling chain edits — cosmetic, and the full editor re-resolves on
-open. The debounced structural resolve (`VisualBeatSync.setProject`, ~40ms on a big
-project) still re-resolves the whole scene per edit burst; per-track graph reuse in
-`core/visual/resolve` is the open follow-up if gesture-end hitches ever matter.
+open. The debounced structural resolve (`VisualBeatSync.setProject`) reuses
+per-track resolutions by identity (see core/visual/CLAUDE.md), so a one-note edit
+re-resolves one track, not the scene.
 
 ## timeline/ — the arrangement view
 

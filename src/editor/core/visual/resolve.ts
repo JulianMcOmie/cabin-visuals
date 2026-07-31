@@ -432,11 +432,51 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   return largestCount
 }
 
+// ── Per-track resolve reuse ──────────────────────────────────────────────────
+// resolveProject runs debounced after every edit burst, and in a large project
+// the note flattening (loop tiling) and chain-closure building dominate - a
+// one-note edit re-resolving 30 dense tracks costs tens of ms right when the
+// gesture ends. The store updates immutably with per-track reference
+// preservation, so an object's resolution can be reused by identity: the cache
+// is keyed WEAKLY on the object track's own reference (an edit to the track
+// replaces the ref, and the old entry is GC'd with it) and validated against
+// everything else its resolvers read - the subtree refs (child lanes at any
+// depth, including mover frames) and the tempo fields. Cached entries are never
+// emitted directly: each resolve emits a shallow copy with its own chain array
+// (global movers append per resolve), solo-derived mute, and scratchBase.
+// The shared inner closures are stateful-but-pure (per-beat memos), same as
+// one instance serving several target objects within a single resolve.
+const objectResolveCache = new WeakMap<Track, { deps: unknown[]; entry: ResolvedObject }>()
+const globalMoverResolveCache = new WeakMap<Track, { deps: unknown[]; resolved: MoverOrSplitter | null }>()
+
+/** Everything a track's resolvers read, as an identity-comparable list: the
+ *  track itself, its whole subtree (DFS), and the tempo fields. */
+function resolveDeps(track: Track, p: ProjectSnapshot): unknown[] {
+  const deps: unknown[] = [p.beatsPerBar, p.totalBars]
+  const seen = new Set<string>()
+  const visit = (t: Track) => {
+    if (seen.has(t.id)) return
+    seen.add(t.id)
+    deps.push(t)
+    for (const cid of t.childIds ?? []) {
+      const c = p.tracks[cid]
+      if (c) visit(c)
+    }
+  }
+  visit(track)
+  return deps
+}
+
+function depsEqual(a: unknown[], b: unknown[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 /**
  * Flatten the project into resolved objects (with their mover chains) plus the tag
  * index. Objects resolve first so tag-scoped top-level movers can expand to the
  * objects carrying that tag.
- * Non-incremental skeleton - resolve is trivially cheap at this scale.
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
@@ -457,30 +497,43 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
     if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing
-    const params = track.params ?? {}
-    const notes = flattenTrackNotes(track, p)
-    const moverAndSplitterChain = resolveMoverAndSplitterChain(track, p)
+
+    const deps = resolveDeps(track, p)
+    const cached = objectResolveCache.get(track)
+    let base: ResolvedObject
+    if (cached && depsEqual(cached.deps, deps)) {
+      base = cached.entry
+    } else {
+      base = {
+        trackId: id,
+        instrumentId: track.instrumentId,
+        parentId: track.parentId,
+        muted: false, // per-resolve (solo pool) - set on the emitted copy below
+        params: track.params ?? {},
+        stringParams: track.stringParams ?? {},
+        localTransform: def?.localTransform,
+        notes: flattenTrackNotes(track, p),
+        abilityEvents: resolveAbilityEvents(track, p),
+        automations: resolveAutomations(track, def, p),
+        effectAutomations: resolveEffectAutomations(track, p),
+        envelopes: resolveEnvelopes(track, def, p),
+        moverAndSplitterChain: resolveMoverAndSplitterChain(track, p),
+        // Fresh array whenever the track changed: the gate ref-compares it, so
+        // a pad-bank edit (which lands via resolve) is always visible to it.
+        videoPads: track.videoPads ? [...track.videoPads] : undefined,
+        // Same contract for the Photo instrument's bank.
+        photoPads: track.photoPads ? [...track.photoPads] : undefined,
+        scratchBase: identitySV(),
+        tags,
+      }
+      objectResolveCache.set(track, { deps, entry: base })
+    }
     objects.push({
-      trackId: id,
-      instrumentId: track.instrumentId,
-      parentId: track.parentId,
+      ...base,
       muted: objectOff(track),
-      params,
-      stringParams: track.stringParams ?? {},
-      localTransform: def?.localTransform,
-      notes,
-      abilityEvents: resolveAbilityEvents(track, p),
-      automations: resolveAutomations(track, def, p),
-      effectAutomations: resolveEffectAutomations(track, p),
-      envelopes: resolveEnvelopes(track, def, p),
-      moverAndSplitterChain,
-      // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
-      // (which lands via resolve) is always visible to it.
-      videoPads: track.videoPads ? [...track.videoPads] : undefined,
-      // Same contract for the Photo instrument's bank.
-      photoPads: track.photoPads ? [...track.photoPads] : undefined,
+      // Own array per resolve: the global-mover pass below appends into it.
+      moverAndSplitterChain: [...base.moverAndSplitterChain],
       scratchBase: identitySV(),
-      tags,
     })
     for (const tag of tags) {
       const list = tagIndex.get(tag)
@@ -524,7 +577,17 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const track = p.tracks[trackId]
     if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
     if (isChainChild(track, p)) continue
-    const resolved = resolveMoverOrSplitterTrack(track, p)
+    // Same identity-keyed reuse as objects: a global entry re-resolves only
+    // when its own subtree (settings, notes, automation, frame) changed.
+    const deps = resolveDeps(track, p)
+    const cached = globalMoverResolveCache.get(track)
+    let resolved: MoverOrSplitter | null
+    if (cached && depsEqual(cached.deps, deps)) {
+      resolved = cached.resolved
+    } else {
+      resolved = resolveMoverOrSplitterTrack(track, p)
+      globalMoverResolveCache.set(track, { deps, resolved })
+    }
     if (!resolved) continue
     const seenTargets = new Set<string>()
     for (const routing of track.targets ?? []) {
