@@ -236,7 +236,6 @@ function panelIdentity(
       : track.type === 'mover' || track.type === 'splitter'
         ? getMoverOrSplitterDefinition(track.type === 'splitter' ? track.splitterId : track.moverId)?.label
           ?? (track.type === 'splitter' ? 'Splitter' : 'Mover')
-      : track.type === 'director' ? compositionDef(track.directorId)?.name ?? 'Director'
       : track.type === 'automation' ? 'Automation'
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
@@ -597,7 +596,7 @@ export function TrackEditor() {
                           ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)
                               ?.params.find((p) => p.key === track.targetParam)
                           : isCompositionTrack(parent)
-                            ? compositionAutomatableParams(compositionDef(parent.instrumentId) ?? compositionDef(parent.directorId))
+                            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
                                 .find((p) => p.key === track.targetParam)
                             : undefined)
                       if (pdef) targetLabel = pdef.label
@@ -621,9 +620,8 @@ export function TrackEditor() {
                   // Composition tracks ON MAIN get the scene-binding panel; a
                   // crop track in a visual scene falls through to the object
                   // path below (its dual surface: compose on Main, mask in a
-                  // scene). The legacy 'director' type takes it regardless of
-                  // scene until the migration removes that shape.
-                  if (track.type === 'director' || (isCompositionTrack(track) && activeIsMain)) {
+                  // scene).
+                  if (isCompositionTrack(track) && activeIsMain) {
                     return <CompositionSettingsPanel track={track} />
                   }
 

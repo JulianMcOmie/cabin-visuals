@@ -1047,7 +1047,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     // Main and a scene deliberately switches which resolve path picks it up.
     const rootDef = root.type === 'base' ? compositionDef(root.instrumentId) : undefined
     if (target.isMain && !isCompositionTrack(root)) return s
-    if (!target.isMain && ((root.type as string) === 'director' || rootDef?.mainOnly)) return s
+    if (!target.isMain && rootDef?.mainOnly) return s
 
     const snapshot = snapshotTrackTree(trackId, source.tracks)
     if (!snapshot) return s
@@ -1260,7 +1260,6 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         stringParams: {},
         moverId: undefined,
         splitterId: undefined,
-        directorId: undefined,
         inputValues: undefined,
         name: name ?? track.name,
       }

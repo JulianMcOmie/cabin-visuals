@@ -30,15 +30,10 @@ export function compositionDef(instrumentId: string | undefined): CompositionIns
   return instrumentId ? BY_ID.get(instrumentId) : undefined
 }
 
-/** Is this track a composition instrument? Accepts BOTH shapes during the
- *  migration: the current `type: 'base'` + composition instrumentId, and the
- *  legacy `type: 'director'` + directorId still present in unhydrated fixtures
- *  and pre-upgrade documents. The legacy arm dies with the TrackType member. */
-export function isCompositionTrack(
-  track: Pick<Track, 'type' | 'instrumentId'> & { directorId?: string },
-): boolean {
-  if (track.type === 'base') return !!compositionDef(track.instrumentId)
-  return (track.type as string) === 'director'
+/** Is this track a composition instrument? (Pre-v12 'director' tracks are
+ *  rewritten to this shape by the upgrade chain before any of this runs.) */
+export function isCompositionTrack(track: Pick<Track, 'type' | 'instrumentId'>): boolean {
+  return track.type === 'base' && !!compositionDef(track.instrumentId)
 }
 
 export type { CompositionLayer, CompositionInstrumentDef } from './types'

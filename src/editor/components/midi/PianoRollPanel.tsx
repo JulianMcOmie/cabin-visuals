@@ -233,12 +233,12 @@ export function PianoRollPanel() {
           ? getMoverOrSplitterDefinition(parent.splitterId)
           : undefined
       const mainActive = !!useProjectStore.getState().scenes[useProjectStore.getState().activeSceneId]?.isMain
-      const parentComposition = parent && ((parent.type as string) === 'director' || (mainActive && isCompositionTrack(parent)))
+      const parentComposition = parent && mainActive && isCompositionTrack(parent)
       const instrumentDef = parent && !parentComposition ? getInstrument(parent.instrumentId) : undefined
       const parentParams = instrumentDef
         ? withTransformParams(instrumentDef.params)
         : moverDef?.params ?? (parentComposition
-          ? compositionAutomatableParams(compositionDef(parent.instrumentId) ?? compositionDef(parent.directorId))
+          ? compositionAutomatableParams(compositionDef(parent.instrumentId))
           : undefined)
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }

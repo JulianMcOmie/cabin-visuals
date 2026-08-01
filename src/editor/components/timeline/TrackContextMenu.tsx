@@ -35,16 +35,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
 
   if (!track) return null
-  // A composition track (on Main, or the legacy 'director' shape) offers the
-  // shared Opacity + its def's params, sampled per frame in VisualEngine's
-  // resolveComposition. It has no object, so it never offers the tf* transform
-  // params - which is why the object def is masked out for it below even for a
-  // dual-surface id like crop.
+  // A composition track (on Main) offers the shared Opacity + its def's
+  // params, sampled per frame in VisualEngine's resolveComposition. It has no
+  // object, so it never offers the tf* transform params - which is why the
+  // object def is masked out for it below even for a dual-surface id like
+  // crop.
   const activeIsMain = !!scenes[activeSceneId]?.isMain
-  const directorDef = (track.type as string) === 'director'
-    ? compositionDef(track.directorId)
-    : activeIsMain && track.type === 'base' ? compositionDef(track.instrumentId) : undefined
-  const isComposition = (track.type as string) === 'director' || (activeIsMain && isCompositionTrack(track))
+  const directorDef = activeIsMain && track.type === 'base' ? compositionDef(track.instrumentId) : undefined
+  const isComposition = activeIsMain && isCompositionTrack(track)
   const def = isComposition ? undefined : getInstrument(track.instrumentId)
   // Mover/splitter tracks have no instrument, but their definition has numeric
   // params of its own - automation children target those the exact same way.
@@ -79,7 +77,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       .map((id) => scenes[id])
       .filter((scene) => scene && scene.id !== activeSceneId && (scene.isMain
         ? isCompositionTrack(track)
-        : !((track.type as string) === 'director' || moveDef?.mainOnly)))
+        : !moveDef?.mainOnly))
     : []
 
   // Effect automation targets: per instance, its On/Off pseudo-param plus every

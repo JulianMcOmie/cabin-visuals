@@ -24,8 +24,7 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setSceneBindings = useProjectStore((s) => s.setSceneBindings)
 
-  // Dual-shape during the migration (same rule as the engine).
-  const def = compositionDef(track.instrumentId) ?? compositionDef(track.directorId)
+  const def = compositionDef(track.instrumentId)
   const scenes = useProjectStore.getState().scenes
   const sceneOrder = useProjectStore.getState().sceneOrder
   const rows = def?.midiRows(track, scenes, sceneOrder) ?? []

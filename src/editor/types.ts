@@ -34,7 +34,9 @@ export type TrackType =
   | 'audio'
   | 'envelope'
   | 'splitter'
-  | 'director'
+// 'director' was retired in schema v12: a scene composer is now an ordinary
+// 'base' track whose instrumentId names a composition instrument
+// (core/directors). upgrade.ts rewrites old saves.
 
 export type SceneId = string
 export const DEFAULT_SCENE_BACKGROUND = '#000000'
@@ -216,9 +218,8 @@ export interface Track {
   moverId?: string
   /** For a `splitter` track: which MoverOrSplitterDefinition this row applies. */
   splitterId?: string
-  /** Main-scene-only: the director plugin this track instantiates. */
-  directorId?: string
-  /** Director MIDI rows bind stable pitches to scene identities. */
+  /** A composition instrument's MIDI rows bind stable pitches to scene
+   *  identities (Main-scene tracks; see core/directors). */
   sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
   /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>

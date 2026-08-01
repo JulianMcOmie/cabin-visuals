@@ -55,15 +55,5 @@ export function resolveDeclaredMidiRows(
     }
   }
 
-  // Legacy pre-migration shape; dies with the 'director' TrackType member.
-  if (track.type === 'director') {
-    const rows = compositionDef(track.directorId)?.midiRows(
-      track,
-      project.scenes,
-      project.sceneOrder,
-    )
-    return rows ? { rows, strict: false } : undefined
-  }
-
   return undefined
 }

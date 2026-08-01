@@ -11,7 +11,7 @@ import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
-import { compositionAutomatableParams, compositionDef, getCompositionInstrument, isCompositionTrack, type CompositionLayer } from '../directors'
+import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -258,9 +258,7 @@ function resolveComposition(beat: number): CompositionLayer[] {
   // Resolve bottom-to-top, preserving each director's own internal layer order.
   const layers = directors.slice().reverse().flatMap((rawTrack) => {
     if (anySolo && !rawTrack.solo) return []
-    // Dual-shape during the migration: instrumentId on migrated tracks, the
-    // legacy directorId on pre-upgrade ones.
-    const def = compositionDef(rawTrack.instrumentId) ?? getCompositionInstrument(rawTrack.directorId)
+    const def = compositionDef(rawTrack.instrumentId)
     let track = rawTrack
     if (def && rawTrack.childIds.length) {
       const lanes = resolveAutomationLanes(rawTrack, compositionAutomatableParams(def), mainSnapshot)

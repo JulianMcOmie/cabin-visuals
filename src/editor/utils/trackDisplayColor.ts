@@ -83,7 +83,7 @@ function moverIdentity(track: Track): string | undefined {
  * - base → the instrument identity (fixed or param-derived), unless it is
  *   near-achromatic or unparseable - then the track's cycle color
  * - mover / splitter / colorizer → its definition's declared color
- * - everything else (param lanes, directors, groups) → its own track.color
+ * - everything else (param lanes, composition tracks, groups) → its own track.color
  */
 export function resolveTrackDisplayColor(track: Track): string {
   if (track.type === 'audio') return AUDIO_TRACK_COLOR
