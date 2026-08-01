@@ -253,15 +253,19 @@ function panelIdentity(
 
 /** The top-level mover targets picker (#tag / branch / track scopes), shared by
  *  legacy movers and new-registry (VisualCopy) movers and splitters. */
-function MoverTargets({ track }: { track: Track }) {
+function MoverTargets({ track, cropMode }: { track: Track; cropMode?: boolean }) {
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
+  // Crop-to-crop routing is a deliberate no-op in the engine (nothing renders
+  // there to mask), so a crop's picker doesn't offer other crops at all.
+  const targetable = (t: Track) =>
+    !!getInstrument(t.instrumentId) && t.id !== track.id && !(cropMode && t.instrumentId === 'crop')
   // The picker lists every object track (name, tags, branch-ness) but must not
   // re-render on every project edit, so it subscribes to a string fingerprint
   // of exactly what it shows and re-reads the record only when that changes.
   const objectTracksKey = useProjectStore((s) => {
     let key = ''
     for (const t of Object.values(s.tracks)) {
-      if (getInstrument(t.instrumentId) && t.id !== track.id) {
+      if (targetable(t)) {
         key += `${t.id}${t.name}${(t.tags ?? []).join(',')}${(t.childIds?.length ?? 0) > 0 ? 'b' : ''}`
       }
     }
@@ -269,7 +273,7 @@ function MoverTargets({ track }: { track: Track }) {
   })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tracks = useMemo(() => useProjectStore.getState().tracks, [objectTracksKey])
-  const objectTracks = Object.values(tracks).filter((t) => getInstrument(t.instrumentId) && t.id !== track.id)
+  const objectTracks = Object.values(tracks).filter(targetable)
   const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
   const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
   const keyOf = (r: Routing) =>
@@ -338,11 +342,15 @@ function MoverTargets({ track }: { track: Track }) {
           })}
         </div>
       )}
-      {options.length > 0 && targets.length === 0 && (
+      {options.length > 0 && targets.length === 0 && (cropMode ? (
+        <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+          No targets checked — this Crop masks its whole scene. Check targets to mask only those instruments.
+        </p>
+      ) : (
         <p className="text-[11px] text-[var(--warn)] mt-1.5">
           No targets checked — a global mover affects nothing until it targets a track, branch, or #tag.
         </p>
-      )}
+      ))}
       {deadTargets.length > 0 && (
         <p className="text-[11px] text-[var(--warn)] mt-1.5">
           {deadTargets.length} checked target{deadTargets.length === 1 ? '' : 's'} no longer
@@ -768,6 +776,14 @@ export function TrackEditor() {
                           />
                         )}
                       </div>
+                      {/* Crop's scope: untargeted, it masks its whole scene;
+                          targeted, it masks exactly those instruments (their
+                          rendered output, via the shader path). */}
+                      {track.instrumentId === 'crop' && (
+                        <div className="mt-4">
+                          <MoverTargets track={track} cropMode />
+                        </div>
+                      )}
                     </>
                   )
                 })()}

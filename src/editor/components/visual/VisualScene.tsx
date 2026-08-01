@@ -843,7 +843,12 @@ export function VisualScene() {
   const impactWarpTrackIds = useMemo(() => postProcessTracksByScene(objects, 'impactWarp'), [objects])
   const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
   const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
-  const cropTrackIds = useMemo(() => postProcessTracksByScene(objects, 'crop'), [objects])
+  // A crop with routing targets masks those objects inside their own
+  // ShaderWrapper chain instead - only untargeted crops mask the whole scene.
+  const cropTrackIds = useMemo(
+    () => postProcessTracksByScene(objects.filter((o) => !o.masksTargets), 'crop'),
+    [objects],
+  )
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
@@ -1107,21 +1112,21 @@ export function VisualScene() {
             {createPortal(
             <>
               {lights()}
-              {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+              {base.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
             </>,
             runtime.base,
             )}
             {createPortal(
             <>
               {lights()}
-              {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+              {front.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:front`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
             </>,
             runtime.front,
             )}
             {createPortal(
             <FinalInvertMaskContext.Provider value>
               {lights()}
-              {invert.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:invert`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} />)}
+              {invert.map((o) => <ObjectRenderer key={`${o.trackId}:${o.visualCopyIndex}:invert`} sceneId={o.sceneId} trackId={o.trackId} instrumentId={o.instrumentId} visualCopyIndex={o.visualCopyIndex} maskSourceIds={o.maskSourceIds} />)}
             </FinalInvertMaskContext.Provider>,
             runtime.invert,
             )}

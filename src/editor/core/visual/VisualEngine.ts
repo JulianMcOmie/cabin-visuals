@@ -68,6 +68,12 @@ export interface ObjectListEntry {
   trackId: string
   instrumentId: string
   visualCopyIndex: number
+  /** Crop tracks masking this object (see ResolvedObject.maskSourceIds).
+   *  Structural: changes only on resolve, like everything else here. */
+  maskSourceIds: readonly string[]
+  /** True on a Crop entry that masks routed targets instead of its scene -
+   *  VisualScene's scene-wide crop pass must skip it. */
+  masksTargets: boolean
 }
 
 // External-store signal for the object list, so VisualScene reconciles the scene
@@ -83,6 +89,8 @@ function publishList() {
       trackId: o.trackId,
       instrumentId: o.instrumentId,
       visualCopyIndex,
+      maskSourceIds: o.maskSourceIds,
+      masksTargets: o.masksTargets,
     }))
   }))
   listeners.forEach((l) => l())
