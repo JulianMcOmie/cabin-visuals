@@ -5,7 +5,7 @@ import type { Scene, Track } from '../../types'
 import { computeAtBeat, getCompositionLayers, setEditorPreviewSceneId, setMainPreviewEnabled, setProject } from '../visual/VisualEngine'
 
 const director = (id: string): Track => ({
-  id, name: id, type: 'director', instrumentId: '', directorId: 'sceneSwitcher',
+  id, name: id, type: 'base', instrumentId: 'sceneSwitcher',
   color: '#6366f1', muted: false, solo: false, childIds: [],
   blocks: [{
     id: `${id}-block`, startBar: 0, durationBars: 2, loop: false,
@@ -33,7 +33,7 @@ test('Main resolves an ordered array of simultaneous directors, never a singular
 
 test('an active hold-gated director may intentionally resolve to an empty frame', () => {
   const cut: Track = {
-    ...director('cut'), directorId: 'cut', sceneBindings: [{ pitch: 60, sceneId: 'visual' }], blocks: [],
+    ...director('cut'), instrumentId: 'cut', sceneBindings: [{ pitch: 60, sceneId: 'visual' }], blocks: [],
   }
   const main: Scene = { id: 'main', name: 'Main', isMain: true, backgroundColor: '#000000', backgroundTransparent: false, tracks: { cut }, rootTrackIds: ['cut'] }
   const visual: Scene = { id: 'visual', name: 'Scene 1', isMain: false, backgroundColor: '#000000', backgroundTransparent: false, tracks: {}, rootTrackIds: [] }
@@ -48,7 +48,7 @@ test('an active hold-gated director may intentionally resolve to an empty frame'
 
 test('an empty Radial Cut above an active director contributes nothing and reveals the lower layer', () => {
   const radial: Track = {
-    ...director('radial'), directorId: 'radialCut', sceneBindings: [{ pitch: 60, sceneId: 'overlay' }], blocks: [],
+    ...director('radial'), instrumentId: 'radialCut', sceneBindings: [{ pitch: 60, sceneId: 'overlay' }], blocks: [],
   }
   const base = { ...director('base'), sceneBindings: [{ pitch: 60, sceneId: 'base-scene' }] }
   const main: Scene = {

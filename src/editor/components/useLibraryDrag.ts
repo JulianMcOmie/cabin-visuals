@@ -7,6 +7,7 @@ import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
 import { lockCursor, unlockCursor } from '../utils/dragCursor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import { seedSceneBindings } from '../core/directors/sceneBindings'
 import type { Track } from '../types'
 
 type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' }
@@ -16,25 +17,26 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // ids the registry doesn't know.
   const isMover = (item.kind === 'mover' || item.kind === 'colorizer') && hasMoverOrSplitterDefinition(item.id)
   const isSplitter = item.kind === 'splitter' && hasMoverOrSplitterDefinition(item.id)
-  const isDirector = item.kind === 'director'
+  // Composition instruments (the Main library's cards) are ordinary base
+  // tracks whose instrumentId names a composition def - they just start with
+  // seeded scene bindings and always land at the root.
+  const isComposition = item.kind === 'director'
   const state = useProjectStore.getState()
-  const visualIds = state.sceneOrder.filter((id) => state.scenes[id] && !state.scenes[id].isMain)
   return {
     id: crypto.randomUUID(),
     name: item.name,
-    type: isDirector ? 'director' : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
-    instrumentId: isMover || isSplitter || isDirector ? '' : item.id,
+    type: isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isMover || isSplitter ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
-    directorId: isDirector ? item.id : undefined,
-    sceneBindings: isDirector ? visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })) : undefined,
+    sceneBindings: isComposition ? seedSceneBindings(state.scenes, state.sceneOrder) : undefined,
     inputValues: isMover || isSplitter ? {} : undefined,
     color: resolveNextTrackColor(state, parentId),
     muted: false,
     solo: false,
     blocks: [],
     childIds: [],
-    parentId: isDirector ? undefined : parentId ?? undefined,
+    parentId: isComposition ? undefined : parentId ?? undefined,
   }
 }
 

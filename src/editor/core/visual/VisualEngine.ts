@@ -11,7 +11,7 @@ import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
-import { directorAutomatableParams, getDirector, type CompositionLayer } from '../directors'
+import { compositionAutomatableParams, compositionDef, getCompositionInstrument, isCompositionTrack, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -128,6 +128,10 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   graphs = new Map()
   for (const sceneId of p.sceneOrder) {
     const scene = p.scenes[sceneId]
+    // Main holds composition tracks (base tracks whose instrumentId names a
+    // composition def). They resolve per-frame in resolveComposition, never as
+    // scene objects - this skip is the load-bearing gate that keeps them out
+    // of the object graphs.
     if (!scene || scene.isMain) continue
     const inputs: GraphInputs = {
       tracks: scene.tracks,
@@ -233,13 +237,16 @@ function resolveComposition(beat: number): CompositionLayer[] {
     ? [{ directorTrackId: '__implicit__', sceneId: visualFallback, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
     : []
 
-  const directors = main.rootTrackIds.map((id) => main.tracks[id]).filter((track) => track?.type === 'director' && !track.muted)
+  const directors = main.rootTrackIds
+    .map((id) => main.tracks[id])
+    .filter((track) => track && isCompositionTrack(track) && !track.muted)
   const anySolo = directors.some((track) => track.solo)
-  // Automation lanes under a director keyframe its params (opacity + the def's
-  // own) exactly like object-track lanes. Directors never enter the resolved
-  // graph, so their lanes are gathered and sampled right here, per frame - a
-  // pure function of the beat (like the note flattening the defs already do
-  // every frame), so scrub == playback == export holds.
+  // Automation lanes under a composition track keyframe its params (opacity +
+  // the def's own) exactly like object-track lanes. Composition tracks never
+  // enter the resolved graph (setProject skips Main), so their lanes are
+  // gathered and sampled right here, per frame - a pure function of the beat
+  // (like the note flattening the defs already do every frame), so
+  // scrub == playback == export holds.
   const mainSnapshot = {
     tracks: main.tracks,
     rootTrackIds: main.rootTrackIds,
@@ -251,10 +258,12 @@ function resolveComposition(beat: number): CompositionLayer[] {
   // Resolve bottom-to-top, preserving each director's own internal layer order.
   const layers = directors.slice().reverse().flatMap((rawTrack) => {
     if (anySolo && !rawTrack.solo) return []
-    const def = getDirector(rawTrack.directorId)
+    // Dual-shape during the migration: instrumentId on migrated tracks, the
+    // legacy directorId on pre-upgrade ones.
+    const def = compositionDef(rawTrack.instrumentId) ?? getCompositionInstrument(rawTrack.directorId)
     let track = rawTrack
     if (def && rawTrack.childIds.length) {
-      const lanes = resolveAutomationLanes(rawTrack, directorAutomatableParams(def), mainSnapshot)
+      const lanes = resolveAutomationLanes(rawTrack, compositionAutomatableParams(def), mainSnapshot)
       if (lanes.length) {
         const params = { ...rawTrack.params }
         for (const lane of lanes) {

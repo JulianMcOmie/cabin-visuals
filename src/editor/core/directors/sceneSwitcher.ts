@@ -1,10 +1,11 @@
 import { flattenTrackNotes } from '../visual/noteFlatten'
-import type { DirectorInstrumentDef } from './types'
+import type { CompositionInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
 import { orderedSceneBindings } from './sceneBindings'
 
-export const sceneSwitcherDirector: DirectorInstrumentDef = {
+export const sceneSwitcherDirector: CompositionInstrumentDef = {
   id: 'sceneSwitcher',
+  mainOnly: true,
   name: 'Scene Switcher',
   params: [],
   midiRows: (track, scenes, sceneOrder) => {

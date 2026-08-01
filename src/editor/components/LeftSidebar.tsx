@@ -9,7 +9,7 @@ import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { listDirectors } from '../core/directors'
+import { listCompositionInstruments } from '../core/directors'
 import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -121,7 +121,7 @@ const DIRECTOR_ICON_COLORS: Record<string, string> = {
 // derived from the mover registry - so registering a director is all it takes
 // to make it reachable. (This list used to be hand-maintained, which meant a
 // registered director simply never appeared in the menu.)
-const DIRECTOR_INSTRUMENTS = withKind('director', listDirectors().map((d) => ({
+const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().map((d) => ({
   id: d.id,
   name: d.name,
   description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into Main with the ${d.name} layout.`,
@@ -806,13 +806,14 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
-  const setTrackDirector = useProjectStore((s) => s.setTrackDirector)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
-    if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
-    else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
+    // Composition instruments (the 'director' library kind) go through the
+    // same conversion as any instrument - setTrackInstrument seeds their
+    // scene bindings when the Main scene is active.
+    if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 

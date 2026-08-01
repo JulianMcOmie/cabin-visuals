@@ -1,4 +1,4 @@
-import type { DirectorInstrumentDef } from './types'
+import type { CompositionInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
 import {
   DEFAULT_PARTITION_COUNT,
@@ -8,8 +8,9 @@ import {
 } from './cut'
 import { orderedSceneBindings } from './sceneBindings'
 
-export const radialCutDirector: DirectorInstrumentDef = {
+export const radialCutDirector: CompositionInstrumentDef = {
   id: 'radialCut',
+  mainOnly: true,
   name: 'Radial Cut',
   params: [
     { key: 'sceneCount', label: 'Scenes', min: 1, max: MAX_PARTITION_COUNT, step: 1, default: DEFAULT_PARTITION_COUNT },

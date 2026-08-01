@@ -19,7 +19,7 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
-import { directorAutomatableParams, getDirector } from '../../core/directors'
+import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
 import { withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
@@ -222,17 +222,24 @@ export function PianoRollPanel() {
     } else {
       // Param automation: the range comes from the parent's instrument def
       // (plus the canonical tf* transform params), from the parent's
-      // mover/splitter definition when automating a mover, or from the
-      // director's def (plus Opacity) when the lane sits under a director.
+      // mover/splitter definition when automating a mover, or - for a
+      // composition track on Main (or the legacy 'director' shape) - from its
+      // composition def plus the shared Opacity. The composition arm wins over
+      // the object def for a dual-surface id like crop: on Main its lanes
+      // address the composition params, never tf*.
       const moverDef = parent?.type === 'mover'
         ? getMoverOrSplitterDefinition(parent.moverId)
         : parent?.type === 'splitter'
           ? getMoverOrSplitterDefinition(parent.splitterId)
           : undefined
-      const instrumentDef = parent ? getInstrument(parent.instrumentId) : undefined
+      const mainActive = !!useProjectStore.getState().scenes[useProjectStore.getState().activeSceneId]?.isMain
+      const parentComposition = parent && ((parent.type as string) === 'director' || (mainActive && isCompositionTrack(parent)))
+      const instrumentDef = parent && !parentComposition ? getInstrument(parent.instrumentId) : undefined
       const parentParams = instrumentDef
         ? withTransformParams(instrumentDef.params)
-        : moverDef?.params ?? (parent?.type === 'director' ? directorAutomatableParams(getDirector(parent.directorId)) : undefined)
+        : moverDef?.params ?? (parentComposition
+          ? compositionAutomatableParams(compositionDef(parent.instrumentId) ?? compositionDef(parent.directorId))
+          : undefined)
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }

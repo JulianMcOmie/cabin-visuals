@@ -1,7 +1,7 @@
 import { flattenTrackNotes } from '../visual/noteFlatten'
 import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { Track } from '../../types'
-import type { DirectorInstrumentDef } from './types'
+import type { CompositionInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
 import { heldDirectorPitches } from './cut'
 import { orderedSceneBindings } from './sceneBindings'
@@ -181,8 +181,13 @@ export function cropMidiRows(track: CropParamSource): MidiRowDef[] {
   }))
 }
 
-export const cropDirector: DirectorInstrumentDef = {
+export const cropDirector: CompositionInstrumentDef = {
   id: 'crop',
+  // Crop is DUAL-surfaced, and this flag is the hinge: on Main this def
+  // composes its bound scene into the frame; in a visual scene the SAME id
+  // resolves through the object registry (instruments/Crop.tsx) and masks the
+  // scene it lives in. Placement picks the behavior.
+  mainOnly: false,
   name: 'Crop',
   params: CROP_PARAMS,
   hideMidiRowsInSettings: true,
