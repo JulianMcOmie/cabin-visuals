@@ -387,6 +387,7 @@ export function TrackEditor() {
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
+  const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
@@ -609,10 +610,12 @@ export function TrackEditor() {
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}
                         burst={track.burst}
+                        amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
+                        onAmount={(amount) => setTrackAutomationAmount(track.id, amount)}
                       />
                     )
                   }

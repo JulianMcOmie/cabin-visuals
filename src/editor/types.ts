@@ -187,6 +187,12 @@ export interface Track {
    *  note's pitch-value, scaled by velocity and by `intensity`. Wins over `noise`
    *  if both are somehow set. (See core/visual/automation.ts BurstConfig.) */
   burst?: { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number }
+  /** Automation tracks only: master output gain on the whole lane, whatever its
+   *  mode - every value it produces (keyframes, noise wander and deviation,
+   *  burst targets) is multiplied by this and clamped back to the param's range.
+   *  1 = as written (default), 0 = the lane flattens to zero, up to
+   *  AUTOMATION_AMOUNT_MAX for boosting a lane written low. */
+  automationAmount?: number
   color: string
   muted: boolean
   solo: boolean

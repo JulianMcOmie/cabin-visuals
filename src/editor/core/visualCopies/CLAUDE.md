@@ -125,7 +125,7 @@ phrase is only truncated when that many really are in frame together.
 
 ## Invariants
 
-- **Copy COUNT never depends on the beat** (fixed at resolve; MIDI gates opacity). VisualEngine warns if violated. Count may still be DERIVED from settings rather than asked for — Duplicate sizes its trail from speed × density so it doesn't need a length knob.
+- **Copy COUNT never depends on the beat** (fixed at resolve; MIDI gates opacity). VisualEngine warns if violated. Count may still be DERIVED from settings rather than asked for — Duplicate sizes its trail from speed × density so it doesn't need a length knob. AUTOMATED settings are the sanctioned exception: an automated entry carries `structuralVariants` (the def resolved at each lane's min/max reach), `structuralCopyCount` sizes the mounted pool to the maximum, and frames asking for less are padded with hidden copies — so a definition may return fewer copies than its structural max under automation, but never more, and never fewer because of the BEAT itself. Sound while count is monotonic in each param (true of every shipped def).
 - **A copy directly behind a convex object is invisible unless it covers more screen**, and perspective shrinks faster than any sane world-scale value grows (a 6× copy 50 units back reads at half size). Depth-axis splitters therefore measure size in APPARENT terms and divide the shrink out — see `duplicateTrail`; the camera sits at z = 5 (`TUNNEL_CAMERA_Z`).
 - Everything evaluated per frame must remain a pure function of `(beat, settings, context)` — same purity rule as instruments.
 

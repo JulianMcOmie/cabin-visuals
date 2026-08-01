@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  automationAmount,
+  automationLaneValueBounds,
+  extractBurstGates,
+  extractKeyframes,
+  extractNoiseGates,
   sampleAutomationLane,
   sampleBurstLane,
   type AutomationLane,
   type BurstConfig,
   type BurstGate,
 } from './automation'
+import type { Block } from '../../types'
 
 // A 1-beat attack to a 0.5 sustain over 1 beat of decay, 1-beat release: every
 // stage is a whole beat, so expected values are readable by hand.
@@ -100,4 +106,96 @@ test('sampleAutomationLane: dispatches on mode and reports inert lanes as NaN', 
   }
   close(sampleAutomationLane(keyframeLane, 1, 99), 5)
   assert.ok(Number.isNaN(sampleAutomationLane({ mode: 'linear', keyframes: [] }, 1, 99)))
+})
+
+// ── Amount (lane output gain) ────────────────────────────────────────────────
+
+/** One 1-bar block with single-beat notes at the given pitches. Pitch 36..84 maps
+ *  onto [min,max]: 36 = min, 60 = midpoint, 84 = max. */
+function pitchBlock(...pitches: number[]): Block[] {
+  return [{
+    id: 'b',
+    startBar: 0,
+    durationBars: 1,
+    loop: false,
+    notes: pitches.map((pitch, i) => ({ id: `n${i}`, startBeat: i, durationBeats: 1, pitch, velocity: 100 })),
+  }]
+}
+
+test('amount: scales every extractor\'s values, clamped back to the param range', () => {
+  const blocks = pitchBlock(84, 60) // → max, midpoint of [0, 10]
+
+  // Keyframes: values are true multiples of what the notes wrote…
+  const half = extractKeyframes(blocks, 4, 0, 10, undefined, 0.5)
+  close(half[0].value, 5)
+  close(half[1].value, 2.5)
+  // …and a boost clamps at the range's top instead of escaping it.
+  const boosted = extractKeyframes(blocks, 4, 0, 10, undefined, 2)
+  close(boosted[0].value, 10)
+  close(boosted[1].value, 10)
+  // Default amount is the identity.
+  close(extractKeyframes(blocks, 4, 0, 10)[1].value, 5)
+
+  // Noise gates scale their centers the same way.
+  close(extractNoiseGates(blocks, 4, 0, 10, undefined, 0.5)[1].center, 2.5)
+  // Burst gates scale the value each burst aims for.
+  close(extractBurstGates(blocks, 4, 0, 10, undefined, 0.5)[0].value, 5)
+
+  // A negative-min range clamps at its floor, not at zero.
+  const negative = extractKeyframes(pitchBlock(36), 4, -4, 4, undefined, 2)
+  close(negative[0].value, -4)
+})
+
+test('automationAmount: absent → 1, negative documents are floored at 0', () => {
+  close(automationAmount({}), 1)
+  close(automationAmount({ automationAmount: 0.25 }), 0.25)
+  close(automationAmount({ automationAmount: -3 }), 0)
+})
+
+// ── Lane value bounds (structural pool sizing) ───────────────────────────────
+
+function keyframeLane(values: number[]): AutomationLane {
+  return {
+    mode: 'linear',
+    keyframes: values.map((value, i) => ({ beat: i * 4, value })),
+  }
+}
+
+test('bounds: a keyframe lane reaches exactly its keyframe extremes, base excluded', () => {
+  const { min, max } = automationLaneValueBounds(keyframeLane([2, 5, 3]), 8)
+  close(min, 2)
+  close(max, 5, 'the knob value never shows through a keyframed lane')
+})
+
+test('bounds: an empty lane is the base value alone', () => {
+  assert.deepEqual(automationLaneValueBounds(keyframeLane([]), 7), { min: 7, max: 7 })
+})
+
+test('bounds: a burst lane spans the base and every target', () => {
+  const lane: AutomationLane = {
+    mode: 'linear',
+    keyframes: [],
+    burst: BURST,
+    bursts: [burst(0, 1, 10), burst(4, 1, 1)],
+    min: 0,
+    max: 10,
+  }
+  // Base shows through between bursts, so it bounds both ends.
+  assert.deepEqual(automationLaneValueBounds(lane, 3), { min: 1, max: 10 })
+  assert.deepEqual(automationLaneValueBounds(lane, 12), { min: 1, max: 12 })
+})
+
+test('bounds: a noise lane spans each gate\'s deviation, clamped to the param range', () => {
+  const lane: AutomationLane = {
+    mode: 'linear',
+    keyframes: [],
+    noise: { rate: 4, smoothness: 0.5, range: 0.5, seed: 1 },
+    gates: [{ beat: 0, endBeat: 4, center: 9, amp: 1 }],
+    min: 0,
+    max: 10,
+  }
+  // deviation = (10-0) * 0.5 * 1 * 0.5 = 2.5 → [6.5, 11.5] clamped to 11.5→10.
+  const { min, max } = automationLaneValueBounds(lane, 8)
+  close(min, 6.5)
+  close(max, 10)
 })

@@ -8,7 +8,7 @@ import { compositionDef, isCompositionTrack } from '../core/directors'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
@@ -411,6 +411,9 @@ export interface ProjectState {
   /** Put an automation lane in one of its three modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  /** Set an automation lane's output amount (a whole-lane gain, any mode).
+   *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
+  setTrackAutomationAmount: (trackId: string, amount: number) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
@@ -1515,6 +1518,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
       }
       return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  setTrackAutomationAmount: (trackId, amount) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(AUTOMATION_AMOUNT_MAX, amount))
+      // Neutral gain is stored as absence, so untouched lanes don't grow a field.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, automationAmount: clamped === 1 ? undefined : clamped } } }
     }),
 
   setTrackTargets: (trackId, targets) =>
