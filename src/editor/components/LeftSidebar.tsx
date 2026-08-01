@@ -188,6 +188,12 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
     </svg>
   )},
+  { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M3.2 1 H6.2 L4.4 11 H1.4 Z" fill="#fbbf24" fillOpacity="0.9" />
+      <path d="M7.4 1 H10.4 L8.6 11 H5.6 Z" fill="#fbbf24" fillOpacity="0.35" />
+    </svg>
+  )},
   { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
@@ -318,9 +324,15 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
+// The in-scene Crop masks the whole scene while its rows are held - the
+// sustained shape Rumble collects - but it is an object instrument outside the
+// core pool, so the folder claims it directly (pick() cannot reach it).
+const CROP_OBJECT_IDS = new Set(['crop'])
+const CROP_OBJECT_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => CROP_OBJECT_IDS.has(i.id))
+
 // Extras is the remainder: everything the curated folders above did not claim.
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
-  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id),
+  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id) && !CROP_OBJECT_IDS.has(i.id),
 )
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
@@ -478,7 +490,7 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     items: [],
     subfolders: [
       { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
-      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking or warping while the note is held.', items: pick(RUMBLE_IDS) },
+      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
     ],
   },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },

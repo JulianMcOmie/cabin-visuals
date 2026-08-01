@@ -144,6 +144,13 @@ export interface ObjectInstrumentDef {
   /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
    *  order (first entry renders at the top). Omit for the full piano roll. */
   midiRows?: MidiRowDef[]
+  /** Settings-dependent MIDI vocabulary: rows derived from the track's current
+   *  params (Crop's one row per division). Wins over `midiRows` when both are
+   *  declared. Takes a structural slice of Track so this file stays free of the
+   *  project types; only the row RESOLVER calls it (resolveDeclaredRows.ts) -
+   *  the static call sites (`useLoopBlockDrag`, drop-layer defaults) keep
+   *  reading `midiRows` and simply see none for such an instrument. */
+  midiRowsFor?: (track: { params?: Record<string, number>; stringParams?: Record<string, string> }) => MidiRowDef[]
   /** This object's transform relative to its parent, per frame. The engine composes
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */

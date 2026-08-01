@@ -1,5 +1,5 @@
 import { flattenTrackNotes } from '../visual/noteFlatten'
-import type { MidiRowDef } from '../../instruments/types'
+import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { Track } from '../../types'
 import type { DirectorInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
@@ -65,40 +65,47 @@ const FLASH_DECAY_SHAPE = 1.8
 
 /** Smear length at blur = 1, in normalized frame widths. Small by design: this
  *  is a suggestion of movement at the cut, not a defocus. */
-const BLUR_MAX_DISTANCE = 0.055
+export const BLUR_MAX_DISTANCE = 0.055
 /**
  * The blur rides the flash envelope raised to this power. Blur comes from
  * MOTION, which stops long before light finishes falling off, so sharing the
  * flash's long gentle tail unmodified would read as a soft-focus lens rather
  * than a smear. Cubing collapses it back onto the onset.
  */
-const BLUR_CONCENTRATION = 3
+export const BLUR_CONCENTRATION = 3
 
-export function cropDivisions(track: Track): number {
+/** The param readers take any params-bearing shape (a document Track or a
+ *  per-frame ObjectState slice), so the Main composition path and the in-scene
+ *  mask instrument read one set of defaults. */
+export interface CropParamSource {
+  params?: Record<string, number>
+}
+
+export function cropDivisions(track: CropParamSource): number {
   return Math.max(1, Math.min(MAX_DIVISIONS, Math.round(track.params?.divisions ?? DEFAULT_DIVISIONS)))
 }
 
 /** Degrees, wrapped into [0, 360). Continuous with no dead zone: in linear mode
  *  180 is 0 with the slice order reversed, in radial mode it is half a turn of
  *  the wedge pattern - both free, and the natural knob for sweeps. */
-export function cropAngle(track: Track): number {
+export function cropAngle(track: CropParamSource): number {
   const raw = track.params?.angle ?? 0
   return ((raw % 360) + 360) % 360
 }
 
-export function cropRadial(track: Track): boolean {
+export function cropRadial(track: CropParamSource): boolean {
   return Math.round(track.params?.mode ?? 0) === 1
 }
 
-export function cropFlash(track: Track): number {
+export function cropFlash(track: CropParamSource): number {
   return Math.max(0, Math.min(1, track.params?.flash ?? 0))
 }
 
-export function cropBlur(track: Track): number {
+export function cropBlur(track: CropParamSource): number {
   return Math.max(0, Math.min(1, track.params?.blur ?? 0))
 }
 
-export function cropFlashBeats(track: Track): number {
+export function cropFlashBeats(track: CropParamSource): number {
   return Math.max(0.01, track.params?.flashBeats ?? 0.3)
 }
 
@@ -140,37 +147,48 @@ function sliceOnsetBeats(
   return onsets
 }
 
+/** One schema for both crop surfaces: the Main composition def below and the
+ *  in-scene mask instrument (instruments/Crop.tsx). Diverging copies would let
+ *  the two panels show different ranges for the same stored keys. */
+export const CROP_PARAMS: ParamDef[] = [
+  { key: 'divisions', label: 'Divisions', min: 1, max: MAX_DIVISIONS, step: 1, default: DEFAULT_DIVISIONS },
+  { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, default: 0 },
+  {
+    key: 'mode',
+    label: 'Mode',
+    type: 'select',
+    options: [
+      { value: 0, label: 'Linear bands' },
+      { value: 1, label: 'Radial wedges' },
+    ],
+    default: 0,
+  },
+  { key: 'flash', label: 'Entry flash', min: 0, max: 1, step: 0.01, default: 0 },
+  { key: 'flashBeats', label: 'Flash length (beats)', min: 0.05, max: 1, step: 0.01, default: 0.3 },
+  { key: 'blur', label: 'Onset blur', min: 0, max: 1, step: 0.01, default: 0 },
+]
+
+/** One MIDI row per slice/wedge - shared by both crop surfaces so the piano
+ *  roll reads identically wherever the crop lives. */
+export function cropMidiRows(track: CropParamSource): MidiRowDef[] {
+  const divisions = cropDivisions(track)
+  const radial = cropRadial(track)
+  return Array.from({ length: divisions }, (_, index) => ({
+    pitch: CROP_BASE_PITCH + index,
+    label: `${radial ? 'Wedge' : 'Slice'} ${index + 1}`,
+    color: `hsl(${(index * 67) % 360}, 65%, 58%)`,
+    emphasized: index === 0,
+  }))
+}
+
 export const cropDirector: DirectorInstrumentDef = {
   id: 'crop',
   name: 'Crop',
-  params: [
-    { key: 'divisions', label: 'Divisions', min: 1, max: MAX_DIVISIONS, step: 1, default: DEFAULT_DIVISIONS },
-    { key: 'angle', label: 'Angle', min: 0, max: 360, step: 1, default: 0 },
-    {
-      key: 'mode',
-      label: 'Mode',
-      type: 'select',
-      options: [
-        { value: 0, label: 'Linear bands' },
-        { value: 1, label: 'Radial wedges' },
-      ],
-      default: 0,
-    },
-    { key: 'flash', label: 'Entry flash', min: 0, max: 1, step: 0.01, default: 0 },
-    { key: 'flashBeats', label: 'Flash length (beats)', min: 0.05, max: 1, step: 0.01, default: 0.3 },
-    { key: 'blur', label: 'Onset blur', min: 0, max: 1, step: 0.01, default: 0 },
-  ],
+  params: CROP_PARAMS,
   hideMidiRowsInSettings: true,
   targetsSingleScene: true,
   midiRows(track): MidiRowDef[] {
-    const divisions = cropDivisions(track)
-    const radial = cropRadial(track)
-    return Array.from({ length: divisions }, (_, index) => ({
-      pitch: CROP_BASE_PITCH + index,
-      label: `${radial ? 'Wedge' : 'Slice'} ${index + 1}`,
-      color: `hsl(${(index * 67) % 360}, 65%, 58%)`,
-      emphasized: index === 0,
-    }))
+    return cropMidiRows(track)
   },
   resolve(track, context) {
     // Rows are slices, so the scene is not chosen by MIDI. The settings panel

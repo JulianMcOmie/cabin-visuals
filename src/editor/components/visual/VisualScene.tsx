@@ -38,6 +38,8 @@ import { resolveActiveColorFilter } from '../../instruments/ColorFilters'
 import { resolveActiveStrobe } from '../../instruments/Strobe'
 import { BASS_RIPPLE_FIELD_GLSL, resolveActiveBassRipple } from '../../instruments/BassRipple'
 import { IMPACT_WARP_FIELD_GLSL, resolveActiveImpactWarp } from '../../instruments/ImpactWarp'
+import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
+import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { useTimeStore } from '../../store/TimeStore'
 
@@ -465,6 +467,54 @@ if (partitionSlice > 0.5) {
   return material
 }
 
+/** Point one compositor quad at `layer`: texture, opacity, partition geometry +
+ * uniforms, viewport placement, render order. Shared by the scene-layer meshes
+ * and the final-invert meshes, which differ ONLY in the texture they sample -
+ * these assignments were duplicated verbatim before this helper, and a new mask
+ * field silently reaching one loop but not the other is exactly the bug that
+ * duplication invites. */
+function applyCompositorLayer(
+  mesh: Mesh,
+  layer: CompositionLayer,
+  index: number,
+  texture: Texture,
+  aspect: number,
+) {
+  const material = mesh.material as MeshBasicMaterial
+  if (material.map !== texture) {
+    material.map = texture
+    material.needsUpdate = true
+  }
+  material.opacity = layer.opacity
+  setPartitionGeometry(mesh.geometry, layer.partition)
+  const uniforms = material.userData.partitionUniforms as PartitionUniforms
+  const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
+  const slice = layer.partition?.kind === 'slice' ? layer.partition : undefined
+  uniforms.radial.value = radial ? 1 : 0
+  uniforms.slice.value = slice ? 1 : 0
+  // Degrees on the contract (what the director exposes), radians in the
+  // shader, converted once here rather than per fragment.
+  uniforms.angle.value = ((slice?.angle ?? 0) * Math.PI) / 180
+  uniforms.index.value = slice?.index ?? radial?.radiusIndex ?? radial?.index ?? 0
+  uniforms.count.value = Math.max(1, slice?.count ?? radial?.count ?? 1)
+  uniforms.aspect.value = aspect
+  uniforms.wedge.value = slice?.radial ? 1 : 0
+  uniforms.flash.value = layer.flash ?? 0
+  uniforms.blur.value = layer.blur ?? 0
+  if (layer.partition) {
+    mesh.position.set(0, 0, -index * 0.001)
+    mesh.scale.set(1, 1, 1)
+  } else {
+    mesh.position.set(
+      -1 + layer.viewport.x * 2 + layer.viewport.width,
+      -1 + layer.viewport.y * 2 + layer.viewport.height,
+      -index * 0.001,
+    )
+    mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
+  }
+  mesh.renderOrder = index
+}
+
 function lights() {
   return (
     <>
@@ -630,6 +680,23 @@ export function VisualScene() {
       depthTest: false,
       depthWrite: false,
     })
+    const cropMaskMaterial = new ShaderMaterial({
+      vertexShader: COLOR_FILTER_VERTEX,
+      fragmentShader: CROP_MASK_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        sliceState: { value: new Float32Array(CROP_MAX_DIVISIONS) },
+        count: { value: 1 },
+        angle: { value: 0 },
+        wedge: { value: 0 },
+        flash: { value: 0 },
+        blur: { value: 0 },
+        wet: { value: 1 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
     const gradientMaterial = new ShaderMaterial({
       vertexShader: COLOR_FILTER_VERTEX,
       fragmentShader: BACKDROP_GRADIENT_FRAGMENT,
@@ -676,7 +743,7 @@ export function VisualScene() {
     })
     return {
       scene, invertScene, cam, meshes, invertMeshes,
-      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, gradientMaterial,
+      filterScene, filterCam, filterMesh, filterMaterial, warpMaterial, impactWarpMaterial, cropMaskMaterial, gradientMaterial,
       compositeTarget, bloomEffect, finalMaterial,
     }
   }, [gl])
@@ -765,6 +832,7 @@ export function VisualScene() {
     compositor.filterMaterial.dispose()
     compositor.warpMaterial.dispose()
     compositor.impactWarpMaterial.dispose()
+    compositor.cropMaskMaterial.dispose()
     compositor.gradientMaterial.dispose()
     compositor.bloomEffect.dispose()
     compositor.finalMaterial.dispose()
@@ -775,6 +843,7 @@ export function VisualScene() {
   const impactWarpTrackIds = useMemo(() => postProcessTracksByScene(objects, 'impactWarp'), [objects])
   const colorFilterTrackIds = useMemo(() => postProcessTracksByScene(objects, 'colorFilters'), [objects])
   const strobeTrackIds = useMemo(() => postProcessTracksByScene(objects, 'strobe'), [objects])
+  const cropTrackIds = useMemo(() => postProcessTracksByScene(objects, 'crop'), [objects])
 
   const placementKey = useProjectStore((s) => objects.map((o) => {
     const track = s.scenes[o.sceneId]?.tracks[o.trackId]
@@ -909,6 +978,33 @@ export function VisualScene() {
           filteredTexture = output.texture
           filterPass++
         }
+        // The in-scene Crop mask runs after even the Strobe: it is a matte
+        // over the finished look, so every grade, warp and flash lands inside
+        // the visible slices - running earlier would fill the punched holes
+        // back in with whatever pass came after. Null resolve (no notes yet,
+        // muted, fully dry) skips the pass entirely.
+        for (const trackId of cropTrackIds.get(sceneId) ?? []) {
+          const mask = resolveActiveCropMask(getObjectState(trackId))
+          if (!mask) continue
+          const output = runtime.filterTargets[filterPass % runtime.filterTargets.length]
+          compositor.filterMesh.material = compositor.cropMaskMaterial
+          const uniforms = compositor.cropMaskMaterial.uniforms
+          uniforms.tDiffuse.value = filteredTexture
+          uniforms.sliceState.value = mask.sliceState
+          uniforms.count.value = mask.count
+          uniforms.angle.value = mask.angle
+          uniforms.wedge.value = mask.wedge ? 1 : 0
+          uniforms.flash.value = mask.flash
+          uniforms.blur.value = mask.blur
+          uniforms.wet.value = mask.wet
+          uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
+          gl.setRenderTarget(output)
+          gl.setClearColor(0x000000, 0)
+          gl.clear(true, true, true)
+          gl.render(compositor.filterScene, compositor.filterCam)
+          filteredTexture = output.texture
+          filterPass++
+        }
         runtime.outputTexture = filteredTexture
 
         // Final-invert text is isolated as a transparent mask. It is applied only
@@ -928,6 +1024,7 @@ export function VisualScene() {
         compositor.meshes.push(mesh)
         compositor.scene.add(mesh)
       }
+      const layerAspect = Math.max(0.0001, size.width / Math.max(1, size.height))
       compositor.meshes.forEach((mesh, i) => {
         const layer = layers[i]
         mesh.visible = !!layer
@@ -935,39 +1032,7 @@ export function VisualScene() {
         const runtime = mounted.get(layer.sceneId)
         mesh.visible = !!runtime
         if (!runtime) return
-        const material = mesh.material as MeshBasicMaterial
-        if (material.map !== runtime.outputTexture) {
-          material.map = runtime.outputTexture
-          material.needsUpdate = true
-        }
-        material.opacity = layer.opacity
-        setPartitionGeometry(mesh.geometry, layer.partition)
-        const uniforms = material.userData.partitionUniforms as PartitionUniforms
-        const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
-        const slice = layer.partition?.kind === 'slice' ? layer.partition : undefined
-        uniforms.radial.value = radial ? 1 : 0
-        uniforms.slice.value = slice ? 1 : 0
-        // Degrees on the contract (what the director exposes), radians in the
-        // shader, converted once here rather than per fragment.
-        uniforms.angle.value = ((slice?.angle ?? 0) * Math.PI) / 180
-        uniforms.index.value = slice?.index ?? radial?.radiusIndex ?? radial?.index ?? 0
-        uniforms.count.value = Math.max(1, slice?.count ?? radial?.count ?? 1)
-        uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-        uniforms.wedge.value = slice?.radial ? 1 : 0
-        uniforms.flash.value = layer.flash ?? 0
-        uniforms.blur.value = layer.blur ?? 0
-        if (layer.partition) {
-          mesh.position.set(0, 0, -i * 0.001)
-          mesh.scale.set(1, 1, 1)
-        } else {
-          mesh.position.set(
-            -1 + layer.viewport.x * 2 + layer.viewport.width,
-            -1 + layer.viewport.y * 2 + layer.viewport.height,
-            -i * 0.001,
-          )
-          mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
-        }
-        mesh.renderOrder = i
+        applyCompositorLayer(mesh, layer, i, runtime.outputTexture, layerAspect)
       })
 
       const project = useProjectStore.getState()
@@ -1020,39 +1085,7 @@ export function VisualScene() {
         const runtime = mounted.get(layer.sceneId)
         mesh.visible = !!runtime
         if (!runtime) return
-        const material = mesh.material as MeshBasicMaterial
-        if (material.map !== runtime.invertTarget.texture) {
-          material.map = runtime.invertTarget.texture
-          material.needsUpdate = true
-        }
-        material.opacity = layer.opacity
-        setPartitionGeometry(mesh.geometry, layer.partition)
-        const uniforms = material.userData.partitionUniforms as PartitionUniforms
-        const radial = layer.partition?.kind === 'radial' ? layer.partition : undefined
-        const slice = layer.partition?.kind === 'slice' ? layer.partition : undefined
-        uniforms.radial.value = radial ? 1 : 0
-        uniforms.slice.value = slice ? 1 : 0
-        // Degrees on the contract (what the director exposes), radians in the
-        // shader, converted once here rather than per fragment.
-        uniforms.angle.value = ((slice?.angle ?? 0) * Math.PI) / 180
-        uniforms.index.value = slice?.index ?? radial?.radiusIndex ?? radial?.index ?? 0
-        uniforms.count.value = Math.max(1, slice?.count ?? radial?.count ?? 1)
-        uniforms.aspect.value = Math.max(0.0001, size.width / Math.max(1, size.height))
-        uniforms.wedge.value = slice?.radial ? 1 : 0
-        uniforms.flash.value = layer.flash ?? 0
-        uniforms.blur.value = layer.blur ?? 0
-        if (layer.partition) {
-          mesh.position.set(0, 0, -i * 0.001)
-          mesh.scale.set(1, 1, 1)
-        } else {
-          mesh.position.set(
-            -1 + layer.viewport.x * 2 + layer.viewport.width,
-            -1 + layer.viewport.y * 2 + layer.viewport.height,
-            -i * 0.001,
-          )
-          mesh.scale.set(layer.viewport.width, layer.viewport.height, 1)
-        }
-        mesh.renderOrder = i
+        applyCompositorLayer(mesh, layer, i, runtime.invertTarget.texture, layerAspect)
       })
       gl.render(compositor.invertScene, compositor.cam)
     } finally {

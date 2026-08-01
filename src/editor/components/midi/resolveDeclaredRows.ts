@@ -31,7 +31,8 @@ export function resolveDeclaredMidiRows(
   project: DeclaredRowProject,
 ): DeclaredMidiRows | undefined {
   if (track.type === 'base') {
-    const rows = getInstrument(track.instrumentId)?.midiRows
+    const def = getInstrument(track.instrumentId)
+    const rows = def?.midiRowsFor?.(track) ?? def?.midiRows
     return rows ? { rows, strict: false } : undefined
   }
 
