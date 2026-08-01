@@ -52,6 +52,7 @@
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
+    ".next-build-worktree/types/**/*.ts",
     ".next-build-3001/types/**/*.ts"
   ],
   "exclude": [

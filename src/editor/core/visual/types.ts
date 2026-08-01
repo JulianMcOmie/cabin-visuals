@@ -119,6 +119,15 @@ export interface ResolvedObject {
   scratchBase: StateVector
   /** Cross-cutting group labels - top-level movers target tags (see Routing). */
   tags: string[]
+  /** Track ids of Crop tracks whose `targets` routing hits THIS object: each
+   *  becomes a screen-space mask pass over this object's rendered output
+   *  (ShaderWrapper), gated by that crop track's own notes. Appended per
+   *  resolve like the global entries in moverAndSplitterChain. */
+  maskSourceIds: string[]
+  /** True on a Crop object that routes to targets: it masks those objects
+   *  instead of its whole scene, so VisualScene must NOT also run its
+   *  scene-wide pass. */
+  masksTargets: boolean
 }
 
 export interface ResolvedGraph {

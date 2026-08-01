@@ -15,7 +15,7 @@ import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { getMountedRenderScenes, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
+import { getCompositionLayers, getMountedRenderScenes, getObjectState, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
@@ -57,7 +57,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   }
   // The VisualCopy pull API too, so E2E checks can read a track's resolved
   // copies (transform + opacity) without reaching into an R3F scene graph.
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes }
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
 }
 
 // Shared segment styling for the header transport band. Segments are flush -

@@ -31,6 +31,10 @@ import type { ViewAspect } from '../editor/store/ProjectStore'
  * v5 introduced scenes; v6 adds each scene's background color; v7 removes
  * retired event-modifier tracks; v8 adds transparent scene backgrounds; v9
  * replaces the basic shapes' numeric hue with a concrete color string.
+ * v10 renames the transform param keys onto the canonical tf* set; v11 pins
+ * pre-existing Oscilloscopes to full-frame; v12 de-specializes directors -
+ * track type 'director' + directorId became type 'base' + a composition
+ * instrumentId (sceneBindings unchanged).
  */
 export interface ProjectDocument {
   schemaVersion: number
@@ -67,7 +71,11 @@ export function emptyDocument(): ProjectDocument {
   const mainId = crypto.randomUUID()
   const firstSceneId = crypto.randomUUID()
   return {
-    schemaVersion: 9,
+    // Keep in step with upgrade.ts's CURRENT_VERSION (a literal here because
+    // upgrade.ts imports this module - the constant would be a cycle). A stale
+    // stamp is harmless today (fresh docs re-walk no-op steps on load) but
+    // misleading to read.
+    schemaVersion: 12,
     bpm: 120,
     beatsPerBar: 4,
     totalBars: 32,

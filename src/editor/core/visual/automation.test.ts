@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   automationAmount,
+  automationLaneValueBounds,
   extractBurstGates,
   extractKeyframes,
   extractNoiseGates,
@@ -149,4 +150,52 @@ test('automationAmount: absent → 1, negative documents are floored at 0', () =
   close(automationAmount({}), 1)
   close(automationAmount({ automationAmount: 0.25 }), 0.25)
   close(automationAmount({ automationAmount: -3 }), 0)
+})
+
+// ── Lane value bounds (structural pool sizing) ───────────────────────────────
+
+function keyframeLane(values: number[]): AutomationLane {
+  return {
+    mode: 'linear',
+    keyframes: values.map((value, i) => ({ beat: i * 4, value })),
+  }
+}
+
+test('bounds: a keyframe lane reaches exactly its keyframe extremes, base excluded', () => {
+  const { min, max } = automationLaneValueBounds(keyframeLane([2, 5, 3]), 8)
+  close(min, 2)
+  close(max, 5, 'the knob value never shows through a keyframed lane')
+})
+
+test('bounds: an empty lane is the base value alone', () => {
+  assert.deepEqual(automationLaneValueBounds(keyframeLane([]), 7), { min: 7, max: 7 })
+})
+
+test('bounds: a burst lane spans the base and every target', () => {
+  const lane: AutomationLane = {
+    mode: 'linear',
+    keyframes: [],
+    burst: BURST,
+    bursts: [burst(0, 1, 10), burst(4, 1, 1)],
+    min: 0,
+    max: 10,
+  }
+  // Base shows through between bursts, so it bounds both ends.
+  assert.deepEqual(automationLaneValueBounds(lane, 3), { min: 1, max: 10 })
+  assert.deepEqual(automationLaneValueBounds(lane, 12), { min: 1, max: 12 })
+})
+
+test('bounds: a noise lane spans each gate\'s deviation, clamped to the param range', () => {
+  const lane: AutomationLane = {
+    mode: 'linear',
+    keyframes: [],
+    noise: { rate: 4, smoothness: 0.5, range: 0.5, seed: 1 },
+    gates: [{ beat: 0, endBeat: 4, center: 9, amp: 1 }],
+    min: 0,
+    max: 10,
+  }
+  // deviation = (10-0) * 0.5 * 1 * 0.5 = 2.5 → [6.5, 11.5] clamped to 11.5→10.
+  const { min, max } = automationLaneValueBounds(lane, 8)
+  close(min, 6.5)
+  close(max, 10)
 })

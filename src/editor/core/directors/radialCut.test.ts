@@ -15,7 +15,7 @@ const scenes = {
 }
 
 const track: Track = {
-  id: 'radial', name: 'Radial Cut', type: 'director', instrumentId: '', directorId: 'radialCut',
+  id: 'radial', name: 'Radial Cut', type: 'base', instrumentId: 'radialCut',
   color: '#6366f1', muted: false, solo: false, childIds: [],
   sceneBindings: [
     { pitch: 60, sceneId: 'three' },

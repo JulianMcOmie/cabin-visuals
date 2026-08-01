@@ -49,8 +49,9 @@ export function applyLyricStyles(
     store().renameScene(sceneId, style.styleName ?? style.name)
   }
 
-  // Main scene: the switcher. setTrackDirector wants the main scene active and
-  // binds every visual scene a pitch row (scene i -> 60 + i, in scene order).
+  // Main scene: the switcher. Converting to a composition instrument with the
+  // main scene active seeds every visual scene a pitch row (scene i -> 60 + i,
+  // in scene order).
   const s = store()
   const mainId = s.sceneOrder.find((id) => s.scenes[id]?.isMain)
   const visualCount = s.sceneOrder.filter((id) => !s.scenes[id]?.isMain).length
@@ -70,7 +71,7 @@ export function applyLyricStyles(
     childIds: [],
   }
   store().addTrack(base)
-  store().setTrackDirector(switcherId, 'sceneSwitcher', 'Scene Switcher')
+  store().setTrackInstrument(switcherId, 'sceneSwitcher', 'Scene Switcher')
 
   // Cycling held notes across the whole song: look 1 for SWITCH_BARS bars,
   // then look 2, ... wrapping around. The switcher shows the most recently
