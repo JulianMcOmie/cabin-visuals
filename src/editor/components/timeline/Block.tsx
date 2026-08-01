@@ -1,9 +1,10 @@
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
 import { registerMidiActivityBlock } from './midiActivityRegistry'
 
@@ -23,21 +24,22 @@ interface BlockProps {
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
-  const editingBlock = useUIStore((s) => s.editingBlock)
+/** Memoized: during a drag every pointermove rewrites the store, and only the
+ *  dragged block's identity changes - every other block must skip. Depends on
+ *  Track keeping `previewRowPitches` and the handlers referentially stable. */
+export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
+  const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  const rowHeight = useUIStore((s) => s.tracksRowHeight)
-  const isEditing = editingBlock?.blockId === block.id
   const blockRef = useRef<HTMLDivElement>(null)
 
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
   const renderedWidth = Math.max(width, 4)
-  const renderedHeight = Math.max(rowHeight, 1)
   const totalBeatsInBlock = block.durationBars * beatsPerBar
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
-  const palette = midiBlockPalette(color)
+  // Stable object: NotePreview is memoized and takes the palette as a prop.
+  const palette = useMemo(() => midiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
   // A looped block's surface is the UNION of its touching rounded sections, so
@@ -98,7 +100,9 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         // relative to whatever child is under the pointer (e.g. a note sliver).
         const rect = e.currentTarget.getBoundingClientRect()
         const w = rect.width
-        const edge = Math.min(8, w / 4)
+        // Same zone the gesture uses (useTrackGestures) - shared so the cursor
+        // can't advertise a handle the pointerdown wouldn't honour.
+        const edge = edgeHitPx(w, BLOCK_EDGE_HIT)
         const localX = e.clientX - rect.left
         const onRightEdge = localX > w - edge
         const onLeftEdge = localX < edge
@@ -149,7 +153,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       />
     </div>
   )
-}
+})
 
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
@@ -166,7 +170,10 @@ interface LoopSection {
  *  tiles the pattern (repeats dimmed) across touching rounded sections. Those
  *  sections are the block surface itself, rather than decorations inside one
  *  large outer pill, so their touching corners form the familiar DAW divots. */
-function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
+/** Memoized separately from Block: a plain block MOVE keeps `notes` (and every
+ *  other prop) referentially identical, so the potentially hundreds of preview
+ *  divs skip reconciliation entirely while the block repositions. */
+const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
@@ -215,7 +222,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
                 opacity: 'var(--midi-activity-opacity, 0)',
                 boxShadow: `inset 0 0 16px ${palette.outline}`,
                 mixBlendMode: 'screen',
-                willChange: 'opacity',
               }}
             />
           </div>
@@ -240,8 +246,11 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
               top: `${topPct}%`,
               height: 2,
               backgroundColor: repeat > 0 ? palette.repeatedNote : palette.note,
+              // No will-change here (or on the spans below): these hint-promoted
+              // compositor layers numbered in the tens of thousands on a large
+              // project. A 2px dash repaints trivially when its activity var
+              // moves; the block-level layers above are hint enough.
               filter: 'brightness(calc(1 + var(--midi-note-activity, 0) * 2.6)) saturate(1.25)',
-              willChange: 'filter',
             }}
           >
             <span
@@ -251,7 +260,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
                 backgroundColor: palette.selectedOutline,
                 opacity: 'var(--midi-note-activity, 0)',
                 boxShadow: `0 0 6px ${palette.outline}`,
-                willChange: 'opacity',
               }}
             />
           </div>
@@ -259,4 +267,4 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
       })}
     </>
   )
-}
+})

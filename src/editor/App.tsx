@@ -130,9 +130,12 @@ function Scene({
 }
 
 /** A deliberately low-resolution copy of the finished WebGL frame. It is
- * stretched and heavily blurred behind the upper workspace, extending the
- * scene's color into otherwise blank UI space without rendering the Three
- * scene a second time or changing the visualizer's viewport calculations. */
+ * stretched and heavily blurred behind the ENTIRE workspace card - anchored to
+ * the top, where the visualizer lives, and fading as it runs down through the
+ * timeline - so every translucent surface (inspector glass, timeline lanes) is
+ * a window onto the same continuous field of light rather than its own copy of
+ * the frame. One canvas, one 15fps painter; the Three scene is never rendered
+ * a second time and the visualizer's viewport calculations are untouched. */
 function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
   const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -906,13 +909,21 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
-  const scenes = useProjectStore((s) => s.scenes)
-  const activeSceneId = useProjectStore((s) => s.activeSceneId)
-  const [previewSceneId, setPreviewSceneId] = useState(activeSceneId)
+  // null = no explicit viewing choice yet: the canvas shows Main (the final
+  // director composition). Only the scene tabs' right-click "View this scene"
+  // sets a concrete id; switching which scene you EDIT never touches it.
+  const [previewSceneId, setPreviewSceneId] = useState<string | null>(null)
   // Project hydration and scene deletion can invalidate a local preview id.
-  // Falling back at render time keeps the canvas and segmented control live
-  // without writing an ephemeral viewing choice into the project document.
-  const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
+  // Falling back to Main keeps the canvas live without writing an ephemeral
+  // viewing choice into the project document. Subscribed as a primitive
+  // (never the scenes record, whose identity changes on every track edit):
+  // this is the editor ROOT, and a whole-record selector here re-renders the
+  // entire shell on every pointermove of a drag.
+  const resolvedPreviewSceneId = useProjectStore((s) =>
+    previewSceneId && s.scenes[previewSceneId]
+      ? previewSceneId
+      : s.sceneOrder.find((id) => s.scenes[id]?.isMain) ?? s.activeSceneId
+  )
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
@@ -971,12 +982,15 @@ export default function EditorApp() {
             {/* relative: the header band is positioned, so the card must be
                 positioned too (and later in the DOM) for its glow to paint
                 over the header and the library rather than under them. */}
-            <div className="relative flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+            {/* isolate: the ambient bleed paints at z-index -1, and the card's
+                stacking context keeps that above the card's own background
+                instead of letting it vanish beneath it. */}
+            <div className="relative isolate flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+              <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
                 <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
                   <PanelGroup
                     orientation="horizontal"
                     style={{ height: '100%' }}
@@ -1024,7 +1038,12 @@ export default function EditorApp() {
 
                 {/* Tracks / Piano Roll */}
                 <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
-                <div className="flex-1 min-h-0">
+                {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
+                    strip) slightly translucent, so the card-level ambient
+                    bleed's fading tail reads through the work surface - the
+                    same light as the inspector's glass, continued downward.
+                    Label rows and blocks keep their opaque chrome. */}
+                <div className="timeline-glass-scope flex-1 min-h-0">
                   <BottomArea />
                 </div>
 

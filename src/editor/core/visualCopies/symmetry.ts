@@ -18,6 +18,7 @@
 
 import { Matrix4, Vector3 } from 'three'
 import type { MoverOrSplitterDefinition } from './definitions'
+import { SYMMETRY_COLOR } from './identityColors'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
 
 export interface SymmetrySettings {
@@ -159,6 +160,7 @@ export const symmetrySplitter: MoverOrSplitterDefinition<SymmetrySettings> = {
   id: 'symmetry',
   label: 'Symmetry',
   kind: 'splitter',
+  identityColor: SYMMETRY_COLOR,
   params: [
     { key: 'mirrors', label: 'Mirrors', min: 1, max: SYMMETRY_MAX_MIRRORS, step: 1, default: 1 },
     { key: 'tilt', label: 'Tilt', min: 0, max: 180, step: 1, default: 0 },

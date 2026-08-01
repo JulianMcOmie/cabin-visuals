@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useAudioStore } from '../../store/AudioStore'
@@ -35,7 +35,10 @@ interface AudioBlockProps {
  * dragged left of bar 0 lives in the pickup (the timeline shifts to keep it
  * flush with the left edge; the lane wrapper in Track.tsx applies the offset).
  */
-export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, showOscilloscope = false }: AudioBlockProps) {
+/** Memoized like Block: audio lanes must not re-render on every store write
+ *  during a MIDI drag. Every subscription below selects a primitive or a
+ *  per-clip object whose identity only changes when that clip changes. */
+export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, showOscilloscope = false }: AudioBlockProps) {
   // Width follows tempo reactively - this subscription is the feature.
   const bpm = useProjectStore((s) => s.bpm)
   const clip = useAudioStore((s) => s.audioClips[block.clipRef])
@@ -322,4 +325,4 @@ export function AudioBlock({ block, trackId, barWidthPx, beatsPerBar, color, sho
       )}
     </div>
   )
-}
+})

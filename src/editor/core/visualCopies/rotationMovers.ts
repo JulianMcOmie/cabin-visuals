@@ -14,6 +14,7 @@ import {
   type BasisSettings,
 } from './motionBasis'
 import type { VisualCopy } from './types'
+import { CONSTANT_ORBIT_COLOR, CONSTANT_ROTATE_COLOR, ORBIT_BURST_COLOR, ROTATE_BURST_COLOR } from './identityColors'
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -103,6 +104,7 @@ export const rotateBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> 
   id: 'rotateBurst',
   label: 'Rotate Burst',
   kind: 'mover',
+  identityColor: ROTATE_BURST_COLOR,
   params: ROTATION_BURST_PARAMS,
   midiRows: () => SIGNED_BASIS_ROWS,
   resolve({ settings, notes }) {
@@ -120,6 +122,7 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
   id: 'orbitBurst',
   label: 'Orbit Burst',
   kind: 'mover',
+  identityColor: ORBIT_BURST_COLOR,
   params: [...ROTATION_BURST_PARAMS, ...PIVOT_PARAMS],
   midiRows: () => SIGNED_BASIS_ROWS,
   resolve({ settings, notes }) {
@@ -216,6 +219,7 @@ export const constantRotateMover: MoverOrSplitterDefinition<ConstantRotationSett
   id: 'constantRotate',
   label: 'Constant Rotate',
   kind: 'mover',
+  identityColor: CONSTANT_ROTATE_COLOR,
   params: CONSTANT_ROTATION_PARAMS,
   midiRows: () => ROTATION_WITH_RETURN_ROWS,
   resolve({ settings, notes }) {
@@ -233,6 +237,7 @@ export const constantOrbitMover: MoverOrSplitterDefinition<ConstantRotationSetti
   id: 'constantOrbit',
   label: 'Constant Orbit',
   kind: 'mover',
+  identityColor: CONSTANT_ORBIT_COLOR,
   params: [...CONSTANT_ROTATION_PARAMS, ...PIVOT_PARAMS],
   midiRows: () => ROTATION_WITH_RETURN_ROWS,
   resolve({ settings, notes }) {

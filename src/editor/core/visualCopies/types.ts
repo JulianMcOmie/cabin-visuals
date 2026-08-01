@@ -64,6 +64,23 @@ export interface VisualCopy {
     tint: string | null
     /** How far toward `tint` to pull, 0..1. Ignored when `tint` is null. */
     tintAmount: number
+    /**
+     * Walk toward `tint` in OKLab rather than by a straight channel lerp.
+     * OPTIONAL, defaulting to false - a straight lerp is what every definition
+     * written before this field did, and existing saves keep looking the way
+     * they were authored.
+     *
+     * It matters at PARTIAL `tintAmount`, which is where a note colorizer
+     * spends nearly all of its time: a channel lerp between two saturated
+     * colors sags through a desaturated middle, so a flash caught at 0.5 reads
+     * as a wash rather than as the color it was pointed at. Set this and the
+     * halfway point still looks like the picked color, just less of it.
+     *
+     * Only the tint mix changes. The HSL offsets above still ride on top in
+     * three's own units, and `tint` is still an absolute target that REPLACES
+     * rather than accumulates.
+     */
+    tintPerceptual?: boolean
   }
 }
 
@@ -116,4 +133,24 @@ export interface MoverOrSplitterContext {
  */
 export interface MoverOrSplitter {
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
+  /**
+   * OPTIONAL, and the one thing a chain entry may say about time rather than
+   * space: remap the beat the whole object is evaluated at.
+   *
+   * `apply` can only ever restate the copy it is handed, computed at the
+   * current beat - it cannot un-compute the instrument animation, automation
+   * lanes or upstream mover motion baked into the placement below it. Freezing
+   * or reversing an object therefore cannot be a transform; it has to be a
+   * change of WHEN. An entry that implements this receives the REAL playhead
+   * beat and returns the beat its object should be evaluated at instead, and
+   * `computeAtBeat` applies the result to everything about that object: energy,
+   * automation, envelopes, localTransform, active notes, and the entire chain
+   * (this entry's own position in the chain is irrelevant - the remap is
+   * object-wide, not a partition of the chain).
+   *
+   * Must be a pure function of the beat plus resolved data, like `apply`.
+   * Several entries compose by SUMMING their deltas against the real beat, so
+   * each one keeps reading its own notes at their true timeline positions.
+   */
+  warpBeat?(beat: number): number
 }

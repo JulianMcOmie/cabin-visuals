@@ -11,6 +11,7 @@ import {
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+import { TRANSLATION_OSCILLATOR_COLOR } from './identityColors'
 
 export interface TranslationOscillatorSettings extends BasisSettings {
   distanceX: number
@@ -78,6 +79,7 @@ export const translationOscillatorMover: MoverOrSplitterDefinition<TranslationOs
   id: 'translationOscillator',
   label: 'Translation Oscillator',
   kind: 'mover',
+  identityColor: TRANSLATION_OSCILLATOR_COLOR,
   params: TRANSLATION_OSCILLATOR_PARAMS,
   midiRows: () => OSCILLATION_ROWS,
   resolve({ settings, notes }) {

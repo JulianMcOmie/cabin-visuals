@@ -37,6 +37,25 @@ export interface MoverOrSplitterDefinition<Settings> {
    *  category because they alter appearance rather than spatial transforms. */
   kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
+  /**
+   * The color this definition's tracks WEAR in the UI - timeline blocks,
+   * piano-roll rows and notes, the inspector's tab rail, and its settings
+   * panel's accent. A fixed '#rrggbb', or `{ param }` to follow one of its own
+   * color params live (same contract as an instrument's, in instruments/types).
+   *
+   * REQUIRED in practice: every shipped definition declares one, because chain
+   * entries no longer inherit their object instrument's color - see the
+   * independence note in `utils/trackDisplayColor.ts`. The fixed values live
+   * together in `identityColors.ts` (a palette is only reviewable as a whole),
+   * and a definition with a bespoke panel must have the panel IMPORT its
+   * constant rather than repeat the hex, so console and notes cannot drift.
+   *
+   * Use `{ param }` when the entry genuinely IS about a color the user picked -
+   * the Colorizer's palette is the case it exists for, where its device row,
+   * its notes and its panel all showing the same color is the difference
+   * between reading a chain and decoding it.
+   */
+  identityColor?: string | { param: string }
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

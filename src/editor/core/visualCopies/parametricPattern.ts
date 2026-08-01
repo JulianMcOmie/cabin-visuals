@@ -4,6 +4,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import type { VisualCopy } from './types'
+import { PARAMETRIC_PATTERN_COLOR } from './identityColors'
 
 export const PARAMETRIC_PATTERNS = [
   'Polar Rose',
@@ -223,6 +224,7 @@ export const parametricPatternSplitter: MoverOrSplitterDefinition<ParametricPatt
   id: 'parametricPattern',
   label: 'Parametric Pattern',
   kind: 'splitter',
+  identityColor: PARAMETRIC_PATTERN_COLOR,
   params: [
     {
       key: 'pattern',

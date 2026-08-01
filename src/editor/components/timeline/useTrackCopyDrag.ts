@@ -31,6 +31,7 @@ interface Session {
   rows: VisualRow[]
   grabOffsetY: number
   listTop: number
+  listLeft: number
   rowHeight: number
   /** Resolved drop, applied on pointer-up. null = no valid target. */
   target: { parentId: string | null; index: number | undefined } | null
@@ -41,8 +42,8 @@ interface Session {
 /**
  * Alt-drag-to-duplicate for tracks. The original stays in the list, a ghost of the
  * row floats with the cursor, and the drop targeting mirrors the plain nest-drag
- * (computeDropTarget): a row's top/bottom edge inserts a copy as a sibling at that
- * level - in any parent, not just the original's - and its middle band nests the
+ * (computeDropTarget): a row's top/bottom edge inserts a copy as a sibling on that
+ * boundary - at the X-picked depth, in any parent - and its middle band nests the
  * copy into that row. Sibling drops open a reflow gap; nest drops highlight the
  * target row. Committed on pointer-up; a no-op if released over the original's own
  * subtree. `scrollRef` is the lane scroll container.
@@ -74,12 +75,13 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       rows,
       grabOffsetY,
       listTop,
+      listLeft: scRect.left,
       rowHeight,
       target: null,
       gapRow: null,
       hasTarget: false,
     }
-    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: resolveTrackDisplayColor(track, useProjectStore.getState().tracks), muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
+    setCopyDrag({ gapRow: null, hasTarget: false, name: track.name, color: resolveTrackDisplayColor(track), muted: track.muted, solo: track.solo, labelLeft: scRect.left, rowHeight })
     lockCursor('grabbing')
 
     const moveGhost = (clientY: number) => {
@@ -107,8 +109,8 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       // computed against the full (unfiltered) lists - they map 1:1 onto the
       // insertion index insertTrackCopy uses.
       let drop = overOriginal ? null : computeDropTarget({
-        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, rowHeight: s.rowHeight,
-        clientY: ev.clientY,
+        tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, listLeft: s.listLeft,
+        rowHeight: s.rowHeight, clientX: ev.clientX, clientY: ev.clientY,
       })
       // Automation + envelope + ability tracks live only on their parent object -
       // a copy can't land under a different parent (or nest into anything).

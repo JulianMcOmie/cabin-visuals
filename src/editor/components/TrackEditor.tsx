@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Check, Plus, X } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { getInstrument } from '../instruments'
 import { tracksWithTag } from '../utils/trackTags'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
-import { getDirector } from '../core/directors'
+import { directorAutomatableParams, getDirector } from '../core/directors'
 import { DIRECTOR_OPACITY_PARAM } from '../core/directors/types'
 import { orderedSceneBindings } from '../core/directors/sceneBindings'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
@@ -228,8 +228,7 @@ const TABS: { id: Tab; label: string; short: string; sceneLabel: string; sceneSh
  *  Scenes have no identity color of their own, so they borrow the theme accent. */
 function panelIdentity(
   track: Track | null,
-  tracks: Record<string, Track>,
-  scene: Scene | undefined,
+  scene: Scene | null | undefined,
 ): { name: string; kind: string; color: string } | null {
   if (track) {
     const kind =
@@ -246,7 +245,7 @@ function panelIdentity(
     // naming this instrument, so an achromatic instrument should light the tab
     // white rather than borrow a cycle color that starts out blue and reads as
     // the app/scene accent.
-    return { name: track.name, kind, color: resolveTrackIdentityColor(track, tracks) }
+    return { name: track.name, kind, color: resolveTrackIdentityColor(track) }
   }
   if (scene) return { name: scene.name, kind: scene.isMain ? 'Main scene' : 'Scene', color: 'var(--accent)' }
   return null
@@ -255,8 +254,21 @@ function panelIdentity(
 /** The top-level mover targets picker (#tag / branch / track scopes), shared by
  *  legacy movers and new-registry (VisualCopy) movers and splitters. */
 function MoverTargets({ track }: { track: Track }) {
-  const tracks = useProjectStore((s) => s.tracks)
   const setTrackTargets = useProjectStore((s) => s.setTrackTargets)
+  // The picker lists every object track (name, tags, branch-ness) but must not
+  // re-render on every project edit, so it subscribes to a string fingerprint
+  // of exactly what it shows and re-reads the record only when that changes.
+  const objectTracksKey = useProjectStore((s) => {
+    let key = ''
+    for (const t of Object.values(s.tracks)) {
+      if (getInstrument(t.instrumentId) && t.id !== track.id) {
+        key += `${t.id}${t.name}${(t.tags ?? []).join(',')}${(t.childIds?.length ?? 0) > 0 ? 'b' : ''}`
+      }
+    }
+    return key
+  })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tracks = useMemo(() => useProjectStore.getState().tracks, [objectTracksKey])
   const objectTracks = Object.values(tracks).filter((t) => getInstrument(t.instrumentId) && t.id !== track.id)
   const allTags = [...new Set(objectTracks.flatMap((t) => t.tags ?? []))].sort()
   const branchTracks = objectTracks.filter((t) => (t.childIds?.length ?? 0) > 0)
@@ -344,9 +356,17 @@ function MoverTargets({ track }: { track: Track }) {
 export function TrackEditor() {
   const [tab, setTab] = useState<Tab>('instrument')
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
-  const tracks = useProjectStore((s) => s.tracks)
+  // The inspector subscribes to the SELECTED track and its parent, never the
+  // whole tracks record - a whole-record selector here re-renders every bespoke
+  // settings panel (some carrying canvases) on every pointermove of a timeline
+  // drag.
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
-  const activeScene = useProjectStore((s) => s.scenes[s.activeSceneId])
+  const track = useProjectStore((s) => (selectedTrackId ? s.tracks[selectedTrackId] ?? null : null))
+  const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
+  // With a track selected the scene object is unused (the track wins every
+  // branch below), so skip the subscription: the active scene's identity
+  // changes on every edit to any of its tracks.
+  const activeScene = useProjectStore((s) => (track ? null : s.scenes[s.activeSceneId] ?? null))
   const setTrackParam = useProjectStore((s) => s.setTrackParam)
   const setTrackStringParam = useProjectStore((s) => s.setTrackStringParam)
   const setMoverInput = useProjectStore((s) => s.setMoverInput)
@@ -358,6 +378,7 @@ export function TrackEditor() {
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
+  const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
   const removeEffect = useProjectStore((s) => s.removeEffect)
   const toggleEffect = useProjectStore((s) => s.toggleEffect)
@@ -371,8 +392,7 @@ export function TrackEditor() {
   const effectDragging = useUIStore((s) => s.effectDragging)
   // Effects picker menu anchor (viewport coords); null = closed.
   const [fxMenu, setFxMenu] = useState<{ x: number; y: number } | null>(null)
-  const track = selectedTrackId ? tracks[selectedTrackId] ?? null : null
-  const identity = panelIdentity(track, tracks, activeScene)
+  const identity = panelIdentity(track, activeScene)
 
   // Dragging an effect from the library flips this panel to its Effects tab so the
   // drop zone is visible - the scene's chain when no track is selected.
@@ -503,7 +523,7 @@ export function TrackEditor() {
                             through their targets (appended to each target's
                             chain); movers under an instrument are local chain
                             entries and have no targets. */}
-                        {(!track.parentId || !getInstrument(tracks[track.parentId]?.instrumentId)) && (
+                        {(!track.parentId || !parent || !getInstrument(parent.instrumentId)) && (
                           <MoverTargets track={track} />
                         )}
                       </>
@@ -514,7 +534,6 @@ export function TrackEditor() {
                   // pure multiplier). Its notes are the gates - drawn in the MIDI
                   // editor like any lane; pitch is ignored, velocity scales peak.
                   if (track.type === 'envelope') {
-                    const parent = track.parentId ? tracks[track.parentId] : undefined
                     const target = track.targetParam
                     const isOpacity = target === ENVELOPE_OPACITY_TARGET
                     let targetLabel = 'Opacity'
@@ -556,7 +575,6 @@ export function TrackEditor() {
                   // carries the same controls in compact form; they live here too
                   // so the modes are discoverable without opening the lane.
                   if (track.type === 'automation') {
-                    const parent = track.parentId ? tracks[track.parentId] : undefined
                     const fx = track.targetParam ? parseFxTarget(track.targetParam) : null
                     let targetLabel = track.targetParam ?? 'value'
                     if (fx) {
@@ -569,21 +587,25 @@ export function TrackEditor() {
                         ?? (parent.type === 'mover' || parent.type === 'splitter'
                           ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)
                               ?.params.find((p) => p.key === track.targetParam)
-                          : undefined)
+                          : parent.type === 'director'
+                            ? directorAutomatableParams(getDirector(parent.directorId)).find((p) => p.key === track.targetParam)
+                            : undefined)
                       if (pdef) targetLabel = pdef.label
                     }
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
-                        color={resolveTrackDisplayColor(track, tracks)}
+                        color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}
                         burst={track.burst}
+                        amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
+                        onAmount={(amount) => setTrackAutomationAmount(track.id, amount)}
                       />
                     )
                   }
