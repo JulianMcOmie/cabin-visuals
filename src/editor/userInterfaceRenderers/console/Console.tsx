@@ -1,0 +1,72 @@
+'use client'
+
+// The chassis of a guide-built panel (docs/instrument-panel-design-guide.md):
+// the full-bleed section washed in the accent's dark shade, plus the accent
+// context every kit control reads so panels state their color exactly once.
+// The chassis owns bleed and wash; the panel owns everything inside it.
+
+import { createContext, useContext, type ReactNode } from 'react'
+import { shadeOf, spillOf } from './accent'
+
+// A neutral slate for a control rendered outside any Console (previews,
+// storybook-style labs). Real panels always provide their own.
+const AccentContext = createContext('#9aa4b8')
+
+/** The accent the enclosing <Console> declared. */
+export function useConsoleAccent(): string {
+  return useContext(AccentContext)
+}
+
+export function Console({ accent, bleed = 'top', testId, children }: {
+  /** The instrument's live color param, or the definition's identityColor for
+   *  movers/splitters/colorizers — never a hard-coded theme hue. */
+  accent: string
+  /**
+   * How the section cancels the chassis card's p-3. 'top' (the guide default)
+   * bleeds sides and top, keeping the card's bottom padding under the last
+   * controls row. 'full' fills the card on all sides and rounds itself to sit
+   * inside the card's 10px border (Laser Sphere) — for a panel whose last row
+   * carries its own bottom padding.
+   */
+  bleed?: 'top' | 'full'
+  testId?: string
+  children: ReactNode
+}) {
+  return (
+    <AccentContext.Provider value={accent}>
+      <section
+        data-testid={testId}
+        className={bleed === 'full' ? '-m-3 rounded-[9px]' : '-mx-3 -mt-3'}
+        style={{ background: shadeOf(accent) }}
+      >
+        {children}
+      </section>
+    </AccentContext.Provider>
+  )
+}
+
+/**
+ * One row of controls under the preview: knobs and segments bottom-aligned so
+ * captions land on a shared baseline. The FIRST row under a preview passes
+ * `spill` to catch the window's light through the seam — later rows don't
+ * (the glow is at the seam, not everywhere).
+ *
+ * `className` replaces the default spacing (not appends), so a panel that
+ * needs tighter padding states the whole rhythm rather than fighting the
+ * default's Tailwind classes.
+ */
+export function ControlRow({ spill = false, className = 'px-4 pb-4 pt-3', children }: {
+  spill?: boolean
+  className?: string
+  children: ReactNode
+}) {
+  const accent = useConsoleAccent()
+  return (
+    <div
+      className={`flex items-end gap-5 ${className}`}
+      style={spill ? { background: spillOf(accent) } : undefined}
+    >
+      {children}
+    </div>
+  )
+}
