@@ -1,7 +1,7 @@
 'use client'
 
-// Bespoke settings for the unified Mover (definition id 'mover'), built to
-// docs/instrument-panel-design-guide.md.
+// Bespoke settings for the unified Mover (definition id 'mover'), built from
+// the console kit (./console).
 //
 // The panel's whole shape mirrors the definition's: two segmented controls
 // carry its two decisions - WHAT moves (translate / rotate / orbit) and WHAT
@@ -19,8 +19,7 @@
 // black until the transport plays, and choosing a motion is exactly the thing
 // you do while parked.
 
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { Matrix4 } from 'three'
 import { BURST_EASINGS } from '../core/visualCopies/burstEasings'
 import { MOVER_COLOR } from '../core/visualCopies/identityColors'
@@ -37,28 +36,25 @@ import {
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { MoverOrSplitter } from '../core/visualCopies/types'
 import type { ResolvedNote } from '../core/visual/types'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
-import { LaserKnob } from './laserKnob'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
-  return parameters.find((candidate) => candidate.definition.key === key)
-}
-
-function numericValue(bound: UserInterfaceParameter | undefined, fallback = 0): number {
-  return typeof bound?.value === 'number' ? bound.value : fallback
-}
+import {
+  bindPanel,
+  Console,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  Segmented,
+  spillOf,
+  towardWhite,
+  withAlpha,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 // The accent comes FROM THE DEFINITION (identityColor), so this console, the
 // mover's timeline blocks, its piano-roll notes and the tab rail are one
 // colour by construction - never re-declare the hex here.
 const AMBER = MOVER_COLOR
-const AMBER_HSV = hexToHsv(AMBER)
-/** Hue-true dark shade per the guide - never an alpha tint over panel gray. */
-const SHADE = hsvToHex(AMBER_HSV.h, Math.min(AMBER_HSV.s, 0.5), 0.075)
-const ROOM = '#05070c'
 
 // ── The demo phrase ──────────────────────────────────────────────────────────
 // One 8-beat loop per mode, written in the mover's own 60-65 vocabulary and
@@ -169,11 +165,7 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
   }, [])
 
   return (
-    <div
-      data-testid="mover-window"
-      className="relative h-[128px] overflow-hidden border-b border-white/[0.06]"
-      style={{ background: ROOM, perspective: '800px' }}
-    >
+    <PreviewWindow height={128} testId="mover-window">
       {/* A pool of light so the room is lit by the instrument. */}
       <div
         aria-hidden="true"
@@ -194,7 +186,9 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
           }}
         />
       )}
-      <div aria-hidden="true" className="absolute inset-0" style={{ transformStyle: 'preserve-3d' }}>
+      {/* perspective lives on this wrapper (the transformed objects' parent)
+          so the Z axis has depth - it used to sit on the window div itself. */}
+      <div aria-hidden="true" className="absolute inset-0" style={{ transformStyle: 'preserve-3d', perspective: '800px' }}>
         {FIELD_SEEDS.map((seed, i) => {
           const center = seed[0] === 0 && seed[1] === 0
           return (
@@ -228,43 +222,7 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
         className="absolute bottom-0 h-[2px] w-[10px] -translate-x-1/2 rounded-full"
         style={{ background: withAlpha(AMBER, 0.55) }}
       />
-    </div>
-  )
-}
-
-// ── Segmented controls ───────────────────────────────────────────────────────
-
-function Segmented({ bound, labels, name }: {
-  bound: UserInterfaceParameter
-  labels: readonly string[]
-  name: string
-}) {
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : 0
-  return (
-    <div
-      role="radiogroup"
-      aria-label={name}
-      data-testid={`mover-${name.toLowerCase().replace(/\s+/g, '-')}`}
-      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
-    >
-      {labels.map((label, value) => {
-        const active = value === selected
-        return (
-          <button
-            key={label}
-            role="radio"
-            aria-checked={active}
-            onClick={() => bound.setValue(value)}
-            className={`h-6 min-w-0 flex-1 cursor-pointer truncate rounded-[5px] px-1 text-[9px] font-semibold tracking-[0.1em] transition-colors ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
-            }`}
-            style={active ? { background: withAlpha(AMBER, 0.22), color: towardWhite(AMBER, 0.6) } : undefined}
-          >
-            {label.toUpperCase()}
-          </button>
-        )
-      })}
-    </div>
+    </PreviewWindow>
   )
 }
 
@@ -296,13 +254,11 @@ function EasingGlyph({ easingIndex }: { easingIndex: number }) {
   )
 }
 
-function EasingStrip({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+function EasingStrip({ b }: { b: SelectBinding }) {
+  const selected = Math.round(b.value)
   return (
     <div className="grid grid-cols-5 gap-1">
-      {definition.options.map((option) => {
+      {b.def.options.map((option) => {
         const active = option.value === selected
         return (
           <button
@@ -310,7 +266,7 @@ function EasingStrip({ bound }: { bound: UserInterfaceParameter }) {
             data-testid={`mover-easing-${option.label.toLowerCase()}`}
             aria-label={`${option.label} easing`}
             aria-pressed={active}
-            onClick={() => bound.setValue(option.value)}
+            onClick={() => b.set(option.value)}
             className={`flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1 transition-colors ${
               active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
             }`}
@@ -325,50 +281,7 @@ function EasingStrip({ bound }: { bound: UserInterfaceParameter }) {
   )
 }
 
-// ── Knobs ────────────────────────────────────────────────────────────────────
-
-function MoverKnob({ parameter: bound, label, large, bipolar, format, suffix }: {
-  parameter: UserInterfaceParameter | undefined
-  label: string
-  large?: boolean
-  /** For the signed pivot axes, whose zero is the middle of their travel. */
-  bipolar?: boolean
-  format?: (value: number) => string
-  suffix?: string
-}) {
-  if (!bound) return null
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-  return (
-    <LaserKnob
-      value={bound.value}
-      min={definition.min}
-      max={definition.max}
-      step={definition.step}
-      defaultValue={definition.default}
-      curve={definition.curve ?? 1}
-      label={label}
-      ariaLabel={definition.label}
-      accent={AMBER}
-      large={large}
-      bipolar={bipolar}
-      format={format}
-      suffix={suffix}
-      onChange={bound.setValue}
-    />
-  )
-}
-
 // ── Panel ────────────────────────────────────────────────────────────────────
-
-const PLACED_KEYS = new Set([
-  'motion', 'mode',
-  'distanceX', 'distanceY', 'distanceZ', 'distance',
-  'angleX', 'angleY', 'angleZ', 'angle',
-  'burstBeats', 'easing', 'sharpness',
-  'cyclesPerBeat', 'returnBeats',
-  'pivotX', 'pivotY', 'pivotZ',
-])
 
 /** The per-axis row's unit, said once above the row instead of on each knob. */
 function amountHint(motion: number, mode: number): string {
@@ -378,22 +291,36 @@ function amountHint(motion: number, mode: number): string {
   return `${unit} / HIT`
 }
 
-export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const [showMore, setShowMore] = useState(false)
+/** Index-valued segments from a labels list (the def's option order). */
+const segments = (labels: readonly string[]) => labels.map((label, value) => ({ value, label }))
 
-  const motion = parameter(parameters, 'motion')
-  const mode = parameter(parameters, 'mode')
-  const easing = parameter(parameters, 'easing')
-  const bound = (key: string) => parameter(parameters, key)
+export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
+  const b = bindPanel(parameters)
+  const motion = b.select('motion')
+  const mode = b.select('mode')
+  const easing = b.select('easing')
+  // Every cell's knobs are claimed up front - even the cells not showing - so
+  // none of them leak into the BASIS disclosure.
+  const axes = {
+    distanceX: b.num('distanceX'), distanceY: b.num('distanceY'), distanceZ: b.num('distanceZ'), distance: b.num('distance'),
+    angleX: b.num('angleX'), angleY: b.num('angleY'), angleZ: b.num('angleZ'), angle: b.num('angle'),
+  }
+  const burstBeats = b.num('burstBeats')
+  const sharpness = b.num('sharpness')
+  const cyclesPerBeat = b.num('cyclesPerBeat')
+  const returnBeats = b.num('returnBeats')
+  const pivotX = b.num('pivotX')
+  const pivotY = b.num('pivotY')
+  const pivotZ = b.num('pivotZ')
 
   // The guide's fallback rule: a missing key means the whole plain list, never
   // a half-empty custom layout.
-  if (!motion || !mode || !easing || !bound('distanceX') || !bound('angleX') || !bound('burstBeats') || !bound('returnBeats') || !bound('pivotX')) {
+  if (!motion || !mode || !easing || !axes.distanceX || !axes.angleX || !burstBeats || !returnBeats || !pivotX) {
     return <ParameterList parameters={parameters} />
   }
 
-  const motionValue = Math.round(numericValue(motion, MOVER_MOTION_TRANSLATE))
-  const modeValue = Math.round(numericValue(mode, MOVER_MODE_BURST))
+  const motionValue = Math.round(motion.value)
+  const modeValue = Math.round(mode.value)
   const translate = motionValue === MOVER_MOTION_TRANSLATE
   const orbit = motionValue === MOVER_MOTION_ORBIT
 
@@ -406,25 +333,21 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
       .map((p) => [p.definition.key, p.value as number])),
   } as MoverSettings
 
-  const unplaced = parameters.filter((p) => !PLACED_KEYS.has(p.definition.key))
-  const axisKey = translate ? 'distance' : 'angle'
+  const axis = (suffix: '' | 'X' | 'Y' | 'Z') => axes[`${translate ? 'distance' : 'angle'}${suffix}` as keyof typeof axes]
   const degrees = (value: number) => `${Math.round(value)}`
 
   return (
-    <section data-testid="mover-user-interface" className="-mx-3 -mt-3" style={{ background: SHADE }}>
+    <Console accent={AMBER} testId="mover-user-interface">
       <FieldWindow settings={settings} />
-      <div
-        className="flex flex-col gap-2.5 pb-4 pt-3"
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(AMBER, 0.12)}, transparent)` }}
-      >
+      <div className="flex flex-col gap-2.5 pb-4 pt-3" style={{ background: spillOf(AMBER) }}>
         <div className="flex flex-col gap-1.5 px-4">
-          <Segmented bound={motion} labels={['Translate', 'Rotate', 'Orbit']} name="Motion" />
-          <Segmented bound={mode} labels={['Burst', 'Constant', 'Oscillate']} name="MIDI mode" />
+          <Segmented b={motion} options={segments(['Translate', 'Rotate', 'Orbit'])} name="Motion" testId="mover-motion" />
+          <Segmented b={mode} options={segments(['Burst', 'Constant', 'Oscillate'])} name="MIDI mode" testId="mover-midi-mode" />
         </div>
 
         {modeValue === MOVER_MODE_BURST && (
           <div className="px-4">
-            <EasingStrip bound={easing} />
+            <EasingStrip b={easing} />
           </div>
         )}
 
@@ -433,53 +356,37 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
             {amountHint(motionValue, modeValue)}
           </p>
           <div className="flex items-end gap-5">
-            <MoverKnob parameter={bound(`${axisKey}X`)} label="X" format={translate ? undefined : degrees} />
-            <MoverKnob parameter={bound(`${axisKey}Y`)} label="Y" format={translate ? undefined : degrees} />
-            <MoverKnob parameter={bound(`${axisKey}Z`)} label="Z" format={translate ? undefined : degrees} />
-            <MoverKnob parameter={bound(axisKey)} label="AMOUNT" large format={(v) => `${Math.round(v * 100)}%`} />
+            <Knob b={axis('X')} label="X" format={translate ? undefined : degrees} />
+            <Knob b={axis('Y')} label="Y" format={translate ? undefined : degrees} />
+            <Knob b={axis('Z')} label="Z" format={translate ? undefined : degrees} />
+            <Knob b={axis('')} label="AMOUNT" large format={(v) => `${Math.round(v * 100)}%`} />
           </div>
         </div>
 
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3 px-4">
           {modeValue === MOVER_MODE_BURST && (
             <>
-              <MoverKnob parameter={bound('burstBeats')} label="TIME" suffix="b" />
-              <MoverKnob parameter={bound('sharpness')} label="SHARP" />
+              <Knob b={burstBeats} label="TIME" suffix="b" />
+              <Knob b={sharpness} label="SHARP" />
             </>
           )}
           {modeValue === MOVER_MODE_OSCILLATE && (
-            <MoverKnob parameter={bound('cyclesPerBeat')} label="CYCLES" suffix="/b" />
+            <Knob b={cyclesPerBeat} label="CYCLES" suffix="/b" />
           )}
           {modeValue !== MOVER_MODE_BURST && (
-            <MoverKnob parameter={bound('returnBeats')} label="RETURN" suffix="b" />
+            <Knob b={returnBeats} label="RETURN" suffix="b" />
           )}
           {orbit && (
             <>
-              <MoverKnob parameter={bound('pivotX')} label="PIV X" bipolar />
-              <MoverKnob parameter={bound('pivotY')} label="PIV Y" bipolar />
-              <MoverKnob parameter={bound('pivotZ')} label="PIV Z" bipolar />
+              <Knob b={pivotX} label="PIV X" bipolar />
+              <Knob b={pivotY} label="PIV Y" bipolar />
+              <Knob b={pivotZ} label="PIV Z" bipolar />
             </>
           )}
         </div>
 
-        {unplaced.length > 0 && (
-          <div className="px-3">
-            <button
-              aria-expanded={showMore}
-              onClick={() => setShowMore((value) => !value)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
-            >
-              {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-              BASIS
-            </button>
-            {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
-                <ParameterList parameters={unplaced} />
-              </div>
-            )}
-          </div>
-        )}
+        <More parameters={b.rest()} label="BASIS" className="px-3" />
       </div>
-    </section>
+    </Console>
   )
 }
