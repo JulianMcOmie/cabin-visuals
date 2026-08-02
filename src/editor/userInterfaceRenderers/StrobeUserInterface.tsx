@@ -1,9 +1,9 @@
 'use client'
 
-// Bespoke settings for Strobe, following docs/instrument-panel-design-guide.md:
-// full-bleed, no card chrome, no in-panel title, washed with a hue-true dark
-// shade of the instrument's accent. A live preview that actually flashes, the
-// rate vocabulary, then STYLE / DEPTH / WIDTH.
+// Bespoke settings for Strobe, built from the console kit (./console):
+// full-bleed, no card chrome, washed with the accent's dark shade. A live
+// preview that actually flashes, the rate vocabulary, then STYLE / DEPTH /
+// WIDTH.
 //
 // Two things are specific to this instrument.
 //
@@ -19,7 +19,7 @@
 // math on real pixels, not a lookalike, and it costs one style write per frame
 // instead of a WebGL context.
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
   STROBE_RATE_ROWS,
   STROBE_REFERENCE_FPS,
@@ -30,26 +30,24 @@ import {
   strobeGate,
   type StrobeRateRow,
 } from '../instruments/Strobe'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+import {
+  bindPanel,
+  Console,
+  ControlRow,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  Segmented,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 /** Strobe exposes no color param, so its accent is the white of the flash its
  *  identity color and library icon already use - one identity across the app,
  *  and a black/white panel for an instrument whose whole vocabulary (invert,
  *  blackout, flash) is black and white. */
 const ACCENT = '#ffffff'
-
-function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
-  return parameters.find((candidate) => candidate.definition.key === key)
-}
-
-function numericValue(bound: UserInterfaceParameter | undefined, fallback: number): number {
-  return typeof bound?.value === 'number' ? bound.value : fallback
-}
 
 // ── Live preview ────────────────────────────────────────────────────────────
 
@@ -129,15 +127,12 @@ function StrobePreview({ style, depth, width, secondsPerCycle }: {
   }, [])
 
   return (
-    <div
-      data-testid="strobe-preview"
-      className="relative h-[76px] overflow-hidden border-b border-white/[0.06] bg-[#05070c]"
-    >
+    <PreviewWindow height={76} testId="strobe-preview">
       <div ref={stageRef} className="absolute inset-0">
         <PreviewStage />
       </div>
       <div ref={veilRef} className="pointer-events-none absolute inset-0 opacity-0" />
-    </div>
+    </PreviewWindow>
   )
 }
 
@@ -247,148 +242,30 @@ const STYLE_GLYPHS: Record<number, ReactElement> = {
   ),
 }
 
-function StyleSelector({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+/** The kit's segmented control wearing the style glyphs, in a knob-shaped
+ *  column: caption and readout beneath so it sits on the knobs' baseline. */
+function StyleSelector({ b }: { b: SelectBinding | null }) {
+  if (!b) return null
+  const selected = Math.round(b.value)
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
-          const active = option.value === selected
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-label={option.label}
-              aria-pressed={active}
-              title={`${option.label} on every flash`}
-              onClick={() => bound.setValue(option.value)}
-              className={`px-1.5 pb-0.5 pt-1 transition-colors ${active ? 'bg-white text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'}`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16">
-                {STYLE_GLYPHS[option.value] ?? STYLE_GLYPHS[STROBE_STYLE_INVERT]}
-              </svg>
-            </button>
-          )
-        })}
-      </div>
+    <div className="flex min-w-0 flex-col items-center gap-1">
+      <Segmented
+        b={b}
+        options={b.def.options.map((option) => ({
+          value: option.value,
+          label: `${option.label} on every flash`,
+          glyph: (
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              {STYLE_GLYPHS[option.value] ?? STYLE_GLYPHS[STROBE_STYLE_INVERT]}
+            </svg>
+          ),
+        }))}
+        name="Style"
+      />
       <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">STYLE</span>
       <span className="font-mono text-[9px] text-white/70">
-        {definition.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
+        {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
-    </div>
-  )
-}
-
-/** The panel's continuous-control vocabulary, to the design guide's knob spec:
- *  flat face, 270° accent arc from 7 o'clock built as three stacked copies so the
- *  light lives only along the lit portion, white needle, white-hot dot at the
- *  arc's tip. Vertical drag over ~140px of travel, double-click resets, arrows
- *  nudge, and the param's response curve is honored the way ParamSlider does. */
-function StrobeKnob({ parameter: bound, label, large = false }: {
-  parameter: UserInterfaceParameter
-  label: string
-  /** The instrument's primary param (DEPTH) reads a step larger. */
-  large?: boolean
-}) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-
-  const value = bound.value
-  const curve = definition.curve ?? 1
-  const range = definition.max - definition.min
-  const norm = range === 0 ? 0 : clamp((value - definition.min) / range, 0, 1)
-  const percent = Math.pow(norm, 1 / curve)
-  const angle = -135 + percent * 270
-
-  const commitNorm = (t: number) => {
-    const raw = definition.min + Math.pow(clamp(t, 0, 1), curve) * range
-    const snapped = curve === 1
-      ? definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-      : raw === 0 ? 0 : Number(raw.toPrecision(3))
-    bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
-  }
-
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    // Capture can throw for exotic/synthetic pointers; the drag still works
-    // through the move/up handlers on the element itself.
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
-  }
-
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / 140)
-  }
-
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col items-center">
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={definition.label}
-        aria-valuemin={definition.min}
-        aria-valuemax={definition.max}
-        aria-valuenow={value}
-        title="Drag vertically · double-click to reset"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => bound.setValue(definition.default)}
-        onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[52px] w-[52px]' : 'h-11 w-11'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
-      >
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${ACCENT} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(6px)',
-            transform: 'scale(1.16)',
-            opacity: 0.9,
-          }}
-        />
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(ACCENT, 0.35)} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(1.5px)',
-          }}
-        />
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(ACCENT, 0.82)} 0deg ${percent * 270}deg, rgba(255,255,255,0.08) ${percent * 270}deg 270deg, transparent 270deg)`,
-          }}
-        />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#14171f]" />
-        <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
-          <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
-            style={{ boxShadow: `0 0 5px 1.5px ${ACCENT}` }}
-          />
-        </div>
-      </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      {/* Both knobs are 0..1 fractions of something - how far the frame flips,
-          how much of the cycle is lit - and percent is how you talk about that. */}
-      <span className="font-mono text-[9px] tabular-nums text-white/70">{Math.round(value * 100)}%</span>
     </div>
   )
 }
@@ -401,41 +278,35 @@ function StrobeKnob({ parameter: bound, label, large = false }: {
  *  never reaches the track. */
 const DEFAULT_PREVIEW_PITCH = (STROBE_RATE_ROWS.find((row) => row.emphasized) ?? STROBE_RATE_ROWS[0]).pitch
 
+/** Both knobs are 0..1 fractions of something - how far the frame flips, how
+ *  much of the cycle is lit - and percent is how you talk about that. */
+const asPercent = (value: number) => `${Math.round(value * 100)}%`
+
 export const StrobeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const style = parameter(parameters, 'style')
-  const depth = parameter(parameters, 'depth')
-  const width = parameter(parameters, 'width')
+  const b = bindPanel(parameters)
+  const style = b.select('style')
+  const depth = b.num('depth')
+  const width = b.num('width')
   const [previewPitch, setPreviewPitch] = useState(DEFAULT_PREVIEW_PITCH)
   const previewRow = STROBE_RATE_ROWS.find((row) => row.pitch === previewPitch) ?? STROBE_RATE_ROWS[0]
-
-  const shade = useMemo(() => {
-    const accentHsv = hexToHsv(ACCENT)
-    // A hue-true dark shade, not an alpha tint - low-alpha accent over the
-    // panel's mid-gray mixes into mud (see the design guide).
-    return hsvToHex(accentHsv.h, Math.min(accentHsv.s, 0.5), 0.075)
-  }, [])
 
   if (!style || !depth || !width) return <ParameterList parameters={parameters} />
 
   return (
-    <section data-testid="strobe-user-interface" className="-mx-3 -mt-3" style={{ background: shade }}>
+    <Console accent={ACCENT} testId="strobe-user-interface">
       <StrobePreview
-        style={typeof style.value === 'number' ? Math.round(style.value) : STROBE_STYLE_INVERT}
-        depth={numericValue(depth, 1)}
-        width={numericValue(width, 0.5)}
+        style={Math.round(style.value)}
+        depth={depth.value}
+        width={width.value}
         secondsPerCycle={previewSecondsPerCycle(previewRow)}
       />
       <RateLegend selected={previewPitch} onSelect={setPreviewPitch} />
-      <div
-        className="flex items-end justify-center gap-5 px-4 pb-2 pt-1.5"
-        // The preview's light spilling through the seam onto the console - the
-        // one earned gradient, per the guide.
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
-      >
-        <StyleSelector bound={style} />
-        <StrobeKnob parameter={depth} label="DEPTH" large />
-        <StrobeKnob parameter={width} label="WIDTH" />
-      </div>
-    </section>
+      <ControlRow spill className="justify-center px-4 pb-2 pt-1.5">
+        <StyleSelector b={style} />
+        <Knob b={depth} label="DEPTH" large format={asPercent} />
+        <Knob b={width} label="WIDTH" format={asPercent} />
+      </ControlRow>
+      <More parameters={b.rest()} />
+    </Console>
   )
 }
