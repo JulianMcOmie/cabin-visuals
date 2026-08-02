@@ -11,6 +11,12 @@ Conventions baked into actions:
 - Clone helpers (`cloneBlock` etc.) mint fresh UUIDs at every level — paste/alt-drag never share ids.
 - `splitBlockAtBeat` handles looped blocks carefully (seam cuts restart phase-zero; mid-loop cuts re-phase) — it's pure and unit-tested; reuse it, don't reimplement splitting.
 - New-track colors continue an OKLCH hue cycle from the latest sibling (`resolveNextTrackColor`).
+- `addTrack` mints an id when the track arrives without one (hand-built tracks from console/E2E
+  scripts). Before this guard, an id-less track keyed the record as the string `"undefined"`,
+  pushed a literal `undefined` into `rootTrackIds` (persisting as `null`), and its timeline row
+  rendered `key={undefined}` — surfacing as React's missing-key warning blaming TimelineArea's
+  (correctly keyed) row map. If that warning names TimelineArea, suspect malformed track ids,
+  not the map.
 - `songEnd.ts` — derived song-end bar + loop trimming on shrink.
 
 **Adding a data field**: it's automatically undoable (HistoryStore) and persisted (serialize) via generic field picking — but add it to `persistence/types.ts` `ProjectDocument`, and default it on hydrate for older saves (see `viewAspect` precedent). Fields excluded from snapshots: the flattened view (`tracks`, `rootTrackIds`, `activeSceneId` is normalized on restore).
