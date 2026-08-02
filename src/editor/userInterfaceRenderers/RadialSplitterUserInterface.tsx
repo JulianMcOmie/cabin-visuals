@@ -1,46 +1,37 @@
 'use client'
 
-// Bespoke settings for the Radial splitter. The hero is a live ring diagram of
-// the layout the splitter actually produces: N marks at i/N of a full turn
-// (copy 1 accented - it is the unrotated slot), each mark spun by its own slot
-// rotation, with a dashed guide ring at the current radius. Dragging anywhere
-// on the diagram sets the radius radially from the center; the copy count is a
-// stepper whose readout also drags vertically like a knob. The plane select is
-// three oriented-ellipse buttons that re-orient the diagram (the depth planes
-// foreshorten into ellipses). The mute map spells out the splitter's MIDI
-// grammar - pitch 127 downward, note on hides the copy - and hover-syncs with
-// the diagram marks. Presentation only: every control routes through the
-// passed parameter bindings.
+// Bespoke settings for the Radial splitter, migrated to
+// docs/instrument-panel-design-guide.md on the console kit (./console). The
+// hero is a live ring window of the layout the splitter actually produces: N
+// marks at i/N of a full turn (copy 1 accented - it is the unrotated slot),
+// each mark spun by its own slot rotation, with a dashed guide ring at the
+// current radius. The window is also the EDITOR (the guide's sanctioned
+// exception): dragging anywhere sets the radius radially from the center. The
+// copy count is a stepper whose readout also drags vertically like a knob,
+// the plane select is three oriented-ellipse buttons that re-orient the
+// window, and the mute map spells out the splitter's MIDI grammar - pitch 127
+// downward, note on hides the copy - hover-synced with the window's marks.
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { RotateCcw } from 'lucide-react'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { RADIAL_COLOR } from '../core/visualCopies/identityColors'
+import {
+  bindPanel,
+  Console,
+  More,
+  ParameterList,
+  PreviewWindow,
+  towardWhite,
+  withAlpha,
+  type NumBinding,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
+// The accent comes FROM THE DEFINITION - the same hue this splitter's timeline
+// blocks and piano-roll notes wear.
+const ACCENT = RADIAL_COLOR
 
 // Mirrors the splitter's MIDI grammar in library.ts: with copies <= 32 there is
 // exactly one row per copy, pitch 127 - slot, and a note on hides that copy.
@@ -120,85 +111,87 @@ function RingPad({ count, radius, planeValue, planeLabel, hoveredSlot, onHoverSl
     : `${count} ${count === 1 ? 'COPY' : 'COPIES'} · 1 UNROTATED`
 
   return (
-    <div
-      ref={padRef}
-      data-testid="radial-ring-pad"
-      role="slider"
-      tabIndex={0}
-      aria-label="Radius"
-      aria-valuemin={def.min}
-      aria-valuemax={def.max}
-      aria-valuenow={value}
-      title="Drag from the center to set radius · double-click to reset"
-      onPointerDown={(event) => {
-        event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        setFromPointer(event)
-      }}
-      onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromPointer(event)
-      }}
-      onPointerUp={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-      }}
-      onDoubleClick={() => set(def.default)}
-      onKeyDown={onKeyDown}
-      className="relative w-full cursor-crosshair touch-none select-none border-y border-[var(--border)] bg-[var(--bg-canvas)] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-      style={{ aspectRatio: `${VB_W} / ${VB_H}` }}
-    >
-      <svg aria-hidden="true" viewBox={`0 0 ${VB_W} ${VB_H}`} className="h-full w-full">
-        {/* max-radius bound + center + axis letters */}
-        <ellipse cx={CX} cy={CY} rx={RING_MAX_PX * view.sx} ry={RING_MAX_PX * view.sy} className="fill-none stroke-[var(--border-subtle)]" strokeWidth="1" />
-        <path d={`M${CX - 4} ${CY}H${CX + 4}M${CX} ${CY - 4}V${CY + 4}`} className="fill-none stroke-[var(--border-strong)]" strokeWidth="1" />
-        <text x={CX + (RING_MAX_PX + 7) * view.sx} y={CY + 2.5} className="fill-[var(--text-muted)] font-mono text-[7px]">{view.h}</text>
-        <text x={CX} y={CY - (RING_MAX_PX + 5) * view.sy} textAnchor="middle" className="fill-[var(--text-muted)] font-mono text-[7px]">{view.v}</text>
+    <PreviewWindow height={170} testId="radial-ring-window">
+      <div
+        ref={padRef}
+        data-testid="radial-ring-pad"
+        role="slider"
+        tabIndex={0}
+        aria-label="Radius"
+        aria-valuemin={def.min}
+        aria-valuemax={def.max}
+        aria-valuenow={value}
+        title="Drag from the center to set radius · double-click to reset"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          setFromPointer(event)
+        }}
+        onPointerMove={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromPointer(event)
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+        }}
+        onDoubleClick={() => set(def.default)}
+        onKeyDown={onKeyDown}
+        className="absolute inset-0 cursor-crosshair touch-none select-none outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/50"
+      >
+        <svg aria-hidden="true" viewBox={`0 0 ${VB_W} ${VB_H}`} className="h-full w-full">
+          {/* max-radius bound + center + axis letters */}
+          <ellipse cx={CX} cy={CY} rx={RING_MAX_PX * view.sx} ry={RING_MAX_PX * view.sy} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+          <path d={`M${CX - 4} ${CY}H${CX + 4}M${CX} ${CY - 4}V${CY + 4}`} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+          <text x={CX + (RING_MAX_PX + 7) * view.sx} y={CY + 2.5} fill="rgba(255,255,255,0.35)" className="font-mono text-[7px]">{view.h}</text>
+          <text x={CX} y={CY - (RING_MAX_PX + 5) * view.sy} textAnchor="middle" fill="rgba(255,255,255,0.35)" className="font-mono text-[7px]">{view.v}</text>
 
-        {/* spokes + dashed guide ring at the current radius */}
-        {rPx > 2 && (
-          <>
-            {marks.map((mark) => (
-              <line key={mark.slot} x1={CX} y1={CY} x2={mark.x} y2={mark.y} className="stroke-[var(--border)]" strokeWidth="1" />
-            ))}
-            <ellipse cx={CX} cy={CY} rx={rPx * view.sx} ry={rPx * view.sy} className="fill-none stroke-[var(--accent-muted)]" strokeWidth="1" strokeDasharray="3 3" />
-          </>
-        )}
+          {/* spokes + dashed guide ring at the current radius */}
+          {rPx > 2 && (
+            <>
+              {marks.map((mark) => (
+                <line key={mark.slot} x1={CX} y1={CY} x2={mark.x} y2={mark.y} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+              ))}
+              <ellipse cx={CX} cy={CY} rx={rPx * view.sx} ry={rPx * view.sy} fill="none" stroke={withAlpha(ACCENT, 0.55)} strokeWidth="1" strokeDasharray="3 3" />
+            </>
+          )}
 
-        {/* copy marks - small squares, each spun by its own slot rotation */}
-        {marks.map((mark) => {
-          const active = hoveredSlot === mark.slot
-          return (
-            <g key={mark.slot} onPointerEnter={() => onHoverSlot(mark.slot)} onPointerLeave={() => onHoverSlot(null)}>
-              <circle cx={mark.x} cy={mark.y} r="9" fill="transparent" />
-              {(active || mark.slot === 0) && (
-                <circle
-                  cx={mark.x}
-                  cy={mark.y}
-                  r="7"
-                  className={`fill-none ${active ? 'stroke-[var(--accent-hover)]' : 'stroke-[var(--accent-muted)]'}`}
-                  strokeWidth="1"
-                  strokeDasharray={mark.slot === 0 && !active ? '2 2' : undefined}
+          {/* copy marks - small squares, each spun by its own slot rotation */}
+          {marks.map((mark) => {
+            const active = hoveredSlot === mark.slot
+            return (
+              <g key={mark.slot} onPointerEnter={() => onHoverSlot(mark.slot)} onPointerLeave={() => onHoverSlot(null)}>
+                <circle cx={mark.x} cy={mark.y} r="9" fill="transparent" />
+                {(active || mark.slot === 0) && (
+                  <circle
+                    cx={mark.x}
+                    cy={mark.y}
+                    r="7"
+                    fill="none"
+                    stroke={active ? towardWhite(ACCENT, 0.3) : withAlpha(ACCENT, 0.55)}
+                    strokeWidth="1"
+                    strokeDasharray={mark.slot === 0 && !active ? '2 2' : undefined}
+                  />
+                )}
+                <rect
+                  x="-3.6"
+                  y="-3.6"
+                  width="7.2"
+                  height="7.2"
+                  rx="1.2"
+                  transform={`translate(${mark.x} ${mark.y}) rotate(${mark.spin})`}
+                  fill={mark.slot === 0 ? ACCENT : active ? towardWhite(ACCENT, 0.3) : 'rgba(255,255,255,0.35)'}
                 />
-              )}
-              <rect
-                x="-3.6"
-                y="-3.6"
-                width="7.2"
-                height="7.2"
-                rx="1.2"
-                transform={`translate(${mark.x} ${mark.y}) rotate(${mark.spin})`}
-                className={mark.slot === 0 ? 'fill-[var(--accent)]' : active ? 'fill-[var(--accent-hover)]' : 'fill-[var(--text-muted)]'}
-              />
-              {mark.slot === 0 && (
-                <text x={mark.x} y={mark.y - 10} textAnchor="middle" className="fill-[var(--accent)] font-mono text-[7px]">1</text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-[var(--text-3)]">R {value.toFixed(1)}</span>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">{planeLabel}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-muted)]">{hoverInfo}</span>
-    </div>
+                {mark.slot === 0 && (
+                  <text x={mark.x} y={mark.y - 10} textAnchor="middle" fill={ACCENT} className="font-mono text-[7px]">1</text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+        <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-white/60">R {value.toFixed(1)}</span>
+        <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-white/30">{planeLabel}</span>
+        <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/30">{hoverInfo}</span>
+      </div>
+    </PreviewWindow>
   )
 }
 
@@ -209,7 +202,7 @@ function CopiesStepper({ b }: { b: NumBinding }) {
   const count = clamp(Math.round(b.value), def.min, def.max)
   const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
   const buttonClass =
-    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-sm leading-none text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 transition-colors hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
 
   return (
     <div className="flex items-stretch gap-1">
@@ -241,10 +234,10 @@ function CopiesStepper({ b }: { b: NumBinding }) {
           event.preventDefault()
           commit(count + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
         }}
-        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-white/10 bg-black/25 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-white/50"
       >
-        <span className="font-mono text-[16px] leading-none tabular-nums text-[var(--text)]">{count}</span>
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">COPIES</span>
+        <span className="font-mono text-[16px] leading-none tabular-nums text-white/90">{count}</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">COPIES</span>
       </div>
       <button aria-label="One more copy" className={buttonClass} onClick={() => commit(count + 1)} disabled={count >= def.max}>+</button>
     </div>
@@ -263,6 +256,7 @@ function PlaneGlyph({ value }: { value: number }) {
   )
 }
 
+/** Each option IS the plane it draws (the guide's segments-with-shapes rule). */
 function PlaneSelector({ b }: { b: SelectBinding }) {
   return (
     <div role="radiogroup" aria-label={b.def.label} className="grid grid-cols-3 gap-1">
@@ -275,9 +269,10 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
             aria-checked={active}
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${active
-              ? 'border-[var(--accent-muted)] bg-[rgba(53,167,230,0.12)] text-[var(--accent-hover)]'
-              : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)]'}`}
+            className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${
+              active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
+            }`}
+            style={active ? { borderColor: withAlpha(ACCENT, 0.4), background: withAlpha(ACCENT, 0.15), color: towardWhite(ACCENT, 0.45) } : undefined}
           >
             <PlaneGlyph value={option.value} />
             <span className="text-[7px] font-semibold tracking-[0.08em]">{option.label}</span>
@@ -289,17 +284,17 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
 }
 
 /** The splitter's MIDI grammar, compact: one pitch chip per copy, hover-synced
- *  with the ring diagram. A note on at that pitch hides the copy. */
+ *  with the ring window. A note on at that pitch hides the copy. */
 function MuteMap({ count, hoveredSlot, onHoverSlot }: {
   count: number
   hoveredSlot: number | null
   onHoverSlot: (slot: number | null) => void
 }) {
   return (
-    <div data-testid="radial-mute-map" className="rounded-md border border-[var(--border)] bg-[var(--bg-app)] p-1.5">
+    <div data-testid="radial-mute-map" className="rounded-md border border-white/[0.06] bg-black/25 p-1.5">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">MUTE MAP</span>
-        <span className="text-[7px] text-[var(--text-muted)] select-none">note on hides the copy</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">MUTE MAP</span>
+        <span className="text-[7px] text-white/25 select-none">note on hides the copy</span>
       </div>
       <div className="grid grid-cols-8 gap-[3px]">
         {Array.from({ length: count }, (_, slot) => {
@@ -311,11 +306,12 @@ function MuteMap({ count, hoveredSlot, onHoverSlot }: {
               title={`Copy ${slot + 1} · mute with pitch ${pitch} (${noteName(pitch)})`}
               onPointerEnter={() => onHoverSlot(slot)}
               onPointerLeave={() => onHoverSlot(null)}
-              className={`cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors ${hovered
-                ? 'border-[var(--accent)] bg-[rgba(53,167,230,0.14)] text-[var(--accent-hover)]'
+              className="cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors"
+              style={hovered
+                ? { borderColor: ACCENT, background: withAlpha(ACCENT, 0.14), color: towardWhite(ACCENT, 0.3) }
                 : slot === 0
-                  ? 'border-[var(--accent-muted)] text-[var(--text-3)]'
-                  : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+                  ? { borderColor: withAlpha(ACCENT, 0.55), color: 'rgba(255,255,255,0.6)' }
+                  : { borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)' }}
             >
               {pitch}
             </span>
@@ -326,59 +322,21 @@ function MuteMap({ count, hoveredSlot, onHoverSlot }: {
   )
 }
 
-function RadialGlyph() {
-  return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
-      {Array.from({ length: 6 }, (_, index) => {
-        const angle = (index / 6) * Math.PI * 2
-        return <circle key={index} cx={10 + Math.cos(angle) * 6.2} cy={10 - Math.sin(angle) * 6.2} r={index === 0 ? 2.1 : 1.4} />
-      })}
-    </svg>
-  )
-}
-
 export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [hoveredSlot, setHoveredSlot] = useState<number | null>(null)
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const copies = pool.num('copies')
   const radius = pool.num('radius')
   const plane = pool.select('plane')
 
   if (!copies || !radius || !plane) return <ParameterList parameters={parameters} />
-  const rest = pool.rest()
 
   const count = clamp(Math.round(copies.value), copies.def.min, copies.def.max)
   const planeLabel = plane.def.options.find((option) => option.value === plane.value)?.label ?? plane.def.options[0]?.label ?? ''
   const safeHover = hoveredSlot != null && hoveredSlot < count ? hoveredSlot : null
-  const resetAll = () => {
-    for (const bound of parameters) bound.setValue(bound.definition.default)
-  }
 
   return (
-    <section
-      data-testid="radial-user-interface"
-      className="-mx-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_14px_34px_rgba(0,0,0,.35)]"
-    >
-      <header className="flex h-9 items-center justify-between px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--accent)]">
-            <RadialGlyph />
-          </div>
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text)]">Radial</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="rounded border border-[var(--border)] bg-[var(--bg-app)] px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-[var(--text-3)]">{count} ×</span>
-          <button
-            aria-label="Reset all Radial parameters"
-            title="Reset all"
-            onClick={resetAll}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-      </header>
-
+    <Console accent={ACCENT} testId="radial-user-interface">
       <RingPad
         count={count}
         radius={radius}
@@ -387,17 +345,12 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
         hoveredSlot={safeHover}
         onHoverSlot={setHoveredSlot}
       />
-
-      <div className="space-y-2 p-2">
+      <div className="flex flex-col gap-2 px-3 pb-3 pt-2">
         <CopiesStepper b={copies} />
         <PlaneSelector b={plane} />
         <MuteMap count={count} hoveredSlot={safeHover} onHoverSlot={setHoveredSlot} />
-        {rest.length > 0 && (
-          <div className="border-t border-[var(--border-subtle)] pt-2">
-            <ParameterList parameters={rest} />
-          </div>
-        )}
+        <More parameters={pool.rest()} label="MORE" className="" />
       </div>
-    </section>
+    </Console>
   )
 }

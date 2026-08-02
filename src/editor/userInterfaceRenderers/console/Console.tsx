@@ -74,3 +74,21 @@ export function ControlRow({ spill = false, className = 'gap-5 px-4 pb-4 pt-3', 
     </div>
   )
 }
+
+/**
+ * One row of a multi-row console: a quiet section word in the left gutter,
+ * controls spread after it (Meteor Impact's IMPACT / FEEL / MOTION / VORTEX
+ * rows are the reference). For a panel with more knobs than one row holds,
+ * this is the shape that keeps the captions short: the gutter says what the
+ * row is about, the knob captions say only which number.
+ */
+export function GutterRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 px-3">
+      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-white/25">
+        {label}
+      </span>
+      <div className="flex flex-1 items-end justify-between gap-1">{children}</div>
+    </div>
+  )
+}

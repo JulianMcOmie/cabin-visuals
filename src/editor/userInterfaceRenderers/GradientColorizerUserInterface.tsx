@@ -1,61 +1,40 @@
 'use client'
 
-// Bespoke settings for the Gradient colorizer, borrowing Figma's gradient
-// editor as the mental model: the hero is the RAMP ITSELF - a strip drawn from
-// the definition's own gradientStops(), with the two stop swatches sitting ON
-// its ends and a flip button between them. What the strip shows is byte-for-
-// byte what the stage samples, because both call the same function.
+// Bespoke settings for the Gradient colorizer, migrated to
+// docs/instrument-panel-design-guide.md on the console kit (./console),
+// borrowing Figma's gradient editor as the mental model: the hero is the RAMP
+// ITSELF - a strip drawn from the definition's own gradientStops(), with the
+// two stop swatches sitting ON its ends and a flip button between them. What
+// the strip shows is byte-for-byte what the stage samples, because both call
+// the same function.
 //
 // Below the ramp, the placement console: a segmented APPLY BY (position /
-// copy index) and the guide's laser knobs for ANGLE / SPAN / OFFSET / AMOUNT.
-// The position knobs stay visible but dimmed in index mode - the layout
-// holds still, and the dimming says "currently without effect" (the shared
+// copy index) and the kit knobs for ANGLE / SPAN / OFFSET / AMOUNT. The
+// position knobs stay visible but dimmed in index mode - the layout holds
+// still, and the dimming says "currently without effect" (the shared
 // ColorWheelPill idiom) rather than hiding the controls.
 //
-// Presentation only: every control routes through the passed parameter
-// bindings, never the stores.
+// The accent is DERIVED: mid-ramp of the current blend, so the console lights
+// with the gradient itself (the same spirit as accent-follows-color-param).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeftRight, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight } from 'lucide-react'
 import {
   GRADIENT_MODE_INDEX,
-  GRADIENT_MODE_POSITION,
   gradientStops,
 } from '../core/visualCopies/gradientColorizer'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { ColorWheelPopover } from './colorWheel'
-import { LaserKnob } from './laserKnob'
-import { ParameterList } from './ParametersUserInterface'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
-
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-interface ColorBinding { value: string; set: (v: string) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    color(key: string): ColorBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'color' || typeof b.value !== 'string') return null
-      pool.delete(key)
-      return { value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
+import {
+  bindPanel,
+  ColorWheelPopover,
+  Console,
+  ControlRow,
+  Knob,
+  More,
+  ParameterList,
+  Segmented,
+  type ColorBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 /** One gradient stop: a round swatch anchored to an end of the ramp, opening
  *  the shared color wheel. Open state + outside-click close follow the
@@ -99,22 +78,8 @@ function StopSwatch({ bound, label, align }: {
   )
 }
 
-function GradientGlyph() {
-  return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden="true">
-      <defs>
-        <linearGradient id="gradient-glyph-ramp" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="currentColor" stopOpacity="0.15" />
-          <stop offset="1" stopColor="currentColor" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="4" width="16" height="12" rx="2.5" fill="url(#gradient-glyph-ramp)" />
-    </svg>
-  )
-}
-
 export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const mode = pool.select('mode')
   const amount = pool.num('amount')
   const angle = pool.num('angle')
@@ -141,39 +106,15 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
   if (!mode || !amount || !angle || !span || !offset || !flip || !colorA || !colorB) {
     return <ParameterList parameters={parameters} />
   }
-  const rest = pool.rest()
 
   const byPosition = mode.value !== GRADIENT_MODE_INDEX
-  const resetAll = () => {
-    for (const bound of parameters) bound.setValue(bound.definition.default)
-  }
 
   return (
-    <section
-      data-testid="gradient-user-interface"
-      // No overflow-hidden (unlike the Radial chassis): the stop swatches'
-      // color wheels must escape the panel; nothing else reaches the corners.
-      className="-mx-1 rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_14px_34px_rgba(0,0,0,.35)]"
-    >
-      <header className="flex h-9 items-center justify-between px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)]" style={{ color: accent }}>
-            <GradientGlyph />
-          </div>
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text)]">Gradient</span>
-        </div>
-        <button
-          aria-label="Reset all Gradient parameters"
-          title="Reset all"
-          onClick={resetAll}
-          className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
-        >
-          <RotateCcw size={11} />
-        </button>
-      </header>
-
-      {/* The ramp. Swatches sit ON its ends, the flip button between them. */}
-      <div className="px-2.5 pb-1 pt-0.5">
+    <Console accent={accent} testId="gradient-user-interface">
+      {/* The ramp. Swatches sit ON its ends, the flip button between them.
+          It stands where a preview window would - it IS the preview, and the
+          input. */}
+      <div className="px-3 pb-1 pt-3">
         <div
           data-testid="gradient-ramp"
           className="relative h-9 rounded-lg border border-white/15"
@@ -201,65 +142,24 @@ export const GradientColorizerUserInterfaceRenderer: UserInterfaceRendererDefini
         </div>
       </div>
 
-      <div className="space-y-2 p-2">
+      <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
         {/* APPLY BY: which axis the ramp spreads along - the world, or the
             chain's copy order. */}
-        <div className="flex overflow-hidden rounded-md border border-[var(--border)]">
-          {mode.def.options.map((option) => {
-            const active = option.value === mode.value
-            return (
-              <button
-                key={option.value}
-                aria-pressed={active}
-                title={option.value === GRADIENT_MODE_INDEX
-                  ? 'Spread the ramp over the chain\'s copies: first copy = A, last = B'
-                  : 'Paint by world position: an axis, a length, a center'}
-                onClick={() => mode.set(option.value)}
-                className={`flex-1 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] transition-colors ${active
-                  ? 'bg-[var(--bg-elevated)] text-[var(--text)]'
-                  : 'bg-transparent text-[var(--text-muted)] hover:text-[var(--text-2)]'}`}
-              >
-                {option.label}
-              </button>
-            )
-          })}
-        </div>
+        <Segmented b={mode} name="Apply by" />
 
-        <div className="flex items-end justify-between px-1">
+        <ControlRow className="justify-between gap-1 px-1">
           {/* Dimmed, not hidden, in index mode: still editable, currently
               without effect - and the panel doesn't reflow on a mode switch. */}
-          <div className={`flex gap-1 transition-opacity ${byPosition ? '' : 'opacity-40'}`}>
-            <LaserKnob
-              value={angle.value} min={angle.def.min} max={angle.def.max} step={angle.def.step}
-              defaultValue={angle.def.default} curve={angle.def.curve} label="ANGLE"
-              ariaLabel="Gradient angle" accent={accent} suffix="°"
-              format={(v) => v.toFixed(0)} onChange={angle.set}
-            />
-            <LaserKnob
-              value={span.value} min={span.def.min} max={span.def.max} step={span.def.step}
-              defaultValue={span.def.default} curve={span.def.curve} label="SPAN"
-              ariaLabel="Gradient span in world units" accent={accent} onChange={span.set}
-            />
-            <LaserKnob
-              value={offset.value} min={offset.def.min} max={offset.def.max} step={offset.def.step}
-              defaultValue={offset.def.default} curve={offset.def.curve} label="OFFSET"
-              ariaLabel="Gradient center offset" accent={accent} onChange={offset.set}
-            />
+          <div className={`flex items-end gap-1 transition-opacity ${byPosition ? '' : 'opacity-40'}`}>
+            <Knob b={angle} label="ANGLE" ariaLabel="Gradient angle" suffix="°" format={(v) => v.toFixed(0)} />
+            <Knob b={span} label="SPAN" ariaLabel="Gradient span in world units" />
+            <Knob b={offset} label="OFFSET" ariaLabel="Gradient center offset" />
           </div>
-          <LaserKnob
-            value={amount.value} min={amount.def.min} max={amount.def.max} step={amount.def.step}
-            defaultValue={amount.def.default} curve={amount.def.curve} label="AMOUNT"
-            ariaLabel="Gradient amount" accent={accent} large
-            format={(v) => `${Math.round(v * 100)}%`} onChange={amount.set}
-          />
-        </div>
+          <Knob b={amount} label="AMOUNT" ariaLabel="Gradient amount" large format={(v) => `${Math.round(v * 100)}%`} />
+        </ControlRow>
 
-        {rest.length > 0 && (
-          <div className="border-t border-[var(--border-subtle)] pt-2">
-            <ParameterList parameters={rest} />
-          </div>
-        )}
+        <More parameters={pool.rest()} label="MORE" className="" />
       </div>
-    </section>
+    </Console>
   )
 }

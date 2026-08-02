@@ -13,7 +13,7 @@
 // gem icosahedra every frame. What ripples here is exactly what ripples on
 // stage, so every knob reads live.
 
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
@@ -29,6 +29,7 @@ import type { ResolvedNote } from '../core/visual/types'
 import {
   bindPanel,
   Console,
+  GutterRow,
   Knob,
   More,
   ParameterList,
@@ -230,18 +231,6 @@ function ImpactPreview({ settings }: { settings: MeteorImpactSettings }) {
 
 // ── Knobs ────────────────────────────────────────────────────────────────────
 
-/** One row of the console: a rotated section word in the gutter, knobs after. */
-function KnobRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 px-3">
-      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-white/25">
-        {label}
-      </span>
-      <div className="flex flex-1 items-end justify-between gap-1">{children}</div>
-    </div>
-  )
-}
-
 /** Segmented swirl-axis selector: which plane the impact spins. */
 function AxisSelector({ b }: { b: SelectBinding }) {
   const selected = Math.round(b.value)
@@ -306,34 +295,34 @@ export const MeteorImpactMoverUserInterfaceRenderer: UserInterfaceRendererDefini
     <Console accent={EMBER} testId="meteor-impact-user-interface">
       <ImpactPreview settings={settings} />
       <div className="flex flex-col gap-2 pb-3 pt-2" style={{ background: spillOf(EMBER) }}>
-        <KnobRow label="IMPACT">
+        <GutterRow label="IMPACT">
           <Knob b={k.strength} label="STRIKE" large />
           <Knob b={k.reach} label="REACH" />
           <Knob b={k.waveSpeed} label="SPEED" />
           <Knob b={k.dispersion} label="SPREAD" />
           <Knob b={k.responseBeats} label="WEIGHT" />
-        </KnobRow>
-        <KnobRow label="FEEL">
+        </GutterRow>
+        <GutterRow label="FEEL">
           <Knob b={k.bounce} label="BOUNCE" />
           <Knob b={k.drag} label="DRAG" />
           <Knob b={k.strikeBeats} label="CRACK" />
           <Knob b={k.anticipation} label="LEAN" />
           <Knob b={k.leadBeats} label="LEAD" />
-        </KnobRow>
-        <KnobRow label="MOTION">
+        </GutterRow>
+        <GutterRow label="MOTION">
           <Knob b={k.stretch} label="STRETCH" />
           <Knob b={k.tumbleDegrees} label="TUMBLE" />
           <Knob b={k.swirl} label="SWIRL" />
           <Knob b={k.overlapBeats} label="OVERLAP" />
           <AxisSelector b={swirlAxis} />
-        </KnobRow>
-        <KnobRow label="VORTEX">
+        </GutterRow>
+        <GutterRow label="VORTEX">
           <Knob b={k.vortexRate} label="RATE" />
           <Knob b={k.vortexTwist} label="TWIST" />
           <Knob b={k.vortexShear} label="FUNNEL" />
           <Knob b={k.vortexGrow} label="GROW" />
           <Knob b={k.vortexOuter} label="SPAN" />
-        </KnobRow>
+        </GutterRow>
         <More parameters={b.rest()} label="MORE" className="px-3" />
       </div>
     </Console>

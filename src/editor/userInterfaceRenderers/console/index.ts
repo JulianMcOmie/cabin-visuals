@@ -17,7 +17,7 @@
 export { bindPanel } from './bindings'
 export type { PanelBindings, NumBinding, SelectBinding, BooleanBinding, ColorBinding, StringBinding } from './bindings'
 export { shadeOf, spillOf, emitterHalo } from './accent'
-export { Console, ControlRow, useConsoleAccent } from './Console'
+export { Console, ControlRow, GutterRow, useConsoleAccent } from './Console'
 export { Knob, ColorPill } from './Knob'
 export { Segmented } from './Segmented'
 export type { SegmentOption } from './Segmented'
