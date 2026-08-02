@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useAudioStore } from '../../store/AudioStore'
@@ -7,7 +7,7 @@ import { selectNewBlock } from '../../utils/selection'
 import { retryAudioTrackUpload } from '../../utils/loadAudioTrack'
 import { getPlaybackEngine } from '../../core/playback'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../../core/audio/waveform'
-import { AUDIO_WAVEFORM_COLOR } from '../../utils/trackColors'
+import { midiBlockPalette } from '../../utils/colors'
 import { AudioTrackOscilloscope } from './AudioTrackOscilloscope'
 import { beginAudioSyncDrag, moveAudioSyncDrag, endAudioSyncDrag } from './audioSyncDrag'
 import type { AudioBlock as AudioBlockType } from '../../types'
@@ -45,6 +45,10 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
   const upload = useAudioStore((s) => s.uploads[block.clipRef])
   const isSelected = useUIStore((s) => s.selectedBlockIds.has(block.id))
   const isSyncSource = useUIStore((s) => s.audioSyncDrag?.blockId === block.id)
+  // The same voice MIDI blocks wear, keyed on the audio sapphire: resting =
+  // dark pane + lit waveform, selected = the star-anatomy body with the
+  // waveform flipped dark (outshone). Stable object, feeds the draw effect.
+  const palette = useMemo(() => midiBlockPalette(color), [color])
 
   const clipSec = Math.max(0, block.trimEnd - block.trimStart)
   // A zero-length block is a clip whose local decode hasn't landed yet (the
@@ -81,10 +85,9 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
-      // The clip colour is the solid surface; the waveform is a separate,
-      // fully opaque ink. Keeping the hues related makes the contrast feel
-      // intentional without falling back to a translucent wash.
-      ctx.fillStyle = AUDIO_WAVEFORM_COLOR
+      // The waveform is the audio block's "notes": lit tubing on the resting
+      // pane, flipped dark when the selected body ignites and outshines it.
+      ctx.fillStyle = isSelected ? palette.selectedNote : palette.note
       const mid = c.height / 2
       const startFrac = clip.duration > 0 ? block.trimStart / clip.duration : 0
       const endFrac = clip.duration > 0 ? block.trimEnd / clip.duration : 1
@@ -107,7 +110,7 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       }
     }).catch((err) => console.warn('Waveform draw failed', err))
     return () => { cancelled = true }
-  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending, isSyncSource])
+  }, [block.clipRef, block.trimStart, block.trimEnd, clip, clipSec, width, color, pending, isSyncSource, isSelected, palette])
 
   // ── Drag gestures: move (body), trim (edges) - free positioning, no snap ──
   // Right edge → trimEnd only. Left edge → trimStart AND startBar together, so
@@ -262,20 +265,18 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
     <div
       data-audio-block-id={block.id}
       title={clip ? `${clip.fileName} - drag to move (loops playback while you drag)` : 'Audio block'}
-      className="absolute top-0 bottom-0 rounded-[3px] overflow-hidden"
+      className="absolute top-0 bottom-0 rounded-[6px] overflow-hidden"
       style={{
         left: `${left}px`,
         width: `${width}px`,
-        backgroundColor: color,
-        borderTop: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
-        borderRight: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
-        borderBottom: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
-        borderLeft: isSelected ? '1px solid #a9d6f5' : '1px solid #3f77b3',
-        boxShadow: isSyncSource
-          ? '0 0 0 1px #e8f4fc, 0 0 12px rgba(53, 167, 230, 0.55)'
-          : isSelected
-            ? '0 0 0 1px #e8f4fc, 0 2px 10px rgba(12, 60, 98, 0.32)'
-            : '0 1px 4px rgba(8, 38, 62, 0.2)',
+        // Same states as the MIDI Block, no borders: the resting pane's inset
+        // hairline, or the ignited star-anatomy body whose bloom IS the edge.
+        // The sync drag rides the selected state (pointerdown selects), so the
+        // lit body doubles as the "aligning by eye" surface.
+        background: isSelected ? palette.selectedBody : palette.fill,
+        boxShadow: isSelected
+          ? palette.selectedBloom
+          : `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -285,12 +286,22 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ opacity: showStaticWaveform ? 1 : 0 }}
+        // The glow the MIDI notes get from box-shadow, as a GPU filter on the
+        // whole waveform layer: resting tubing glows; on the lit body the
+        // body's light wraps the dark waveform instead.
+        style={{
+          opacity: showStaticWaveform ? 1 : 0,
+          filter: isSelected
+            ? `drop-shadow(0 0 3px ${palette.selectedNoteWrap})`
+            : `drop-shadow(0 0 4px ${palette.noteGlow})`,
+        }}
       />
       {showOscilloscope && !isSyncSource && <AudioTrackOscilloscope trackId={trackId} />}
       <span
-        className="absolute top-0.5 left-1.5 text-[10px] font-medium text-white pointer-events-none truncate max-w-full pr-2"
-        style={{ textShadow: '0 1px 2px rgba(8, 34, 56, 0.8)' }}
+        className="absolute top-0.5 left-1.5 text-[10px] font-medium pointer-events-none truncate max-w-full pr-2"
+        style={isSelected
+          ? { color: palette.selectedNote }
+          : { color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)' }}
       >
         {clip?.fileName}
       </span>
@@ -306,7 +317,7 @@ export const AudioBlock = memo(function AudioBlock({ block, trackId, barWidthPx,
           </span>
           <div
             className="absolute bottom-0 left-0 h-[2px] pointer-events-none transition-[width] duration-150"
-            style={{ width: `${upload.progress * 100}%`, backgroundColor: AUDIO_WAVEFORM_COLOR }}
+            style={{ width: `${upload.progress * 100}%`, backgroundColor: palette.note }}
           />
         </>
       )}

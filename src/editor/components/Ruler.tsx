@@ -197,16 +197,19 @@ export function Ruler({
             </div>
           )}
 
-          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest. */}
+          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest.
+              Tick/number/line colors read through --ruler-* vars so the
+              TIMELINE (.timeline-neon) can voice them as faint etched white on
+              its near-black stage while the piano roll keeps these defaults. */}
           {subs.map((beat) => (
-            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[#222228]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
+            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,#222228)]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
           ))}
 
           {/* Short minor ticks - 4 per major span (one per measure when zoomed
               out). Clearly shorter than the numbered major lines, still a hair
               taller than the 16th sub-ticks. */}
           {minors.map((beat) => (
-            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
+            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
           ))}
 
           {bars.map((bar) => {
@@ -226,7 +229,7 @@ export function Ruler({
                     {/* Top half: bar number - 10px/500 mono, one step brighter
                         than faint so it reads at a glance */}
                     <span
-                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--text-3)]"
+                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--ruler-number,var(--text-3))]"
                       style={{ top: 3, zIndex: 6 }}
                     >
                       {bar + 1}
@@ -249,7 +252,7 @@ export function Ruler({
                     )}
                     {/* Near-full-height line beside the number - stops a hair
                         below the ruler's top edge (matches other DAWs). */}
-                    <div className="absolute bottom-0 w-px bg-[var(--border-strong)]" style={{ top: 2 }} />
+                    <div className="absolute bottom-0 w-px bg-[var(--ruler-line,var(--border-strong))]" style={{ top: 2 }} />
                     {/* Its top-half restated above the loop band, darkened to
                         read against the solid fill. */}
                     {inLoopBand && (

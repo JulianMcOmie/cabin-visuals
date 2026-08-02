@@ -356,7 +356,7 @@ export function TimelineArea() {
   }
 
   return (
-    <div className="relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
+    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the

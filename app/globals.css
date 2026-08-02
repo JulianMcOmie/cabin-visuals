@@ -115,9 +115,22 @@ body {
    inspector (which share none of these vars inside this scope) keep their own
    chrome. */
 .timeline-glass-scope {
-  --bg-timeline: rgba(13, 13, 14, 0.82);
+  --bg-timeline: rgba(13, 13, 14, 0.94);
   --bg-track-row: #141415;
   --timeline-grid-line: rgba(255, 255, 255, 0.055);
+}
+
+/* Ruler voicing for the TIMELINE's ruler only. Applied on TimelineArea's root
+   rather than the glass scope because the piano roll's ruler is the same
+   shared Ruler component inside the same scope - its numbers sit over the
+   hue-tinted clip-header band and need the brighter defaults to stay
+   readable. Here the numbers recede to etched marks on the dark stage so the
+   blocks (and the selected block's supernova) carry the scene. */
+.timeline-neon {
+  --ruler-number: rgba(255, 255, 255, 0.34);
+  --ruler-line: rgba(255, 255, 255, 0.1);
+  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
+  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
 }
 
 .visualizer-glass-surface {

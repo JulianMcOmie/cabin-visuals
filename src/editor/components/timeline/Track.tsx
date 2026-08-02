@@ -87,6 +87,9 @@ interface TrackProps {
  *  select primitives. */
 export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  // Audio lanes only need this for the selection spill's geometry (an audio
+  // block's width is derived from its trimmed seconds at the current tempo).
+  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -517,22 +520,33 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
         {/* A selected block's light spills onto its lane: a wide wash behind
             the blocks (first child = painted under them), clipped to the row.
-            The cross-row reach comes from the block's own bloom shadows. */}
-        {track.type !== 'audio' && track.blocks.map((block) =>
-          selectedBlockIds.has(block.id) ? (
+            The cross-row reach comes from the block's own bloom shadows.
+            Audio blocks spill too - their width is derived (trimmed seconds at
+            the current tempo), mirroring AudioBlock's own layout math. */}
+        {(track.type === 'audio'
+          ? (track.audioBlocks ?? []).map((block) => {
+              if (!selectedBlockIds.has(block.id)) return null
+              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
+              const widthPx = Math.max(widthBars * barWidthPx, 4)
+              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
+            })
+          : track.blocks.map((block) =>
+              selectedBlockIds.has(block.id)
+                ? {
+                    id: block.id,
+                    centerPx: (block.startBar + block.durationBars / 2) * barWidthPx,
+                    widthPx: block.durationBars * barWidthPx,
+                  }
+                : null)
+        ).map((spill) =>
+          spill && (
             <div
-              key={`spill:${block.id}`}
+              key={`spill:${spill.id}`}
               aria-hidden="true"
               className="pointer-events-none absolute inset-0"
-              style={{
-                background: midiSelectionSpill(
-                  blockColor,
-                  (block.startBar + block.durationBars / 2) * barWidthPx,
-                  block.durationBars * barWidthPx,
-                ),
-              }}
+              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
             />
-          ) : null)}
+          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
