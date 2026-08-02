@@ -22,6 +22,17 @@ export const MAX_VISUAL_COPIES = 1024
  *  5. The next step receives `index`/`count` for the complete result of the
  *     previous step.
  *
+ * Every copy's `transform` is its REFERENCE FRAME as far as the steps are
+ * concerned. A step that also produces motion INTERNAL to a copy (a mover
+ * nested under a splitter - see `FramedVisualCopy`) hands it over separately
+ * via `applyFramed`; the kernel carries it per copy through the remaining
+ * steps - descendants of a copy inherit its internal motion, later internal
+ * contributions compose inside inherited ones - and folds it into the final
+ * transforms (`frame · internal`) only on the copies it returns. That split is
+ * what keeps a nested mover's animation out of the frame downstream entries
+ * build in: a second grid duplicates a spinning sub-grid rather than laying
+ * its cells out in a spinning frame.
+ *
  * No MIDI, automation, envelope, project-track, React, or instrument logic
  * belongs here - definitions close over whatever resolved data they need.
  */
@@ -31,13 +42,18 @@ export function resolveVisualCopies(
   placementTransform?: Matrix4,
 ): VisualCopy[] {
   let visualCopies = [identityVisualCopy()]
+  // Parallel to visualCopies: each copy's accumulated internal motion, or null.
+  let internals: (Matrix4 | null)[] = [null]
 
   for (const moverOrSplitter of moverAndSplitterChain) {
     const previousVisualCopies = visualCopies
+    const previousInternals = internals
     const count = previousVisualCopies.length
+    const nextVisualCopies: VisualCopy[] = []
+    const nextInternals: (Matrix4 | null)[] = []
 
-    visualCopies = previousVisualCopies.flatMap((visualCopy, index) =>
-      moverOrSplitter.apply(visualCopy, {
+    previousVisualCopies.forEach((visualCopy, index) => {
+      const context = {
         beat,
         index,
         count,
@@ -47,15 +63,34 @@ export function resolveVisualCopies(
         // its identity is stable for the step (see the contract in types.ts).
         formation: previousVisualCopies,
         ...(placementTransform ? { placementTransform } : {}),
-      }),
-    )
+      }
+      const inherited = previousInternals[index]
+      if (moverOrSplitter.applyFramed) {
+        for (const { visualCopy: framed, internalTransform } of moverOrSplitter.applyFramed(visualCopy, context)) {
+          nextVisualCopies.push(framed)
+          nextInternals.push(
+            inherited && internalTransform
+              ? inherited.clone().multiply(internalTransform)
+              : internalTransform ?? inherited,
+          )
+        }
+      } else {
+        for (const next of moverOrSplitter.apply(visualCopy, context)) {
+          nextVisualCopies.push(next)
+          nextInternals.push(inherited)
+        }
+      }
+    })
 
-    if (visualCopies.length > MAX_VISUAL_COPIES) {
-      visualCopies = visualCopies.slice(0, MAX_VISUAL_COPIES)
-    }
+    visualCopies = nextVisualCopies.slice(0, MAX_VISUAL_COPIES)
+    internals = nextInternals.slice(0, MAX_VISUAL_COPIES)
   }
 
-  return visualCopies
+  return visualCopies.map((visualCopy, index) => {
+    const internal = internals[index]
+    if (!internal) return visualCopy
+    return { ...visualCopy, transform: visualCopy.transform.clone().multiply(internal) }
+  })
 }
 
 /**

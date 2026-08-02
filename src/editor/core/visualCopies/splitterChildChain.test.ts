@@ -157,6 +157,77 @@ test('a degenerate incoming frame falls back to the bare splitter output', () =>
   }
 })
 
+// ── Internal motion: the child never re-frames the chain below ──────────────
+
+test('a grid below duplicates the SPINNING sub-grid; the layout itself stays put', () => {
+  // The user-facing case that motivated the frame/internal split: sub-grid
+  // first (spacing 4 → slots ±2) with a rotation child, duplicator grid second
+  // (spacing 1 → offsets ±0.5). The duplicates must land on the UNROTATED
+  // lattice, each containing the rotated sub-grid: position = dup + R·slot,
+  // never R·(slot + dup) (the whole compound orbiting one origin).
+  const out = positions(resolveVisualCopies([
+    splitterWithChildChain(gridRow(2, 4), [rotateZ(90)]),
+    gridRow(2, 1),
+  ], 0))
+  assertNear(out[0], [-0.5, -2, 0], 'slot −2 rotated to (0,−2), duplicated at −0.5')
+  assertNear(out[1], [0.5, -2, 0], 'slot −2 rotated to (0,−2), duplicated at +0.5')
+  assertNear(out[2], [-0.5, 2, 0], 'slot +2 rotated to (0,+2), duplicated at −0.5')
+  assertNear(out[3], [0.5, 2, 0], 'slot +2 rotated to (0,+2), duplicated at +0.5')
+})
+
+test('a mover below composes against the unmoved frame, not the child motion', () => {
+  // Shift +X below the wrapped grid: the copies orbit the grid center AND
+  // shift along the frame's own X - the shift axis must not rotate with them.
+  const out = positions(resolveVisualCopies([
+    splitterWithChildChain(gridRow(2), [rotateZ(90)]),
+    shiftX(1),
+  ], 0))
+  assertNear(out[0], [1, -1, 0], 'orbited to (0,−1), shifted along unrotated X')
+  assertNear(out[1], [1, 1, 0], 'orbited to (0,+1), shifted along unrotated X')
+})
+
+test('downstream steps SEE the unmoved frames', () => {
+  const seen: number[][] = []
+  const spy: MoverOrSplitter = {
+    apply(visualCopy) {
+      seen.push(new Vector3().setFromMatrixPosition(visualCopy.transform).toArray())
+      return [cloneCopy(visualCopy)]
+    },
+  }
+  resolveVisualCopies([splitterWithChildChain(gridRow(2), [rotateZ(90)]), spy], 0)
+  assertNear(new Vector3(...seen[0]), [-1, 0, 0], 'frame handed downstream is the bare slot')
+  assertNear(new Vector3(...seen[1]), [1, 0, 0], 'frame handed downstream is the bare slot')
+})
+
+test('internal motion is inherited through a downstream fan-out', () => {
+  const clone2: MoverOrSplitter = {
+    apply: (visualCopy) => [cloneCopy(visualCopy), cloneCopy(visualCopy)],
+  }
+  const out = positions(resolveVisualCopies([
+    splitterWithChildChain(gridRow(2), [rotateZ(90)]),
+    clone2,
+  ], 0))
+  assert.equal(out.length, 4)
+  assertNear(out[0], [0, -1, 0], 'both clones of slot 0 carry the orbit')
+  assertNear(out[1], [0, -1, 0], 'both clones of slot 0 carry the orbit')
+  assertNear(out[2], [0, 1, 0], 'both clones of slot 1 carry the orbit')
+})
+
+test('two wrapped splitters compose deepest-contributor-innermost', () => {
+  // Outer grid (±2) spinning + inner duplicator (±0.5) spinning, both 90°.
+  // Pinned from the documented rule (frame · outer internal · inner internal):
+  // position = R₁(slot + (R₂−I)·dup) + dup, which at 90/90 collapses to
+  // (0, slot − dup).
+  const out = positions(resolveVisualCopies([
+    splitterWithChildChain(gridRow(2, 4), [rotateZ(90)]),
+    splitterWithChildChain(gridRow(2, 1), [rotateZ(90)]),
+  ], 0))
+  assertNear(out[0], [0, -1.5, 0], 'slot −2, dup −0.5')
+  assertNear(out[1], [0, -2.5, 0], 'slot −2, dup +0.5')
+  assertNear(out[2], [0, 2.5, 0], 'slot +2, dup −0.5')
+  assertNear(out[3], [0, 1.5, 0], 'slot +2, dup +0.5')
+})
+
 test('structural variants compose through the wrapper, so the probe sees child fan-out', () => {
   const childOfCount = (n: number): MoverOrSplitter => ({
     apply: (visualCopy) => Array.from({ length: n }, () => cloneCopy(visualCopy)),

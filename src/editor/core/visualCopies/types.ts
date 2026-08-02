@@ -118,6 +118,22 @@ export interface MoverOrSplitterContext {
 }
 
 /**
+ * One chain step's output when the entry separates the copy's REFERENCE FRAME
+ * from motion INTERNAL to it. `visualCopy.transform` is the frame - the thing
+ * downstream chain entries compose against, unchanged by the internal motion.
+ * `internalTransform` is applied at render time only (frame · internal), is
+ * inherited by every downstream copy derived from this one, and composes
+ * inside inherited internal motion (deepest contributor innermost). This is
+ * what lets a mover nested under a splitter animate the splitter's formation
+ * without re-framing the entries below it: a second grid duplicates a SPINNING
+ * sub-grid instead of laying its cells out in a spinning frame.
+ */
+export interface FramedVisualCopy {
+  visualCopy: VisualCopy
+  internalTransform?: Matrix4
+}
+
+/**
  * One resolved chain entry: receives one copy, returns one or more copies. A
  * mover normally returns a one-item array; a splitter returns multiple items.
  *
@@ -137,6 +153,17 @@ export interface MoverOrSplitterContext {
  */
 export interface MoverOrSplitter {
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
+  /**
+   * OPTIONAL: like `apply`, but separates each output copy's reference frame
+   * from motion internal to it (see `FramedVisualCopy`). The chain kernel
+   * prefers this when present, carries each copy's accumulated internal motion
+   * through the remaining steps, and folds it into the final transforms it
+   * returns; `apply` must return the same copies with the internal motion
+   * folded in immediately (`frame · internal`), which is what direct callers
+   * and a chain's LAST entry observe either way. Only splitterChildChain
+   * implements it today - ordinary definitions never need to.
+   */
+  applyFramed?(visualCopy: VisualCopy, context: MoverOrSplitterContext): FramedVisualCopy[]
   /**
    * OPTIONAL: alternative resolutions of this same entry whose output COUNTS
    * bracket everything `apply` can ever produce. The runtime attaches these
