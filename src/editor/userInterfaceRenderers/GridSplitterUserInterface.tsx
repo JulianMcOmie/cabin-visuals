@@ -233,9 +233,6 @@ function LayoutPreview({ settings }: { settings: GridSettings }) {
 
   const dims = `${Math.round(settings.rows)} × ${Math.round(settings.columns)} × ${Math.round(settings.depth)}`
   const total = layout.matrices.length
-  // The engine truncates any step past MAX_VISUAL_COPIES; when the requested
-  // product overflows, say so instead of quietly showing fewer copies.
-  const capped = Math.round(settings.rows) * Math.round(settings.columns) * Math.round(settings.depth) > total
 
   return (
     <div
@@ -265,7 +262,7 @@ function LayoutPreview({ settings }: { settings: GridSettings }) {
       <canvas ref={canvasRef} className="h-full w-full" />
       <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] tabular-nums text-white/45">{dims}</span>
       <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/45">
-        {total} {total === 1 ? 'COPY' : 'COPIES'}{capped ? ' · CAPPED' : ''}
+        {total} {total === 1 ? 'COPY' : 'COPIES'}
       </span>
     </div>
   )

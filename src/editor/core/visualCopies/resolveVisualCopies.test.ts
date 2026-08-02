@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
-import { MAX_VISUAL_COPIES, resolveVisualCopies } from './resolveVisualCopies'
+import { resolveVisualCopies } from './resolveVisualCopies'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 // -- Test-only chain entries ------------------------------------------------
@@ -224,15 +224,15 @@ test('same beat produces identical copies (pure evaluation)', () => {
   }
 })
 
-test('the hard copy cap bounds chained splitters', () => {
-  // Eleven 2-way splits would produce 2048 copies; the cap truncates to
-  // MAX_VISUAL_COPIES and downstream steps see the truncated count.
+test('chained splitters fan out uncapped', () => {
+  // Eleven 2-way splits multiply to 2048 copies; every one survives and
+  // downstream steps see the full count.
   const chain = Array.from({ length: 11 }, () => splitter(2, 1))
   const seen: MoverOrSplitterContext[] = []
   const copies = resolveVisualCopies([...chain, recordingMover(seen)], 0)
-  assert.equal(copies.length, MAX_VISUAL_COPIES)
-  assert.equal(seen.length, MAX_VISUAL_COPIES)
-  assert.equal(seen[0].count, MAX_VISUAL_COPIES)
+  assert.equal(copies.length, 2048)
+  assert.equal(seen.length, 2048)
+  assert.equal(seen[0].count, 2048)
 })
 
 test('identityVisualCopy returns independently owned values', () => {

@@ -44,7 +44,7 @@
 // whole formation out about the parent's origin (n·m copies, input-major).
 
 import { Matrix4 } from 'three'
-import { MAX_VISUAL_COPIES, warpChainBeat } from './resolveVisualCopies'
+import { warpChainBeat } from './resolveVisualCopies'
 import type { FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 /** A child result still tied to the parent slot whose frame it moves. */
@@ -117,7 +117,6 @@ export function splitterWithChildChain(
           })
           .map((result) => ({ copy: result, slot })),
       )
-      if (locals.length > MAX_VISUAL_COPIES) locals = locals.slice(0, MAX_VISUAL_COPIES)
     }
     return {
       slots,
