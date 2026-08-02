@@ -15,6 +15,9 @@ export const FLASH_WALL_BASE_PITCH = 60
 
 export const DEFAULT_FLASH_WALL_COLOR = '#8de1ff'
 
+/** The gradient's far end (zone N): ice blue falling into violet. */
+export const DEFAULT_FLASH_WALL_COLOR2 = '#b48cff'
+
 /** All times in seconds - a flash is a percussive gesture, so its envelope
  *  should not stretch when the tempo changes. Callers convert note ages from
  *  beats via secPerBeat, which keeps every value a pure function of the beat. */
@@ -80,12 +83,10 @@ export function flashWallGrid(zones: number, layout: number): { cols: number; ro
 }
 
 /**
- * Per-zone flash levels at `beat`, written into the caller's arrays (no
+ * Per-zone flash levels at `beat`, written into the caller's array (no
  * per-frame allocation). Overlapping notes on one zone combine by MAX - a
  * flash is a level, not an energy sum, and max keeps a roll from clipping
  * white. Velocity scales the peak (a soft floor keeps quiet notes visible).
- * `outPitches[z]` is the pitch of the zone's strongest contributor (-1 while
- * dark) - what the Pitch color mode paints the zone with.
  */
 export function resolveZoneFlashes(
   notes: readonly ResolvedNote[],
@@ -94,12 +95,8 @@ export function resolveZoneFlashes(
   zones: number,
   env: FlashWallEnvelope,
   outLevels: number[],
-  outPitches: number[],
 ): void {
-  for (let i = 0; i < zones; i++) {
-    outLevels[i] = 0
-    outPitches[i] = -1
-  }
+  for (let i = 0; i < zones; i++) outLevels[i] = 0
   for (const note of notes) {
     const t = (beat - note.beat) * secPerBeat
     if (t < 0) continue
@@ -109,70 +106,46 @@ export function resolveZoneFlashes(
     const level = flashEnvelopeAt(env, t, heldSec) * (0.25 + 0.75 * velN)
     if (level <= 0) continue
     const z = zoneOfPitch(note.pitch, zones)
-    if (level > outLevels[z]) {
-      outLevels[z] = level
-      outPitches[z] = note.pitch
-    }
+    if (level > outLevels[z]) outLevels[z] = level
   }
 }
 
 // ── Zone color ──────────────────────────────────────────────────────────────
-// Self-contained hex/HSV math (no imports): the instrument AND its settings
-// panel both call zoneColorHex, so the wall and the panel preview cannot
-// disagree about what a zone wears.
+// Self-contained hex math (no imports): the instrument AND its settings panel
+// both call zoneColorHex, so the wall and the panel preview cannot disagree
+// about what a zone wears.
 
-export const FLASH_WALL_COLOR_MODE = { solid: 0, spectrum: 1, pitch: 2 } as const
+export const FLASH_WALL_COLOR_MODE = { solid: 0, gradient: 1 } as const
 
-function hexToHsv(hex: string): { h: number; s: number; v: number } {
+function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
   const n = m ? parseInt(m[1], 16) : 0x8de1ff
-  const r = ((n >> 16) & 255) / 255
-  const g = ((n >> 8) & 255) / 255
-  const b = (n & 255) / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const d = max - min
-  let h = 0
-  if (d > 0) {
-    if (max === r) h = ((g - b) / d + 6) % 6
-    else if (max === g) h = (b - r) / d + 2
-    else h = (r - g) / d + 4
-    h /= 6
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max }
-}
-
-function hsvToHex(h: number, s: number, v: number): string {
-  const hh = ((h % 1) + 1) % 1
-  const f = (n: number) => {
-    const k = (n + hh * 6) % 6
-    const c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1))
-    return Math.round(c * 255).toString(16).padStart(2, '0')
-  }
-  return `#${f(5)}${f(3)}${f(1)}`
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
 /**
- * What a zone wears. Solid: everything is the base color. Spectrum: the base
- * hue fans around the wheel across the zones, so the division of the screen is
- * visible even at rest (saturation gets a floor - a near-white base would fan
- * into twelve whites). Pitch: the zone takes the hue of the note lighting it
- * (pitch class around the wheel), falling back to the base while dark.
+ * What a zone wears. Solid (the default): every zone is the base color - the
+ * wall reads as ONE fixture. Gradient: zones step from the base color to the
+ * end color across the wall in reading order (sRGB mix, the same convention
+ * as the scene backdrop gradient, so CSS previews match pixel-for-pixel).
+ * Both derive from the track's live color params, which the engine has
+ * already passed through any Colorizer's shift - so a colorized wall
+ * recolors whole, in either mode.
  */
 export function zoneColorHex(
   baseHex: string,
+  endHex: string,
   mode: number,
   zone: number,
   zones: number,
-  pitch: number,
 ): string {
-  if (mode === FLASH_WALL_COLOR_MODE.spectrum) {
-    const { h, s, v } = hexToHsv(baseHex)
-    return hsvToHex(h + zone / Math.max(1, zones), Math.max(s, 0.6), v)
+  if (mode !== FLASH_WALL_COLOR_MODE.gradient || zones <= 1) return baseHex
+  const t = Math.max(0, Math.min(1, zone / (zones - 1)))
+  const from = hexToRgb(baseHex)
+  const to = hexToRgb(endHex)
+  let out = '#'
+  for (let i = 0; i < 3; i++) {
+    out += Math.round(from[i] + (to[i] - from[i]) * t).toString(16).padStart(2, '0')
   }
-  if (mode === FLASH_WALL_COLOR_MODE.pitch && pitch >= 0) {
-    const { s, v } = hexToHsv(baseHex)
-    return hsvToHex((((pitch % 12) + 12) % 12) / 12, Math.max(s, 0.6), v)
-  }
-  return baseHex
+  return out
 }
