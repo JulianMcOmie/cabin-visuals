@@ -337,6 +337,7 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
+  mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
@@ -347,11 +348,15 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
-// Left the library outright - Motion's Step/Snap/Spin blocks are these exact
-// movers (same pitches, same evaluators), so listing them is pure duplication.
-// Same move as Circle/Triangle above: the definitions stay registered so old
-// projects keep working.
-const MOVER_REMOVED_IDS = new Set(['burst', 'rotateBurst', 'constantRotate'])
+// Retired outright by the 2026-08 mover consolidation: the unified Mover's
+// (translate | rotate | orbit) x (burst | constant | oscillate) matrix IS
+// these six, and persistence UPGRADES[12] rewrites old saves onto it, so the
+// ids are gone from the registry too. Kept as a guard in case one is ever
+// re-registered for a transition period.
+const MOVER_REMOVED_IDS = new Set([
+  'burst', 'rotateBurst', 'orbitBurst',
+  'constantRotate', 'constantOrbit', 'translationOscillator',
+])
 
 const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'mover' && !MOVER_REMOVED_IDS.has(d.id))
@@ -368,14 +373,7 @@ const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
   ),
 })))
 
-// Single-behavior movers, soft-deprecated: each is one bank of the compound
-// movers, so they park in a collapsed Mover Extras folder - demoted, not
-// deleted, like the object and director Extras.
-const MOVER_EXTRA_IDS = new Set([
-  'orbitBurst', 'constantOrbit', 'translationOscillator',
-])
-const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => !MOVER_EXTRA_IDS.has(d.id))
-const MOVER_EXTRA_INSTRUMENTS = ALL_MOVER_INSTRUMENTS.filter((d) => MOVER_EXTRA_IDS.has(d.id))
+const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS
 
 const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'splitter')
@@ -476,7 +474,6 @@ const CLAIMED_IDS = new Set([
   ...OBJECT_INSTRUMENTS.map((i) => i.id),
   ...INSTRUMENT_FOLDER_IDS,
   ...MOTION_ITEMS.map((i) => i.id),
-  ...MOVER_EXTRA_INSTRUMENTS.map((i) => i.id),
   ...SPLITTER_INSTRUMENTS.map((i) => i.id),
 ])
 const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
@@ -501,9 +498,6 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     title: 'Motion',
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
     items: MOTION_ITEMS,
-    subfolders: [
-      { id: 'motion-extras', title: 'Extras', description: 'Single-behavior movers, still fully working - the compound movers above cover the same ground in one track.', items: MOVER_EXTRA_INSTRUMENTS },
-    ],
   },
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },

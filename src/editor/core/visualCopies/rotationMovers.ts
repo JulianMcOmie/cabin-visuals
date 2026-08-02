@@ -14,7 +14,13 @@ import {
   type BasisSettings,
 } from './motionBasis'
 import type { VisualCopy } from './types'
-import { CONSTANT_ORBIT_COLOR, CONSTANT_ROTATE_COLOR, ORBIT_BURST_COLOR, ROTATE_BURST_COLOR } from './identityColors'
+
+// RETIRED from the registry (2026-08): the unified `mover` definition covers
+// all four of these cells, and persistence UPGRADES[12] rewrites old saves
+// onto it. The definition objects survive because All Movers embeds Orbit
+// Burst and Constant Orbit as bank modules, and mover.test.ts pins the unified
+// definition's parity against them. They declare no identityColor - their
+// hues went back to the palette.
 
 const DEG_TO_RAD = Math.PI / 180
 
@@ -104,7 +110,6 @@ export const rotateBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> 
   id: 'rotateBurst',
   label: 'Rotate Burst',
   kind: 'mover',
-  identityColor: ROTATE_BURST_COLOR,
   params: ROTATION_BURST_PARAMS,
   midiRows: () => SIGNED_BASIS_ROWS,
   resolve({ settings, notes }) {
@@ -122,7 +127,6 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
   id: 'orbitBurst',
   label: 'Orbit Burst',
   kind: 'mover',
-  identityColor: ORBIT_BURST_COLOR,
   params: [...ROTATION_BURST_PARAMS, ...PIVOT_PARAMS],
   midiRows: () => SIGNED_BASIS_ROWS,
   resolve({ settings, notes }) {
@@ -138,12 +142,17 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
   },
 }
 
-export interface ConstantRotationSettings extends BasisSettings {
+/** What evaluateConstantRotationAngles actually reads - narrow so the unified
+ *  Mover can hand it its own (differently-keyed) settings directly. */
+export interface ConstantSpinSettings {
   speedX: number
   speedY: number
   speedZ: number
   speed: number
   returnBeats: number
+}
+
+export interface ConstantRotationSettings extends BasisSettings, ConstantSpinSettings {
   pivotX: number
   pivotY: number
   pivotZ: number
@@ -165,7 +174,7 @@ const ROTATION_WITH_RETURN_ROWS = [
 
 function rawConstantAngles(
   notes: readonly ResolvedNote[],
-  settings: ConstantRotationSettings,
+  settings: ConstantSpinSettings,
   beat: number,
 ): [number, number, number] {
   const speeds = [settings.speedX, settings.speedY, settings.speedZ]
@@ -189,7 +198,7 @@ function rawConstantAngles(
 
 export function evaluateConstantRotationAngles(
   notes: readonly ResolvedNote[],
-  settings: ConstantRotationSettings,
+  settings: ConstantSpinSettings,
   beat: number,
 ): [number, number, number] {
   const returnBeats = Math.max(0.0001, settings.returnBeats)
@@ -219,7 +228,6 @@ export const constantRotateMover: MoverOrSplitterDefinition<ConstantRotationSett
   id: 'constantRotate',
   label: 'Constant Rotate',
   kind: 'mover',
-  identityColor: CONSTANT_ROTATE_COLOR,
   params: CONSTANT_ROTATION_PARAMS,
   midiRows: () => ROTATION_WITH_RETURN_ROWS,
   resolve({ settings, notes }) {
@@ -237,7 +245,6 @@ export const constantOrbitMover: MoverOrSplitterDefinition<ConstantRotationSetti
   id: 'constantOrbit',
   label: 'Constant Orbit',
   kind: 'mover',
-  identityColor: CONSTANT_ORBIT_COLOR,
   params: [...CONSTANT_ROTATION_PARAMS, ...PIVOT_PARAMS],
   midiRows: () => ROTATION_WITH_RETURN_ROWS,
   resolve({ settings, notes }) {

@@ -11,7 +11,10 @@ import {
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
-import { TRANSLATION_OSCILLATOR_COLOR } from './identityColors'
+// RETIRED from the registry (2026-08): the unified `mover` definition's
+// translate-oscillate cell is this exact behaviour, and persistence
+// UPGRADES[12] rewrites old saves onto it. The definition survives as an All
+// Movers bank module; no identityColor - its hue went back to the palette.
 
 export interface TranslationOscillatorSettings extends BasisSettings {
   distanceX: number
@@ -79,7 +82,6 @@ export const translationOscillatorMover: MoverOrSplitterDefinition<TranslationOs
   id: 'translationOscillator',
   label: 'Translation Oscillator',
   kind: 'mover',
-  identityColor: TRANSLATION_OSCILLATOR_COLOR,
   params: TRANSLATION_OSCILLATOR_PARAMS,
   midiRows: () => OSCILLATION_ROWS,
   resolve({ settings, notes }) {
