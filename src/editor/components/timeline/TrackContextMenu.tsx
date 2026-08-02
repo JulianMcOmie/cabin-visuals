@@ -57,9 +57,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     : moverDef?.params ?? (isComposition ? compositionAutomatableParams(directorDef) : [])
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
-  // there: a mover child MOVES its parent rather than joining the object's chain
-  // (core/visualCopies/moverFrame.ts). Splitters and colorizers have nothing to
-  // contribute to a frame, so they stay an object-track affordance.
+  // there, and never join the object's chain: under a MOVER a child moves its
+  // parent's field (core/visualCopies/moverFrame.ts); under a SPLITTER it moves
+  // the splitter's copies in the splitter's own reference frame
+  // (core/visualCopies/splitterChildChain.ts). Splitters and colorizers stay an
+  // object-track affordance.
   const newDefs = def || moverDef ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
   const colorizers = def ? newDefs.filter((d) => d.kind === 'colorizer') : []

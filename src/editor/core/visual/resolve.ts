@@ -17,6 +17,7 @@ import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
+import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
@@ -301,26 +302,22 @@ function moverOrSplitterId(track: Track): string | undefined {
   return undefined
 }
 
-/** Resolve one mover/splitter track through the registry: merge the
- *  definition's param defaults with the track's stored inputValues (numeric)
- *  and stringParams (color/string),
+/** Resolve one mover/splitter track's OWN definition, without its child chain:
+ *  merge the definition's param defaults with the track's stored inputValues
+ *  (numeric) and stringParams (color/string),
  *  flatten its notes, and let the definition close over both. Returns null for
  *  unknown ids. Automation children overlay their params per beat: the resolved
  *  closure re-resolves with the beat-sampled settings, memoized per beat. The
  *  memo is a cache, not playback state - re-resolving at a repeated beat yields
  *  the identical closure, so scrub == playback == export still holds. */
-function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
+function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
   if (!def) return null
   const settings = mergeDefinitionSettings(def, track.inputValues, track.stringParams)
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
   const automation = resolveAutomationLanes(track, def.params, p)
-  // This track's own mover/splitter children are not chain entries of the object:
-  // they are this entry's FRAME, and they move it (visualCopies/moverFrame.ts).
-  // Collected by the same function as an object's chain, so frames nest.
-  const frame = resolveMoverAndSplitterChain(track, p)
-  if (automation.length === 0) return framedMoverOrSplitter(resolved, frame)
+  if (automation.length === 0) return resolved
   let cachedBeat = Number.NaN
   let cached = resolved
   const wrapped: MoverOrSplitter = {
@@ -338,14 +335,12 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   // only thing this loses is automating a remap's own params, which for Freeze
   // means automating a two-value "on release" switch.
   if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
-  const entry = framedMoverOrSplitter(wrapped, frame)
   // Automation makes the per-beat settings - and so possibly the COPY COUNT -
   // vary with the beat, which a single-beat structural probe cannot see. Hand
   // the probe the definition resolved at every lane's maximum reach (and
   // minimum, for a count that shrinks as a param grows) so the mounted pool is
   // sized to everything the lanes can reach (structuralCopyCount in
-  // visualCopies/resolveVisualCopies.ts). Probe-only closures: frames don't
-  // change counts, so they skip the framing wrapper.
+  // visualCopies/resolveVisualCopies.ts).
   const maxOverlay: Record<string, number> = {}
   const minOverlay: Record<string, number> = {}
   for (const lane of automation) {
@@ -354,10 +349,29 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
     maxOverlay[lane.param] = bounds.max
     minOverlay[lane.param] = bounds.min
   }
-  entry.structuralVariants = [
+  wrapped.structuralVariants = [
     def.resolve({ settings: { ...settings, ...maxOverlay }, notes }),
     def.resolve({ settings: { ...settings, ...minOverlay }, notes }),
   ]
+  return wrapped
+}
+
+/** Resolve one mover/splitter track WITH its nested mover/splitter children.
+ *  Those children are never chain entries of the object; what they are depends
+ *  on the parent. Under a MOVER they are its FRAME and move its field
+ *  (visualCopies/moverFrame.ts); under a SPLITTER they act on its copies in
+ *  its reference frame (visualCopies/splitterChildChain.ts). Both collect
+ *  through the same function as an object's chain, so nesting recurses. */
+function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
+  const own = resolveOwnMoverOrSplitter(track, p)
+  if (!own) return null
+  const children = resolveMoverAndSplitterChain(track, p)
+  if (track.type === 'splitter') return splitterWithChildChain(own, children)
+  const entry = framedMoverOrSplitter(own, children)
+  // Structural variants stay the BARE resolutions: frames don't change counts,
+  // so they skip the framing wrapper (splitterWithChildChain, whose children DO
+  // change counts, composes its own variants instead).
+  if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
   return entry
 }
 
@@ -428,6 +442,13 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
     const anySolo = candidates.some((child) => child.solo)
     const prefix: MoverOrSplitter[] = []
+    // A SPLITTER's child chain runs over the splitter's own copies
+    // (visualCopies/splitterChildChain.ts), so the parent itself heads the
+    // prefix; a MOVER's children are its frame and start from one copy.
+    if (parent.type === 'splitter') {
+      const own = resolveOwnMoverOrSplitter(parent, p)
+      if (own) prefix.push(own)
+    }
     for (const child of candidates) {
       if (child.id === trackId) break
       if (child.muted || (anySolo && !child.solo)) continue
