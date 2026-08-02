@@ -21,17 +21,7 @@ import {
   LASER_VERTEX_SHADER,
 } from '../instruments/LaserSphere'
 import { evaluateCoreAppearance } from '../instruments/laserSphereCore'
-import {
-  bindPanel,
-  Console,
-  ControlRow,
-  ColorPill,
-  emitterHalo,
-  Knob,
-  ParameterList,
-  PreviewWindow,
-} from './console'
-import type { UserInterfaceRendererDefinition } from './types'
+import { consolePanel, PreviewWindow, type PanelPreviewProps } from './console'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -133,46 +123,30 @@ function OrbPreview({ color, size, glow, whiteCore, light }: {
   )
 }
 
-// ── The panel ───────────────────────────────────────────────────────────────
-
-export const LaserSphereUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const b = bindPanel(parameters)
-  const size = b.num('size')
-  const color = b.color('color')
-  const glow = b.num('glow')
-  const whiteCore = b.num('whiteCore')
-  const light = b.num('light')
-
-  if (!size || !color || !glow || !whiteCore || !light) return <ParameterList parameters={parameters} />
-
-  const accent = color.value
-
+/** The spec preview slot → the orb's own props. */
+function LaserSpherePanelPreview({ values, accent }: PanelPreviewProps) {
   return (
-    <Console accent={accent} bleed="full" testId="laser-sphere-user-interface">
-      <OrbPreview
-        color={accent}
-        size={size.value}
-        glow={glow.value}
-        whiteCore={whiteCore.value}
-        light={light.value}
-      />
-      <ControlRow spill>
-        <Knob b={size} label="SIZE" large />
-        <Knob b={glow} label="GLOW" />
-        <Knob b={whiteCore} label="CORE" />
-        <Knob b={light} label="LIGHT" />
-        <div className="ml-auto">
-          {/* The COLOR pill is the emitter — its halo alone follows the GLOW
-              param (1.5..12) in reach and strength. Knob glow lives in the
-              arcs themselves. */}
-          <ColorPill
-            b={color}
-            halo={emitterHalo(accent, glow.value / 12)}
-            pillTestId="laser-color-pill"
-            wheelTestId="laser-color-wheel"
-          />
-        </div>
-      </ControlRow>
-    </Console>
+    <OrbPreview
+      color={accent}
+      size={values.size ?? 1.6}
+      glow={values.glow ?? 5.5}
+      whiteCore={values.whiteCore ?? 1}
+      light={values.light ?? 14}
+    />
   )
 }
+
+// ── The panel ───────────────────────────────────────────────────────────────
+// Pure composition, so it is a SPEC (see console/spec.tsx): the preview, one
+// knob row, and the COLOR pill as the emitter — its halo alone follows the
+// GLOW param in reach and strength; knob glow lives in the arcs themselves.
+
+export const LaserSphereUserInterfaceRenderer = consolePanel({
+  accent: { param: 'color', fallback: DEFAULT_LASER_SPHERE_COLOR },
+  testId: 'laser-sphere-user-interface',
+  bleed: 'full',
+  preview: LaserSpherePanelPreview,
+  rows: [
+    { row: ['size*:SIZE', 'glow:GLOW', 'whiteCore:CORE', 'light:LIGHT', { pill: 'color', haloParam: 'glow' }] },
+  ],
+})

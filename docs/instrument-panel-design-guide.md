@@ -2,8 +2,13 @@
 
 The rules for bespoke instrument settings UIs (`src/editor/userInterfaceRenderers/`).
 Laser Sphere (`LaserSphereUserInterface.tsx`) is the reference implementation; new
-panels and reworks of existing ones follow this guide. The knob itself now lives in
-`laserKnob.tsx` (plain numbers in/out) — adopt it, don't re-derive the arc math.
+panels and reworks of existing ones follow this guide. **The guide's decisions are
+implemented once in the console kit (`userInterfaceRenderers/console/`)** — chassis,
+accent formulas, bound knob, segmented control, preview frame, disclosure — and a
+pure-composition panel can be declared as a spec (`console/spec.tsx`, Laser Line's
+`panelSpec` is the 10-line reference). Build from the kit; don't re-derive the arc
+math, the shade math, or the binder. The plain-number knob stays in `laserKnob.tsx`
+for values that aren't params.
 `AutomationUserInterface.tsx` is the second panel built to these rules, and the
 worked example for a panel whose subject is a SIGNAL rather than an object. The point of the guide is to
 replace "vibe-coded" styling — chrome that appears because a generator liked it,
@@ -219,9 +224,14 @@ render `ParameterList` for everything rather than a half-empty custom layout.
   surface (the scene panel's etched "SCENE" wordmark, the audio panel's
   oscilloscope label) — never a heading row above the tabs.
 - A real layering solution to replace the deprecated IN FRONT toggle.
-- Migrate the other bespoke renderers (Cube, Hopf, …) to these rules: strip
-  card chrome, headers, reset buttons, gradient backdrops; adopt the accent
-  and glow rules (and `laserKnob.tsx` for their knobs).
+- ~~Migrate the other bespoke renderers (Cube, Hopf, …) to these rules~~ —
+  done 2026-08-02 on the console kit: Cube, Hopf, DotField, Pixel Blast,
+  Particle Burst, Icosahedron Burst, Symmetric Motion, Gradient, Radial and
+  Symmetry lost their card chrome, headers and reset buttons and now compose
+  the kit. Character controls earned their keep (Pixel Blast's cell meters,
+  the gradient-track sliders); the remaining theme-var panels (Stars, Neon
+  Polar, Oscilloscope, Fractal Tunnel, TextDisplay, the effect panels…) are
+  still pre-guide.
 - `EnvelopeUserInterface.tsx`'s ADSR pad and `AutomationUserInterface.tsx`'s
   burst window are the same geometry in two skins (theme vars vs. the lane's
   accent). When the envelope panel is migrated, they should become one pad.

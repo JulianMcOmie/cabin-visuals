@@ -23,6 +23,8 @@ export { Segmented } from './Segmented'
 export type { SegmentOption } from './Segmented'
 export { PreviewWindow } from './Window'
 export { More } from './More'
+export { consolePanel } from './spec'
+export type { PanelSpec, PanelRowSpec, KnobItem, KnobSpec, PillSpec, PanelPreviewProps } from './spec'
 
 export { LaserKnob, formatKnobValue } from '../laserKnob'
 export { ColorWheelPill, ColorWheelPopover, hexToHsv, hsvToHex, towardWhite, withAlpha } from '../colorWheel'

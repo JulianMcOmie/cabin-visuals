@@ -11,7 +11,7 @@ No `useFrame`, `performance.now`, `Date.now`, `Math.random`, clock/delta. Per-fr
 1. New file exporting the def: `id`, `name`, `kind: 'object'`, `params: ParamDef[]`, `userInterfaceRenderer`, `component: FC<{trackId}>`, plus optional `localTransform`, `abilities`, `midiRows`, `fullFrame`, `defaultOnTop`.
 2. Register in `index.ts` (`INSTRUMENTS` map).
 3. **Add a picker entry in `components/LeftSidebar.tsx` `ALL_OBJECT_INSTRUMENTS`** — the add-track menu is curated and does NOT read the registry; without this the instrument is registered but unreachable.
-4. Settings UI: `'parameters'` (generic list) or a bespoke renderer — new id in `userInterfaceRenderers/ids.ts` + component + entry in its `index.ts` (see that dir's CLAUDE.md).
+4. Settings UI, cheapest first: a **`panelSpec`** on the def (a declarative console — accent, knob rows, optional preview component; no registration at all, see `userInterfaceRenderers/console/spec.tsx`, Laser Line is the reference), or `'parameters'` (generic list), or a bespoke renderer — new id in `userInterfaceRenderers/ids.ts` + component + entry in its `index.ts` (see that dir's CLAUDE.md).
 5. Preview clip (library hover): `npm run previews:instruments`.
 
 ## Testing an instrument: put the pure math in a `*Core.ts`

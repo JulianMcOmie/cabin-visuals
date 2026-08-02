@@ -20,6 +20,7 @@ import { SceneSettingsPanel } from './SceneSettingsPanel'
 import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
+import { consolePanel } from '../userInterfaceRenderers/console'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../utils/trackDisplayColor'
@@ -628,9 +629,13 @@ export function TrackEditor() {
                     return <CompositionSettingsPanel track={track} />
                   }
 
-                  // Object track → its registered settings UI, then its common track controls.
+                  // Object track → its settings UI: a declarative panelSpec on
+                  // the def wins (no registration needed - see console/spec.tsx),
+                  // else its registered renderer.
                   const def = getInstrument(track.instrumentId)
-                  const UserInterfaceRenderer = def ? getUserInterfaceRenderer(def.userInterfaceRenderer) : null
+                  const UserInterfaceRenderer = def
+                    ? (def.panelSpec ? consolePanel(def.panelSpec) : getUserInterfaceRenderer(def.userInterfaceRenderer))
+                    : null
                   // Params gated behind a toggle (showIf) only appear while
                   // that toggle is on - a flight-speed slider means nothing
                   // with flight mode off. 'key' alone means "key >= 0.5";
