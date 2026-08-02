@@ -119,6 +119,12 @@ export const RISO_DUOTONE_COLOR = '#ff7587'
 export const FORCE_FIELD_PUSH_COLOR = '#ff786e'
 /** Hue 39°. */
 export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
+/** Hue 62° - the midpoint of the gap past the rebalanced stretch: Meteor Impact
+ *  (51°) and Burst (73°) leave exactly 22.2°. The hex was searched for a
+ *  ROUND-TRIP hue ≥11° from both (8-bit channels quantize hue in ~0.3-0.7°
+ *  jumps, and the OKLCH-generated candidates all landed on the wrong side of
+ *  one neighbour). The next definition needs a bigger gap freed up first. */
+export const CONTOUR_COLOR = '#f4aa67'
 // Hue ~86° is deliberately left free for the COLORIZER, which is the one
 // definition that does not take a fixed colour from this file: its subject IS
 // a colour the user picked, so it declares `{ param: 'color' }` and wears its
