@@ -14,7 +14,7 @@
 import { useEffect, useRef } from 'react'
 import {
   DEFAULT_FLASH_WALL_COLOR,
-  FLASH_WALL_BASE_PITCH,
+  DEFAULT_FLASH_WALL_COLOR2,
   FLASH_WALL_COLOR_MODE,
   flashEnvelopeAt,
   flashWallGrid,
@@ -254,6 +254,9 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
   const gap = parameter(parameters, 'gap')
   const texture = parameter(parameters, 'texture')
   const color = parameter(parameters, 'color')
+  // showIf-gated on Gradient mode, so absent while Solid - like panelWidth,
+  // its absence must not trip the fallback.
+  const color2 = parameter(parameters, 'color2')
   const colorMode = parameter(parameters, 'colorMode')
   const fitToScreen = parameter(parameters, 'fitToScreen')
   const panelWidth = parameter(parameters, 'panelWidth')
@@ -275,7 +278,8 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
 
   const zonesN = clamp(Math.round(numericValue(zones, 6)), 1, 12)
   const layoutN = numericValue(layout, 0)
-  const modeN = numericValue(colorMode, FLASH_WALL_COLOR_MODE.spectrum)
+  const modeN = numericValue(colorMode, FLASH_WALL_COLOR_MODE.solid)
+  const accent2 = stringValue(color2, DEFAULT_FLASH_WALL_COLOR2)
   const idleN = numericValue(idle, 0.08)
   const gapN = numericValue(gap, 0.06)
   const textureN = numericValue(texture, 0.5)
@@ -287,13 +291,11 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
     releaseSec: numericValue(release, 0.4),
   }
 
-  // The same zone colors the shader will wear; Pitch mode previews each zone
-  // lit by its own row (base pitch + zone), which is exactly the mapping.
+  // The same zone colors the shader will wear (filler cells clamp to the last
+  // zone, matching the instrument's grid-filler rule).
   const { cols, rows } = flashWallGrid(zonesN, layoutN)
   const cellColors = Array.from({ length: cols * rows }, (_, i) =>
-    i < zonesN
-      ? zoneColorHex(accent, modeN, i, zonesN, modeN === FLASH_WALL_COLOR_MODE.pitch ? FLASH_WALL_BASE_PITCH + i : -1)
-      : accent,
+    zoneColorHex(accent, accent2, modeN, Math.min(i, zonesN - 1), zonesN),
   )
 
   const pillHalo = `0 0 10px ${withAlpha(accent, 0.35)}`
@@ -346,7 +348,7 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
         <ParamKnob parameter={decay} label="DEC" accent={accent} />
         <ParamKnob parameter={sustain} label="SUS" accent={accent} />
         <ParamKnob parameter={release} label="REL" accent={accent} />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-end gap-3">
           <ColorWheelPill
             value={accent}
             onChange={(hex) => color.setValue(hex)}
@@ -357,6 +359,20 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
             pillTestId="flash-wall-color-pill"
             wheelTestId="flash-wall-color-wheel"
           />
+          {/* Present only in Gradient mode (showIf gates the param away in
+              Solid), so the second pill appears exactly when it matters. */}
+          {color2 && (
+            <ColorWheelPill
+              value={accent2}
+              onChange={(hex) => color2.setValue(hex)}
+              label="COLOR 2"
+              ariaLabel="Gradient end color"
+              halo={`0 0 10px ${withAlpha(accent2, 0.35)}`}
+              align="right"
+              pillTestId="flash-wall-color2-pill"
+              wheelTestId="flash-wall-color2-wheel"
+            />
+          )}
         </div>
       </div>
       {/* The surface: what the wall is made of, and how zones take color. */}
@@ -370,9 +386,8 @@ export const FlashWallUserInterfaceRenderer: UserInterfaceRendererDefinition = (
           <Segmented
             ariaLabel="Zone color mode"
             options={[
-              { value: 0, label: 'SOLID', title: 'Every zone wears the base color' },
-              { value: 1, label: 'FAN', title: 'The base hue fans across the zones' },
-              { value: 2, label: 'PITCH', title: 'Each flash takes its note’s hue' },
+              { value: 0, label: 'SOLID', title: 'Every zone wears the one color' },
+              { value: 1, label: 'GRADIENT', title: 'Zones blend from COLOR to COLOR 2 across the wall' },
             ]}
             value={modeN}
             accent={accent}

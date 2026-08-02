@@ -343,6 +343,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
   symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
+  symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 

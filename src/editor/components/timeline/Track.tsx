@@ -244,6 +244,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
           // The M/S buttons are not drag handles; neither is the rename input
           // nor the transform strip's fader.
           if ((e.target as HTMLElement).closest('button, input, [data-strip-control]')) return
+          // The transform/tags popovers portal to document.body but still route
+          // their events through this React subtree - and this capture handler
+          // runs BEFORE their own stopPropagation can. A target that isn't a
+          // DOM descendant of the label came through a portal: not a drag handle.
+          if (!e.currentTarget.contains(e.target as Node)) return
           // The audio track is pinned at the top - not draggable, not duplicable.
           if (track.type === 'audio') return
           // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the

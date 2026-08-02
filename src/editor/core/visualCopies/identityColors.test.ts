@@ -1,5 +1,5 @@
 // The palette's integrity, which is the one thing no single definition file can
-// check for itself: a colour is only meaningful relative to the other twenty-five.
+// check for itself: a colour is only meaningful relative to the other twenty-six.
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
