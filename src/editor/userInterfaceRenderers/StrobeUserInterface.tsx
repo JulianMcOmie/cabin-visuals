@@ -301,7 +301,7 @@ export const StrobeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ p
         secondsPerCycle={previewSecondsPerCycle(previewRow)}
       />
       <RateLegend selected={previewPitch} onSelect={setPreviewPitch} />
-      <ControlRow spill className="justify-center px-4 pb-2 pt-1.5">
+      <ControlRow spill className="justify-center gap-5 px-4 pb-2 pt-1.5">
         <StyleSelector b={style} />
         <Knob b={depth} label="DEPTH" large format={asPercent} />
         <Knob b={width} label="WIDTH" format={asPercent} />

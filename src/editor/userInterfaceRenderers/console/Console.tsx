@@ -17,7 +17,7 @@ export function useConsoleAccent(): string {
   return useContext(AccentContext)
 }
 
-export function Console({ accent, bleed = 'top', testId, children }: {
+export function Console({ accent, bleed = 'top', shade, testId, children }: {
   /** The instrument's live color param, or the definition's identityColor for
    *  movers/splitters/colorizers — never a hard-coded theme hue. */
   accent: string
@@ -29,6 +29,10 @@ export function Console({ accent, bleed = 'top', testId, children }: {
    * carries its own bottom padding.
    */
   bleed?: 'top' | 'full'
+  /** Overrides the computed accent shade — for a panel whose accent is one of
+   *  SEVERAL live colors (the Colorizer's palette), where a wash that re-tints
+   *  on every palette edit would make the whole room flicker. */
+  shade?: string
   testId?: string
   children: ReactNode
 }) {
@@ -37,7 +41,7 @@ export function Console({ accent, bleed = 'top', testId, children }: {
       <section
         data-testid={testId}
         className={bleed === 'full' ? '-m-3 rounded-[9px]' : '-mx-3 -mt-3'}
-        style={{ background: shadeOf(accent) }}
+        style={{ background: shade ?? shadeOf(accent) }}
       >
         {children}
       </section>
@@ -51,11 +55,11 @@ export function Console({ accent, bleed = 'top', testId, children }: {
  * `spill` to catch the window's light through the seam — later rows don't
  * (the glow is at the seam, not everywhere).
  *
- * `className` replaces the default spacing (not appends), so a panel that
- * needs tighter padding states the whole rhythm rather than fighting the
+ * `className` replaces the default gap and spacing (not appends), so a panel
+ * that needs a tighter rhythm states the whole thing rather than fighting the
  * default's Tailwind classes.
  */
-export function ControlRow({ spill = false, className = 'px-4 pb-4 pt-3', children }: {
+export function ControlRow({ spill = false, className = 'gap-5 px-4 pb-4 pt-3', children }: {
   spill?: boolean
   className?: string
   children: ReactNode
@@ -63,7 +67,7 @@ export function ControlRow({ spill = false, className = 'px-4 pb-4 pt-3', childr
   const accent = useConsoleAccent()
   return (
     <div
-      className={`flex items-end gap-5 ${className}`}
+      className={`flex items-end ${className}`}
       style={spill ? { background: spillOf(accent) } : undefined}
     >
       {children}
