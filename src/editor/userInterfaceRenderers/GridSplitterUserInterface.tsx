@@ -1,30 +1,46 @@
 'use client'
 
-// Bespoke settings for the Grid splitter. Two live surfaces stacked:
+// Bespoke settings for the Grid splitter, following
+// docs/instrument-panel-design-guide.md (Laser Sphere is the reference,
+// Radial Motion the nearest sibling with a matrix of same-question knobs).
 //
-// 1. A table-size chooser (the Word-table gesture): a 32 x 32 cell field where
-//    hovering previews a rows x columns choice and pressing/dragging commits it
-//    in one sweep. Fine adjustment via - / + steppers whose readouts drag
-//    vertically.
-// 2. A layout preview of the grid the splitter actually produces: cells placed
-//    with the real spacing (the gap widens live as the slider moves until the
-//    fit clamp takes over), re-oriented by the plane select (the depth planes
-//    project as foreshortened parallelograms), and swept by a repeating index
-//    pulse that travels in the EXACT order from gridCellOrder - so the four
-//    indexing modes are visibly different. Small grids also overlay the index
-//    numbers; the dashed ring marks cell 1.
+// The old panel's Word-table drag chooser is gone. The layout is now:
+//
+// 1. A live preview window: the splitter's REAL resolve() (no notes) applied to
+//   a single generic cube, drawn with a plain 2D canvas - no r3f, because a
+//   panel <Canvas> stays black until the transport plays (see the renderers
+//   CLAUDE.md) and a layout is exactly the thing you dial in while paused.
+//   Drag orbits it; until touched it turns on its own. An index pulse sweeps
+//   the copies in slot order, so the four indexing modes read differently.
+// 2. Three vertical strips, one per dimension (columns / rows / depth), each
+//   labelled with the world axis it drives: a grid-vs-circular segmented
+//   control on top, then a COUNT knob, then - only while circular - a RADIUS
+//   knob.
+// 3. A bottom row: SPACING knob, plane select, indexing select.
 //
 // Presentation only: every control routes through the passed parameter
-// bindings; gridCellOrder is imported read-only from the splitter definition.
+// bindings; the preview imports the definition read-only.
 
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { RotateCcw } from 'lucide-react'
-import { gridCellOrder } from '../core/visualCopies/library'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
+import { GRID_COLOR } from '../core/visualCopies/identityColors'
+import { gridSplitter, type GridSettings } from '../core/visualCopies/library'
+import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
+import { withAlpha } from './colorWheel'
+import { LaserKnob } from './laserKnob'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const ACCENT = GRID_COLOR
+// The guide's hue-true dark shade of the accent (never an alpha tint).
+const PANEL_SHADE = '#130a0f'
+const ROOM = '#05070c'
+const PREVIEW_HEIGHT = 148
+/** Above this copy count the preview drops from lit cubes to points. */
+const CUBE_BUDGET = 360
 
 interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
 interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
@@ -48,355 +64,242 @@ function bind(parameters: readonly UserInterfaceParameter[]) {
   }
 }
 
-const intValue = (b: NumBinding) => clamp(Math.round(b.value), b.def.min, b.def.max)
+// ── 3D layout preview ────────────────────────────────────────────────────────
 
-// ── Size chooser ─────────────────────────────────────────────────────────────
+const CUBE_HALF = 0.3
+/** Local cube corners, bit-indexed (bit0 = +X, bit1 = +Y, bit2 = +Z). */
+const CUBE_CORNERS = Array.from({ length: 8 }, (_, i) => [
+  i & 1 ? CUBE_HALF : -CUBE_HALF,
+  i & 2 ? CUBE_HALF : -CUBE_HALF,
+  i & 4 ? CUBE_HALF : -CUBE_HALF,
+])
+const CUBE_FACES = [
+  [1, 5, 7, 3], [0, 2, 6, 4], [2, 3, 7, 6], [0, 4, 5, 1], [4, 6, 7, 5], [0, 1, 3, 2],
+]
 
-const MAX_DIMENSION = 32
-const CHOOSER_CELL = 7
-const CHOOSER_PAD = 2
-const CHOOSER_FIELD = MAX_DIMENSION * CHOOSER_CELL
-const CHOOSER_VB = CHOOSER_FIELD + CHOOSER_PAD * 2
+function hexToRgb(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+}
 
-/** All lattice lines as one path each - minor every cell, major every 8th. */
-const CHOOSER_LINES = (() => {
-  let minor = ''
-  let major = ''
-  for (let i = 0; i <= MAX_DIMENSION; i++) {
-    const p = CHOOSER_PAD + i * CHOOSER_CELL
-    const d = `M${CHOOSER_PAD} ${p}H${CHOOSER_PAD + CHOOSER_FIELD}M${p} ${CHOOSER_PAD}V${CHOOSER_PAD + CHOOSER_FIELD}`
-    if (i % 8 === 0) major += d
-    else minor += d
-  }
-  return { minor, major }
-})()
+/** The splitter's real output at beat 0 with no notes: copy matrices in slot
+ *  order, plus how far the layout reaches (what the camera has to frame). */
+function resolveLayout(settings: GridSettings) {
+  const copies = resolveVisualCopies([gridSplitter.resolve({ settings, notes: [] })], 0)
+  const matrices = copies.map((copy) => copy.transform.elements)
+  let reach = 1
+  for (const e of matrices) reach = Math.max(reach, Math.hypot(e[12], e[13], e[14]) + CUBE_HALF * 2)
+  return { matrices, reach }
+}
 
-/** The Word-table gesture: hover previews rows x columns, press/drag commits. */
-function SizeChooser({ rows, columns }: { rows: NumBinding; columns: NumBinding }) {
-  const padRef = useRef<HTMLDivElement>(null)
-  const [preview, setPreview] = useState<{ r: number; c: number } | null>(null)
-  const committedR = intValue(rows)
-  const committedC = intValue(columns)
+function LayoutPreview({ settings }: { settings: GridSettings }) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const viewRef = useRef({ yaw: -0.55, pitch: 0.38, auto: true })
+  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null)
 
-  const cellFromPointer = (clientX: number, clientY: number) => {
-    const rect = padRef.current?.getBoundingClientRect()
-    if (!rect) return null
-    const scale = Math.min(rect.width / CHOOSER_VB, rect.height / CHOOSER_VB)
-    const u = (clientX - rect.left - (rect.width - CHOOSER_VB * scale) / 2) / scale
-    const v = (clientY - rect.top - (rect.height - CHOOSER_VB * scale) / 2) / scale
-    return {
-      r: clamp(Math.ceil((v - CHOOSER_PAD) / CHOOSER_CELL), 1, MAX_DIMENSION),
-      c: clamp(Math.ceil((u - CHOOSER_PAD) / CHOOSER_CELL), 1, MAX_DIMENSION),
+  const layout = useMemo(() => resolveLayout(settings), [settings])
+  const live = useRef(layout)
+  live.current = layout
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) return
+    const [ar, ag, ab] = hexToRgb(ACCENT)
+    let raf = 0
+
+    const draw = (now: number) => {
+      raf = requestAnimationFrame(draw)
+      const host = hostRef.current
+      if (!host) return
+      // Size is re-derived per frame (the pane is user-resizable, and
+      // ResizeObserver callbacks starve in a hidden pane).
+      const w = host.clientWidth
+      const h = host.clientHeight
+      if (w === 0 || h === 0) return
+      const dpr = window.devicePixelRatio || 1
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr
+        canvas.height = h * dpr
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, w, h)
+
+      const view = viewRef.current
+      if (view.auto) view.yaw += 0.0035
+      const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+      const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
+      const { matrices, reach } = live.current
+      const total = matrices.length
+      const pxScale = (Math.min(w, h) * 0.42) / reach
+      const camera = reach * 3.5
+      const cx = w / 2, cyPx = h / 2
+
+      // View-rotate (yaw about Y, then pitch about X); camera on +Z.
+      const rotate = (x: number, y: number, z: number): [number, number, number] => {
+        const x1 = cy * x + sy * z
+        const z1 = -sy * x + cy * z
+        return [x1, cp * y - sp * z1, sp * y + cp * z1]
+      }
+      const project = (p: [number, number, number]): [number, number, number] => {
+        const f = camera / Math.max(camera - p[2], camera * 0.2)
+        return [cx + p[0] * pxScale * f, cyPx - p[1] * pxScale * f, f]
+      }
+
+      // The index pulse: a slot-order sweep so the indexing modes are visibly
+      // different. Panel chrome may run on wall time - the pause invariant
+      // governs the rendered visual, not the console.
+      const period = clamp(total * 0.14, 1.8, 6)
+      const phase = ((now / 1000) % period) / period * total
+      const pulse = (slot: number) => {
+        const d = Math.min(Math.abs(slot - phase), total - Math.abs(slot - phase))
+        return Math.exp(-d * d * 2)
+      }
+
+      if (total <= CUBE_BUDGET) {
+        // Generic cubes with the real copy orientation: circular dimensions
+        // turn each copy to face around its ring, and that should be visible.
+        const faces: { depth: number; points: [number, number, number][]; fill: string }[] = []
+        for (let slot = 0; slot < total; slot++) {
+          const e = matrices[slot]
+          const corners = CUBE_CORNERS.map(([lx, ly, lz]) => rotate(
+            e[0] * lx + e[4] * ly + e[8] * lz + e[12],
+            e[1] * lx + e[5] * ly + e[9] * lz + e[13],
+            e[2] * lx + e[6] * ly + e[10] * lz + e[14],
+          ))
+          const center = rotate(e[12], e[13], e[14])
+          const boost = pulse(slot)
+          for (const face of CUBE_FACES) {
+            let fx = 0, fy = 0, fz = 0
+            for (const i of face) { fx += corners[i][0]; fy += corners[i][1]; fz += corners[i][2] }
+            fx /= 4; fy /= 4; fz /= 4
+            // Outward normal straight from the geometry (centroid minus cube
+            // center) - immune to winding mistakes, and exact for a cube.
+            const nl = Math.hypot(fx - center[0], fy - center[1], fz - center[2]) || 1
+            const nx = (fx - center[0]) / nl, ny = (fy - center[1]) / nl, nz = (fz - center[2]) / nl
+            if (nz <= 0.02) continue
+            const light = 0.28 + 0.72 * Math.max(0, nx * -0.33 + ny * 0.62 + nz * 0.71)
+            const glow = clamp(light * (0.55 + 0.45 * boost) + boost * 0.25, 0, 1.2)
+            faces.push({
+              depth: fz,
+              points: face.map((i) => project(corners[i])),
+              fill: `rgb(${Math.round(ar * glow)},${Math.round(ag * glow)},${Math.round(ab * glow)})`,
+            })
+          }
+        }
+        faces.sort((a, b) => a.depth - b.depth)
+        for (const face of faces) {
+          ctx.beginPath()
+          ctx.moveTo(face.points[0][0], face.points[0][1])
+          for (let i = 1; i < 4; i++) ctx.lineTo(face.points[i][0], face.points[i][1])
+          ctx.closePath()
+          ctx.fillStyle = face.fill
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+          ctx.lineWidth = 0.5
+          ctx.stroke()
+        }
+      } else {
+        // Point cloud past the cube budget: position + depth cue only.
+        for (let slot = 0; slot < total; slot++) {
+          const e = matrices[slot]
+          const [px, py, f] = project(rotate(e[12], e[13], e[14]))
+          const a = clamp(0.25 + 0.45 * f + pulse(slot) * 0.5, 0, 1)
+          ctx.fillStyle = `rgba(${ar},${ag},${ab},${a.toFixed(3)})`
+          const size = clamp(2.4 * f, 1, 4)
+          ctx.fillRect(px - size / 2, py - size / 2, size, size)
+        }
+      }
+
+      // Axis gizmo, so the strips' X/Y/Z captions point at something.
+      const gx = 16, gy = h - 16, gr = 11
+      ctx.font = '7px ui-monospace, monospace'
+      for (const [axis, label] of [[0, 'X'], [1, 'Y'], [2, 'Z']] as const) {
+        const dir = rotate(axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0)
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(gx, gy)
+        ctx.lineTo(gx + dir[0] * gr, gy - dir[1] * gr)
+        ctx.stroke()
+        ctx.fillStyle = 'rgba(255,255,255,0.55)'
+        ctx.fillText(label, gx + dir[0] * (gr + 3) - 2, gy - dir[1] * (gr + 3) + 2)
+      }
     }
-  }
 
-  const commit = (cell: { r: number; c: number }) => {
-    rows.set(clamp(cell.r, rows.def.min, rows.def.max))
-    columns.set(clamp(cell.c, columns.def.min, columns.def.max))
-  }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const delta: Record<string, [number, number]> = {
-      ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
-    }
-    const step = delta[event.key]
-    if (!step) return
-    event.preventDefault()
-    commit({ r: clamp(committedR + step[0], 1, MAX_DIMENSION), c: clamp(committedC + step[1], 1, MAX_DIMENSION) })
-  }
-
-  const shown = preview ?? { r: committedR, c: committedC }
-  const previewDiffers = preview != null && (preview.r !== committedR || preview.c !== committedC)
+  const dims = `${Math.round(settings.rows)} × ${Math.round(settings.columns)} × ${Math.round(settings.depth)}`
+  const total = layout.matrices.length
+  // The engine truncates any step past MAX_VISUAL_COPIES; when the requested
+  // product overflows, say so instead of quietly showing fewer copies.
+  const capped = Math.round(settings.rows) * Math.round(settings.columns) * Math.round(settings.depth) > total
 
   return (
     <div
-      ref={padRef}
-      data-testid="grid-size-chooser"
-      role="group"
-      tabIndex={0}
-      aria-label={`${rows.def.label} and ${columns.def.label}`}
-      title="Hover to preview · click or drag to set rows × columns"
-      onPointerMove={(event) => {
-        const cell = cellFromPointer(event.clientX, event.clientY)
-        if (!cell) return
-        setPreview(cell)
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) commit(cell)
-      }}
+      ref={hostRef}
+      data-testid="grid-layout-preview"
+      title="Drag to orbit"
+      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      style={{ height: PREVIEW_HEIGHT, background: ROOM }}
       onPointerDown={(event) => {
         event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        const cell = cellFromPointer(event.clientX, event.clientY)
-        if (cell) { setPreview(cell); commit(cell) }
+        try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+        const view = viewRef.current
+        view.auto = false
+        dragRef.current = { x: event.clientX, y: event.clientY, yaw: view.yaw, pitch: view.pitch }
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current
+        if (!drag) return
+        viewRef.current.yaw = drag.yaw + (event.clientX - drag.x) * 0.01
+        viewRef.current.pitch = clamp(drag.pitch + (event.clientY - drag.y) * 0.01, -1.35, 1.35)
       }}
       onPointerUp={(event) => {
+        dragRef.current = null
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       }}
-      onPointerLeave={() => setPreview(null)}
-      onKeyDown={onKeyDown}
-      className="relative w-full cursor-crosshair touch-none select-none border-y border-[var(--border)] bg-[var(--bg-canvas)] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-      style={{ aspectRatio: '1 / 1' }}
     >
-      <svg aria-hidden="true" viewBox={`0 0 ${CHOOSER_VB} ${CHOOSER_VB}`} className="h-full w-full">
-        <path d={CHOOSER_LINES.minor} className="stroke-[var(--border-subtle)]" strokeWidth="0.6" />
-        <path d={CHOOSER_LINES.major} className="stroke-[var(--border)]" strokeWidth="0.6" />
-        {/* committed rows x columns */}
-        <rect
-          x={CHOOSER_PAD}
-          y={CHOOSER_PAD}
-          width={committedC * CHOOSER_CELL}
-          height={committedR * CHOOSER_CELL}
-          fill="rgba(63,124,166,0.30)"
-          className="stroke-[var(--accent)]"
-          strokeWidth="1"
-        />
-        {/* hover preview */}
-        {previewDiffers && preview && (
-          <rect
-            x={CHOOSER_PAD}
-            y={CHOOSER_PAD}
-            width={preview.c * CHOOSER_CELL}
-            height={preview.r * CHOOSER_CELL}
-            fill="rgba(255,255,255,0.03)"
-            className="stroke-[var(--text-3)]"
-            strokeWidth="1"
-            strokeDasharray="3 3"
-          />
-        )}
-      </svg>
-      <span
-        className="pointer-events-none absolute rounded-sm border border-[var(--border)] px-1 py-px font-mono text-[9px] leading-tight tabular-nums text-[var(--text-2)]"
-        style={{
-          background: 'rgba(19,19,22,0.92)',
-          left: `${clamp(((CHOOSER_PAD + shown.c * CHOOSER_CELL) / CHOOSER_VB) * 100 + 1.5, 2, 74)}%`,
-          top: `${clamp(((CHOOSER_PAD + shown.r * CHOOSER_CELL) / CHOOSER_VB) * 100 + 1.5, 2, 88)}%`,
-        }}
-      >
-        {shown.r} × {shown.c}
+      <canvas ref={canvasRef} className="h-full w-full" />
+      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] tabular-nums text-white/45">{dims}</span>
+      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/45">
+        {total} {total === 1 ? 'COPY' : 'COPIES'}{capped ? ' · CAPPED' : ''}
       </span>
     </div>
   )
 }
 
-/** Compact dimension stepper: - / + around a vertically draggable readout. */
-function DimStepper({ b, tag }: { b: NumBinding; tag: string }) {
-  const dragRef = useRef<{ y: number; start: number } | null>(null)
-  const { def } = b
-  const value = intValue(b)
-  const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
-  const buttonClass =
-    'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[13px] leading-none text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+// ── Controls ─────────────────────────────────────────────────────────────────
 
+/** Linear run: dots along a line. */
+function GridModeGlyph() {
   return (
-    <div className="flex items-stretch gap-1">
-      <button aria-label={`One fewer ${tag.toLowerCase()}`} className={buttonClass} onClick={() => commit(value - 1)} disabled={value <= def.min}>−</button>
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={def.label}
-        aria-valuemin={def.min}
-        aria-valuemax={def.max}
-        aria-valuenow={value}
-        title="Drag vertically · double-click to reset"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = { y: event.clientY, start: value }
-        }}
-        onPointerMove={(event) => {
-          const drag = dragRef.current
-          if (drag) commit(drag.start + (drag.y - event.clientY) / 7)
-        }}
-        onPointerUp={(event) => {
-          dragRef.current = null
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onDoubleClick={() => b.set(def.default)}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-          event.preventDefault()
-          commit(value + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
-        }}
-        className="flex min-w-0 flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-app)] py-1 outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
-      >
-        <span className="font-mono text-[13px] leading-none tabular-nums text-[var(--text)]">{value}</span>
-        <span className="text-[7px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">{tag}</span>
-      </div>
-      <button aria-label={`One more ${tag.toLowerCase()}`} className={buttonClass} onClick={() => commit(value + 1)} disabled={value >= def.max}>+</button>
-    </div>
-  )
-}
-
-// ── Layout preview ───────────────────────────────────────────────────────────
-
-const PREVIEW_W = 240
-const PREVIEW_H = 150
-// Depth planes project as foreshortened parallelograms; XY faces the camera.
-const PLANE_PROJECTIONS = ['', 'scale(1 0.46) skewX(-26)', 'scale(0.46 1) skewY(-16)']
-// Mirrors GRID_PLANES in library.ts: [horizontal axis, vertical axis].
-const PLANE_AXES = [['X', 'Y'], ['X', 'Z'], ['Y', 'Z']]
-
-/** The grid the splitter actually produces: real spacing, plane-oriented, with
- *  a repeating pulse traveling in the exact gridCellOrder index order. */
-function LayoutPreview({ rows, columns, spacing, planeValue, indexing }: {
-  rows: number
-  columns: number
-  spacing: number
-  planeValue: number
-  indexing: number
-}) {
-  const order = useMemo(() => gridCellOrder(rows, columns, indexing), [rows, columns, indexing])
-  const total = rows * columns
-  // Fixed pixels-per-unit until the grid would overflow, then fit-clamped - so
-  // dragging SPACING visibly widens the gaps instead of being normalized away.
-  const safeSpacing = Math.max(spacing, 0.0001)
-  const unit = Math.min(
-    26,
-    columns > 1 ? 176 / ((columns - 1) * safeSpacing) : 26,
-    rows > 1 ? 112 / ((rows - 1) * safeSpacing) : 26,
-  )
-  const gap = spacing * unit
-  const size = spacing === 0 ? 5 : clamp(gap * 0.5, 3, 12)
-  const showNumbers = total <= 49 && size >= 8
-  const sweepSeconds = clamp(total * 0.14, 1.8, 6)
-  const [hAxis, vAxis] = PLANE_AXES[planeValue] ?? PLANE_AXES[0]
-  const first = order[0]
-  const cellX = (column: number) => (column - (columns - 1) / 2) * gap
-  const cellY = (row: number) => (row - (rows - 1) / 2) * gap
-
-  return (
-    <div
-      data-testid="grid-layout-preview"
-      className="relative w-full select-none overflow-hidden border-y border-[var(--border)] bg-[var(--bg-canvas)]"
-      style={{ aspectRatio: `${PREVIEW_W} / ${PREVIEW_H}` }}
-    >
-      <style>{'@keyframes cabin-grid-index-sweep { 0%, 5% { fill: var(--accent); opacity: 1; } 11%, 100% { fill: var(--accent-muted); opacity: 0.5; } }'}</style>
-      <svg aria-hidden="true" viewBox={`0 0 ${PREVIEW_W} ${PREVIEW_H}`} className="h-full w-full">
-        <g transform={`translate(${PREVIEW_W / 2} ${PREVIEW_H / 2}) ${PLANE_PROJECTIONS[planeValue] ?? ''}`}>
-          {order.map(([row, column], index) => (
-            <rect
-              key={`${row}-${column}`}
-              x={cellX(column) - size / 2}
-              y={cellY(row) - size / 2}
-              width={size}
-              height={size}
-              rx={1}
-              style={{
-                fill: 'var(--accent-muted)',
-                opacity: 0.5,
-                animation: `cabin-grid-index-sweep ${sweepSeconds}s linear infinite`,
-                // Negative delay: the sweep is mid-flight on the first frame.
-                animationDelay: `${(index / total) * sweepSeconds - sweepSeconds}s`,
-              }}
-            />
-          ))}
-          {first && (
-            <rect
-              x={cellX(first[1]) - size / 2 - 2.5}
-              y={cellY(first[0]) - size / 2 - 2.5}
-              width={size + 5}
-              height={size + 5}
-              rx={2}
-              className="fill-none stroke-[var(--accent)]"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-            />
-          )}
-          {showNumbers && order.map(([row, column], index) => (
-            <text
-              key={`n-${row}-${column}`}
-              x={cellX(column)}
-              y={cellY(row) + size * 0.22}
-              textAnchor="middle"
-              className="pointer-events-none fill-[var(--text)] font-mono"
-              style={{ fontSize: Math.min(8, size * 0.6) }}
-            >
-              {index + 1}
-            </text>
-          ))}
-        </g>
-      </svg>
-      <span className="pointer-events-none absolute left-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">↑ {vAxis}</span>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] text-[var(--text-muted)]">→ {hAxis}</span>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] tabular-nums text-[var(--text-3)]">GAP {spacing.toFixed(1)}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-muted)]">{total} {total === 1 ? 'COPY' : 'COPIES'}</span>
-    </div>
-  )
-}
-
-/** Console-styled spacing slider; the layout preview above is its live readout. */
-function SpacingSlider({ b }: { b: NumBinding }) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const { def, value, set } = b
-  const pct = ((clamp(value, def.min, def.max) - def.min) / (def.max - def.min)) * 100
-
-  const setFromClientX = (clientX: number) => {
-    const rect = trackRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const t = clamp((clientX - rect.left) / rect.width, 0, 1)
-    const raw = def.min + t * (def.max - def.min)
-    const snapped = Math.round(raw / def.step) * def.step
-    set(clamp(Number(snapped.toFixed(8)), def.min, def.max))
-  }
-
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-app)] px-2 py-2">
-      <span className="w-[52px] flex-shrink-0 text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">SPACING</span>
-      <div
-        ref={trackRef}
-        role="slider"
-        tabIndex={0}
-        aria-label={def.label}
-        aria-valuemin={def.min}
-        aria-valuemax={def.max}
-        aria-valuenow={value}
-        title="Drag · double-click to reset"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          setFromClientX(event.clientX)
-        }}
-        onPointerMove={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromClientX(event.clientX)
-        }}
-        onPointerUp={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onDoubleClick={() => set(def.default)}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-          event.preventDefault()
-          const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-          set(clamp(Number((value + direction * def.step).toFixed(8)), def.min, def.max))
-        }}
-        className="relative h-4 flex-1 cursor-ew-resize touch-none outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
-      >
-        <span className="absolute left-0 top-1/2 h-[3px] w-full -translate-y-1/2 bg-[var(--border)]" />
-        <span className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 bg-[var(--accent-muted)]" style={{ width: `${pct}%` }} />
-        <span className="absolute top-1/2 h-[9px] w-[9px] -translate-y-1/2 border border-[var(--border-strong)] bg-[var(--accent-muted)]" style={{ left: `calc(${pct}% - 4px)` }} />
-      </div>
-      <span className="w-[30px] flex-shrink-0 text-right font-mono text-[10px] tabular-nums text-[var(--text-3)]">{value.toFixed(1)}</span>
-    </div>
-  )
-}
-
-// ── Selects ──────────────────────────────────────────────────────────────────
-
-/** Plane glyph: the grid's footprint as it will be drawn - upright square for
- *  X/Y, foreshortened parallelograms for the depth planes. */
-function PlaneGlyph({ value }: { value: number }) {
-  const outline = value === 1 ? '3,14 8,6 17,6 12,14' : value === 2 ? '6,3 13,6 13,17 6,14' : '5,4 15,4 15,16 5,16'
-  const inner = value === 1 ? 'M5.5 10H14.5M12.5 6L7.5 14' : value === 2 ? 'M9.5 4.5V15.5M6 8.5L13 11.5' : 'M10 4V16M5 10H15'
-  return (
-    <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.3" aria-hidden="true">
-      <polygon points={outline} />
-      <path d={inner} opacity="0.55" />
+    <svg viewBox="0 0 20 14" className="h-3.5 w-5 fill-current" aria-hidden="true">
+      <circle cx="3.5" cy="7" r="1.8" />
+      <circle cx="10" cy="7" r="1.8" />
+      <circle cx="16.5" cy="7" r="1.8" />
     </svg>
   )
 }
 
-function PlaneSelector({ b }: { b: SelectBinding }) {
+/** The same count wrapped into a ring. */
+function CircularModeGlyph() {
+  const dots = Array.from({ length: 6 }, (_, i) => {
+    const a = (i / 6) * Math.PI * 2 - Math.PI / 2
+    return [10 + Math.cos(a) * 4.6, 7 + Math.sin(a) * 4.6]
+  })
   return (
-    <div role="radiogroup" aria-label={b.def.label} className="grid grid-cols-3 gap-1">
+    <svg viewBox="0 0 20 14" className="h-3.5 w-5 fill-current" aria-hidden="true">
+      {dots.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.5" />)}
+    </svg>
+  )
+}
+
+function ModeControl({ b, axis }: { b: SelectBinding; axis: string }) {
+  return (
+    <div role="radiogroup" aria-label={`${axis} axis layout`} className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-md border border-white/[0.08]">
       {b.def.options.map((option) => {
         const active = option.value === b.value
         return (
@@ -404,14 +307,14 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
             key={option.value}
             role="radio"
             aria-checked={active}
-            title={`${b.def.label}: ${option.label}`}
+            title={`${axis}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${active
-              ? 'border-[var(--accent-muted)] bg-[rgba(53,167,230,0.12)] text-[var(--accent-hover)]'
-              : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)]'}`}
+            className="flex items-center justify-center py-1 transition-colors"
+            style={active
+              ? { background: withAlpha(ACCENT, 0.16), color: ACCENT }
+              : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}
           >
-            <PlaneGlyph value={option.value} />
-            <span className="text-[7px] font-semibold tracking-[0.08em]">{option.label}</span>
+            {option.value === 1 ? <CircularModeGlyph /> : <GridModeGlyph />}
           </button>
         )
       })}
@@ -419,37 +322,85 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
   )
 }
 
-/** Indexing glyph: three scan arrows plus a dot at the starting corner. */
+/** One dimension's vertical strip: axis caption, grid/circular segmented
+ *  control, COUNT knob, and (while circular) the RADIUS knob. The radius gate
+ *  lives HERE: the mover branch of TrackEditor passes showIf-gated params
+ *  through unfiltered (only the instrument branch filters), so the binding is
+ *  present in both modes and display is the panel's own decision. */
+function AxisStrip({ axis, role, mode, count, radius }: {
+  axis: string
+  role: string
+  mode: SelectBinding
+  count: NumBinding
+  radius: NumBinding | null
+}) {
+  const circular = mode.value === 1
+  return (
+    <div className="flex flex-col items-center gap-1.5 rounded-md border border-white/[0.06] bg-black/25 px-1 pb-1.5 pt-1">
+      <div className="flex items-baseline gap-1">
+        <span className="text-[11px] font-bold" style={{ color: ACCENT }}>{axis}</span>
+        <span className="text-[7px] font-semibold tracking-[0.14em] text-white/35">{role}</span>
+      </div>
+      <ModeControl b={mode} axis={axis} />
+      <LaserKnob
+        value={count.value}
+        min={count.def.min}
+        max={count.def.max}
+        step={count.def.step}
+        defaultValue={count.def.default}
+        label="COUNT"
+        ariaLabel={count.def.label}
+        accent={ACCENT}
+        format={(v) => `${Math.round(v)}`}
+        onChange={count.set}
+      />
+      {circular && radius && (
+        <LaserKnob
+          value={radius.value}
+          min={radius.def.min}
+          max={radius.def.max}
+          step={radius.def.step}
+          defaultValue={radius.def.default}
+          label="RADIUS"
+          ariaLabel={radius.def.label}
+          accent={ACCENT}
+          onChange={radius.set}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Plane glyph: the grid's footprint - upright square for X/Y, foreshortened
+ *  parallelograms for the depth planes. */
+function PlaneGlyph({ value }: { value: number }) {
+  const outline = value === 1 ? '3,14 8,6 17,6 12,14' : value === 2 ? '6,3 13,6 13,17 6,14' : '5,4 15,4 15,16 5,16'
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.3" aria-hidden="true">
+      <polygon points={outline} />
+    </svg>
+  )
+}
+
+/** Indexing glyph: a scan arrow plus a dot at the starting corner. */
 function IndexingGlyph({ value }: { value: number }) {
   const horizontal = value === 0 || value === 1
   const reversed = value === 1 || value === 3
-  const lanes = horizontal ? [3.5, 8, 12.5] : [4, 11, 18]
-  let d = ''
-  for (const lane of lanes) {
-    if (horizontal) {
-      d += reversed
-        ? `M19 ${lane}H3.5M7 ${lane - 2.4}L3.5 ${lane}L7 ${lane + 2.4}`
-        : `M3 ${lane}H18.5M15 ${lane - 2.4}L18.5 ${lane}L15 ${lane + 2.4}`
-    } else {
-      d += reversed
-        ? `M${lane} 14.5V2.5M${lane - 2.4} 6L${lane} 2.5L${lane + 2.4} 6`
-        : `M${lane} 1.5V13.5M${lane - 2.4} 10L${lane} 13.5L${lane + 2.4} 10`
-    }
-  }
-  const [dotX, dotY] = horizontal ? (reversed ? [19, 12.5] : [3, 3.5]) : (reversed ? [18, 14.5] : [4, 1.5])
+  const d = horizontal
+    ? reversed ? 'M17 8H4M8 4.8L4 8L8 11.2' : 'M3 8H16M12 4.8L16 8L12 11.2'
+    : reversed ? 'M10 14V3M6.8 7L10 3L13.2 7' : 'M10 2V13M6.8 9L10 13L13.2 9'
+  const [dotX, dotY] = horizontal ? (reversed ? [17, 8] : [3, 8]) : (reversed ? [10, 14] : [10, 2])
   return (
-    <svg viewBox="0 0 22 16" className="h-3.5 w-[19px] fill-none stroke-current" strokeWidth="1.3" aria-hidden="true">
+    <svg viewBox="0 0 20 16" className="h-3.5 w-4 fill-none stroke-current" strokeWidth="1.4" aria-hidden="true">
       <path d={d} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={dotX} cy={dotY} r="1.7" className="fill-current stroke-none" />
+      <circle cx={dotX} cy={dotY} r="1.6" className="fill-current stroke-none" />
     </svg>
   )
 }
 
-const INDEXING_SHORT: Record<number, string> = { 0: 'ROWS', 1: 'ROWS · REV', 2: 'COLS', 3: 'COLS · REV' }
-
-function IndexingSelector({ b }: { b: SelectBinding }) {
+function IconRadioRow({ b, glyph }: { b: SelectBinding; glyph: (value: number) => ReactNode }) {
   return (
-    <div role="radiogroup" aria-label={b.def.label} className="grid grid-cols-2 gap-1">
+    <div role="radiogroup" aria-label={b.def.label} className="flex gap-px overflow-hidden rounded-md border border-white/[0.08]">
       {b.def.options.map((option) => {
         const active = option.value === b.value
         return (
@@ -459,12 +410,12 @@ function IndexingSelector({ b }: { b: SelectBinding }) {
             aria-checked={active}
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex items-center justify-center gap-1.5 rounded-md border py-1.5 transition-colors ${active
-              ? 'border-[var(--accent-muted)] bg-[rgba(53,167,230,0.12)] text-[var(--accent-hover)]'
-              : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)]'}`}
+            className="flex h-6 w-6 items-center justify-center transition-colors"
+            style={active
+              ? { background: withAlpha(ACCENT, 0.16), color: ACCENT }
+              : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}
           >
-            <IndexingGlyph value={option.value} />
-            <span className="text-[7px] font-semibold tracking-[0.08em]">{INDEXING_SHORT[option.value] ?? option.label}</span>
+            {glyph(option.value)}
           </button>
         )
       })}
@@ -472,11 +423,96 @@ function IndexingSelector({ b }: { b: SelectBinding }) {
   )
 }
 
-function GridGlyph() {
+// ── Renderer ─────────────────────────────────────────────────────────────────
+
+const AXIS_LETTERS = ['X', 'Y', 'Z']
+// Mirrors GRID_PLANES in library.ts: [horizontal, vertical] world axes.
+const PLANE_AXES: [number, number][] = [[0, 1], [0, 2], [1, 2]]
+
+interface GridBindings {
+  rows: NumBinding
+  columns: NumBinding
+  depth: NumBinding
+  spacing: NumBinding
+  columnsMode: SelectBinding
+  rowsMode: SelectBinding
+  depthMode: SelectBinding
+  columnsRadius: NumBinding | null
+  rowsRadius: NumBinding | null
+  depthRadius: NumBinding | null
+  plane: SelectBinding
+  indexing: SelectBinding
+  rest: UserInterfaceParameter[]
+}
+
+/** Hooks live here, below the renderer's fallback branch. */
+function GridConsole({ bound }: { bound: GridBindings }) {
+  const {
+    rows, columns, depth, spacing, columnsMode, rowsMode, depthMode,
+    columnsRadius, rowsRadius, depthRadius, plane, indexing, rest,
+  } = bound
+
+  const columnsRadiusValue = columnsRadius?.value
+  const rowsRadiusValue = rowsRadius?.value
+  const depthRadiusValue = depthRadius?.value
+  const settings = useMemo(() => ({
+    ...(mergeDefinitionSettings(gridSplitter, undefined) as unknown as GridSettings),
+    rows: rows.value,
+    columns: columns.value,
+    depth: depth.value,
+    spacing: spacing.value,
+    plane: plane.value,
+    indexing: indexing.value,
+    columnsMode: columnsMode.value,
+    rowsMode: rowsMode.value,
+    depthMode: depthMode.value,
+    ...(columnsRadiusValue !== undefined ? { columnsRadius: columnsRadiusValue } : {}),
+    ...(rowsRadiusValue !== undefined ? { rowsRadius: rowsRadiusValue } : {}),
+    ...(depthRadiusValue !== undefined ? { depthRadius: depthRadiusValue } : {}),
+  }), [
+    rows.value, columns.value, depth.value, spacing.value, plane.value, indexing.value,
+    columnsMode.value, rowsMode.value, depthMode.value,
+    columnsRadiusValue, rowsRadiusValue, depthRadiusValue,
+  ])
+
+  const [horizontalAxis, verticalAxis] = PLANE_AXES[plane.value] ?? PLANE_AXES[0]
+  const normalAxis = 3 - horizontalAxis - verticalAxis
+
   return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.4" aria-hidden="true">
-      <path d="M3.5 3.5H16.5V16.5H3.5V3.5M10 3.5V16.5M3.5 10H16.5" />
-    </svg>
+    <section data-testid="grid-user-interface" className="-mx-3 -mt-3" style={{ background: PANEL_SHADE }}>
+      <LayoutPreview settings={settings} />
+      {/* The preview's light spilling through the seam onto the controls. */}
+      <div
+        className="pointer-events-none h-0"
+        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
+      />
+      <div className="grid grid-cols-3 gap-1 px-2 pt-2">
+        <AxisStrip axis={AXIS_LETTERS[horizontalAxis]} role="COLS" mode={columnsMode} count={columns} radius={columnsRadius} />
+        <AxisStrip axis={AXIS_LETTERS[verticalAxis]} role="ROWS" mode={rowsMode} count={rows} radius={rowsRadius} />
+        <AxisStrip axis={AXIS_LETTERS[normalAxis]} role="DEPTH" mode={depthMode} count={depth} radius={depthRadius} />
+      </div>
+      <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5">
+        <LaserKnob
+          value={spacing.value}
+          min={spacing.def.min}
+          max={spacing.def.max}
+          step={spacing.def.step}
+          defaultValue={spacing.def.default}
+          label="SPACING"
+          accent={ACCENT}
+          onChange={spacing.set}
+        />
+        <div className="flex flex-col items-end gap-1">
+          <IconRadioRow b={plane} glyph={(value) => <PlaneGlyph value={value} />} />
+          <IconRadioRow b={indexing} glyph={(value) => <IndexingGlyph value={value} />} />
+        </div>
+      </div>
+      {rest.length > 0 && (
+        <div className="border-t border-white/[0.06] px-2 pb-2 pt-2">
+          <ParameterList parameters={rest} />
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -484,69 +520,28 @@ export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition 
   const pool = bind(parameters)
   const rows = pool.num('rows')
   const columns = pool.num('columns')
+  const depth = pool.num('depth')
   const spacing = pool.num('spacing')
+  const columnsMode = pool.select('columnsMode')
+  const rowsMode = pool.select('rowsMode')
+  const depthMode = pool.select('depthMode')
+  // showIf-gated on their mode. The mover branch of TrackEditor passes gated
+  // params through today, but keep these OPTIONAL: listing them in the
+  // fallback check would silently drop the whole console if that ever changes.
+  const columnsRadius = pool.num('columnsRadius')
+  const rowsRadius = pool.num('rowsRadius')
+  const depthRadius = pool.num('depthRadius')
   const plane = pool.select('plane')
   const indexing = pool.select('indexing')
 
-  if (!rows || !columns || !spacing || !plane || !indexing) return <ParameterList parameters={parameters} />
-  const rest = pool.rest()
-
-  const r = intValue(rows)
-  const c = intValue(columns)
-  const resetAll = () => {
-    for (const bound of parameters) bound.setValue(bound.definition.default)
+  if (!rows || !columns || !depth || !spacing || !columnsMode || !rowsMode || !depthMode || !plane || !indexing) {
+    return <ParameterList parameters={parameters} />
   }
 
   return (
-    <section
-      data-testid="grid-user-interface"
-      className="-mx-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_14px_34px_rgba(0,0,0,.35)]"
-    >
-      <header className="flex h-9 items-center justify-between px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--accent)]">
-            <GridGlyph />
-          </div>
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text)]">Grid</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="rounded border border-[var(--border)] bg-[var(--bg-app)] px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-[var(--text-3)]">{r} × {c}</span>
-          <button
-            aria-label="Reset all Grid parameters"
-            title="Reset all"
-            onClick={resetAll}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-      </header>
-
-      <SizeChooser rows={rows} columns={columns} />
-
-      <div className="grid grid-cols-2 gap-1 p-2">
-        <DimStepper b={rows} tag="ROWS" />
-        <DimStepper b={columns} tag="COLS" />
-      </div>
-
-      <LayoutPreview
-        rows={r}
-        columns={c}
-        spacing={clamp(spacing.value, spacing.def.min, spacing.def.max)}
-        planeValue={plane.value}
-        indexing={indexing.value}
-      />
-
-      <div className="space-y-2 p-2">
-        <SpacingSlider b={spacing} />
-        <PlaneSelector b={plane} />
-        <IndexingSelector b={indexing} />
-        {rest.length > 0 && (
-          <div className="border-t border-[var(--border-subtle)] pt-2">
-            <ParameterList parameters={rest} />
-          </div>
-        )}
-      </div>
-    </section>
+    <GridConsole bound={{
+      rows, columns, depth, spacing, columnsMode, rowsMode, depthMode,
+      columnsRadius, rowsRadius, depthRadius, plane, indexing, rest: pool.rest(),
+    }} />
   )
 }

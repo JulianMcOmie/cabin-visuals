@@ -58,6 +58,24 @@ above: a size punch is exactly the thing you need to watch while the transport i
 parked. Reach for a canvas only when the preview genuinely needs shaders, lighting, or
 real geometry.
 
+`MoverUserInterface.tsx` extends that pattern to full 3D: its window is a FIELD of
+nine seeds run through the definition's real `resolve()` on a looping demo phrase,
+each rendered as a DOM square whose `transform` is the resulting `Matrix4` as a CSS
+`matrix3d(...)`. What that conversion needs (in `toCssMatrix`): both are column-major,
+so the elements pass straight through, but three's +Y is up and CSS's is down —
+CONJUGATE by a Y-flip (`F · M · F`), which flips the axis while keeping rotations
+rigid (a bare `scaleY(-1)` wrapper would mirror handedness instead) — then scale only
+the translation column into pixels. `perspective` on the stage div gives the Z axis
+its depth for free. A field, not a lone subject, because rotate and orbit are
+indistinguishable on one centered object. Its demo phrase is per-mode, chosen to end
+where it starts so the loop wrap is invisible — and the rotate/orbit CONSTANT cell
+deliberately plays NO notes, because an empty lane spinning is that cell's actual
+claim (same reasoning as Radial Motion's no-notes preview). The panel's two segmented
+controls mirror the definition's two select params; per-mode knobs render only for
+the active cell, and the shared per-axis X/Y/Z knobs re-bind between `distance*` and
+`angle*` keys as the motion segment moves, with the row's unit said once in a caption
+above it rather than on every knob.
+
 **Sizing a signal window's axes is a design decision, not arithmetic.** Two mistakes
 that each make a mathematically correct curve look like a broken panel, both found in
 that same panel:
@@ -71,13 +89,26 @@ that same panel:
   instead squeezes short values into the left fifth. Use a proportional span WITH a
   beat grid behind it: the shape fills the window and the grid says how long it lasted.
 
-**TrackEditor filters `showIf`-gated params BEFORE the renderer sees them.** A
-bespoke panel's `parameters` array only contains params whose gate is currently
-satisfied - so a panel that lists a gated param (Flash Wall's `panelWidth`,
-gated on `fitToScreen=0`) in its "all keys present, else ParameterList" check
-silently renders the generic fallback whenever the gate is off, which looks
-like the registration failed. Treat gated params as optional bindings; only
-ungated keys belong in the fallback check.
+**TrackEditor filters `showIf`-gated params BEFORE the renderer sees them —
+but ONLY on the instrument branch.** A bespoke instrument panel's `parameters`
+array only contains params whose gate is currently satisfied - so a panel that
+lists a gated param (Flash Wall's `panelWidth`, gated on `fitToScreen=0`) in
+its "all keys present, else ParameterList" check silently renders the generic
+fallback whenever the gate is off, which looks like the registration failed.
+Treat gated params as optional bindings; only ungated keys belong in the
+fallback check. The MOVER/SPLITTER branch passes gated params through
+UNFILTERED (verified 2026-08-01 on the Grid panel), so a mover panel must gate
+the control's display on the controlling param's value itself - and should
+STILL treat the gated binding as optional, in case the branches are ever
+unified.
+
+**A panel whose subject is a LAYOUT can preview with a plain 2D canvas.**
+`GridSplitterUserInterface` runs the splitter's real `resolve()` (no notes)
+and draws the copies as painter-sorted cube faces on a `<canvas>` with its own
+rAF - no r3f, because a panel `<Canvas>` stays black until the transport plays
+(see above) and a layout is exactly what you dial in while paused. It re-reads
+`clientWidth/Height` per frame instead of using a ResizeObserver (those starve
+in a hidden pane), and drops to a point cloud past a few hundred copies.
 
 **Give a stage zone a FIXED width, never a percentage.** The settings panel is
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide

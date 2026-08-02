@@ -154,7 +154,7 @@ test('moving a root track transfers its complete subtree with stable ids', () =>
   const targetId = useProjectStore.getState().addScene()
   const root = { ...cube('visual'), childIds: ['motion'] }
   const child: Track = {
-    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'mover',
     color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
   }
   useProjectStore.getState().addTrackTree([root, child])
@@ -180,7 +180,7 @@ test('scene transfer rejects child rows and incompatible Main destinations', () 
   const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
   const root = { ...cube('visual'), childIds: ['motion'] }
   const child: Track = {
-    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'mover',
     color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
   }
   state.addTrackTree([root, child])

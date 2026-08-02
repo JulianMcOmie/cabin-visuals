@@ -1,10 +1,5 @@
 import type { UserInterfaceRendererDefinition } from './types'
-import { BurstMoverUserInterfaceRenderer } from './BurstMoverUserInterface'
-import { TranslationOscillatorUserInterfaceRenderer } from './TranslationOscillatorUserInterface'
-import { RotateBurstMoverUserInterfaceRenderer } from './RotateBurstMoverUserInterface'
-import { OrbitBurstMoverUserInterfaceRenderer } from './OrbitBurstMoverUserInterface'
-import { ConstantRotateMoverUserInterfaceRenderer } from './ConstantRotateMoverUserInterface'
-import { ConstantOrbitMoverUserInterfaceRenderer } from './ConstantOrbitMoverUserInterface'
+import { MoverUserInterfaceRenderer } from './MoverUserInterface'
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
@@ -12,6 +7,7 @@ import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserI
 import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
 import { ImpactPulseMoverUserInterfaceRenderer } from './ImpactPulseMoverUserInterface'
 import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
+import { SymmetricMotionMoverUserInterfaceRenderer } from './SymmetricMotionMoverUserInterface'
 import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
@@ -32,12 +28,7 @@ import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface
 // ParamControl list in TrackEditor, so registration is always optional.
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
-  burst: BurstMoverUserInterfaceRenderer,
-  rotateBurst: RotateBurstMoverUserInterfaceRenderer,
-  orbitBurst: OrbitBurstMoverUserInterfaceRenderer,
-  constantRotate: ConstantRotateMoverUserInterfaceRenderer,
-  constantOrbit: ConstantOrbitMoverUserInterfaceRenderer,
-  translationOscillator: TranslationOscillatorUserInterfaceRenderer,
+  mover: MoverUserInterfaceRenderer,
   visibility: VisibilityMoverUserInterfaceRenderer,
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.
@@ -46,6 +37,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   impactScatter: ImpactScatterMoverUserInterfaceRenderer,
   impactPulse: ImpactPulseMoverUserInterfaceRenderer,
   conveyor: ConveyorMoverUserInterfaceRenderer,
+  symmetricMotion: SymmetricMotionMoverUserInterfaceRenderer,
   radialMotion: RadialMotionMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   symmetry: SymmetrySplitterUserInterfaceRenderer,

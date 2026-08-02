@@ -322,7 +322,7 @@ export const LYRIC_TEMPLATE_TRACKS: Track[] = [
   },
   {
     "id": "5fd6def1-ce8c-4c92-b9d3-65d4c2ea3491",
-    "name": "Burst",
+    "name": "Mover",
     "solo": false,
     "type": "mover",
     "color": "#6366f1",
@@ -569,10 +569,12 @@ export const LYRIC_TEMPLATE_TRACKS: Track[] = [
         "durationBars": 8
       }
     ],
-    "moverId": "burst",
+    "moverId": "mover",
     "childIds": [],
     "parentId": "87a370a1-cc2d-4d9f-b0df-54f6cc4fd77c",
     "inputValues": {
+      "motion": 0,
+      "mode": 0,
       "distanceX": 1
     },
     "instrumentId": ""

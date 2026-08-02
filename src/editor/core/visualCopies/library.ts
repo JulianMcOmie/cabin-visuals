@@ -7,13 +7,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
-import {
-  constantOrbitMover,
-  constantRotateMover,
-  orbitBurstMover,
-  rotateBurstMover,
-} from './rotationMovers'
-import { translationOscillatorMover } from './translationOscillator'
+import { moverDefinition } from './mover'
 import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
@@ -27,6 +21,7 @@ import { consolidatedMover } from './consolidatedMover'
 import { BURST_EASINGS } from './burstEasings'
 import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './burstOffset'
 import { motionMover } from './motion'
+import { symmetricMotionMover } from './symmetricMotion'
 import { conveyorMover } from './conveyor'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
@@ -36,19 +31,24 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
-import { BURST_COLOR, GRID_COLOR, RADIAL_COLOR } from './identityColors'
+import { GRID_COLOR, RADIAL_COLOR } from './identityColors'
 
-// ── Burst ────────────────────────────────────────────────────────────────────
+// ── Burst (RETIRED) ──────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
 // distance in one cardinal direction, animated by an ease-out "burst" (violent
 // start, soft landing). Steps accumulate - repeated +X notes keep walking the
 // object right, a -X note steps it back - so position is fully choreographed by
 // the note history, and the summed offset stays a closed-form function of the
 // beat (the pause invariant: scrub == playback == export).
+//
+// Retired from the registry (2026-08): the unified `mover` definition's
+// translate-burst cell is this exact behaviour, and persistence UPGRADES[12]
+// rewrites old saves onto it. The definition object stays exported for the
+// parity tests that pin the unified Mover against it.
 
 // The vocabulary and the offset evaluator live in burstOffset.ts so Motion can
 // reuse them without importing this library (a cycle); re-exported here because
-// the Burst UI panel and the burst tests import them from this module.
+// the burst tests import them from this module.
 export { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings }
 
 const BURST_ROWS: MidiRowDef[] = [
@@ -66,7 +66,6 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   id: 'burst',
   label: 'Burst',
   kind: 'mover',
-  identityColor: BURST_COLOR,
   params: [
     { key: 'burstBeats', label: 'Burst beats', min: 0.05, max: 16, step: 0.05, default: 1 },
     {
@@ -177,16 +176,53 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 }
 
 // ── Grid ────────────────────────────────────────────────────────────────────
+// Three structural dimensions - columns, rows, depth - each INDEPENDENTLY laid
+// out as a grid (a run of evenly spaced offsets along its world axis) or as a
+// circle (the same count wrapped into a ring about a fixed world axis, with its
+// own radius knob). The combinations are the point: one circular dimension is a
+// ring, circular columns + linear depth is a tunnel of rings, circular depth +
+// linear rows is a standing cylinder, circular columns + circular depth nest
+// into a true torus facing the camera - and ANY circular pair collapses to a
+// sphere when the outer ring's radius is dialled to 0.
+//
+// Composition rules (deliberate, and load-bearing for predictability):
+// - LINEAR offsets sum in WORLD axes, outside everything circular - the sliders
+//   promise "copies along X/Y/Z", so a linear dimension never gets swept into
+//   another dimension's rotation (no accidental pinwheels).
+// - CIRCULAR steps compose LOCALLY in dimension order (columns, rows, depth):
+//   R(axis, index/count · 2π) · T(radius), so an outer ring re-frames the inner
+//   one - which is exactly what makes two rings a torus.
+// - Rotation axes are fixed per dimension (columns about the plane NORMAL, rows
+//   about the HORIZONTAL axis, depth about the VERTICAL axis), so with the
+//   default X/Y plane: circular columns face the camera, circular rows are a
+//   wheel, circular depth is a floor ring. The ring's radius direction is the
+//   dimension's own linear axis, so slot 0 sits unrotated on that axis.
+// The rotation lands in each copy's frame (copies face around their ring), the
+// same convention as the Radial splitter.
+//
+// The three counts can multiply past MAX_VISUAL_COPIES (32 x 32 x 2 already
+// does); the kernel then truncates in slot order, exactly as it does for
+// chained splitters, and the bespoke panel labels the count CAPPED.
 
 export interface GridSettings {
   rows: number
   columns: number
-  /** Distance between adjacent cell centers in the selected plane. */
+  /** Copy count along the plane normal - the grid's third dimension. */
+  depth: number
+  /** Distance between adjacent cell centers along every linear dimension. */
   spacing: number
   /** 0 = XY, 1 = XZ, 2 = YZ. */
   plane: number
   /** 0 = English, 1 = reverse English, 2 = columns first, 3 = reverse columns. */
   indexing: number
+  /** Per-dimension layout: 0 = grid (linear), 1 = circular. */
+  columnsMode: number
+  rowsMode: number
+  depthMode: number
+  /** Ring radius per circular dimension, in world units. */
+  columnsRadius: number
+  rowsRadius: number
+  depthRadius: number
 }
 
 const GRID_MAX_DIMENSION = 32
@@ -195,6 +231,7 @@ const GRID_PLANES: [0 | 1 | 2, 0 | 1 | 2][] = [
   [0, 2],
   [1, 2],
 ]
+const GRID_AXIS_VECTORS = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]
 
 /** Cell coordinates in the exact order downstream movers will see them. */
 export function gridCellOrder(rows: number, columns: number, indexing: number): [number, number][] {
@@ -211,6 +248,25 @@ export function gridCellOrder(rows: number, columns: number, indexing: number): 
   return indexing === 1 || indexing === 3 ? cells.reverse() : cells
 }
 
+/** [row, column, layer] triples: layers are the OUTERMOST loop (cell 1 is the
+ *  front layer's first cell), each layer walks the 2D indexing order, and the
+ *  reversed modes reverse the whole sequence - so depth 1 reproduces
+ *  gridCellOrder exactly and existing projects keep their note mapping. */
+export function gridCellOrder3(
+  rows: number,
+  columns: number,
+  depth: number,
+  indexing: number,
+): [number, number, number][] {
+  const forwardIndexing = indexing === 2 || indexing === 3 ? 2 : 0
+  const planeOrder = gridCellOrder(rows, columns, forwardIndexing)
+  const cells: [number, number, number][] = []
+  for (let layer = 0; layer < depth; layer++) {
+    for (const [row, column] of planeOrder) cells.push([row, column, layer])
+  }
+  return indexing === 1 || indexing === 3 ? cells.reverse() : cells
+}
+
 export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   id: 'grid',
   label: 'Grid',
@@ -219,7 +275,41 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   params: [
     { key: 'rows', label: 'Rows', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
+    { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1 },
     { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.1, default: 1 },
+    {
+      key: 'columnsMode',
+      label: 'Columns layout',
+      type: 'select',
+      options: [
+        { value: 0, label: 'Grid' },
+        { value: 1, label: 'Circular' },
+      ],
+      default: 0,
+    },
+    {
+      key: 'rowsMode',
+      label: 'Rows layout',
+      type: 'select',
+      options: [
+        { value: 0, label: 'Grid' },
+        { value: 1, label: 'Circular' },
+      ],
+      default: 0,
+    },
+    {
+      key: 'depthMode',
+      label: 'Depth layout',
+      type: 'select',
+      options: [
+        { value: 0, label: 'Grid' },
+        { value: 1, label: 'Circular' },
+      ],
+      default: 0,
+    },
+    { key: 'columnsRadius', label: 'Columns radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'columnsMode=1' },
+    { key: 'rowsRadius', label: 'Rows radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'rowsMode=1' },
+    { key: 'depthRadius', label: 'Depth radius', min: 0, max: 10, step: 0.1, default: 2, showIf: 'depthMode=1' },
     {
       key: 'plane',
       label: 'Axes',
@@ -247,20 +337,64 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
   midiRows: (settings) => {
     const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
     const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
-    return splitterMidiRows(rows * columns, 'cell', 'cells')
+    const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
+    return splitterMidiRows(rows * columns * depth, 'cell', 'cells')
   },
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const rows = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.rows)))
     const columns = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.columns)))
+    const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
     const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
-    const cells = gridCellOrder(rows, columns, settings.indexing).map(([row, column]) => {
-      const position: [number, number, number] = [0, 0, 0]
+    const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
+    // One record per dimension, in composition order. `offset` keeps the exact
+    // legacy centering (rows grow downward from the top, layer 0 is the front).
+    const dimensions = [
+      {
+        count: columns,
+        circular: settings.columnsMode === 1,
+        radius: Math.max(0, settings.columnsRadius ?? 0),
+        offsetAxis: horizontalAxis,
+        rotationAxis: normalAxis,
+        offset: (index: number) => (index - (columns - 1) / 2) * settings.spacing,
+      },
+      {
+        count: rows,
+        circular: settings.rowsMode === 1,
+        radius: Math.max(0, settings.rowsRadius ?? 0),
+        offsetAxis: verticalAxis,
+        rotationAxis: horizontalAxis,
+        offset: (index: number) => ((rows - 1) / 2 - index) * settings.spacing,
+      },
+      {
+        count: depth,
+        circular: settings.depthMode === 1,
+        radius: Math.max(0, settings.depthRadius ?? 0),
+        offsetAxis: normalAxis,
+        rotationAxis: verticalAxis,
+        offset: (index: number) => ((depth - 1) / 2 - index) * settings.spacing,
+      },
+    ]
+    const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
+      const indices = [column, row, layer]
       // Grid is a layout, not a fit-to-frame operation: adding rows/columns
       // expands the occupied area while every copy retains the incoming size.
-      position[horizontalAxis] = (column - (columns - 1) / 2) * settings.spacing
-      position[verticalAxis] = ((rows - 1) / 2 - row) * settings.spacing
-      return new Matrix4().makeTranslation(position[0], position[1], position[2])
+      // Linear offsets sum in world axes, outside the circular steps.
+      const translation = new Vector3()
+      for (let d = 0; d < 3; d++) {
+        const dim = dimensions[d]
+        if (!dim.circular) translation.addScaledVector(GRID_AXIS_VECTORS[dim.offsetAxis], dim.offset(indices[d]))
+      }
+      const cell = new Matrix4().makeTranslation(translation.x, translation.y, translation.z)
+      for (let d = 0; d < 3; d++) {
+        const dim = dimensions[d]
+        if (!dim.circular) continue
+        const arm = GRID_AXIS_VECTORS[dim.offsetAxis].clone().multiplyScalar(dim.radius)
+        cell
+          .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
+          .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
+      }
+      return cell
     })
     return {
       apply(visualCopy, { beat }) {
@@ -276,8 +410,17 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
 
 export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } from './visibility'
 
-/** Every production definition, in picker order. Seeded into the registry. */
+/** Every production definition, in picker order. Seeded into the registry.
+ *
+ *  The six single-behavior motion movers (`burst`, `rotateBurst`,
+ *  `orbitBurst`, `constantRotate`, `constantOrbit`, `translationOscillator`)
+ *  were retired in 2026-08: the unified `mover` covers their whole
+ *  (translate | rotate | orbit) x (burst | constant | oscillate) matrix, and
+ *  persistence UPGRADES[12] rewrites old saves onto it, so their ids never
+ *  reach the registry any more. Their definition objects remain exported for
+ *  All Movers' banks and the parity tests. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
+  moverDefinition,
   consolidatedMover,
   motionMover,
   conveyorMover,
@@ -285,12 +428,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   meteorImpactMover,
   impactScatterMover,
   impactPulseMover,
-  burstMover,
-  rotateBurstMover,
-  orbitBurstMover,
-  constantRotateMover,
-  constantOrbitMover,
-  translationOscillatorMover,
+  symmetricMotionMover,
   forceFieldPushMover,
   waveTerrainMover,
   visibilityMover,
