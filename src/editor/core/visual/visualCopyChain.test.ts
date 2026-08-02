@@ -310,6 +310,39 @@ test('prior copy count treats a frame chain like any other chain prefix', () => 
   assert.equal(getPriorVisualCopyCount('v', p), 2)
 })
 
+// ── Splitter children: a mover child of a splitter moves its copies ─────────
+
+test('a mover child of a splitter moves its copies in the splitter frame, not as a chain entry', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['m'] }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 's', inputValues: { distance: 3 } }),
+  ], ['cube'])
+  const obj = objectByTrackId(p, 'cube')
+  assert.equal(obj.moverAndSplitterChain.length, 1, 'the child does not join the object chain')
+
+  log.length = 0
+  const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  assert.equal(copies.length, 2)
+  // The split resolves first, then the child addresses each slot.
+  assert.deepEqual(log, ['split', 'lift(3)', 'lift(3)'])
+  // Unlike a frame under a MOVER (where a placeless mover has nothing to move,
+  // see the frame test above), a splitter's child moves its COPIES: both slots
+  // ride up the full distance.
+  assert.equal(copies[0].transform.elements[13], 3)
+  assert.equal(copies[1].transform.elements[13], 3)
+})
+
+test('prior copy count under a splitter parent counts the splitter itself', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['v'] }),
+    track({ id: 'v', type: 'mover', moverId: 'visibility', parentId: 's' }),
+  ], ['cube'])
+  // 'v' acts on the splitter's own output, so its MIDI lane addresses both slots.
+  assert.equal(getPriorVisualCopyCount('v', p), 2)
+})
+
 test('a mover with a parent instrument stays local even when it has targets', () => {
   const p = snapshot([
     track({ id: 'cube', instrumentId: 'cube', childIds: ['lm'] }),

@@ -7,13 +7,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
-import {
-  constantOrbitMover,
-  constantRotateMover,
-  orbitBurstMover,
-  rotateBurstMover,
-} from './rotationMovers'
-import { translationOscillatorMover } from './translationOscillator'
+import { moverDefinition } from './mover'
 import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
 import { forceFieldPushMover } from './forceFieldPush'
@@ -37,19 +31,24 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
-import { BURST_COLOR, GRID_COLOR, RADIAL_COLOR } from './identityColors'
+import { GRID_COLOR, RADIAL_COLOR } from './identityColors'
 
-// ── Burst ────────────────────────────────────────────────────────────────────
+// ── Burst (RETIRED) ──────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
 // distance in one cardinal direction, animated by an ease-out "burst" (violent
 // start, soft landing). Steps accumulate - repeated +X notes keep walking the
 // object right, a -X note steps it back - so position is fully choreographed by
 // the note history, and the summed offset stays a closed-form function of the
 // beat (the pause invariant: scrub == playback == export).
+//
+// Retired from the registry (2026-08): the unified `mover` definition's
+// translate-burst cell is this exact behaviour, and persistence UPGRADES[12]
+// rewrites old saves onto it. The definition object stays exported for the
+// parity tests that pin the unified Mover against it.
 
 // The vocabulary and the offset evaluator live in burstOffset.ts so Motion can
 // reuse them without importing this library (a cycle); re-exported here because
-// the Burst UI panel and the burst tests import them from this module.
+// the burst tests import them from this module.
 export { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings }
 
 const BURST_ROWS: MidiRowDef[] = [
@@ -67,7 +66,6 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
   id: 'burst',
   label: 'Burst',
   kind: 'mover',
-  identityColor: BURST_COLOR,
   params: [
     { key: 'burstBeats', label: 'Burst beats', min: 0.05, max: 16, step: 0.05, default: 1 },
     {
@@ -201,10 +199,6 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 //   dimension's own linear axis, so slot 0 sits unrotated on that axis.
 // The rotation lands in each copy's frame (copies face around their ring), the
 // same convention as the Radial splitter.
-//
-// The three counts can multiply past MAX_VISUAL_COPIES (32 x 32 x 2 already
-// does); the kernel then truncates in slot order, exactly as it does for
-// chained splitters, and the bespoke panel labels the count CAPPED.
 
 export interface GridSettings {
   rows: number
@@ -412,8 +406,17 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
 
 export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } from './visibility'
 
-/** Every production definition, in picker order. Seeded into the registry. */
+/** Every production definition, in picker order. Seeded into the registry.
+ *
+ *  The six single-behavior motion movers (`burst`, `rotateBurst`,
+ *  `orbitBurst`, `constantRotate`, `constantOrbit`, `translationOscillator`)
+ *  were retired in 2026-08: the unified `mover` covers their whole
+ *  (translate | rotate | orbit) x (burst | constant | oscillate) matrix, and
+ *  persistence UPGRADES[12] rewrites old saves onto it, so their ids never
+ *  reach the registry any more. Their definition objects remain exported for
+ *  All Movers' banks and the parity tests. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
+  moverDefinition,
   consolidatedMover,
   motionMover,
   conveyorMover,
@@ -421,13 +424,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   meteorImpactMover,
   impactScatterMover,
   impactPulseMover,
-  burstMover,
   symmetricMotionMover,
-  rotateBurstMover,
-  orbitBurstMover,
-  constantRotateMover,
-  constantOrbitMover,
-  translationOscillatorMover,
   forceFieldPushMover,
   waveTerrainMover,
   visibilityMover,

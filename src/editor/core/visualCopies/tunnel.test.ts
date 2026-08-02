@@ -12,7 +12,11 @@ import {
   TUNNEL_ORIGIN_X_PITCHES,
   TUNNEL_ORIGIN_Y_PITCHES,
   TUNNEL_REVERSE_PITCH,
+  TUNNEL_SYNC_DETENTS,
   evaluateTunnelTravel,
+  tunnelBaseSpeed,
+  tunnelSyncDetentIndex,
+  tunnelSyncDetentLabel,
   isTunnelCameraMuteActive,
   tunnelCameraMuteZone,
   tunnelCounts,
@@ -389,4 +393,41 @@ test('the camera mute is a pure opacity gate: copies keep flowing underneath', (
   assert.deepEqual(copiesAt(config, 3.5, notes).map(positionOf), copiesAt(config, 3.5).map(positionOf))
   // ...and the structural count never changes.
   assert.equal(copiesAt(settings(), 2, notes).length, 48)
+})
+
+test('faces the ring center by default, so the corridor reads as a wall', () => {
+  assert.equal(DEFAULTS.orientation, 1)
+})
+
+test('Beat-synced mode converts rings-per-beat through the current ring spacing', () => {
+  // 40 deep / 8 rings = 5 units of spacing; one ring per beat = 5 units/beat.
+  const config = settings({ speedMode: 1, syncRingsPerBeat: 1, depth: 40, rings: 8, speed: 33, midiSpeed: 0 })
+  assert.equal(tunnelBaseSpeed(config), 5)
+  assert.equal(evaluateTunnelTravel([], config, 3), 15)
+  // Reproportioning the corridor keeps the CADENCE, not the units/beat.
+  assert.equal(tunnelBaseSpeed({ ...config, depth: 80 }), 10)
+  assert.equal(tunnelBaseSpeed({ ...config, syncRingsPerBeat: -0.5 }), -2.5)
+  // Free mode still reads the speed knob verbatim, and is the stored default.
+  assert.equal(DEFAULTS.speedMode, 0)
+  assert.equal(tunnelBaseSpeed(settings({ speed: 7 })), 7)
+})
+
+test('at one ring per beat the formation maps onto itself every beat', () => {
+  const config = settings({ speedMode: 1, syncRingsPerBeat: 1, twistDegrees: 0, midiSpeed: 0 })
+  const snapshot = (beat: number) =>
+    copiesAt(config, beat).map((copy) => JSON.stringify(positionOf(copy))).sort()
+  assert.deepEqual(snapshot(1), snapshot(0))
+  assert.notDeepEqual(snapshot(0.5), snapshot(0))
+})
+
+test('sync detents are musical divisions with zero dead centre', () => {
+  const detents = [...TUNNEL_SYNC_DETENTS]
+  assert.equal(detents[Math.floor(detents.length / 2)], 0)
+  assert.deepEqual(detents, [...detents].sort((a, b) => a - b))
+  assert.equal(tunnelSyncDetentLabel(1), '1b')
+  assert.equal(tunnelSyncDetentLabel(4), '1/4b')
+  assert.equal(tunnelSyncDetentLabel(-0.125), '−8b')
+  assert.equal(tunnelSyncDetentLabel(0), '0')
+  // An off-grid (automated) value reads back as its nearest detent.
+  assert.equal(TUNNEL_SYNC_DETENTS[tunnelSyncDetentIndex(0.6)], 0.5)
 })

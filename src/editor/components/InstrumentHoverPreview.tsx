@@ -338,6 +338,15 @@ interface CompoundMoverPreview {
   label?: string
 }
 const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
+  // The unified Mover's default cell (translate x burst) stepping a ring of
+  // seeds through the generic 60-65 arc - the same phrase every mover card
+  // speaks, so the card reads as the family's fundamental.
+  mover: {
+    label: 'mover',
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: MOVER_NOTES,
+  },
   // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
   // on their own - the mover needs no notes to move - so the only notes here
   // step the OUTER radius multiplier (36-39 = collapse/half/home/double) and

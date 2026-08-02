@@ -16,8 +16,10 @@ export interface AutomationKeyframe {
 // on what the notes say, not a remap of the pitch rows - the piano roll's row
 // labels keep meaning "the value at 100%".
 
-/** The amount fader's top: 2 = the lane can double what its notes wrote. */
-export const AUTOMATION_AMOUNT_MAX = 2
+/** The amount fader's top: 10 = the lane can boost what its notes wrote tenfold
+ *  (values still clamp back to the param's range, so this is headroom for lanes
+ *  written low, not a way to escape a param's bounds). */
+export const AUTOMATION_AMOUNT_MAX = 10
 export const DEFAULT_AUTOMATION_AMOUNT = 1
 
 /** A track's effective amount: absent = 1, and never negative (a document edited

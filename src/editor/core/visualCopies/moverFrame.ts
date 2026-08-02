@@ -1,8 +1,10 @@
-// A mover nested UNDER another mover does not become a second chain entry - it
+// A mover nested UNDER another MOVER does not become a second chain entry - it
 // MOVES that mover. Its own chain resolves to one transform F, the frame, and
 // the parent is evaluated as though its whole field sat inside it: Impact
 // Scatter's blast center drifts, Meteor Impact's impact point orbits, Force
-// Field Push's source travels.
+// Field Push's source travels. (A mover nested under a SPLITTER means
+// something else - it moves the splitter's copies in the splitter's reference
+// frame; see splitterChildChain.ts.)
 //
 // The mechanism is one line of algebra rather than a new contract. Every mover
 // with a PLACE in the world already keys its field off `placementTransform` and

@@ -386,25 +386,36 @@ function CurveSegmented({ interpolation, accent, onInterpolation }: {
  *  detent at the rail's center; the lit fill grows FROM that mark, so pulling
  *  the lane down reads as light retreating toward the detent and boosting as
  *  light past it - the same "never half-lit for neutral" rule as LaserKnob's
- *  bipolar arc. Drag anywhere on the rail; it snaps onto 100% when close;
- *  double-click resets. */
+ *  bipolar arc. The rail is a split taper around that detent: the left half
+ *  spans 0-100% and the right half 100%-AUTOMATION_AMOUNT_MAX, so raising the
+ *  ceiling doesn't crush the everyday attenuation range into a sliver (a
+ *  linear 0-10x rail would park neutral at 10% of the throw). Drag anywhere
+ *  on the rail; it snaps onto 100% when close; double-click resets. */
 function AmountFader({ amount, accent, onAmount }: {
   amount: number
   accent: string
   onAmount: (amount: number) => void
 }) {
   const railRef = useRef<HTMLDivElement>(null)
-  const frac = clamp(amount / AUTOMATION_AMOUNT_MAX, 0, 1)
-  const neutralFrac = DEFAULT_AUTOMATION_AMOUNT / AUTOMATION_AMOUNT_MAX
+  const neutralFrac = 0.5
+  const boostSpan = AUTOMATION_AMOUNT_MAX - DEFAULT_AUTOMATION_AMOUNT
+  const frac = amount <= DEFAULT_AUTOMATION_AMOUNT
+    ? clamp(amount / DEFAULT_AUTOMATION_AMOUNT, 0, 1) * neutralFrac
+    : neutralFrac + clamp((amount - DEFAULT_AUTOMATION_AMOUNT) / boostSpan, 0, 1) * (1 - neutralFrac)
   const percent = Math.round(amount * 100)
 
+  const valueFromFrac = (t: number) => t <= neutralFrac
+    ? (t / neutralFrac) * DEFAULT_AUTOMATION_AMOUNT
+    : DEFAULT_AUTOMATION_AMOUNT + ((t - neutralFrac) / (1 - neutralFrac)) * boostSpan
   const valueFromX = (clientX: number) => {
     const rect = railRef.current?.getBoundingClientRect()
     if (!rect || rect.width === 0) return amount
     const t = clamp((clientX - rect.left) / rect.width, 0, 1)
-    const value = snap(t * AUTOMATION_AMOUNT_MAX)
-    // The detent: 100% catches the thumb, so neutral is easy to land exactly.
-    return Math.abs(value - DEFAULT_AUTOMATION_AMOUNT) < 0.04 ? DEFAULT_AUTOMATION_AMOUNT : value
+    // The detent catches in RAIL space (a fixed slice of the throw), not value
+    // space - the boost half covers 9x per rail, so a value-space window there
+    // would be sub-pixel.
+    if (Math.abs(t - neutralFrac) < 0.02) return DEFAULT_AUTOMATION_AMOUNT
+    return snap(valueFromFrac(t))
   }
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -421,8 +432,11 @@ function AmountFader({ amount, accent, onAmount }: {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    const delta = (event.key === 'ArrowRight' ? 1 : -1) * 0.05
-    onAmount(snap(clamp(amount + delta, 0, AUTOMATION_AMOUNT_MAX)))
+    // Nudge in RAIL space so a keypress moves the thumb the same distance on
+    // both sides of the detent (in value space that's finer below 100% than
+    // above, matching the split taper).
+    const nextFrac = clamp(frac + (event.key === 'ArrowRight' ? 1 : -1) * 0.025, 0, 1)
+    onAmount(snap(valueFromFrac(nextFrac)))
   }
 
   const fillLeft = Math.min(frac, neutralFrac)
@@ -470,7 +484,7 @@ function AmountFader({ amount, accent, onAmount }: {
           style={{ left: `${frac * 100}%`, background: towardWhite(accent, 0.55), boxShadow: `0 0 6px 1px ${withAlpha(accent, 0.8)}` }}
         />
       </div>
-      <span className="w-[30px] shrink-0 text-right font-mono text-[9px] tabular-nums text-white/70">{percent}%</span>
+      <span className="w-[34px] shrink-0 text-right font-mono text-[9px] tabular-nums text-white/70">{percent}%</span>
     </div>
   )
 }
