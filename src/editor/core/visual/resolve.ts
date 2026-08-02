@@ -11,14 +11,14 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, automationLaneValueBounds, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import type { MoverOrSplitter } from '../visualCopies/types'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -78,6 +78,9 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (!param) continue
     const pdef = params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
+    // The lane's output gain, applied at extraction so every consumer of the
+    // resolved lane (engine, hover preview, paramAtBeat) agrees on the values.
+    const amount = automationAmount(child)
     // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
     // travelling from whatever value sits underneath (hence `base`).
     if (child.burst) {
@@ -86,21 +89,23 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
         min: pdef.min,
         max: pdef.max,
         base: pdef.default,
       })
       continue
     }
-    // Noise mode: the notes become wobble gates instead of keyframes.
+    // Noise mode: the notes become wobble gates instead of keyframes. Amount
+    // scales the wobble's deviation along with its centers - a tamed lane
+    // shrinks as a whole, not just where its notes sit.
     if (child.noise) {
       out.push({
         param,
         mode: 'linear',
         keyframes: [],
-        noise: child.noise,
-        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
         min: pdef.min,
         max: pdef.max,
       })
@@ -109,7 +114,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
     })
   }
   return out
@@ -171,6 +176,10 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       max = pdef.max
       base = instance.settings[target.key] ?? pdef.default
     }
+    // The lane's output gain. 'enabled' is exempt: it is a 0/1 switch read
+    // against a 0.5 threshold, and a gain there would just be a surprise
+    // off-switch.
+    const amount = target.key === 'enabled' ? 1 : automationAmount(child)
     // Burst mode: each note fires the ADSR from the stored setting toward its own
     // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
     // so it stays a keyframe lane whatever the track says.
@@ -181,7 +190,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
         min,
         max,
         base,
@@ -192,7 +201,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
     })
   }
   return out
@@ -329,7 +338,27 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   // only thing this loses is automating a remap's own params, which for Freeze
   // means automating a two-value "on release" switch.
   if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
-  return framedMoverOrSplitter(wrapped, frame)
+  const entry = framedMoverOrSplitter(wrapped, frame)
+  // Automation makes the per-beat settings - and so possibly the COPY COUNT -
+  // vary with the beat, which a single-beat structural probe cannot see. Hand
+  // the probe the definition resolved at every lane's maximum reach (and
+  // minimum, for a count that shrinks as a param grows) so the mounted pool is
+  // sized to everything the lanes can reach (structuralCopyCount in
+  // visualCopies/resolveVisualCopies.ts). Probe-only closures: frames don't
+  // change counts, so they skip the framing wrapper.
+  const maxOverlay: Record<string, number> = {}
+  const minOverlay: Record<string, number> = {}
+  for (const lane of automation) {
+    const underneath = settings[lane.param]
+    const bounds = automationLaneValueBounds(lane, typeof underneath === 'number' ? underneath : lane.base ?? 0)
+    maxOverlay[lane.param] = bounds.max
+    minOverlay[lane.param] = bounds.min
+  }
+  entry.structuralVariants = [
+    def.resolve({ settings: { ...settings, ...maxOverlay }, notes }),
+    def.resolve({ settings: { ...settings, ...minOverlay }, notes }),
+  ]
+  return entry
 }
 
 /** Collect an object track's mover and splitter children together, in exact
@@ -405,7 +434,9 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(child, p)
       if (resolved) prefix.push(resolved)
     }
-    return resolveVisualCopies(prefix, 0).length
+    // Structural, not single-beat: an automated entry above this one may breathe
+    // its count with the beat, and the MIDI rows must address the mounted pool.
+    return structuralCopyCount(prefix)
   }
 
   const objects = Object.values(p.tracks).filter(
@@ -427,7 +458,7 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(global, p)
       if (resolved) prefix.push(resolved)
     }
-    largestCount = Math.max(largestCount, resolveVisualCopies(prefix, 0).length)
+    largestCount = Math.max(largestCount, structuralCopyCount(prefix))
   }
   return largestCount
 }
@@ -525,6 +556,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         photoPads: track.photoPads ? [...track.photoPads] : undefined,
         scratchBase: identitySV(),
         tags,
+        maskSourceIds: [],
+        masksTargets: false,
       }
       objectResolveCache.set(track, { deps, entry: base })
     }
@@ -534,6 +567,10 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // Own array per resolve: the global-mover pass below appends into it.
       moverAndSplitterChain: [...base.moverAndSplitterChain],
       scratchBase: identitySV(),
+      // Per-resolve like the chain: the crop routing pass below appends, and
+      // targets edits arrive as a whole re-resolve rather than a deps miss.
+      maskSourceIds: [],
+      masksTargets: track.instrumentId === 'crop' && (track.targets?.length ?? 0) > 0,
     })
     for (const tag of tags) {
       const list = tagIndex.get(tag)
@@ -595,6 +632,31 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         if (seenTargets.has(targetObjectId)) continue
         seenTargets.add(targetObjectId)
         objectById.get(targetObjectId)?.moverAndSplitterChain.push(resolved)
+      }
+    }
+  }
+
+  // A Crop track with routing targets masks THOSE objects (a screen-space pass
+  // in each target's ShaderWrapper) instead of its whole scene; with no targets
+  // it stays the scene-wide pass VisualScene runs. Only the crop's TRACK ID is
+  // routed - the per-frame mask state is pulled from the crop object's own
+  // engine state at draw time, so mute/solo and automation apply through the
+  // normal object path. A crop never masks itself or another crop (nothing
+  // renders there to mask), mirroring the dedup discipline of the mover pass
+  // above. Dead targets mask nothing rather than falling back to scene-wide -
+  // the settings panel's dead-target warning is the honest surface for that.
+  for (const object of objects) {
+    if (!object.masksTargets || object.muted) continue
+    const track = p.tracks[object.trackId]
+    if (!track) continue
+    const seenTargets = new Set<string>()
+    for (const routing of track.targets ?? []) {
+      for (const targetObjectId of objectsForScope(routing.scope)) {
+        if (seenTargets.has(targetObjectId) || targetObjectId === object.trackId) continue
+        seenTargets.add(targetObjectId)
+        const target = objectById.get(targetObjectId)
+        if (!target || target.instrumentId === 'crop') continue
+        target.maskSourceIds.push(object.trackId)
       }
     }
   }

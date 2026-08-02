@@ -138,7 +138,7 @@ test('adding a scene extends every director binding and keeps the active Main vi
   const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
   state.setActiveScene(mainId)
   state.addTrack({
-    id: 'cut', name: 'Cut', type: 'director', instrumentId: '', directorId: 'cut',
+    id: 'cut', name: 'Cut', type: 'base', instrumentId: 'cut',
     color: '#6366f1', muted: false, solo: false, blocks: [], childIds: [], sceneBindings: [],
   })
 

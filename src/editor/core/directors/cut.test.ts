@@ -15,7 +15,7 @@ const scenes = {
 }
 
 const makeTrack = (params: Record<string, number> = {}): Track => ({
-  id: 'cut', name: 'Cut', type: 'director', instrumentId: '', directorId: 'cut',
+  id: 'cut', name: 'Cut', type: 'base', instrumentId: 'cut',
   color: '#6366f1', muted: false, solo: false, childIds: [], params,
   sceneBindings: [
     { pitch: 60, sceneId: 'two' },

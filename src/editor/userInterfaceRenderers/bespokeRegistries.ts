@@ -15,6 +15,7 @@ import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface
 import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
+import { SymmetrySplitterUserInterfaceRenderer } from './SymmetrySplitterUserInterface'
 import { ApproachSplitterUserInterfaceRenderer } from './ApproachSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
@@ -47,6 +48,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   conveyor: ConveyorMoverUserInterfaceRenderer,
   radialMotion: RadialMotionMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
+  symmetry: SymmetrySplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
   approach: ApproachSplitterUserInterfaceRenderer,
 }

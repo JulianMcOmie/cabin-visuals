@@ -34,7 +34,9 @@ export type TrackType =
   | 'audio'
   | 'envelope'
   | 'splitter'
-  | 'director'
+// 'director' was retired in schema v12: a scene composer is now an ordinary
+// 'base' track whose instrumentId names a composition instrument
+// (core/directors). upgrade.ts rewrites old saves.
 
 export type SceneId = string
 export const DEFAULT_SCENE_BACKGROUND = '#000000'
@@ -185,6 +187,12 @@ export interface Track {
    *  note's pitch-value, scaled by velocity and by `intensity`. Wins over `noise`
    *  if both are somehow set. (See core/visual/automation.ts BurstConfig.) */
   burst?: { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number }
+  /** Automation tracks only: master output gain on the whole lane, whatever its
+   *  mode - every value it produces (keyframes, noise wander and deviation,
+   *  burst targets) is multiplied by this and clamped back to the param's range.
+   *  1 = as written (default), 0 = the lane flattens to zero, up to
+   *  AUTOMATION_AMOUNT_MAX for boosting a lane written low. */
+  automationAmount?: number
   color: string
   muted: boolean
   solo: boolean
@@ -216,9 +224,8 @@ export interface Track {
   moverId?: string
   /** For a `splitter` track: which MoverOrSplitterDefinition this row applies. */
   splitterId?: string
-  /** Main-scene-only: the director plugin this track instantiates. */
-  directorId?: string
-  /** Director MIDI rows bind stable pitches to scene identities. */
+  /** A composition instrument's MIDI rows bind stable pitches to scene
+   *  identities (Main-scene tracks; see core/directors). */
   sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
   /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>

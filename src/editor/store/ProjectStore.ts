@@ -2,9 +2,13 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+// Capability checks only. core/directors is React-free; the store must NEVER
+// import instruments/index (components import stores - instant cycle).
+import { compositionDef, isCompositionTrack } from '../core/directors'
+import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
@@ -372,11 +376,14 @@ export interface ProjectState {
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
   setTrackStringParam: (trackId: string, key: string, value: string) => void
+  /** Convert a track to an instrument. A COMPOSITION instrument id on the Main
+   *  scene additionally seeds sceneBindings and drops child lanes (the former
+   *  setTrackDirector semantics). */
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into a mover row (no instrument). */
   setTrackMover: (trackId: string, moverId: string, name: string) => void
-  setTrackDirector: (trackId: string, directorId: string, name: string) => void
-  setDirectorSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
+  /** Rebind a composition track's MIDI rows to scenes. */
+  setSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
@@ -404,6 +411,9 @@ export interface ProjectState {
   /** Put an automation lane in one of its three modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  /** Set an automation lane's output amount (a whole-lane gain, any mode).
+   *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
+  setTrackAutomationAmount: (trackId: string, amount: number) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
@@ -562,7 +572,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const main = scenes[mainId]
         const tracks = { ...main.tracks }
         for (const [trackId, track] of Object.entries(tracks)) {
-          if (track.type !== 'director') continue
+          if (!isCompositionTrack(track)) continue
           const nextPitch = Math.max(59, ...(track.sceneBindings ?? []).map((b) => b.pitch)) + 1
           tracks[trackId] = { ...track, sceneBindings: [...(track.sceneBindings ?? []), { sceneId: id, pitch: nextPitch }] }
         }
@@ -1035,7 +1045,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const target = s.scenes[targetSceneId]
     const root = source?.tracks[trackId]
     if (!source || !target || source.id === target.id || !root || root.parentId || root.type === 'audio') return s
-    if ((root.type === 'director') !== target.isMain) return s
+    // Main is composition-only, and mainOnly composers never leave it. Crop
+    // (composition def, mainOnly false) passes BOTH ways - moving it between
+    // Main and a scene deliberately switches which resolve path picks it up.
+    const rootDef = root.type === 'base' ? compositionDef(root.instrumentId) : undefined
+    if (target.isMain && !isCompositionTrack(root)) return s
+    if (!target.isMain && rootDef?.mainOnly) return s
 
     const snapshot = snapshotTrackTree(trackId, source.tracks)
     if (!snapshot) return s
@@ -1240,20 +1255,29 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.instrumentId === instrumentId) return s
+      const base: Track = {
+        ...track,
+        type: 'base',
+        instrumentId,
+        params: {},
+        stringParams: {},
+        moverId: undefined,
+        splitterId: undefined,
+        inputValues: undefined,
+        name: name ?? track.name,
+      }
+      // Converting to a composition instrument ON MAIN carries the extra
+      // conversion semantics the director era had: seed the scene bindings
+      // and drop child lanes (they addressed the previous instrument's
+      // params). Off Main - crop in a visual scene - it is an ordinary
+      // instrument change.
+      const composition = compositionDef(instrumentId) && s.scenes[s.activeSceneId]?.isMain
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            type: 'base',
-            instrumentId,
-            params: {},
-            stringParams: {},
-            moverId: undefined,
-            splitterId: undefined,
-            inputValues: undefined,
-            name: name ?? track.name,
-          },
+          [trackId]: composition
+            ? { ...base, sceneBindings: seedSceneBindings(s.scenes, s.sceneOrder), childIds: [] }
+            : base,
         },
       }
     }),
@@ -1282,34 +1306,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       }
     }),
 
-  setTrackDirector: (trackId, directorId, name) =>
-    set((s) => {
-      const scene = s.scenes[s.activeSceneId]
-      const track = s.tracks[trackId]
-      if (!scene?.isMain || !track) return s
-      const visualIds = s.sceneOrder.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: {
-            ...track,
-            name,
-            type: 'director',
-            instrumentId: '',
-            directorId,
-            params: {},
-            stringParams: {},
-            sceneBindings: visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })),
-            childIds: [],
-          },
-        },
-      }
-    }),
-
-  setDirectorSceneBindings: (trackId, bindings) =>
+  setSceneBindings: (trackId, bindings) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'director') return s
+      if (!track || !isCompositionTrack(track)) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, sceneBindings: bindings } } }
     }),
 
@@ -1518,6 +1518,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
       }
       return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  setTrackAutomationAmount: (trackId, amount) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(AUTOMATION_AMOUNT_MAX, amount))
+      // Neutral gain is stored as absence, so untouched lanes don't grow a field.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, automationAmount: clamped === 1 ? undefined : clamped } } }
     }),
 
   setTrackTargets: (trackId, targets) =>

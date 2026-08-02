@@ -4,7 +4,7 @@ import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { withTransformParams } from '../../core/transform'
-import { directorAutomatableParams, getDirector } from '../../core/directors'
+import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from '../NestedMenu'
@@ -35,21 +35,26 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
 
   if (!track) return null
-  const def = getInstrument(track.instrumentId)
+  // A composition track (on Main) offers the shared Opacity + its def's
+  // params, sampled per frame in VisualEngine's resolveComposition. It has no
+  // object, so it never offers the tf* transform params - which is why the
+  // object def is masked out for it below even for a dual-surface id like
+  // crop.
+  const activeIsMain = !!scenes[activeSceneId]?.isMain
+  const directorDef = activeIsMain && track.type === 'base' ? compositionDef(track.instrumentId) : undefined
+  const isComposition = activeIsMain && isCompositionTrack(track)
+  const def = isComposition ? undefined : getInstrument(track.instrumentId)
   // Mover/splitter tracks have no instrument, but their definition has numeric
   // params of its own - automation children target those the exact same way.
   const moverDef = getMoverOrSplitterDefinition(
     track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
   )
-  // Director tracks likewise: their def's params plus the shared Opacity are
-  // automatable (sampled per frame in VisualEngine's resolveComposition).
-  const directorDef = track.type === 'director' ? getDirector(track.directorId) : undefined
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number). Object
   // tracks also offer the canonical transform params (core/transform.ts).
   const params = (def
     ? withTransformParams(def.params)
-    : moverDef?.params ?? directorAutomatableParams(directorDef)
+    : moverDef?.params ?? (isComposition ? compositionAutomatableParams(directorDef) : [])
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
   // there: a mover child MOVES its parent rather than joining the object's chain
@@ -63,10 +68,16 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
   const envelopedParams = new Set(childTracks.filter((c) => c?.type === 'envelope').map((c) => c!.targetParam))
+  // Same three-way rule as moveTrackToScene: Main accepts only composition
+  // tracks; mainOnly composers (switcher/cut/radialCut) never leave Main; crop
+  // and plain instruments move freely between visual scenes.
+  const moveDef = track.type === 'base' ? compositionDef(track.instrumentId) : undefined
   const moveDestinations = !track.parentId && track.type !== 'audio'
     ? sceneOrder
       .map((id) => scenes[id])
-      .filter((scene) => scene && scene.id !== activeSceneId && scene.isMain === (track.type === 'director'))
+      .filter((scene) => scene && scene.id !== activeSceneId && (scene.isMain
+        ? isCompositionTrack(track)
+        : !moveDef?.mainOnly))
     : []
 
   // Effect automation targets: per instance, its On/Off pseudo-param plus every

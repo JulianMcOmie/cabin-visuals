@@ -40,6 +40,7 @@ import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
 import { waterDropInstrument } from './WaterDrop'
 import { flashWallInstrument } from './FlashWall'
+import { cropMaskInstrument } from './Crop'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -82,6 +83,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [polyFxInstrument.id]: polyFxInstrument,
   [waterDropInstrument.id]: waterDropInstrument,
   [flashWallInstrument.id]: flashWallInstrument,
+  [cropMaskInstrument.id]: cropMaskInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

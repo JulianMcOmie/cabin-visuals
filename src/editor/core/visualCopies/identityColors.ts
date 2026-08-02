@@ -90,6 +90,16 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
 // a colour the user picked, so it declares `{ param: 'color' }` and wears its
 // live palette slot 1 (default '#ffd166', hue 86°). Nothing else may claim that
 // hue, or a Colorizer left on its default would collide with it.
+/**
+ * Hue 62° - the peach between Meteor Impact's orange and Burst's amber, and
+ * the LAST hue this palette had room for. It sits 11.1° from each of them,
+ * barely over the test's floor, and the quantization of an 8-bit hex leaves
+ * exactly one usable hue in the window: the two nearest alternatives measure
+ * 61.1 and 62.6 and both fail. If you are here to add a 26th definition, the
+ * honest answer is that there is no gap left - rebalance the whole wheel
+ * rather than hunting for one, because every remaining gap is under 17°.
+ */
+export const SYMMETRY_COLOR = '#fdb97d'
 /** Hue 99°. */
 export const ROTATE_BURST_COLOR = '#dec52a'
 /** Hue 112°. */

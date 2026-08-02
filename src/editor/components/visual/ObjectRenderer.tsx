@@ -33,11 +33,16 @@ export function ObjectRenderer({
   trackId,
   instrumentId,
   visualCopyIndex,
+  maskSourceIds,
 }: {
   sceneId: string
   trackId: string
   instrumentId: string
   visualCopyIndex: number
+  /** Crop tracks masking this object (ObjectListEntry.maskSourceIds): forces
+   *  the ShaderWrapper path so the mask pass has the object's pixels isolated,
+   *  even with no shader effects of its own. */
+  maskSourceIds?: readonly string[]
 }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
@@ -129,14 +134,19 @@ export function ObjectRenderer({
     ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
     : bare
 
+  // A routed crop mask needs the object's pixels isolated, which is exactly
+  // what the shader path provides - so masked objects take it even with no
+  // shader effects of their own.
+  const needsShaderPath = shaderInstances.length > 0 || (maskSourceIds?.length ?? 0) > 0
+
   // Full-frame instruments (viewport-filling planes) skip the placement transform and
   // the transform effect chain; shaders may still post-process them.
   if (isFullFrame) {
     // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
-    return shaderInstances.length > 0
-      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]}>{frame}</ShaderWrapper>
+    return needsShaderPath
+      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -149,13 +159,14 @@ export function ObjectRenderer({
   // Shader path: the object is rendered offscreen with the same world × Scale ×
   // copy order and drawn back as a post-processed full-frame overlay, so there
   // is no in-scene placement group here.
-  if (shaderInstances.length > 0) {
+  if (needsShaderPath) {
     return (
       <ShaderWrapper
         trackId={trackId}
         visualCopyIndex={visualCopyIndex}
         plugins={shaderInstances}
         postMoverScalePlugins={scaleInstances}
+        maskSourceIds={maskSourceIds}
       >
         {content}
       </ShaderWrapper>

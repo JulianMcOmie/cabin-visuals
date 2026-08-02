@@ -1,5 +1,18 @@
 import type { Scene, Track } from '../../types'
 
+/** The default binding a fresh composition track starts with: every visual
+ *  scene, in scene order, from pitch 60 up. One definition for the three
+ *  creation paths (library drag, timeline "+", instrument conversion), which
+ *  each used to hand-roll this map. */
+export function seedSceneBindings(
+  scenes: Record<string, Scene>,
+  sceneOrder: string[],
+): Array<{ sceneId: string; pitch: number }> {
+  return sceneOrder
+    .filter((id) => scenes[id] && !scenes[id].isMain)
+    .map((sceneId, index) => ({ sceneId, pitch: 60 + index }))
+}
+
 /** Preserve a director's explicit scene order and stable pitches, then append
  * any visual scenes that were added while its saved binding list was stale.
  * This makes old/incomplete projects self-healing without reordering choices. */

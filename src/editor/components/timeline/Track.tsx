@@ -99,8 +99,13 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
   const renameTrack = useProjectStore((s) => s.renameTrack)
 
-  // The transform strip (opacity fader + panel opener) exists on object tracks only.
-  const isObjectTrack = track.type === 'base' && !!track.instrumentId
+  // The transform strip (opacity fader + panel opener) exists on object tracks
+  // only. Main's rows are composition tracks - base-typed with an instrumentId,
+  // but with no object behind them - so the active scene gates the whole strip
+  // (all Main tracks are composition tracks by the moveTrackToScene invariant,
+  // and crop-in-a-scene keeps its fader this way).
+  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
+  const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
   const opacityValue = useProjectStore((s) =>
     isObjectTrack ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
   )
@@ -131,7 +136,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
     ? getMoverOrSplitterDefinition(track.moverId)
     : undefined
   const previewItem: InstrumentItem | null =
-    track.type === 'base' && track.instrumentId
+    isObjectTrack
       ? { id: track.instrumentId, name: track.name, description: '', icon: null, kind: 'object' }
       : track.type === 'mover' && track.moverId
         ? {

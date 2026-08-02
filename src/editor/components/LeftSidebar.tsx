@@ -9,7 +9,7 @@ import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
-import { listDirectors } from '../core/directors'
+import { listCompositionInstruments } from '../core/directors'
 import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -121,7 +121,7 @@ const DIRECTOR_ICON_COLORS: Record<string, string> = {
 // derived from the mover registry - so registering a director is all it takes
 // to make it reachable. (This list used to be hand-maintained, which meant a
 // registered director simply never appeared in the menu.)
-const DIRECTOR_INSTRUMENTS = withKind('director', listDirectors().map((d) => ({
+const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().map((d) => ({
   id: d.id,
   name: d.name,
   description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into Main with the ${d.name} layout.`,
@@ -186,6 +186,12 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
       <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
       <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
+    </svg>
+  )},
+  { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M3.2 1 H6.2 L4.4 11 H1.4 Z" fill="#fbbf24" fillOpacity="0.9" />
+      <path d="M7.4 1 H10.4 L8.6 11 H5.6 Z" fill="#fbbf24" fillOpacity="0.35" />
     </svg>
   )},
   { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
@@ -318,9 +324,15 @@ const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.
 const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop', 'flashWall'])
 const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
 
+// The in-scene Crop masks the whole scene while its rows are held - the
+// sustained shape Rumble collects - but it is an object instrument outside the
+// core pool, so the folder claims it directly (pick() cannot reach it).
+const CROP_OBJECT_IDS = new Set(['crop'])
+const CROP_OBJECT_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => CROP_OBJECT_IDS.has(i.id))
+
 // Extras is the remainder: everything the curated folders above did not claim.
 const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
-  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id),
+  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id) && !CROP_OBJECT_IDS.has(i.id),
 )
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
@@ -329,6 +341,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
@@ -478,7 +491,7 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     items: [],
     subfolders: [
       { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
-      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking or warping while the note is held.', items: pick(RUMBLE_IDS) },
+      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
     ],
   },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
@@ -794,13 +807,14 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
-  const setTrackDirector = useProjectStore((s) => s.setTrackDirector)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
-    if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
-    else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
+    // Composition instruments (the 'director' library kind) go through the
+    // same conversion as any instrument - setTrackInstrument seeds their
+    // scene bindings when the Main scene is active.
+    if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 

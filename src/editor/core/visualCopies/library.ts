@@ -31,6 +31,7 @@ import { conveyorMover } from './conveyor'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
+import { symmetrySplitter } from './symmetry'
 import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
@@ -297,6 +298,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   noteColorizer,
   gradientColorizer,
   radialSplitter,
+  symmetrySplitter,
   gridSplitter,
   polyhedronSplitter,
   parametricPatternSplitter,

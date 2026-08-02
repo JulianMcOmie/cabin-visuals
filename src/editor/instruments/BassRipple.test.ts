@@ -55,6 +55,19 @@ test('velocity and the release tail compound', () => {
   assert.equal(resolveActiveBassRipple(stateAt(3, notes, { release: 2 }))?.amount, 0.125)
 })
 
+test('the pattern selection rides along and tracks without one stay on noise', () => {
+  const notes = [note(0, 2)]
+  assert.equal(resolveActiveBassRipple(stateAt(1, notes))?.pattern, 0)
+  assert.equal(resolveActiveBassRipple(stateAt(1, notes, { pattern: 3 }))?.pattern, 3)
+})
+
+test('frequency rides along, defaults to 1x, and never collapses to zero', () => {
+  const notes = [note(0, 2)]
+  assert.equal(resolveActiveBassRipple(stateAt(1, notes))?.frequency, 1)
+  assert.equal(resolveActiveBassRipple(stateAt(1, notes, { frequency: 2 }))?.frequency, 2)
+  assert.equal(resolveActiveBassRipple(stateAt(1, notes, { frequency: 0 }))?.frequency, 0.25)
+})
+
 test('unrecognized pitches neither warp the scene nor start a release', () => {
   const notes = [note(0, 1, 40)]
   assert.equal(resolveActiveBassRipple(stateAt(0.5, notes, { release: 2 })), null)
