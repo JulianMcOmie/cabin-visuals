@@ -199,10 +199,6 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 //   dimension's own linear axis, so slot 0 sits unrotated on that axis.
 // The rotation lands in each copy's frame (copies face around their ring), the
 // same convention as the Radial splitter.
-//
-// The three counts can multiply past MAX_VISUAL_COPIES (32 x 32 x 2 already
-// does); the kernel then truncates in slot order, exactly as it does for
-// chained splitters, and the bespoke panel labels the count CAPPED.
 
 export interface GridSettings {
   rows: number
