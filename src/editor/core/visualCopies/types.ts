@@ -130,9 +130,25 @@ export interface MoverOrSplitterContext {
  *  - The NUMBER of returned copies must not depend on `beat`. A splitter's
  *    configured copy count is structural; MIDI gates copies by driving opacity
  *    to zero, never by removing slots, so downstream indices stay stable.
+ *    An entry whose SETTINGS legitimately vary per beat (see
+ *    `structuralVariants`) may return fewer copies than its structural
+ *    maximum - the runtime pads the difference with hidden copies - but never
+ *    more.
  */
 export interface MoverOrSplitter {
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
+  /**
+   * OPTIONAL: alternative resolutions of this same entry whose output COUNTS
+   * bracket everything `apply` can ever produce. The runtime attaches these
+   * when an entry's settings vary with the beat (an automated mover), resolving
+   * the definition once with every varying param at its maximum reach and once
+   * at its minimum; the engine sizes the MOUNTED copy pool against them instead
+   * of against a single-beat sample, so a count that breathes with automation
+   * always fits. Probe-only - never applied to render a frame - and sound as
+   * long as an entry's count is monotonic in each of its params (true of every
+   * shipped definition; the engine's overflow clamp backstops the rest).
+   */
+  structuralVariants?: readonly MoverOrSplitter[]
   /**
    * OPTIONAL, and the one thing a chain entry may say about time rather than
    * space: remap the beat the whole object is evaluated at.

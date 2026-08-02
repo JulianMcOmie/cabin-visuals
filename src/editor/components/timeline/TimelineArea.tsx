@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect, type UIEvent as ReactScrollEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { Plus } from 'lucide-react'
 import { MAX_TOTAL_BARS, MIN_TOTAL_BARS, resolveNextTrackColor, useProjectStore } from '../../store/ProjectStore'
+import { seedSceneBindings } from '../../core/directors/sceneBindings'
 import { useUIStore } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { Track } from './Track'
@@ -324,12 +325,9 @@ export function TimelineArea() {
     state.addTrack({
       id,
       name: isMain ? 'Scene Switcher' : 'Cube',
-      type: isMain ? 'director' as const : 'base' as const,
-      instrumentId: isMain ? '' : 'cube',
-      directorId: isMain ? 'sceneSwitcher' : undefined,
-      sceneBindings: isMain
-        ? state.sceneOrder.filter((sceneId) => !state.scenes[sceneId]?.isMain).map((sceneId, i) => ({ sceneId, pitch: 60 + i }))
-        : undefined,
+      type: 'base' as const,
+      instrumentId: isMain ? 'sceneSwitcher' : 'cube',
+      sceneBindings: isMain ? seedSceneBindings(state.scenes, state.sceneOrder) : undefined,
       color: resolveNextTrackColor(state),
       muted: false,
       solo: false,

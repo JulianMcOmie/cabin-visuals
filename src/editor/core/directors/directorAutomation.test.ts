@@ -37,7 +37,7 @@ function setMainProject(directorTrack: Track, lanes: Track[]) {
 }
 
 const cropTrack: Track = {
-  id: 'dir', name: 'Crop', type: 'director', instrumentId: '', directorId: 'crop',
+  id: 'dir', name: 'Crop', type: 'base', instrumentId: 'crop',
   color: '#6366f1', muted: false, solo: false, childIds: [],
   // Hold crop's slice-0 row (pitch 60) so the director emits a layer to inspect.
   blocks: [{
@@ -77,7 +77,7 @@ test('a muted lane is inert - the director keeps its stored param', () => {
 
 test('the shared Opacity param is automatable on any director', () => {
   const switcher: Track = {
-    ...cropTrack, directorId: 'sceneSwitcher',
+    ...cropTrack, instrumentId: 'sceneSwitcher',
   }
   // Pitch 60 is the midpoint of [0,1] → opacity 0.5.
   setMainProject(switcher, [lane('op-lane', 'opacity', [{ beat: 0, pitch: 60 }])])

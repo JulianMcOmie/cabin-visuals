@@ -304,3 +304,51 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
   }
   return lane.keyframes.length ? sampleLane(lane.keyframes, beat, lane.mode) : NaN
 }
+
+/**
+ * The range a lane can ever reach, over ALL beats - what sizes a structural
+ * budget (a mover's mounted copy pool) to the automation's reach rather than to
+ * whatever the lane happens to say at one probe beat. `base` is the value that
+ * shows through wherever the lane is inert, so it bounds every mode that can go
+ * inert; a keyframe lane with notes never is, and deliberately excludes it (the
+ * knob's value never shows through such a lane, and including it would
+ * over-mount).
+ *
+ * Sound because every mode interpolates BETWEEN its extremes: easings map onto
+ * [0,1], a burst travels from `base` toward its targets by a 0..1 fraction, and
+ * noise clamps to the param range around its centers.
+ */
+export function automationLaneValueBounds(
+  lane: AutomationLane,
+  base: number,
+): { min: number; max: number } {
+  if (lane.burst) {
+    let min = base
+    let max = base
+    for (const g of lane.bursts ?? []) {
+      min = Math.min(min, g.value)
+      max = Math.max(max, g.value)
+    }
+    return { min, max }
+  }
+  if (lane.noise) {
+    const paramMin = lane.min ?? 0
+    const paramMax = lane.max ?? 1
+    let min = base
+    let max = base
+    for (const g of lane.gates ?? []) {
+      const deviation = (paramMax - paramMin) * (lane.noise.range ?? 0) * g.amp * 0.5
+      min = Math.min(min, Math.max(paramMin, g.center - deviation))
+      max = Math.max(max, Math.min(paramMax, g.center + deviation))
+    }
+    return { min, max }
+  }
+  if (lane.keyframes.length === 0) return { min: base, max: base }
+  let min = Infinity
+  let max = -Infinity
+  for (const k of lane.keyframes) {
+    min = Math.min(min, k.value)
+    max = Math.max(max, k.value)
+  }
+  return { min, max }
+}

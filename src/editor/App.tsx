@@ -15,7 +15,7 @@ import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { getMountedRenderScenes, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
+import { getCompositionLayers, getMountedRenderScenes, getObjectState, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
@@ -57,7 +57,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   }
   // The VisualCopy pull API too, so E2E checks can read a track's resolved
   // copies (transform + opacity) without reaching into an R3F scene graph.
-  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes }
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
 }
 
 // Shared segment styling for the header transport band. Segments are flush -
@@ -909,15 +909,21 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
-  const activeSceneId = useProjectStore((s) => s.activeSceneId)
-  const [previewSceneId, setPreviewSceneId] = useState(activeSceneId)
+  // null = no explicit viewing choice yet: the canvas shows Main (the final
+  // director composition). Only the scene tabs' right-click "View this scene"
+  // sets a concrete id; switching which scene you EDIT never touches it.
+  const [previewSceneId, setPreviewSceneId] = useState<string | null>(null)
   // Project hydration and scene deletion can invalidate a local preview id.
-  // Falling back keeps the canvas and segmented control live without writing
-  // an ephemeral viewing choice into the project document. Subscribed as a
-  // primitive (never the scenes record, whose identity changes on every track
-  // edit): this is the editor ROOT, and a whole-record selector here re-renders
-  // the entire shell on every pointermove of a drag.
-  const resolvedPreviewSceneId = useProjectStore((s) => (s.scenes[previewSceneId] ? previewSceneId : s.activeSceneId))
+  // Falling back to Main keeps the canvas live without writing an ephemeral
+  // viewing choice into the project document. Subscribed as a primitive
+  // (never the scenes record, whose identity changes on every track edit):
+  // this is the editor ROOT, and a whole-record selector here re-renders the
+  // entire shell on every pointermove of a drag.
+  const resolvedPreviewSceneId = useProjectStore((s) =>
+    previewSceneId && s.scenes[previewSceneId]
+      ? previewSceneId
+      : s.sceneOrder.find((id) => s.scenes[id]?.isMain) ?? s.activeSceneId
+  )
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">

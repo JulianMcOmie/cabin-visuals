@@ -7,7 +7,7 @@ import {
   registerMoverOrSplitterDefinition,
   unregisterMoverOrSplitterDefinitionForTests,
 } from '../visualCopies/registry'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { resolveVisualCopies, structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import { getPriorVisualCopyCount, resolveProject, type ProjectSnapshot } from './resolve'
 
@@ -418,4 +418,45 @@ test('every instrument track exposes a chain; empty chains yield one identity co
   const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
   assert.equal(copies.length, 1)
   assert.equal(copies[0].opacity, 1)
+})
+
+/** Splitter whose copy COUNT comes from a param (for automated-count tests). */
+const chainCountSplit: MoverOrSplitterDefinition<{ copies: number }> = {
+  id: 'test.chainCountSplit',
+  label: 'Chain Count Split',
+  kind: 'splitter',
+  params: [{ key: 'copies', label: 'Copies', min: 1, max: 8, step: 1, default: 2 }],
+  resolve({ settings }) {
+    const count = Math.max(1, Math.round(settings.copies))
+    return {
+      apply(visualCopy) {
+        return Array.from({ length: count }, () => cloneCopy(visualCopy))
+      },
+    }
+  },
+}
+registerMoverOrSplitterDefinition(chainCountSplit)
+test.after(() => unregisterMoverOrSplitterDefinitionForTests('test.chainCountSplit'))
+
+test('an automated count entry carries structural variants bracketing its reach', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainCountSplit', parentId: 'cube', childIds: ['a'] }),
+    track({ ...AUTOMATION_LANE, parentId: 's', targetParam: 'copies' }),
+  ], ['cube'])
+  const [entry] = objectByTrackId(p, 'cube').moverAndSplitterChain
+  assert.equal(entry.structuralVariants?.length, 2)
+  // Lane keyframes span pitch 36..84 → copies 1..8; beat 0 alone would say 1.
+  assert.equal(resolveVisualCopies([entry], 0).length, 1)
+  assert.equal(structuralCopyCount([entry]), 8)
+})
+
+test('prior copy count under an automated splitter addresses the mounted pool', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s', 'm'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainCountSplit', parentId: 'cube', childIds: ['a'] }),
+    track({ ...AUTOMATION_LANE, parentId: 's', targetParam: 'copies' }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube' }),
+  ], ['cube'])
+  assert.equal(getPriorVisualCopyCount('m', p), 8)
 })

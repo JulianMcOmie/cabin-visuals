@@ -2,6 +2,9 @@ import type { MidiRowDef, ParamDef } from '../../instruments/types'
 import type { Scene, Track } from '../../types'
 
 export interface CompositionLayer {
+  /** The composition track that produced this layer. (Named for the director
+   *  era; kept because it is an internal layer key with no persistence and a
+   *  rename would touch every def and test for zero behavior.) */
   directorTrackId: string
   sceneId: string
   opacity: number
@@ -49,7 +52,7 @@ export interface CompositionLayer {
   blendMode?: 'normal' | 'add' | 'multiply' | 'screen'
 }
 
-export interface DirectorResolveContext {
+export interface CompositionResolveContext {
   beat: number
   beatsPerBar: number
   totalBars: number
@@ -57,12 +60,22 @@ export interface DirectorResolveContext {
   sceneOrder: string[]
 }
 
-/** Directors are Main-scene instruments. The runtime always resolves an ordered
- * array of them; the first product UI happens to create only a Switcher. */
-export interface DirectorInstrumentDef {
+/** A composition instrument: an ordinary `base` track (registered in
+ * core/directors, not the object registry) whose capability is composing
+ * scenes into the final frame - resolve() yields CompositionLayers instead of
+ * an R3F component. The runtime always resolves an ordered array of them. */
+export interface CompositionInstrumentDef {
   id: string
   name: string
   params: ParamDef[]
+  /**
+   * This def only makes sense on the Main scene (it composes OTHER scenes, so
+   * placing it inside one would be circular). False for crop, whose def is
+   * dual-surfaced: on Main it composes (this def), in a scene it masks that
+   * scene as the object instrument of the same id. moveTrackToScene and the
+   * context menu enforce it.
+   */
+  mainOnly: boolean
   midiRows: (track: Track, scenes: Record<string, Scene>, sceneOrder: string[]) => MidiRowDef[]
   /**
    * Keep the settings panel from listing the MIDI rows. Worth setting when the
@@ -79,18 +92,18 @@ export interface DirectorInstrumentDef {
    * be whichever one happens to sort first.
    */
   targetsSingleScene?: boolean
-  resolve: (track: Track, context: DirectorResolveContext) => CompositionLayer[]
+  resolve: (track: Track, context: CompositionResolveContext) => CompositionLayer[]
 }
 
 export const FULL_FRAME = { x: 0, y: 0, width: 1, height: 1 } as const
-export const DIRECTOR_OPACITY_PARAM: ParamDef = {
+export const COMPOSITION_OPACITY_PARAM: ParamDef = {
   key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1,
 }
 
-/** The params an automation child lane may target on a director track: the
- *  shared Opacity plus the director's own params. The single source for the
+/** The params an automation child lane may target on a composition track: the
+ *  shared Opacity plus the def's own params. The single source for the
  *  context menu, the lane's piano-roll value rows and the engine's lane
  *  resolution, so they can never disagree about a param's [min,max]. */
-export function directorAutomatableParams(def: DirectorInstrumentDef | undefined): ParamDef[] {
-  return def ? [DIRECTOR_OPACITY_PARAM, ...def.params] : []
+export function compositionAutomatableParams(def: CompositionInstrumentDef | undefined): ParamDef[] {
+  return def ? [COMPOSITION_OPACITY_PARAM, ...def.params] : []
 }

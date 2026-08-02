@@ -59,6 +59,31 @@ export function resolveVisualCopies(
 }
 
 /**
+ * The STRUCTURAL copy count of a chain: an upper bound on how many copies it
+ * can produce at any beat, which is what the renderer mounts. Copy count is
+ * beat-independent by contract, so one evaluation at an arbitrary beat answers
+ * for a plain chain; entries whose settings vary with the beat carry
+ * `structuralVariants` (min/max-reach resolutions), and the count is the max
+ * over the chain evaluated with each variant rank swapped in. Per-entry counts
+ * multiply independently down the chain, so the all-max chain IS the maximum -
+ * no cross-entry combinations are needed.
+ */
+export function structuralCopyCount(moverAndSplitterChain: MoverOrSplitter[]): number {
+  let count = resolveVisualCopies(moverAndSplitterChain, 0).length
+  const variantRanks = Math.max(
+    0,
+    ...moverAndSplitterChain.map((entry) => entry.structuralVariants?.length ?? 0),
+  )
+  for (let rank = 0; rank < variantRanks; rank++) {
+    const probeChain = moverAndSplitterChain.map(
+      (entry) => entry.structuralVariants?.[rank] ?? entry,
+    )
+    count = Math.max(count, resolveVisualCopies(probeChain, 0).length)
+  }
+  return count
+}
+
+/**
  * The beat an object should actually be evaluated at, given the real playhead
  * beat and the object's chain (see `MoverOrSplitter.warpBeat`).
  *

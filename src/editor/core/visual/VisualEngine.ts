@@ -6,12 +6,12 @@ import { DEFAULT_ADSR, evaluateAdsrGain } from './adsr'
 import { composeMatrix, identitySV, localTransformToSV } from './stateVector'
 import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transform'
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
-import { resolveVisualCopies, warpChainBeat } from '../visualCopies/resolveVisualCopies'
+import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import type { ResolvedGraph, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
-import { directorAutomatableParams, getDirector, type CompositionLayer } from '../directors'
+import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
 
 // The engine is a plain module singleton, NOT a zustand/React store: per-frame
 // state must never trigger React re-renders. Renderers read it imperatively from
@@ -51,8 +51,10 @@ const _tfMat = new Matrix4()
 const _tfSV = identitySV()
 
 // Per-track VisualCopy cache - deliberately SEPARATE from ObjectState. The
-// STRUCTURAL copy count is fixed once per resolve (definitions contract: count
-// never depends on beat - MIDI gates opacity, not slots); the copy VALUES
+// STRUCTURAL copy count is fixed once per resolve at the chain's MAXIMUM reach
+// (definitions contract: count never depends on beat - MIDI gates opacity, not
+// slots - and automated settings probe at their lanes' extremes, so a count
+// that breathes with automation stays inside the pool); the copy VALUES
 // (matrices/opacity/color shift) refresh imperatively per frame in
 // computeAtBeat, so React never reconciles during playback.
 const visualCopiesByTrack = new Map<string, VisualCopy[]>()
@@ -68,6 +70,12 @@ export interface ObjectListEntry {
   trackId: string
   instrumentId: string
   visualCopyIndex: number
+  /** Crop tracks masking this object (see ResolvedObject.maskSourceIds).
+   *  Structural: changes only on resolve, like everything else here. */
+  maskSourceIds: readonly string[]
+  /** True on a Crop entry that masks routed targets instead of its scene -
+   *  VisualScene's scene-wide crop pass must skip it. */
+  masksTargets: boolean
 }
 
 // External-store signal for the object list, so VisualScene reconciles the scene
@@ -83,6 +91,8 @@ function publishList() {
       trackId: o.trackId,
       instrumentId: o.instrumentId,
       visualCopyIndex,
+      maskSourceIds: o.maskSourceIds,
+      masksTargets: o.masksTargets,
     }))
   }))
   listeners.forEach((l) => l())
@@ -120,6 +130,10 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   graphs = new Map()
   for (const sceneId of p.sceneOrder) {
     const scene = p.scenes[sceneId]
+    // Main holds composition tracks (base tracks whose instrumentId names a
+    // composition def). They resolve per-frame in resolveComposition, never as
+    // scene objects - this skip is the load-bearing gate that keeps them out
+    // of the object graphs.
     if (!scene || scene.isMain) continue
     const inputs: GraphInputs = {
       tracks: scene.tracks,
@@ -156,12 +170,21 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
   for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
   copyCountWarned.clear()
-  // Fix each track's STRUCTURAL copy count now, with one evaluation. Counts are
-  // beat-independent by contract, so the probe beat is arbitrary; the values are
-  // real too, so copies are readable before the first computeAtBeat.
+  // Fix each track's STRUCTURAL copy count now. Counts are beat-independent by
+  // contract, but automation can vary a chain entry's SETTINGS per beat, so the
+  // probe (structuralCopyCount) also measures each entry at its lanes' maximum
+  // reach - the pool is sized to everything the automation can ask for, and
+  // frames where it asks for less are padded with hidden copies. The beat-0
+  // values are real, so copies are readable before the first computeAtBeat.
   for (const graph of graphs.values()) for (const obj of graph.objects) {
     const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
-    visualCopyCounts.set(obj.trackId, copies.length)
+    const structuralCount = Math.max(copies.length, structuralCopyCount(obj.moverAndSplitterChain))
+    while (copies.length < structuralCount) {
+      const hidden = identityVisualCopy()
+      hidden.opacity = 0
+      copies.push(hidden)
+    }
+    visualCopyCounts.set(obj.trackId, structuralCount)
     visualCopiesByTrack.set(obj.trackId, copies)
   }
   publishList()
@@ -225,13 +248,16 @@ function resolveComposition(beat: number): CompositionLayer[] {
     ? [{ directorTrackId: '__implicit__', sceneId: visualFallback, opacity: 1, viewport: { x: 0, y: 0, width: 1, height: 1 } }]
     : []
 
-  const directors = main.rootTrackIds.map((id) => main.tracks[id]).filter((track) => track?.type === 'director' && !track.muted)
+  const directors = main.rootTrackIds
+    .map((id) => main.tracks[id])
+    .filter((track) => track && isCompositionTrack(track) && !track.muted)
   const anySolo = directors.some((track) => track.solo)
-  // Automation lanes under a director keyframe its params (opacity + the def's
-  // own) exactly like object-track lanes. Directors never enter the resolved
-  // graph, so their lanes are gathered and sampled right here, per frame - a
-  // pure function of the beat (like the note flattening the defs already do
-  // every frame), so scrub == playback == export holds.
+  // Automation lanes under a composition track keyframe its params (opacity +
+  // the def's own) exactly like object-track lanes. Composition tracks never
+  // enter the resolved graph (setProject skips Main), so their lanes are
+  // gathered and sampled right here, per frame - a pure function of the beat
+  // (like the note flattening the defs already do every frame), so
+  // scrub == playback == export holds.
   const mainSnapshot = {
     tracks: main.tracks,
     rootTrackIds: main.rootTrackIds,
@@ -243,10 +269,10 @@ function resolveComposition(beat: number): CompositionLayer[] {
   // Resolve bottom-to-top, preserving each director's own internal layer order.
   const layers = directors.slice().reverse().flatMap((rawTrack) => {
     if (anySolo && !rawTrack.solo) return []
-    const def = getDirector(rawTrack.directorId)
+    const def = compositionDef(rawTrack.instrumentId)
     let track = rawTrack
     if (def && rawTrack.childIds.length) {
-      const lanes = resolveAutomationLanes(rawTrack, directorAutomatableParams(def), mainSnapshot)
+      const lanes = resolveAutomationLanes(rawTrack, compositionAutomatableParams(def), mainSnapshot)
       if (lanes.length) {
         const params = { ...rawTrack.params }
         for (const lane of lanes) {
@@ -415,25 +441,28 @@ export function computeAtBeat(beat: number) {
 
     // Evaluate the new VisualCopy chain at this beat (pure function of beat +
     // resolved chain, so scrub == playback == export). The structural count was
-    // fixed at resolve time; a definition that varies its count with the beat
-    // violates its contract, so clamp back to structure rather than let the
-    // renderer's occurrence list silently disagree with React's.
+    // fixed at resolve time as the chain's MAXIMUM reach (automated counts
+    // legitimately breathe below it - the shortfall is padded with hidden
+    // copies so the renderer's occurrence list never disagrees with React's).
+    // OVERFLOWING the pool is still a contract violation - a definition varying
+    // its count with the beat, or one non-monotonic in an automated param - so
+    // warn and truncate rather than render copies that have no mount.
     const copies = resolveVisualCopies(obj.moverAndSplitterChain, objBeat, world)
     const structuralCount = visualCopyCounts.get(obj.trackId) ?? copies.length
-    if (copies.length !== structuralCount) {
+    if (copies.length > structuralCount) {
       if (!copyCountWarned.has(obj.trackId)) {
         copyCountWarned.add(obj.trackId)
         console.warn(
-          `VisualCopy count for track ${obj.trackId} changed with the beat (${copies.length} vs structural ${structuralCount}). ` +
-            'Splitter definitions must gate copies by opacity, not by adding/removing slots.',
+          `VisualCopy count for track ${obj.trackId} exceeded its structural pool (${copies.length} vs ${structuralCount}). ` +
+            'Definitions must gate copies by opacity, not by adding slots per beat.',
         )
       }
-      while (copies.length < structuralCount) {
-        const hidden = identityVisualCopy()
-        hidden.opacity = 0
-        copies.push(hidden)
-      }
       copies.length = structuralCount
+    }
+    while (copies.length < structuralCount) {
+      const hidden = identityVisualCopy()
+      hidden.opacity = 0
+      copies.push(hidden)
     }
     visualCopiesByTrack.set(obj.trackId, copies)
   }

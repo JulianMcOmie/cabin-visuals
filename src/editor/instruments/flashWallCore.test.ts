@@ -98,64 +98,55 @@ describe('flashWallGrid', () => {
 
 describe('resolveZoneFlashes', () => {
   const levels: number[] = []
-  const pitches: number[] = []
 
-  it('lights the zone of a sounding note and reports its pitch', () => {
+  it('lights only the zone of a sounding note', () => {
     // 120bpm: secPerBeat 0.5. Note at beat 0, probed at beat 0.5 = 0.25s in.
-    resolveZoneFlashes([note({ pitch: FLASH_WALL_BASE_PITCH + 2 })], 0.5, 0.5, 6, ENV, levels, pitches)
+    resolveZoneFlashes([note({ pitch: FLASH_WALL_BASE_PITCH + 2 })], 0.5, 0.5, 6, ENV, levels)
     assert.ok(levels[2] > 0)
-    assert.equal(pitches[2], FLASH_WALL_BASE_PITCH + 2)
     for (const z of [0, 1, 3, 4, 5]) assert.equal(levels[z], 0)
-    assert.equal(pitches[0], -1)
   })
 
   it('overlapping notes on one zone combine by max, not sum', () => {
     const a = note({ beat: 0 })
     const b = note({ beat: 0.1 })
-    resolveZoneFlashes([a, b], 0.5, 0.5, 6, ENV, levels, pitches)
+    resolveZoneFlashes([a, b], 0.5, 0.5, 6, ENV, levels)
     const combined = levels[0]
-    resolveZoneFlashes([a], 0.5, 0.5, 6, ENV, levels, pitches)
+    resolveZoneFlashes([a], 0.5, 0.5, 6, ENV, levels)
     const aAlone = levels[0]
-    resolveZoneFlashes([b], 0.5, 0.5, 6, ENV, levels, pitches)
+    resolveZoneFlashes([b], 0.5, 0.5, 6, ENV, levels)
     const bAlone = levels[0]
     assert.ok(Math.abs(combined - Math.max(aAlone, bAlone)) < 1e-9)
   })
 
   it('velocity scales the peak with a floor for quiet notes', () => {
     const env = { ...ENV, attackSec: 0 }
-    resolveZoneFlashes([note({ velocity: 127 })], 0, 0.5, 6, env, levels, pitches)
+    resolveZoneFlashes([note({ velocity: 127 })], 0, 0.5, 6, env, levels)
     const loud = levels[0]
-    resolveZoneFlashes([note({ velocity: 10 })], 0, 0.5, 6, env, levels, pitches)
+    resolveZoneFlashes([note({ velocity: 10 })], 0, 0.5, 6, env, levels)
     const quiet = levels[0]
     assert.equal(loud, 1)
     assert.ok(quiet > 0.2 && quiet < loud)
   })
 
   it('a finished note leaves its zone dark again', () => {
-    resolveZoneFlashes([note({ beat: 0, durationBeats: 1 })], 4, 0.5, 6, ENV, levels, pitches)
+    resolveZoneFlashes([note({ beat: 0, durationBeats: 1 })], 4, 0.5, 6, ENV, levels)
     assert.equal(levels[0], 0)
-    assert.equal(pitches[0], -1)
   })
 })
 
 describe('zoneColorHex', () => {
   it('solid mode passes the base through untouched', () => {
-    assert.equal(zoneColorHex('#ff8800', FLASH_WALL_COLOR_MODE.solid, 3, 6, 64), '#ff8800')
+    assert.equal(zoneColorHex('#ff8800', '#0000ff', FLASH_WALL_COLOR_MODE.solid, 3, 6), '#ff8800')
   })
 
-  it('spectrum mode gives distinct hues per zone', () => {
-    const colors = new Set(
-      [0, 1, 2, 3, 4, 5].map((z) => zoneColorHex('#ff0000', FLASH_WALL_COLOR_MODE.spectrum, z, 6, -1)),
-    )
-    assert.equal(colors.size, 6)
-    // Zone 0 keeps the base hue.
-    assert.equal(zoneColorHex('#ff0000', FLASH_WALL_COLOR_MODE.spectrum, 0, 6, -1), '#ff0000')
+  it('gradient runs from the base color to the end color across the zones', () => {
+    assert.equal(zoneColorHex('#ff0000', '#0000ff', FLASH_WALL_COLOR_MODE.gradient, 0, 6), '#ff0000')
+    assert.equal(zoneColorHex('#ff0000', '#0000ff', FLASH_WALL_COLOR_MODE.gradient, 5, 6), '#0000ff')
+    // Interior zones are honest mixes, monotone toward the end color.
+    assert.equal(zoneColorHex('#ff0000', '#0000ff', FLASH_WALL_COLOR_MODE.gradient, 2, 5), '#800080')
   })
 
-  it('pitch mode follows the pitch class and falls back to base while dark', () => {
-    const c = zoneColorHex('#ff0000', FLASH_WALL_COLOR_MODE.pitch, 0, 6, FLASH_WALL_BASE_PITCH)
-    const octaveUp = zoneColorHex('#ff0000', FLASH_WALL_COLOR_MODE.pitch, 0, 6, FLASH_WALL_BASE_PITCH + 12)
-    assert.equal(c, octaveUp)
-    assert.equal(zoneColorHex('#ff0000', FLASH_WALL_COLOR_MODE.pitch, 0, 6, -1), '#ff0000')
+  it('a one-zone gradient degenerates to the base color', () => {
+    assert.equal(zoneColorHex('#ff0000', '#0000ff', FLASH_WALL_COLOR_MODE.gradient, 0, 1), '#ff0000')
   })
 })

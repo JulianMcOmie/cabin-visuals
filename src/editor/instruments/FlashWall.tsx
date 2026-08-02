@@ -1,12 +1,13 @@
 import { useContext, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Color, Mesh, ShaderMaterial } from 'three'
+import { Color, Mesh } from 'three'
 import { beatInBlock, useInstrumentFrame } from '../core/visual/instrumentFrame'
 import { getVisualCopy } from '../core/visual/VisualEngine'
 import { InstrumentCopyContext } from '../core/visual/instrumentColor'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
 import {
   DEFAULT_FLASH_WALL_COLOR,
+  DEFAULT_FLASH_WALL_COLOR2,
   FLASH_WALL_BASE_PITCH,
   FLASH_WALL_MAX_ZONES,
   flashWallGrid,
@@ -51,11 +52,11 @@ const PARAMS: ParamDef[] = [
     type: 'select',
     options: [
       { value: 0, label: 'Solid' },
-      { value: 1, label: 'Spectrum' },
-      { value: 2, label: 'Pitch' },
+      { value: 1, label: 'Gradient' },
     ],
-    default: 1,
+    default: 0,
   },
+  { key: 'color2', label: 'Color 2', type: 'color', default: DEFAULT_FLASH_WALL_COLOR2, showIf: 'colorMode=1' },
   // The placement MODE, like Oscilloscope's: full-frame by default (the wall
   // IS the screen), or a real rectangle in the scene with a size and a depth
   // sort. A select so the size sliders can gate on `=0`.
@@ -157,7 +158,6 @@ function FlashWallVisual({ trackId }: { trackId: string }) {
   }).current
   const envRef = useRef<FlashWallEnvelope>({ attackSec: 0, decaySec: 0.01, sustain: 0, releaseSec: 0.01 })
   const levelsRef = useRef<number[]>([]).current
-  const pitchesRef = useRef<number[]>([]).current
 
   useInstrumentFrame(trackId, (state) => {
     const mesh = meshRef.current
@@ -172,19 +172,22 @@ function FlashWallVisual({ trackId }: { trackId: string }) {
     env.decaySec = Math.max(0.001, par('decay'))
     env.sustain = par('sustain')
     env.releaseSec = par('release')
-    resolveZoneFlashes(state.notes, state.beat, state.secPerBeat, zones, env, levelsRef, pitchesRef)
+    resolveZoneFlashes(state.notes, state.beat, state.secPerBeat, zones, env, levelsRef)
 
+    // These params already carry any Colorizer shift (useInstrumentFrame runs
+    // applyColorShiftToInstrumentParams over every declared color param), so
+    // solid AND gradient walls recolor whole under a colorized copy.
     const baseHex = state.stringParams.color || DEFAULT_FLASH_WALL_COLOR
+    const endHex = state.stringParams.color2 || DEFAULT_FLASH_WALL_COLOR2
     const mode = par('colorMode')
     uniforms.uCols.value = cols
     uniforms.uRows.value = rows
     for (let i = 0; i < FLASH_WALL_MAX_ZONES; i++) {
       const inRange = i < zones
       uniforms.uLevels.value[i] = inRange ? levelsRef[i] : 0
-      // Grid filler cells past the zone count idle in the base color.
-      uniforms.uColors.value[i].set(
-        inRange ? zoneColorHex(baseHex, mode, i, zones, pitchesRef[i]) : baseHex,
-      )
+      // Grid filler cells past the zone count clamp to the last zone's color,
+      // so a gradient runs off its own end instead of snapping back to base.
+      uniforms.uColors.value[i].set(zoneColorHex(baseHex, endHex, mode, Math.min(i, zones - 1), zones))
     }
     uniforms.uIdle.value = par('idle')
     uniforms.uGap.value = par('gap')
@@ -246,6 +249,9 @@ export const flashWallInstrument: ObjectInstrumentDef = {
   id: 'flashWall',
   name: 'Flash Wall',
   kind: 'object',
+  // Two color params now, so the single-color automatic identity no longer
+  // applies: the track follows the PRIMARY color (the gradient's near end).
+  identityColor: { param: 'color' },
   userInterfaceRenderer: 'flashWall',
   params: PARAMS,
   midiRows: MIDI_ROWS,

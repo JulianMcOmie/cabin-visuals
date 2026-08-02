@@ -11,14 +11,14 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, automationLaneValueBounds, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import type { MoverOrSplitter } from '../visualCopies/types'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -338,7 +338,27 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   // only thing this loses is automating a remap's own params, which for Freeze
   // means automating a two-value "on release" switch.
   if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
-  return framedMoverOrSplitter(wrapped, frame)
+  const entry = framedMoverOrSplitter(wrapped, frame)
+  // Automation makes the per-beat settings - and so possibly the COPY COUNT -
+  // vary with the beat, which a single-beat structural probe cannot see. Hand
+  // the probe the definition resolved at every lane's maximum reach (and
+  // minimum, for a count that shrinks as a param grows) so the mounted pool is
+  // sized to everything the lanes can reach (structuralCopyCount in
+  // visualCopies/resolveVisualCopies.ts). Probe-only closures: frames don't
+  // change counts, so they skip the framing wrapper.
+  const maxOverlay: Record<string, number> = {}
+  const minOverlay: Record<string, number> = {}
+  for (const lane of automation) {
+    const underneath = settings[lane.param]
+    const bounds = automationLaneValueBounds(lane, typeof underneath === 'number' ? underneath : lane.base ?? 0)
+    maxOverlay[lane.param] = bounds.max
+    minOverlay[lane.param] = bounds.min
+  }
+  entry.structuralVariants = [
+    def.resolve({ settings: { ...settings, ...maxOverlay }, notes }),
+    def.resolve({ settings: { ...settings, ...minOverlay }, notes }),
+  ]
+  return entry
 }
 
 /** Collect an object track's mover and splitter children together, in exact
@@ -414,7 +434,9 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(child, p)
       if (resolved) prefix.push(resolved)
     }
-    return resolveVisualCopies(prefix, 0).length
+    // Structural, not single-beat: an automated entry above this one may breathe
+    // its count with the beat, and the MIDI rows must address the mounted pool.
+    return structuralCopyCount(prefix)
   }
 
   const objects = Object.values(p.tracks).filter(
@@ -436,7 +458,7 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(global, p)
       if (resolved) prefix.push(resolved)
     }
-    largestCount = Math.max(largestCount, resolveVisualCopies(prefix, 0).length)
+    largestCount = Math.max(largestCount, structuralCopyCount(prefix))
   }
   return largestCount
 }
@@ -534,6 +556,8 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         photoPads: track.photoPads ? [...track.photoPads] : undefined,
         scratchBase: identitySV(),
         tags,
+        maskSourceIds: [],
+        masksTargets: false,
       }
       objectResolveCache.set(track, { deps, entry: base })
     }
@@ -543,6 +567,10 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
       // Own array per resolve: the global-mover pass below appends into it.
       moverAndSplitterChain: [...base.moverAndSplitterChain],
       scratchBase: identitySV(),
+      // Per-resolve like the chain: the crop routing pass below appends, and
+      // targets edits arrive as a whole re-resolve rather than a deps miss.
+      maskSourceIds: [],
+      masksTargets: track.instrumentId === 'crop' && (track.targets?.length ?? 0) > 0,
     })
     for (const tag of tags) {
       const list = tagIndex.get(tag)
@@ -604,6 +632,31 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         if (seenTargets.has(targetObjectId)) continue
         seenTargets.add(targetObjectId)
         objectById.get(targetObjectId)?.moverAndSplitterChain.push(resolved)
+      }
+    }
+  }
+
+  // A Crop track with routing targets masks THOSE objects (a screen-space pass
+  // in each target's ShaderWrapper) instead of its whole scene; with no targets
+  // it stays the scene-wide pass VisualScene runs. Only the crop's TRACK ID is
+  // routed - the per-frame mask state is pulled from the crop object's own
+  // engine state at draw time, so mute/solo and automation apply through the
+  // normal object path. A crop never masks itself or another crop (nothing
+  // renders there to mask), mirroring the dedup discipline of the mover pass
+  // above. Dead targets mask nothing rather than falling back to scene-wide -
+  // the settings panel's dead-target warning is the honest surface for that.
+  for (const object of objects) {
+    if (!object.masksTargets || object.muted) continue
+    const track = p.tracks[object.trackId]
+    if (!track) continue
+    const seenTargets = new Set<string>()
+    for (const routing of track.targets ?? []) {
+      for (const targetObjectId of objectsForScope(routing.scope)) {
+        if (seenTargets.has(targetObjectId) || targetObjectId === object.trackId) continue
+        seenTargets.add(targetObjectId)
+        const target = objectById.get(targetObjectId)
+        if (!target || target.instrumentId === 'crop') continue
+        target.maskSourceIds.push(object.trackId)
       }
     }
   }

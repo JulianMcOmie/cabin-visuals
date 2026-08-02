@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 11
+export const CURRENT_VERSION = 12
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -346,6 +346,32 @@ UPGRADES[10] = (doc) => {
       tracks[trackId] = track.instrumentId === 'oscilloscope'
         ? { ...track, params: { ...track.params, fitToScreen: 1 } }
         : track
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v11 → v12 ────────────────────────────────────────────────────────────────
+// Directors de-specialized: a director is now an ordinary base track whose
+// instrumentId names a composition instrument (core/directors). The former
+// directorId moves into instrumentId; sceneBindings, params, blocks and child
+// automation lanes carry over untouched (their targetParam keys - opacity +
+// the def's params - are unchanged). Directors only ever lived in scenes
+// (never audioTracks), and a directorId-less director track can only be the
+// pre-first-UI Scene Switcher, so that is the fallback id.
+UPGRADES[11] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      if ((track.type as string) !== 'director') {
+        tracks[trackId] = track
+        continue
+      }
+      const { directorId, ...kept } = track as Track & { directorId?: string }
+      tracks[trackId] = { ...kept, type: 'base', instrumentId: directorId ?? 'sceneSwitcher' }
     }
     scenes[sceneId] = { ...scene, tracks }
   }
