@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 12
+export const CURRENT_VERSION = 13
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -372,6 +372,59 @@ UPGRADES[11] = (doc) => {
       }
       const { directorId, ...kept } = track as Track & { directorId?: string }
       tracks[trackId] = { ...kept, type: 'base', instrumentId: directorId ?? 'sceneSwitcher' }
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v12 → v13 ────────────────────────────────────────────────────────────────
+// The mover consolidation: the six single-behavior motion movers collapse into
+// the one `mover` definition, whose `motion` (0 translate / 1 rotate / 2 orbit)
+// and `mode` (0 burst / 1 constant / 2 oscillate) selects pick the cell. Every
+// cell delegates to the same evaluators the old definitions used (parity is
+// pinned in core/visualCopies/mover.test.ts), and all six spoke the same
+// 60-65 (+66 Return) pitches, so notes carry over untouched. The only stored
+// values whose KEYS change are Constant Rotate/Orbit's per-axis rates
+// (speedX/Y/Z, speed → angleX/Y/Z, angle - same units, °/beat, same ranges);
+// automation and envelope child lanes targeting those params retarget with
+// their parent, exactly as UPGRADES[9] did for the transform keys.
+const MOVER_CONSOLIDATION: Record<string, { motion: number; mode: number; renames?: Record<string, string> }> = {
+  burst: { motion: 0, mode: 0 },
+  rotateBurst: { motion: 1, mode: 0 },
+  orbitBurst: { motion: 2, mode: 0 },
+  constantRotate: { motion: 1, mode: 1, renames: { speedX: 'angleX', speedY: 'angleY', speedZ: 'angleZ', speed: 'angle' } },
+  constantOrbit: { motion: 2, mode: 1, renames: { speedX: 'angleX', speedY: 'angleY', speedZ: 'angleZ', speed: 'angle' } },
+  translationOscillator: { motion: 0, mode: 2 },
+}
+
+UPGRADES[12] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      const migration = track.type === 'mover' && track.moverId ? MOVER_CONSOLIDATION[track.moverId] : undefined
+      if (migration) {
+        const inputValues: Record<string, number> = { motion: migration.motion, mode: migration.mode }
+        for (const [key, value] of Object.entries(track.inputValues ?? {})) {
+          inputValues[migration.renames?.[key] ?? key] = value
+        }
+        tracks[trackId] = { ...track, moverId: 'mover', inputValues }
+        continue
+      }
+      // Child lanes keyed to a renamed parent param follow the rename.
+      if ((track.type === 'automation' || track.type === 'envelope') && track.targetParam && track.parentId) {
+        const parent = scene.tracks[track.parentId]
+        const renamed = parent?.type === 'mover' && parent.moverId
+          ? MOVER_CONSOLIDATION[parent.moverId]?.renames?.[track.targetParam]
+          : undefined
+        if (renamed) {
+          tracks[trackId] = { ...track, targetParam: renamed }
+          continue
+        }
+      }
+      tracks[trackId] = track
     }
     scenes[sceneId] = { ...scene, tracks }
   }

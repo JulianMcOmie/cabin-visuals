@@ -23,11 +23,12 @@ function close(actual: number, expected: number, msg?: string) {
   assert.ok(Math.abs(actual - expected) < 1e-9, msg ?? `expected ${expected}, got ${actual}`)
 }
 
-test('burst is registered as a production mover', () => {
-  const def = getMoverOrSplitterDefinition('burst')
-  assert.equal(def?.kind, 'mover')
-  assert.equal(def?.label, 'Burst')
-  const rows = def!.midiRows!(DEFAULTS)
+test('burst is retired from the registry - the unified mover owns its cell', () => {
+  // UPGRADES[12] rewrites saved `burst` tracks onto `mover`, so the id must
+  // never resolve again (a re-registration would fork the two behaviours).
+  assert.equal(getMoverOrSplitterDefinition('burst'), undefined)
+  assert.equal(getMoverOrSplitterDefinition('mover')?.kind, 'mover')
+  const rows = burstMover.midiRows!(DEFAULTS)
   assert.equal(rows.length, 6)
   assert.deepEqual(rows.map((r) => r.pitch).sort((a, b) => a - b), [60, 61, 62, 63, 64, 65])
 })

@@ -25,10 +25,10 @@
 // Wave Terrain's by lightness at one degree of hue apart, and they came out the
 // same colour in the timeline.)
 //
-// Every colour here is therefore placed by HUE ALONE, as far apart as 26
-// entries and 9 immovable ones allow: the nine leave five usable gaps, and
-// spreading the other sixteen evenly through them lands everything ~12-16°
-// apart. identityColors.test.ts enforces a floor of 11°, so a new definition
+// Every colour here is therefore placed by HUE ALONE, as far apart as the
+// entry count and the immovable panel accents allow (the wheel peaked at 26
+// entries ~12-16° apart before the 2026-08 mover consolidation returned five
+// hues). identityColors.test.ts enforces a floor of 11°, so a new definition
 // that crowds an existing one fails rather than shipping a lane that looks like
 // a duplicate. (11 rather than 12 because a hex only carries 8 bits per
 // channel - a hue placed at exactly 12 round-trips to ~11.7 - and because the
@@ -65,14 +65,19 @@
 export const IMPACT_PULSE_COLOR = '#ff6b9d'
 /** Meteor Impact's ember. Hue 51°. */
 export const METEOR_IMPACT_COLOR = '#ff8a3c'
-/** Burst's amber. Hue 73°. */
-export const BURST_COLOR = '#f5a623'
+/**
+ * The Mover's amber. Hue 73° - inherited EXACTLY from the retired Burst mover,
+ * whose panel accent this was: the 2026-08 mover consolidation folded Burst,
+ * Rotate/Orbit Burst, Constant Rotate/Orbit and Translation Oscillator into
+ * the one `mover` definition, and the family's most-played color carries the
+ * flag. Their other five hues (99, 112, 124, 137, 208) went back to the wheel,
+ * so the palette has real gaps again - the 86-150 band and ~200-210 are open.
+ */
+export const MOVER_COLOR = '#f5a623'
 /** Visibility's emerald. Hue 163°. */
 export const VISIBILITY_COLOR = '#34d399'
 /** Conveyor's current teal. Hue 175°. */
 export const CONVEYOR_COLOR = '#48e5c2'
-/** Translation Oscillator's cyan. Hue 208°. */
-export const TRANSLATION_OSCILLATOR_COLOR = '#2bd4e8'
 /** Impact Scatter's shock blue. Hue 222°. */
 export const IMPACT_SCATTER_COLOR = '#5ad8ff'
 /** Approach's warp blue. Hue 234°. */
@@ -91,23 +96,14 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
 // live palette slot 1 (default '#ffd166', hue 86°). Nothing else may claim that
 // hue, or a Colorizer left on its default would collide with it.
 /**
- * Hue 62° - the peach between Meteor Impact's orange and Burst's amber, and
- * the LAST hue this palette had room for. It sits 11.1° from each of them,
- * barely over the test's floor, and the quantization of an 8-bit hex leaves
- * exactly one usable hue in the window: the two nearest alternatives measure
- * 61.1 and 62.6 and both fail. If you are here to add a 26th definition, the
- * honest answer is that there is no gap left - rebalance the whole wheel
- * rather than hunting for one, because every remaining gap is under 17°.
+ * Hue 62° - the peach between Meteor Impact's orange and the Mover's amber.
+ * It sits 11.1° from each, barely over the test's floor, and the quantization
+ * of an 8-bit hex leaves exactly one usable hue in that window: the two
+ * nearest alternatives measure 61.1 and 62.6 and both fail. (When this
+ * shipped the wheel was FULL; the 2026-08 mover consolidation has since
+ * reopened the 86-150 band and ~200-210 - see MOVER_COLOR.)
  */
 export const SYMMETRY_COLOR = '#fdb97d'
-/** Hue 99°. */
-export const ROTATE_BURST_COLOR = '#dec52a'
-/** Hue 112°. */
-export const ORBIT_BURST_COLOR = '#c7ce3e'
-/** Hue 124°. */
-export const CONSTANT_ROTATE_COLOR = '#afd556'
-/** Hue 137°. */
-export const CONSTANT_ORBIT_COLOR = '#90dc70'
 /** Hue 150°. */
 export const WAVE_TERRAIN_COLOR = '#6de18b'
 /** Hue 191° - ice, for the mover that stops time. */

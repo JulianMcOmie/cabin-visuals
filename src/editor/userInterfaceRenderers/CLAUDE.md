@@ -58,6 +58,24 @@ above: a size punch is exactly the thing you need to watch while the transport i
 parked. Reach for a canvas only when the preview genuinely needs shaders, lighting, or
 real geometry.
 
+`MoverUserInterface.tsx` extends that pattern to full 3D: its window is a FIELD of
+nine seeds run through the definition's real `resolve()` on a looping demo phrase,
+each rendered as a DOM square whose `transform` is the resulting `Matrix4` as a CSS
+`matrix3d(...)`. What that conversion needs (in `toCssMatrix`): both are column-major,
+so the elements pass straight through, but three's +Y is up and CSS's is down —
+CONJUGATE by a Y-flip (`F · M · F`), which flips the axis while keeping rotations
+rigid (a bare `scaleY(-1)` wrapper would mirror handedness instead) — then scale only
+the translation column into pixels. `perspective` on the stage div gives the Z axis
+its depth for free. A field, not a lone subject, because rotate and orbit are
+indistinguishable on one centered object. Its demo phrase is per-mode, chosen to end
+where it starts so the loop wrap is invisible — and the rotate/orbit CONSTANT cell
+deliberately plays NO notes, because an empty lane spinning is that cell's actual
+claim (same reasoning as Radial Motion's no-notes preview). The panel's two segmented
+controls mirror the definition's two select params; per-mode knobs render only for
+the active cell, and the shared per-axis X/Y/Z knobs re-bind between `distance*` and
+`angle*` keys as the motion segment moves, with the row's unit said once in a caption
+above it rather than on every knob.
+
 **Sizing a signal window's axes is a design decision, not arithmetic.** Two mistakes
 that each make a mathematically correct curve look like a broken panel, both found in
 that same panel:

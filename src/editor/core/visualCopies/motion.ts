@@ -96,13 +96,30 @@ const MOTION_ROWS: MidiRowDef[] = [
   ...directionRows(MOTION_BLOCKS.snap, 'Snap'),
 ]
 
-export interface MotionSettings extends BasisSettings {
-  // Drift - constant translate.
+/** What evaluateDriftOffset actually reads - narrow so the unified Mover can
+ *  hand it its own (differently-keyed) settings without a fake MotionSettings. */
+export interface DriftSettings {
   driftX: number
   driftY: number
   driftZ: number
   drift: number
   driftReturnBeats: number
+}
+
+/** What evaluateSnapAngles actually reads - same reason as DriftSettings. */
+export interface SnapSettings {
+  burstBeats: number
+  easing: number
+  sharpness: number
+  angleX: number
+  angleY: number
+  angleZ: number
+  angle: number
+}
+
+// Drift fields come from DriftSettings; the Snap block's angles and the shared
+// burst feel (which Step also reads) come from SnapSettings.
+export interface MotionSettings extends BasisSettings, DriftSettings, SnapSettings {
   // Wrap bounds, as half-extents per basis axis. 0 disables that axis.
   boundX: number
   boundY: number
@@ -120,15 +137,6 @@ export interface MotionSettings extends BasisSettings {
   spinZ: number
   spin: number
   spinReturnBeats: number
-  // Snap - rotate burst.
-  angleX: number
-  angleY: number
-  angleZ: number
-  angle: number
-  // Shared burst feel, so a Step and a Snap on the same beat land together.
-  burstBeats: number
-  easing: number
-  sharpness: number
   // Shared by both rotation blocks: 0 spins in place, non-zero orbits.
   pivotX: number
   pivotY: number
@@ -157,7 +165,7 @@ export function motionBlockNotes(
 /** Per-axis distance accumulated by held drift notes, ignoring Return rows. */
 function rawDrift(
   notes: readonly ResolvedNote[],
-  settings: MotionSettings,
+  settings: DriftSettings,
   beat: number,
 ): [number, number, number] {
   const out: [number, number, number] = [0, 0, 0]
@@ -181,7 +189,7 @@ function rawDrift(
  */
 export function evaluateDriftOffset(
   notes: readonly ResolvedNote[],
-  settings: MotionSettings,
+  settings: DriftSettings,
   beat: number,
 ): [number, number, number] {
   const returnBeats = Math.max(0.0001, settings.driftReturnBeats)
@@ -209,7 +217,7 @@ export function evaluateDriftOffset(
  */
 export function evaluateSnapAngles(
   notes: readonly ResolvedNote[],
-  settings: MotionSettings,
+  settings: SnapSettings,
   beat: number,
 ): [number, number, number] {
   const angles: [number, number, number] = [0, 0, 0]
