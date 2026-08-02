@@ -6,7 +6,7 @@
 //
 // A palette is the one kind of constant that cannot be reviewed a file at a
 // time: the only interesting property is how each colour relates to the other
-// twenty-four, and two definitions in different files silently landing on the
+// twenty-five, and two definitions in different files silently landing on the
 // same blue is invisible until you see them side by side in a timeline. So the
 // values live here, together, and each definition imports its own.
 //
@@ -99,8 +99,12 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
  * Hue 62° - the peach between Meteor Impact's orange and the Mover's amber.
  * It sits 11.1° from each, barely over the test's floor, and the quantization
  * of an 8-bit hex leaves exactly one usable hue in that window: the two
- * nearest alternatives measure 61.1 and 62.6 and both fail. (When this
- * shipped the wheel was FULL; the 2026-08 mover consolidation has since
+ * nearest alternatives measure 61.1 and 62.6 and both fail. When the wheel is
+ * full again, REBALANCE a stretch of movable hues instead of hunting for a
+ * gap - worked example: fitting Symmetric Motion meant respacing the five
+ * violet-to-rose entries between Radial Motion (286°, immovable) and Impact
+ * Pulse (2°, immovable) at an even ~12.7°, moving only spread entries, never
+ * a panel-accent anchor. (For now the 2026-08 mover consolidation has
  * reopened the 86-150 band and ~200-210 - see MOVER_COLOR.)
  */
 export const SYMMETRY_COLOR = '#fdb97d'
@@ -114,14 +118,20 @@ export const MOTION_COLOR = '#4eaeff'
 export const TUNNEL_COLOR = '#72a7ff'
 /** Hue 273°. */
 export const DUPLICATE_TRAIL_COLOR = '#8ba0ff'
-/** Hue 301°. */
-export const POLYHEDRON_COLOR = '#ba8cff'
-/** Hue 316°. */
-export const PARAMETRIC_PATTERN_COLOR = '#d57df7'
-/** Hue 332°. */
-export const RADIAL_COLOR = '#ea74dc'
-/** Hue 347°. */
-export const GRID_COLOR = '#f96ebf'
+// The violet-to-rose stretch: five entries respaced evenly (~12.7°) between
+// the immovable Radial Motion (286°) and Impact Pulse (2°) anchors when
+// Symmetric Motion joined - each sits as close to its pre-rebalance hue as
+// the spacing allows.
+/** Hue 299°. */
+export const POLYHEDRON_COLOR = '#b68eff'
+/** Hue 311°. */
+export const PARAMETRIC_PATTERN_COLOR = '#ce7ffe'
+/** Hue 324°. */
+export const RADIAL_COLOR = '#e078ea'
+/** Hue 337° - the mover that moves a formation symmetrically. */
+export const SYMMETRIC_MOTION_COLOR = '#ef72d3'
+/** Hue 349°. */
+export const GRID_COLOR = '#fb6dba'
 
 // ── Opting out of hue ───────────────────────────────────────────────────────
 /**

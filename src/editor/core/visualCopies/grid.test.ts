@@ -2,15 +2,22 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Matrix4 } from 'three'
 import type { ResolvedNote } from '../visual/types'
-import { gridCellOrder, gridSplitter, type GridSettings } from './library'
+import { gridCellOrder, gridCellOrder3, gridSplitter, type GridSettings } from './library'
 import { resolveVisualCopies } from './resolveVisualCopies'
 
 const settings = (overrides: Partial<GridSettings> = {}): GridSettings => ({
   rows: 2,
   columns: 3,
+  depth: 1,
   spacing: 1,
   plane: 0,
   indexing: 0,
+  columnsMode: 0,
+  rowsMode: 0,
+  depthMode: 0,
+  columnsRadius: 2,
+  rowsRadius: 2,
+  depthRadius: 2,
   ...overrides,
 })
 
@@ -31,7 +38,7 @@ function scale(copy: ReturnType<typeof resolveGrid>[number]): [number, number, n
 }
 
 function rounded(values: [number, number, number][]): [number, number, number][] {
-  return values.map((value) => value.map((n) => Number(n.toFixed(10))) as [number, number, number])
+  return values.map((value) => value.map((n) => Number(n.toFixed(10)) || 0) as [number, number, number])
 }
 
 test('grid defaults to XY axes and English reading order', () => {
@@ -122,4 +129,110 @@ test('grid indexing modes change downstream index order without changing cells',
 test('grid dimensions clamp to the structural 1..32 range', () => {
   assert.equal(resolveGrid({ rows: 0, columns: 0 }).length, 1)
   assert.equal(resolveGrid({ rows: 100, columns: 100 }).length, 1024)
+})
+
+test('depth stacks layers along the plane normal, front layer first', () => {
+  const copies = resolveGrid({ rows: 1, columns: 1, depth: 3, spacing: 2 })
+  assert.deepEqual(rounded(copies.map(position)), [
+    [0, 0, 2],
+    [0, 0, 0],
+    [0, 0, -2],
+  ])
+  for (const copy of copies) assert.deepEqual(scale(copy), [1, 1, 1])
+
+  // On the X/Z plane the normal is Y.
+  const xz = resolveGrid({ rows: 1, columns: 1, depth: 2, plane: 1 })
+  assert.deepEqual(rounded(xz.map(position)), [
+    [0, 0.5, 0],
+    [0, -0.5, 0],
+  ])
+})
+
+test('gridCellOrder3 walks layers outermost and depth 1 matches gridCellOrder', () => {
+  assert.deepEqual(gridCellOrder3(2, 2, 2, 0), [
+    [0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0],
+    [0, 0, 1], [0, 1, 1], [1, 0, 1], [1, 1, 1],
+  ])
+  assert.deepEqual(gridCellOrder3(2, 2, 2, 1), gridCellOrder3(2, 2, 2, 0).slice().reverse())
+  for (const indexing of [0, 1, 2, 3]) {
+    assert.deepEqual(
+      gridCellOrder3(2, 3, 1, indexing).map(([row, column]) => [row, column]),
+      gridCellOrder(2, 3, indexing),
+    )
+  }
+})
+
+test('circular columns wrap into a ring about the plane normal, slot 0 unrotated', () => {
+  const copies = resolveGrid({ rows: 1, columns: 4, columnsMode: 1, columnsRadius: 2 })
+  assert.deepEqual(rounded(copies.map(position)), [
+    [2, 0, 0],
+    [0, 2, 0],
+    [-2, 0, 0],
+    [0, -2, 0],
+  ])
+})
+
+test('circular columns above linear rows: rings offset along world Y, not swept', () => {
+  const copies = resolveGrid({ rows: 2, columns: 2, columnsMode: 1, columnsRadius: 1 })
+  assert.deepEqual(rounded(copies.map(position)), [
+    [1, 0.5, 0],
+    [-1, 0.5, 0],
+    [1, -0.5, 0],
+    [-1, -0.5, 0],
+  ])
+})
+
+test('circular depth is a floor ring; adding linear rows makes a standing cylinder', () => {
+  const ring = resolveGrid({ rows: 1, columns: 1, depth: 4, depthMode: 1, depthRadius: 2 })
+  assert.deepEqual(rounded(ring.map(position)), [
+    [0, 0, 2],
+    [2, 0, 0],
+    [0, 0, -2],
+    [-2, 0, 0],
+  ])
+
+  const cylinder = resolveGrid({ rows: 2, columns: 1, depth: 4, depthMode: 1, depthRadius: 2 })
+  for (const copy of cylinder) {
+    const [x, y, z] = position(copy)
+    assert.equal(Number(Math.hypot(x, z).toFixed(9)), 2)
+    assert.equal(Number(Math.abs(y).toFixed(9)), 0.5)
+  }
+})
+
+test('two circular dimensions nest into a torus that collapses to a sphere at radius 0', () => {
+  // Rows ring (about X) framing a depth ring (about the rotated Y): with the
+  // outer radius at 0 every copy sits exactly depthRadius from the origin.
+  const sphere = resolveGrid({
+    rows: 4, columns: 1, depth: 6,
+    rowsMode: 1, rowsRadius: 0,
+    depthMode: 1, depthRadius: 3,
+  })
+  assert.equal(sphere.length, 24)
+  for (const copy of sphere) {
+    const [x, y, z] = position(copy)
+    assert.equal(Number(Math.hypot(x, y, z).toFixed(9)), 3)
+  }
+
+  // Circular columns + circular depth is the true torus pair: the depth ring's
+  // plane contains both the columns arm (X) and the columns axis (Z), so every
+  // copy sits exactly depthRadius from the spine (radius-2 circle about Z).
+  const torus = resolveGrid({
+    rows: 1, columns: 8, depth: 4,
+    columnsMode: 1, columnsRadius: 2,
+    depthMode: 1, depthRadius: 0.5,
+  })
+  for (const copy of torus) {
+    const [x, y, z] = position(copy)
+    const spineDistance = Math.hypot(Math.hypot(x, y) - 2, z)
+    assert.equal(Number(spineDistance.toFixed(9)), 0.5)
+  }
+})
+
+test('MIDI rows cover rows x columns x depth cells', () => {
+  const rows = gridSplitter.midiRows!(settings({ rows: 2, columns: 2, depth: 2 }))
+  assert.equal(rows.length, 8)
+  assert.equal(rows[7].label, 'Disable cell 8')
+
+  const copies = resolveGrid({ rows: 2, columns: 2, depth: 2 }, [note(rows[4].pitch)], 0.5)
+  assert.deepEqual(copies.map((copy) => copy.opacity), [1, 1, 1, 1, 0, 1, 1, 1])
 })
