@@ -749,6 +749,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
   addTrack: (track, atIndex) =>
     set((s) => {
+      // Hand-built tracks (console scripts, E2E) sometimes arrive without an id.
+      // Left alone, the record keys it "undefined", rootTrackIds gains a literal
+      // undefined (persisted as null), and the timeline row renders key={undefined}
+      // - React's missing-key warning pointing at TimelineArea's keyed map. Mint one.
+      if (!track.id) track = { ...track, id: crypto.randomUUID() }
       const tracks = { ...s.tracks, [track.id]: track }
       // Nested under a parent: insert into the parent's childIds at atIndex.
       if (track.parentId) {
