@@ -122,7 +122,7 @@ export function TimelineArea() {
     const { majorBars } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
     const majorPx = majorBars * beatsPerBar * pixelsPerBeat
     return {
-      backgroundImage: `repeating-linear-gradient(to right, var(--border-strong) 0px 1px, transparent 1px ${majorPx}px)`,
+      backgroundImage: `repeating-linear-gradient(to right, var(--timeline-grid-line, var(--border-strong)) 0px 1px, transparent 1px ${majorPx}px)`,
       backgroundSize: `${majorPx}px 100%`,
       // Phase the repeat so a line still lands exactly on musical bar 0 when
       // the pickup shifts the content (the pattern extends back through it).

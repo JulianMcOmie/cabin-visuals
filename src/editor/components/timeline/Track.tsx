@@ -9,6 +9,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
+import { midiSelectionSpill } from '../../utils/colors'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
@@ -514,6 +515,24 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
+        {/* A selected block's light spills onto its lane: a wide wash behind
+            the blocks (first child = painted under them), clipped to the row.
+            The cross-row reach comes from the block's own bloom shadows. */}
+        {track.type !== 'audio' && track.blocks.map((block) =>
+          selectedBlockIds.has(block.id) ? (
+            <div
+              key={`spill:${block.id}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: midiSelectionSpill(
+                  blockColor,
+                  (block.startBar + block.durationBars / 2) * barWidthPx,
+                  block.durationBars * barWidthPx,
+                ),
+              }}
+            />
+          ) : null)}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
