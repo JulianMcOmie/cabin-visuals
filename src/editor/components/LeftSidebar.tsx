@@ -331,6 +331,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
+  contour: "Sculpts a formation along the camera's depth axis: each copy's distance follows a surface of its own x/y - a cone to start.",
 }
 
 // Left the library outright - Motion's Step/Snap/Spin blocks are these exact

@@ -12,6 +12,7 @@ import { GradientColorizerUserInterfaceRenderer } from './GradientColorizerUserI
 import { ImpactScatterMoverUserInterfaceRenderer } from './ImpactScatterMoverUserInterface'
 import { ImpactPulseMoverUserInterfaceRenderer } from './ImpactPulseMoverUserInterface'
 import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface'
+import { ContourMoverUserInterfaceRenderer } from './ContourMoverUserInterface'
 import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
@@ -45,6 +46,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   impactScatter: ImpactScatterMoverUserInterfaceRenderer,
   impactPulse: ImpactPulseMoverUserInterfaceRenderer,
   conveyor: ConveyorMoverUserInterfaceRenderer,
+  contour: ContourMoverUserInterfaceRenderer,
   radialMotion: RadialMotionMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
