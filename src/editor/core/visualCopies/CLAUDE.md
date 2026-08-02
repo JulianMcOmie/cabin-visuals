@@ -110,7 +110,13 @@ because it contradicts the module's normal reading of a note.
 
 **`tunnel` vs `approach`** — both stream copies down the camera axis and recycle with a
 `mod`, and both must keep their near end BEHIND the camera (z = 5) so the recycle is
-off-screen. They differ in what sells the depth: Tunnel renders every copy at full size
+off-screen. Tunnel's speed has two clocks (`speedMode`): Free reads the `speed` knob in
+units/beat; Beat-synced converts `syncRingsPerBeat` through the CURRENT ring spacing
+(`depth / rings`) so "1" lands a ring on every beat however the corridor is
+proportioned — `tunnelBaseSpeed` is the one place that conversion lives, and the stored
+rate stays continuous (panel steps it over `TUNNEL_SYNC_DETENTS`, same contract as
+Radial Motion's spin rates). Its `orientation` default is **Face center** (1) as of
+2026-08 — a save that never touched the param picks up the new default. They differ in what sells the depth: Tunnel renders every copy at full size
 and fades opacity (a corridor you travel through); Approach grows each copy from scale
 ZERO to its arrival size (an object flying at you, or receding away from you). Both
 divide offsets by the placement scale to stay world-metric — see the war-story comment

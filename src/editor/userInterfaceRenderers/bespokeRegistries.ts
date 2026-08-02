@@ -13,6 +13,7 @@ import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterfa
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { SymmetrySplitterUserInterfaceRenderer } from './SymmetrySplitterUserInterface'
 import { ApproachSplitterUserInterfaceRenderer } from './ApproachSplitterUserInterface'
+import { TunnelSplitterUserInterfaceRenderer } from './TunnelSplitterUserInterface'
 import { OffsetEffectUserInterfaceRenderer } from './OffsetEffectUserInterface'
 import { RotateEffectUserInterfaceRenderer } from './RotateEffectUserInterface'
 import { ScaleEffectUserInterfaceRenderer } from './ScaleEffectUserInterface'
@@ -43,6 +44,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   symmetry: SymmetrySplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
   approach: ApproachSplitterUserInterfaceRenderer,
+  tunnel: TunnelSplitterUserInterfaceRenderer,
 }
 
 export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {

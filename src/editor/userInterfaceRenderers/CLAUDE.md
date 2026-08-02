@@ -102,6 +102,15 @@ the control's display on the controlling param's value itself - and should
 STILL treat the gated binding as optional, in case the branches are ever
 unified.
 
+`TunnelSplitterUserInterface.tsx` is Approach's corridor sibling: same real-resolve
+preview from a camera parked at the splitter's assumed stage position, but drawn with
+thin TILES rather than spheres, because its FACING control is a rotation and only a
+flat face makes a rotation legible. Its SPEED row is the worked example for a
+two-clock rate: a FREE/SYNC segmented control renders whichever knob the mode reads
+(the other key stays in PLACED_KEYS so it can't leak into MORE as a stray slider),
+and the SYNC knob is a stepped LaserKnob over `TUNNEL_SYNC_DETENTS` in index units —
+Radial Motion's detent pattern, with the readout speaking beats-per-ring ("1/2b").
+
 **A panel whose subject is a LAYOUT can preview with a plain 2D canvas.**
 `GridSplitterUserInterface` runs the splitter's real `resolve()` (no notes)
 and draws the copies as painter-sorted cube faces on a `<canvas>` with its own
