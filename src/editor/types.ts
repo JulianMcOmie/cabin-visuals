@@ -233,6 +233,9 @@ export interface Track {
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */
   audioBlocks?: AudioBlock[]
+  /** Audio-track-only: linear output gain (1 = unity, up to 1.5). Neutral is
+   *  stored as ABSENCE (like automationAmount), so old documents read as 1. */
+  volume?: number
   /** Video-instrument-only: the ordered pads of its bank. Order is the MIDI
    *  mapping - index 0 answers baseNote. Bytes live behind core/video. */
   videoPads?: VideoPad[]

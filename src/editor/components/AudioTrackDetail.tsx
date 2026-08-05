@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { getAudioEngine } from '../core/audio/AudioEngine'
 import { getPeaks, BASE_PEAK_BUCKETS } from '../core/audio/waveform'
 import { useAudioStore } from '../store/AudioStore'
@@ -53,6 +53,8 @@ function formatTime(sec: number): string {
  * moment. Both halves are canvas; both animate off one rAF loop.
  */
 export function AudioTrackDetail({ track }: { track: Track }) {
+  const setTrackVolume = useProjectStore((s) => s.setTrackVolume)
+  const volume = track.volume ?? 1
   const scopeRef = useRef<HTMLCanvasElement>(null)
   const laneRef = useRef<HTMLCanvasElement>(null)
   const readoutRef = useRef<HTMLSpanElement>(null)
@@ -307,6 +309,28 @@ export function AudioTrackDetail({ track }: { track: Track }) {
               {clipNames.join(' · ')}
             </span>
           )}
+        </div>
+        {/* The track's fader: a live gain (heard mid-drag, no re-arm), 100% =
+            unity, up to 150% for a quiet source. Double-click snaps back. */}
+        <div className="absolute right-3 top-2 flex items-center gap-2">
+          <span className="text-[10px] font-semibold tracking-[0.16em] select-none" style={{ color: LABEL }}>
+            VOL
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1.5}
+            step={0.01}
+            value={volume}
+            onChange={(e) => setTrackVolume(track.id, Number(e.target.value))}
+            onDoubleClick={() => setTrackVolume(track.id, 1)}
+            title="Track volume - double-click to reset"
+            style={{ '--fill': `${(volume / 1.5) * 100}%` } as CSSProperties}
+            className="slider-console w-24"
+          />
+          <span className="w-8 text-right font-mono text-[10px] tabular-nums select-none" style={{ color: LABEL }}>
+            {Math.round(volume * 100)}%
+          </span>
         </div>
       </div>
 

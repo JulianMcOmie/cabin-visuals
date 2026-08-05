@@ -418,6 +418,11 @@ export interface ProjectState {
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
   setTrackOnTop: (trackId: string, onTop: boolean) => void
+  /** Set an audio track's output volume (linear gain, clamped to [0, 1.5]).
+   *  Unity is stored as absence, like automationAmount. A volume-only change
+   *  is applied as a live gain by the audio engine WITHOUT re-arming players
+   *  (see usePlayback's subscription), so dragging the fader stays smooth. */
+  setTrackVolume: (trackId: string, volume: number) => void
   /** Replace a Video track's ordered pads (its bank of source moments). */
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Replace a Photo track's ordered photos (its bank). */
@@ -1559,6 +1564,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, onTop } } }
+    }),
+
+  setTrackVolume: (trackId, volume) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(1.5, volume))
+      // Unity gain is stored as absence, so untouched tracks don't grow a field.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, volume: clamped === 1 ? undefined : clamped } } }
     }),
 
   setTrackVideoPads: (trackId, videoPads) =>
