@@ -33,6 +33,7 @@ import { wormholeInstrument } from './Wormhole'
 import { particleSphereInstrument } from './ParticleSphere'
 import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
+import { midiRollInstrument } from './MidiRoll'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -68,6 +69,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [particleSphereInstrument.id]: particleSphereInstrument,
   [photoSlotInstrument.id]: photoSlotInstrument,
   [polyFxInstrument.id]: polyFxInstrument,
+  [midiRollInstrument.id]: midiRollInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

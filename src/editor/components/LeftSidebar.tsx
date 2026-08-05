@@ -223,6 +223,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M1 1 L11 11" stroke="#9adfe0" strokeWidth="1.2" />
     </svg>
   )},
+  { id: 'midiRoll', name: 'Midi Roll', description: 'Your notes as a scrolling neon piano roll - bars glide past a center playhead where diamonds flare as they play.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="0.8" y="2" width="4.5" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <rect x="6.5" y="4.6" width="4.5" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <rect x="2.5" y="7.2" width="4" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <path d="M6 5.3 L7 6.3 L6 7.3 L5 6.3 Z" fill="#67e8f9" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library
