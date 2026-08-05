@@ -1623,7 +1623,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           id,
           name: t.name || `MIDI ${i + 1}`,
           type: 'base',
-          instrumentId: 'cube',
+          // An imported MIDI file lands as a Midi Roll: the notes ARE the
+          // visual, whatever their pitch range - swap the instrument after.
+          instrumentId: 'midiRoll',
           // Chain through the partially-built maps so multi-track imports
           // step the hue cycle per track.
           color: resolveNextTrackColor({ tracks, rootTrackIds }),
