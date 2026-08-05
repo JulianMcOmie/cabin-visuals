@@ -18,10 +18,13 @@ export function padRoom(count: number, isPro: boolean): number {
 }
 // Per-plan caps on the SOURCE file (the only thing uploaded). Picking moments
 // out of it is free. PRO_MAX_MB must equal the bucket's file_size_limit
-// (migration 0004): callers reject oversized files instantly; the bucket
+// (migration 0008): callers reject oversized files instantly; the bucket
 // backstops. (Like all plan gating, the free cap is client-side only.)
 export const FREE_MAX_MB = 50
-export const PRO_MAX_MB = 250
+export const PRO_MAX_MB = 1024
+
+/** A cap in user-facing units: whole gigabytes read as GB, the rest as MB. */
+const capLabel = (mb: number) => (mb >= 1024 && mb % 1024 === 0 ? `${mb / 1024} GB` : `${mb} MB`)
 
 /** The user-facing rejection for an over-cap file, or null if it fits. */
 export function capError(file: File, isPro: boolean): string | null {
@@ -29,8 +32,8 @@ export function capError(file: File, isPro: boolean): string | null {
   if (file.size <= maxMb * 1024 * 1024) return null
   const mb = Math.round(file.size / (1024 * 1024))
   return isPro
-    ? `${file.name} is ${mb} MB - sources are capped at ${PRO_MAX_MB} MB. Compress it first.`
-    : `${file.name} is ${mb} MB - free sources are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${PRO_MAX_MB} MB, or compress it first.`
+    ? `${file.name} is ${mb} MB - sources are capped at ${capLabel(PRO_MAX_MB)}. Compress it first.`
+    : `${file.name} is ${mb} MB - free sources are capped at ${FREE_MAX_MB} MB. Upgrade to Pro for ${capLabel(PRO_MAX_MB)}, or compress it first.`
 }
 
 // Free plans also cap TOTAL video stored in a project; Pro is unlimited total.
