@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 9
+export const CURRENT_VERSION = 13
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -246,6 +246,185 @@ UPGRADES[8] = (doc) => {
           baseColor: hueToHex(baseHue ?? 240),
         },
       }
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v9 → v10 ─────────────────────────────────────────────────────────────────
+// World-space instruments' transform params move to the canonical track
+// transform keys (src/editor/core/transform.ts): position → tfX/tfY/tfZ and
+// size → tfSize (a multiplier of the instrument's natural size, so world sizes
+// divide by the 1.6 reference). Automation/envelope children retarget with
+// their parent. See docs/track-transform-panel.md.
+const TRANSFORM_KEY_MIGRATIONS: Record<string, Record<string, { to: string; scale?: number }>> = {
+  cube: {
+    baseXPosition: { to: 'tfX' },
+    baseYPosition: { to: 'tfY' },
+    baseZPosition: { to: 'tfZ' },
+    baseSize: { to: 'tfSize', scale: 1 / 1.6 },
+  },
+  circle: {
+    baseXPosition: { to: 'tfX' },
+    baseYPosition: { to: 'tfY' },
+    baseZPosition: { to: 'tfZ' },
+    baseSize: { to: 'tfSize', scale: 1 / 1.6 },
+  },
+  triangle: {
+    baseXPosition: { to: 'tfX' },
+    baseYPosition: { to: 'tfY' },
+    baseZPosition: { to: 'tfZ' },
+    baseSize: { to: 'tfSize', scale: 1 / 1.6 },
+  },
+  // laserSphere keeps its own `size` param (the bespoke panel's SIZE knob binds
+  // to it - see LaserSphereUserInterface), so only its position migrates.
+  laserSphere: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' } },
+  laserLine: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' } },
+  particleSphere: { x: { to: 'tfX' }, y: { to: 'tfY' }, z: { to: 'tfZ' }, size: { to: 'tfSize', scale: 1 / 1.6 } },
+}
+
+/** Rename one track's params through an instrument's migration map. Exported for
+ *  the template builder, which constructs tracks without passing through the
+ *  document upgrade chain. */
+export function migrateTransformParams(
+  instrumentId: string,
+  params: Record<string, number> | undefined,
+): Record<string, number> | undefined {
+  const map = TRANSFORM_KEY_MIGRATIONS[instrumentId]
+  if (!map || !params) return params
+  let changed = false
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(params)) {
+    const m = map[key]
+    if (m) {
+      out[m.to] = m.scale !== undefined ? value * m.scale : value
+      changed = true
+    } else {
+      out[key] = value
+    }
+  }
+  return changed ? out : params
+}
+
+UPGRADES[9] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      let next = track
+      const params = migrateTransformParams(track.instrumentId, track.params)
+      if (params !== track.params) next = { ...next, params }
+      // Automation/envelope children target the parent's params by key.
+      if ((track.type === 'automation' || track.type === 'envelope') && track.targetParam && track.parentId) {
+        const parent = scene.tracks[track.parentId]
+        const m = parent ? TRANSFORM_KEY_MIGRATIONS[parent.instrumentId]?.[track.targetParam] : undefined
+        if (m) next = { ...next, targetParam: m.to }
+      }
+      tracks[trackId] = next
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v10 → v11 ────────────────────────────────────────────────────────────────
+// The Oscilloscope stopped being a fixed full-frame instrument and became a real
+// object in the scene (a positioned, depth-sorted, billboarding panel), with the
+// old viewport-pinned overlay kept as its "Fit to screen" placement mode. New
+// scopes default to In scene; every scope that already exists was authored
+// against the pinned look, so it is pinned explicitly here. `fitToScreen` also
+// decides the on-top pass (isOnTopTrack), so this one param restores the whole
+// of the previous behaviour - nothing already made changes.
+UPGRADES[10] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      tracks[trackId] = track.instrumentId === 'oscilloscope'
+        ? { ...track, params: { ...track.params, fitToScreen: 1 } }
+        : track
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v11 → v12 ────────────────────────────────────────────────────────────────
+// Directors de-specialized: a director is now an ordinary base track whose
+// instrumentId names a composition instrument (core/directors). The former
+// directorId moves into instrumentId; sceneBindings, params, blocks and child
+// automation lanes carry over untouched (their targetParam keys - opacity +
+// the def's params - are unchanged). Directors only ever lived in scenes
+// (never audioTracks), and a directorId-less director track can only be the
+// pre-first-UI Scene Switcher, so that is the fallback id.
+UPGRADES[11] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      if ((track.type as string) !== 'director') {
+        tracks[trackId] = track
+        continue
+      }
+      const { directorId, ...kept } = track as Track & { directorId?: string }
+      tracks[trackId] = { ...kept, type: 'base', instrumentId: directorId ?? 'sceneSwitcher' }
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v12 → v13 ────────────────────────────────────────────────────────────────
+// The mover consolidation: the six single-behavior motion movers collapse into
+// the one `mover` definition, whose `motion` (0 translate / 1 rotate / 2 orbit)
+// and `mode` (0 burst / 1 constant / 2 oscillate) selects pick the cell. Every
+// cell delegates to the same evaluators the old definitions used (parity is
+// pinned in core/visualCopies/mover.test.ts), and all six spoke the same
+// 60-65 (+66 Return) pitches, so notes carry over untouched. The only stored
+// values whose KEYS change are Constant Rotate/Orbit's per-axis rates
+// (speedX/Y/Z, speed → angleX/Y/Z, angle - same units, °/beat, same ranges);
+// automation and envelope child lanes targeting those params retarget with
+// their parent, exactly as UPGRADES[9] did for the transform keys.
+const MOVER_CONSOLIDATION: Record<string, { motion: number; mode: number; renames?: Record<string, string> }> = {
+  burst: { motion: 0, mode: 0 },
+  rotateBurst: { motion: 1, mode: 0 },
+  orbitBurst: { motion: 2, mode: 0 },
+  constantRotate: { motion: 1, mode: 1, renames: { speedX: 'angleX', speedY: 'angleY', speedZ: 'angleZ', speed: 'angle' } },
+  constantOrbit: { motion: 2, mode: 1, renames: { speedX: 'angleX', speedY: 'angleY', speedZ: 'angleZ', speed: 'angle' } },
+  translationOscillator: { motion: 0, mode: 2 },
+}
+
+UPGRADES[12] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      const migration = track.type === 'mover' && track.moverId ? MOVER_CONSOLIDATION[track.moverId] : undefined
+      if (migration) {
+        const inputValues: Record<string, number> = { motion: migration.motion, mode: migration.mode }
+        for (const [key, value] of Object.entries(track.inputValues ?? {})) {
+          inputValues[migration.renames?.[key] ?? key] = value
+        }
+        tracks[trackId] = { ...track, moverId: 'mover', inputValues }
+        continue
+      }
+      // Child lanes keyed to a renamed parent param follow the rename.
+      if ((track.type === 'automation' || track.type === 'envelope') && track.targetParam && track.parentId) {
+        const parent = scene.tracks[track.parentId]
+        const renamed = parent?.type === 'mover' && parent.moverId
+          ? MOVER_CONSOLIDATION[parent.moverId]?.renames?.[track.targetParam]
+          : undefined
+        if (renamed) {
+          tracks[trackId] = { ...track, targetParam: renamed }
+          continue
+        }
+      }
+      tracks[trackId] = track
     }
     scenes[sceneId] = { ...scene, tracks }
   }

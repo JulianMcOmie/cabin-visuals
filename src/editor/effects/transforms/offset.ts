@@ -4,6 +4,7 @@ export const offsetPlugin: VisualEffect = {
   id: 'offset',
   name: 'Offset',
   category: 'transform',
+  deprecated: true,
   params: [
     { key: 'x', label: 'X', min: -10, max: 10, step: 0.1, default: 0 },
     { key: 'y', label: 'Y', min: -10, max: 10, step: 0.1, default: 0 },

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,10 +24,43 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@daw/*": ["src/features/daw/*"]
+      "@/*": [
+        "src/*"
+      ],
+      "@daw/*": [
+        "src/features/daw/*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next-build-3001/types/**/*.ts",
+    ".next-build-3002/types/**/*.ts",
+    ".next-build-3004/types/**/*.ts",
+    ".next-build-3005/types/**/*.ts",
+    ".next-build-3040/types/**/*.ts",
+    ".next-build-check/types/**/*.ts",
+    ".next-build-commit/types/**/*.ts",
+    ".next-build-verify/types/**/*.ts",
+    ".next-build-worktree/types/**/*.ts",
+    ".next-build/types/**/*.ts",
+    ".next-isolated-3001/types/**/*.ts",
+    ".next-isolated-3002/types/**/*.ts",
+    ".next-isolated-3003/types/**/*.ts",
+    ".next-isolated-3004/types/**/*.ts",
+    ".next-isolated-3005/types/**/*.ts",
+    ".next-isolated-3008/types/**/*.ts",
+    ".next-isolated-3012/types/**/*.ts",
+    ".next-isolated-3021/types/**/*.ts",
+    ".next-isolated-3022/types/**/*.ts",
+    ".next-isolated-3031/types/**/*.ts",
+    ".next-isolated-3040/types/**/*.ts",
+    ".next-isolated/types/**/*.ts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

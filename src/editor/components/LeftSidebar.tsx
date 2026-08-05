@@ -2,14 +2,14 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import * as TooltipPrimitive from '@radix-ui/react-tooltip'
-import { Check, ChevronRight, Plus, Sparkles, CircleHelp, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Folder, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
 import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
+import { listCompositionInstruments } from '../core/directors'
 import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -34,14 +34,23 @@ export interface InstrumentItem {
 const withKind = (kind: LibraryKind, items: Omit<InstrumentItem, 'kind'>[]): InstrumentItem[] =>
   items.map((i) => ({ ...i, kind }))
 
-// The essentials most projects reach for first - surfaced above the object list.
-// They are ordinary object instruments; only the grouping differs.
-const MAIN_INSTRUMENTS = withKind('object', [
+// Scene-wide instruments: the camera, full-frame media, and whole-scene
+// effects. Ordinary object instruments - only the grouping differs. The
+// folders below claim them by id (Camera → Impact, Video → Utility, ...).
+const SCENE_INSTRUMENTS = withKind('object', [
   { id: 'cameraControl', name: 'Camera', description: 'Drives the scene camera - each note punches a dolly-in and a shake.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <rect x="1" y="3.5" width="7.5" height="5.5" rx="1" fill="none" stroke="#818cf8" strokeWidth="1" />
       <path d="M8.5 5.3 L11 4 V8.5 L8.5 7.2 Z" fill="none" stroke="#818cf8" strokeWidth="1" strokeLinejoin="round" />
       <circle cx="4.5" cy="6.25" r="1.4" fill="none" stroke="#818cf8" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'cameraOrbit', name: 'Camera Orbit', description: 'Circles the camera around a point it never stops looking at - hold a note to swing, tilt, or come home.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <ellipse cx="6" cy="7" rx="4.6" ry="2.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <circle cx="6" cy="7" r="1.1" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <rect x="8.2" y="1.6" width="3.2" height="2.6" rx="0.7" fill="none" stroke="#818cf8" strokeWidth="1" />
+      <path d="M8.2 3 L7 5.9" fill="none" stroke="#818cf8" strokeWidth="0.9" strokeDasharray="1.4 1.1" />
     </svg>
   )},
   { id: 'video', name: 'Video', description: 'Plays your uploaded video clips full-frame - each note cuts to a clip.', icon: (
@@ -67,6 +76,19 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <path d="M0.5 6 H2.2 L3.2 2.5 L4.7 9.5 L6.2 4 L7.5 7.5 L8.7 5 H11.5" fill="none" stroke="#22d3ee" strokeWidth="1.1" strokeLinejoin="round" />
     </svg>
   )},
+  { id: 'bassRipple', name: 'Bass Ripple', description: 'Warps the whole scene through a drifting noise field while its MIDI note is held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M0.5 3.5 Q3 1.5 6 3.5 T11.5 3.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
+      <path d="M0.5 6 Q3 4 6 6 T11.5 6" fill="none" stroke="#a78bfa" strokeWidth="1" />
+      <path d="M0.5 8.5 Q3 6.5 6 8.5 T11.5 8.5" fill="none" stroke="#a78bfa" strokeWidth="1" />
+    </svg>
+  )},
+  { id: 'impactWarp', name: 'Impact Warp', description: 'Punches the whole scene on every MIDI hit — zoom slam, shockwave, sideways shove or torn slabs — then lets it recover.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="4" y="4" width="4" height="4" rx="0.5" fill="none" stroke="#ff6a00" strokeWidth="1.1" />
+      <path d="M3.1 3.1 L0.8 0.8M8.9 3.1 L11.2 0.8M3.1 8.9 L0.8 11.2M8.9 8.9 L11.2 11.2" fill="none" stroke="#ff6a00" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  )},
   { id: 'colorFilters', name: 'Color Filters', description: 'Applies scene-wide color remaps while its labeled MIDI notes are held.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="4.2" cy="4.5" r="3" fill="none" stroke="#22d3ee" strokeWidth="1" />
@@ -74,18 +96,57 @@ const MAIN_INSTRUMENTS = withKind('object', [
       <circle cx="6" cy="7.7" r="3" fill="none" stroke="#facc15" strokeWidth="1" />
     </svg>
   )},
+  { id: 'strobe', name: 'Strobe', description: 'Flashes the whole scene on the beat grid — inverted, black or white — at the rate of whichever labeled MIDI row is held.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M6.6 0.6 L2.6 6.4 H5.3 L4.6 11.4 L9.1 5.1 H6.2 Z" fill="#ffffff" />
+    </svg>
+  )},
 ])
 
-const DIRECTOR_INSTRUMENTS = withKind('director', [
-  { id: 'sceneSwitcher', name: 'Scene Switcher', description: 'Shows the most recently started scene row only while its MIDI note remains held.', icon: <Sparkles size={12} className="text-indigo-400" /> },
-  { id: 'cut', name: 'Cut', description: 'Partitions the frame between held scene rows, with straight or diagonal cuts.', icon: <Sparkles size={12} className="text-fuchsia-400" /> },
-  { id: 'radialCut', name: 'Radial Cut', description: 'Partitions held scene rows into concentric rings from the center outward.', icon: <Sparkles size={12} className="text-cyan-400" /> },
-])
+const DIRECTOR_DESCRIPTIONS: Record<string, string> = {
+  sceneSwitcher: 'Shows the most recently started scene row only while its MIDI note remains held.',
+  cut: 'Partitions the frame between held scene rows, with straight or diagonal cuts.',
+  radialCut: 'Partitions held scene rows into concentric rings from the center outward.',
+  crop: 'Masks one scene into evenly spaced slices at any angle. Each held row shows its slice; the rest stays transparent.',
+}
+
+const DIRECTOR_ICON_COLORS: Record<string, string> = {
+  sceneSwitcher: 'text-indigo-400',
+  cut: 'text-fuchsia-400',
+  radialCut: 'text-cyan-400',
+  crop: 'text-amber-400',
+}
+
+// Derived from the director registry, the same way MOVER_INSTRUMENTS below is
+// derived from the mover registry - so registering a director is all it takes
+// to make it reachable. (This list used to be hand-maintained, which meant a
+// registered director simply never appeared in the menu.)
+const DIRECTOR_INSTRUMENTS = withKind('director', listCompositionInstruments().map((d) => ({
+  id: d.id,
+  name: d.name,
+  description: DIRECTOR_DESCRIPTIONS[d.id] ?? `Renders scene sources into Main with the ${d.name} layout.`,
+  icon: <Sparkles size={12} className={DIRECTOR_ICON_COLORS[d.id] ?? 'text-indigo-400'} />,
+})))
+
+// Cut and Radial Cut are soft-deprecated: still fully working, but parked in a
+// collapsed Extras folder below the curated list (Crop's angled slicing covers
+// most of what they did). Same demote-don't-delete move as EXTRA_INSTRUMENTS.
+const DIRECTOR_EXTRA_IDS = new Set(['cut', 'radialCut'])
+const DIRECTOR_CORE = DIRECTOR_INSTRUMENTS.filter((d) => !DIRECTOR_EXTRA_IDS.has(d.id))
+const DIRECTOR_EXTRAS = DIRECTOR_INSTRUMENTS.filter((d) => DIRECTOR_EXTRA_IDS.has(d.id))
 
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
   { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'kaleidoSolid', name: 'Kaleido Solid', description: 'A solid whose surface is a live kaleidoscope - shapes grow, drift and recolour, and every note twists the barrel.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6" r="5" fill="#0f766e" fillOpacity="0.35" stroke="#5eead4" strokeWidth="0.7" />
+      <path d="M6 6 L6 1 A5 5 0 0 1 10.3 3.5 Z" fill="#fbbf24" fillOpacity="0.9" />
+      <path d="M6 6 L10.3 8.5 A5 5 0 0 1 6 11 Z" fill="#f472b6" fillOpacity="0.9" />
+      <path d="M6 6 L1.7 3.5 A5 5 0 0 1 6 1 Z" fill="#a78bfa" fillOpacity="0.75" />
+    </svg>
+  )},
   { id: 'laserSphere', name: 'Laser Sphere', description: 'A white-hot neon orb with HDR bloom and colored scene light.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6" r="4.5" fill="#22d3ee" fillOpacity="0.18" stroke="#67e8f9" strokeWidth="0.8" />
@@ -117,6 +178,29 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
         <circle cx="6" cy="6" r="1.4" /><circle cx="6" cy="1.5" r="0.8" /><circle cx="6" cy="10.5" r="0.8" /><circle cx="1.5" cy="6" r="0.8" /><circle cx="10.5" cy="6" r="0.8" />
         <circle cx="2.8" cy="2.8" r="0.7" /><circle cx="9.2" cy="2.8" r="0.7" /><circle cx="2.8" cy="9.2" r="0.7" /><circle cx="9.2" cy="9.2" r="0.7" />
       </g>
+    </svg>
+  )},
+  { id: 'flashWall', name: 'Flash Wall', description: 'A screen-filling wall of light - each note flashes its own slice of the frame through an ADSR envelope.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="0.5" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.25" />
+      <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
+      <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
+      <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
+    </svg>
+  )},
+  { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path d="M3.2 1 H6.2 L4.4 11 H1.4 Z" fill="#fbbf24" fillOpacity="0.9" />
+      <path d="M7.4 1 H10.4 L8.6 11 H5.6 Z" fill="#fbbf24" fillOpacity="0.35" />
+    </svg>
+  )},
+  { id: 'waterDrop', name: 'Water Drop', description: 'Each note drops ink into water - pitch picks the height it spreads at.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="6" cy="6.5" r="2.4" fill="#2f8fff" fillOpacity="0.85" />
+      <circle cx="2.4" cy="4.4" r="1.1" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9.4" cy="8.4" r="1.2" fill="#2f8fff" fillOpacity="0.5" />
+      <circle cx="9" cy="3.2" r="0.8" fill="#bff3ff" fillOpacity="0.8" />
+      <circle cx="3.2" cy="9.4" r="0.7" fill="#bff3ff" fillOpacity="0.7" />
     </svg>
   )},
   { id: 'fractalTunnel', name: 'Fractal Tunnel', description: 'A fractal-flower tunnel - notes shift its hue and fire pulse rings.', icon: (
@@ -238,21 +322,52 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
-const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => !CORE_OBJECT_IDS.has(i.id))
+
+// The Instruments folder. These are object instruments like any other; what
+// they share is that a note is a PERFORMANCE on them - each one spawns its own
+// short-lived event rather than posing a standing shape - so they belong
+// together rather than scattered through Objects and Extras.
+const INSTRUMENT_FOLDER_IDS = new Set(['waterDrop', 'flashWall'])
+const INSTRUMENT_FOLDER_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => INSTRUMENT_FOLDER_IDS.has(i.id))
+
+// The in-scene Crop masks the whole scene while its rows are held - the
+// sustained shape Rumble collects - but it is an object instrument outside the
+// core pool, so the folder claims it directly (pick() cannot reach it).
+const CROP_OBJECT_IDS = new Set(['crop'])
+const CROP_OBJECT_ITEMS = ALL_OBJECT_INSTRUMENTS.filter((i) => CROP_OBJECT_IDS.has(i.id))
+
+// Extras is the remainder: everything the curated folders above did not claim.
+const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
+  (i) => !CORE_OBJECT_IDS.has(i.id) && !INSTRUMENT_FOLDER_IDS.has(i.id) && !CROP_OBJECT_IDS.has(i.id),
+)
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
+  mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
-  burst: 'Steps its object a burst in a cardinal direction per note - steps accumulate, velocity scales distance.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
-  radialMotion: 'Builds three color-adjustable layers with two nested MIDI radius-and-spin stages on any shape.',
+  radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
+  impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
+  symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
+  approach: 'Streams copies at the camera, each born far away at nothing and swelling as it arrives - an endless flight into the object.',
 }
 
-const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
-  .filter((d) => d.kind === 'mover')
+// Retired outright by the 2026-08 mover consolidation: the unified Mover's
+// (translate | rotate | orbit) x (burst | constant | oscillate) matrix IS
+// these six, and persistence UPGRADES[12] rewrites old saves onto it, so the
+// ids are gone from the registry too. Kept as a guard in case one is ever
+// re-registered for a transition period.
+const MOVER_REMOVED_IDS = new Set([
+  'burst', 'rotateBurst', 'orbitBurst',
+  'constantRotate', 'constantOrbit', 'translationOscillator',
+])
+
+const ALL_MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
+  .filter((d) => d.kind === 'mover' && !MOVER_REMOVED_IDS.has(d.id))
   .map((d) => ({
   id: d.id,
   name: d.label,
@@ -265,6 +380,8 @@ const MOVER_INSTRUMENTS = withKind('mover', listMoverOrSplitterDefinitions()
     </svg>
   ),
 })))
+
+const MOVER_INSTRUMENTS = ALL_MOVER_INSTRUMENTS
 
 const SPLITTER_INSTRUMENTS = withKind('splitter', listMoverOrSplitterDefinitions()
   .filter((d) => d.kind === 'splitter')
@@ -288,7 +405,7 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
     id: d.id,
     name: d.label,
     description: d.id === 'calmHueRotate'
-      ? 'Turns hue calmly with signed MIDI, optionally spreading the amount across splitter-copy indices.'
+      ? 'Every note flashes its objects toward a color you pick - velocity sets how hard, an attack/release envelope shapes the hit, and Stagger rolls it across split copies.'
       : `Changes its object's color with the ${d.label} colorizer.`,
     icon: (
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" strokeWidth="1.2" strokeLinecap="round">
@@ -304,99 +421,203 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
 // to know what can be clipped - the picker arrays above stay the single source
 // of what exists in the library.
 export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
-  ...MAIN_INSTRUMENTS,
+  ...SCENE_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
   ...ALL_OBJECT_INSTRUMENTS,
+  ...ALL_MOVER_INSTRUMENTS,
+  ...COLORIZER_INSTRUMENTS,
+  ...SPLITTER_INSTRUMENTS,
+]
+
+/** A library folder: a row you click into, holding items and/or subfolders. */
+interface LibraryFolder {
+  id: string
+  title: string
+  /** One tooltip sentence: what belongs in this folder. */
+  description: string
+  items: InstrumentItem[]
+  subfolders?: LibraryFolder[]
+}
+
+// ——— Folder assignments ———
+// Items are defined once in the arrays above; the folders claim them here by
+// id. Anything no folder claims falls through to Unsorted, so a newly added
+// instrument is never invisible - it just waits there until it's given a home.
+// (Modulators are retired from the library - movers replace them; their code
+// stays until existing projects are migrated off ports.)
+
+const SCENE_ITEM_POOL: InstrumentItem[] = [
+  ...SCENE_INSTRUMENTS,
+  ...OBJECT_INSTRUMENTS,
   ...MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
 ]
 
-function Section({ title, description, items, onItemPointerDown, onItemDoubleClick, defaultOpen = true }: { title: string; description: string; items: InstrumentItem[]; onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void; onItemDoubleClick: (item: InstrumentItem) => void; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen)
+const pick = (ids: readonly string[]): InstrumentItem[] =>
+  ids.flatMap((id) => SCENE_ITEM_POOL.filter((i) => i.id === id))
+
+// Impact is notes hitting the scene itself, split by envelope: Impulse
+// strikes once per note and decays; Rumble warps for as long as it's held.
+// Visibility rides with Impulse - its ADSR window is exactly that shape.
+const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldPush', 'impactScatter', 'impactPulse', 'visibility']
+// Both of the odd ones here file by ENVELOPE, which is what the Impact split is
+// for. Strobe sits in Rumble rather than Color because it is scene-wide and
+// sustained - it keeps flashing for exactly as long as the note is held. Camera
+// Orbit sits here rather than beside Camera in Impulse for the same reason:
+// holding a row to swing the rig is the held shape, not a strike that decays.
+const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
+const UTILITY_IDS = ['video', 'photo', 'textDisplay']
+const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
+
+const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
+// Everything else that moves lives under Motion - the compound movers at its
+// top level, the single-behavior ones in its Extras subfolder.
+const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
+
+const CLAIMED_IDS = new Set([
+  ...IMPACT_IDS,
+  ...UTILITY_IDS,
+  ...COLOR_IDS,
+  ...OBJECT_INSTRUMENTS.map((i) => i.id),
+  ...INSTRUMENT_FOLDER_IDS,
+  ...MOTION_ITEMS.map((i) => i.id),
+  ...SPLITTER_INSTRUMENTS.map((i) => i.id),
+])
+const UNSORTED_ITEMS = SCENE_ITEM_POOL.filter((i) => !CLAIMED_IDS.has(i.id))
+
+// The scene library's root, in shelf order. Extras folders keep holding
+// exactly what they held before the folder pass - demoted, never deleted -
+// but they now sit INSIDE the folder they belong to rather than at the root.
+const SCENE_FOLDERS: LibraryFolder[] = [
+  {
+    id: 'impact',
+    title: 'Impact',
+    description: 'Notes hitting the scene itself - camera punches, shockwaves, and sustained rumble.',
+    items: [],
+    subfolders: [
+      { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
+      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
+    ],
+  },
+  { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
+  {
+    id: 'motion',
+    title: 'Motion',
+    description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
+    items: MOTION_ITEMS,
+  },
+  { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
+  { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
+  { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
+  { id: 'utility', title: 'Utility', description: 'Full-frame media and text - video clips, photos, and word display.', items: pick(UTILITY_IDS) },
+  { id: 'unsorted', title: 'Unsorted', description: 'Not yet filed into a folder above - fully working, just awaiting a home.', items: UNSORTED_ITEMS },
+  { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
+]
+
+// The Main scene's library: the curated directors ARE the root view (no
+// folder to click through first), with the soft-deprecated ones one level in.
+const MAIN_ROOT_ITEMS = DIRECTOR_CORE
+const MAIN_FOLDERS: LibraryFolder[] = [
+  { id: 'director-extras', title: 'Extras', description: "Older directors, still fully working - Crop's angled slicing covers most of what Cut and Radial Cut did.", items: DIRECTOR_EXTRAS },
+]
+
+interface ItemHandlers {
+  onItemPointerDown: (e: ReactPointerEvent, item: InstrumentItem) => void
+  onItemDoubleClick: (item: InstrumentItem) => void
+}
+
+function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: InstrumentItem[] } & ItemHandlers) {
+  return (
+    <div className="grid grid-cols-1 gap-2 px-2">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          data-instrument-id={item.id}
+          onPointerDown={(e) => onItemPointerDown(e, item)}
+          onDoubleClick={() => onItemDoubleClick(item)}
+          title={item.description}
+          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
+        >
+          <div className="relative aspect-video">
+            {canPreview(item)
+              ? <InstrumentCardPreview item={item} />
+              : (
+                <span className="absolute inset-0 flex items-center justify-center [&_svg]:h-8 [&_svg]:w-8">
+                  {item.icon}
+                </span>
+              )}
+            <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+              <span
+                className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
+                style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
+              >
+                {item.name}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Logic-style drill-down browser. Every folder is a plain row you click
+ *  into; a sticky back row returns one level; instrument cards appear only at
+ *  the level that holds them. `rootItems` lets a view keep items at the very
+ *  top level (the Main scene's directors) without a folder to click through. */
+function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubleClick }: { folders: LibraryFolder[]; rootItems?: InstrumentItem[] } & ItemHandlers) {
+  // The trail of entered folders, root-first. The folder trees are module
+  // constants, so a held reference can never go stale.
+  const [path, setPath] = useState<LibraryFolder[]>([])
+  const current = path[path.length - 1]
+  const folderRows = (current ? current.subfolders ?? [] : folders)
+    // An empty folder is a dead-end click - hide it until it has contents.
+    .filter((f) => f.items.length > 0 || (f.subfolders?.length ?? 0) > 0)
+  const items = current ? current.items : rootItems
 
   return (
-    <div className="@container">
-      <div className="flex items-center gap-1 px-3 pt-3 pb-1 select-none">
-        {/* Caps section row - clicking the label still collapses/expands the list. */}
-        <button
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          className="flex items-center text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] transition-colors cursor-pointer hover:text-[var(--text-2)]"
-        >
-          {title}
-        </button>
-        <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={100}>
-          <TooltipPrimitive.Root>
-            <TooltipPrimitive.Trigger asChild>
-              <button
-                type="button"
-                className="flex size-3.5 flex-shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--border-strong)] transition-colors hover:text-[var(--text-2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] data-[state=delayed-open]:text-[var(--text-2)] data-[state=instant-open]:text-[var(--text-2)]"
-                aria-label={`About ${title}`}
-              >
-                <CircleHelp size={11} aria-hidden="true" />
-              </button>
-            </TooltipPrimitive.Trigger>
-            <TooltipPrimitive.Portal>
-              <TooltipPrimitive.Content
-                side="right"
-                align="start"
-                sideOffset={8}
-                collisionPadding={8}
-                avoidCollisions
-                sticky="always"
-                className="z-[100] max-h-[calc(100vh-1rem)] w-52 max-w-[calc(100vw-1rem)] overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-[var(--text-2)] shadow-lg shadow-black/50"
-              >
-                {description}
-              </TooltipPrimitive.Content>
-            </TooltipPrimitive.Portal>
-          </TooltipPrimitive.Root>
-        </TooltipPrimitive.Provider>
+    <div>
+      {/* The location row is always present so entering a folder swaps its
+          label instead of inserting a row above the list (which made the whole
+          menu jump down). Same size and metrics as the folder rows - depth
+          reads from the ‹ chevron and position, not from bolder type. */}
+      {current ? (
         <button
           type="button"
-          onClick={() => setOpen(!open)}
-          aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-          aria-expanded={open}
-          className="ml-auto flex size-4 flex-shrink-0 cursor-pointer items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--text-2)]"
+          onClick={() => setPath(path.slice(0, -1))}
+          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
+          className="sticky top-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 text-xs text-[var(--text)] transition-colors hover:bg-[var(--bg-elevated)]"
         >
-          <ChevronRight
-            size={10}
-            className={`transition-transform ${open ? 'rotate-90' : ''}`}
-          />
+          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          <span className="min-w-0 truncate">{current.title}</span>
         </button>
-      </div>
-      {open && (
-        <div className="grid grid-cols-1 gap-2 px-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              data-instrument-id={item.id}
-              onPointerDown={(e) => onItemPointerDown(e, item)}
-              onDoubleClick={() => onItemDoubleClick(item)}
-              title={item.description}
-              className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
-            >
-              <div className="relative aspect-video">
-                {canPreview(item)
-                  ? <InstrumentCardPreview item={item} />
-                  : (
-                    <span className="absolute inset-0 flex items-center justify-center [&_svg]:h-8 [&_svg]:w-8">
-                      {item.icon}
-                    </span>
-                  )}
-                <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/90 via-black/35 to-black/5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                  <span
-                    className="min-w-0 truncate px-2 pb-1.5 text-xs font-medium text-white"
-                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.75)' }}
-                  >
-                    {item.name}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
+      ) : (
+        <div className="sticky top-0 z-20 flex h-[30px] select-none items-center bg-[var(--bg-shell)] px-3 text-xs text-[var(--text-muted)]">
+          Library
         </div>
       )}
+      {items.length > 0 && (
+        <div className="mt-1">
+          <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
+        </div>
+      )}
+      {/* Folder rows sit BELOW any cards: the only level that mixes them is
+          the Main root, where the deprecated Extras must not lead. */}
+      <div className={items.length > 0 ? 'mt-2' : ''}>
+        {folderRows.map((folder) => (
+          <div
+            key={folder.id}
+            onClick={() => setPath([...path, folder])}
+            title={folder.description}
+            className="flex h-[30px] cursor-default select-none items-center gap-2.5 px-3 transition-colors hover:bg-[var(--bg-elevated)]"
+          >
+            <Folder size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+            <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{folder.title}</span>
+            <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -589,13 +810,14 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
-  const setTrackDirector = useProjectStore((s) => s.setTrackDirector)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
-    if (item.kind === 'director') setTrackDirector(selectedTrackId, item.id, item.name)
-    else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
+    // Composition instruments (the 'director' library kind) go through the
+    // same conversion as any instrument - setTrackInstrument seeds their
+    // scene bindings when the Main scene is active.
+    if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 
@@ -610,8 +832,10 @@ export function LeftSidebar() {
           exhaustion when several two-column sections are visible. */}
       {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
-          narrow, and icon + label once there's room for the text. */}
-      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2 py-1.5">
+          narrow, and icon + label once there's room for the text. The 320px
+          threshold is the width where all three labels fit inside the pills'
+          px-2 padding without truncating - below it, labels would ellipsize. */}
+      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
           { id: 'loops', label: 'Loops', Icon: Repeat },
@@ -621,34 +845,30 @@ export function LeftSidebar() {
             key={id}
             onClick={() => setTab(id)}
             title={label}
-            className={`flex-1 h-6 flex items-center justify-center gap-1.5 rounded-full text-[11px] transition-colors cursor-pointer ${
+            className={`flex-1 min-w-0 h-6 flex items-center justify-center gap-1.5 rounded-full px-2 text-[11px] transition-colors cursor-pointer ${
               tab === id
                 ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
                 : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
             }`}
           >
             <Icon size={13} className="flex-shrink-0" />
-            <span className="hidden @[224px]:inline truncate">{label}</span>
+            <span className="hidden @[320px]:inline truncate">{label}</span>
           </button>
         ))}
       </div>
 
       <div className="timeline-scrollbar relative z-10 flex-1 overflow-y-auto pb-4">
         {tab === 'instruments' && (
-          <>
-            {activeIsMain ? (
-              <Section title="Directors" description="Director instruments render and composite one or more visual scenes into Main." items={DIRECTOR_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            ) : <>
-            <Section title="Main" description="Scene-wide essentials: Camera, Video, Photo, Text, Oscilloscope, and MIDI-driven Color Filters." items={MAIN_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Objects" description="Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres." items={OBJECT_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            {/* Modulators are retired from the library (movers replace them);
-                the code stays until existing projects are migrated off ports. */}
-            <Section title="Movers" description="Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes." items={MOVER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Colorizers" description="Colorizers change objects' material colors in ordered mover/splitter chains, driven by their own MIDI rows." items={COLORIZER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Splitters" description="Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes." items={SPLITTER_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} />
-            <Section title="Extras" description="The back catalog: older object instruments, all still fully working - just outside the curated core list above." items={EXTRA_INSTRUMENTS} onItemPointerDown={startLibraryDrag} onItemDoubleClick={onItemDoubleClick} defaultOpen={false} />
-            </>}
-          </>
+          // Keyed: the scene/Main views are different folder trees rendered in
+          // the same slot - remount so a drill-down path into one never
+          // carries over into the other.
+          <FolderBrowser
+            key={activeIsMain ? 'main' : 'scene'}
+            folders={activeIsMain ? MAIN_FOLDERS : SCENE_FOLDERS}
+            rootItems={activeIsMain ? MAIN_ROOT_ITEMS : undefined}
+            onItemPointerDown={startLibraryDrag}
+            onItemDoubleClick={onItemDoubleClick}
+          />
         )}
         {tab === 'loops' && (
           <div className="pt-1">

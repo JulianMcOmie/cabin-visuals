@@ -1,9 +1,10 @@
 import { useUIStore } from '../../store/UIStore'
 import { loopLengthBeats, tileLoopNotes } from '../../core/visual/noteFlatten'
 import { LOOP_CURSOR } from '../../utils/dragCursor'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { midiBlockPalette, type MidiBlockPalette } from '../../utils/colors'
 import { notePreviewPitchPositions } from '../../core/visual/notePreviewLayout'
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Block as BlockType } from '../../types'
 import { registerMidiActivityBlock } from './midiActivityRegistry'
 
@@ -23,34 +24,29 @@ interface BlockProps {
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
 }
 
-export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
-  const editingBlock = useUIStore((s) => s.editingBlock)
+/** Memoized: during a drag every pointermove rewrites the store, and only the
+ *  dragged block's identity changes - every other block must skip. Depends on
+ *  Track keeping `previewRowPitches` and the handlers referentially stable. */
+export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelected, muted, previewRowPitches, strictPreviewRows, onBlockPointerDown }: BlockProps) {
+  const isEditing = useUIStore((s) => s.editingBlock?.blockId === block.id)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  const rowHeight = useUIStore((s) => s.tracksRowHeight)
-  const isEditing = editingBlock?.blockId === block.id
   const blockRef = useRef<HTMLDivElement>(null)
 
   const left = block.startBar * barWidthPx
   const width = block.durationBars * barWidthPx
   const renderedWidth = Math.max(width, 4)
-  const renderedHeight = Math.max(rowHeight, 1)
   const totalBeatsInBlock = block.durationBars * beatsPerBar
   const loopBeats = block.loop ? loopLengthBeats(block, beatsPerBar) : null
   const hasLoopSections = loopBeats != null && loopBeats > 0 && loopBeats < totalBeatsInBlock
-  const palette = midiBlockPalette(color)
+  // Stable object: NotePreview is memoized and takes the palette as a prop.
+  const palette = useMemo(() => midiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  // A looped block's surface is the UNION of its touching rounded sections, so
-  // its perimeter has a small notch (divot) at every loop boundary. A box-shadow
-  // ring can't express that - it traces the bounding RECTANGLE and paves the
-  // divots over. drop-shadow is built from the rendered alpha instead, so four
-  // 1px offsets lay a ring that hugs the real silhouette, divots included. The
-  // sections meet flush, so nothing is drawn along their shared edge (which is
-  // why the ring can't live on the sections themselves - see NotePreview).
-  const silhouetteRing = (ringColor: string) =>
-    `drop-shadow(1px 0 0 ${ringColor}) drop-shadow(-1px 0 0 ${ringColor})` +
-    ` drop-shadow(0 1px 0 ${ringColor}) drop-shadow(0 -1px 0 ${ringColor})`
   const activityFilter = 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))'
+  // Resting: the neon-signage pane - an inset hue hairline plus a near-black
+  // separation ring against the lane. Selected: the supernova - the body IS
+  // the light, so the only "edge" is the burning rim inside its bloom stack.
+  const restingShadow = `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`
 
   useEffect(() => {
     const element = blockRef.current
@@ -68,28 +64,16 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
-        // No borders: instead each block casts a super-thin, almost-black ring
-        // shadow - significant in darkness, hairline in geometry - so it reads
-        // as a border/margin against the lane and neighbouring blocks. The ring
-        // lives on THIS outer element for looped blocks too, so a looped block
-        // has ONE perimeter border; per-section rings would double up where two
-        // sections touch and read as a hard dividing line (the loop boundary is
-        // shown by the sections' corner notch instead).
-        backgroundColor: hasLoopSections ? 'transparent' : active ? palette.selectedFill : palette.fill,
-        // Square-cornered blocks keep the cheaper box-shadow ring; only looped
-        // blocks pay for the silhouette filter, and only they need it.
-        boxShadow: hasLoopSections
-          ? undefined
-          : active
-            ? `0 0 0 1px ${palette.selectedOutline}, 0 0 0 2px rgba(0,0,0,0.6), 0 3px 10px rgba(0,0,0,0.24)`
-            : '0 0 0 1px rgba(0,0,0,0.6)',
-        filter: hasLoopSections
-          // Selected: the accent ring first, then a black ring laid around the
-          // result - the same colour order the box-shadow version stacks in.
-          ? active
-            ? `${activityFilter} ${silhouetteRing(palette.selectedOutline)} ${silhouetteRing('rgba(0,0,0,0.6)')}`
-            : `${activityFilter} ${silhouetteRing('rgba(0,0,0,0.6)')}`
-          : activityFilter,
+        // No borders in either state. A looped block keeps its fill on the
+        // flush rounded sections (their touching corners form the loop-divot
+        // notches) while the shadow work - resting hairlines or the selected
+        // bloom - lives on THIS outer element, one perimeter for the whole
+        // block. The bloom is pure light, so it needs no silhouette hugging;
+        // the resting inset hairline sits under the sections and survives only
+        // at the notches, which reads as intended.
+        background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
+        boxShadow: active ? palette.selectedBloom : restingShadow,
+        filter: activityFilter,
         willChange: 'filter',
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
@@ -98,7 +82,9 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
         // relative to whatever child is under the pointer (e.g. a note sliver).
         const rect = e.currentTarget.getBoundingClientRect()
         const w = rect.width
-        const edge = Math.min(8, w / 4)
+        // Same zone the gesture uses (useTrackGestures) - shared so the cursor
+        // can't advertise a handle the pointerdown wouldn't honour.
+        const edge = edgeHitPx(w, BLOCK_EDGE_HIT)
         const localX = e.clientX - rect.left
         const onRightEdge = localX > w - edge
         const onLeftEdge = localX < edge
@@ -149,7 +135,7 @@ export function Block({ block, trackId, barWidthPx, beatsPerBar, color, isSelect
       />
     </div>
   )
-}
+})
 
 // Preview divs per looped block stay bounded; a tiny pattern in a huge block
 // caps out instead of flooding the DOM.
@@ -166,7 +152,10 @@ interface LoopSection {
  *  tiles the pattern (repeats dimmed) across touching rounded sections. Those
  *  sections are the block surface itself, rather than decorations inside one
  *  large outer pill, so their touching corners form the familiar DAW divots. */
-function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
+/** Memoized separately from Block: a plain block MOVE keeps `notes` (and every
+ *  other prop) referentially identical, so the potentially hundreds of preview
+ *  divs skip reconciliation entirely while the block repositions. */
+const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitches, strictRows }: { notes: BlockType['notes']; totalBeats: number; loopBeats: number | null; palette: MidiBlockPalette; selected?: boolean; rowPitches?: number[]; strictRows?: boolean }) {
   if (totalBeats <= 0) return null
   // Loop boundaries describe the block's repeated pattern even when that
   // pattern is currently empty, so note previews and divisions stay separate.
@@ -200,11 +189,13 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
               width: `max(${widthPct}%, 1px)`,
               top: 0,
               bottom: 0,
-              backgroundColor: selected ? palette.selectedFill : palette.fill,
-              // No per-section ring: the perimeter border lives on the outer
+              background: selected ? palette.selectedBody : palette.fill,
+              // No per-section ring: the perimeter shadows live on the outer
               // block, so touching sections merge into one fill and the loop
               // boundary reads only from the small corner notch their rounding
-              // leaves - never a hard dark dividing line.
+              // leaves - never a hard dark dividing line. Each selected section
+              // gets its own star-anatomy gradient (per-section cores), which
+              // makes the loop repeats read as a chain of small suns.
             }}
           >
             <div
@@ -215,7 +206,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
                 opacity: 'var(--midi-activity-opacity, 0)',
                 boxShadow: `inset 0 0 16px ${palette.outline}`,
                 mixBlendMode: 'screen',
-                willChange: 'opacity',
               }}
             />
           </div>
@@ -229,6 +219,17 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
         // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
         // follow their declared row order; plain piano rolls keep high pitch up.
         const topPct = 8 + pitchPosition * 80
+        // Resting: lit tubing with a glow. Selected: the notes flip DARK -
+        // outshone by the ignited body - and the body's light wraps around
+        // each first-pass mark (repeats stay unwrapped so they read dimmer).
+        const noteFill = selected
+          ? (repeat > 0 ? palette.selectedRepeatedNote : palette.selectedNote)
+          : (repeat > 0 ? palette.repeatedNote : palette.note)
+        const noteHalo = repeat > 0
+          ? undefined
+          : selected
+            ? `0 0 4px ${palette.selectedNoteWrap}`
+            : `0 0 6px ${palette.noteGlow}`
         return (
           <div
             key={`${note.id}:${repeat}`}
@@ -239,9 +240,13 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
               width: `max(${widthPct}%, 3px)`,
               top: `${topPct}%`,
               height: 2,
-              backgroundColor: repeat > 0 ? palette.repeatedNote : palette.note,
+              backgroundColor: noteFill,
+              boxShadow: noteHalo,
+              // No will-change here (or on the spans below): these hint-promoted
+              // compositor layers numbered in the tens of thousands on a large
+              // project. A 2px dash repaints trivially when its activity var
+              // moves; the block-level layers above are hint enough.
               filter: 'brightness(calc(1 + var(--midi-note-activity, 0) * 2.6)) saturate(1.25)',
-              willChange: 'filter',
             }}
           >
             <span
@@ -251,7 +256,6 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
                 backgroundColor: palette.selectedOutline,
                 opacity: 'var(--midi-note-activity, 0)',
                 boxShadow: `0 0 6px ${palette.outline}`,
-                willChange: 'opacity',
               }}
             />
           </div>
@@ -259,4 +263,4 @@ function NotePreview({ notes, totalBeats, loopBeats, palette, selected, rowPitch
       })}
     </>
   )
-}
+})

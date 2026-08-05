@@ -6,6 +6,7 @@ export const rotatePlugin: VisualEffect = {
   id: 'rotate',
   name: 'Rotate',
   category: 'transform',
+  deprecated: true,
   params: [
     { key: 'speedX', label: 'Spin X', min: -5, max: 5, step: 0.1, default: 0 },
     { key: 'speedY', label: 'Spin Y', min: -5, max: 5, step: 0.1, default: 0 },

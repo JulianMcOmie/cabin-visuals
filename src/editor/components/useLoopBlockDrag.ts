@@ -8,6 +8,7 @@ import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
+import { audioPickupBars } from '../utils/audioPickup'
 import type { Block, Track } from '../types'
 import type { LoopPattern } from './loops'
 
@@ -77,7 +78,9 @@ export function useLoopBlockDrag() {
       const row = rows[index]
       const track = row ? tracks[row.id] : undefined
       if (!track || track.type === 'audio') return null
+      // Content x=0 is the start of the PICKUP, not musical beat 0 - shift out.
       const beat = (x - laneLeft + sc.scrollLeft) / ui.tracksPixelsPerBeat
+        - audioPickupBars(tracks) * beatsPerBar
       const bar = Math.max(0, Math.min(totalBars - 1, Math.floor(beat / beatsPerBar)))
       return { track, bar }
     }

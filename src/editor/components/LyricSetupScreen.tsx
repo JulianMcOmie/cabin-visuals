@@ -9,6 +9,7 @@ import { ProfileMenu } from '../../components/ProfileMenu'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { loadAudioTrack } from '../utils/loadAudioTrack'
+import { dragCarriesFiles, isAudioFile } from '../core/mediaFileKinds'
 import { placeTranscription, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { applyLyricStyles } from '../utils/multiStyleApply'
 import { firstAudioBlock, transcribeActiveSong } from '../utils/transcribeSong'
@@ -269,13 +270,16 @@ export function LyricSetupScreen({
   // absorbs enter/leave noise from crossing child boundaries.
   const [dragActive, setDragActive] = useState(false)
   const dragDepthRef = useRef(0)
-  const isFileDrag = (e: ReactDragEvent) => Array.from(e.dataTransfer.types).includes('Files')
+  const isFileDrag = (e: ReactDragEvent) => dragCarriesFiles(e.dataTransfer)
 
   const onDrop = (e: ReactDragEvent) => {
     e.preventDefault()
     dragDepthRef.current = 0
     setDragActive(false)
-    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('audio/'))
+    // isAudioFile, not `type.startsWith('audio/')`: Safari reports an empty
+    // File.type for extensions macOS has no MIME mapping for, so a real song
+    // would land here and be ignored.
+    const file = Array.from(e.dataTransfer.files).find(isAudioFile)
     if (file) addSong(file)
   }
 

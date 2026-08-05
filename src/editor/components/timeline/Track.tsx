@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, Move3d, Tag } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useTimeStore } from '../../store/TimeStore'
@@ -8,7 +8,8 @@ import { AudioBlock } from './AudioBlock'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { RowGuide } from './trackTree'
-import { AUDIO_TRACK_COLOR } from '../../utils/trackColors'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
+import { midiSelectionSpill } from '../../utils/colors'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
@@ -17,6 +18,12 @@ import { resolveDeclaredMidiRows } from '../midi/resolveDeclaredRows'
 import type { InstrumentItem } from '../LeftSidebar'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { Track as TrackType } from '../../types'
+import { TrackTransformPanel, beginTransformDrag, resetTransformValues, transformValue } from './TrackTransformPanel'
+import { TrackTagsPanel } from './TrackTagsPanel'
+import { TF_OPACITY } from '../../core/transform'
+
+// The strip fader is the track's "volume": opacity 0..1, snapping at 0/50/100%.
+const OPACITY_FADER_SPEC = { min: 0, max: 1, step: 0.01, snaps: [0, 0.5, 1], snapThreshold: 0.03 }
 
 // Logic-style M/S painting: pointer-down on a button starts a stroke, and every
 // button of the SAME kind the pointer crosses while held gets the first
@@ -25,6 +32,10 @@ import type { Track as TrackType } from '../../types'
 let msPaint: { kind: 'mute' | 'solo'; value: boolean } | null = null
 
 const BRACKET_CORNER_RADIUS_PX = 6
+
+// Tag badges under the name need a second text line; only rows the user has
+// deliberately made tall (default height is 44) get one.
+const TAG_BADGES_MIN_ROW_HEIGHT = 64
 
 function startMsPaint(kind: 'mute' | 'solo', value: boolean) {
   msPaint = { kind, value }
@@ -35,6 +46,9 @@ interface TrackProps {
   track: TrackType
   barWidthPx: number
   timelineWidthPx: number
+  /** Pickup width (px): musical bar 0 sits this far into the lane. All block
+   *  space is shifted right by this much; audio in the pickup has startBar < 0. */
+  pickupPx: number
   selectedBlockIds: Set<string>
   onBlockPointerDown: (e: ReactPointerEvent, trackId: string, blockId: string) => void
   onLanePointerDown: (e: ReactPointerEvent, trackId?: string) => void
@@ -65,8 +79,17 @@ interface TrackProps {
   onLabelContextMenu?: (e: ReactMouseEvent, trackId: string) => void
 }
 
-export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
+/** Memoized: the timeline re-renders on every ProjectStore write (every
+ *  pointermove of a drag), and rows whose track didn't change must skip. All
+ *  props stay referentially stable across foreign edits - `track` by the
+ *  store's per-track immutability, `guides` via TimelineArea's rowsKey memo,
+ *  handlers via useCallback - and the row's own store subscriptions all
+ *  select primitives. */
+export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  // Audio lanes only need this for the selection spill's geometry (an audio
+  // block's width is derived from its trimmed seconds at the current tempo).
+  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -80,6 +103,23 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   const toggleSolo = useProjectStore((s) => s.toggleSolo)
   const renameTrack = useProjectStore((s) => s.renameTrack)
 
+  // The transform strip (opacity fader + panel opener) exists on object tracks
+  // only. Main's rows are composition tracks - base-typed with an instrumentId,
+  // but with no object behind them - so the active scene gates the whole strip
+  // (all Main tracks are composition tracks by the moveTrackToScene invariant,
+  // and crop-in-a-scene keeps its fader this way).
+  const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
+  const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
+  const opacityValue = useProjectStore((s) =>
+    isObjectTrack ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
+  )
+  const [panelAnchor, setPanelAnchor] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
+  const [tagsAnchor, setTagsAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
+  // The fader needs real room: hide it (keeping the opener) when the label
+  // column is too narrow for name + fader + buttons, so it never crowds the
+  // M/S cluster out of alignment.
+  const showFader = isObjectTrack && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210
+
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -89,6 +129,10 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
 
   const isSelected = selectedTrackId === track.id || inMultiSelection
 
+  // Tag badges are a second label line, shown only on deliberately-tall rows.
+  const tagList = isObjectTrack ? track.tags ?? [] : []
+  const showTagBadges = tagList.length > 0 && rowHeight >= TAG_BADGES_MIN_ROW_HEIGHT
+
   // Hovering the label plays the row's element in the shared preview popup
   // (the same warm canvas the library uses) - objects run their instrument,
   // mover/splitter/colorizer rows run their chain on the stand-in cube.
@@ -96,7 +140,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
     ? getMoverOrSplitterDefinition(track.moverId)
     : undefined
   const previewItem: InstrumentItem | null =
-    track.type === 'base' && track.instrumentId
+    isObjectTrack
       ? { id: track.instrumentId, name: track.name, description: '', icon: null, kind: 'object' }
       : track.type === 'mover' && track.moverId
         ? {
@@ -138,11 +182,25 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
   }
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current) }, [])
   const hasChildren = track.childIds.length > 0
-  const blockColor = track.type === 'audio' ? AUDIO_TRACK_COLOR : track.color
-  const declaredMidiRows = track.type === 'audio'
-    ? undefined
-    : resolveDeclaredMidiRows(track, useProjectStore.getState())
-  const previewRowPitches = declaredMidiRows?.rows.map((row) => row.pitch)
+  // The row's own identity: its definition's declared color for a mover /
+  // splitter / colorizer, the instrument's for an object, else its hue cycle.
+  // Derived purely from the `track` prop, so no store subscription is needed.
+  const blockColor = resolveTrackDisplayColor(track)
+  // Recomputed only when THIS track changes, and the pitch array keeps its
+  // identity (it is a prop of every memoized Block and a dep of their activity
+  // effects). Mover-lane rows technically also depend on sibling chains for
+  // their prior copy count; a sibling edit leaves this preview stale until the
+  // track itself changes - cosmetic row placement, accepted so foreign edits
+  // don't touch this row (the full MIDI editor resolves its own rows fresh).
+  const { previewRowPitches, strictPreviewRows } = useMemo(() => {
+    const declared = track.type === 'audio'
+      ? undefined
+      : resolveDeclaredMidiRows(track, useProjectStore.getState())
+    return {
+      previewRowPitches: declared?.rows.map((row) => row.pitch),
+      strictPreviewRows: declared?.strict,
+    }
+  }, [track])
   // Automation, envelope and ability sub-rows render darker than their object; mover
   // (mover) lanes are first-class creative tracks and keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
@@ -187,8 +245,14 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         onPointerDownCapture={(e) => {
           leaveLabel()
           if (e.button !== 0) return
-          // The M/S buttons are not drag handles; neither is the rename input.
-          if ((e.target as HTMLElement).closest('button, input')) return
+          // The M/S buttons are not drag handles; neither is the rename input
+          // nor the transform strip's fader.
+          if ((e.target as HTMLElement).closest('button, input, [data-strip-control]')) return
+          // The transform/tags popovers portal to document.body but still route
+          // their events through this React subtree - and this capture handler
+          // runs BEFORE their own stopPropagation can. A target that isn't a
+          // DOM descendant of the label came through a portal: not a drag handle.
+          if (!e.currentTarget.contains(e.target as Node)) return
           // The audio track is pinned at the top - not draggable, not duplicable.
           if (track.type === 'audio') return
           // Alt+drag duplicates; a plain drag re-nests. Neither preventDefault on the
@@ -252,7 +316,12 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
         )}
         {/* Name + its collapse toggle, grouped so the chevron hugs the name text
             (the empty space sits to their right, not between them). */}
-        <div className="relative flex-1 min-w-0 flex items-center gap-1.5">
+        {/* Rows showing the opacity fader give it the free space (DAW-style
+            channel strip); other rows keep it on the name as before. */}
+        <div className={`relative ${showFader ? '' : 'flex-1'} min-w-0 flex ${showTagBadges ? 'flex-col justify-center' : 'items-center gap-1.5'}`}>
+          {/* display:contents when single-line, so the name/chevron keep sitting
+              directly in the row flex; a real flex row when badges add line 2. */}
+          <div className={showTagBadges ? 'flex min-w-0 items-center gap-1.5' : 'contents'}>
           {renaming ? (
             <input
               ref={renameRef}
@@ -283,9 +352,66 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
               {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
             </button>
           )}
+          </div>
+          {showTagBadges && (
+            <div
+              className="pointer-events-none mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden"
+              title={tagList.join(', ')}
+            >
+              {tagList.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="flex-shrink-0 max-w-[64px] truncate rounded-[3px] border border-[var(--border)] bg-white/10 px-1 text-[9px] leading-[13px] text-[var(--text-3)]"
+                >
+                  {t}
+                </span>
+              ))}
+              {tagList.length > 3 && (
+                <span className="flex-shrink-0 px-1 text-[9px] leading-[13px] text-[var(--text-muted)]">
+                  +{tagList.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="relative flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className={`relative flex items-center gap-1 ${showFader ? 'flex-1 min-w-0' : 'flex-shrink-0'}`} onClick={(e) => e.stopPropagation()}>
+          {showFader && (
+            <div
+              data-strip-control
+              role="slider"
+              aria-label="Track opacity"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(opacityValue * 100)}
+              title={`Opacity ${Math.round(opacityValue * 100)}% · drag · double-click = 100%`}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                beginTransformDrag(e, track.id, TF_OPACITY, OPACITY_FADER_SPEC, (ev) =>
+                  (ev.clientX - rect.left) / rect.width,
+                )
+              }}
+              onDoubleClick={() => resetTransformValues(track.id, [TF_OPACITY])}
+              className="group mr-2 flex h-4 min-w-[48px] flex-1 cursor-ew-resize touch-none items-center px-[3px]"
+            >
+              {/* Logic-style horizontal fader: a THIN groove with a cap that
+                  stands well taller than the track it rides. */}
+              <div className="relative h-[3px] w-full rounded-full bg-black/55 shadow-[inset_0_1px_1px_rgba(0,0,0,0.65)]">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-l-full opacity-60 group-hover:opacity-80"
+                  style={{ width: `${opacityValue * 100}%`, background: blockColor }}
+                />
+                <div className="absolute left-1/2 top-[-3px] h-[2px] w-px bg-white/25" />
+                <div
+                  className="absolute top-1/2 h-[15px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-[2.5px] border border-black/65 bg-gradient-to-b from-[#e3e5ea] to-[#b9bcc4] shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                  style={{ left: `${opacityValue * 100}%` }}
+                >
+                  <div className="absolute inset-y-[2px] left-1/2 w-px -translate-x-1/2 bg-black/50" />
+                </div>
+              </div>
+            </div>
+          )}
           <button
             onPointerDown={(e) => {
               if (e.button !== 0) return
@@ -297,7 +423,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.muted
-                ? 'bg-[var(--warn)] text-[var(--on-accent)]'
+                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
@@ -314,13 +440,59 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             }}
             className={`w-4 h-4 rounded-[3px] text-[9px] font-bold flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
               track.solo
-                ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                ? 'bg-[var(--warn)] text-[var(--on-accent)]'
                 : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
             }`}
           >
             S
           </button>
+          {isObjectTrack && (
+            <button
+              aria-label="Edit tags"
+              title={tagList.length > 0 ? `Tags: ${tagList.join(', ')}` : 'Tags'}
+              data-tags-opener={track.id}
+              onClick={(e) => {
+                if (tagsAnchor) { setTagsAnchor(null); return }
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                setTagsAnchor({ left: rect.left, top: rect.top, bottom: rect.bottom })
+              }}
+              className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+                tagsAnchor
+                  ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                  : tagList.length > 0
+                    ? 'bg-white/10 text-[var(--accent)] hover:text-[var(--accent-hover)]'
+                    : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+              }`}
+            >
+              <Tag size={10} />
+            </button>
+          )}
+          {isObjectTrack && (
+            <button
+              aria-label="Open transform panel"
+              title="Transform"
+              data-transform-opener={track.id}
+              onClick={(e) => {
+                if (panelAnchor) { setPanelAnchor(null); return }
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                setPanelAnchor({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })
+              }}
+              className={`w-4 h-4 rounded-[3px] flex items-center justify-center transition-all active:scale-75 cursor-pointer ${
+                panelAnchor
+                  ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                  : 'bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-2)]'
+              }`}
+            >
+              <Move3d size={10} />
+            </button>
+          )}
         </div>
+        {panelAnchor && isObjectTrack && (
+          <TrackTransformPanel trackId={track.id} anchor={panelAnchor} onClose={() => setPanelAnchor(null)} />
+        )}
+        {tagsAnchor && isObjectTrack && (
+          <TrackTagsPanel trackId={track.id} anchor={tagsAnchor} onClose={() => setTagsAnchor(null)} />
+        )}
       </div>
 
       {/* Gutter (half a triangle wide) between the label and the lane so the ruler
@@ -342,6 +514,39 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
           : (e) => onLanePointerDown(e, track.id)}
         onContextMenu={(e) => e.preventDefault()}
       >
+        {/* Block space is offset by the pickup: bar 0 of the music sits pickupPx
+            into the lane, so audio with startBar < 0 still renders on-lane
+            (flush with the left edge when it defines the pickup). */}
+        <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
+        {/* A selected block's light spills onto its lane: a wide wash behind
+            the blocks (first child = painted under them), clipped to the row.
+            The cross-row reach comes from the block's own bloom shadows.
+            Audio blocks spill too - their width is derived (trimmed seconds at
+            the current tempo), mirroring AudioBlock's own layout math. */}
+        {(track.type === 'audio'
+          ? (track.audioBlocks ?? []).map((block) => {
+              if (!selectedBlockIds.has(block.id)) return null
+              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
+              const widthPx = Math.max(widthBars * barWidthPx, 4)
+              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
+            })
+          : track.blocks.map((block) =>
+              selectedBlockIds.has(block.id)
+                ? {
+                    id: block.id,
+                    centerPx: (block.startBar + block.durationBars / 2) * barWidthPx,
+                    widthPx: block.durationBars * barWidthPx,
+                  }
+                : null)
+        ).map((spill) =>
+          spill && (
+            <div
+              key={`spill:${spill.id}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
+            />
+          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock
@@ -365,7 +570,7 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
                 isSelected={selectedBlockIds.has(block.id)}
                 muted={track.muted}
                 previewRowPitches={previewRowPitches}
-                strictPreviewRows={declaredMidiRows?.strict}
+                strictPreviewRows={strictPreviewRows}
                 onBlockPointerDown={onBlockPointerDown}
               />
             ))}
@@ -379,7 +584,8 @@ export function Track({ track, barWidthPx, timelineWidthPx, selectedBlockIds, on
             <span className="truncate px-1.5 font-mono text-[10px] text-[var(--accent)]">{loopDragHere.name}</span>
           </div>
         )}
+        </div>
       </div>
     </div>
   )
-}
+})

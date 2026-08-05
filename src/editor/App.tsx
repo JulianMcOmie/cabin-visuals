@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Square, SkipBack, Repeat, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2, Library, SlidersHorizontal } from 'lucide-react'
+import { Play, Pause, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -15,14 +15,15 @@ import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
 import { VisualBeatSync } from './core/visual/VisualBeatSync'
-import { setEditorPreviewSceneId } from './core/visual/VisualEngine'
+import { getCompositionLayers, getMountedRenderScenes, getObjectState, getVisualCopies, getVisualCopyCount, setEditorPreviewSceneId } from './core/visual/VisualEngine'
 import { track } from '../analytics/analytics'
 // Tutorial is disabled in the UI - see the commented mount below.
 // import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
-import { BpmControl } from './components/BpmControl'
-import { ProjectLengthControl } from './components/ProjectLengthControl'
+import { TransportDisplay } from './components/TransportDisplay'
+import { PlayIcon, StopIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
+import { BooksIcon, SlidersIcon } from './components/PanelToggleIcons'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -54,13 +55,18 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     ui: useUIStore,
     time: useTimeStore,
   }
+  // The VisualCopy pull API too, so E2E checks can read a track's resolved
+  // copies (transform + opacity) without reaching into an R3F scene graph.
+  ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
 }
 
-function formatBeat(beat: number, beatsPerBar: number): string {
-  const bar = Math.floor(beat / beatsPerBar) + 1
-  const beatInBar = Math.floor(beat % beatsPerBar) + 1
-  return `${bar.toString().padStart(3, '0')}:${beatInBar}`
-}
+// Shared segment styling for the header transport band. Segments are flush -
+// the band's overflow clipping rounds the two ends at rest, but the END
+// segments also carry their own matching outer radius so the press
+// contraction (scale) keeps the rounded shape instead of revealing square
+// corners as they shrink away from the clip edge.
+const transportBtn =
+  'flex w-8 cursor-pointer items-center justify-center transition-[color,background-color,transform] duration-100 active:scale-[0.92] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)]'
 
 // Dev-only companion to __cabinStores: exposes the r3f state (scene, camera,
 // renderer) so console/E2E checks can inspect the scene graph. Never ships.
@@ -124,9 +130,12 @@ function Scene({
 }
 
 /** A deliberately low-resolution copy of the finished WebGL frame. It is
- * stretched and heavily blurred behind the upper workspace, extending the
- * scene's color into otherwise blank UI space without rendering the Three
- * scene a second time or changing the visualizer's viewport calculations. */
+ * stretched and heavily blurred behind the ENTIRE workspace card - anchored to
+ * the top, where the visualizer lives, and fading as it runs down through the
+ * timeline - so every translucent surface (inspector glass, timeline lanes) is
+ * a window onto the same continuous field of light rather than its own copy of
+ * the frame. One canvas, one 15fps painter; the Three scene is never rendered
+ * a second time and the visualizer's viewport calculations are untouched. */
 function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HTMLCanvasElement | null> }) {
   const bleedCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -551,17 +560,22 @@ function SaveStatusChip() {
   )
 }
 
+// Styled as a transport-band segment (transportBtn): same elevated strip,
+// flush segments, press contraction, and a lit accent fill while the panel
+// is open - the header's two bands read as one family.
 function EditorPanelToggle({
   label,
   open,
   onToggle,
   controls,
+  position,
   children,
 }: {
   label: string
   open: boolean
   onToggle: () => void
   controls: string
+  position: 'first' | 'last'
   children: ReactNode
 }) {
   return (
@@ -571,10 +585,10 @@ function EditorPanelToggle({
       aria-controls={controls}
       aria-pressed={open}
       title={`${open ? 'Hide' : 'Show'} ${label}`}
-      className={`flex h-7 w-7 items-center justify-center rounded transition-colors cursor-pointer ${
+      className={`${transportBtn} ${position === 'first' ? 'rounded-l-md' : 'rounded-r-md'} ${
         open
-          ? 'bg-white/10 text-[var(--text)] hover:bg-white/15'
-          : 'text-[var(--text-muted)] hover:bg-white/10 hover:text-[var(--text)]'
+          ? 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
+          : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
       }`}
     >
       {children}
@@ -599,7 +613,6 @@ function Header({
   const { play, pause, reset, restart } = playback
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
-  const currentBeat = useTimeStore((s) => s.currentBeat)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const loopEnabled = useTimeStore((s) => !!s.loopRegion?.enabled)
@@ -656,7 +669,7 @@ function Header({
       <EditableProjectName />
 
       <div
-        className="flex flex-shrink-0 items-center gap-0.5 rounded-lg bg-[var(--bg-elevated)] p-0.5"
+        className="flex h-9 flex-shrink-0 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]"
         role="group"
         aria-label="Editor panels"
       >
@@ -665,16 +678,18 @@ function Header({
           open={libraryOpen}
           onToggle={onToggleLibrary}
           controls="library-panel"
+          position="first"
         >
-          <Library size={13} />
+          <BooksIcon />
         </EditorPanelToggle>
         <EditorPanelToggle
           label="scene editor"
           open={sceneEditorOpen}
           onToggle={onToggleSceneEditor}
           controls="scene-editor-panel"
+          position="last"
         >
-          <SlidersHorizontal size={13} />
+          <SlidersIcon />
         </EditorPanelToggle>
       </div>
 
@@ -704,62 +719,50 @@ function Header({
           carries play/pause/scrub there. */}
       <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 pointer-events-none select-none">
         <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Transport band - a continuous elevated strip (same surface the
-              buttons used); each control is a segment whose hover/active state is
-              a rounded rectangle within the band (GarageBand-style). Segment
-              radius is concentric with the band's so the highlights sit flush.
-              Play lights accent while playing, loop while enabled. */}
-          <div className="flex items-center gap-0.5 overflow-hidden rounded-lg bg-[var(--bg-elevated)]">
+          {/* Transport band - a continuous elevated strip matching the
+              display's height and radius. Segment highlights run flush to the
+              band's edges (overflow clipping rounds the two ends); the 1px gap
+              is invisible at rest and becomes a hairline seam only between two
+              lit/hovered segments. Each active control has its own hue: play
+              goes green while playing; loop goes the looped-region blue
+              (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
+              TransportIcons. */}
+          <div className="flex h-9 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]">
             <button
               onClick={isPlaying ? pause : reset}
-              title={isPlaying ? 'Pause' : 'Return to start'}
-              className="flex items-center justify-center w-8 h-6 rounded-md text-[var(--text-3)] hover:text-[var(--text)] hover:bg-white/10 transition-colors cursor-pointer"
+              title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
+              className={`${transportBtn} rounded-l-md text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]`}
             >
-              {isPlaying
-                ? <Square size={10} fill="currentColor" />
-                : <SkipBack size={11} fill="currentColor" />}
+              {isPlaying ? <StopIcon /> : <SkipBackIcon />}
             </button>
             <button
               onClick={isPlaying ? restart : play}
               title={isPlaying ? 'Restart playback' : 'Play (Space)'}
               data-tutorial-play=""
-              className={`flex items-center justify-center w-8 h-6 rounded-md transition-colors cursor-pointer ${
+              className={`${transportBtn} ${
                 isPlaying
-                  ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
-                  : 'text-[var(--text-3)] hover:text-[var(--text)] hover:bg-white/10'
+                  ? 'bg-[#3db26a] text-[var(--on-accent)] hover:bg-[#58c37f]'
+                  : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
               }`}
             >
-              <Play size={12} fill="currentColor" />
+              <PlayIcon />
             </button>
             <button
               onClick={toggleLoop}
               title={loopEnabled ? 'Loop on' : 'Loop off'}
-              className={`flex items-center justify-center w-8 h-6 rounded-md transition-colors cursor-pointer ${
+              className={`${transportBtn} rounded-r-md ${
                 loopEnabled
-                  ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
-                  : 'text-[var(--text-3)] hover:text-[var(--text)] hover:bg-white/10'
+                  ? 'bg-[#4da3d9] text-[var(--on-accent)] hover:bg-[#6fb8e2]'
+                  : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
               }`}
             >
-              <Repeat size={12} />
+              <LoopIcon />
             </button>
           </div>
 
-          {/* One continuous pill: beat readout, BARS, and BPM share a single
-              recessed track, separated by thin dividers rather than sitting as
-              three detached chips. */}
-          <div className="flex items-stretch h-7 rounded bg-[var(--bg-app)] overflow-hidden select-none">
-            <div className="flex items-center justify-center px-2.5 min-w-[62px] font-mono text-[13px] text-[var(--text)] tabular-nums whitespace-nowrap">
-              {formatBeat(currentBeat, beatsPerBar)}
-            </div>
-            <div className="w-px bg-[var(--border)]" />
-            <div className="flex items-center px-2.5">
-              <ProjectLengthControl />
-            </div>
-            <div className="w-px bg-[var(--border)]" />
-            <div className="flex items-center px-2.5">
-              <BpmControl />
-            </div>
-          </div>
+          {/* The readout is a recessed instrument screen (position + tempo);
+              project length moved into the timeline. See TransportDisplay. */}
+          <TransportDisplay />
         </div>
       </div>
 
@@ -906,13 +909,21 @@ export default function EditorApp() {
   // store (nothing else should have to coordinate with it).
   const conflicted = useSaveStatus((s) => s.status === 'conflict')
   const modalOpen = useUIStore((s) => s.modalOpen) || conflicted
-  const scenes = useProjectStore((s) => s.scenes)
-  const activeSceneId = useProjectStore((s) => s.activeSceneId)
-  const [previewSceneId, setPreviewSceneId] = useState(activeSceneId)
+  // null = no explicit viewing choice yet: the canvas shows Main (the final
+  // director composition). Only the scene tabs' right-click "View this scene"
+  // sets a concrete id; switching which scene you EDIT never touches it.
+  const [previewSceneId, setPreviewSceneId] = useState<string | null>(null)
   // Project hydration and scene deletion can invalidate a local preview id.
-  // Falling back at render time keeps the canvas and segmented control live
-  // without writing an ephemeral viewing choice into the project document.
-  const resolvedPreviewSceneId = scenes[previewSceneId] ? previewSceneId : activeSceneId
+  // Falling back to Main keeps the canvas live without writing an ephemeral
+  // viewing choice into the project document. Subscribed as a primitive
+  // (never the scenes record, whose identity changes on every track edit):
+  // this is the editor ROOT, and a whole-record selector here re-renders the
+  // entire shell on every pointermove of a drag.
+  const resolvedPreviewSceneId = useProjectStore((s) =>
+    previewSceneId && s.scenes[previewSceneId]
+      ? previewSceneId
+      : s.sceneOrder.find((id) => s.scenes[id]?.isMain) ?? s.activeSceneId
+  )
 
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-[var(--bg-app)] text-[var(--text)]">
@@ -922,21 +933,23 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, '15%')}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, '25%')}
         onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '55%')}
         playback={playback}
       />
       {/* The library's panel color fills everything below the header, so the
           workspace reads as one card inset within the library's surface. */}
       <div className="flex-1 min-h-0 bg-[var(--bg-shell)]">
-        <PanelGroup orientation="horizontal" style={{ height: '100%' }} disabled={modalOpen}>
+        {/* overflow visible so the workspace card's glow can spill past the
+            group's top edge onto the header band. */}
+        <PanelGroup orientation="horizontal" style={{ height: '100%', overflow: 'visible' }} disabled={modalOpen}>
 
           {/* Library - dragging below its minimum snaps it closed; the matching
               header icon uses the same imperative panel state. */}
           <Panel
             id="library-panel"
             panelRef={libraryPanelRef}
-            defaultSize={paneDefaults.library ? '15%' : '0%'}
+            defaultSize={paneDefaults.library ? '25%' : '0%'}
             minSize="8%"
             maxSize="30%"
             collapsible
@@ -963,13 +976,21 @@ export default function EditorApp() {
           {/* Right section: inspector + canvas above, tracks + audio strip below.
               The shell shows only along the top and left; the workspace runs
               flush to the viewport's right and bottom edges. */}
-          <Panel className="pt-2 pl-2">
-            <div className="flex h-full flex-col overflow-hidden rounded-tl-[10px] border border-[var(--border)] bg-[var(--bg-app)]">
+          {/* overflow-visible (overriding the wrapper's overflow:auto) lets the
+              card's glow bleed past the inset gap onto the shell surface. */}
+          <Panel className="pt-2 pl-2" style={{ overflow: 'visible' }}>
+            {/* relative: the header band is positioned, so the card must be
+                positioned too (and later in the DOM) for its glow to paint
+                over the header and the library rather than under them. */}
+            {/* isolate: the ambient bleed paints at z-index -1, and the card's
+                stacking context keeps that above the card's own background
+                instead of letting it vanish beneath it. */}
+            <div className="relative isolate flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+              <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
               <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
 
                 {/* Upper: TRACK inspector + Canvas, resizable */}
                 <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
-                  <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
                   <PanelGroup
                     orientation="horizontal"
                     style={{ height: '100%' }}
@@ -1017,7 +1038,12 @@ export default function EditorApp() {
 
                 {/* Tracks / Piano Roll */}
                 <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
-                <div className="flex-1 min-h-0">
+                {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
+                    strip) slightly translucent, so the card-level ambient
+                    bleed's fading tail reads through the work surface - the
+                    same light as the inspector's glass, continued downward.
+                    Label rows and blocks keep their opaque chrome. */}
+                <div className="timeline-glass-scope flex-1 min-h-0">
                   <BottomArea />
                 </div>
 

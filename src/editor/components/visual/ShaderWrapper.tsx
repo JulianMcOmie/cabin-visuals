@@ -13,6 +13,8 @@ import { getEffect } from '../../effects'
 import { effectiveEffectState } from '../../effects/automation'
 import type { EffectInstance } from '../../types'
 import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual/postMoverScale'
+import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
+import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 
 // Fullscreen-quad vertex shader: writes clip space directly, so a 2×2 plane always fills
 // the target regardless of camera. Passthrough fragment blits the final texture.
@@ -48,6 +50,7 @@ export function ShaderWrapper({
   visualCopyIndex,
   plugins,
   postMoverScalePlugins,
+  maskSourceIds,
   children,
 }: {
   trackId: string
@@ -59,9 +62,13 @@ export function ShaderWrapper({
   plugins: EffectInstance[]
   /** Scale transform effects are composed outside the VisualCopy mover matrix. */
   postMoverScalePlugins: EffectInstance[]
+  /** Crop tracks routed at this object (ObjectListEntry.maskSourceIds): each
+   *  runs the crop mask as the OUTERMOST pass over the effect chain's output,
+   *  its per-frame state pulled from that crop track's own engine state. */
+  maskSourceIds?: readonly string[]
   children: ReactNode
 }) {
-  const { gl, camera, size } = useThree()
+  const { gl, camera, size, scene: parentScene } = useThree()
   const outMeshRef = useRef<Mesh>(null)
 
   // Offscreen render rig: scene (+ lights + a world-transform holder), ping-pong targets,
@@ -110,6 +117,32 @@ export function ShaderWrapper({
     return map
   }, [plugins.map((p) => p.id + ':' + p.pluginId).join(','), size.width, size.height]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // One shared material for the crop mask passes: sources run sequentially and
+  // their uniforms are rewritten just before each pass, the same way
+  // VisualScene's scene-wide cropMaskMaterial is shared across scenes.
+  const hasMaskSources = (maskSourceIds?.length ?? 0) > 0
+  const maskMaterial = useMemo(() => {
+    if (!hasMaskSources) return null
+    return new ShaderMaterial({
+      vertexShader: QUAD_VERT,
+      fragmentShader: CROP_MASK_FRAGMENT,
+      uniforms: {
+        tDiffuse: { value: null as Texture | null },
+        sliceState: { value: new Float32Array(CROP_MAX_DIVISIONS) },
+        count: { value: 1 },
+        angle: { value: 0 },
+        wedge: { value: 0 },
+        flash: { value: 0 },
+        blur: { value: 0 },
+        wet: { value: 1 },
+        aspect: { value: 1 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    })
+  }, [hasMaskSources])
+  useEffect(() => () => { maskMaterial?.dispose() }, [maskMaterial])
+
   useEffect(() => {
     const w = Math.max(1, Math.floor(size.width)), h = Math.max(1, Math.floor(size.height))
     rig.src.setSize(w, h); rig.ping.setSize(w, h); rig.pong.setSize(w, h)
@@ -128,6 +161,12 @@ export function ShaderWrapper({
     // Same clock rule as VisualBeatSync: exports drive time through the beat
     // override while the transport stays frozen.
     const beat = getBeatOverride() ?? useTimeStore.getState().currentBeat
+
+    // Inherit the mounting scene's env map so env-driven materials (Texturizer
+    // chrome/glass) keep their reflections inside the offscreen pass.
+    if (rig.scene.environment !== parentScene.environment) {
+      rig.scene.environment = parentScene.environment
+    }
 
     // Render the object (with world × Scale effect × this occurrence's
     // VisualCopy transform) into the source FBO. The object's size
@@ -174,6 +213,34 @@ export function ShaderWrapper({
       gl.render(rig.quadScene, rig.quadCam)
       inputTex = a.texture
       const t = a; a = b; b = t
+    }
+
+    // Crop tracks routed at this object mask its post-processed output: the
+    // matte is the OUTERMOST pass, so every effect above lands inside the
+    // visible slices. Null resolve (crop with no notes, muted, fully dry)
+    // skips that source's pass; the object then shows unmasked.
+    if (maskMaterial) {
+      const aspect = Math.max(0.0001, size.width / Math.max(1, size.height))
+      for (const sourceId of maskSourceIds ?? []) {
+        const mask = resolveActiveCropMask(getObjectState(sourceId))
+        if (!mask) continue
+        const uniforms = maskMaterial.uniforms
+        uniforms.tDiffuse.value = inputTex
+        uniforms.sliceState.value = mask.sliceState
+        uniforms.count.value = mask.count
+        uniforms.angle.value = mask.angle
+        uniforms.wedge.value = mask.wedge ? 1 : 0
+        uniforms.flash.value = mask.flash
+        uniforms.blur.value = mask.blur
+        uniforms.wet.value = mask.wet
+        uniforms.aspect.value = aspect
+        rig.quad.material = maskMaterial
+        gl.setRenderTarget(a)
+        gl.setClearColor(0x000000, 0); gl.clear()
+        gl.render(rig.quadScene, rig.quadCam)
+        inputTex = a.texture
+        const t = a; a = b; b = t
+      }
     }
 
     gl.setRenderTarget(prev)

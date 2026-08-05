@@ -8,6 +8,7 @@ import { flattenVisualRows } from './trackTree'
 import { loopLengthBeats } from '../../core/visual/noteFlatten'
 import { deselectTrack, selectNewTrack, suppressTrackSelectBriefly, deleteSelectedTracks, pruneSelectionAfterTrackDelete } from '../../utils/selection'
 import { snapStepBeats } from '../../utils/snapStep'
+import { BLOCK_EDGE_HIT, edgeHitPx } from '../../constants'
 import { suppressNextContextMenu } from '../../utils/contextMenuGuard'
 import type { Note, Block, Track } from '../../types'
 import type { TrackTreeSnapshot } from '../../store/ProjectStore'
@@ -30,7 +31,6 @@ interface BlockOrigin {
   patternBars: number
 }
 
-const EDGE_PX = 8
 const PROJECT_END_EPSILON_BARS = 1e-9
 
 function rootAncestorId(tracks: Record<string, Track>, id: string): string {
@@ -186,7 +186,7 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       ? LOOP_CURSOR
       : t === 'resizing-left' || t === 'resizing-right' ? 'ew-resize' : 'default')
 
-    const handleMove = (e: PointerEvent) => {
+    const processMove = (e: PointerEvent) => {
       const d = dragRef.current
       if (!d) return
       // Any in-flight drag (marquee, move, resize, draw) ends with a click on
@@ -340,7 +340,34 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       if (guideStartBar != null) placeDragGuideAtBar(guideStartBar, d.barWidthPx)
     }
 
+    // Coalesce to one processed move per animation frame. High-poll-rate mice
+    // (and 120Hz displays) can deliver pointermoves faster than frames, and
+    // every processed move is one-or-more store writes with a full subscriber
+    // fan-out - work beyond frame rate is invisible. Only the LATEST event
+    // matters (positions are absolute, never deltas between events).
+    let pendingMove: PointerEvent | null = null
+    let moveRaf = 0
+    const handleMove = (e: PointerEvent) => {
+      pendingMove = e
+      if (moveRaf) return
+      moveRaf = requestAnimationFrame(() => {
+        moveRaf = 0
+        const pending = pendingMove
+        pendingMove = null
+        // The gesture may have been torn down (release, unmount) between
+        // scheduling and this frame - a trailing write would edit post-gesture.
+        if (pending && abortRef.current === controller) processMove(pending)
+      })
+    }
+
     const handleUp = () => {
+      // Flush the last unprocessed move BEFORE tearing down, so release always
+      // lands on the final pointer position (also what keeps synthetic drags,
+      // whose up can arrive before any frame renders, working at all).
+      if (moveRaf) cancelAnimationFrame(moveRaf)
+      moveRaf = 0
+      if (pendingMove) processMove(pendingMove)
+      pendingMove = null
       // A right-button draw released outside the lane would otherwise open the
       // browser context menu on whatever sits under the pointer.
       if (dragRef.current?.type === 'drawing') suppressNextContextMenu()
@@ -409,12 +436,14 @@ export function useTrackGestures({ laneRef, dragGuideRef }: UseTrackGesturesOpti
       return
     }
 
-    // Near an edge → resize that edge; otherwise move. Edge zones shrink on
-    // narrow blocks so the middle stays a move target.
+    // Near an edge → resize that edge; otherwise move. A constant screen-space
+    // zone (see edgeHitPx), so the handle feels identical at every zoom; only a
+    // block too narrow to seat two of them gives any of it back to the middle.
+    // Keep this in step with Block.tsx, which paints the cursor for the zone.
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
     const localX = e.clientX - rect.left
     const w = rect.width
-    const edge = Math.min(EDGE_PX, w / 4)
+    const edge = edgeHitPx(w, BLOCK_EDGE_HIT)
     const type: DragState['type'] =
       localX < edge ? 'resizing-left' : localX > w - edge ? 'resizing-right' : 'moving'
     // Only the TOP half of the right edge arms looping; the bottom half is a

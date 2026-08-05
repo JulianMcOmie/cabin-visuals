@@ -666,6 +666,7 @@ export const starsInstrument: ObjectInstrumentDef = {
   id: 'stars',
   name: 'Stars',
   kind: 'object',
+  identityColor: { param: 'groundColor' },
   userInterfaceRenderer: 'stars',
   params: PARAMS,
   midiRows: [

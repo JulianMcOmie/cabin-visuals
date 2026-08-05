@@ -15,6 +15,13 @@ import {
 } from './motionBasis'
 import type { VisualCopy } from './types'
 
+// RETIRED from the registry (2026-08): the unified `mover` definition covers
+// all four of these cells, and persistence UPGRADES[12] rewrites old saves
+// onto it. The definition objects survive because All Movers embeds Orbit
+// Burst and Constant Orbit as bank modules, and mover.test.ts pins the unified
+// definition's parity against them. They declare no identityColor - their
+// hues went back to the palette.
+
 const DEG_TO_RAD = Math.PI / 180
 
 export const ROTATION_EASINGS: { label: string; ease: (t: number) => number }[] = [
@@ -135,12 +142,17 @@ export const orbitBurstMover: MoverOrSplitterDefinition<RotationBurstSettings> =
   },
 }
 
-export interface ConstantRotationSettings extends BasisSettings {
+/** What evaluateConstantRotationAngles actually reads - narrow so the unified
+ *  Mover can hand it its own (differently-keyed) settings directly. */
+export interface ConstantSpinSettings {
   speedX: number
   speedY: number
   speedZ: number
   speed: number
   returnBeats: number
+}
+
+export interface ConstantRotationSettings extends BasisSettings, ConstantSpinSettings {
   pivotX: number
   pivotY: number
   pivotZ: number
@@ -162,7 +174,7 @@ const ROTATION_WITH_RETURN_ROWS = [
 
 function rawConstantAngles(
   notes: readonly ResolvedNote[],
-  settings: ConstantRotationSettings,
+  settings: ConstantSpinSettings,
   beat: number,
 ): [number, number, number] {
   const speeds = [settings.speedX, settings.speedY, settings.speedZ]
@@ -186,7 +198,7 @@ function rawConstantAngles(
 
 export function evaluateConstantRotationAngles(
   notes: readonly ResolvedNote[],
-  settings: ConstantRotationSettings,
+  settings: ConstantSpinSettings,
   beat: number,
 ): [number, number, number] {
   const returnBeats = Math.max(0.0001, settings.returnBeats)

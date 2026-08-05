@@ -127,6 +127,15 @@ export interface ObjectInstrumentDef {
   name: string
   kind: 'object'
   params: ParamDef[]
+  /** The instrument's color identity - what its track wears in the timeline,
+   *  piano roll, and editor chrome (all re-voiced through the OKLCH recipes).
+   *  A hex literal is a fixed identity; `{ param }` follows that color param's
+   *  current value, so recoloring the instrument recolors its MIDI. Omitted:
+   *  an instrument with exactly ONE color param follows it automatically;
+   *  otherwise the track keeps its hue-cycle color. Near-achromatic derived
+   *  values (white/black/grey) also fall back to the cycle - see
+   *  utils/trackDisplayColor.ts. */
+  identityColor?: string | { param: string }
   /** Registered settings UI. Every instrument explicitly chooses one. */
   userInterfaceRenderer: UserInterfaceRendererId
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
@@ -135,6 +144,13 @@ export interface ObjectInstrumentDef {
   /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
    *  order (first entry renders at the top). Omit for the full piano roll. */
   midiRows?: MidiRowDef[]
+  /** Settings-dependent MIDI vocabulary: rows derived from the track's current
+   *  params (Crop's one row per division). Wins over `midiRows` when both are
+   *  declared. Takes a structural slice of Track so this file stays free of the
+   *  project types; only the row RESOLVER calls it (resolveDeclaredRows.ts) -
+   *  the static call sites (`useLoopBlockDrag`, drop-layer defaults) keep
+   *  reading `midiRows` and simply see none for such an instrument. */
+  midiRowsFor?: (track: { params?: Record<string, number>; stringParams?: Record<string, string> }) => MidiRowDef[]
   /** This object's transform relative to its parent, per frame. The engine composes
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */
@@ -145,6 +161,13 @@ export interface ObjectInstrumentDef {
    *  than sitting at a 3D position. The renderer skips the placement transform + the
    *  transform/clone effect chain for these. */
   fullFrame?: boolean
+  /** Full-frame is a MODE this instrument's track switches, not a fixed fact:
+   *  the track is full-frame exactly while this numeric param is >= 0.5, and an
+   *  ordinary in-scene object otherwise (Oscilloscope's "Fit to screen"). The
+   *  on-top pass follows the same param - a screen-pinned overlay that also
+   *  depth-sorted against scenery would be neither one thing nor the other.
+   *  Read it through `isFullFrameTrack` / `isOnTopTrack`, never directly. */
+  fullFrameParam?: string
   /** Tracks of this instrument draw on top of everything by default (the per-track
    *  "In front" toggle overrides). Text wants this: words are captions, not scenery. */
   defaultOnTop?: boolean
@@ -154,4 +177,36 @@ export interface ObjectInstrumentDef {
 export function paramDefault(def: ObjectInstrumentDef, key: string): number {
   const p = def.params.find((p) => p.key === key)
   return p && typeof p.default === 'number' ? p.default : 0
+}
+
+/**
+ * Is this track full-frame RIGHT NOW - a viewport-filling plane pinned to the
+ * camera, with the placement transform and the transform/clone chain skipped?
+ *
+ * Two sources, deliberately in one function: a fixed `fullFrame` def always is,
+ * and a `fullFrameParam` def is whenever that param is on. Both the renderer
+ * (which subtree to mount) and the compositor (which pass to draw in) must
+ * reach the same answer, so neither reads the flags itself.
+ */
+export function isFullFrameTrack(
+  def: ObjectInstrumentDef | undefined,
+  params: Record<string, number> | undefined,
+): boolean {
+  if (!def) return false
+  if (def.fullFrame) return true
+  if (!def.fullFrameParam) return false
+  return (params?.[def.fullFrameParam] ?? paramDefault(def, def.fullFrameParam)) >= 0.5
+}
+
+/** Does this track draw in the depth-cleared on-top pass? The stored per-track
+ *  override wins; a mode-switched full-frame instrument is on top exactly while
+ *  it IS full-frame; everything else falls back to the def's `defaultOnTop`. */
+export function isOnTopTrack(
+  def: ObjectInstrumentDef | undefined,
+  params: Record<string, number> | undefined,
+  onTop: boolean | undefined,
+): boolean {
+  if (onTop !== undefined) return onTop
+  if (def?.fullFrameParam) return isFullFrameTrack(def, params)
+  return def?.defaultOnTop ?? false
 }

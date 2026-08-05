@@ -11,6 +11,10 @@ import {
   resolveBasis,
   type BasisSettings,
 } from './motionBasis'
+// RETIRED from the registry (2026-08): the unified `mover` definition's
+// translate-oscillate cell is this exact behaviour, and persistence
+// UPGRADES[12] rewrites old saves onto it. The definition survives as an All
+// Movers bank module; no identityColor - its hue went back to the palette.
 
 export interface TranslationOscillatorSettings extends BasisSettings {
   distanceX: number

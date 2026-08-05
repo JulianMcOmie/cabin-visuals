@@ -69,7 +69,7 @@ test('three picked looks become three named scenes and a cycling switcher', () =
   // Main holds a Scene Switcher bound to all three scenes, with back-to-back
   // held notes cycling through all three rows to the project's end.
   const main = s.scenes[mainId]
-  const switcher = Object.values(main.tracks).find((t) => t.directorId === 'sceneSwitcher')
+  const switcher = Object.values(main.tracks).find((t) => t.instrumentId === 'sceneSwitcher')
   assert.ok(switcher, 'a Scene Switcher director exists on Main')
   const boundScenes = new Set((switcher.sceneBindings ?? []).map((b) => b.sceneId))
   assert.ok(visual.every((id) => boundScenes.has(id)), 'every scene is bound to a row')
@@ -100,7 +100,7 @@ test('one picked look stays a single restyled scene, no switcher', () => {
   assert.equal(s.scenes[visual[0]].name, 'Wormhole')
   const main = s.scenes[mainId]
   assert.ok(
-    !Object.values(main.tracks).some((t) => t.directorId === 'sceneSwitcher'),
+    !Object.values(main.tracks).some((t) => t.instrumentId === 'sceneSwitcher'),
     'no switcher for a single look',
   )
 })

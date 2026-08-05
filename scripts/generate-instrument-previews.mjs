@@ -110,11 +110,15 @@ try {
   const version = await page.evaluate(() => window.__instrumentPreviewVersion)
   const manifest = await loadManifest()
 
-  // Decide what to (re)capture.
+  // Decide what to (re)capture. Manifest values are "<version>-<timestamp>":
+  // the version prefix is the staleness signal, and the timestamp makes every
+  // capture's ?v= unique - without it, a FORCED recapture at an unchanged
+  // version re-uploads to the same URL, where the year-long clip cache keeps
+  // serving the old bytes and the new clip never shows.
   const targets = ids.filter((id) => {
     if (onlyIds.length) return onlyIds.includes(id)
     if (forceAll) return true
-    return manifest[id] !== version // never captured, or capture version bumped
+    return String(manifest[id] ?? '').split('-')[0] !== version // never captured, or version bumped
   })
   const skipped = ids.length - targets.length
   console.log(
@@ -150,7 +154,7 @@ try {
         console.log(`upload failed: ${error.message}`)
         continue
       }
-      manifest[id] = version
+      manifest[id] = `${version}-${Date.now()}`
       console.log(`ok (${(bytes.length / 1024).toFixed(0)} KB)`)
       ok++
     } catch (err) {

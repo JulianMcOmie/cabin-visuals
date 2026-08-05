@@ -7,6 +7,30 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "dev-isolated",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:isolated", "--", "--port", "3001"],
+      "port": 3001
+    },
+    {
+      "name": "dev-3002",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3002", "npm", "run", "dev", "--", "--port", "3002"],
+      "port": 3002
+    },
+    {
+      "name": "dev-3004",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3004", "npm", "run", "dev", "--", "--port", "3004"],
+      "port": 3004
+    },
+    {
+      "name": "dev-3040",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3040", "npm", "run", "dev", "--", "--port", "3040"],
+      "port": 3040
     }
   ]
 }

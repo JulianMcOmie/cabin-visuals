@@ -493,6 +493,7 @@ export const particleBurstInstrument: ObjectInstrumentDef = {
   id: 'particleBurst',
   name: 'Particle Burst',
   kind: 'object',
+  identityColor: '#e62b00',
   userInterfaceRenderer: 'particleBurst',
   params: PARAMS,
   // Pitch (36-71) selects one of the 36 color presets (pitch - 36 = preset index);

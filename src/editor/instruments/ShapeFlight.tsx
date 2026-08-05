@@ -424,6 +424,7 @@ export const shapeFlightInstrument: ObjectInstrumentDef = {
   id: 'shapeFlight',
   name: 'Shape Flight',
   kind: 'object',
+  identityColor: '#38bdf8',
   userInterfaceRenderer: 'shapeFlight',
   params: PARAMS,
   midiRows: [

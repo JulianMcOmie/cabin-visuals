@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronRight, Check } from 'lucide-react'
 import { useUIStore } from '../store/UIStore'
 
@@ -99,7 +100,12 @@ export function NestedMenu({
 
   const visible = groups.filter((g) => g.items.length > 0)
 
-  return (
+  // Portaled to <body>: consumers sit inside panels whose backdrop-filter makes
+  // them the containing block for fixed descendants - rendered in place, the
+  // menu lands offset by the panel's origin and its submenus paint UNDER
+  // sibling panels (the 3D viewport). At the body level, fixed means the
+  // viewport and z-50 wins against the panel stack.
+  return createPortal(
     <>
       {/* Full-screen backdrop: an outside click closes the menu AND is swallowed -
           without it the closing click falls through to whatever sits beneath
@@ -156,6 +162,7 @@ export function NestedMenu({
         </div>
       ))}
     </div>
-    </>
+    </>,
+    document.body,
   )
 }

@@ -340,6 +340,7 @@ export const photoInstrument: ObjectInstrumentDef = {
   id: 'photo',
   name: 'Photo',
   kind: 'object',
+  identityColor: '#f4915d',
   userInterfaceRenderer: 'photo',
   params: [
     {

@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { X, Magnet, Waves, Dices } from 'lucide-react'
-import { useUIStore, MIDI_ROW_HEIGHTS } from '../../store/UIStore'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
+import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
+import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
@@ -10,6 +10,8 @@ import { MidiEditor } from './MidiEditor'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { computeRulerGrid } from '../rulerGrid'
 import { generateRows, generateValueRows, generateToggleRows, generateVideoClipRows, generatePhotoRows, generateInstrumentRows, generateTriggerRows } from './generateRows'
+import { midiNoteBaseColor, midiToolbarAccent } from '../../utils/midiEditorPalette'
+import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 import { useVideoStore } from '../../store/VideoStore'
 import { usePhotoStore } from '../../store/PhotoStore'
 import { getInstrument } from '../../instruments'
@@ -17,10 +19,81 @@ import { VIDEO_BASE_PITCH } from '../../core/video/videoTime'
 import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
+import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
+import { withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
+import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
-import type { Block, InterpolationMode } from '../../types'
+import type { AutomationMode, Block, InterpolationMode } from '../../types'
+
+/** Filled-track position for .slider-console inputs (drives the --fill var);
+ *  `color` retints the filled portion (--slider-color) to the edited track. */
+const sliderFill = (value: number, min: number, max: number, color?: string) =>
+  ({
+    '--fill': `${((value - min) / (max - min)) * 100}%`,
+    ...(color ? { '--slider-color': color } : undefined),
+  } as CSSProperties)
+
+/** Borderless toolbar select: the native control with its chrome stripped and
+ *  a quiet chevron, so it sits in the toolbar like the buttons around it. */
+function ToolbarSelect({ value, onChange, title, children }: {
+  value: string | number
+  onChange: ChangeEventHandler<HTMLSelectElement>
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <div className="relative flex-shrink-0">
+      <select
+        value={value}
+        onChange={onChange}
+        title={title}
+        className="appearance-none h-5 pl-1.5 pr-[18px] rounded bg-zinc-800/70 hover:bg-zinc-700/70 text-[10px] text-zinc-300 outline-none cursor-pointer transition-colors"
+      >
+        {children}
+      </select>
+      <ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500" />
+    </div>
+  )
+}
+
+/** A labelled toolbar slider - one lane param in its most compact form, wearing
+ *  the edited track's accent like the other toolbar chrome. */
+function ToolbarSlider({ label, title, value, min, max, step, accent, onChange }: {
+  label: string
+  title: string
+  value: number
+  min: number
+  max: number
+  step: number
+  accent: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex flex-shrink-0 items-center gap-1" title={title}>
+      <span className="text-[10px] text-zinc-600">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={sliderFill(value, min, max, accent)}
+        className="slider-console w-10 cursor-pointer"
+      />
+    </div>
+  )
+}
+
+/** The three things an automation lane's notes can mean. Mirrors the settings
+ *  panel's segmented control (AutomationUserInterface). */
+const MODE_OPTIONS: { value: AutomationMode; label: string; title: string; icon: typeof Waves }[] = [
+  { value: 'curve', label: 'Curve', title: 'Notes are value keyframes joined by a curve', icon: TrendingUp },
+  { value: 'noise', label: 'Noise', title: 'Held notes gate a seeded random wobble around their value', icon: Waves },
+  { value: 'burst', label: 'Burst', title: 'Each note fires an ADSR envelope toward its value', icon: Zap },
+]
 
 /** Automation editor context: the param a lane drives, and its value bounds.
  *  kind picks the row model - 'value' shows 13 value-labelled rows across the
@@ -83,9 +156,12 @@ function quantizeLabel(beats: number, beatsPerBar: number): string {
 export function PianoRollPanel() {
   const editingBlock = useUIStore((s) => s.editingBlock)
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
-  const tracks = useProjectStore((s) => s.tracks)
+  // Subscribe to the edited track and its parent only - never the whole tracks
+  // record, whose identity changes on EVERY project edit and would re-render
+  // the entire piano roll per pointermove of any timeline gesture.
+  const track = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
+  const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
 
-  const track = editingBlock ? tracks[editingBlock.trackId] : undefined
   const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
 
   // Auto-close if the block disappeared (track/block deleted)
@@ -121,7 +197,6 @@ export function PianoRollPanel() {
     // reads beat/duration/velocity off abilityEvents, never pitch), so they get the
     // short trigger rows. An ability that wants real pitches must declare
     // editor: 'pitched' on its AbilityLaneDef to keep the full piano.
-    const parent = track.parentId ? tracks[track.parentId] : undefined
     const ability = parent
       ? getInstrument(parent.instrumentId)?.abilities?.find((a) => a.key === track.abilityKey)
       : undefined
@@ -131,7 +206,6 @@ export function PianoRollPanel() {
       abilityColor = ability?.color
     }
   } else if (track.type === 'automation' && track.targetParam) {
-    const parent = track.parentId ? tracks[track.parentId] : undefined
     const fx = parseFxTarget(track.targetParam)
     if (fx) {
       // Effect automation: value range from the plugin's param. The enabled
@@ -146,16 +220,27 @@ export function PianoRollPanel() {
         else if (pd?.type === 'boolean') automation = { paramLabel: `${plugin?.name} · ${pd.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
       }
     } else {
-      // Param automation: the range comes from the parent's instrument def, or
-      // from the parent's mover/splitter definition when automating a mover.
+      // Param automation: the range comes from the parent's instrument def
+      // (plus the canonical tf* transform params), from the parent's
+      // mover/splitter definition when automating a mover, or - for a
+      // composition track on Main (or the legacy 'director' shape) - from its
+      // composition def plus the shared Opacity. The composition arm wins over
+      // the object def for a dual-surface id like crop: on Main its lanes
+      // address the composition params, never tf*.
       const moverDef = parent?.type === 'mover'
         ? getMoverOrSplitterDefinition(parent.moverId)
         : parent?.type === 'splitter'
           ? getMoverOrSplitterDefinition(parent.splitterId)
           : undefined
-      const pdef = parent
-        ? (getInstrument(parent.instrumentId)?.params ?? moverDef?.params)?.find((p) => p.key === track.targetParam)
-        : undefined
+      const mainActive = !!useProjectStore.getState().scenes[useProjectStore.getState().activeSceneId]?.isMain
+      const parentComposition = parent && mainActive && isCompositionTrack(parent)
+      const instrumentDef = parent && !parentComposition ? getInstrument(parent.instrumentId) : undefined
+      const parentParams = instrumentDef
+        ? withTransformParams(instrumentDef.params)
+        : moverDef?.params ?? (parentComposition
+          ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+          : undefined)
+      const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
     }
@@ -166,7 +251,7 @@ export function PianoRollPanel() {
       key={block.id}
       trackId={track.id}
       trackName={track.name}
-      trackColor={track.color}
+      trackColor={resolveTrackDisplayColor(track)}
       noteColor={abilityColor}
       automation={automation}
       trigger={trigger}
@@ -194,8 +279,6 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const bpm = useProjectStore((s) => s.bpm)
-  const tracks = useProjectStore((s) => s.tracks)
-  const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const track = useProjectStore((s) => s.tracks[trackId])
   const midiPixelsPerBeat = useUIStore((s) => s.midiPixelsPerBeat)
   const setMidiPixelsPerBeat = useUIStore((s) => s.setMidiPixelsPerBeat)
@@ -203,6 +286,9 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const setMidiRowHeight = useUIStore((s) => s.setMidiRowHeight)
 
   const [snapEnabled, setSnapEnabled] = useState(true)
+  // Toolbar toggles and sliders wear the edited track's color, matching the
+  // grid chrome (midiEditorChrome) below.
+  const accent = midiToolbarAccent(trackColor)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasScrolledRef = useRef(false)
 
@@ -212,16 +298,29 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
     defaultQuantize: DEFAULT_QUANTIZE,
   })
 
-  // 'Smart' keeps the note grid in sync with the header: quantize = the smallest
-  // subdivision the ruler currently shows at this zoom (computeRulerGrid, the
-  // same rule the ruler renders and the playhead snaps by).
-  const smartQuantize = computeRulerGrid(midiPixelsPerBeat, beatsPerBar, Math.max(totalBars, INITIAL_TOTAL_BARS)).smallestBeats
+  // 'Smart' keeps the note grid in sync with the header: quantize = half the
+  // smallest subdivision the ruler currently shows at this zoom (computeRulerGrid),
+  // matching playheadSnapBeats so notes and the playhead share one grid.
+  const smartQuantize = computeRulerGrid(midiPixelsPerBeat, beatsPerBar, Math.max(totalBars, INITIAL_TOTAL_BARS)).smallestBeats / 2
   const effectiveQuantize = quantize === 'smart' ? smartQuantize : quantize
 
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const interpolation = useProjectStore((s) => s.tracks[trackId]?.interpolation) ?? 'linear'
   const noise = useProjectStore((s) => s.tracks[trackId]?.noise)
+  const burst = useProjectStore((s) => s.tracks[trackId]?.burst)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
+  const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
+  const mode = automationMode({ noise, burst })
+
+  // In burst mode a row is not a value the lane HOLDS but the value each burst
+  // travels to, and velocity is that burst's intensity - the corner says so,
+  // since the value rows look identical in either mode.
+  const cornerLabel = automation
+    ? mode === 'burst'
+      ? `${automation.paramLabel} · burst target · velocity = intensity`
+      : automation.paramLabel
+    : trigger?.cornerLabel ?? trackName
 
   // Value lanes show 13 value-labelled rows (pitch → param/input value) with the
   // target name in the frozen corner; toggle lanes show exactly On/Off; trigger
@@ -233,26 +332,36 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const photoTrack = !automation && track?.type === 'base' && track.instrumentId === 'photo' ? track : null
   const videoClips = useVideoStore((s) => s.videoClips)
   const photoClips = usePhotoStore((s) => s.photoClips)
-  const scenes = useProjectStore((s) => s.scenes)
-  const sceneOrder = useProjectStore((s) => s.sceneOrder)
-  const declaredRows = !automation && !trigger && track
-    ? resolveDeclaredMidiRows(track, {
-        tracks,
-        rootTrackIds,
-        scenes,
-        sceneOrder,
-        bpm,
-        beatsPerBar,
-        totalBars,
-      })
-    : undefined
+  // Director rows are labelled with scene names; this string fingerprint keeps
+  // them fresh without subscribing to the scenes record itself (whose identity
+  // changes on every track edit anywhere).
+  const sceneNamesKey = useProjectStore((s) => s.sceneOrder.map((id) => s.scenes[id]?.name).join(' '))
+  // Declared rows read the wider project (mover chains, scenes) but must not
+  // subscribe to it: recompute only when the edited track itself changes. A
+  // sibling chain edit can in principle change a mover lane's prior copy count
+  // mid-session; the next edit to THIS track catches up - acceptable staleness
+  // for keeping foreign edits from re-rendering the roll.
+  const declaredRows = useMemo(() => {
+    if (automation || trigger || !track) return undefined
+    const s = useProjectStore.getState()
+    return resolveDeclaredMidiRows(track, {
+      tracks: s.tracks,
+      rootTrackIds: s.rootTrackIds,
+      scenes: s.scenes,
+      sceneOrder: s.sceneOrder,
+      bpm,
+      beatsPerBar,
+      totalBars,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [automation, trigger, track, bpm, beatsPerBar, totalBars, sceneNamesKey])
   const defRows = declaredRows?.rows
   const rows = automation
     ? automation.kind === 'toggle'
-      ? generateToggleRows(notes.map((n) => n.pitch))
-      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch))
+      ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
+      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor)
     : trigger
-      ? generateTriggerRows(trigger.rowLabel, noteColor ?? trackColor, notes.map((n) => n.pitch))
+      ? generateTriggerRows(trigger.rowLabel, midiNoteBaseColor(noteColor ?? trackColor), notes.map((n) => n.pitch))
       : videoTrack
         ? generateVideoClipRows(
             (videoTrack.videoPads ?? []).map((pad, i) => {
@@ -261,18 +370,20 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             }),
             VIDEO_BASE_PITCH,
             notes.map((n) => n.pitch),
+            trackColor,
           )
         : photoTrack
         ? generatePhotoRows(
             (photoTrack.photoPads ?? []).map((pad, i) => photoClips[pad.ref]?.fileName ?? `Photo ${i + 1}`),
             PHOTO_BASE_PITCH,
             notes.map((n) => n.pitch),
+            trackColor,
           )
         : defRows
-          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch))
+          ? generateInstrumentRows(defRows, declaredRows.strict ? [] : notes.map((n) => n.pitch), trackColor)
           : noteColor
-            ? generateRows(undefined).map((r) => ({ ...r, color: r.emphasized ? r.color : noteColor }))
-            : generateRows(undefined)
+            ? generateRows(noteColor)
+            : generateRows(trackColor)
   const blockDurationBeats = block.durationBars * beatsPerBar
   // Span the full project length so the MIDI editor scrolls to the same end as
   // the tracks view (at least INITIAL_TOTAL_BARS so short projects still have room).
@@ -327,73 +438,77 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
           <X size={12} />
         </button>
 
-        <div className="w-px h-4 bg-zinc-800" />
-
         <button
           onClick={() => setSnapEnabled(!snapEnabled)}
           title={snapEnabled ? 'Snap to grid (on)' : 'Snap to grid (off)'}
-          className={`flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-medium transition-colors ${
-            snapEnabled
-              ? 'bg-indigo-600/30 text-indigo-300'
-              : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+          className={`px-2 h-5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+            snapEnabled ? '' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
           }`}
+          style={snapEnabled ? { background: accent.pillBg, color: accent.pillText } : undefined}
         >
-          <Magnet size={10} />
           Snap
         </button>
 
-        <select
+        <ToolbarSelect
           value={quantize}
           onChange={(e) => setQuantize(e.target.value === 'smart' ? 'smart' : Number(e.target.value))}
           title="Grid resolution"
-          className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
         >
           {/* The live readout shows what Smart resolves to at this zoom. */}
           <option value="smart">Smart ({quantizeLabel(smartQuantize, beatsPerBar)})</option>
           {QUANTIZE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
-        </select>
+        </ToolbarSelect>
 
         {automation && (
           <>
             <div className="w-px h-4 bg-zinc-800" />
-            {/* Noise mode: notes gate seeded random bursts around their value
-                instead of keyframing. Seed is fixed per take (pure function
-                of the beat - scrub/export replay the same wobble); the dice
-                re-roll a new one. */}
-            <button
-              onClick={() => setTrackNoise(trackId, noise
-                ? undefined
-                : { rate: 4, smoothness: 0.5, range: 0.5, seed: Math.floor(Math.random() * 1e9) })}
-              title={noise ? 'Noise bursts ON - notes gate random wobble around their value' : 'Noise bursts OFF - notes are value keyframes'}
-              className={`flex items-center gap-1 px-1.5 h-5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                noise ? 'bg-indigo-600/30 text-indigo-300' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Waves size={10} />
-              Noise
-            </button>
-            {noise ? (
+            {/* The lane's MODE, the same three the settings panel shows: value
+                keyframes on a curve, seeded noise gates, or ADSR bursts. The
+                mode's own controls follow it in the toolbar. */}
+            <div className="flex flex-shrink-0 items-center gap-[2px] rounded bg-zinc-800/50 p-[2px]">
+              {MODE_OPTIONS.map((option) => {
+                const active = option.value === mode
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setAutomationMode(trackId, option.value)}
+                    title={option.title}
+                    className={`flex items-center gap-1 px-1.5 h-[18px] rounded-[3px] text-[10px] font-medium transition-colors cursor-pointer ${
+                      active ? '' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                    style={active ? { background: accent.pillBg, color: accent.pillText } : undefined}
+                  >
+                    <option.icon size={10} />
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            {mode === 'burst' && burst ? (
               <>
-                <div className="flex items-center gap-1" title="Wiggles per beat">
-                  <span className="text-[10px] text-zinc-600">Rate</span>
-                  <input type="range" min={0.5} max={16} step={0.5} value={noise.rate}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, rate: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
-                </div>
-                <div className="flex items-center gap-1" title="0 = stepped chaos, 1 = smooth wandering">
-                  <span className="text-[10px] text-zinc-600">Smooth</span>
-                  <input type="range" min={0} max={1} step={0.05} value={noise.smoothness}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, smoothness: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
-                </div>
-                <div className="flex items-center gap-1" title="Deviation around the note's value (fraction of the param range)">
-                  <span className="text-[10px] text-zinc-600">Range</span>
-                  <input type="range" min={0} max={1} step={0.05} value={noise.range}
-                    onChange={(e) => setTrackNoise(trackId, { ...noise, range: Number(e.target.value) })}
-                    className="slider-square w-10 cursor-pointer" />
-                </div>
+                {/* Beats per stage, then how far every burst travels. The curve
+                    itself is grabbable in the settings panel. */}
+                <ToolbarSlider label="A" title="Attack, in beats" value={burst.attackBeats} min={0} max={4} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, attackBeats: v })} />
+                <ToolbarSlider label="D" title="Decay, in beats" value={burst.decayBeats} min={0} max={8} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, decayBeats: v })} />
+                <ToolbarSlider label="S" title="Sustain level while the note is held" value={burst.sustainLevel} min={0} max={1} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, sustainLevel: v })} />
+                <ToolbarSlider label="R" title="Release, in beats after the note ends" value={burst.releaseBeats} min={0} max={8} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, releaseBeats: v })} />
+                <ToolbarSlider label="Amt" title="Intensity: how far every burst travels" value={burst.intensity} min={0} max={1} step={0.01}
+                  accent={accent.slider} onChange={(v) => setTrackBurst(trackId, { ...burst, intensity: v })} />
+              </>
+            ) : mode === 'noise' && noise ? (
+              <>
+                <ToolbarSlider label="Rate" title="Wiggles per beat" value={noise.rate} min={0.5} max={16} step={0.5}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, rate: v })} />
+                <ToolbarSlider label="Smooth" title="0 = stepped chaos, 1 = smooth wandering" value={noise.smoothness} min={0} max={1} step={0.05}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, smoothness: v })} />
+                <ToolbarSlider label="Range" title="Deviation around the note's value (fraction of the param range)" value={noise.range} min={0} max={1} step={0.05}
+                  accent={accent.slider} onChange={(v) => setTrackNoise(trackId, { ...noise, range: v })} />
                 <button
                   onClick={() => setTrackNoise(trackId, { ...noise, seed: Math.floor(Math.random() * 1e9) })}
                   title="Re-roll the noise (new random take; each take replays identically)"
@@ -405,16 +520,15 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             ) : (
               <>
                 <span className="text-[10px] text-zinc-600" title="Interpolation between keyframes">Interp</span>
-                <select
+                <ToolbarSelect
                   value={interpolation}
                   onChange={(e) => setTrackInterpolation(trackId, e.target.value as InterpolationMode)}
                   title="Interpolation between value keyframes"
-                  className="h-5 px-1 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700 outline-none"
                 >
                   {INTERP_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
-                </select>
+                </ToolbarSelect>
               </>
             )}
           </>
@@ -428,22 +542,24 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
             type="range"
             min={5}
             max={200}
+            step="any"
             value={midiPixelsPerBeat}
             onChange={(e) => setMidiPixelsPerBeat(Number(e.target.value))}
-            className="slider-square w-14 cursor-pointer"
+            style={sliderFill(midiPixelsPerBeat, 5, 200, accent.slider)}
+            className="slider-console w-24 cursor-pointer"
           />
         </div>
         <div className="flex items-center gap-1.5" title="Vertical zoom (Alt+scroll)">
           <span className="text-[10px] text-zinc-600">V</span>
-          {/* Slider moves over the quantized ladder's indices, one rung per step. */}
           <input
             type="range"
-            min={0}
-            max={MIDI_ROW_HEIGHTS.length - 1}
-            step={1}
-            value={MIDI_ROW_HEIGHTS.indexOf(rowHeight)}
-            onChange={(e) => setMidiRowHeight(MIDI_ROW_HEIGHTS[Number(e.target.value)])}
-            className="slider-square w-14 cursor-pointer"
+            min={MIDI_ROW_HEIGHT_MIN}
+            max={MIDI_ROW_HEIGHT_MAX}
+            step="any"
+            value={rowHeight}
+            onChange={(e) => setMidiRowHeight(Number(e.target.value))}
+            style={sliderFill(rowHeight, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX, accent.slider)}
+            className="slider-console w-24 cursor-pointer"
           />
         </div>
 
@@ -452,10 +568,11 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
       {/* Piano roll grid */}
       <MidiEditor
         trackId={trackId}
+        trackColor={trackColor}
         blockStartBeat={block.startBar * beatsPerBar}
         blockDurationBeats={blockDurationBeats}
         rows={rows}
-        cornerLabel={automation?.paramLabel ?? trigger?.cornerLabel ?? trackName}
+        cornerLabel={cornerLabel}
         block={block}
         notes={notes}
         onNotesChange={setNotes}

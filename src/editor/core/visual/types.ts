@@ -4,8 +4,8 @@
 
 import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
-import type { AdsrEnvelope, InterpolationMode, PhotoPad, VideoPad } from '../../types'
-import type { AutomationKeyframe, NoiseConfig, NoiseGate } from './automation'
+import type { AdsrEnvelope, PhotoPad, VideoPad } from '../../types'
+import type { AutomationLane } from './automation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
 export interface StateVector {
@@ -20,30 +20,20 @@ export interface StateVector {
   aux: Record<string, number>
 }
 
-/** A resolved automation lane: keyframes (pitch→value, absolute beats) driving one of
- *  the object's params, interpolated per `mode`. Sampled per frame in computeAtBeat.
- *  Noise-mode lanes carry `noise` + `gates` instead of meaningful keyframes: while a
- *  gate (held note) covers the beat, the param wanders around the note's value. */
-export interface ResolvedAutomation {
+/** A resolved automation lane driving one of the object's params. Its MODE lives
+ *  in the shared AutomationLane shape (keyframes / noise gates / ADSR bursts) and
+ *  only sampleAutomationLane reads it apart; computeAtBeat samples it per frame. */
+export interface ResolvedAutomation extends AutomationLane {
   param: string
-  mode: InterpolationMode
-  keyframes: AutomationKeyframe[]
-  noise?: NoiseConfig
-  gates?: NoiseGate[]
-  /** Param range for noise scaling (from the instrument's param def). */
-  min?: number
-  max?: number
 }
 
 /** A resolved automation lane targeting one effect instance's setting (or its
  *  'enabled' pseudo-param as a 0/1 lane). Sampled per frame in computeAtBeat
  *  into ObjectState.effectOverrides; the effect wrappers merge it over the
  *  instance's stored settings. */
-export interface ResolvedEffectAutomation {
+export interface ResolvedEffectAutomation extends AutomationLane {
   instanceId: string
   key: string
-  mode: InterpolationMode
-  keyframes: AutomationKeyframe[]
 }
 
 /**
@@ -129,6 +119,15 @@ export interface ResolvedObject {
   scratchBase: StateVector
   /** Cross-cutting group labels - top-level movers target tags (see Routing). */
   tags: string[]
+  /** Track ids of Crop tracks whose `targets` routing hits THIS object: each
+   *  becomes a screen-space mask pass over this object's rendered output
+   *  (ShaderWrapper), gated by that crop track's own notes. Appended per
+   *  resolve like the global entries in moverAndSplitterChain. */
+  maskSourceIds: string[]
+  /** True on a Crop object that routes to targets: it masks those objects
+   *  instead of its whole scene, so VisualScene must NOT also run its
+   *  scene-wide pass. */
+  masksTargets: boolean
 }
 
 export interface ResolvedGraph {

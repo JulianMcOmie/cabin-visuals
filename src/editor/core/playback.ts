@@ -19,6 +19,14 @@ interface EngineCallbacks {
 // jitter.
 const AUDIO_LOOKAHEAD = 0.05
 
+// Tone's transport position cannot go negative, but musical beats can: audio
+// dragged into the pickup region starts before bar 0. A large constant origin
+// (transport bar 1024 = musical bar 0) maps every reachable negative beat onto
+// a positive transport position. Constant on purpose - deriving the offset from
+// the live pickup would move the mapping under a playing transport every time a
+// drag grows the pickup.
+const TRANSPORT_ORIGIN_BARS = 1024
+
 /**
  * The TRANSPORT engine: the Tone transport and the RAF beat clock - the sole
  * producer of the beat and of the shared `when` anchor. Audio playback lives in
@@ -31,6 +39,7 @@ class PlaybackEngine {
   private playing = false
   private lastTrackedBeat: number | null = null
   private bpmDragging = false
+  private blockDragging = false
 
   init(callbacks: EngineCallbacks) {
     this.callbacks = callbacks
@@ -121,6 +130,44 @@ class PlaybackEngine {
     }
   }
 
+  /** Silence audio for the length of an audio-block drag - move or trim alike -
+   *  the same trade the scrub makes. Every pointermove writes the block, and the
+   *  store subscription re-arms every block on each write; those re-arms restart
+   *  the same audio at nearly the same offset and stack inside the lookahead
+   *  window into a runaway gain sum - the drag "earrape". The release re-arms
+   *  once, exactly as endBpmDrag does. */
+  beginBlockDrag() {
+    this.blockDragging = true
+    if (this.playing) getAudioEngine().stopAll()
+  }
+
+  /** End a block drag: re-arm once at the final position (no-op if not playing). */
+  endBlockDrag() {
+    this.blockDragging = false
+    this.rearmAudio()
+  }
+
+  /** The AUDIBLE audio-block drag (sync mode): playback keeps sounding so the
+   *  drag can be tuned by ear. Like beginBlockDrag this suppresses the store
+   *  subscription's per-move re-arm (the earrape source) - but does NOT silence.
+   *  Fresh audio arrives through the two safe, bounded channels instead: the
+   *  loop wrap's seek() each pass, and the gesture's debounced forceRearm.
+   *  Ended by the same endBlockDrag as the silent variant. */
+  beginSyncDrag() {
+    this.blockDragging = true
+  }
+
+  /** One deliberate re-arm DURING a sync drag (debounced by the caller - a
+   *  single re-arm is safe, only per-pointermove stacks are not). */
+  forceRearm() {
+    if (!this.playing || !this.callbacks) return
+    const bpm = this.callbacks.getBpm()
+    const beatsPerBar = this.callbacks.getBeatsPerBar()
+    const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
+    const when = Tone.now() + AUDIO_LOOKAHEAD
+    getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+  }
+
   /** Silence audio for the duration of a scrub. The transport keeps running so the
    *  playhead still follows the drag; each move uses scrubSeek (no re-arm) and the
    *  release calls seek() to resume. Re-arming on every move instead would stack
@@ -137,9 +184,10 @@ class PlaybackEngine {
     this.lastTrackedBeat = beat
   }
 
-  /** Re-arm audio at the current position (block edits / mute toggles while playing). */
+  /** Re-arm audio at the current position (block edits / mute toggles while playing).
+   *  Suppressed mid-drag - that gesture's own release re-arms (see beginBlockDrag). */
   rearmAudio() {
-    if (!this.playing || !this.callbacks) return
+    if (!this.playing || !this.callbacks || this.blockDragging) return
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
@@ -200,17 +248,19 @@ class PlaybackEngine {
   }
 }
 
-/** beat -> Tone transport position "bars:beats:sixteenths". */
+/** Musical beat -> Tone transport position "bars:beats:sixteenths" (origin-shifted). */
 function beatToPosition(beat: number, beatsPerBar: number): string {
-  const bars = Math.floor(beat / beatsPerBar)
-  const beats = beat % beatsPerBar
+  const shifted = Math.max(0, beat + TRANSPORT_ORIGIN_BARS * beatsPerBar)
+  const bars = Math.floor(shifted / beatsPerBar)
+  const beats = shifted % beatsPerBar
   return `${bars}:${beats}:0`
 }
 
-/** Tone transport position -> absolute beat (with sub-beat precision). */
+/** Tone transport position -> absolute musical beat (with sub-beat precision). */
 function positionToBeat(position: unknown, beatsPerBar: number): number {
   const [bars, beats, sixteenths] = String(position).split(':').map(Number)
   return (bars || 0) * beatsPerBar + (beats || 0) + (sixteenths || 0) / 4
+    - TRANSPORT_ORIGIN_BARS * beatsPerBar
 }
 
 let _engine: PlaybackEngine | null = null

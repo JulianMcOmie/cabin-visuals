@@ -5,6 +5,7 @@ export const opacityPlugin: VisualEffect = {
   id: 'opacity',
   name: 'Opacity',
   category: 'shader',
+  deprecated: true,
   params: [
     { key: 'opacity', label: 'Opacity', min: 0, max: 1, step: 0.01, default: 1 },
   ],

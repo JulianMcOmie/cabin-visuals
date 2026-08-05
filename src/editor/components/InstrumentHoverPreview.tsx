@@ -4,7 +4,7 @@ import { Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalS
 import { Canvas, useFrame } from '@react-three/fiber'
 import { View } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
+import { CanvasTexture, Group, LinearFilter, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -14,7 +14,7 @@ import type { VisualCopy } from '../core/visualCopies/types'
 import { setPreviewObjectState } from '../core/visual/VisualEngine'
 import { resolveProject, type ProjectSnapshot } from '../core/visual/resolve'
 import { evaluatePulse } from '../core/visual/energy'
-import { sampleLane, sampleNoiseLane } from '../core/visual/automation'
+import { sampleAutomationLane } from '../core/visual/automation'
 import { evaluateAdsrGain } from '../core/visual/adsr'
 import { composeMatrix, localTransformToSV } from '../core/visual/stateVector'
 import { composeScreenAnchor } from '../core/visual/screenAnchor'
@@ -128,20 +128,50 @@ const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 
 // Preview-only param overrides for instruments whose real defaults read poorly
 // in a popup: Text Display defaults to the single word HELLO, which hides its
-// whole point - advancing a word per note.
+// whole point. The Stack layout shows the PHRASE: "text display" stays up the
+// whole loop while the font flicker below carries all the motion.
 const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
-  textDisplay: { text: 'hello awesome person' },
+  textDisplay: { text: 'text display' },
+}
+const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
+  // Stack layout, 2 words per card, held until replaced (no fade dips between
+  // the tightly-spaced preview notes).
+  textDisplay: { layoutMode: 2, stackMaxWords: 2, sustain: 1 },
+  // Spin defaults to 0 (still) in real tracks; a static solid makes a dead
+  // preview, so the popup shows the classic steady tumble.
+  cube: { spinSpeed: 1 },
+}
+
+// Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
+// Display rapid-fire flickers through font stacks - system faces only, since
+// the template webfonts gate frames on their loads mid-flicker.
+const TEXT_DISPLAY_FLICKER_FONTS = [0, 1, 2, 10, 13, 14, 11]
+const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {
+  textDisplay: (params, beat) => {
+    params.font = TEXT_DISPLAY_FLICKER_FONTS[Math.floor(beat * 2) % TEXT_DISPLAY_FLICKER_FONTS.length]
+  },
 }
 
 // Preview-only note overrides for instruments whose labeled vocabulary the
 // generic arc misses entirely. Text Display renders NOTHING without pitch 48
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
-// black. Near-held word notes keep a word on screen while stepping it; and
-// the note COUNT must divide by the 3 preview words, or the loop's wrap
-// restarts the word cycle mid-sequence (hello twice in a row once per loop).
-// 12 notes over the 16 beats: divisible by 3, still an even musical stride.
+// black. Both word notes land at beat 0, so the full phrase is up from the
+// first frame and never rebuilds - the font flicker alone is the animation.
+// Object cards with a stylized in-canvas caption, same treatment as the
+// compound movers' field labels (baked into captured clips).
+const OBJECT_PREVIEW_LABELS: Record<string, string> = {
+  cube: '3d shape',
+}
+
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
-  textDisplay: makeLoopNotes([48], 1.2, 4 / 3),
+  textDisplay: Array.from({ length: 2 }, () => ({
+    beat: 0,
+    blockStartBeat: 0,
+    blockEndBeat: 1e9,
+    pitch: 48,
+    velocity: 100,
+    durationBeats: 0.4,
+  })),
 }
 
 function makePreviewState(instrumentId: string): ObjectState {
@@ -153,6 +183,7 @@ function makePreviewState(instrumentId: string): ObjectState {
     else if (typeof p.default === 'number') params[p.key] = p.default
   }
   Object.assign(stringParams, PREVIEW_STRING_PARAMS[instrumentId])
+  Object.assign(params, PREVIEW_NUMBER_PARAMS[instrumentId])
   return {
     beat: 0,
     secPerBeat: 60 / PREVIEW_BPM,
@@ -188,6 +219,7 @@ function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumen
   useFrame((root) => {
     const beat = previewBeatNow(root.clock.elapsedTime, sync)
     state.beat = beat
+    PREVIEW_PARAM_ANIMATORS[instrumentId]?.(state.params, beat)
     state.activeNotes.length = 0
     let lastOnset = -Infinity
     let lastVel = 0
@@ -231,10 +263,12 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
       <Comp trackId={trackId} />
     </Suspense>
   )
+  const label = OBJECT_PREVIEW_LABELS[instrumentId]
   return (
     <>
       <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
+      {label && <PreviewFieldLabel text={label} />}
     </>
   )
 }
@@ -260,41 +294,249 @@ const CUBE_BASE_COLOR = new Color('#35a7e6')
 // off-frame.
 const MOVER_BASE_OFFSET = 1.3
 
+/** One long held note - constant-rate blocks (spins, radii) read held time. */
+const holdNote = (pitch: number, beat = 0, durationBeats = LOOP_BEATS): ResolvedNote => ({
+  beat,
+  blockStartBeat: 0,
+  blockEndBeat: 1e9,
+  pitch,
+  velocity: 100,
+  durationBeats,
+})
+
+/** N seed positions around a camera-facing circle. */
+const ringSeeds = (n: number, r: number): Array<[number, number, number]> =>
+  Array.from({ length: n }, (_, i) => [
+    Math.cos((i / n) * Math.PI * 2) * r,
+    Math.sin((i / n) * Math.PI * 2) * r,
+    0,
+  ])
+
+/** cols x rows of camera-facing seed positions, centered on the origin. */
+const gridSeeds = (cols: number, rows: number, spacing: number): Array<[number, number, number]> => {
+  const out: Array<[number, number, number]> = []
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      out.push([(c - (cols - 1) / 2) * spacing, (r - (rows - 1) / 2) * spacing, 0])
+    }
+  }
+  return out
+}
+
+// The compound movers choreograph WHOLE ARRANGEMENTS, so their library cards
+// preview a field of small cubes instead of the single offset cube. Radial
+// Motion is structural (it mints its own copies), so one centered seed shows
+// the full bloom; the pure movers run a ring of seeds through the chain in
+// parallel. Notes speak each definition's own vocabulary.
+interface CompoundMoverPreview {
+  seeds: Array<[number, number, number]>
+  /** Uniform scale baked into each seed - the "many smaller objects" look. */
+  seedScale: number
+  settings?: Record<string, number>
+  notes: ResolvedNote[]
+  /** Stylized in-canvas caption naming the mover (baked into captured clips). */
+  label?: string
+}
+const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
+  // The unified Mover's default cell (translate x burst) stepping a ring of
+  // seeds through the generic 60-65 arc - the same phrase every mover card
+  // speaks, so the card reads as the family's fundamental.
+  mover: {
+    label: 'mover',
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: MOVER_NOTES,
+  },
+  // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
+  // on their own - the mover needs no notes to move - so the only notes here
+  // step the OUTER radius multiplier (36-39 = collapse/half/home/double) and
+  // the arrangement BLOOMS out of the center and folds back in while it spins.
+  radialMotion: {
+    label: 'radial motion',
+    seeds: [[0, 0, 0]],
+    seedScale: 0.34,
+    settings: {
+      copies0: 6, copies1: 3, copies2: 2,
+      radius0: 1.9, radius1: 0.85, radius2: 0.38,
+    },
+    notes: [36, 37, 38, 39, 39, 38, 37, 36].map((pitch, i) => holdNote(pitch, i * 2, 2)),
+  },
+  // Motion's Step block is the 60-65 signed basis the generic arc already
+  // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
+  motion: {
+    label: 'motion',
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: [...MOVER_NOTES, holdNote(76)],
+  },
+  // The consolidated rack's pitches are bank-relative: its Motion bank starts
+  // at 0 with rows drift 0-5, return 6, step 7-12, spin 13-18 - so this is the
+  // same step arc + held spin as `motion`, transposed into the rack's lane.
+  allMovers: {
+    label: 'all movers',
+    seeds: ringSeeds(8, 1.5),
+    seedScale: 0.42,
+    notes: [...makeLoopNotes([7, 9, 11, 8, 10, 12, 7, 10], 2, 2), holdNote(17)],
+  },
+  // Meteor Impact strikes the center of a camera-facing field: the shockwave
+  // front visibly travels outward through the neighbors, springs and settles
+  // (60 = Impact, once per bar).
+  meteorImpact: {
+    label: 'meteor impact',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: makeLoopNotes([60], 0.5, 4),
+  },
+  // Wave Terrain displaces along scene Z at each copy's own (x, y): the same
+  // grid rides the rolling surface while Amplitude-up (60) is held, settling
+  // as the hold ends so the loop restarts from calm water.
+  waveTerrain: {
+    label: 'wave terrain',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: [holdNote(60, 0, 12)],
+  },
+  // Force Field Pulse pushes every copy radially from the center - the grid
+  // breathes out, anticipates in-then-out, pulls in, and spiral-twists, one
+  // gesture per bar (its four note vocabularies).
+  forceFieldPush: {
+    label: 'force field pulse',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    notes: makeLoopNotes([60, 62, 61, 64], 0.5, 4),
+  },
+  // Impact Scatter integrates hits into the field's momentum, so the loop
+  // tells that story: one clean blast, a rapid triple that visibly compounds
+  // (each kick lands on pieces already flying), an implode, then a blast
+  // yanked home mid-flight by the settle row. IMPACT is preview-tamed so the
+  // throw stays inside the popup's frame.
+  impactScatter: {
+    label: 'impact scatter',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { impact: 0.5, recoverBeats: 2, chaos: 0.6 },
+    notes: [
+      holdNote(60, 0, 0.25),
+      holdNote(60, 4, 0.25),
+      holdNote(60, 4.5, 0.25),
+      holdNote(60, 5, 0.25),
+      holdNote(61, 8, 0.25),
+      holdNote(60, 12, 0.25),
+      holdNote(62, 13.5, 0.25),
+    ],
+  },
+  // Impact Pulse punches SIZE, so the whole field pops together like a drum
+  // hit: swell and squash alternate, with enough STRETCH that grow reads
+  // tall-and-narrow and shrink short-and-wide, and a decay long enough to
+  // watch fall away at popup scale.
+  impactPulse: {
+    label: 'impact pulse',
+    seeds: gridSeeds(7, 5, 0.72),
+    seedScale: 0.3,
+    settings: { hit: 0.55, decayBeats: 1, stretch: 0.6 },
+    notes: makeLoopNotes([60, 61], 0.5, 2),
+  },
+  // Visibility gates existence itself: ONE full-size cube popping in and out
+  // with its note (127 = the single copy's row).
+  visibility: {
+    label: 'visibility',
+    seeds: [[0, 0, 0]],
+    seedScale: 1,
+    notes: makeLoopNotes([127], 0.5, 1),
+  },
+}
+
+/** An item's name as a stylized caption INSIDE the GL frame - drawn to a
+ *  canvas texture, so captured clips carry it (a DOM overlay never would).
+ *  Depth test off + late renderOrder: the caption is a title, not a scene
+ *  object, so it reads over anything the preview swings through its plane
+ *  (the 3D Shape's tumbling solid reaches it; movers' small cubes can too). */
+function PreviewFieldLabel({ text }: { text: string }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1024
+    canvas.height = 192
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      let size = 116
+      const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
+      ctx.font = font(size)
+      const measured = ctx.measureText(text).width
+      if (measured > 940) size *= 940 / measured
+      ctx.font = font(size)
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = 'rgba(0,0,0,0.65)'
+      ctx.shadowBlur = 18
+      ctx.shadowOffsetY = 6
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(text, 512, 96)
+    }
+    const tex = new CanvasTexture(canvas)
+    tex.minFilter = LinearFilter
+    tex.magFilter = LinearFilter
+    return tex
+  }, [text])
+  useEffect(() => () => texture.dispose(), [texture])
+  return (
+    <mesh position={[0, -1.35, 0.7]} renderOrder={10}>
+      <planeGeometry args={[3.4, 0.6375]} />
+      <meshBasicMaterial map={texture} transparent depthWrite={false} depthTest={false} toneMapped={false} />
+    </mesh>
+  )
+}
+
 export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
   const def = getMoverOrSplitterDefinition(moverId)
+  const compound = COMPOUND_MOVER_PREVIEWS[moverId]
   const meshesRef = useRef<Mesh[]>([])
   const chain = useMemo(() => {
     if (!def) return null
     return def.resolve({
-      settings: mergeDefinitionSettings(def, inputValues),
-      notes: notes && notes.length > 0 ? notes : MOVER_NOTES,
+      settings: mergeDefinitionSettings(def, inputValues ?? compound?.settings),
+      notes: notes && notes.length > 0 ? notes : compound?.notes ?? MOVER_NOTES,
     })
-  }, [def, notes, inputValues])
-  const offsetSeed = def?.kind === 'mover'
+  }, [def, notes, inputValues, compound])
+  const offsetSeed = def?.kind === 'mover' && !compound
 
   useFrame((root) => {
     if (!chain) return
     const beat = previewBeatNow(root.clock.elapsedTime, sync)
-    const seed = identityVisualCopy()
-    if (offsetSeed) seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
-    const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
     const meshes = meshesRef.current
-    for (let i = 0; i < meshes.length; i++) {
-      const mesh = meshes[i]
-      if (!mesh) continue
-      const copy = copies[i]
-      mesh.visible = !!copy
-      if (!copy) continue
-      mesh.matrixAutoUpdate = false
-      mesh.matrix.copy(copy.transform)
-      const mat = mesh.material as MeshStandardMaterial
-      mat.transparent = true
-      mat.opacity = copy.opacity
-      mat.color.copy(CUBE_BASE_COLOR).offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+    let used = 0
+    for (const seedPosition of compound?.seeds ?? [null]) {
+      if (used >= meshes.length) break
+      const seed = identityVisualCopy()
+      if (seedPosition) {
+        seed.transform
+          .makeTranslation(seedPosition[0], seedPosition[1], seedPosition[2])
+          .multiply(_seedScaleMatrix.makeScale(compound.seedScale, compound.seedScale, compound.seedScale))
+      } else if (offsetSeed) {
+        seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
+      }
+      const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
+      for (const copy of copies) {
+        if (used >= meshes.length) break
+        const mesh = meshes[used++]
+        if (!mesh) continue
+        mesh.visible = true
+        mesh.matrixAutoUpdate = false
+        mesh.matrix.copy(copy.transform)
+        const mat = mesh.material as MeshStandardMaterial
+        mat.transparent = true
+        mat.opacity = copy.opacity
+        mat.color.copy(CUBE_BASE_COLOR).offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+      }
+    }
+    for (let i = used; i < meshes.length; i++) {
+      if (meshes[i]) meshes[i].visible = false
     }
   })
 
   if (!chain) return null
+  // Fields need one mesh per seed plus headroom for self-multiplying movers
+  // (Radial Motion mints copies from its single seed).
+  const poolSize = compound ? compound.seeds.length + MAX_COPIES : MAX_COPIES
   return (
     <>
       {/* Static origin marker: the fixed point orbits circle around. */}
@@ -305,12 +547,16 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
         </mesh>
       )}
       {/* The "gone" ghost: the object exactly where it would sit WITHOUT this
-          mover/splitter - the solid copies show what adding it does. */}
-      <mesh position={offsetSeed ? [MOVER_BASE_OFFSET, 0, 0] : [0, 0, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
-      </mesh>
-      {Array.from({ length: MAX_COPIES }, (_, i) => (
+          mover/splitter - the solid copies show what adding it does. A field
+          of small seeds needs no ghost; the motion itself is the story. */}
+      {!compound && (
+        <mesh position={offsetSeed ? [MOVER_BASE_OFFSET, 0, 0] : [0, 0, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
+        </mesh>
+      )}
+      {compound?.label && <PreviewFieldLabel text={compound.label} />}
+      {Array.from({ length: poolSize }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
           <meshStandardMaterial color={CUBE_BASE_COLOR} />
@@ -319,6 +565,7 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
     </>
   )
 }
+const _seedScaleMatrix = new Matrix4()
 
 // ── Project-accurate track-row previews ─────────────────────────────────────
 //
@@ -516,12 +763,8 @@ export function computeProjectState(
   if (obj.automations.length) {
     params = { ...obj.params }
     for (const auto of obj.automations) {
-      if (auto.noise && auto.gates?.length) {
-        const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
-        if (!Number.isNaN(v)) params[auto.param] = v
-      } else if (auto.keyframes.length) {
-        params[auto.param] = sampleLane(auto.keyframes, beat, auto.mode)
-      }
+      const v = sampleAutomationLane(auto, beat, params[auto.param] ?? auto.base ?? 0)
+      if (!Number.isNaN(v)) params[auto.param] = v
     }
   }
   let opacityGate = 1

@@ -5,6 +5,9 @@ import { offsetPlugin } from './transforms/offset'
 import { rotatePlugin } from './transforms/rotate'
 import { scalePlugin } from './transforms/scale'
 import { kaleidoscopePlugin } from './shaders/kaleidoscope'
+import { kaleidoSkinPlugin } from './materials/kaleidoSkin'
+import { glowPlugin } from './shaders/glow'
+import { texturizerPlugin } from './materials/texturizer'
 import { boilPlugin } from './shaders/boil'
 import { pixelatePlugin } from './shaders/pixelate'
 import { chromaticAberrationPlugin } from './shaders/chromaticAberration'
@@ -18,10 +21,13 @@ export const EFFECTS: Record<string, VisualEffect> = {
   [rotatePlugin.id]: rotatePlugin,
   [scalePlugin.id]: scalePlugin,
   [kaleidoscopePlugin.id]: kaleidoscopePlugin,
+  [kaleidoSkinPlugin.id]: kaleidoSkinPlugin,
   [boilPlugin.id]: boilPlugin,
   [pixelatePlugin.id]: pixelatePlugin,
   [chromaticAberrationPlugin.id]: chromaticAberrationPlugin,
   [opacityPlugin.id]: opacityPlugin,
+  [texturizerPlugin.id]: texturizerPlugin,
+  [glowPlugin.id]: glowPlugin,
 }
 
 export function getEffect(id: string): VisualEffect | undefined {

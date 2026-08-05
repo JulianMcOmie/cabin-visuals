@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group, Matrix4 } from 'three'
 import { getInstrument } from '../../instruments'
+import { isFullFrameTrack } from '../../instruments/types'
 import { getObjectState, getVisualCopy } from '../../core/visual/VisualEngine'
 import { composeScreenAnchor } from '../../core/visual/screenAnchor'
 import { applyMaterialOpacity } from '../../core/visual/animatedOpacity'
@@ -14,6 +15,7 @@ import { composePostMoverScale, evaluatePostMoverScale } from '../../core/visual
 import { useTimeStore } from '../../store/TimeStore'
 import { TransformWrapper } from './TransformWrapper'
 import { ShaderWrapper } from './ShaderWrapper'
+import { MaterialWrapper } from './MaterialWrapper'
 
 /**
  * Renders ONE OCCURRENCE of one object: the placement group carries the object's
@@ -31,11 +33,16 @@ export function ObjectRenderer({
   trackId,
   instrumentId,
   visualCopyIndex,
+  maskSourceIds,
 }: {
   sceneId: string
   trackId: string
   instrumentId: string
   visualCopyIndex: number
+  /** Crop tracks masking this object (ObjectListEntry.maskSourceIds): forces
+   *  the ShaderWrapper path so the mask pass has the object's pixels isolated,
+   *  even with no shader effects of its own. */
+  maskSourceIds?: readonly string[]
 }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
@@ -59,8 +66,21 @@ export function ObjectRenderer({
     (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
   )
   const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
+  // Material effects generate the target's SURFACE, so they must sit innermost -
+  // closest to the meshes - and they apply on both the full-frame and normal paths.
+  // Kept mounted while an automated 'enabled' is off, same as shader instances.
+  const materialInstances = plugins.filter(
+    (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'material',
+  )
 
-  const isFullFrame = !!def?.fullFrame
+  // Full-frame can be a per-track MODE (Oscilloscope's "Fit to screen"), so the
+  // params record is a real dependency here: flipping the mode swaps which of
+  // the two branches at the bottom of this component renders. Only instruments
+  // that declare `fullFrameParam` subscribe, so nothing else pays for it.
+  const modeParams = useProjectStore((s) => def?.fullFrameParam
+    ? s.scenes[sceneId]?.tracks[trackId]?.params
+    : undefined)
+  const isFullFrame = isFullFrameTrack(def, modeParams)
   const instrumentCopyContext = useMemo(() => ({
     visualCopyIndex,
     colorParams: (def?.params ?? []).flatMap((param) => param.type === 'color'
@@ -105,11 +125,19 @@ export function ObjectRenderer({
 
   if (!def) return null
   const Component = def.component
-  const instrument = (
+  const bare = (
     <InstrumentCopyContext.Provider value={instrumentCopyContext}>
       <Component trackId={trackId} />
     </InstrumentCopyContext.Provider>
   )
+  const instrument = materialInstances.length > 0
+    ? <MaterialWrapper trackId={trackId} plugins={materialInstances}>{bare}</MaterialWrapper>
+    : bare
+
+  // A routed crop mask needs the object's pixels isolated, which is exactly
+  // what the shader path provides - so masked objects take it even with no
+  // shader effects of their own.
+  const needsShaderPath = shaderInstances.length > 0 || (maskSourceIds?.length ?? 0) > 0
 
   // Full-frame instruments (viewport-filling planes) skip the placement transform and
   // the transform effect chain; shaders may still post-process them.
@@ -117,8 +145,8 @@ export function ObjectRenderer({
     // No visualCopyIndex on the wrapper: the screen anchor inside the offscreen
     // scene (this group's useFrame) already composes the copy transform.
     const frame = <group ref={groupRef}>{instrument}</group>
-    return shaderInstances.length > 0
-      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]}>{frame}</ShaderWrapper>
+    return needsShaderPath
+      ? <ShaderWrapper trackId={trackId} plugins={shaderInstances} postMoverScalePlugins={[]} maskSourceIds={maskSourceIds}>{frame}</ShaderWrapper>
       : frame
   }
 
@@ -131,13 +159,14 @@ export function ObjectRenderer({
   // Shader path: the object is rendered offscreen with the same world × Scale ×
   // copy order and drawn back as a post-processed full-frame overlay, so there
   // is no in-scene placement group here.
-  if (shaderInstances.length > 0) {
+  if (needsShaderPath) {
     return (
       <ShaderWrapper
         trackId={trackId}
         visualCopyIndex={visualCopyIndex}
         plugins={shaderInstances}
         postMoverScalePlugins={scaleInstances}
+        maskSourceIds={maskSourceIds}
       >
         {content}
       </ShaderWrapper>

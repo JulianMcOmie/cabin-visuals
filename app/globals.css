@@ -79,16 +79,58 @@ body {
   --windowSelectionColor: rgba(53, 167, 230, 0.35);
 }
 
-/* A tiny copy of the finished visualizer frame creates a low-frequency color
-   wash behind the inspector. The real WebGL canvas keeps its normal size. */
+/* A tiny copy of the finished visualizer frame creates ONE low-frequency field
+   of light behind the whole workspace card. Anchored high (the image's center
+   sits in the upper band, where the visualizer actually is) and masked so it
+   fades as it runs down through the timeline: the translucent surfaces below
+   read as the same light continuing, not as their own copy of the frame. It
+   sits at z-index -1 inside the card's isolated stacking context, above the
+   card's background and beneath everything else. */
 .visual-ambient-bleed {
   position: absolute;
-  inset: -25%;
-  width: 150%;
-  height: 150%;
+  z-index: -1;
+  top: -30%;
+  left: -15%;
+  width: 130%;
+  height: 118%;
   pointer-events: none;
-  opacity: 0.24;
+  opacity: 0.3;
   filter: blur(80px) saturate(135%) brightness(0.78);
+  -webkit-mask-image: linear-gradient(to bottom, black 45%, rgba(0, 0, 0, 0.5) 100%);
+  mask-image: linear-gradient(to bottom, black 45%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* Scopes the timeline's see-through treatment: the lanes and ruler strip both
+   paint --bg-timeline, so overriding it here (and only here) lets the ambient
+   field's tail glow through the whole work surface. Label rows and the frozen
+   corner keep their opaque --bg-track-row - solid chrome over glass, the same
+   split the inspector makes.
+
+   The values are the neon-signage stage the timeline color lab settled on
+   (Tyler, 2026-08-02): lanes drop to near-black #0d0d0e so resting blocks read
+   as dark panes with lit-tubing notes and the selected block's supernova has
+   real darkness to burn against. The label rows follow a step above, and the
+   bar gridlines switch to a faint white so they read as etched lines on the
+   dark stage rather than raised borders. Scoped here so the piano roll and
+   inspector (which share none of these vars inside this scope) keep their own
+   chrome. */
+.timeline-glass-scope {
+  --bg-timeline: rgba(13, 13, 14, 0.94);
+  --bg-track-row: #141415;
+  --timeline-grid-line: rgba(255, 255, 255, 0.055);
+}
+
+/* Ruler voicing for the TIMELINE's ruler only. Applied on TimelineArea's root
+   rather than the glass scope because the piano roll's ruler is the same
+   shared Ruler component inside the same scope - its numbers sit over the
+   hue-tinted clip-header band and need the brighter defaults to stay
+   readable. Here the numbers recede to etched marks on the dark stage so the
+   blocks (and the selected block's supernova) carry the scene. */
+.timeline-neon {
+  --ruler-number: rgba(255, 255, 255, 0.34);
+  --ruler-line: rgba(255, 255, 255, 0.1);
+  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
+  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
 }
 
 .visualizer-glass-surface {
@@ -446,81 +488,58 @@ body.drag-moving * {
   background: transparent;
 }
 
-/* Console-styled native range inputs (piano-roll zoom, video scrubber):
-   square muted thumb on a thin track, matching ParamSlider's look. */
-.slider-square {
+/* Console-styled native range inputs (piano-roll zoom, noise params, timeline
+   zoom, video scrubber): round thumb on a thin rounded track, matching
+   ParamSlider's look. The track FILLS up to the value: in a toolbar with no
+   room for a number, the fill is the only thing that says where the value
+   sits, and without it the slider reads as a stray hairline. `--fill` is set
+   per instance from the value, so the native input keeps its drag and
+   keyboard behaviour; instances that don't set it just show the bare track.
+   `--slider-color` retints the filled portion per instance (the MIDI editor
+   sets it to the edited track's color); unset, it's the global accent. */
+.slider-console {
   -webkit-appearance: none;
   appearance: none;
-  height: 3px;
-  background: var(--border);
-  outline: none;
-}
-.slider-square::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 9px;
-  height: 9px;
-  background: var(--accent-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: 0;
-  cursor: pointer;
-}
-.slider-square::-moz-range-thumb {
-  width: 9px;
-  height: 9px;
-  background: var(--accent-muted);
-  border: 1px solid var(--border-strong);
-  border-radius: 0;
-  cursor: pointer;
-}
-
-/* Timeline zoom sliders (the pair on the scene row). Same rule and square thumb
-   as ParamSlider, and the same FILLED track: in a toolbar with no room for a
-   number, the fill is the only thing that says how zoomed in you are, and
-   without it the pair read as two stray hairlines. `--fill` is set per instance
-   from the value, so the native input keeps its drag and keyboard behaviour. */
-.slider-zoom {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 3px;
+  height: 4px;
+  border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--accent-muted) var(--fill, 0%),
+    var(--slider-color, var(--accent-muted)) var(--fill, 0%),
     var(--border) var(--fill, 0%)
   );
   outline: none;
 }
-.slider-zoom::-webkit-slider-thumb {
+.slider-console::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   background: var(--text-2);
   border: 1px solid var(--border-strong);
-  border-radius: 0;
+  border-radius: 50%;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
-.slider-zoom::-moz-range-thumb {
-  width: 9px;
-  height: 9px;
+.slider-console::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
   background: var(--text-2);
   border: 1px solid var(--border-strong);
-  border-radius: 0;
+  border-radius: 50%;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
 /* The thumb brightens under the pointer, so the thing you are about to grab
    announces itself without the row lighting up. */
-.slider-zoom:hover::-webkit-slider-thumb,
-.slider-zoom:active::-webkit-slider-thumb {
+.slider-console:hover::-webkit-slider-thumb,
+.slider-console:active::-webkit-slider-thumb {
   background: var(--text);
 }
-.slider-zoom:hover::-moz-range-thumb,
-.slider-zoom:active::-moz-range-thumb {
+.slider-console:hover::-moz-range-thumb,
+.slider-console:active::-moz-range-thumb {
   background: var(--text);
 }
-.slider-zoom:focus-visible {
+.slider-console:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 4px;
 }

@@ -19,13 +19,11 @@ export const cubeInstrument: ObjectInstrumentDef = {
   name: '3D Shape',
   kind: 'object',
   userInterfaceRenderer: 'cube',
+  // Position and size are the canonical track transform now (core/transform.ts,
+  // edited via the track strip's panel) - instruments keep only behavior params.
   params: [
-    { key: 'baseSize', label: 'Base Size', min: 0.2, max: 4, step: 0.05, default: 1.6 },
     { key: 'baseColor', label: 'Base Color', type: 'color', default: DEFAULT_BASE_COLOR },
     { key: 'geometry', label: 'Geometry', type: 'string', default: 'cube' },
-    { key: 'baseXPosition', label: 'Base X Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'baseYPosition', label: 'Base Y Position', min: -10, max: 10, step: 0.1, default: 0 },
-    { key: 'baseZPosition', label: 'Base Z Position', min: -10, max: 10, step: 0.1, default: 0 },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
@@ -44,21 +42,14 @@ export const cubeInstrument: ObjectInstrumentDef = {
   abilities: [
     { key: 'shatter', label: 'Shatter', color: '#f472b6' },
   ],
-  // Position is placement: movers and child tracks see it. Scale (the size) is a
-  // mesh property - the engine keeps it out of the placement transform and applies
-  // it to the mesh itself, so movers lay out in unscaled space and children don't
-  // inherit the size. Spin is applied inside each rendered copy below, so splitters
-  // duplicate a spinning solid without rotating their own layout offsets.
-  localTransform: ({ params, energy }) => {
-    const baseSize = params.baseSize ?? paramDefault(cubeInstrument, 'baseSize')
-    const baseXPosition = params.baseXPosition ?? paramDefault(cubeInstrument, 'baseXPosition')
-    const baseYPosition = params.baseYPosition ?? paramDefault(cubeInstrument, 'baseYPosition')
-    const baseZPosition = params.baseZPosition ?? paramDefault(cubeInstrument, 'baseZPosition')
-    return {
-      position: [baseXPosition, baseYPosition, baseZPosition],
-      scale: (baseSize / 1.6) * (1 + energy * 0.35),
-    }
-  },
+  // The note-pulse swell is the only local transform left: it is a mesh property
+  // (kept out of the placement matrix), so movers and children never inherit the
+  // pulse. Placement itself comes from the canonical track transform. Spin is
+  // applied inside each rendered copy below, so splitters duplicate a spinning
+  // solid without rotating their own layout offsets.
+  localTransform: ({ energy }) => ({
+    scale: 1 + energy * 0.35,
+  }),
   component: Cube,
 }
 

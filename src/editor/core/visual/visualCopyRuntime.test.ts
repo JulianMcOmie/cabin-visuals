@@ -185,9 +185,9 @@ test('the structural object list has one entry per copy index', () => {
   ], ['solo', 'cube']))
 
   assert.deepEqual(getObjectList(), [
-    { sceneId: '__legacy_scene__', trackId: 'solo', instrumentId: 'cube', visualCopyIndex: 0 },
-    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 0 },
-    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 1 },
+    { sceneId: '__legacy_scene__', trackId: 'solo', instrumentId: 'cube', visualCopyIndex: 0, maskSourceIds: [], masksTargets: false },
+    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 0, maskSourceIds: [], masksTargets: false },
+    { sceneId: '__legacy_scene__', trackId: 'cube', instrumentId: 'cube', visualCopyIndex: 1, maskSourceIds: [], masksTargets: false },
   ])
 })
 
@@ -217,4 +217,71 @@ test('re-resolving drops caches for removed tracks', () => {
   assert.equal(getVisualCopyCount('cube'), 0)
   assert.deepEqual(getVisualCopies('cube'), [])
   assert.equal(getVisualCopyCount('other'), 1)
+})
+
+// ── Automated copy counts: the pool is sized to the automation's reach ───────
+
+/** Splitter whose copy COUNT comes from a param, so automating that param
+ *  makes the per-beat count breathe. */
+const countSplitter: MoverOrSplitterDefinition<{ copies: number }> = {
+  id: 'test.countSplit',
+  label: 'Count Split',
+  kind: 'splitter',
+  params: [{ key: 'copies', label: 'Copies', min: 1, max: 8, step: 1, default: 2 }],
+  resolve({ settings }) {
+    const count = Math.max(1, Math.round(settings.copies))
+    return {
+      apply(visualCopy) {
+        return Array.from({ length: count }, (_, i) => {
+          const next = cloneCopy(visualCopy)
+          next.transform.multiply(new Matrix4().makeTranslation(i, 0, 0))
+          return next
+        })
+      },
+    }
+  },
+}
+
+registerMoverOrSplitterDefinition(countSplitter)
+test.after(() => unregisterMoverOrSplitterDefinitionForTests('test.countSplit'))
+
+function countAutomationProject(): ProjectSnapshot {
+  return project([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.countSplit', parentId: 'cube', childIds: ['a'] }),
+    track({
+      id: 'a', type: 'automation', parentId: 's', targetParam: 'copies', interpolation: 'linear',
+      blocks: [{
+        id: 'b1', startBar: 0, durationBars: 4, loop: false,
+        notes: [
+          { id: 'n1', startBeat: 0, pitch: 36, durationBeats: 1, velocity: 100 }, // copies 1
+          { id: 'n2', startBeat: 8, pitch: 84, durationBeats: 1, velocity: 100 }, // copies 8
+        ],
+      }],
+    }),
+  ], ['cube'])
+}
+
+test('an automated count param mounts the lane\'s maximum reach, not the beat-0 value', () => {
+  setProject(countAutomationProject())
+  // Beat 0 says 1 copy; the pool must still fit the keyframe at 8.
+  assert.equal(getVisualCopyCount('cube'), 8)
+  assert.equal(getObjectList().filter((e) => e.trackId === 'cube').length, 8)
+  // Readable before the first frame: the beat-0 copy is real, the rest hidden.
+  assert.equal(getVisualCopy('cube', 0)?.opacity, 1)
+  assert.equal(getVisualCopy('cube', 7)?.opacity, 0)
+})
+
+test('frames below the maximum pad hidden copies; the peak fills the pool', () => {
+  setProject(countAutomationProject())
+  computeAtBeat(0) // automated count 1
+  assert.equal(getVisualCopies('cube').length, 8)
+  assert.equal(getVisualCopy('cube', 0)?.opacity, 1)
+  assert.equal(getVisualCopy('cube', 1)?.opacity, 0, 'shortfall is hidden, not unmounted')
+  computeAtBeat(8) // automated count 8
+  for (let i = 0; i < 8; i++) assert.equal(getVisualCopy('cube', i)?.opacity, 1, `copy ${i} live at the peak`)
+  // Midpoint: value 4.5 rounds to 5 live copies, 3 hidden.
+  computeAtBeat(4)
+  assert.equal(getVisualCopy('cube', 4)?.opacity, 1)
+  assert.equal(getVisualCopy('cube', 5)?.opacity, 0)
 })

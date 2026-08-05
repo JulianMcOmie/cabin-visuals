@@ -218,59 +218,6 @@ function MiniKnob({
   )
 }
 
-function XYPad({ x, y }: { x: UserInterfaceParameter; y: UserInterfaceParameter }) {
-  const padRef = useRef<HTMLDivElement>(null)
-  const xDefinition = x.definition
-  const yDefinition = y.definition
-  if (!isNumberParam(xDefinition) || !isNumberParam(yDefinition)) return null
-  if (typeof x.value !== 'number' || typeof y.value !== 'number') return null
-
-  const xPercent = ((x.value - xDefinition.min) / (xDefinition.max - xDefinition.min)) * 100
-  const yPercent = 100 - ((y.value - yDefinition.min) / (yDefinition.max - yDefinition.min)) * 100
-
-  const setFromPointer = (event: PointerEvent<HTMLDivElement>) => {
-    const rect = padRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const nx = clamp((event.clientX - rect.left) / rect.width, 0, 1)
-    const ny = clamp((event.clientY - rect.top) / rect.height, 0, 1)
-    const snap = (raw: number, min: number, max: number, step: number) =>
-      clamp(min + Math.round((raw - min) / step) * step, min, max)
-    x.setValue(snap(xDefinition.min + nx * (xDefinition.max - xDefinition.min), xDefinition.min, xDefinition.max, xDefinition.step))
-    y.setValue(snap(yDefinition.max - ny * (yDefinition.max - yDefinition.min), yDefinition.min, yDefinition.max, yDefinition.step))
-  }
-
-  return (
-    <div
-      ref={padRef}
-      data-testid="cube-xy-pad"
-      role="group"
-      aria-label="Cube X and Y position"
-      onPointerDown={(event) => {
-        event.currentTarget.setPointerCapture(event.pointerId)
-        setFromPointer(event)
-      }}
-      onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromPointer(event)
-      }}
-      onDoubleClick={() => { x.setValue(0); y.setValue(0) }}
-      className="relative h-[82px] cursor-crosshair touch-none overflow-hidden rounded-md border border-white/10 bg-[#090c13] shadow-[inset_0_0_20px_rgba(0,0,0,.58)]"
-      style={{
-        backgroundImage: 'linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)',
-        backgroundSize: '20% 25%',
-      }}
-    >
-      <span className="absolute left-1/2 top-0 h-full w-px bg-white/10" />
-      <span className="absolute left-0 top-1/2 h-px w-full bg-white/10" />
-      <span
-        className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,.16),0_0_14px_rgba(139,92,246,.75)]"
-        style={{ left: `${xPercent}%`, top: `${yPercent}%` }}
-      />
-      <span className="absolute bottom-1 left-1.5 font-mono text-[7px] text-white/30">X {x.value.toFixed(1)}</span>
-      <span className="absolute right-1.5 top-1 font-mono text-[7px] text-white/30">Y {y.value.toFixed(1)}</span>
-    </div>
-  )
-}
-
 function GeometryGlyph({ geometry }: { geometry: FundamentalGeometryId }) {
   if (geometry === 'cube') return <BoxIcon size={14} strokeWidth={1.5} />
   const points = geometry === 'tetrahedron'
@@ -333,22 +280,14 @@ function ColorSwatch({ bound }: { bound: UserInterfaceParameter }) {
   )
 }
 
+// Placement (position/size) moved to the canonical track transform panel - this
+// UI keeps only what the instrument owns: geometry, color, and spin.
 export const CubeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const size = parameter(parameters, 'baseSize')
   const color = parameter(parameters, 'baseColor')
   const geometry = parameter(parameters, 'geometry')
-  const x = parameter(parameters, 'baseXPosition')
-  const y = parameter(parameters, 'baseYPosition')
-  const z = parameter(parameters, 'baseZPosition')
   const spin = parameter(parameters, 'spinSpeed')
 
-  if (!size || !color || !geometry || !x || !y || !z || !spin) return <ParameterList parameters={parameters} />
-
-  const setPosition = (nextX: number, nextY: number, nextZ: number) => {
-    x.setValue(nextX)
-    y.setValue(nextY)
-    z.setValue(nextZ)
-  }
+  if (!color || !geometry || !spin) return <ParameterList parameters={parameters} />
 
   const resetAll = () => {
     for (const bound of parameters) bound.setValue(bound.definition.default)
@@ -387,37 +326,14 @@ export const CubeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ par
       <SolidPreview
         geometry={selectedGeometry}
         color={stringValue(color, DEFAULT_FUNDAMENTAL_COLOR)}
-        size={numericValue(size, 1.6)}
+        size={1.6}
         spinSpeed={numericValue(spin)}
-        position={[numericValue(x), numericValue(y), numericValue(z)]}
+        position={[0, 0, 0]}
       />
 
       <div className="space-y-2 p-2">
-        <div className="grid grid-cols-3 gap-1 rounded-lg border border-white/[0.07] bg-white/[0.025] px-1.5 py-1">
-          <MiniKnob parameter={size} label="SIZE" suffix="×" />
+        <div className="grid grid-cols-1 gap-1 rounded-lg border border-white/[0.07] bg-white/[0.025] px-1.5 py-1">
           <MiniKnob parameter={spin} label="SPIN" suffix="×" />
-          <MiniKnob parameter={z} label="Z" />
-        </div>
-
-        <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-1.5">
-          <XYPad x={x} y={y} />
-          <div className="mt-1.5 grid grid-cols-4 gap-1">
-            {[
-              { label: 'CTR', ariaLabel: 'Center position', values: [0, 0, 0] },
-              { label: 'LEFT', ariaLabel: 'Place left', values: [-3, 0, 0] },
-              { label: 'UP', ariaLabel: 'Place high', values: [0, 3, 0] },
-              { label: 'BACK', ariaLabel: 'Place deep', values: [0, 0, -3] },
-            ].map((preset) => (
-              <button
-                key={preset.label}
-                aria-label={preset.ariaLabel}
-                onClick={() => setPosition(preset.values[0], preset.values[1], preset.values[2])}
-                className="rounded border border-white/[0.07] bg-black/15 px-1 py-1.5 text-[7px] font-semibold tracking-[0.06em] text-white/32 transition-colors hover:border-violet-300/25 hover:bg-violet-500/10 hover:text-violet-100"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </section>

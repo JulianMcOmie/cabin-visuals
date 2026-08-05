@@ -2,11 +2,16 @@ import { create } from 'zustand'
 import { getEffect } from '../effects'
 import { nextTrackColor, AUDIO_TRACK_COLOR } from '../utils/trackColors'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+// Capability checks only. core/directors is React-free; the store must NEVER
+// import instruments/index (components import stores - instant cycle).
+import { compositionDef, isCompositionTrack } from '../core/directors'
+import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
-import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
+import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
 import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
@@ -327,6 +332,15 @@ export interface ProjectState {
   renameScene: (sceneId: string, name: string) => void
   setSceneBackgroundColor: (sceneId: string, color: string) => void
   setSceneBackgroundTransparent: (sceneId: string, transparent: boolean) => void
+  setSceneBackdropMode: (sceneId: string, mode: SceneBackdropMode) => void
+  /** Merges into the scene's gradient (seeding defaults if it never had one).
+   *  Pass `enabled` only via setSceneBackdropMode - it owns mode consistency. */
+  setSceneBackgroundGradient: (sceneId: string, patch: Partial<Omit<SceneGradient, 'enabled'>>) => void
+  addSceneEffect: (sceneId: string, pluginId: string) => void
+  removeSceneEffect: (sceneId: string, instanceId: string) => void
+  setSceneEffectSetting: (sceneId: string, instanceId: string, key: string, value: number) => void
+  toggleSceneEffect: (sceneId: string, instanceId: string) => void
+  reorderSceneEffect: (sceneId: string, instanceId: string, direction: -1 | 1) => void
   duplicateScene: (sceneId: string) => string | null
   deleteScene: (sceneId: string) => void
   reorderScenes: (sceneIds: string[]) => void
@@ -362,11 +376,14 @@ export interface ProjectState {
   toggleSolo: (trackId: string) => void
   setTrackParam: (trackId: string, key: string, value: number) => void
   setTrackStringParam: (trackId: string, key: string, value: string) => void
+  /** Convert a track to an instrument. A COMPOSITION instrument id on the Main
+   *  scene additionally seeds sceneBindings and drops child lanes (the former
+   *  setTrackDirector semantics). */
   setTrackInstrument: (trackId: string, instrumentId: string, name?: string) => void
   /** Convert a track into a mover row (no instrument). */
   setTrackMover: (trackId: string, moverId: string, name: string) => void
-  setTrackDirector: (trackId: string, directorId: string, name: string) => void
-  setDirectorSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
+  /** Rebind a composition track's MIDI rows to scenes. */
+  setSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
@@ -388,6 +405,15 @@ export interface ProjectState {
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
   /** Set (or clear, with undefined) an automation track's noise mode. */
   setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
+  /** Set (or clear, with undefined) an automation track's burst mode. Setting one
+   *  mode clears the other - a lane is in exactly one mode. */
+  setTrackBurst: (trackId: string, burst: Track['burst'] | undefined) => void
+  /** Put an automation lane in one of its three modes, in ONE action (so it is one
+   *  undo step). Re-entering a mode starts from that mode's defaults. */
+  setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  /** Set an automation lane's output amount (a whole-lane gain, any mode).
+   *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
+  setTrackAutomationAmount: (trackId: string, amount: number) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
@@ -546,7 +572,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const main = scenes[mainId]
         const tracks = { ...main.tracks }
         for (const [trackId, track] of Object.entries(tracks)) {
-          if (track.type !== 'director') continue
+          if (!isCompositionTrack(track)) continue
           const nextPitch = Math.max(59, ...(track.sceneBindings ?? []).map((b) => b.pitch)) + 1
           tracks[trackId] = { ...track, sceneBindings: [...(track.sceneBindings ?? []), { sceneId: id, pitch: nextPitch }] }
         }
@@ -579,6 +605,86 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundTransparent: transparent } } }
   }),
 
+  // The backdrop is ONE three-way choice (color | gradient | transparent)
+  // spread across two fields; writing both here keeps a mode switch atomic -
+  // a single undo step, never an intermediate state where transparency and an
+  // enabled gradient disagree. The gradient's setup survives leaving the mode.
+  setSceneBackdropMode: (sceneId, mode) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene || sceneBackdropMode(scene) === mode) return s
+    const gradient = scene.backgroundGradient ?? defaultSceneGradient()
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: {
+          ...scene,
+          backgroundTransparent: mode === 'transparent',
+          backgroundGradient: { ...gradient, enabled: mode === 'gradient' },
+        },
+      },
+    }
+  }),
+
+  setSceneBackgroundGradient: (sceneId, patch) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene) return s
+    const gradient = { ...(scene.backgroundGradient ?? defaultSceneGradient()), ...patch }
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, backgroundGradient: gradient } } }
+  }),
+
+  // Scene-level effect chain - same contract as the per-track actions below, but
+  // the chain lives on the scene itself (see Scene.effects in types.ts: document
+  // + inspector only for now, the engine does not yet apply these).
+  addSceneEffect: (sceneId, pluginId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    const plugin = getEffect(pluginId)
+    if (!scene || !plugin) return s
+    const settings: Record<string, number> = {}
+    for (const p of plugin.params) if (typeof p.default === 'number') settings[p.key] = p.default
+    const instance: EffectInstance = { id: crypto.randomUUID(), pluginId, enabled: true, settings }
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: [...(scene.effects ?? []), instance] } } }
+  }),
+
+  removeSceneEffect: (sceneId, instanceId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects: scene.effects.filter((e) => e.id !== instanceId) } } }
+  }),
+
+  setSceneEffectSetting: (sceneId, instanceId, key, value) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, settings: { ...e.settings, [key]: value } } : e) },
+      },
+    }
+  }),
+
+  toggleSceneEffect: (sceneId, instanceId) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    return {
+      scenes: {
+        ...s.scenes,
+        [sceneId]: { ...scene, effects: scene.effects.map((e) => e.id === instanceId ? { ...e, enabled: !e.enabled } : e) },
+      },
+    }
+  }),
+
+  reorderSceneEffect: (sceneId, instanceId, direction) => rawSet((s) => {
+    const scene = s.scenes[sceneId]
+    if (!scene?.effects) return s
+    const from = scene.effects.findIndex((e) => e.id === instanceId)
+    const to = from + direction
+    if (from < 0 || to < 0 || to >= scene.effects.length) return s
+    const effects = scene.effects.slice()
+    effects[from] = scene.effects[to]
+    effects[to] = scene.effects[from]
+    return { scenes: { ...s.scenes, [sceneId]: { ...scene, effects } } }
+  }),
+
   duplicateScene: (sceneId) => {
     let nextId: string | null = null
     rawSet((s) => {
@@ -600,6 +706,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         isMain: false,
         backgroundColor: source.backgroundColor,
         backgroundTransparent: source.backgroundTransparent,
+        backgroundGradient: source.backgroundGradient && { ...source.backgroundGradient },
+        // Fresh instance ids, per the clone convention - duplicated chains must
+        // never share ids with the source.
+        effects: source.effects?.map((e) => ({ ...e, id: crypto.randomUUID(), settings: { ...e.settings } })),
         tracks,
         rootTrackIds,
       }
@@ -639,6 +749,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
   addTrack: (track, atIndex) =>
     set((s) => {
+      // Hand-built tracks (console scripts, E2E) sometimes arrive without an id.
+      // Left alone, the record keys it "undefined", rootTrackIds gains a literal
+      // undefined (persisted as null), and the timeline row renders key={undefined}
+      // - React's missing-key warning pointing at TimelineArea's keyed map. Mint one.
+      if (!track.id) track = { ...track, id: crypto.randomUUID() }
       const tracks = { ...s.tracks, [track.id]: track }
       // Nested under a parent: insert into the parent's childIds at atIndex.
       if (track.parentId) {
@@ -935,7 +1050,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     const target = s.scenes[targetSceneId]
     const root = source?.tracks[trackId]
     if (!source || !target || source.id === target.id || !root || root.parentId || root.type === 'audio') return s
-    if ((root.type === 'director') !== target.isMain) return s
+    // Main is composition-only, and mainOnly composers never leave it. Crop
+    // (composition def, mainOnly false) passes BOTH ways - moving it between
+    // Main and a scene deliberately switches which resolve path picks it up.
+    const rootDef = root.type === 'base' ? compositionDef(root.instrumentId) : undefined
+    if (target.isMain && !isCompositionTrack(root)) return s
+    if (!target.isMain && rootDef?.mainOnly) return s
 
     const snapshot = snapshotTrackTree(trackId, source.tracks)
     if (!snapshot) return s
@@ -1140,20 +1260,29 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const track = s.tracks[trackId]
       if (!track || track.instrumentId === instrumentId) return s
+      const base: Track = {
+        ...track,
+        type: 'base',
+        instrumentId,
+        params: {},
+        stringParams: {},
+        moverId: undefined,
+        splitterId: undefined,
+        inputValues: undefined,
+        name: name ?? track.name,
+      }
+      // Converting to a composition instrument ON MAIN carries the extra
+      // conversion semantics the director era had: seed the scene bindings
+      // and drop child lanes (they addressed the previous instrument's
+      // params). Off Main - crop in a visual scene - it is an ordinary
+      // instrument change.
+      const composition = compositionDef(instrumentId) && s.scenes[s.activeSceneId]?.isMain
       return {
         tracks: {
           ...s.tracks,
-          [trackId]: {
-            ...track,
-            type: 'base',
-            instrumentId,
-            params: {},
-            stringParams: {},
-            moverId: undefined,
-            splitterId: undefined,
-            inputValues: undefined,
-            name: name ?? track.name,
-          },
+          [trackId]: composition
+            ? { ...base, sceneBindings: seedSceneBindings(s.scenes, s.sceneOrder), childIds: [] }
+            : base,
         },
       }
     }),
@@ -1182,34 +1311,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       }
     }),
 
-  setTrackDirector: (trackId, directorId, name) =>
-    set((s) => {
-      const scene = s.scenes[s.activeSceneId]
-      const track = s.tracks[trackId]
-      if (!scene?.isMain || !track) return s
-      const visualIds = s.sceneOrder.filter((id) => s.scenes[id] && !s.scenes[id].isMain)
-      return {
-        tracks: {
-          ...s.tracks,
-          [trackId]: {
-            ...track,
-            name,
-            type: 'director',
-            instrumentId: '',
-            directorId,
-            params: {},
-            stringParams: {},
-            sceneBindings: visualIds.map((sceneId, i) => ({ sceneId, pitch: 60 + i })),
-            childIds: [],
-          },
-        },
-      }
-    }),
-
-  setDirectorSceneBindings: (trackId, bindings) =>
+  setSceneBindings: (trackId, bindings) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || track.type !== 'director') return s
+      if (!track || !isCompositionTrack(track)) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, sceneBindings: bindings } } }
     }),
 
@@ -1269,7 +1374,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         instrumentId: '',
         targetParam: paramKey,
         interpolation: 'linear',
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1305,7 +1412,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         adsr: { ...DEFAULT_ADSR },
         envDepth: 1,
         envTarget,
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1359,7 +1468,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         type: 'ability',
         instrumentId: '',
         abilityKey,
-        color: parent.color,
+        // Param lanes have no definition to declare an identity, so they take
+        // their own hue-cycle color - lanes no longer inherit their parent.
+        color: resolveNextTrackColor(s, parentId),
         muted: false,
         solo: false,
         blocks: [],
@@ -1382,11 +1493,45 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
     }),
 
+  // The two non-keyframe modes are mutually exclusive: setting one drops the
+  // other, so a lane is never ambiguous (the engine would silently prefer burst).
   setTrackNoise: (trackId, noise) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, noise } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst } } }
+    }),
+
+  setTrackBurst: (trackId, burst) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise } } }
+    }),
+
+  setAutomationMode: (trackId, mode) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      // Each mode's config is what identifies it, so switching is just choosing
+      // which one exists. A fresh noise seed per entry = a fresh random take.
+      const next: Track = {
+        ...track,
+        noise: mode === 'noise'
+          ? track.noise ?? { ...DEFAULT_NOISE, seed: Math.floor(Math.random() * 1e9) }
+          : undefined,
+        burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
+      }
+      return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  setTrackAutomationAmount: (trackId, amount) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(AUTOMATION_AMOUNT_MAX, amount))
+      // Neutral gain is stored as absence, so untouched lanes don't grow a field.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, automationAmount: clamped === 1 ? undefined : clamped } } }
     }),
 
   setTrackTargets: (trackId, targets) =>

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { emptyDocument } from '../../persistence/types'
 import { hydrate, serialize } from '../../persistence/serialize'
-import type { Track } from '../types'
+import { sceneBackdropMode, type Track } from '../types'
 import { useProjectStore } from './ProjectStore'
 
 const cube = (id: string): Track => ({ id, name: id, type: 'base', instrumentId: 'cube', color: '#fff', muted: false, solo: false, blocks: [], childIds: [] })
@@ -71,13 +71,74 @@ test('scene background color defaults, edits, duplicates, and persists with the 
   assert.equal(useProjectStore.getState().scenes[sceneId].backgroundTransparent, true)
 })
 
+test('scene backdrop gradient: atomic mode switches, config survival, duplication, persistence', () => {
+  hydrate(emptyDocument())
+  const sceneId = useProjectStore.getState().activeSceneId
+  assert.equal(sceneBackdropMode(useProjectStore.getState().scenes[sceneId]), 'color')
+
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'gradient')
+  let scene = useProjectStore.getState().scenes[sceneId]
+  assert.equal(sceneBackdropMode(scene), 'gradient')
+  assert.equal(scene.backgroundTransparent, false)
+
+  useProjectStore.getState().setSceneBackgroundGradient(sceneId, { kind: 'radial', from: '#ff8800', to: '#112233', angle: 135 })
+
+  // Leaving gradient mode keeps the setup; coming back restores it verbatim.
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'transparent')
+  scene = useProjectStore.getState().scenes[sceneId]
+  assert.equal(sceneBackdropMode(scene), 'transparent')
+  assert.equal(scene.backgroundGradient!.enabled, false)
+  assert.equal(scene.backgroundGradient!.from, '#ff8800')
+  useProjectStore.getState().setSceneBackdropMode(sceneId, 'gradient')
+
+  const expected = { enabled: true, kind: 'radial', from: '#ff8800', to: '#112233', angle: 135 }
+  const copyId = useProjectStore.getState().duplicateScene(sceneId)!
+  assert.deepEqual(useProjectStore.getState().scenes[copyId].backgroundGradient, expected)
+
+  const document = serialize()
+  hydrate(document)
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].backgroundGradient, expected)
+  assert.equal(sceneBackdropMode(useProjectStore.getState().scenes[sceneId]), 'gradient')
+})
+
+test('scene effect chain edits, reorders, duplicates with fresh ids, and persists with the scene', () => {
+  hydrate(emptyDocument())
+  const sceneId = useProjectStore.getState().activeSceneId
+
+  useProjectStore.getState().addSceneEffect(sceneId, 'pixelate')
+  useProjectStore.getState().addSceneEffect(sceneId, 'boil')
+  let effects = useProjectStore.getState().scenes[sceneId].effects!
+  assert.deepEqual(effects.map((e) => e.pluginId), ['pixelate', 'boil'])
+  assert.ok(effects.every((e) => e.enabled))
+
+  const [pixelate, boil] = effects
+  useProjectStore.getState().reorderSceneEffect(sceneId, boil.id, -1)
+  useProjectStore.getState().toggleSceneEffect(sceneId, pixelate.id)
+  useProjectStore.getState().setSceneEffectSetting(sceneId, boil.id, 'amount', 0.5)
+  effects = useProjectStore.getState().scenes[sceneId].effects!
+  assert.deepEqual(effects.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.equal(effects.find((e) => e.id === pixelate.id)!.enabled, false)
+  assert.equal(effects.find((e) => e.id === boil.id)!.settings.amount, 0.5)
+
+  const copyId = useProjectStore.getState().duplicateScene(sceneId)!
+  const copied = useProjectStore.getState().scenes[copyId].effects!
+  assert.deepEqual(copied.map((e) => e.pluginId), ['boil', 'pixelate'])
+  assert.ok(copied.every((e) => !effects.some((source) => source.id === e.id)))
+
+  hydrate(serialize())
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil', 'pixelate'])
+
+  useProjectStore.getState().removeSceneEffect(sceneId, pixelate.id)
+  assert.deepEqual(useProjectStore.getState().scenes[sceneId].effects!.map((e) => e.pluginId), ['boil'])
+})
+
 test('adding a scene extends every director binding and keeps the active Main view in sync', () => {
   hydrate(emptyDocument())
   const state = useProjectStore.getState()
   const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
   state.setActiveScene(mainId)
   state.addTrack({
-    id: 'cut', name: 'Cut', type: 'director', instrumentId: '', directorId: 'cut',
+    id: 'cut', name: 'Cut', type: 'base', instrumentId: 'cut',
     color: '#6366f1', muted: false, solo: false, blocks: [], childIds: [], sceneBindings: [],
   })
 
@@ -93,7 +154,7 @@ test('moving a root track transfers its complete subtree with stable ids', () =>
   const targetId = useProjectStore.getState().addScene()
   const root = { ...cube('visual'), childIds: ['motion'] }
   const child: Track = {
-    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'mover',
     color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
   }
   useProjectStore.getState().addTrackTree([root, child])
@@ -119,7 +180,7 @@ test('scene transfer rejects child rows and incompatible Main destinations', () 
   const mainId = state.sceneOrder.find((id) => state.scenes[id].isMain)!
   const root = { ...cube('visual'), childIds: ['motion'] }
   const child: Track = {
-    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'burst',
+    id: 'motion', name: 'Burst', type: 'mover', instrumentId: '', moverId: 'mover',
     color: '#fff', muted: false, solo: false, blocks: [], childIds: [], parentId: root.id,
   }
   state.addTrackTree([root, child])

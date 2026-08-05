@@ -11,7 +11,8 @@ import { identityVisualCopy } from './identityVisualCopy'
 import { getMoverOrSplitterDefinition } from './registry'
 
 const MODULE_IDS = Object.keys(CONSOLIDATED_MOVER_BANKS)
-const DEFAULTS = mergeDefinitionSettings(consolidatedMover, undefined)
+// Consolidated has no string params, so its merged settings are all numeric.
+const DEFAULTS = mergeDefinitionSettings(consolidatedMover, undefined) as Record<string, number>
 
 function settings(
   enabled: string[],
@@ -52,7 +53,9 @@ test('every enabled capability owns one collision-free bank inside MIDI 0..127',
   const rows = consolidatedMover.midiRows!(settings(MODULE_IDS), { priorCount: 50 })
   const pitches = rows.map((row) => row.pitch)
 
-  assert.equal(rows.length, 123)
+  // 81, not 128: Radial Motion issues 27 of its 69 reserved pitches, and the
+  // slack is deliberately left unclaimed so the banks below it never move.
+  assert.equal(rows.length, 81)
   assert.equal(new Set(pitches).size, pitches.length)
   assert.ok(pitches.every((pitch) => pitch >= 0 && pitch <= 127))
   assert.equal(Math.min(...pitches), 0)
@@ -66,8 +69,8 @@ test('every enabled capability owns one collision-free bank inside MIDI 0..127',
     settings(MODULE_IDS, { visibility__grouping: 0 }),
     { priorCount: 50 },
   )
-  assert.equal(eachVisibilityRow.length, 128, 'Each Index uses every remaining MIDI pitch')
-  assert.equal(new Set(eachVisibilityRow.map((row) => row.pitch)).size, 128)
+  assert.equal(eachVisibilityRow.length, 86, 'Each Index uses every remaining MIDI pitch')
+  assert.equal(new Set(eachVisibilityRow.map((row) => row.pitch)).size, 86)
   assert.equal(Math.max(...eachVisibilityRow.map((row) => row.pitch)), 127)
 })
 
@@ -78,12 +81,15 @@ test('module switches control both the settings surface and MIDI vocabulary', ()
   assert.ok(rows.every((row) => row.label.startsWith('Motion · ')))
   assert.deepEqual(rows.map((row) => row.pitch), Array.from({ length: 26 }, (_, index) => index))
 
-  const radialOnly = settings(['radialMotion'], { radialMotion__layers: 1 })
+  // Radial Motion's 27 rows sit at the bottom of a bank left 69 wide, so every
+  // module below it keeps the pitches existing projects were written against.
+  const radialOnly = settings(['radialMotion'])
   const radialRows = consolidatedMover.midiRows!(radialOnly)
-  assert.equal(radialRows.length, 23)
-  assert.deepEqual(radialRows.map((row) => row.pitch), Array.from({ length: 23 }, (_, index) => 26 + index))
+  assert.equal(radialRows.length, 27)
+  assert.deepEqual(radialRows.map((row) => row.pitch), Array.from({ length: 27 }, (_, index) => 26 + index))
+  assert.equal(consolidatedMoverPitch('orbitBurst', 0), 95)
 
-  const moduleParam = consolidatedMover.params.find((param) => param.key === 'radialMotion__layers')
+  const moduleParam = consolidatedMover.params.find((param) => param.key === 'radialMotion__copies0')
   assert.equal(moduleParam?.showIf, 'enable__radialMotion')
 })
 
@@ -108,15 +114,17 @@ test('bank notes are translated back into the selected mover vocabulary', () => 
 
 test('structural Radial Motion output composes inside the same mover', () => {
   const config = settings(['radialMotion'], {
-    radialMotion__layers: 2,
-    radialMotion__outerCopies: 2,
-    radialMotion__innerCopies: 3,
+    radialMotion__copies0: 2,
+    radialMotion__copies1: 3,
+    radialMotion__copies2: 2,
   })
   const resolved = consolidatedMover.resolve({ settings: config, notes: [] })
   const copies = resolved.apply(identityVisualCopy(), { beat: 4, index: 0, count: 1 })
 
   assert.equal(copies.length, 12)
-  assert.deepEqual([...new Set(copies.map((copy) => copy.colorShift.hue))], [0, 0.33])
+  // Passive by design: with no notes at all the nest has still turned by beat 4.
+  const atRest = resolved.apply(identityVisualCopy(), { beat: 0, index: 0, count: 1 })
+  assert.notDeepEqual(copies.map(position), atRest.map(position))
 })
 
 test('Visibility can gate the result from the consolidated top bank', () => {

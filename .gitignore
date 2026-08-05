@@ -15,6 +15,9 @@
 
 # next.js
 /.next/
+/.next-isolated/
+/.next-build-check/
+/.next-build-commit/
 /out/
 
 # production
@@ -43,3 +46,6 @@ next-env.d.ts
 
 # local claude code config
 .claude/settings.local.json
+/.next-isolated-*/
+/.next-build/
+/.next-build-*/

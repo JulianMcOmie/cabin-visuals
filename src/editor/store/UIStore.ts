@@ -1,18 +1,15 @@
 import { create } from 'zustand'
 import { TRACK_LABEL_WIDTH } from '../constants'
+import type { LoopRegion } from '../core/loopRegion'
 
 interface EditingBlockRef {
   trackId: string
   blockId: string
 }
 
-// The MIDI editor's vertical zoom is a step function (like Logic), not a
-// continuous scale: row heights come from this ladder only. ~15% per rung,
-// same 14-56px span the old continuous scale covered, 28 as the default.
-export const MIDI_ROW_HEIGHTS = [14, 16, 18, 21, 24, 28, 32, 37, 42, 49, 56]
-
-const snapMidiRowHeight = (px: number) =>
-  MIDI_ROW_HEIGHTS.reduce((best, h) => (Math.abs(h - px) < Math.abs(best - px) ? h : best))
+// The MIDI editor's vertical zoom range (row height in px), 28 as the default.
+export const MIDI_ROW_HEIGHT_MIN = 14
+export const MIDI_ROW_HEIGHT_MAX = 56
 
 interface UIState {
   selectedTrackId: string | null;
@@ -37,10 +34,8 @@ interface UIState {
 
   midiPixelsPerBeat: number
   setMidiPixelsPerBeat: (pixels: number) => void
-  // Always one of MIDI_ROW_HEIGHTS - set() snaps, step() moves one rung.
   midiRowHeight: number
   setMidiRowHeight: (px: number) => void
-  stepMidiRowHeight: (direction: 1 | -1) => void
 
   // Horizontal zoom for the tracks timeline (pixels per beat).
   tracksPixelsPerBeat: number
@@ -92,6 +87,13 @@ interface UIState {
   loopDrag: { name: string; durationBars: number; target: { trackId: string; bar: number } | null } | null
   setLoopDrag: (v: UIState['loopDrag']) => void
 
+  // Live state of an audible audio-block drag (sync mode): while set, the
+  // transport loops `loop` (overriding the user's loop region), the dragged
+  // block swaps its oscilloscope for a transient-resolution waveform, and the
+  // timeline highlights the looped span. null = no sync drag in progress.
+  audioSyncDrag: { trackId: string; blockId: string; loop: LoopRegion } | null
+  setAudioSyncDrag: (v: UIState['audioSyncDrag']) => void
+
   // The open project's row name (set at load) - display-only editor chrome, e.g.
   // the export dialog's default filename. NOT the document (never serialized).
   projectName: string | null
@@ -133,13 +135,8 @@ export const useUIStore = create<UIState>((set) => ({
     set({ midiPixelsPerBeat: Math.max(5, Math.min(200, pixels)) }),
 
   midiRowHeight: 28,
-  setMidiRowHeight: (px) => set({ midiRowHeight: snapMidiRowHeight(px) }),
-  stepMidiRowHeight: (direction) =>
-    set((s) => {
-      const idx = MIDI_ROW_HEIGHTS.indexOf(snapMidiRowHeight(s.midiRowHeight))
-      const next = Math.max(0, Math.min(MIDI_ROW_HEIGHTS.length - 1, idx + direction))
-      return { midiRowHeight: MIDI_ROW_HEIGHTS[next] }
-    }),
+  setMidiRowHeight: (px) =>
+    set({ midiRowHeight: Math.max(MIDI_ROW_HEIGHT_MIN, Math.min(MIDI_ROW_HEIGHT_MAX, px)) }),
 
   tracksPixelsPerBeat: 16,
   setTracksPixelsPerBeat: (pixels) =>
@@ -177,6 +174,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   loopDrag: null,
   setLoopDrag: (v) => set({ loopDrag: v }),
+
+  audioSyncDrag: null,
+  setAudioSyncDrag: (v) => set({ audioSyncDrag: v }),
 
   projectName: null,
   setProjectName: (name) => set({ projectName: name }),

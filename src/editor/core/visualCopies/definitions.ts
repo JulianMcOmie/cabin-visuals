@@ -8,7 +8,7 @@
 // evaluateAdsrGain(notes, beat, adsr) may be reused inside apply() - they are
 // already pure functions of the playhead beat.
 
-import type { MidiRowDef, ParamDef } from '../../instruments/types'
+import { isStringParam, type MidiRowDef, type ParamDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitter } from './types'
 
@@ -37,20 +37,53 @@ export interface MoverOrSplitterDefinition<Settings> {
    *  category because they alter appearance rather than spatial transforms. */
   kind: 'mover' | 'splitter' | 'colorizer'
   params: ParamDef[]
+  /**
+   * The color this definition's tracks WEAR in the UI - timeline blocks,
+   * piano-roll rows and notes, the inspector's tab rail, and its settings
+   * panel's accent. A fixed '#rrggbb', or `{ param }` to follow one of its own
+   * color params live (same contract as an instrument's, in instruments/types).
+   *
+   * REQUIRED in practice: every shipped definition declares one, because chain
+   * entries no longer inherit their object instrument's color - see the
+   * independence note in `utils/trackDisplayColor.ts`. The fixed values live
+   * together in `identityColors.ts` (a palette is only reviewable as a whole),
+   * and a definition with a bespoke panel must have the panel IMPORT its
+   * constant rather than repeat the hex, so console and notes cannot drift.
+   *
+   * Use `{ param }` when the entry genuinely IS about a color the user picked -
+   * the Colorizer's palette is the case it exists for, where its device row,
+   * its notes and its panel all showing the same color is the difference
+   * between reading a chain and decoding it.
+   */
+  identityColor?: string | { param: string }
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean
   resolve(args: { settings: Settings; notes: ResolvedNote[] }): MoverOrSplitter
 }
 
-/** The settings a definition's resolve()/midiRows() receive: its numeric param
- *  defaults overlaid with the track's stored inputValues. One helper so the
- *  engine and the editor UI derive identical settings. */
+/** The settings a definition's resolve()/midiRows() receive: its param defaults
+ *  overlaid with the track's stored values. One helper so the engine and the
+ *  editor UI derive identical settings.
+ *
+ *  Numeric params live in the track's `inputValues`; string-valued ones (color /
+ *  string ParamDefs) live in the shared `stringParams` field, exactly as they do
+ *  for instruments - the two are kept apart so the engine's numeric paths
+ *  (automation lanes, envelopes) never have to consider a string. */
 export function mergeDefinitionSettings(
   def: MoverOrSplitterDefinition<any>,
   inputValues: Record<string, number> | undefined,
-): Record<string, number> {
-  const settings: Record<string, number> = {}
-  for (const pd of def.params) if (typeof pd.default === 'number') settings[pd.key] = pd.default
-  return Object.assign(settings, inputValues)
+  stringValues?: Record<string, string>,
+): Record<string, number | string> {
+  const settings: Record<string, number | string> = {}
+  for (const pd of def.params) {
+    if (typeof pd.default === 'number') settings[pd.key] = pd.default
+  }
+  Object.assign(settings, inputValues)
+  for (const pd of def.params) {
+    if (!isStringParam(pd)) continue
+    const stored = stringValues?.[pd.key]
+    settings[pd.key] = stored ?? pd.default
+  }
+  return settings
 }

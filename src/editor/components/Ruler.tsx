@@ -5,6 +5,7 @@ import {
   LOOP_REGION_DISABLED_COLOR,
   LOOP_REGION_ENABLED_COLOR,
   PLAYHEAD_TRIANGLE_HALF,
+  edgeHitPx,
 } from '../constants'
 import { computeRulerGrid } from './rulerGrid'
 import type { LoopResizeEdge } from '../hooks/useLoopDrag'
@@ -33,6 +34,9 @@ interface RulerProps {
   /** Sub-pixel nudge for the playhead triangle (aligns it with a lane line that
    *  renders in a separate viewport-space overlay). */
   playheadNudgePx?: number
+  /** Pickup width (px): beat 0 sits this far into the content, and the span
+   *  before it renders as a shaded lead-in band (audio dragged before bar 0). */
+  leadInPx?: number
   /** Inner content element - translated horizontally to mirror the lane/grid scroll. */
   contentRef: RefObject<HTMLDivElement | null>
   /** Playhead triangle element (the head), positioned by the caller's RAF loop. */
@@ -71,6 +75,7 @@ export function Ruler({
   dimAfterBars,
   totalBeats,
   playheadNudgePx = 0,
+  leadInPx = 0,
   contentRef,
   playheadHeadRef,
   onScrubStart,
@@ -81,6 +86,12 @@ export function Ruler({
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
+  // The band's own width is content space (it shrinks as you zoom out), but its
+  // resize handles are screen space. Without the cap, a band narrower than two
+  // insets hands its whole width to the LAST handle painted (the end one), and
+  // the start edge + the move middle become ungrabbable at low zoom.
+  const loopBandWidthPx = loopRegion ? (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat : 0
+  const loopEdgeInset = edgeHitPx(loopBandWidthPx, LOOP_MOVE_EDGE_INSET)
   const beatExtent = totalBeats ?? totalBars * beatsPerBar
 
   // Zoom-adaptive grid (Logic-style), shared with the playhead snap - see
@@ -124,6 +135,30 @@ export function Ruler({
           {/* mid divider between top and bottom half of the ruler */}
           <div className="absolute left-0 right-0 h-px bg-[var(--border-strong)] opacity-40 pointer-events-none" style={{ top: '50%' }} />
 
+          {/* Everything beat-positioned lives in this wrapper: beat 0 sits
+              leadInPx into the content, so the pickup needs no per-item math. */}
+          <div className="absolute top-0 bottom-0" style={{ left: leadInPx, right: 0 }}>
+
+          {/* The pickup band: the lead-in span before bar 1, holding audio that
+              starts ahead of the music. Hatched so it reads as "outside the
+              song" without hiding the waveform's edge beside it. */}
+          {leadInPx > 0 && (
+            <div
+              data-pickup-ruler=""
+              className="pointer-events-none absolute top-0 bottom-0 overflow-hidden"
+              style={{
+                left: -leadInPx,
+                width: leadInPx,
+                backgroundImage: 'repeating-linear-gradient(-45deg, rgba(53,167,230,0.16) 0 5px, rgba(53,167,230,0.05) 5px 10px)',
+                borderRight: '1px solid rgba(53,167,230,0.55)',
+              }}
+            >
+              <span className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--accent)]" style={{ top: 3 }}>
+                pickup
+              </span>
+            </div>
+          )}
+
           {/* Loop region band - top half only (the loop lane), content space so
               it scrolls with the ruler. Region set = looping on. */}
           {loopRegion && (
@@ -133,7 +168,7 @@ export function Ruler({
               className="absolute top-0 pointer-events-none"
               style={{
                 left: loopRegion.startBeat * pixelsPerBeat,
-                width: (loopRegion.endBeat - loopRegion.startBeat) * pixelsPerBeat,
+                width: loopBandWidthPx,
                 height: '50%',
                 backgroundColor: loopRegion.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR,
                 borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
@@ -144,34 +179,37 @@ export function Ruler({
               <div
                 data-loop-resize-handle="start"
                 className="absolute top-0 bottom-0 left-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                style={{ width: loopEdgeInset }}
                 onPointerDown={(e) => onLoopResizeStart(e, 'start')}
               />
               <div
                 data-loop-move-handle=""
                 className="absolute top-0 bottom-0 cursor-grab pointer-events-auto"
-                style={{ left: LOOP_MOVE_EDGE_INSET, right: LOOP_MOVE_EDGE_INSET }}
+                style={{ left: loopEdgeInset, right: loopEdgeInset }}
                 onPointerDown={onLoopMoveStart}
               />
               <div
                 data-loop-resize-handle="end"
                 className="absolute top-0 bottom-0 right-0 cursor-ew-resize pointer-events-auto"
-                style={{ width: LOOP_MOVE_EDGE_INSET }}
+                style={{ width: loopEdgeInset }}
                 onPointerDown={(e) => onLoopResizeStart(e, 'end')}
               />
             </div>
           )}
 
-          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest. */}
+          {/* Faint 16th sub-ticks (deep zoom only) - shortest and dimmest.
+              Tick/number/line colors read through --ruler-* vars so the
+              TIMELINE (.timeline-neon) can voice them as faint etched white on
+              its near-black stage while the piano roll keeps these defaults. */}
           {subs.map((beat) => (
-            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[#222228]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
+            <div key={`s${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-sub,#222228)]" style={{ left: beat * pixelsPerBeat, top: '78%' }} />
           ))}
 
           {/* Short minor ticks - 4 per major span (one per measure when zoomed
               out). Clearly shorter than the numbered major lines, still a hair
               taller than the 16th sub-ticks. */}
           {minors.map((beat) => (
-            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[#2c2c33]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
+            <div key={`b${beat}`} className="absolute bottom-0 w-px bg-[var(--ruler-tick-minor,#2c2c33)]" style={{ left: beat * pixelsPerBeat, top: '74%' }} />
           ))}
 
           {bars.map((bar) => {
@@ -191,7 +229,7 @@ export function Ruler({
                     {/* Top half: bar number - 10px/500 mono, one step brighter
                         than faint so it reads at a glance */}
                     <span
-                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--text-3)]"
+                      className="absolute left-1 font-mono text-[10px] font-medium leading-none text-[var(--ruler-number,var(--text-3))]"
                       style={{ top: 3, zIndex: 6 }}
                     >
                       {bar + 1}
@@ -214,7 +252,7 @@ export function Ruler({
                     )}
                     {/* Near-full-height line beside the number - stops a hair
                         below the ruler's top edge (matches other DAWs). */}
-                    <div className="absolute bottom-0 w-px bg-[var(--border-strong)]" style={{ top: 2 }} />
+                    <div className="absolute bottom-0 w-px bg-[var(--ruler-line,var(--border-strong))]" style={{ top: 2 }} />
                     {/* Its top-half restated above the loop band, darkened to
                         read against the solid fill. */}
                     {inLoopBand && (
@@ -278,6 +316,7 @@ export function Ruler({
                 )
               })()}
             </svg>
+          </div>
           </div>
         </div>
       </div>

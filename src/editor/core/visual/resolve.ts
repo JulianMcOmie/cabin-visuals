@@ -11,12 +11,15 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { extractKeyframes, extractNoiseGates, sampleLane, sampleNoiseLane } from './automation'
+import { automationAmount, automationLaneValueBounds, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
+import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
+import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
+import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -55,11 +58,13 @@ function flattenTrackNotes(track: Track, p: ProjectSnapshot): ResolvedNote[] {
 
 /** Gather a track's `automation` child tracks into resolved keyframe lanes over
  *  the given params (an instrument def's for object tracks, a MoverOrSplitter
- *  def's for mover/splitter tracks). Each lane maps one param (its note pitch →
- *  the param's [min,max]); the engine samples them per frame. Children with no
- *  target param or an unknown param are skipped. Muted automation children are
- *  ignored (a quick disable); solo pools per parent. */
-function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
+ *  def's for mover/splitter tracks, a director def's for director tracks -
+ *  the latter resolved per frame by VisualEngine's resolveComposition, since
+ *  director tracks never enter the resolved graph). Each lane maps one param
+ *  (its note pitch → the param's [min,max]); the engine samples them per frame.
+ *  Children with no target param or an unknown param are skipped. Muted
+ *  automation children are ignored (a quick disable); solo pools per parent. */
+export function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnapshot): ResolvedAutomation[] {
   const out: ResolvedAutomation[] = []
   // Per-parent solo pool among this track's automation children.
   const anyAutoSolo = (track.childIds ?? []).some((cid) => {
@@ -74,14 +79,34 @@ function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnap
     if (!param) continue
     const pdef = params.find((pd) => pd.key === param)
     if (!pdef || !isNumberParam(pdef)) continue
-    // Noise mode: the notes become burst gates instead of keyframes.
+    // The lane's output gain, applied at extraction so every consumer of the
+    // resolved lane (engine, hover preview, paramAtBeat) agrees on the values.
+    const amount = automationAmount(child)
+    // Burst mode: the notes become ADSR bursts aimed at their own pitch-value,
+    // travelling from whatever value sits underneath (hence `base`).
+    if (child.burst) {
+      out.push({
+        param,
+        mode: 'linear',
+        keyframes: [],
+        burst: child.burst,
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+        min: pdef.min,
+        max: pdef.max,
+        base: pdef.default,
+      })
+      continue
+    }
+    // Noise mode: the notes become wobble gates instead of keyframes. Amount
+    // scales the wobble's deviation along with its centers - a tamed lane
+    // shrinks as a whole, not just where its notes sit.
     if (child.noise) {
       out.push({
         param,
         mode: 'linear',
         keyframes: [],
-        noise: child.noise,
-        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+        noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
         min: pdef.min,
         max: pdef.max,
       })
@@ -90,29 +115,35 @@ function resolveAutomationLanes(track: Track, params: ParamDef[], p: ProjectSnap
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
     })
   }
   return out
 }
 
-/** Gather an object track's `automation` child tracks into resolved keyframe lanes. */
+/** Gather an object track's `automation` child tracks into resolved keyframe lanes.
+ *  The canonical transform params (core/transform.ts) are automatable on every
+ *  object track, exactly like the instrument's own params. */
 function resolveAutomations(track: Track, def: ObjectInstrumentDef | undefined, p: ProjectSnapshot): ResolvedAutomation[] {
-  return def ? resolveAutomationLanes(track, def.params, p) : []
+  return def ? resolveAutomationLanes(track, withTransformParams(def.params), p) : []
 }
 
 /** Sample one beat of every automation lane into a settings/params overlay.
- *  Mirrors computeAtBeat's merge: noise lanes are inert (skipped) outside
- *  their gates; keyframe lanes hold their endpoints outside the range. */
-function sampleAutomationLanes(lanes: ResolvedAutomation[], beat: number): Record<string, number> {
+ *  Mirrors computeAtBeat's merge: an inert lane (noise/burst between its gates)
+ *  contributes nothing, so `settings` shows through; keyframe lanes hold their
+ *  endpoints outside the range. `settings` is what bursts travel away from. */
+function sampleAutomationLanes(
+  lanes: ResolvedAutomation[],
+  beat: number,
+  settings: Record<string, string | number>,
+): Record<string, number> {
   const values: Record<string, number> = {}
   for (const lane of lanes) {
-    if (lane.noise && lane.gates?.length) {
-      const v = sampleNoiseLane(lane.noise, lane.gates, beat, lane.min ?? 0, lane.max ?? 1)
-      if (!Number.isNaN(v)) values[lane.param] = v
-    } else if (lane.keyframes.length) {
-      values[lane.param] = sampleLane(lane.keyframes, beat, lane.mode)
-    }
+    // Only numeric params get lanes, so a string-valued setting can never be the
+    // base here - fall back to the param's default if one somehow collides.
+    const underneath = settings[lane.param]
+    const v = sampleAutomationLane(lane, beat, typeof underneath === 'number' ? underneath : lane.base ?? 0)
+    if (!Number.isNaN(v)) values[lane.param] = v
   }
   return values
 }
@@ -138,17 +169,40 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
     if (!instance) continue
     let min = 0
     let max = 1
+    let base = instance.settings[target.key] ?? 0
     if (target.key !== 'enabled') {
       const pdef = getEffect(instance.pluginId)?.params.find((pd) => pd.key === target.key)
       if (!pdef || !isNumberParam(pdef)) continue
       min = pdef.min
       max = pdef.max
+      base = instance.settings[target.key] ?? pdef.default
+    }
+    // The lane's output gain. 'enabled' is exempt: it is a 0/1 switch read
+    // against a 0.5 threshold, and a gain there would just be a surprise
+    // off-switch.
+    const amount = target.key === 'enabled' ? 1 : automationAmount(child)
+    // Burst mode: each note fires the ADSR from the stored setting toward its own
+    // pitch-value. The 0/1 'enabled' pseudo-param has no range to travel through,
+    // so it stays a keyframe lane whatever the track says.
+    if (child.burst && target.key !== 'enabled') {
+      out.push({
+        instanceId: target.instanceId,
+        key: target.key,
+        mode: 'linear',
+        keyframes: [],
+        burst: child.burst,
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
+        min,
+        max,
+        base,
+      })
+      continue
     }
     out.push({
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
     })
   }
   return out
@@ -204,7 +258,7 @@ function resolveEnvelopes(track: Track, def: ObjectInstrumentDef | undefined, p:
       })
       continue
     }
-    const pdef = def?.params.find((pd) => pd.key === target)
+    const pdef = def ? withTransformParams(def.params).find((pd) => pd.key === target) : undefined
     if (!pdef || !isNumberParam(pdef)) continue
     out.push({
       trackId: child.id,
@@ -248,32 +302,77 @@ function moverOrSplitterId(track: Track): string | undefined {
   return undefined
 }
 
-/** Resolve one mover/splitter track through the registry: merge the
- *  definition's numeric param defaults with the track's stored inputValues,
+/** Resolve one mover/splitter track's OWN definition, without its child chain:
+ *  merge the definition's param defaults with the track's stored inputValues
+ *  (numeric) and stringParams (color/string),
  *  flatten its notes, and let the definition close over both. Returns null for
  *  unknown ids. Automation children overlay their params per beat: the resolved
  *  closure re-resolves with the beat-sampled settings, memoized per beat. The
  *  memo is a cache, not playback state - re-resolving at a repeated beat yields
  *  the identical closure, so scrub == playback == export still holds. */
-function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
+function resolveOwnMoverOrSplitter(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
   if (!def) return null
-  const settings = mergeDefinitionSettings(def, track.inputValues)
+  const settings = mergeDefinitionSettings(def, track.inputValues, track.stringParams)
   const notes = flattenTrackNotes(track, p)
   const resolved = def.resolve({ settings, notes })
   const automation = resolveAutomationLanes(track, def.params, p)
   if (automation.length === 0) return resolved
   let cachedBeat = Number.NaN
   let cached = resolved
-  return {
+  const wrapped: MoverOrSplitter = {
     apply(visualCopy, context) {
       if (context.beat !== cachedBeat) {
         cachedBeat = context.beat
-        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat) }, notes })
+        cached = def.resolve({ settings: { ...settings, ...sampleAutomationLanes(automation, context.beat, settings) }, notes })
       }
       return cached.apply(visualCopy, context)
     },
   }
+  // A time remap is deliberately taken from the UN-automated resolution: it is
+  // asked for the REAL beat (while apply is asked for the warped one), so
+  // routing it through the memo above would thrash the cache every frame. The
+  // only thing this loses is automating a remap's own params, which for Freeze
+  // means automating a two-value "on release" switch.
+  if (resolved.warpBeat) wrapped.warpBeat = (beat) => resolved.warpBeat!(beat)
+  // Automation makes the per-beat settings - and so possibly the COPY COUNT -
+  // vary with the beat, which a single-beat structural probe cannot see. Hand
+  // the probe the definition resolved at every lane's maximum reach (and
+  // minimum, for a count that shrinks as a param grows) so the mounted pool is
+  // sized to everything the lanes can reach (structuralCopyCount in
+  // visualCopies/resolveVisualCopies.ts).
+  const maxOverlay: Record<string, number> = {}
+  const minOverlay: Record<string, number> = {}
+  for (const lane of automation) {
+    const underneath = settings[lane.param]
+    const bounds = automationLaneValueBounds(lane, typeof underneath === 'number' ? underneath : lane.base ?? 0)
+    maxOverlay[lane.param] = bounds.max
+    minOverlay[lane.param] = bounds.min
+  }
+  wrapped.structuralVariants = [
+    def.resolve({ settings: { ...settings, ...maxOverlay }, notes }),
+    def.resolve({ settings: { ...settings, ...minOverlay }, notes }),
+  ]
+  return wrapped
+}
+
+/** Resolve one mover/splitter track WITH its nested mover/splitter children.
+ *  Those children are never chain entries of the object; what they are depends
+ *  on the parent. Under a MOVER they are its FRAME and move its field
+ *  (visualCopies/moverFrame.ts); under a SPLITTER they act on its copies in
+ *  its reference frame (visualCopies/splitterChildChain.ts). Both collect
+ *  through the same function as an object's chain, so nesting recurses. */
+function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrSplitter | null {
+  const own = resolveOwnMoverOrSplitter(track, p)
+  if (!own) return null
+  const children = resolveMoverAndSplitterChain(track, p)
+  if (track.type === 'splitter') return splitterWithChildChain(own, children)
+  const entry = framedMoverOrSplitter(own, children)
+  // Structural variants stay the BARE resolutions: frames don't change counts,
+  // so they skip the framing wrapper (splitterWithChildChain, whose children DO
+  // change counts, composes its own variants instead).
+  if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
+  return entry
 }
 
 /** Collect an object track's mover and splitter children together, in exact
@@ -293,15 +392,20 @@ function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOr
   return chain
 }
 
-/** True when this mover/splitter resolves as a LOCAL chain entry of its parent
- *  instrument (see resolveMoverAndSplitterChain) - i.e. its parent is a valid
- *  instrument track. Everything else (root level, nested under a plain group
- *  track or another mover, or under an instrument the registry no longer knows)
- *  is a mover "without a parent instrument": it routes globally through its
- *  `targets`, appended to the end of each target object's chain. */
-function isLocalChainChild(track: Track, p: ProjectSnapshot): boolean {
+/** True when this mover/splitter belongs to a parent's chain rather than routing
+ *  itself: either a LOCAL entry of its parent instrument's chain, or a FRAME
+ *  entry of a parent mover/splitter, which moves that parent
+ *  (visualCopies/moverFrame.ts). Both are collected by
+ *  resolveMoverAndSplitterChain from the parent's childIds, so the same prefix
+ *  logic counts either one. Everything else (root level, nested under a plain
+ *  group track, or under an instrument the registry no longer knows) is a mover
+ *  "without a parent": it routes globally through its `targets`, appended to the
+ *  end of each target object's chain. */
+function isChainChild(track: Track, p: ProjectSnapshot): boolean {
   const parent = track.parentId ? p.tracks[track.parentId] : undefined
-  return !!parent && !!getInstrument(parent.instrumentId)
+  if (!parent) return false
+  return !!getInstrument(parent.instrumentId)
+    || !!getMoverOrSplitterDefinition(moverOrSplitterId(parent))
 }
 
 function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
@@ -327,10 +431,10 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   const target = p.tracks[trackId]
   if (!target) return 1
 
-  // A local chain child counts the entries above it within its parent
-  // instrument's chain; a global entry (no parent instrument) counts each
-  // target's local chain plus every preceding global that hits it.
-  if (isLocalChainChild(target, p)) {
+  // A chain child counts the entries above it within its parent's chain -
+  // an instrument's local chain, or a parent mover's frame chain; a global entry
+  // counts each target's local chain plus every preceding global that hits it.
+  if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
     if (!parent) return 1
     const candidates = (parent.childIds ?? [])
@@ -338,13 +442,22 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
     const anySolo = candidates.some((child) => child.solo)
     const prefix: MoverOrSplitter[] = []
+    // A SPLITTER's child chain runs over the splitter's own copies
+    // (visualCopies/splitterChildChain.ts), so the parent itself heads the
+    // prefix; a MOVER's children are its frame and start from one copy.
+    if (parent.type === 'splitter') {
+      const own = resolveOwnMoverOrSplitter(parent, p)
+      if (own) prefix.push(own)
+    }
     for (const child of candidates) {
       if (child.id === trackId) break
       if (child.muted || (anySolo && !child.solo)) continue
       const resolved = resolveMoverOrSplitterTrack(child, p)
       if (resolved) prefix.push(resolved)
     }
-    return resolveVisualCopies(prefix, 0).length
+    // Structural, not single-beat: an automated entry above this one may breathe
+    // its count with the beat, and the MIDI rows must address the mounted pool.
+    return structuralCopyCount(prefix)
   }
 
   const objects = Object.values(p.tracks).filter(
@@ -360,22 +473,62 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       if (
         !global || global.muted ||
         !getMoverOrSplitterDefinition(moverOrSplitterId(global)) ||
-        isLocalChainChild(global, p) ||
+        isChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
       const resolved = resolveMoverOrSplitterTrack(global, p)
       if (resolved) prefix.push(resolved)
     }
-    largestCount = Math.max(largestCount, resolveVisualCopies(prefix, 0).length)
+    largestCount = Math.max(largestCount, structuralCopyCount(prefix))
   }
   return largestCount
+}
+
+// ── Per-track resolve reuse ──────────────────────────────────────────────────
+// resolveProject runs debounced after every edit burst, and in a large project
+// the note flattening (loop tiling) and chain-closure building dominate - a
+// one-note edit re-resolving 30 dense tracks costs tens of ms right when the
+// gesture ends. The store updates immutably with per-track reference
+// preservation, so an object's resolution can be reused by identity: the cache
+// is keyed WEAKLY on the object track's own reference (an edit to the track
+// replaces the ref, and the old entry is GC'd with it) and validated against
+// everything else its resolvers read - the subtree refs (child lanes at any
+// depth, including mover frames) and the tempo fields. Cached entries are never
+// emitted directly: each resolve emits a shallow copy with its own chain array
+// (global movers append per resolve), solo-derived mute, and scratchBase.
+// The shared inner closures are stateful-but-pure (per-beat memos), same as
+// one instance serving several target objects within a single resolve.
+const objectResolveCache = new WeakMap<Track, { deps: unknown[]; entry: ResolvedObject }>()
+const globalMoverResolveCache = new WeakMap<Track, { deps: unknown[]; resolved: MoverOrSplitter | null }>()
+
+/** Everything a track's resolvers read, as an identity-comparable list: the
+ *  track itself, its whole subtree (DFS), and the tempo fields. */
+function resolveDeps(track: Track, p: ProjectSnapshot): unknown[] {
+  const deps: unknown[] = [p.beatsPerBar, p.totalBars]
+  const seen = new Set<string>()
+  const visit = (t: Track) => {
+    if (seen.has(t.id)) return
+    seen.add(t.id)
+    deps.push(t)
+    for (const cid of t.childIds ?? []) {
+      const c = p.tracks[cid]
+      if (c) visit(c)
+    }
+  }
+  visit(track)
+  return deps
+}
+
+function depsEqual(a: unknown[], b: unknown[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }
 
 /**
  * Flatten the project into resolved objects (with their mover chains) plus the tag
  * index. Objects resolve first so tag-scoped top-level movers can expand to the
  * objects carrying that tag.
- * Non-incremental skeleton - resolve is trivially cheap at this scale.
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
@@ -396,30 +549,49 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
     if (!def) continue // unknown instrument (removed, or a legacy modulator) renders nothing
-    const params = track.params ?? {}
-    const notes = flattenTrackNotes(track, p)
-    const moverAndSplitterChain = resolveMoverAndSplitterChain(track, p)
+
+    const deps = resolveDeps(track, p)
+    const cached = objectResolveCache.get(track)
+    let base: ResolvedObject
+    if (cached && depsEqual(cached.deps, deps)) {
+      base = cached.entry
+    } else {
+      base = {
+        trackId: id,
+        instrumentId: track.instrumentId,
+        parentId: track.parentId,
+        muted: false, // per-resolve (solo pool) - set on the emitted copy below
+        params: track.params ?? {},
+        stringParams: track.stringParams ?? {},
+        localTransform: def?.localTransform,
+        notes: flattenTrackNotes(track, p),
+        abilityEvents: resolveAbilityEvents(track, p),
+        automations: resolveAutomations(track, def, p),
+        effectAutomations: resolveEffectAutomations(track, p),
+        envelopes: resolveEnvelopes(track, def, p),
+        moverAndSplitterChain: resolveMoverAndSplitterChain(track, p),
+        // Fresh array whenever the track changed: the gate ref-compares it, so
+        // a pad-bank edit (which lands via resolve) is always visible to it.
+        videoPads: track.videoPads ? [...track.videoPads] : undefined,
+        // Same contract for the Photo instrument's bank.
+        photoPads: track.photoPads ? [...track.photoPads] : undefined,
+        scratchBase: identitySV(),
+        tags,
+        maskSourceIds: [],
+        masksTargets: false,
+      }
+      objectResolveCache.set(track, { deps, entry: base })
+    }
     objects.push({
-      trackId: id,
-      instrumentId: track.instrumentId,
-      parentId: track.parentId,
+      ...base,
       muted: objectOff(track),
-      params,
-      stringParams: track.stringParams ?? {},
-      localTransform: def?.localTransform,
-      notes,
-      abilityEvents: resolveAbilityEvents(track, p),
-      automations: resolveAutomations(track, def, p),
-      effectAutomations: resolveEffectAutomations(track, p),
-      envelopes: resolveEnvelopes(track, def, p),
-      moverAndSplitterChain,
-      // Fresh array per resolve: the gate ref-compares it, so a clip-bank edit
-      // (which lands via resolve) is always visible to it.
-      videoPads: track.videoPads ? [...track.videoPads] : undefined,
-      // Same contract for the Photo instrument's bank.
-      photoPads: track.photoPads ? [...track.photoPads] : undefined,
+      // Own array per resolve: the global-mover pass below appends into it.
+      moverAndSplitterChain: [...base.moverAndSplitterChain],
       scratchBase: identitySV(),
-      tags,
+      // Per-resolve like the chain: the crop routing pass below appends, and
+      // targets edits arrive as a whole re-resolve rather than a deps miss.
+      maskSourceIds: [],
+      masksTargets: track.instrumentId === 'crop' && (track.targets?.length ?? 0) > 0,
     })
     for (const tag of tags) {
       const list = tagIndex.get(tag)
@@ -462,8 +634,18 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   for (const trackId of flattenTree(p)) {
     const track = p.tracks[trackId]
     if (!track || track.muted || !getMoverOrSplitterDefinition(moverOrSplitterId(track))) continue
-    if (isLocalChainChild(track, p)) continue
-    const resolved = resolveMoverOrSplitterTrack(track, p)
+    if (isChainChild(track, p)) continue
+    // Same identity-keyed reuse as objects: a global entry re-resolves only
+    // when its own subtree (settings, notes, automation, frame) changed.
+    const deps = resolveDeps(track, p)
+    const cached = globalMoverResolveCache.get(track)
+    let resolved: MoverOrSplitter | null
+    if (cached && depsEqual(cached.deps, deps)) {
+      resolved = cached.resolved
+    } else {
+      resolved = resolveMoverOrSplitterTrack(track, p)
+      globalMoverResolveCache.set(track, { deps, resolved })
+    }
     if (!resolved) continue
     const seenTargets = new Set<string>()
     for (const routing of track.targets ?? []) {
@@ -471,6 +653,31 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         if (seenTargets.has(targetObjectId)) continue
         seenTargets.add(targetObjectId)
         objectById.get(targetObjectId)?.moverAndSplitterChain.push(resolved)
+      }
+    }
+  }
+
+  // A Crop track with routing targets masks THOSE objects (a screen-space pass
+  // in each target's ShaderWrapper) instead of its whole scene; with no targets
+  // it stays the scene-wide pass VisualScene runs. Only the crop's TRACK ID is
+  // routed - the per-frame mask state is pulled from the crop object's own
+  // engine state at draw time, so mute/solo and automation apply through the
+  // normal object path. A crop never masks itself or another crop (nothing
+  // renders there to mask), mirroring the dedup discipline of the mover pass
+  // above. Dead targets mask nothing rather than falling back to scene-wide -
+  // the settings panel's dead-target warning is the honest surface for that.
+  for (const object of objects) {
+    if (!object.masksTargets || object.muted) continue
+    const track = p.tracks[object.trackId]
+    if (!track) continue
+    const seenTargets = new Set<string>()
+    for (const routing of track.targets ?? []) {
+      for (const targetObjectId of objectsForScope(routing.scope)) {
+        if (seenTargets.has(targetObjectId) || targetObjectId === object.trackId) continue
+        seenTargets.add(targetObjectId)
+        const target = objectById.get(targetObjectId)
+        if (!target || target.instrumentId === 'crop') continue
+        target.maskSourceIds.push(object.trackId)
       }
     }
   }

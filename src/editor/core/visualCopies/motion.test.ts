@@ -6,6 +6,7 @@ import { mergeDefinitionSettings } from './definitions'
 import { identityVisualCopy } from './identityVisualCopy'
 import {
   MOTION_BLOCKS,
+  edgeFade,
   evaluateDriftOffset,
   evaluateMotionTranslation,
   evaluateSnapAngles,
@@ -46,6 +47,17 @@ function localX(copy: VisualCopy): [number, number, number] {
 }
 
 const NO_WRAP = { boundX: 0, boundY: 0, boundZ: 0 }
+
+/** A copy some entry above this mover has already placed at (x, y, z). */
+function copyAt(x: number, y: number, z: number): VisualCopy {
+  const copy = identityVisualCopy()
+  copy.transform.makeTranslation(x, y, z)
+  return copy
+}
+
+function applyToCopy(config: MotionSettings, notes: ResolvedNote[], copy: VisualCopy, beat: number): VisualCopy {
+  return motionMover.resolve({ settings: config, notes }).apply(copy, { beat, index: 0, count: 1 })[0]
+}
 
 test('motion is registered as one mover carrying all four blocks', () => {
   const def = getMoverOrSplitterDefinition('motion')
@@ -121,7 +133,7 @@ test('wrapping folds a coordinate into [-bound, bound) and 0 disables it', () =>
 test('a long drift note walks the object off one edge and back on the other', () => {
   const config = settings({ driftX: 2, drift: 1, boundX: 5 })
   const notes = [note(0, 48, 100)]
-  const x = (beat: number) => evaluateMotionTranslation(notes, config, beat)[0]
+  const x = (beat: number) => positionOf(applyAt(config, notes, beat))[0]
   assert.equal(x(2), 4)
   assert.equal(x(3), -4, 'teleported to the other side')
   assert.equal(x(4), -2)
@@ -133,13 +145,44 @@ test('a long drift note walks the object off one edge and back on the other', ()
 test('the wrap covers the whole translation, so steps cannot escape the box either', () => {
   const config = settings({ boundX: 5, distanceX: 4, distance: 1, easing: 5, burstBeats: 1 })
   const steps = [note(0, 60), note(1, 60)] // two +X steps of 4 = 8, past the +5 bound
-  assert.equal(evaluateMotionTranslation(steps, config, 2)[0], -2)
-  // Drift and steps share one wrapped offset rather than wrapping separately.
+  assert.equal(positionOf(applyAt(config, steps, 2))[0], -2)
+  // Drift and steps fold as ONE resulting position rather than wrapping separately.
   const mixed = [note(0, 60), note(0, 48, 2)]
   assert.equal(
-    evaluateMotionTranslation(mixed, settings({ boundX: 5, distanceX: 4, easing: 5, driftX: 2 }), 2)[0],
+    positionOf(applyAt(settings({ boundX: 5, distanceX: 4, easing: 5, driftX: 2 }), mixed, 2))[0],
     wrapToBound(4 + 4, 5),
   )
+})
+
+test('copies wrap one at a time, when their OWN position crosses the face', () => {
+  const config = settings({ driftX: 4, drift: 1, boundX: 5, fade: 0 })
+  const notes = [note(0, 48, 100)]
+  // One drift slides every copy at +4/beat; at beat 1 the copy that started at
+  // +2 has crossed the +5 face and reappeared on the left, while the one at
+  // the origin is still mid-frame - no batch teleport.
+  assert.equal(positionOf(applyToCopy(config, notes, copyAt(0, 0, 0), 1))[0], 4)
+  assert.equal(positionOf(applyToCopy(config, notes, copyAt(2, 0, 0), 1))[0], -4)
+  // A beat later they have swapped roles: the belt streams copy by copy.
+  assert.equal(positionOf(applyToCopy(config, notes, copyAt(0, 0, 0), 2))[0], -2)
+  assert.equal(positionOf(applyToCopy(config, notes, copyAt(2, 0, 0), 2))[0], 0)
+})
+
+test('the edge fade dissolves a copy through the faces, identically on both sides', () => {
+  const config = settings({ boundX: 5, fade: 0.5 })
+  const opacityAt = (x: number) => applyToCopy(config, [], copyAt(x, 0, 0), 0).opacity
+  assert.equal(opacityAt(0), 1, 'full in the middle')
+  const leaving = opacityAt(4.5)
+  assert.ok(leaving > 0 && leaving < 1, `dissolving near the face (${leaving})`)
+  assert.equal(opacityAt(-4.5), leaving, 'entering face matches leaving face - the wrap has no seam')
+  assert.equal(edgeFade(5, 5, 0.5), 0, 'gone exactly at the face')
+  assert.equal(edgeFade(2, 5, 0.5), 1, 'inside the fade band, untouched')
+  assert.equal(edgeFade(4.5, 0, 0.5), 1, 'bound 0 = no wrap, no fade')
+  assert.equal(edgeFade(4.5, 5, 0), 1, 'fade 0 turns the dissolve off')
+})
+
+test('the box bounds POSITIONS: a copy parked outside it is folded straight in', () => {
+  const config = settings({ boundX: 5, fade: 0 })
+  assert.equal(positionOf(applyToCopy(config, [], copyAt(7, 0, 0), 0))[0], -3)
 })
 
 test('the Step block is the Burst mover, at the Burst pitches', () => {
@@ -235,7 +278,7 @@ test('every block leaves opacity and colour untouched', () => {
   const notes = [note(0, 48, 2), note(0, 60), note(0, 72, 2), note(0, 84)]
   const copy = motionMover
     .resolve({ settings: settings(), notes })
-    .apply({ ...identityVisualCopy(), opacity: 0.5, colorShift: { hue: 0.25, saturation: 0, lightness: 0 } },
+    .apply({ ...identityVisualCopy(), opacity: 0.5, colorShift: { hue: 0.25, saturation: 0, lightness: 0, tint: null, tintAmount: 0 } },
       { beat: 1, index: 0, count: 1 })[0]
   assert.equal(copy.opacity, 0.5)
   assert.equal(copy.colorShift.hue, 0.25)

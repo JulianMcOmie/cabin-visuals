@@ -427,6 +427,7 @@ export const hopfFibrationInstrument: ObjectInstrumentDef = {
   id: 'hopfFibration',
   name: 'Hopf Fibration',
   kind: 'object',
+  identityColor: '#2dd4bf',
   userInterfaceRenderer: 'hopfFibration',
   params: PARAMS,
   // Transforms are octave-looped (pitch % 12); one octave (48-59) is exposed.

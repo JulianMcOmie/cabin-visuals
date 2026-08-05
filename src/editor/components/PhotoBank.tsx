@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Image as ImageIcon, Plus, X } from 'lucide-react'
 import { claimMediaDrop } from './MediaFileDropLayer'
+import { dragCarriesFiles, isPhotoFile } from '../core/mediaFileKinds'
 import { useProjectStore } from '../store/ProjectStore'
 import { usePhotoStore } from '../store/PhotoStore'
 import { getPhotoPlayableUrl } from '../core/photo/photoSource'
@@ -98,7 +99,10 @@ export function PhotoBank({ track }: { track: Track }) {
     claimMediaDrop(e)
     hoverDepthRef.current = 0
     setDropHover(false)
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
+    // isPhotoFile, not `type.startsWith('image/')`: Safari leaves File.type
+    // empty for some extensions, and this zone CLAIMS the drop - a file it
+    // filtered out here would be dropped by everyone.
+    const files = Array.from(e.dataTransfer.files).filter(isPhotoFile)
     if (files.length > 0) add(files)
   }
 
@@ -106,7 +110,7 @@ export function PhotoBank({ track }: { track: Track }) {
   // noisy, so a depth counter decides "a file drag is happening at all").
   useEffect(() => {
     let depth = 0
-    const isFileDrag = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')
+    const isFileDrag = (e: DragEvent) => dragCarriesFiles(e.dataTransfer)
     const onEnter = (e: DragEvent) => {
       if (!isFileDrag(e)) return
       depth++
@@ -153,13 +157,13 @@ export function PhotoBank({ track }: { track: Track }) {
     <div
       className={`relative mb-5 rounded ${dropHover ? 'bg-[var(--accent)]/10' : ''}`}
       onDragEnter={(e) => {
-        if (!Array.from(e.dataTransfer.types).includes('Files')) return
+        if (!dragCarriesFiles(e.dataTransfer)) return
         e.preventDefault()
         hoverDepthRef.current++
         setDropHover(true)
       }}
       onDragOver={(e) => {
-        if (!Array.from(e.dataTransfer.types).includes('Files')) return
+        if (!dragCarriesFiles(e.dataTransfer)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}

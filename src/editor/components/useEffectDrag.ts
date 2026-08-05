@@ -57,10 +57,12 @@ export function useEffectDrag() {
       setGhostName(null)
       useUIStore.getState().setEffectDragging(false)
       if (over) {
-        // Match the Track Editor's target (selected track, else the first root track).
+        // Match the Track Editor's target: the selected track's chain, else the
+        // active scene's chain (the drop zone shown when nothing is selected).
         const { selectedTrackId } = useUIStore.getState()
-        const trackId = selectedTrackId ?? useProjectStore.getState().rootTrackIds[0]
-        if (trackId) useProjectStore.getState().addEffect(trackId, plugin.id)
+        const project = useProjectStore.getState()
+        if (selectedTrackId && project.tracks[selectedTrackId]) project.addEffect(selectedTrackId, plugin.id)
+        else if (project.activeSceneId) project.addSceneEffect(project.activeSceneId, plugin.id)
       }
     }
 

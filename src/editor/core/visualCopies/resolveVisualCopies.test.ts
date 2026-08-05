@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Matrix4 } from 'three'
 import { identityVisualCopy } from './identityVisualCopy'
-import { MAX_VISUAL_COPIES, resolveVisualCopies } from './resolveVisualCopies'
+import { resolveVisualCopies } from './resolveVisualCopies'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 // -- Test-only chain entries ------------------------------------------------
@@ -73,17 +73,36 @@ test('empty chain returns one identity copy', () => {
   assert.equal(copies.length, 1)
   assert.deepEqual(copies[0].transform.elements, new Matrix4().elements)
   assert.equal(copies[0].opacity, 1)
-  assert.deepEqual(copies[0].colorShift, { hue: 0, saturation: 0, lightness: 0 })
+  assert.deepEqual(copies[0].colorShift, { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 })
 })
 
 test('movers receive the current index and count', () => {
   const seen: MoverOrSplitterContext[] = []
   resolveVisualCopies([splitter(3, 1), recordingMover(seen)], 7.5)
-  assert.deepEqual(seen, [
-    { beat: 7.5, index: 0, count: 3 },
-    { beat: 7.5, index: 1, count: 3 },
-    { beat: 7.5, index: 2, count: 3 },
-  ])
+  assert.deepEqual(
+    seen.map(({ beat, index, count }) => ({ beat, index, count })),
+    [
+      { beat: 7.5, index: 0, count: 3 },
+      { beat: 7.5, index: 1, count: 3 },
+      { beat: 7.5, index: 2, count: 3 },
+    ],
+  )
+})
+
+test('movers receive the whole formation, as one shared array', () => {
+  // A mover that reads how its copies are arranged (Conveyor loops each one at
+  // the formation's own repeat distance) needs the siblings, and needs the array
+  // IDENTITY to be stable so it can measure them once per step instead of once
+  // per copy.
+  const seen: MoverOrSplitterContext[] = []
+  const copies = resolveVisualCopies([splitter(3, 2), recordingMover(seen)], 0)
+  assert.equal(seen.length, 3)
+  assert.equal(seen[0].formation?.length, 3)
+  assert.ok(seen.every((context) => context.formation === seen[0].formation), 'one array per step')
+  // It is the INPUT of the step, so the positions are pre-mover ones - and the
+  // copy at each index is the one that context belongs to.
+  assert.deepEqual(seen[0].formation?.map(positionOf), [[0, 0, 0], [2, 0, 0], [4, 0, 0]])
+  assert.equal(copies.length, 3)
 })
 
 test('a splitter expands one copy into multiple copies', () => {
@@ -159,6 +178,7 @@ test('opacity and color shift survive copying', () => {
       const next = cloneCopy(visualCopy)
       next.opacity = visualCopy.opacity * 0.5
       next.colorShift = {
+        ...visualCopy.colorShift,
         hue: visualCopy.colorShift.hue + 0.25,
         saturation: visualCopy.colorShift.saturation + 0.1,
         lightness: visualCopy.colorShift.lightness - 0.1,
@@ -170,7 +190,7 @@ test('opacity and color shift survive copying', () => {
   assert.equal(copies.length, 2)
   for (const copy of copies) {
     assert.equal(copy.opacity, 0.5)
-    assert.deepEqual(copy.colorShift, { hue: 0.25, saturation: 0.1, lightness: -0.1 })
+    assert.deepEqual(copy.colorShift, { hue: 0.25, saturation: 0.1, lightness: -0.1, tint: null, tintAmount: 0 })
   }
 })
 
@@ -204,15 +224,15 @@ test('same beat produces identical copies (pure evaluation)', () => {
   }
 })
 
-test('the hard copy cap bounds chained splitters', () => {
-  // Eleven 2-way splits would produce 2048 copies; the cap truncates to
-  // MAX_VISUAL_COPIES and downstream steps see the truncated count.
+test('chained splitters fan out uncapped', () => {
+  // Eleven 2-way splits multiply to 2048 copies; every one survives and
+  // downstream steps see the full count.
   const chain = Array.from({ length: 11 }, () => splitter(2, 1))
   const seen: MoverOrSplitterContext[] = []
   const copies = resolveVisualCopies([...chain, recordingMover(seen)], 0)
-  assert.equal(copies.length, MAX_VISUAL_COPIES)
-  assert.equal(seen.length, MAX_VISUAL_COPIES)
-  assert.equal(seen[0].count, MAX_VISUAL_COPIES)
+  assert.equal(copies.length, 2048)
+  assert.equal(seen.length, 2048)
+  assert.equal(seen[0].count, 2048)
 })
 
 test('identityVisualCopy returns independently owned values', () => {

@@ -3,8 +3,14 @@ import { useFrame } from '@react-three/fiber'
 import { Color } from 'three'
 import { getObjectState, getVisualCopy } from './VisualEngine'
 import { applyColorShiftToInstrumentParams, InstrumentCopyContext } from './instrumentColor'
-import { sampleLane, sampleNoiseLane } from './automation'
+import { sampleAutomationLane } from './automation'
 import type { ObjectState } from './types'
+import type { VisualCopy } from '../visualCopies/types'
+
+/** What an object with no VisualCopy sees: the identity shift. Frozen module
+ *  constant so the per-frame signature compares by identity, not by allocation. */
+const NO_COLOR_SHIFT: VisualCopy['colorShift'] =
+  { hue: 0, saturation: 0, lightness: 0, tint: null, tintAmount: 0 }
 
 /**
  * THE per-frame entry point for instrument visuals - instruments use this, never
@@ -45,6 +51,7 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
   const shiftedStringParams = useRef<Record<string, string>>({}).current
   const shiftedState = useRef<ObjectState | null>(null)
   const scratchColor = useRef(new Color()).current
+  const scratchTint = useRef(new Color()).current
   useFrame((root) => {
     const state = getObjectState(trackId)
     if (!state) {
@@ -55,9 +62,13 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     const visualCopy = copyContext
       ? getVisualCopy(trackId, copyContext.visualCopyIndex)
       : undefined
-    const hueShift = visualCopy?.colorShift.hue ?? 0
-    const saturationShift = visualCopy?.colorShift.saturation ?? 0
-    const lightnessShift = visualCopy?.colorShift.lightness ?? 0
+    const colorShift = visualCopy?.colorShift ?? NO_COLOR_SHIFT
+    const hueShift = colorShift.hue
+    const saturationShift = colorShift.saturation
+    const lightnessShift = colorShift.lightness
+    const tint = colorShift.tint
+    const tintAmount = colorShift.tintAmount
+    const tintPerceptual = colorShift.tintPerceptual ?? false
     let i = 0
     let dirty = false
     const put = (v: unknown) => {
@@ -85,6 +96,12 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(hueShift)
     put(saturationShift)
     put(lightnessShift)
+    put(tint)
+    put(tintAmount)
+    // Which mix the tint walks changes the rendered color at a fixed beat, so
+    // flipping the Colorizer's MIX while paused has to repaint like any other
+    // colorShift field.
+    put(tintPerceptual)
     put(visualCopy?.opacity ?? 1)
     put(state.abilityEvents)
     put(state.videoPads)
@@ -106,7 +123,8 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     }
     if (dirty) {
       const colorShiftActive = copyContext && copyContext.colorParams.length > 0 &&
-        Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001
+        (Math.abs(hueShift) + Math.abs(saturationShift) + Math.abs(lightnessShift) > 0.0001 ||
+          (tint !== null && tintAmount > 0.0001))
       if (!colorShiftActive) {
         // Couldn't apply yet: drop the committed signature so next frame retries.
         if (cb(state) === false) buf.length = 0
@@ -115,11 +133,10 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
       applyColorShiftToInstrumentParams(
         state.stringParams,
         copyContext.colorParams,
-        hueShift,
-        saturationShift,
-        lightnessShift,
+        colorShift,
         shiftedStringParams,
         scratchColor,
+        scratchTint,
       )
       const nextState = shiftedState.current ?? { ...state, stringParams: shiftedStringParams }
       Object.assign(nextState, state)
@@ -146,25 +163,23 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
  * Sampling the lane at the spawn beat pins it instead, so a fading word stays put
  * and only the next one moves.
  *
- * Safe for the pause invariant: sampleLane/sampleNoiseLane are pure functions of
- * beat, so this is still a function of (beat, document) and scrub == playback.
+ * Safe for the pause invariant: sampleAutomationLane is a pure function of beat,
+ * so this is still a function of (beat, document) and scrub == playback.
  *
  * Does NOT reproduce envelope overlay (the base ← automation ← envelope merge
  * stops at automation here). Envelopes are ADSR-gated around the CURRENT beat, so
  * latching one to a past beat would be meaningless rather than merely incomplete.
  */
 export function paramAtBeat(state: ObjectState, param: string, beat: number): number {
+  const base = state.baseParams[param] ?? state.params[param] ?? 0
   for (const auto of state.automations) {
     if (auto.param !== param) continue
-    if (auto.noise && auto.gates?.length) {
-      const v = sampleNoiseLane(auto.noise, auto.gates, beat, auto.min ?? 0, auto.max ?? 1)
-      // NaN = outside every gate, i.e. the lane is inert; fall back to the base.
-      if (!Number.isNaN(v)) return v
-      break
-    }
-    if (auto.keyframes.length) return sampleLane(auto.keyframes, beat, auto.mode)
+    const v = sampleAutomationLane(auto, beat, base)
+    // NaN = the lane is inert at this beat; fall back to the base value.
+    if (!Number.isNaN(v)) return v
+    break
   }
-  return state.baseParams[param] ?? state.params[param] ?? 0
+  return base
 }
 
 export function beatInBlock(state: ObjectState): boolean {

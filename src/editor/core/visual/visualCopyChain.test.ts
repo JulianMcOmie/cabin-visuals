@@ -7,7 +7,7 @@ import {
   registerMoverOrSplitterDefinition,
   unregisterMoverOrSplitterDefinitionForTests,
 } from '../visualCopies/registry'
-import { resolveVisualCopies } from '../visualCopies/resolveVisualCopies'
+import { resolveVisualCopies, structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
 import { getPriorVisualCopyCount, resolveProject, type ProjectSnapshot } from './resolve'
 
@@ -238,14 +238,17 @@ test('a mover nested under a non-instrument track routes globally through its ta
 })
 
 test('nested globals append in depth-first order after root globals', () => {
+  // Nested under a plain group track, so both stay global: nesting a mover under
+  // another MOVER means something else entirely (see the frame tests below).
   const p = snapshot([
     track({ id: 'cube', instrumentId: 'cube' }),
     track({
-      id: 'bm', type: 'mover', moverId: 'test.chainLift', childIds: ['gm'], inputValues: { distance: 1 },
+      id: 'bm', type: 'mover', moverId: 'test.chainLift', childIds: ['group'], inputValues: { distance: 1 },
       targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
     }),
+    track({ id: 'group', parentId: 'bm', childIds: ['gm'] }),
     track({
-      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'bm', inputValues: { distance: 3 },
+      id: 'gm', type: 'mover', moverId: 'test.chainLift', parentId: 'group', inputValues: { distance: 3 },
       targets: [{ port: '', scope: { kind: 'track', id: 'cube' }, amount: 1 }],
     }),
   ], ['cube', 'bm'])
@@ -253,6 +256,91 @@ test('nested globals append in depth-first order after root globals', () => {
   log.length = 0
   resolveVisualCopies(obj.moverAndSplitterChain, 0)
   assert.deepEqual(log, ['lift(1)', 'lift(3)'])
+})
+
+// ── Frames: a mover child of a mover moves that mover ────────────────────────
+
+test('a mover child of a mover is its frame, not a chain entry of the object', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({
+      id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube',
+      childIds: ['frame'], inputValues: { distance: 1 },
+    }),
+    track({ id: 'frame', type: 'mover', moverId: 'test.chainLift', parentId: 'parent', inputValues: { distance: 3 } }),
+  ], ['cube'])
+  const obj = objectByTrackId(p, 'cube')
+  assert.equal(obj.moverAndSplitterChain.length, 1, 'the frame does not join the object chain')
+
+  log.length = 0
+  const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  // The frame resolves first - it establishes where the parent's field is - then
+  // the parent runs inside it.
+  assert.deepEqual(log, ['lift(3)', 'lift(1)'])
+  // test.chainLift has no place in the world (it ignores placementTransform), so
+  // its frame cannot move it: 1 unit up, not 4.
+  assert.equal(copies[0].transform.elements[13], 1)
+})
+
+test('a frame child does not route globally even with targets', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({ id: 'other', instrumentId: 'cube' }),
+    track({
+      id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube',
+      childIds: ['frame'], inputValues: { distance: 1 },
+    }),
+    track({
+      id: 'frame', type: 'mover', moverId: 'test.chainLift', parentId: 'parent', inputValues: { distance: 3 },
+      targets: [{ port: '', scope: { kind: 'track', id: 'other' }, amount: 1 }],
+    }),
+  ], ['cube', 'other'])
+  assert.equal(objectByTrackId(p, 'other').moverAndSplitterChain.length, 0, 'frames answer to their parent only')
+})
+
+test('prior copy count treats a frame chain like any other chain prefix', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['parent'] }),
+    track({ id: 'parent', type: 'mover', moverId: 'test.chainLift', parentId: 'cube', childIds: ['s', 'v'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'parent' }),
+    track({ id: 'v', type: 'mover', moverId: 'visibility', parentId: 'parent' }),
+  ], ['cube'])
+  // 'v' sits inside the frame chain, after a splitter, so its MIDI lane
+  // addresses two copies - counted off the frame, not the object's chain.
+  assert.equal(getPriorVisualCopyCount('v', p), 2)
+})
+
+// ── Splitter children: a mover child of a splitter moves its copies ─────────
+
+test('a mover child of a splitter moves its copies in the splitter frame, not as a chain entry', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['m'] }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 's', inputValues: { distance: 3 } }),
+  ], ['cube'])
+  const obj = objectByTrackId(p, 'cube')
+  assert.equal(obj.moverAndSplitterChain.length, 1, 'the child does not join the object chain')
+
+  log.length = 0
+  const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
+  assert.equal(copies.length, 2)
+  // The split resolves first, then the child addresses each slot.
+  assert.deepEqual(log, ['split', 'lift(3)', 'lift(3)'])
+  // Unlike a frame under a MOVER (where a placeless mover has nothing to move,
+  // see the frame test above), a splitter's child moves its COPIES: both slots
+  // ride up the full distance.
+  assert.equal(copies[0].transform.elements[13], 3)
+  assert.equal(copies[1].transform.elements[13], 3)
+})
+
+test('prior copy count under a splitter parent counts the splitter itself', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['v'] }),
+    track({ id: 'v', type: 'mover', moverId: 'visibility', parentId: 's' }),
+  ], ['cube'])
+  // 'v' acts on the splitter's own output, so its MIDI lane addresses both slots.
+  assert.equal(getPriorVisualCopyCount('v', p), 2)
 })
 
 test('a mover with a parent instrument stays local even when it has targets', () => {
@@ -363,4 +451,45 @@ test('every instrument track exposes a chain; empty chains yield one identity co
   const copies = resolveVisualCopies(obj.moverAndSplitterChain, 0)
   assert.equal(copies.length, 1)
   assert.equal(copies[0].opacity, 1)
+})
+
+/** Splitter whose copy COUNT comes from a param (for automated-count tests). */
+const chainCountSplit: MoverOrSplitterDefinition<{ copies: number }> = {
+  id: 'test.chainCountSplit',
+  label: 'Chain Count Split',
+  kind: 'splitter',
+  params: [{ key: 'copies', label: 'Copies', min: 1, max: 8, step: 1, default: 2 }],
+  resolve({ settings }) {
+    const count = Math.max(1, Math.round(settings.copies))
+    return {
+      apply(visualCopy) {
+        return Array.from({ length: count }, () => cloneCopy(visualCopy))
+      },
+    }
+  },
+}
+registerMoverOrSplitterDefinition(chainCountSplit)
+test.after(() => unregisterMoverOrSplitterDefinitionForTests('test.chainCountSplit'))
+
+test('an automated count entry carries structural variants bracketing its reach', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainCountSplit', parentId: 'cube', childIds: ['a'] }),
+    track({ ...AUTOMATION_LANE, parentId: 's', targetParam: 'copies' }),
+  ], ['cube'])
+  const [entry] = objectByTrackId(p, 'cube').moverAndSplitterChain
+  assert.equal(entry.structuralVariants?.length, 2)
+  // Lane keyframes span pitch 36..84 → copies 1..8; beat 0 alone would say 1.
+  assert.equal(resolveVisualCopies([entry], 0).length, 1)
+  assert.equal(structuralCopyCount([entry]), 8)
+})
+
+test('prior copy count under an automated splitter addresses the mounted pool', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s', 'm'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainCountSplit', parentId: 'cube', childIds: ['a'] }),
+    track({ ...AUTOMATION_LANE, parentId: 's', targetParam: 'copies' }),
+    track({ id: 'm', type: 'mover', moverId: 'test.chainLift', parentId: 'cube' }),
+  ], ['cube'])
+  assert.equal(getPriorVisualCopyCount('m', p), 8)
 })

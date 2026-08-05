@@ -9,6 +9,7 @@ export const scalePlugin: VisualEffect = {
   id: 'scale',
   name: 'Scale',
   category: 'transform',
+  deprecated: true,
   params: [
     { key: 'scale', label: 'Base Scale', min: 0.1, max: 3, step: 0.1, default: 1 },
     { key: 'pulseAmount', label: 'Pulse Amount', min: 0, max: 1, step: 0.05, default: 0 },

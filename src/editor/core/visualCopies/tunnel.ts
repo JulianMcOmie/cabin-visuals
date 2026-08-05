@@ -39,6 +39,7 @@ import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
 import type { VisualCopy } from './types'
+import { TUNNEL_COLOR } from './identityColors'
 
 export interface TunnelSettings {
   /** Copies evenly spaced around each ring (1 collapses the tunnel to single file). */
@@ -51,8 +52,16 @@ export interface TunnelSettings {
   /** Axial coordinate copies wrap AT. Keep it at least `fadeDistance` behind
    *  the camera (which sits at z = 5 by default) so the fade-out is off-screen. */
   nearEnd: number
-  /** Units travelled per beat; negative sends the tunnel away from you. */
+  /** 0 = Free (`speed` in units/beat), 1 = Beat-synced (`syncRingsPerBeat`
+   *  paces the corridor so rings arrive on musical divisions). */
+  speedMode: number
+  /** Units travelled per beat in Free mode; negative sends the tunnel away from you. */
   speed: number
+  /** Rings arriving per beat in Beat-synced mode: 1 lands a ring on every
+   *  beat, 0.5 on every other, negative runs the corridor backward. The
+   *  stored unit stays continuous so automation lanes can sweep it; the panel
+   *  steps it over TUNNEL_SYNC_DETENTS like an audio plugin's synced rate. */
+  syncRingsPerBeat: number
   /** Per-ring rotation about the axis, for a spiral corridor. */
   twistDegrees: number
   /** 0 = Z (toward the default camera), 1 = X, 2 = Y. */
@@ -127,10 +136,65 @@ function positiveModulo(value: number, period: number): number {
   return ((value % period) + period) % period
 }
 
+// ── Beat-synced speed ────────────────────────────────────────────────────────
+// Same contract as Radial Motion's stepped spin knobs: every detent is a
+// musical division (one RING ARRIVAL per power-of-two beats, either direction,
+// or stopped), the STORED value stays a continuous number so old saves and
+// automation lanes keep working, and quantization happens at the panel.
+
+/** Beats between ring arrivals, slow → fast. */
+export const TUNNEL_SYNC_BEATS_PER_RING = [8, 4, 2, 1, 0.5, 0.25] as const
+
+/** Every synced knob position, ascending, zero dead centre: −(fast…slow), 0, slow…fast. */
+export const TUNNEL_SYNC_DETENTS: readonly number[] = (() => {
+  const rates = TUNNEL_SYNC_BEATS_PER_RING.map((beats) => 1 / beats)
+  return [...[...rates].reverse().map((rate) => -rate), 0, ...rates]
+})()
+
+/** Nearest detent for a stored rate — how the stepped knob reads a value that
+ *  was automated or typed off the grid. */
+export function tunnelSyncDetentIndex(rate: number): number {
+  let best = 0
+  for (let index = 1; index < TUNNEL_SYNC_DETENTS.length; index++) {
+    if (Math.abs(TUNNEL_SYNC_DETENTS[index] - rate) < Math.abs(TUNNEL_SYNC_DETENTS[best] - rate)) {
+      best = index
+    }
+  }
+  return best
+}
+
+/** A detent's readout: beats per ring arrival, signed — "2b" is a ring every
+ *  2 beats, "1/4b" four rings per beat, "−1b" one per beat the other way. */
+export function tunnelSyncDetentLabel(rate: number): string {
+  if (rate === 0) return '0'
+  const sign = rate < 0 ? '−' : ''
+  const beats = 1 / Math.abs(rate)
+  return beats >= 1 ? `${sign}${beats}b` : `${sign}1/${Math.round(1 / beats)}b`
+}
+
+/** The settings the travel integral needs. The sync fields are optional so
+ *  callers that predate Beat-synced mode (and the origin-lookup tests) can
+ *  keep passing the narrow Free-mode shape. */
+export type TunnelSpeedSettings = Pick<TunnelSettings, 'speed' | 'midiSpeed'> &
+  Partial<Pick<TunnelSettings, 'speedMode' | 'syncRingsPerBeat' | 'copiesPerRing' | 'rings' | 'depth'>>
+
+/**
+ * The corridor's base rate in units/beat, whichever mode picks it: Free reads
+ * the `speed` knob verbatim; Beat-synced converts rings-per-beat through the
+ * CURRENT ring spacing (`depth / rings`), so "1" means a ring crosses any
+ * fixed point on every beat regardless of how the corridor is proportioned.
+ */
+export function tunnelBaseSpeed(settings: TunnelSpeedSettings): number {
+  if (Math.round(settings.speedMode ?? 0) !== 1) return settings.speed
+  const { rings } = tunnelCounts({ copiesPerRing: settings.copiesPerRing ?? 1, rings: settings.rings ?? 1 })
+  const spacing = Math.max(0.0001, settings.depth ?? 0) / rings
+  return spacing * (settings.syncRingsPerBeat ?? 0)
+}
+
 /** Structural slot counts, clamped so a chain of splitters cannot fan out past
  *  the tunnel's own budget (rings give way first - a partial ring would break
  *  the corridor's symmetry). */
-export function tunnelCounts(settings: TunnelSettings): { copiesPerRing: number; rings: number } {
+export function tunnelCounts(settings: Pick<TunnelSettings, 'copiesPerRing' | 'rings'>): { copiesPerRing: number; rings: number } {
   const copiesPerRing = Math.max(1, Math.min(MAX_COPIES_PER_RING, Math.round(settings.copiesPerRing)))
   const rings = Math.max(
     1,
@@ -150,10 +214,10 @@ export function tunnelCounts(settings: TunnelSettings): { copiesPerRing: number;
  */
 export function evaluateTunnelTravel(
   notes: readonly ResolvedNote[],
-  settings: Pick<TunnelSettings, 'speed' | 'midiSpeed'>,
+  settings: TunnelSpeedSettings,
   beat: number,
 ): number {
-  let travel = settings.speed * beat
+  let travel = tunnelBaseSpeed(settings) * beat
   for (const note of notes) {
     const direction = note.pitch === TUNNEL_FORWARD_PITCH
       ? 1
@@ -210,7 +274,7 @@ export function tunnelCameraMuteZone(
  */
 export function tunnelOriginLookup(
   notes: readonly ResolvedNote[],
-  settings: Pick<TunnelSettings, 'speed' | 'midiSpeed' | 'originSpread'>,
+  settings: TunnelSpeedSettings & Pick<TunnelSettings, 'originSpread'>,
 ): (travelAtSpawn: number) => TunnelOrigin {
   const events = notes
     .map((note) => {
@@ -344,6 +408,7 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
   id: 'tunnel',
   label: 'Tunnel',
   kind: 'splitter',
+  identityColor: TUNNEL_COLOR,
   params: [
     // 6 x 8 = 48 copies: enough for a corridor wall, and in the same weight
     // class as the other splitters (Parametric Pattern defaults to 48). Every
@@ -355,7 +420,22 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     // Default camera z = 5, default fade 6: wrapping at 12 keeps the whole
     // fade-out band (6..12) behind it.
     { key: 'nearEnd', label: 'Near end (past camera)', min: -20, max: 40, step: 0.5, default: 12 },
+    // Free by default so every save from before the mode existed keeps its
+    // exact `speed`; Beat-synced reinterprets travel as rings-per-beat.
+    {
+      key: 'speedMode',
+      label: 'Speed mode',
+      type: 'select',
+      options: [
+        { value: 0, label: 'Free (units / beat)' },
+        { value: 1, label: 'Beat-synced' },
+      ],
+      default: 0,
+    },
     { key: 'speed', label: 'Speed / beat', min: -40, max: 40, step: 0.1, default: 4 },
+    // Continuous storage, stepped presentation (TUNNEL_SYNC_DETENTS) — same
+    // contract as Radial Motion's spin rates, so automation can still sweep it.
+    { key: 'syncRingsPerBeat', label: 'Sync rate (rings / beat)', min: -4, max: 4, step: 0.05, default: 1 },
     { key: 'twistDegrees', label: 'Twist / ring (°)', min: -180, max: 180, step: 1, default: 0 },
     {
       key: 'axis',
@@ -370,14 +450,18 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     },
     {
       key: 'orientation',
-      label: 'Orientation',
+      label: 'Facing',
       type: 'select',
       options: [
         { value: 0, label: 'Fixed' },
-        { value: 1, label: 'Face the axis' },
+        { value: 1, label: 'Face center' },
         { value: 2, label: 'Face outward' },
       ],
-      default: 0,
+      // Face center: each copy turns toward its ring's own middle, so the
+      // corridor reads as a wall you fly through rather than a field of
+      // identically-posed objects. (Changed from Fixed in 2026-08 — a save
+      // that never touched the param picks up the new default.)
+      default: 1,
     },
     { key: 'fadeDistance', label: 'Fade distance', min: 0, max: 50, step: 0.5, default: 6 },
     { key: 'midiSpeed', label: 'MIDI speed / beat', min: 0, max: 80, step: 0.5, default: 8 },
