@@ -525,6 +525,20 @@ export default function LandingPage() {
       <footer className="border-t border-[var(--border-subtle)]">
         <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center justify-between gap-3 px-6 py-7 md:flex-row md:gap-2">
           <p className="m-0 text-[13px] text-[var(--text-muted)]">© {new Date().getFullYear()} Cabin Visuals. All rights reserved. Made with ♥ for musicians and visual artists</p>
+          {/* Grant condition: the ElevenLabs Grants badge, linked back to the
+              program. White variant - the whole site is dark. */}
+          <a
+            href="https://elevenlabs.io/startup-grants"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="opacity-70 transition-opacity hover:opacity-100"
+          >
+            <img
+              src="https://eleven-public-cdn.elevenlabs.io/payloadcms/cy7rxce8uki-IIElevenLabsGrants%201.webp"
+              alt="ElevenLabs Grants"
+              className="h-auto w-[200px]"
+            />
+          </a>
           <div className="flex items-center gap-5">
             {SOCIAL_LINKS.map((social) => (
               <a
