@@ -42,6 +42,7 @@ import { waterDropInstrument } from './WaterDrop'
 import { flashWallInstrument } from './FlashWall'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
+import { particleFieldInstrument } from './ParticleField'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -86,6 +87,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [flashWallInstrument.id]: flashWallInstrument,
   [cropMaskInstrument.id]: cropMaskInstrument,
   [midiRollInstrument.id]: midiRollInstrument,
+  [particleFieldInstrument.id]: particleFieldInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

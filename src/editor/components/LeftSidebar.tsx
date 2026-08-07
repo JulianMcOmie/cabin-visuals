@@ -315,6 +315,18 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M6 5.3 L7 6.3 L6 7.3 L5 6.3 Z" fill="#67e8f9" />
     </svg>
   )},
+  { id: 'particleField', name: 'Particle Field', description: 'A screen of drifting dots; on each note the ones near the anchor condense into the next word, the rest never move.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <circle cx="1.6" cy="2" r="0.7" fill="#8fd8ff" opacity="0.5" />
+      <circle cx="10.4" cy="1.8" r="0.7" fill="#8fd8ff" opacity="0.5" />
+      <circle cx="2" cy="9.8" r="0.7" fill="#8fd8ff" opacity="0.5" />
+      <circle cx="10" cy="10.2" r="0.7" fill="#8fd8ff" opacity="0.5" />
+      <circle cx="4.6" cy="5.4" r="0.8" fill="#8fd8ff" />
+      <circle cx="6" cy="6.6" r="0.8" fill="#8fd8ff" />
+      <circle cx="7.4" cy="5.4" r="0.8" fill="#8fd8ff" />
+      <circle cx="6" cy="4.2" r="0.8" fill="#8fd8ff" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library
