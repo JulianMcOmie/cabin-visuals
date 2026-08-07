@@ -29,9 +29,12 @@ import {
   disposeParticleCloud,
   easeInOutQuad,
   updateParticleCloud,
+  updateParticleField,
   wordShape,
+  type FieldFormation,
   type WordShape,
 } from './particleWordCloud'
+import { fieldPositions, fieldTimeline, recruitNearest, type TextOnset } from './particleFieldCore'
 import { FORCE_TRANSPARENT_KEY, setAnimatedOpacity } from '../core/visual/animatedOpacity'
 import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
 import type { ResolvedNote } from '../core/visual/types'
@@ -634,6 +637,13 @@ const PARAMS: ParamDef[] = [
   { key: 'particleStagger', label: 'Morph Stagger', min: 0, max: 1, step: 0.05, default: 0.4, showIf: 'particleEnabled' },
   { key: 'particleVariation', label: 'Color Variation', min: 0, max: 1, step: 0.05, default: 0.5, showIf: 'particleEnabled' },
   { key: 'particlePulse', label: 'Pulse Push (bass pop)', min: 0, max: 1.5, step: 0.05, default: 0.35, showIf: 'particleEnabled' },
+  // Field Mode: instead of the whole cloud BEING the word, a screen-filling
+  // slab of ambient particles sits still and only the ones nearest the anchor
+  // condense into each word (then fly back to the exact homes they left).
+  { key: 'particleField', label: 'Field Mode (ambient screen)', type: 'boolean', default: 0, showIf: 'particleEnabled' },
+  { key: 'fieldDepth', label: 'Field Depth', min: 0, max: 3, step: 0.1, default: 1.2, showIf: 'particleField' },
+  { key: 'fieldDrift', label: 'Field Drift', min: 0, max: 1, step: 0.05, default: 0.25, showIf: 'particleField' },
+  { key: 'fieldDensity', label: 'Text Density', min: 500, max: 20000, step: 250, default: 4000, showIf: 'particleField' },
 ]
 const _hueColor = new Color()
 
@@ -662,6 +672,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
   const particleAnchorRef = useRef<Group>(null)
   const particleCloud = useMemo(() => createParticleCloud(), [])
   useEffect(() => () => disposeParticleCloud(particleCloud), [particleCloud])
+
+  // Field mode's memoized pure pieces: the ambient slab and a handful of
+  // recruitment maps (a sort over the field per word - cheap, but not free).
+  const fieldAmbientRef = useRef<{ key: string; positions: Float32Array } | null>(null)
+  const fieldRecruitsRef = useRef<Array<{ key: string; map: Uint32Array }>>([])
 
   const { viewport, camera } = useThree()
   const [ready, setReady] = useState(false)
@@ -926,11 +941,98 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       setAnimatedOpacity(particleCloud.points.material as Material, textOpacity)
     }
     if (!particleMode && particleAnchorRef.current) particleAnchorRef.current.visible = false
+    const fieldMode = particleMode && (p.particleField ?? 0) >= 0.5
 
     const entries = parseTextEntries(text, (p.advanceUnit ?? 0) >= 0.5)
+
+    // --- Field mode ---
+    // The cloud's sibling behavior: a screen-filling slab of ambient particles
+    // that never reacts - except the ones nearest the anchor, which condense
+    // into the current word and later fly back to the exact homes they left.
+    // Shares the text pipeline's font/color/size/placement latching and the
+    // particle params; only the field itself (depth, drift, density) is new.
+    // NOTE: called from the two early-exit blocks below with no words - every
+    // later-declared closure it touches (yOffsetAt) is gated behind a real
+    // formation, so those calls only ever draw the plain field.
+    const driveField = (wordNotes: ResolvedNote[]) => {
+      const anchor = particleAnchorRef.current
+      if (!anchor) return
+      // The slab lives in viewport space: the anchor carries no per-word
+      // placement here (each formation latches its own).
+      anchor.visible = true
+      anchor.scale.setScalar(1)
+      anchor.position.set(0, 0, 0)
+
+      const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(p.particleCount ?? 6000)))
+      const depth = p.fieldDepth ?? 1.2
+      const drift = p.fieldDrift ?? 0.25
+      const density = Math.round(p.fieldDensity ?? 4000)
+      const formBeats = Math.max(0.05, p.particleMorphBeats ?? 2)
+      // Release Duration is SECONDS everywhere else in this instrument.
+      const releaseBeats = Math.max(0.05, releaseDuration / state.secPerBeat)
+      // A little over the viewport so the slab's edges never show.
+      const W = viewport.width * 1.06
+      const H = viewport.height * 1.06
+      const ambientKey = `${count}|${W.toFixed(3)}|${H.toFixed(3)}|${depth}`
+      if (fieldAmbientRef.current?.key !== ambientKey) {
+        fieldAmbientRef.current = { key: ambientKey, positions: fieldPositions(count, W, H, depth) }
+      }
+      const ambient = fieldAmbientRef.current.positions
+
+      const onsets: TextOnset[] = wordNotes.map((n) => ({ beat: n.beat, endBeat: n.beat + n.durationBeats }))
+      const tl = fieldTimeline(onsets, state.beat, formBeats, releaseBeats, sustainWords)
+
+      const K = Math.min(density, count)
+      const formationFor = (onsetIndex: number, progress: number, release: number): FieldFormation | null => {
+        if (onsetIndex < 0) return null
+        const word = entries[onsetIndex % entries.length]
+        const shape = wordShape(word.text, font)
+        if (!shape) return null
+        // Anchor, size and height offset latch at the word's own onset, like
+        // the cloud path's per-word latching.
+        const onsetBeat = onsets[onsetIndex].beat
+        const anchorX = placeX(onsetBeat)
+        const anchorY = placeY(onsetBeat) + yOffsetAt(onsetBeat) * viewport.height * heightAmount
+        const scale = sizeAt(onsetBeat) * 0.22
+        const key = `${word.text}|${font.css}|${K}|${anchorX.toFixed(2)}|${anchorY.toFixed(2)}|${scale.toFixed(3)}|${ambientKey}`
+        let cached = fieldRecruitsRef.current.find((c) => c.key === key)
+        if (!cached) {
+          cached = { key, map: recruitNearest(ambient, count, K, anchorX, anchorY) }
+          fieldRecruitsRef.current.push(cached)
+          if (fieldRecruitsRef.current.length > 6) fieldRecruitsRef.current.shift()
+        }
+        return { shape, map: cached.map, anchorX, anchorY, scale, progress, release, seed: (onsetIndex + 1) * 131.3 }
+      }
+
+      // Same color voice as the cloud path (rainbow / hue / invert-as-white).
+      const fieldSubdiv = Math.floor(state.beat * flightSubdivRate)
+      const fieldHue = rainbowEnabled ? ((fieldSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
+      const fieldColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(fieldHue, 1, 0.55) : color)
+
+      updateParticleField(particleCloud, {
+        beat: state.beat,
+        count,
+        dotSize: p.particleSize ?? 0.025,
+        glow: p.particleGlow ?? 0.3,
+        opaque: (p.particleOpaque ?? 0) >= 0.5,
+        color: fieldColor,
+        variation: p.particleVariation ?? 0.5,
+        stagger: p.particleStagger ?? 0.4,
+        drift,
+        driftScale: Math.min(viewport.width, viewport.height),
+        ambient,
+        cur: formationFor(tl.curIndex, tl.curProgress, tl.curRelease),
+        prev: formationFor(tl.prevIndex, 1, tl.prevRelease),
+      })
+      setAnimatedOpacity(particleCloud.points.material as Material, textOpacity)
+    }
+
     if (entries.length === 0) {
       meshRef.current.visible = false
-      if (particleMode) driveCloud(null) // no words on the sheet yet: idle sphere
+      if (particleMode) {
+        if (fieldMode) driveField([]) // the field is furniture - no words needed
+        else driveCloud(null) // no words on the sheet yet: idle sphere
+      }
       return
     }
 
@@ -972,7 +1074,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         spr.active = false
         spr.mesh.visible = false
       }
-      if (particleMode) {
+      if (particleMode && fieldMode) {
+        driveField([]) // no words sounded yet: just the ambient slab
+      } else if (particleMode) {
         // Anticipate the FIRST word: the sphere starts morphing into it early
         // enough to land fully formed exactly on its note.
         let firstNote: ResolvedNote | undefined
@@ -1053,6 +1157,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
       for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
+      if (fieldMode) {
+        driveField(nextWordNotes)
+        return
+      }
 
       const curIdx = wordCount - 1 // note index of the word on screen
       const curNote = nextWordNotes[curIdx]
