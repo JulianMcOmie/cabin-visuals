@@ -162,6 +162,36 @@ const drawCamera: Draw2D = (ctx, w, h, t) => {
   }
 }
 
+/** Camera Orbit: the same scene, but the viewpoint CIRCLES - a slow lateral
+ *  sweep with a matching roll, so the move reads as orbiting the subject
+ *  rather than punching into it. (The camera instruments render no object of
+ *  their own, so a WebGL capture of them is a black clip - this vignette is
+ *  the whole preview.) An orbit-path arc under the frame is the chrome. */
+const drawCameraOrbit: Draw2D = (ctx, w, h, t) => {
+  const sweep = Math.sin(t * 0.7)
+  ctx.save()
+  ctx.translate(w / 2, h / 2)
+  ctx.rotate(sweep * 0.05) // the roll that sells the circling
+  // Slight overscan so the rolled frame never shows an edge.
+  ctx.scale(1.1, 1.1)
+  ctx.translate(-w / 2 - sweep * w * 0.05, -h / 2)
+  drawCameraScene(ctx, w, h, t)
+  ctx.restore()
+
+  // The orbit ring: a dashed arc with the rig's dot riding the sweep.
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([4, 4])
+  ctx.beginPath()
+  ctx.ellipse(w / 2, h - 12, w * 0.3, 7, 0, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.arc(w / 2 + Math.sin(t * 0.7) * w * 0.3, h - 12 + Math.cos(t * 0.7) * 7, 3, 0, Math.PI * 2)
+  ctx.fill()
+}
+
 /** Video: the video itself, nothing else - full-frame sunset footage with
  *  mountain ridges rushing past in parallax (the far ridge slower than the
  *  near one, like footage shot from a moving car) and "video" centered over
@@ -843,6 +873,7 @@ const drawOpacityFx: Draw2D = (ctx, w, h, t) => {
 
 const PREVIEWS_2D: Record<string, Draw2D> = {
   cameraControl: drawCamera,
+  cameraOrbit: drawCameraOrbit,
   video: drawVideo,
   photo: drawPhoto,
   oscilloscope: drawOscilloscope,

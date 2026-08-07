@@ -10,7 +10,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
-import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
@@ -830,7 +830,6 @@ export function LeftSidebar() {
       <InstrumentPreviewLayer />
       {/* All live 3D cards share this renderer, avoiding browser WebGL-context
           exhaustion when several two-column sections are visible. */}
-      {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
           narrow, and icon + label once there's room for the text. The 320px
           threshold is the width where all three labels fit inside the pills'
