@@ -537,7 +537,7 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
           onPointerDown={(e) => onItemPointerDown(e, item)}
           onDoubleClick={() => onItemDoubleClick(item)}
           title={item.description}
-          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
+          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] transition-colors hover:border-[var(--border-strong)]"
         >
           <div className="relative aspect-video">
             {canPreview(item)
