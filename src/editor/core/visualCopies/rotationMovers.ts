@@ -150,6 +150,10 @@ export interface ConstantSpinSettings {
   speedZ: number
   speed: number
   returnBeats: number
+  /** false = no always-on spin: angles come only from held basis-row notes.
+   *  Absent/true keeps the shipped Constant Rotate/Orbit baseline - every
+   *  retired definition and old save reads through the default. */
+  baselineSpin?: boolean
 }
 
 export interface ConstantRotationSettings extends BasisSettings, ConstantSpinSettings {
@@ -179,11 +183,13 @@ function rawConstantAngles(
 ): [number, number, number] {
   const speeds = [settings.speedX, settings.speedY, settings.speedZ]
   // Always-on baseline: the mover rotates continuously, no notes needed. Pure
-  // function of beat, so scrubbing and export stay deterministic.
+  // function of beat, so scrubbing and export stay deterministic. The unified
+  // Mover's MIDI-only drive turns exactly this term off.
+  const baseline = settings.baselineSpin === false ? 0 : beat
   const angles: [number, number, number] = [
-    beat * speeds[0] * settings.speed * DEG_TO_RAD,
-    beat * speeds[1] * settings.speed * DEG_TO_RAD,
-    beat * speeds[2] * settings.speed * DEG_TO_RAD,
+    baseline * speeds[0] * settings.speed * DEG_TO_RAD,
+    baseline * speeds[1] * settings.speed * DEG_TO_RAD,
+    baseline * speeds[2] * settings.speed * DEG_TO_RAD,
   ]
   // Held notes add EXTRA rotation on top of the baseline spin.
   for (const note of notes) {

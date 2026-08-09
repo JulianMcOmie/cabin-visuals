@@ -26,6 +26,7 @@ import { BURST_EASINGS } from '../core/visualCopies/burstEasings'
 import { MOVER_COLOR } from '../core/visualCopies/identityColors'
 import { identityVisualCopy } from '../core/visualCopies/identityVisualCopy'
 import {
+  MOVER_DRIVE_MIDI,
   MOVER_MODE_BURST,
   MOVER_MODE_CONSTANT,
   MOVER_MODE_OSCILLATE,
@@ -83,9 +84,11 @@ const demoNote = (beat: number, pitch: number, durationBeats: number): ResolvedN
   durationBeats,
 })
 
-function demoNotes(motion: number, mode: number): ResolvedNote[] {
+function demoNotes(motion: number, mode: number, midiOnly: boolean): ResolvedNote[] {
   if (mode === MOVER_MODE_CONSTANT) {
-    if (motion !== MOVER_MOTION_TRANSLATE) return []
+    // Rotate/orbit's baseline needs no notes - unless MIDI-only drive is on,
+    // where held notes ARE the motion (same walk the translate demo does).
+    if (motion !== MOVER_MOTION_TRANSLATE && !midiOnly) return []
     return [demoNote(0, 60, 2), demoNote(2, 61, 2), demoNote(4, 62, 2), demoNote(6, 63, 2)]
   }
   if (mode === MOVER_MODE_OSCILLATE) {
@@ -131,7 +134,7 @@ function FieldWindow({ settings }: { settings: MoverSettings }) {
   // re-subscribes (ImpactPulse's pattern).
   const chain: MoverOrSplitter = moverDefinition.resolve({
     settings,
-    notes: demoNotes(settings.motion, settings.mode),
+    notes: demoNotes(settings.motion, settings.mode, Math.round(settings.drive ?? 0) === MOVER_DRIVE_MIDI),
   })
   const liveRef = useRef(chain)
   liveRef.current = chain
@@ -362,7 +365,7 @@ function MoverKnob({ parameter: bound, label, large, bipolar, format, suffix }: 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 const PLACED_KEYS = new Set([
-  'motion', 'mode',
+  'motion', 'mode', 'drive',
   'distanceX', 'distanceY', 'distanceZ', 'distance',
   'angleX', 'angleY', 'angleZ', 'angle',
   'burstBeats', 'easing', 'sharpness',
@@ -371,9 +374,9 @@ const PLACED_KEYS = new Set([
 ])
 
 /** The per-axis row's unit, said once above the row instead of on each knob. */
-function amountHint(motion: number, mode: number): string {
+function amountHint(motion: number, mode: number, midiOnly: boolean): string {
   const unit = motion === MOVER_MOTION_TRANSLATE ? 'UNITS' : 'DEGREES'
-  if (mode === MOVER_MODE_CONSTANT) return `${unit} / BEAT · HELD NOTES${motion === MOVER_MOTION_TRANSLATE ? '' : ' + ALWAYS ON'}`
+  if (mode === MOVER_MODE_CONSTANT) return `${unit} / BEAT · HELD NOTES${motion === MOVER_MOTION_TRANSLATE || midiOnly ? '' : ' + ALWAYS ON'}`
   if (mode === MOVER_MODE_OSCILLATE) return `${unit} OF SWING · HELD NOTES`
   return `${unit} / HIT`
 }
@@ -396,6 +399,8 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
   const modeValue = Math.round(numericValue(mode, MOVER_MODE_BURST))
   const translate = motionValue === MOVER_MOTION_TRANSLATE
   const orbit = motionValue === MOVER_MOTION_ORBIT
+  const drive = bound('drive')
+  const midiOnly = drive ? Math.round(numericValue(drive, 0)) === MOVER_DRIVE_MIDI : false
 
   // The window runs the definition itself, so its settings come through the
   // same merge the engine uses - panel values overlaid on schema defaults.
@@ -420,6 +425,11 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
         <div className="flex flex-col gap-1.5 px-4">
           <Segmented bound={motion} labels={['Translate', 'Rotate', 'Orbit']} name="Motion" />
           <Segmented bound={mode} labels={['Burst', 'Constant', 'Oscillate']} name="MIDI mode" />
+          {/* Constant rotate/orbit only: whether the baseline spin runs at
+              all, or the basis rows are the only thing that moves it. */}
+          {modeValue === MOVER_MODE_CONSTANT && !translate && drive && (
+            <Segmented bound={drive} labels={['Auto spin', 'MIDI only']} name="Drive" />
+          )}
         </div>
 
         {modeValue === MOVER_MODE_BURST && (
@@ -430,7 +440,7 @@ export const MoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ pa
 
         <div className="px-4">
           <p className="mb-1 text-right text-[7px] font-bold tracking-[0.16em] text-white/25">
-            {amountHint(motionValue, modeValue)}
+            {amountHint(motionValue, modeValue, midiOnly)}
           </p>
           <div className="flex items-end gap-5">
             <MoverKnob parameter={bound(`${axisKey}X`)} label="X" format={translate ? undefined : degrees} />

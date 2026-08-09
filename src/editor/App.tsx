@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
+import { Play, Pause, Upload, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -830,6 +830,7 @@ function Header({
                 : 'bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
             }`}
           >
+            <Upload size={11} strokeWidth={2.5} />
             Export
           </button>
           {(exportGate?.ok === false || (!authLoading && !permanent)) && (
