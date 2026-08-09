@@ -505,7 +505,17 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     id: 'motion',
     title: 'Motion',
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
-    items: MOTION_ITEMS,
+    // The legacy compound movers (All Movers, Motion) are demoted - never
+    // deleted - into the Extras shelf; the unified Mover supersedes them.
+    items: MOTION_ITEMS.filter((m) => m.id !== 'allMovers' && m.id !== 'motion'),
+    subfolders: [
+      {
+        id: 'motion-extras',
+        title: 'Extras',
+        description: 'The legacy compound movers - all fully working, superseded by Mover.',
+        items: MOTION_ITEMS.filter((m) => m.id === 'allMovers' || m.id === 'motion'),
+      },
+    ],
   },
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },

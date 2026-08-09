@@ -24,6 +24,10 @@ export const cubeInstrument: ObjectInstrumentDef = {
   params: [
     { key: 'baseColor', label: 'Base Color', type: 'color', default: DEFAULT_BASE_COLOR },
     { key: 'geometry', label: 'Geometry', type: 'string', default: 'cube' },
+    // Per-INSTANCE size: a mesh-local scale (first in the chain), so each copy
+    // a splitter mints grows in place - unlike the canonical tfSize, which is
+    // a group fader scaling the whole formation and its layout offsets.
+    { key: 'size', label: 'Size', min: 0.05, max: 4, step: 0.01, default: 1 },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
   ],
@@ -47,8 +51,8 @@ export const cubeInstrument: ObjectInstrumentDef = {
   // pulse. Placement itself comes from the canonical track transform. Spin is
   // applied inside each rendered copy below, so splitters duplicate a spinning
   // solid without rotating their own layout offsets.
-  localTransform: ({ energy }) => ({
-    scale: 1 + energy * 0.35,
+  localTransform: ({ energy, params }) => ({
+    scale: (1 + energy * 0.35) * (params.size ?? 1),
   }),
   component: Cube,
 }

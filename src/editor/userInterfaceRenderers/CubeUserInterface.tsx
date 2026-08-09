@@ -280,14 +280,16 @@ function ColorSwatch({ bound }: { bound: UserInterfaceParameter }) {
   )
 }
 
-// Placement (position/size) moved to the canonical track transform panel - this
-// UI keeps only what the instrument owns: geometry, color, and spin.
+// Placement stays on the canonical track transform panel; SIZE here is the
+// instrument's own per-instance scale (each copy grows in place - see the
+// param's comment in Cube.tsx).
 export const CubeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const color = parameter(parameters, 'baseColor')
   const geometry = parameter(parameters, 'geometry')
   const spin = parameter(parameters, 'spinSpeed')
+  const size = parameter(parameters, 'size')
 
-  if (!color || !geometry || !spin) return <ParameterList parameters={parameters} />
+  if (!color || !geometry || !spin || !size) return <ParameterList parameters={parameters} />
 
   const resetAll = () => {
     for (const bound of parameters) bound.setValue(bound.definition.default)
@@ -326,13 +328,14 @@ export const CubeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ par
       <SolidPreview
         geometry={selectedGeometry}
         color={stringValue(color, DEFAULT_FUNDAMENTAL_COLOR)}
-        size={1.6}
+        size={1.6 * numericValue(size, 1)}
         spinSpeed={numericValue(spin)}
         position={[0, 0, 0]}
       />
 
       <div className="space-y-2 p-2">
-        <div className="grid grid-cols-1 gap-1 rounded-lg border border-white/[0.07] bg-white/[0.025] px-1.5 py-1">
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/[0.07] bg-white/[0.025] px-1.5 py-1">
+          <MiniKnob parameter={size} label="SIZE" suffix="×" />
           <MiniKnob parameter={spin} label="SPIN" suffix="×" />
         </div>
       </div>
