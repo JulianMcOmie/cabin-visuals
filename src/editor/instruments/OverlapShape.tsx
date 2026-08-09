@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  AlwaysDepth,
   AlwaysStencilFunc,
   DoubleSide,
   EqualDepth,
@@ -8,9 +9,12 @@ import {
   KeepStencilOp,
   LessEqualDepth,
   MeshBasicMaterial,
+  ReplaceStencilOp,
   Shape,
+  ShaderMaterial,
   ShapeGeometry,
   ZeroStencilOp,
+  type Material,
   type Group,
   type Mesh,
 } from 'three'
@@ -93,11 +97,21 @@ function geometryFor(shape: number): ShapeGeometry {
 
 /** One material per pass, configured straight from the pure pass spec. The
  *  color materials stay tone-map-free so "renders a single color" is literal.
- *  None of them declare FORCE_TRANSPARENT: at full opacity all five live in
+ *  None of them declare FORCE_TRANSPARENT: at full opacity all seven live in
  *  the OPAQUE render list (renderOrder is honored there), and a track fade
  *  flips them transparent together, so the pass order survives either way. */
-function materialFor(pass: OverlapShapePass): MeshBasicMaterial {
-  const material = new MeshBasicMaterial({ side: DoubleSide, toneMapped: false })
+function materialFor(pass: OverlapShapePass): Material {
+  // The depth-clear pass is the one that cannot be a stock material: writing
+  // FAR depth (rather than the mesh's own plane) takes gl_FragDepth. Depth
+  // test must stay ENABLED (a disabled test also disables depth writes in GL)
+  // with func Always so the far value always lands where the stencil allows.
+  const material = pass.depth === 'clear'
+    ? new ShaderMaterial({
+        vertexShader: 'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'void main() { gl_FragDepth = 1.0; gl_FragColor = vec4(0.0); }',
+      })
+    : new MeshBasicMaterial({ toneMapped: false })
+  material.side = DoubleSide
   material.colorWrite = pass.writesColor
   if (pass.depth === 'prepass') {
     material.depthWrite = true
@@ -105,6 +119,9 @@ function materialFor(pass: OverlapShapePass): MeshBasicMaterial {
   } else if (pass.depth === 'equal') {
     material.depthWrite = false
     material.depthFunc = EqualDepth
+  } else if (pass.depth === 'clear') {
+    material.depthWrite = true
+    material.depthFunc = AlwaysDepth
   } else {
     material.depthWrite = false
     material.depthTest = false
@@ -117,7 +134,9 @@ function materialFor(pass: OverlapShapePass): MeshBasicMaterial {
     material.stencilFuncMask = stencil.funcMask
     material.stencilFail = KeepStencilOp
     material.stencilZFail = KeepStencilOp
-    material.stencilZPass = stencil.zPass === 'invert' ? InvertStencilOp : ZeroStencilOp
+    material.stencilZPass = stencil.zPass === 'invert'
+      ? InvertStencilOp
+      : stencil.zPass === 'replace' ? ReplaceStencilOp : ZeroStencilOp
     material.stencilWriteMask = stencil.writeMask
   }
   return material
@@ -152,11 +171,12 @@ function OverlapShapeVisual({ trackId }: { trackId: string }) {
     }
 
     // These already carry any Colorizer shift (useInstrumentFrame applies
-    // applyColorShiftToInstrumentParams over declared color params).
-    materials[BASE_PASS_INDEX].color.set(
+    // applyColorShiftToInstrumentParams over declared color params). The two
+    // fill passes are the only MeshBasicMaterials with a visible color.
+    ;(materials[BASE_PASS_INDEX] as MeshBasicMaterial).color.set(
       state.stringParams.baseColor || DEFAULT_OVERLAP_SHAPE_BASE_COLOR,
     )
-    materials[OVERLAP_PASS_INDEX].color.set(
+    ;(materials[OVERLAP_PASS_INDEX] as MeshBasicMaterial).color.set(
       state.stringParams.overlapColor || DEFAULT_OVERLAP_SHAPE_OVERLAP_COLOR,
     )
     // Cut-out mode simply never mounts the overlap fill: the even-covered

@@ -1,6 +1,6 @@
 // Pure math for the Overlap Shape instrument: the shape vocabulary (unit-radius
 // outlines shared by the mesh geometry, the settings panel's preview, and the
-// library icon) and the five-pass stencil recipe that implements its one trick -
+// library icon) and the seven-pass stencil recipe that implements its one trick -
 // wherever two shapes cover the same pixel AT THE SAME DEPTH, the overlap region
 // renders as a cutout (pure transparency) or as a second color, XOR-style.
 //
@@ -8,31 +8,49 @@
 // renderOrder so passes interleave ACROSS occurrences - that is what makes
 // splitter/mover copies, and even two Overlap Shape tracks, overlap each other):
 //
-//   1. depth    - writes only the depth buffer. After every occurrence has run,
-//                 the depth buffer holds the FRONTMOST shape surface per pixel.
-//   2. parity   - depthFunc Equal against that prepass, inverting stencil bit 0
-//                 per covering shape. Equal-depth is the "same axis" rule: two
-//                 coplanar shapes share a depth value at every shared pixel, so
-//                 both toggle the bit; a shape at a different depth fails the
-//                 test and simply occludes (or is occluded) like any opaque
-//                 object. Odd coverage leaves bit 0 = 1, even leaves 0.
-//   3. overlap  - fills the even-covered region (the overlap) with the overlap
-//                 color, marking bit 1 so a second covering shape can't double-
-//                 draw it. Hidden entirely in "cut out" mode - nothing is drawn,
-//                 so the region stays whatever the scene already rendered there.
-//   4. base     - fills the odd-covered region with the base color and zeroes
-//                 the stencil behind itself (idempotent across occurrences).
-//   5. cleanup  - zeroes every stencil bit under the shape's silhouette so the
-//                 next track (or next frame's front pass) starts clean.
+//   1. depth      - writes only the depth buffer. After every occurrence has
+//                   run, the depth buffer holds the FRONTMOST shape surface per
+//                   pixel.
+//   2. mark       - depthFunc Equal against that prepass, setting the OWNED bit:
+//                   "the depth at this pixel is OUR plane, not some occluder's".
+//                   The depth-clear pass below keys on it - without the mark, a
+//                   nearer object overlapping the silhouette would get its depth
+//                   wiped too.
+//   3. parity     - also Equal, inverting the parity bit per covering shape.
+//                   Equal-depth is the "same axis" rule: coplanar shapes share a
+//                   depth value at every shared pixel, so each toggles the bit;
+//                   a shape at a different depth fails the test and simply
+//                   occludes (or is occluded) like any opaque object. Odd
+//                   coverage leaves parity 1, even leaves 0.
+//   4. overlap    - fills the even-covered region (the overlap) with the overlap
+//                   color, marking DONE so a second covering shape can't double-
+//                   draw it. Hidden entirely in "cut out" mode - nothing is
+//                   drawn, so the region stays whatever the scene already
+//                   rendered there.
+//   5. base       - fills the odd-covered region with the base color, marking
+//                   BASE so it draws once however many shapes cover the pixel.
+//   6. depthClear - the pass that makes a cutout ACTUALLY transparent: where the
+//                   plane is owned but nothing was painted (stencil == OWNED
+//                   exactly), it writes FAR depth via gl_FragDepth. Without it
+//                   the prepass footprint keeps occluding, and everything three
+//                   draws after these passes - the whole transparent render list
+//                   (lasers, particles, water drops) - vanishes behind the hole.
+//                   Painted regions keep their depth: they are opaque surfaces.
+//   7. cleanup    - zeroes every stencil bit under the shape's silhouette so the
+//                   next track (or next frame's front pass) starts clean.
 //
 // The overlap pass runs BEFORE the base pass on purpose: on a context with no
-// stencil buffer (the library's live-preview canvas) every stencil test passes,
-// so the base fill simply paints over the overlap fill and the shape degrades to
-// a plain single-color silhouette instead of an all-overlap-colored one.
+// stencil buffer every stencil test passes, so the base fill simply paints over
+// the overlap fill and the shape degrades to a plain single-color silhouette
+// instead of an all-overlap-colored one. (In that degrade the depth-clear also
+// fires across the whole silhouette - the lone-shape previews it affects don't
+// depth-sort against anything, so it stays invisible.)
 // overlapShapeCore.test.ts pins all of these orderings and masks.
 
 export const OVERLAP_PARITY_BIT = 0x01
 export const OVERLAP_DONE_BIT = 0x02
+export const OVERLAP_BASE_BIT = 0x04
+export const OVERLAP_OWNED_BIT = 0x08
 
 /** Render-order base for the pass stack. Above the default 0 so the depth
  *  prepass sees the scene's ordinary opaque objects already in the buffer,
@@ -40,17 +58,19 @@ export const OVERLAP_DONE_BIT = 0x02
 export const OVERLAP_SHAPE_RENDER_ORDER = 20
 
 export interface OverlapShapePass {
-  name: 'depth' | 'parity' | 'overlap' | 'base' | 'cleanup'
+  name: 'depth' | 'mark' | 'parity' | 'overlap' | 'base' | 'depthClear' | 'cleanup'
   renderOrder: number
   writesColor: boolean
   /** prepass = write depth (LessEqual); equal = test-only against the prepass;
-   *  ignore = no depth test at all (the cleanup must reach occluded pixels). */
-  depth: 'prepass' | 'equal' | 'ignore'
+   *  clear = write FAR depth via gl_FragDepth (depth test Always, so the write
+   *  lands - the stencil gate decides where); ignore = no depth test at all
+   *  (the cleanup must reach occluded pixels). */
+  depth: 'prepass' | 'equal' | 'clear' | 'ignore'
   stencil?: {
     func: 'always' | 'equal'
     ref: number
     funcMask: number
-    zPass: 'invert' | 'zero'
+    zPass: 'invert' | 'zero' | 'replace'
     writeMask: number
   }
 }
@@ -63,19 +83,29 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
     depth: 'prepass',
   },
   {
-    name: 'parity',
+    name: 'mark',
     renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 1,
+    writesColor: false,
+    depth: 'equal',
+    // Replace writes ref & writeMask, so ref doubles as the OWNED bit value;
+    // re-marking by later coplanar shapes is idempotent.
+    stencil: { func: 'always', ref: OVERLAP_OWNED_BIT, funcMask: 0xff, zPass: 'replace', writeMask: OVERLAP_OWNED_BIT },
+  },
+  {
+    name: 'parity',
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 2,
     writesColor: false,
     depth: 'equal',
     stencil: { func: 'always', ref: 0, funcMask: 0xff, zPass: 'invert', writeMask: OVERLAP_PARITY_BIT },
   },
   {
     name: 'overlap',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 2,
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 3,
     writesColor: true,
     depth: 'equal',
-    // Passes only where coverage is even AND not yet filled (both bits 0);
-    // inverting the done bit under writeMask 0x02 marks the pixel filled.
+    // Passes only where coverage is even AND not yet filled (parity and DONE
+    // both 0 - the OWNED bit is excluded from the mask); inverting DONE under
+    // its own writeMask marks the pixel filled so siblings can't double-draw.
     stencil: {
       func: 'equal',
       ref: 0,
@@ -86,16 +116,40 @@ export const OVERLAP_SHAPE_PASSES: readonly OverlapShapePass[] = [
   },
   {
     name: 'base',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 3,
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 4,
     writesColor: true,
     depth: 'equal',
-    // Odd parity only; zeroing behind itself makes a triple-covered region
-    // draw once, not three times (which would double-blend under a fade).
-    stencil: { func: 'equal', ref: 1, funcMask: OVERLAP_PARITY_BIT, zPass: 'zero', writeMask: 0xff },
+    // Odd parity, not yet drawn (BASE still 0); setting BASE makes a triple-
+    // covered region draw once, not three times (which would double-blend
+    // under a fade) - and distinguishes "painted" from "cutout" for the
+    // depth-clear pass, which a plain zeroing zPass could not.
+    stencil: {
+      func: 'equal',
+      ref: OVERLAP_PARITY_BIT,
+      funcMask: OVERLAP_PARITY_BIT | OVERLAP_BASE_BIT,
+      zPass: 'invert',
+      writeMask: OVERLAP_BASE_BIT,
+    },
+  },
+  {
+    name: 'depthClear',
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 5,
+    writesColor: false,
+    depth: 'clear',
+    // Exactly OWNED across all four bits = our plane, nothing painted = a
+    // cutout. Zeroing as it clears retires the pixel so sibling depth-clear
+    // passes skip it.
+    stencil: {
+      func: 'equal',
+      ref: OVERLAP_OWNED_BIT,
+      funcMask: OVERLAP_PARITY_BIT | OVERLAP_DONE_BIT | OVERLAP_BASE_BIT | OVERLAP_OWNED_BIT,
+      zPass: 'zero',
+      writeMask: 0xff,
+    },
   },
   {
     name: 'cleanup',
-    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 4,
+    renderOrder: OVERLAP_SHAPE_RENDER_ORDER + 6,
     writesColor: false,
     depth: 'ignore',
     stencil: { func: 'always', ref: 0, funcMask: 0xff, zPass: 'zero', writeMask: 0xff },
