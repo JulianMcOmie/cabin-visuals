@@ -1,5 +1,5 @@
 import type { AdsrEnvelope, AutomationMode, Block, InterpolationMode, Track } from '../../types'
-import { pitchToValue } from '../trackTypes'
+import { pitchToValueRanged, type AutomationRange } from '../trackTypes'
 import { adsrGateGain, type AdsrGate } from './adsr'
 import { flattenBlocks } from './noteFlatten'
 
@@ -44,10 +44,11 @@ export function extractKeyframes(
   paramMax: number,
   totalBars?: number,
   amount = 1,
+  range?: AutomationRange,
 ): AutomationKeyframe[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
-    value: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
   }))
 }
 
@@ -95,11 +96,12 @@ export function extractNoiseGates(
   paramMax: number,
   totalBars?: number,
   amount = 1,
+  range?: AutomationRange,
 ): NoiseGate[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     endBeat: note.beat + note.durationBeats,
-    center: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    center: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
     amp: Math.max(0, Math.min(1, (note.velocity ?? 100) / 127)),
   }))
 }
@@ -150,10 +152,38 @@ export function sampleNoiseLane(
 // last keyframe. Closed-form over the note list (adsr.ts), so pause/scrub/export
 // replay identically.
 
+/** The burst envelope's SHAPE. Absent = 'adsr' (every pre-existing save). */
+export type BurstShape = 'adsr' | 'bezier' | 'spring'
+
+/** A user cubic-bezier gain shape: rise 0→1 along the curve over riseBeats
+ *  (control Ys past 1 overshoot the peak), hold, then play the curve BACK
+ *  over fallBeats. */
+export interface BurstBezier {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  riseBeats: number
+  fallBeats: number
+}
+
+/** A damped-spring gain shape in the standard physical parameterization
+ *  (per-BEAT time base): the gain springs from 0 toward 1 on the onset -
+ *  underdamped springs overshoot and ring - and springs back to 0 on release,
+ *  seeded with the exact state it held (velocity carries, no hitch). */
+export interface BurstSpring {
+  stiffness: number
+  damping: number
+  mass: number
+}
+
 /** Track-level burst settings (stored on the automation track). */
 export interface BurstConfig extends AdsrEnvelope {
   /** Scales every burst's travel: 0 = the lane does nothing, 1 = full reach. */
   intensity: number
+  shape?: BurstShape
+  bezier?: BurstBezier
+  spring?: BurstSpring
 }
 
 /** What flipping a lane to burst mode starts from: a fast hit that falls to a low
@@ -164,6 +194,17 @@ export const DEFAULT_BURST: BurstConfig = {
   sustainLevel: 0.35,
   releaseBeats: 0.5,
   intensity: 1,
+}
+
+/** The bezier shape's starting point: the expo-out workhorse. */
+export const DEFAULT_BURST_BEZIER: BurstBezier = {
+  x1: 0.16, y1: 1, x2: 0.3, y2: 1, riseBeats: 0.15, fallBeats: 0.6,
+}
+
+/** The spring shape's starting point: the platform-spring band (stiffness
+ *  170-230, damping 18-26, mass 1 - zeta ≈ 0.77 here, a visible ring). */
+export const DEFAULT_BURST_SPRING: BurstSpring = {
+  stiffness: 170, damping: 20, mass: 1,
 }
 
 /** One burst: a note's gate window plus the value it reaches at full gain. */
@@ -180,19 +221,135 @@ export function extractBurstGates(
   paramMax: number,
   totalBars?: number,
   amount = 1,
+  range?: AutomationRange,
 ): BurstGate[] {
   return flattenBlocks(blocks, beatsPerBar, totalBars).map((note) => ({
     beat: note.beat,
     durationBeats: note.durationBeats,
     velocity: note.velocity ?? 100,
-    value: scaleValue(pitchToValue(note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
   }))
+}
+
+// ── Shaped gate gains ──
+// The bezier and spring shapes may return gain > 1 (that IS the overshoot);
+// both floor at 0, so the blend weights below stay meaningful.
+
+const BEZIER_EPS = 0.005
+
+/** One cubic-bezier component and derivative for control values c1, c2. */
+const bezierComponent = (c1: number, c2: number, t: number): [number, number] => {
+  const inv = 1 - t
+  return [
+    3 * inv * inv * t * c1 + 3 * inv * t * t * c2 + t * t * t,
+    3 * inv * inv * c1 + 6 * inv * t * (c2 - c1) + 3 * t * t * (1 - c2),
+  ]
+}
+
+/** y at time-progress u of cubic-bezier(x1, y1, x2, y2) - Newton, bisection net. */
+export function bezierY(x1: number, y1: number, x2: number, y2: number, u: number): number {
+  if (u <= 0) return 0
+  if (u >= 1) return 1
+  let t = u
+  for (let i = 0; i < 8; i++) {
+    const [x, dx] = bezierComponent(x1, x2, t)
+    const err = x - u
+    if (Math.abs(err) < 1e-7 || Math.abs(dx) < 1e-6) break
+    t = Math.min(1, Math.max(0, t - err / dx))
+  }
+  if (Math.abs(bezierComponent(x1, x2, t)[0] - u) > 1e-5) {
+    let lo = 0
+    let hi = 1
+    for (let i = 0; i < 40; i++) {
+      t = (lo + hi) / 2
+      if (bezierComponent(x1, x2, t)[0] < u) lo = t
+      else hi = t
+    }
+  }
+  return bezierComponent(y1, y2, t)[0]
+}
+
+function bezierGateGain(note: BurstGate, beat: number, bez: BurstBezier): number {
+  const t = beat - note.beat
+  if (t < 0) return 0
+  const rise = Math.max(BEZIER_EPS, bez.riseBeats)
+  const fall = Math.max(BEZIER_EPS, bez.fallBeats)
+  const hold = Math.max(note.durationBeats || 0, rise)
+  if (t >= hold + fall) return 0
+  const shape = (u: number) => bezierY(bez.x1, bez.y1, bez.x2, bez.y2, u)
+  // Rise along the curve, hold at its end, then play it back down.
+  const gain = t < rise ? shape(t / rise)
+    : t <= hold ? 1
+    : shape(1 - (t - hold) / fall)
+  return Math.max(0, gain)
+}
+
+function springGateGain(note: BurstGate, beat: number, spring: BurstSpring): number {
+  const t = beat - note.beat
+  if (t < 0) return 0
+  const mass = Math.max(0.05, spring.mass)
+  const k = Math.max(1, spring.stiffness)
+  const omega = Math.sqrt(k / mass)
+  const zeta = Math.max(0.05, spring.damping / (2 * Math.sqrt(k * mass)))
+  // Closed-form displacement + velocity from (x0, v0) toward 0.
+  const solve = (x0: number, v0: number, dt: number): [number, number] => {
+    if (zeta >= 1) {
+      const a = x0
+      const b = v0 + omega * x0
+      const decay = Math.exp(-omega * dt)
+      return [(a + b * dt) * decay, (b - omega * (a + b * dt)) * decay]
+    }
+    const omegaD = omega * Math.sqrt(1 - zeta * zeta)
+    const a = x0
+    const b = (v0 + zeta * omega * x0) / omegaD
+    const decay = Math.exp(-zeta * omega * dt)
+    const cos = Math.cos(omegaD * dt)
+    const sin = Math.sin(omegaD * dt)
+    return [
+      decay * (a * cos + b * sin),
+      decay * ((b * omegaD - zeta * omega * a) * cos - (a * omegaD + zeta * omega * b) * sin),
+    ]
+  }
+  // The gate lives while held plus a settle window either side of release.
+  const settle = 9 / Math.max(0.2, zeta * omega)
+  const hold = Math.max(note.durationBeats || 0, 0.001)
+  if (t >= hold + settle) return 0
+  if (t <= hold) {
+    const [u] = solve(-1, 0, t) // gain = 1 + u: springs from 0 toward 1
+    return Math.max(0, 1 + u)
+  }
+  // Release: spring toward 0, seeded with the exact held state.
+  const [uAtRelease, vAtRelease] = solve(-1, 0, hold)
+  const [u] = solve(1 + uAtRelease, vAtRelease, t - hold)
+  return Math.max(0, u)
+}
+
+/** The gain one burst note contributes at `beat`, per the config's shape.
+ *  Velocity scales every shape the same way the ADSR always scaled. */
+export function burstGateGain(note: BurstGate, beat: number, cfg: BurstConfig): number {
+  if (cfg.shape === 'bezier') {
+    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    return velocity * bezierGateGain(note, beat, cfg.bezier ?? DEFAULT_BURST_BEZIER)
+  }
+  if (cfg.shape === 'spring') {
+    const velocity = note.velocity <= 1 ? note.velocity : note.velocity / 127
+    return velocity * springGateGain(note, beat, cfg.spring ?? DEFAULT_BURST_SPRING)
+  }
+  return adsrGateGain(note, beat, cfg)
+}
+
+/** How far past the target a shaped burst may travel (gain and travel cap).
+ *  The classic ADSR keeps its historical hard cap of 1, bit-identical for
+ *  every pre-existing save; the shaped envelopes are allowed to overshoot. */
+function travelCap(cfg: BurstConfig): number {
+  return cfg.shape === 'bezier' || cfg.shape === 'spring' ? 2 : 1
 }
 
 /** Sample a burst lane at `beat`: NaN while no burst is live (lane inert), else
  *  `base` travelled toward the live bursts' value. Overlapping bursts blend -
  *  the destination is their gain-weighted average value and the total travel
- *  clamps at 1, matching evaluateAdsrGain's sum-and-clamp stacking. */
+ *  clamps at the shape's cap (1 for the classic ADSR, matching
+ *  evaluateAdsrGain's sum-and-clamp stacking; 2 for the overshooting shapes). */
 export function sampleBurstLane(
   cfg: BurstConfig,
   gates: readonly BurstGate[],
@@ -202,14 +359,14 @@ export function sampleBurstLane(
   let gainSum = 0
   let weightedValue = 0
   for (const g of gates) {
-    const gain = adsrGateGain(g, beat, cfg)
+    const gain = burstGateGain(g, beat, cfg)
     if (gain <= 0) continue
     gainSum += gain
     weightedValue += gain * g.value
   }
   if (gainSum <= 0) return NaN
   const target = weightedValue / gainSum
-  const travel = Math.min(1, gainSum) * Math.max(0, Math.min(1, cfg.intensity))
+  const travel = Math.min(travelCap(cfg), gainSum) * Math.max(0, Math.min(1, cfg.intensity))
   return base + (target - base) * travel
 }
 
@@ -297,7 +454,13 @@ export interface AutomationLane {
  */
 export function sampleAutomationLane(lane: AutomationLane, beat: number, base: number): number {
   if (lane.burst) {
-    return lane.bursts?.length ? sampleBurstLane(lane.burst, lane.bursts, beat, base) : NaN
+    if (!lane.bursts?.length) return NaN
+    const value = sampleBurstLane(lane.burst, lane.bursts, beat, base)
+    // Shaped bursts may overshoot their target; the param's range is still the
+    // law. A no-op for the classic ADSR (travel ≤ 1 stays between base and
+    // target, both already in range).
+    if (Number.isNaN(value) || lane.min === undefined || lane.max === undefined) return value
+    return Math.max(lane.min, Math.min(lane.max, value))
   }
   if (lane.noise) {
     return lane.gates?.length
@@ -325,11 +488,19 @@ export function automationLaneValueBounds(
   base: number,
 ): { min: number; max: number } {
   if (lane.burst) {
+    // Shaped bursts may overshoot: their reach is base + cap * (target - base),
+    // clamped back to the param range exactly as sampling clamps it. Base and
+    // targets stay unclamped, as they always were (base shows through inert
+    // stretches whatever the range says).
+    const cap = lane.burst.shape === 'bezier' || lane.burst.shape === 'spring' ? 2 : 1
     let min = base
     let max = base
     for (const g of lane.bursts ?? []) {
-      min = Math.min(min, g.value)
-      max = Math.max(max, g.value)
+      let reach = base + cap * (g.value - base)
+      if (lane.min !== undefined) reach = Math.max(lane.min, reach)
+      if (lane.max !== undefined) reach = Math.min(lane.max, reach)
+      min = Math.min(min, g.value, reach)
+      max = Math.max(max, g.value, reach)
     }
     return { min, max }
   }

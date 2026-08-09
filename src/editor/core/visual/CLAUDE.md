@@ -39,10 +39,32 @@ Burst reuses `adsr.ts`: `adsrGateGain` is the per-note piece (exported for exact
 this), and overlapping bursts blend toward their gain-weighted target with the
 total travel clamped at 1 — the same sum-and-clamp stacking `evaluateAdsrGain` does.
 
+**Burst SHAPES** (`Track.burst.shape`, absent = 'adsr' for every pre-existing save):
+'bezier' rides a user cubic-bezier — rise 0→1 along the curve over `riseBeats`
+(control Ys past 1 overshoot), hold, play it back over `fallBeats` — and 'spring'
+is a closed-form damped-spring simulation (stiffness/damping/mass, per-beat time
+base; underdamped rings, release springs back seeded with the exact held state).
+Both may return gain > 1, so their travel cap is 2 (the classic ADSR keeps its
+historical cap of 1, bit-identical), and `sampleAutomationLane` clamps the shaped
+result back to the param range. `burstGateGain` is the one shape dispatcher;
+`automationLaneValueBounds` includes the overshoot reach (clamped) for the
+structural budgets. The panel's bezier window is a real control-point editor;
+the spring window plots a demo note through the actual evaluator.
+
 Burst works on `fx:` lanes too, taking the effect's stored setting as its base. The
 `enabled` pseudo-param stays a keyframe lane (a 0/1 toggle has nothing to travel
 through). Noise on `fx:` lanes is NOT wired — such a lane silently behaves as
 keyframes, as it always has.
+
+**ROW SPREAD** (`Track.automationRange`, absent = the frozen historical mapping):
+a lane may reshape how its pitch rows spread onto values - a value SUB-range
+(`min`/`max` inside the param's own bounds), a row COUNT (`rows` 2..49, rows fill
+upward from pitch 36 and the top row IS the max), INTEGER snapping, and a spread
+`curve` ('linear' | 'fineLow' | 'fineHigh' | 'sCurve'). `pitchToValueRanged`
+(core/trackTypes.ts) is the one mapping both the engine (extraction in
+resolve.ts) and the editor (generateValueRows' labels) read, so a note can never
+mean different things in the roll and in playback. The panel's Rows·Range
+console emits a NORMALIZED config - defaults collapse to absence.
 
 **AMOUNT** (`Track.automationAmount`, default 1, 0..`AUTOMATION_AMOUNT_MAX`) is a
 whole-lane output gain, mode-independent: applied at EXTRACTION in resolve.ts (the

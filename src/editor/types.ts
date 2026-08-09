@@ -186,7 +186,20 @@ export interface Track {
    *  ADSR envelope that carries the param from whatever is underneath toward the
    *  note's pitch-value, scaled by velocity and by `intensity`. Wins over `noise`
    *  if both are somehow set. (See core/visual/automation.ts BurstConfig.) */
-  burst?: { attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number }
+  burst?: {
+    attackBeats: number; decayBeats: number; sustainLevel: number; releaseBeats: number; intensity: number
+    /** Envelope shape: absent/'adsr' = the classic piecewise ADSR; 'bezier'
+     *  rides a user cubic-bezier (control Ys past 1 overshoot); 'spring' is a
+     *  damped-spring simulation (stiffness/damping/mass, per-beat). */
+    shape?: 'adsr' | 'bezier' | 'spring'
+    bezier?: { x1: number; y1: number; x2: number; y2: number; riseBeats: number; fallBeats: number }
+    spring?: { stiffness: number; damping: number; mass: number }
+  }
+  /** Automation tracks only: how the pitch rows spread onto the value range -
+   *  a value sub-range, a row count, integer snapping, and the spread's curve.
+   *  Absent = the historical full-span linear mapping. The math lives in
+   *  core/trackTypes.ts (pitchToValueRanged); engine and editor both read it. */
+  automationRange?: { min?: number; max?: number; rows?: number; integer?: boolean; curve?: 'linear' | 'fineLow' | 'fineHigh' | 'sCurve' }
   /** Automation tracks only: master output gain on the whole lane, whatever its
    *  mode - every value it produces (keyframes, noise wander and deviation,
    *  burst targets) is multiplied by this and clamped back to the param's range.

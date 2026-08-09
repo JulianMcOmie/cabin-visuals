@@ -34,14 +34,20 @@ import {
   AUTOMATION_AMOUNT_MAX,
   DEFAULT_AUTOMATION_AMOUNT,
   DEFAULT_BURST,
+  DEFAULT_BURST_BEZIER,
+  DEFAULT_BURST_SPRING,
   DEFAULT_NOISE,
+  bezierY,
+  burstGateGain,
   easeFraction,
   sampleNoiseLane,
   type BurstConfig,
+  type BurstShape,
   type NoiseConfig,
 } from '../core/visual/automation'
 import { LaserKnob } from './laserKnob'
 import { hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
+import { AUTOMATION_MAX_ROWS, type AutomationRange, type AutomationSpreadCurve } from '../core/trackTypes'
 import type { AutomationMode, InterpolationMode } from '../types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -282,6 +288,158 @@ function BurstWindow({ burst, accent, onBurst }: {
   )
 }
 
+// ── Shaped burst windows ────────────────────────────────────────────────────
+// Overshoot headroom: level 1 sits below the top so a bezier Y past 1 or a
+// spring's ring has room to draw. Shared by both shaped windows.
+const OS_SPAN = Y_SPAN * 0.62
+const yLevel = (level: number) => Y_BASE - level * OS_SPAN
+
+/** The bezier shape as an EDITOR: the unit rise curve with both control points
+ *  grabbable (Y past the dashed full-line overshoots). The fall plays this
+ *  same curve back, so one picture describes the whole burst. */
+function BezierBurstWindow({ burst, accent, onBurst }: {
+  burst: BurstConfig
+  accent: string
+  onBurst: (next: BurstConfig) => void
+}) {
+  const padRef = useRef<HTMLDivElement>(null)
+  const bez = burst.bezier ?? DEFAULT_BURST_BEZIER
+  const X0 = 8
+  const X1 = 92
+  const xOf = (u: number) => X0 + u * (X1 - X0)
+
+  const steps = 56
+  let path = `M ${xOf(0)} ${yLevel(0)}`
+  for (let i = 1; i <= steps; i++) {
+    const u = i / steps
+    path += ` L ${xOf(u)} ${yLevel(bezierY(bez.x1, bez.y1, bez.x2, bez.y2, u))}`
+  }
+
+  const p1x = xOf(clamp(bez.x1, 0, 1))
+  const p1y = yLevel(bez.y1)
+  const p2x = xOf(clamp(bez.x2, 0, 1))
+  const p2y = yLevel(bez.y2)
+  const setPoint = (key: 'x1' | 'y1' | 'x2' | 'y2', value: number) =>
+    onBurst({ ...burst, bezier: { ...bez, [key]: value } })
+  const fromPad = (fx: number, fy: number): [number, number] => [
+    snap(clamp((fx - X0) / (X1 - X0), 0, 1)),
+    snap(clamp((Y_BASE - fy) / OS_SPAN, -0.5, 1.7)),
+  ]
+
+  return (
+    <LaneWindow testId="automation-burst-bezier-pad" title="The rise curve each note fires; the fall plays it back. Drag the control points - Y past the dashed line overshoots.">
+      <div ref={padRef} role="group" aria-label="Bezier burst curve" className="absolute inset-0">
+        <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+          <line x1={X0} y1={yLevel(1)} x2={X1} y2={yLevel(1)} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <line x1={X0} y1={Y_BASE} x2={X1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {/* Control arms, the way every curve tool draws them. */}
+          <line x1={xOf(0)} y1={yLevel(0)} x2={p1x} y2={p1y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line x1={xOf(1)} y1={yLevel(1)} x2={p2x} y2={p2y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <GlowPath d={path} accent={accent} />
+        </svg>
+        <CurveHandle
+          padRef={padRef} x={p1x} y={p1y} accent={accent}
+          ariaLabel="First control point" ariaMin={0} ariaMax={1} ariaNow={bez.x1}
+          ariaText={`Control 1 at ${bez.x1.toFixed(2)}, ${bez.y1.toFixed(2)}`} cursor="move"
+          onDragTo={(fx, fy) => { const [x, y] = fromPad(fx, fy); onBurst({ ...burst, bezier: { ...bez, x1: x, y1: y } }) }}
+          onNudge={(dx2, dy2) => onBurst({ ...burst, bezier: { ...bez, x1: snap(clamp(bez.x1 + dx2 * 0.02, 0, 1)), y1: snap(clamp(bez.y1 + dy2 * 0.02, -0.5, 1.7)) } })}
+          onReset={() => setPoint('x1', DEFAULT_BURST_BEZIER.x1)}
+        />
+        <CurveHandle
+          padRef={padRef} x={p2x} y={p2y} accent={accent}
+          ariaLabel="Second control point" ariaMin={0} ariaMax={1} ariaNow={bez.x2}
+          ariaText={`Control 2 at ${bez.x2.toFixed(2)}, ${bez.y2.toFixed(2)}`} cursor="move"
+          onDragTo={(fx, fy) => { const [x, y] = fromPad(fx, fy); onBurst({ ...burst, bezier: { ...bez, x2: x, y2: y } }) }}
+          onNudge={(dx2, dy2) => onBurst({ ...burst, bezier: { ...bez, x2: snap(clamp(bez.x2 + dx2 * 0.02, 0, 1)), y2: snap(clamp(bez.y2 + dy2 * 0.02, -0.5, 1.7)) } })}
+          onReset={() => setPoint('x2', DEFAULT_BURST_BEZIER.x2)}
+        />
+      </div>
+    </LaneWindow>
+  )
+}
+
+/** The spring shape as a PLOT: a demo note held two beats through the real
+ *  evaluator, so the ring, the settle and the velocity-carrying release are
+ *  exactly what the lane will play. The knobs below are the editor. */
+function SpringBurstWindow({ burst, accent }: {
+  burst: BurstConfig
+  accent: string
+}) {
+  const X0 = 5
+  const X1 = 95
+  const demo = { beat: 0, durationBeats: 2, velocity: 1, value: 1 }
+  const span = 4.5
+  const steps = 110
+  let path = `M ${X0} ${yLevel(0)}`
+  for (let i = 1; i <= steps; i++) {
+    const t = (i / steps) * span
+    const gain = burstGateGain(demo, t, { ...burst, shape: 'spring' })
+    path += ` L ${X0 + (i / steps) * (X1 - X0)} ${yLevel(gain)}`
+  }
+  const releaseX = X0 + (demo.durationBeats / span) * (X1 - X0)
+
+  return (
+    <LaneWindow testId="automation-burst-spring-plot" title="A two-beat note through this spring - ring, settle, and the velocity-carrying release">
+      <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+        <line x1={X0} y1={yLevel(1)} x2={X1} y2={yLevel(1)} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        <line x1={releaseX} y1={Y_PEAK - 6} x2={releaseX} y2={Y_BASE} stroke="rgba(255,255,255,0.10)" strokeWidth={1} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+        <line x1={X0} y1={Y_BASE} x2={X1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <GlowPath d={path} accent={accent} />
+      </svg>
+    </LaneWindow>
+  )
+}
+
+const SHAPE_OPTIONS: { value: BurstShape; label: string; title: string }[] = [
+  { value: 'adsr', label: 'ADSR', title: 'The classic piecewise envelope: attack, decay, sustain, release' },
+  { value: 'bezier', label: 'BEZIER', title: 'A user cubic-bezier rise and fall - control Ys past 1 overshoot' },
+  { value: 'spring', label: 'SPRING', title: 'A damped-spring simulation: stiffness, damping, mass - it rings' },
+]
+
+/** Which envelope the bursts ride. Picking a shape seeds its config so the
+ *  window has something honest to draw immediately. */
+function ShapeSegmented({ burst, accent, onBurst }: {
+  burst: BurstConfig
+  accent: string
+  onBurst: (next: BurstConfig) => void
+}) {
+  const shape: BurstShape = burst.shape ?? 'adsr'
+  return (
+    <div
+      role="tablist"
+      aria-label="Burst envelope shape"
+      data-testid="automation-burst-shape-segmented"
+      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+    >
+      {SHAPE_OPTIONS.map((option) => {
+        const active = option.value === shape
+        return (
+          <button
+            key={option.value}
+            role="tab"
+            aria-selected={active}
+            title={option.title}
+            onClick={() => onBurst({
+              ...burst,
+              shape: option.value,
+              bezier: option.value === 'bezier' ? burst.bezier ?? { ...DEFAULT_BURST_BEZIER } : burst.bezier,
+              spring: option.value === 'spring' ? burst.spring ?? { ...DEFAULT_BURST_SPRING } : burst.spring,
+            })}
+            className={`h-[22px] flex-1 cursor-pointer rounded-[5px] text-[9px] font-semibold tracking-[0.1em] transition-colors ${
+              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+            }`}
+            style={active
+              ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) }
+              : undefined}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Segmented controls ──────────────────────────────────────────────────────
 
 const MODE_OPTIONS: { value: AutomationMode; label: string; title: string }[] = [
@@ -491,8 +649,102 @@ function AmountFader({ amount, accent, onAmount }: {
 
 // ── The panel ───────────────────────────────────────────────────────────────
 
+const SPREAD_OPTIONS: { value: AutomationSpreadCurve; label: string; title: string }[] = [
+  { value: 'linear', label: 'LIN', title: 'Rows spread evenly across the range' },
+  { value: 'fineLow', label: 'LOW', title: 'Finer resolution near the minimum' },
+  { value: 'fineHigh', label: 'HIGH', title: 'Finer resolution near the maximum' },
+  { value: 'sCurve', label: 'S', title: 'Finer at both ends, coarser through the middle' },
+]
+
+/** The lane's row-spread console: value sub-range, row count, integer snap and
+ *  the spread curve. Emits a NORMALIZED config - defaults collapse to absence,
+ *  so an untouched lane stays on the frozen historical mapping. */
+function RangeConsole({ bounds, range, accent, onRange }: {
+  bounds: { min: number; max: number }
+  range: AutomationRange | undefined
+  accent: string
+  onRange: (range: AutomationRange | undefined) => void
+}) {
+  const lo = range?.min ?? bounds.min
+  const hi = range?.max ?? bounds.max
+  const rows = range?.rows ?? AUTOMATION_MAX_ROWS
+  const integer = range?.integer ?? false
+  const curve = range?.curve ?? 'linear'
+  const step = integer ? 1 : Math.max(0.01, Number(((bounds.max - bounds.min) / 200).toPrecision(2)))
+
+  const emit = (next: AutomationRange) => {
+    const cleaned: AutomationRange = {}
+    if (next.min !== undefined && Math.abs(next.min - bounds.min) > 1e-9) cleaned.min = next.min
+    if (next.max !== undefined && Math.abs(next.max - bounds.max) > 1e-9) cleaned.max = next.max
+    if (next.rows && Math.round(next.rows) !== AUTOMATION_MAX_ROWS) cleaned.rows = Math.round(next.rows)
+    if (next.integer) cleaned.integer = true
+    if (next.curve && next.curve !== 'linear') cleaned.curve = next.curve
+    onRange(Object.keys(cleaned).length ? cleaned : undefined)
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-black/20 p-2">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[8px] uppercase tracking-[0.14em] text-white/35">Rows · Range</span>
+        <button
+          onClick={() => emit({ min: lo, max: hi, rows, integer: !integer, curve })}
+          aria-pressed={integer}
+          title="Snap every row's value to a whole number"
+          className={`h-[18px] rounded-full px-2 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+            integer ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+          }`}
+          style={integer ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
+        >
+          INT
+        </button>
+      </div>
+      <div className="flex items-end gap-4">
+        <LaserKnob
+          value={lo} min={bounds.min} max={bounds.max} step={step} defaultValue={bounds.min}
+          label="MIN" ariaLabel="Bottom row's value" accent={accent}
+          onChange={(v) => emit({ min: Math.min(v, hi), max: hi, rows, integer, curve })}
+        />
+        <LaserKnob
+          value={hi} min={bounds.min} max={bounds.max} step={step} defaultValue={bounds.max}
+          label="MAX" ariaLabel="Top row's value" accent={accent}
+          onChange={(v) => emit({ min: lo, max: Math.max(v, lo), rows, integer, curve })}
+        />
+        <LaserKnob
+          value={rows} min={2} max={AUTOMATION_MAX_ROWS} step={1} defaultValue={AUTOMATION_MAX_ROWS}
+          label="ROWS" ariaLabel="Number of rows" accent={accent}
+          onChange={(v) => emit({ min: lo, max: hi, rows: v, integer, curve })}
+        />
+        <div
+          role="radiogroup"
+          aria-label="Row spread curve"
+          className="ml-auto flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+        >
+          {SPREAD_OPTIONS.map((option) => {
+            const active = option.value === curve
+            return (
+              <button
+                key={option.value}
+                role="radio"
+                aria-checked={active}
+                title={option.title}
+                onClick={() => emit({ min: lo, max: hi, rows, integer, curve: option.value })}
+                className={`h-[20px] cursor-pointer rounded-[5px] px-1.5 text-[8px] font-semibold tracking-[0.08em] transition-colors ${
+                  active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/70'
+                }`}
+                style={active ? { background: withAlpha(accent, 0.22), color: towardWhite(accent, 0.6) } : undefined}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AutomationUserInterface({
-  targetLabel, color, mode, interpolation, noise, burst, amount, onMode, onInterpolation, onNoise, onBurst, onAmount,
+  targetLabel, color, mode, interpolation, noise, burst, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -509,6 +761,11 @@ export function AutomationUserInterface({
   onNoise: (noise: NoiseConfig) => void
   onBurst: (burst: BurstConfig) => void
   onAmount: (amount: number) => void
+  /** The target param's own bounds; null hides the row-spread console (the
+   *  lane's target could not be resolved to a numeric param). */
+  paramBounds: { min: number; max: number } | null
+  range: AutomationRange | undefined
+  onRange: (range: AutomationRange | undefined) => void
 }): JSX.Element {
   const accent = hexAccent(color)
   const accentHsv = hexToHsv(accent)
@@ -525,7 +782,11 @@ export function AutomationUserInterface({
     // the card's 10px border.
     <section data-testid="automation-user-interface" className="-m-3 rounded-[9px]" style={{ background: shade }}>
       {mode === 'burst' && burst ? (
-        <BurstWindow burst={burst} accent={accent} onBurst={onBurst} />
+        (burst.shape ?? 'adsr') === 'bezier'
+          ? <BezierBurstWindow burst={burst} accent={accent} onBurst={onBurst} />
+          : (burst.shape ?? 'adsr') === 'spring'
+            ? <SpringBurstWindow burst={burst} accent={accent} />
+            : <BurstWindow burst={burst} accent={accent} onBurst={onBurst} />
       ) : mode === 'noise' && noise ? (
         <LaneWindow testId="automation-noise-plot" title={`${NOISE_WINDOW_BEATS} beats of this seed`}>
           <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -561,6 +822,59 @@ export function AutomationUserInterface({
             pill sits. */}
 
         {mode === 'burst' && burst && (
+          <ShapeSegmented burst={burst} accent={accent} onBurst={onBurst} />
+        )}
+
+        {mode === 'burst' && burst && (burst.shape ?? 'adsr') === 'bezier' && (
+          <div className="flex items-end gap-4">
+            <LaserKnob
+              value={(burst.bezier ?? DEFAULT_BURST_BEZIER).riseBeats} min={0.02} max={4} step={0.01} defaultValue={DEFAULT_BURST_BEZIER.riseBeats}
+              label="RISE" ariaLabel="Rise beats" accent={accent} suffix="b"
+              onChange={(v) => onBurst({ ...burst, bezier: { ...(burst.bezier ?? DEFAULT_BURST_BEZIER), riseBeats: v } })}
+            />
+            <LaserKnob
+              value={(burst.bezier ?? DEFAULT_BURST_BEZIER).fallBeats} min={0.02} max={8} step={0.01} defaultValue={DEFAULT_BURST_BEZIER.fallBeats}
+              label="FALL" ariaLabel="Fall beats" accent={accent} suffix="b"
+              onChange={(v) => onBurst({ ...burst, bezier: { ...(burst.bezier ?? DEFAULT_BURST_BEZIER), fallBeats: v } })}
+            />
+            <div className="ml-auto">
+              <LaserKnob
+                value={burst.intensity} min={0} max={1} step={0.01} defaultValue={DEFAULT_BURST.intensity}
+                label="AMT" ariaLabel="Intensity" accent={accent} large
+                onChange={(v) => onBurst({ ...burst, intensity: v })}
+              />
+            </div>
+          </div>
+        )}
+
+        {mode === 'burst' && burst && (burst.shape ?? 'adsr') === 'spring' && (
+          <div className="flex items-end gap-4">
+            <LaserKnob
+              value={(burst.spring ?? DEFAULT_BURST_SPRING).stiffness} min={10} max={600} step={1} defaultValue={DEFAULT_BURST_SPRING.stiffness} curve={2}
+              label="STIFF" ariaLabel="Spring stiffness" accent={accent}
+              onChange={(v) => onBurst({ ...burst, spring: { ...(burst.spring ?? DEFAULT_BURST_SPRING), stiffness: v } })}
+            />
+            <LaserKnob
+              value={(burst.spring ?? DEFAULT_BURST_SPRING).damping} min={1} max={80} step={0.5} defaultValue={DEFAULT_BURST_SPRING.damping}
+              label="DAMP" ariaLabel="Spring damping" accent={accent}
+              onChange={(v) => onBurst({ ...burst, spring: { ...(burst.spring ?? DEFAULT_BURST_SPRING), damping: v } })}
+            />
+            <LaserKnob
+              value={(burst.spring ?? DEFAULT_BURST_SPRING).mass} min={0.1} max={5} step={0.05} defaultValue={DEFAULT_BURST_SPRING.mass}
+              label="MASS" ariaLabel="Spring mass" accent={accent}
+              onChange={(v) => onBurst({ ...burst, spring: { ...(burst.spring ?? DEFAULT_BURST_SPRING), mass: v } })}
+            />
+            <div className="ml-auto">
+              <LaserKnob
+                value={burst.intensity} min={0} max={1} step={0.01} defaultValue={DEFAULT_BURST.intensity}
+                label="AMT" ariaLabel="Intensity" accent={accent} large
+                onChange={(v) => onBurst({ ...burst, intensity: v })}
+              />
+            </div>
+          </div>
+        )}
+
+        {mode === 'burst' && burst && (burst.shape ?? 'adsr') === 'adsr' && (
           <div className="flex items-end gap-4">
             <LaserKnob
               value={burst.attackBeats} min={0} max={ATTACK_MAX} step={0.01} defaultValue={DEFAULT_BURST.attackBeats}
@@ -631,6 +945,12 @@ export function AutomationUserInterface({
         {/* The lane's master gain, below whichever mode console is up: it
             belongs to the lane, not the mode, so it keeps one seat. */}
         <AmountFader amount={amount} accent={accent} onAmount={onAmount} />
+
+        {/* How the rows spread onto the value range - shared by every mode
+            (pitch encodes value in all three). */}
+        {paramBounds && (
+          <RangeConsole bounds={paramBounds} range={range} accent={accent} onRange={onRange} />
+        )}
 
         {/* What this lane does, in the mode it is in. */}
         <p className="text-[10px] leading-relaxed text-white/40">

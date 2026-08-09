@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { pitchToValue, pitchToValueRanged } from '../trackTypes'
 import {
+  DEFAULT_BURST_BEZIER,
+  DEFAULT_BURST_SPRING,
   automationAmount,
   automationLaneValueBounds,
   extractBurstGates,
@@ -198,4 +201,98 @@ test('bounds: a noise lane spans each gate\'s deviation, clamped to the param ra
   const { min, max } = automationLaneValueBounds(lane, 8)
   close(min, 6.5)
   close(max, 10)
+})
+
+// ── Shaped bursts ────────────────────────────────────────────────────────────
+
+test('adsr shape absent: sampleBurstLane behaves exactly as it always did', () => {
+  const gates = [burst(0, 1, 10)]
+  // Mid-attack of the classic envelope; the shaped machinery must not change it.
+  const value = sampleBurstLane(BURST, gates, 0.025, 0)
+  const gain = 0.025 / BURST.attackBeats
+  close(value, 10 * Math.min(1, gain) * BURST.intensity)
+})
+
+test('bezier shape: expo-out default front-loads; a hot Y overshoots the target', () => {
+  const cfg: BurstConfig = { ...BURST, shape: 'bezier', bezier: { ...DEFAULT_BURST_BEZIER } }
+  const gates = [burst(0, 1, 10)]
+  // Most of the rise lands early (expo-out): halfway through riseBeats ≥ 80%.
+  const early = sampleBurstLane(cfg, gates, DEFAULT_BURST_BEZIER.riseBeats / 2, 0)
+  assert.ok(early > 8, `expo-out should front-load, saw ${early}`)
+  // Held past the rise: parked exactly at the target.
+  close(sampleBurstLane(cfg, gates, 0.5, 0), 10)
+  // Fully fallen: inert.
+  assert.ok(Number.isNaN(sampleBurstLane(cfg, gates, 1 + DEFAULT_BURST_BEZIER.fallBeats + 0.01, 0)))
+
+  // Y past 1 overshoots: the value passes the target mid-rise.
+  const hot: BurstConfig = { ...cfg, bezier: { ...DEFAULT_BURST_BEZIER, y1: 1.6, y2: 1.2 } }
+  let peak = -Infinity
+  for (let b = 0; b <= 1; b += 0.005) {
+    const v = sampleBurstLane(hot, [burst(0, 1, 10)], b, 0)
+    if (!Number.isNaN(v)) peak = Math.max(peak, v)
+  }
+  assert.ok(peak > 10.5, `hot bezier should overshoot 10, saw ${peak}`)
+})
+
+test('spring shape: rings past the target, settles on it, releases to inert', () => {
+  const cfg: BurstConfig = { ...BURST, shape: 'spring', spring: { ...DEFAULT_BURST_SPRING } }
+  const gates = [burst(0, 2, 10)]
+  let peak = -Infinity
+  for (let b = 0; b <= 2; b += 0.005) {
+    const v = sampleBurstLane(cfg, gates, b, 0)
+    if (!Number.isNaN(v)) peak = Math.max(peak, v)
+  }
+  assert.ok(peak > 10.2, `spring should ring past the target, saw ${peak}`)
+  // Long-held: settled on the target (within the ring's dying residue).
+  assert.ok(Math.abs(sampleBurstLane(cfg, gates, 1.9, 0) - 10) < 1e-3)
+  // Well after release: the gate has died and the lane is inert.
+  assert.ok(Number.isNaN(sampleBurstLane(cfg, gates, 30, 0)))
+})
+
+test('bounds: shaped bursts include the overshoot reach, clamped to the range', () => {
+  const lane: AutomationLane = {
+    mode: 'linear',
+    keyframes: [],
+    burst: { ...BURST, shape: 'spring', spring: { ...DEFAULT_BURST_SPRING } },
+    bursts: [burst(0, 1, 8)],
+    min: 0,
+    max: 10,
+  }
+  // Reach = 2 + 2*(8-2) = 14, clamped to the param max of 10.
+  assert.deepEqual(automationLaneValueBounds(lane, 2), { min: 2, max: 10 })
+})
+
+// ── Per-lane row spread (automationRange) ────────────────────────────────────
+
+test('pitchToValueRanged: absent config is the frozen historical mapping', () => {
+  for (const pitch of [36, 50, 84, 20, 99]) {
+    close(pitchToValueRanged(undefined, pitch, 0, 10), pitchToValue(pitch, 0, 10))
+  }
+})
+
+test('ranged mapping: sub-range, row count, integer snap, spread curve', () => {
+  // Sub-range: rows span 2..6 of a 0..10 param.
+  close(pitchToValueRanged({ min: 2, max: 6 }, 36, 0, 10), 2)
+  close(pitchToValueRanged({ min: 2, max: 6 }, 84, 0, 10), 6)
+
+  // Row count: 5 rows sit at pitches 36..40; the top row IS the max, and
+  // anything above clamps to it.
+  const rows5 = { rows: 5 }
+  close(pitchToValueRanged(rows5, 36, 0, 8), 0)
+  close(pitchToValueRanged(rows5, 40, 0, 8), 8)
+  close(pitchToValueRanged(rows5, 38, 0, 8), 4)
+  close(pitchToValueRanged(rows5, 70, 0, 8), 8)
+
+  // Integer + rows: one row per whole value.
+  const ints = { rows: 5, integer: true, min: 2, max: 6 }
+  assert.deepEqual([36, 37, 38, 39, 40].map((p) => pitchToValueRanged(ints, p, 0, 10)), [2, 3, 4, 5, 6])
+
+  // fineLow: the middle row sits BELOW the linear middle (finer near the min).
+  const mid = pitchToValueRanged({ curve: 'fineLow' }, 60, 0, 10)
+  assert.ok(mid < 5, `fineLow midpoint should sit low, saw ${mid}`)
+  close(pitchToValueRanged({ curve: 'fineLow' }, 84, 0, 10), 10) // still arrives
+
+  // Extraction threads the config: a top-of-5-rows note lands on the max.
+  const kfs = extractKeyframes(pitchBlock(40), 4, 0, 8, undefined, 1, rows5)
+  close(kfs[0].value, 8)
 })
