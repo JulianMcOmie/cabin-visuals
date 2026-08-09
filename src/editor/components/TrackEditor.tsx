@@ -10,6 +10,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
 import { CompositionSettingsPanel } from './CompositionSettingsPanel'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
+import { TRANSFORM_PARAM_DEFS } from '../core/transform'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
@@ -386,6 +387,7 @@ export function TrackEditor() {
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setTrackAutomationRange = useProjectStore((s) => s.setTrackAutomationRange)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
   const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
@@ -581,11 +583,14 @@ export function TrackEditor() {
                   if (track.type === 'automation') {
                     const fx = track.targetParam ? parseFxTarget(track.targetParam) : null
                     let targetLabel = track.targetParam ?? 'value'
+                    // The target param's own bounds, for the row-spread console.
+                    let laneBounds: { min: number; max: number } | null = null
                     if (fx) {
                       const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
                       const plugin = inst ? getEffect(inst.pluginId) : undefined
                       const pd = plugin?.params.find((p) => p.key === fx.key)
                       if (pd) targetLabel = `${plugin?.name} · ${pd.label}`
+                      if (pd && isNumberParam(pd)) laneBounds = { min: pd.min, max: pd.max }
                     } else if (parent && track.targetParam) {
                       const pdef = getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam)
                         ?? (parent.type === 'mover' || parent.type === 'splitter'
@@ -595,7 +600,11 @@ export function TrackEditor() {
                             ? compositionAutomatableParams(compositionDef(parent.instrumentId))
                                 .find((p) => p.key === track.targetParam)
                             : undefined)
+                        // The canonical transform lanes (tfSize etc.) have no
+                        // instrument def to be found in - they live here.
+                        ?? TRANSFORM_PARAM_DEFS.find((p) => p.key === track.targetParam)
                       if (pdef) targetLabel = pdef.label
+                      if (pdef && isNumberParam(pdef)) laneBounds = { min: pdef.min, max: pdef.max }
                     }
                     return (
                       <AutomationUserInterface
@@ -611,6 +620,9 @@ export function TrackEditor() {
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
                         onAmount={(amount) => setTrackAutomationAmount(track.id, amount)}
+                        paramBounds={laneBounds}
+                        range={track.automationRange}
+                        onRange={(range) => setTrackAutomationRange(track.id, range)}
                       />
                     )
                   }

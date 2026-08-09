@@ -408,6 +408,9 @@ export interface ProjectState {
   /** Set (or clear, with undefined) an automation track's burst mode. Setting one
    *  mode clears the other - a lane is in exactly one mode. */
   setTrackBurst: (trackId: string, burst: Track['burst'] | undefined) => void
+  /** Set (or clear) an automation lane's row-spread config (value sub-range,
+   *  row count, integer snap, spread curve). An empty object clears. */
+  setTrackAutomationRange: (trackId: string, range: Track['automationRange'] | undefined) => void
   /** Put an automation lane in one of its three modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
@@ -1513,6 +1516,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst } } }
     }),
 
+  setTrackAutomationRange: (trackId, range) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const empty = !range || Object.keys(range).length === 0
+      return { tracks: { ...s.tracks, [trackId]: { ...track, automationRange: empty ? undefined : range } } }
+    }),
   setTrackBurst: (trackId, burst) =>
     set((s) => {
       const track = s.tracks[trackId]

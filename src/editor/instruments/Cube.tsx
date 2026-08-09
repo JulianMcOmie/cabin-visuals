@@ -1,12 +1,22 @@
-import { useRef } from 'react'
-import { Group, Mesh, MeshPhysicalMaterial } from 'three'
+import { useEffect, useRef } from 'react'
+import { Color, Group, Mesh, MeshPhysicalMaterial, type BufferGeometry } from 'three'
 import { cubeSpinRotation } from '../core/visual/cubeSpin'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
 import {
   DEFAULT_FUNDAMENTAL_COLOR,
+  DEFAULT_SIDES,
+  DEFAULT_TUBE_FRACTION,
   FUNDAMENTAL_GEOMETRIES,
   FundamentalMesh,
+  MAX_SIDES,
+  MIN_SIDES,
+  SIDED_GEOMETRIES,
+  TUBED_GEOMETRIES,
+  applyFundamentalSurface,
+  buildSidedGeometry,
+  buildTubedGeometry,
   normalizeFundamentalGeometry,
+  normalizeSides,
   type FundamentalGeometryId,
 } from './FundamentalGeometry'
 import { paramDefault, type ObjectInstrumentDef } from './types'
@@ -28,8 +38,26 @@ export const cubeInstrument: ObjectInstrumentDef = {
     // a splitter mints grows in place - unlike the canonical tfSize, which is
     // a group fader scaling the whole formation and its layout offsets.
     { key: 'size', label: 'Size', min: 0.05, max: 4, step: 0.01, default: 1 },
+    // The solid's proportions: per-axis stretch applied to the mesh itself
+    // (a cube becomes a slab or a pillar, a cylinder a disc), kept out of the
+    // placement matrix so movers and children never inherit the stretch.
+    { key: 'dimX', label: 'Width', min: 0.25, max: 3, step: 0.01, default: 1 },
+    { key: 'dimY', label: 'Height', min: 0.25, max: 3, step: 0.01, default: 1 },
+    { key: 'dimZ', label: 'Depth', min: 0.25, max: 3, step: 0.01, default: 1 },
+    // Tube thickness for the torus family, as a fraction of the ring radius -
+    // the ring shrinks as the tube grows, so overall size holds still.
+    { key: 'tube', label: 'Tube', min: 0.12, max: 0.85, step: 0.01, default: DEFAULT_TUBE_FRACTION },
+    // The N-gon family: how many sides the prism/cone cross-section has -
+    // 3 = triangular prism / pyramid, high counts approach round.
+    { key: 'sides', label: 'Sides', min: MIN_SIDES, max: MAX_SIDES, step: 1, default: DEFAULT_SIDES },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
+    // Surface toggles - resolved through fundamentalMaterialSettings. Defaults
+    // reproduce the original material exactly, so existing projects keep their look.
+    { key: 'reflective', label: 'Reflective', type: 'boolean', default: 0 },
+    { key: 'refractive', label: 'Refractive', type: 'boolean', default: 0 },
+    { key: 'shaded', label: 'Lit', type: 'boolean', default: 1 },
+    { key: 'textured', label: 'Textured', type: 'boolean', default: 0 },
   ],
   // Notes drive the pulse envelope (scale swell + emissive glow); higher pitch = stronger pulse.
   midiRows: [
@@ -65,18 +93,21 @@ const CORNERS: [number, number, number][] = [
 
 // One selected solid per Cube track. The transform (world matrix) and mute blackout are applied
 // by ObjectRenderer's placement group; this draws the mesh at local origin and owns
-// appearance (color/emissive) plus its signature Shatter ability.
+// appearance (color/emissive/surface toggles) plus its signature Shatter ability.
 export function Cube({ trackId }: { trackId: string }) {
   const spinRef = useRef<Group>(null)
-  const meshRefs = useRef<Record<FundamentalGeometryId, Mesh | null>>({
-    cube: null,
-    tetrahedron: null,
-    octahedron: null,
-    dodecahedron: null,
-    icosahedron: null,
-    sphere: null,
-  })
+  const meshRefs = useRef<Partial<Record<FundamentalGeometryId, Mesh | null>>>({})
   const fragRefs = useRef<(Mesh | null)[]>([])
+  // The torus family's geometry follows the TUBE param and the prism/cone
+  // family the SIDES param, so those are built here (imperatively, only when
+  // the value moves) rather than declared - the component never re-renders on
+  // a param edit. We own these builds; `value` is whichever param drives the id.
+  const paramBuilt = useRef<Partial<Record<FundamentalGeometryId, { value: number; geometry: BufferGeometry }>>>({})
+  const tint = useRef(new Color()).current
+
+  useEffect(() => () => {
+    for (const entry of Object.values(paramBuilt.current)) entry?.geometry.dispose()
+  }, [])
 
   useInstrumentFrame(trackId, (state) => {
     if (!spinRef.current) return false
@@ -87,6 +118,24 @@ export function Cube({ trackId }: { trackId: string }) {
       const candidate = meshRefs.current[option.id]
       if (candidate) candidate.visible = option.id === geometry
     }
+    // Keep the selected param-shaped solid's geometry in step with its param:
+    // TUBE for the torus family, SIDES for the prism/cone family.
+    if (geometry === 'torus' || geometry === 'torusKnot' || geometry === 'prism' || geometry === 'cone') {
+      const isTubed = geometry === 'torus' || geometry === 'torusKnot'
+      const value = isTubed
+        ? state.params.tube ?? paramDefault(cubeInstrument, 'tube')
+        : normalizeSides(state.params.sides ?? paramDefault(cubeInstrument, 'sides'))
+      const built = paramBuilt.current[geometry]
+      if (!built || Math.abs(built.value - value) > 1e-4) {
+        const next = isTubed
+          ? buildTubedGeometry(geometry, value)
+          : buildSidedGeometry(geometry, value)
+        // First build replaces the mesh's default empty BufferGeometry.
+        mesh.geometry.dispose()
+        mesh.geometry = next
+        paramBuilt.current[geometry] = { value, geometry: next }
+      }
+    }
     const spinSpeed = state.params.spinSpeed ?? paramDefault(cubeInstrument, 'spinSpeed')
     spinRef.current.rotation.set(...cubeSpinRotation(state.beat, spinSpeed))
     // The note-pulse signal, computed directly from the object's own notes.
@@ -94,11 +143,17 @@ export function Cube({ trackId }: { trackId: string }) {
     const baseColor = state.stringParams.baseColor
     const legacyBaseHue = state.params.baseHue
 
+    if (baseColor) tint.set(baseColor)
+    else if (legacyBaseHue !== undefined) tint.setHSL(legacyBaseHue / 360, 0.65, 0.6)
+    else tint.set(DEFAULT_BASE_COLOR)
+
     const mat = mesh.material as MeshPhysicalMaterial
-    if (baseColor) mat.color.set(baseColor)
-    else if (legacyBaseHue !== undefined) mat.color.setHSL(legacyBaseHue / 360, 0.65, 0.6)
-    else mat.color.set(DEFAULT_BASE_COLOR)
-    mat.emissiveIntensity = 0.25 + energy * 2.5
+    applyFundamentalSurface(mat, {
+      reflective: (state.params.reflective ?? paramDefault(cubeInstrument, 'reflective')) >= 0.5,
+      refractive: (state.params.refractive ?? paramDefault(cubeInstrument, 'refractive')) >= 0.5,
+      shaded: (state.params.shaded ?? paramDefault(cubeInstrument, 'shaded')) >= 0.5,
+      textured: (state.params.textured ?? paramDefault(cubeInstrument, 'textured')) >= 0.5,
+    }, tint, energy)
 
     // Shatter: sample this track's Shatter lane at the current beat - a pure function
     // of the beat, so scrubbing mirrors playback exactly. The burst is MAX at the note
@@ -120,7 +175,14 @@ export function Cube({ trackId }: { trackId: string }) {
     const spread = 1.4 + Math.min(1, nvel) * 2.2
 
     // The core shrinks as it shatters; fragments grow from nothing and fly outward.
-    mesh.scale.setScalar(Math.max(0.001, 1 - 0.85 * a))
+    // The per-axis DIM stretch rides the same mesh scale (a mesh property, so
+    // splitter copies stretch in place and mover layouts stay unscaled).
+    const shatterScale = Math.max(0.001, 1 - 0.85 * a)
+    mesh.scale.set(
+      shatterScale * (state.params.dimX ?? paramDefault(cubeInstrument, 'dimX')),
+      shatterScale * (state.params.dimY ?? paramDefault(cubeInstrument, 'dimY')),
+      shatterScale * (state.params.dimZ ?? paramDefault(cubeInstrument, 'dimZ')),
+    )
     for (let i = 0; i < CORNERS.length; i++) {
       const frag = fragRefs.current[i]
       if (!frag) continue
@@ -138,7 +200,9 @@ export function Cube({ trackId }: { trackId: string }) {
       {FUNDAMENTAL_GEOMETRIES.map(({ id }) => (
         <FundamentalMesh
           key={id}
-          geometry={id}
+          // Tubed and sided solids omit the declarative geometry: the frame
+          // callback above owns theirs, rebuilt from the TUBE / SIDES params.
+          geometry={TUBED_GEOMETRIES.has(id) || SIDED_GEOMETRIES.has(id) ? undefined : id}
           visible={id === 'cube'}
           meshRef={(mesh) => { meshRefs.current[id] = mesh }}
         />
