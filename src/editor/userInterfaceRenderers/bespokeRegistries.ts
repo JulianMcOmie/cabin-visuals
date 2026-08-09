@@ -1,5 +1,6 @@
 import type { UserInterfaceRendererDefinition } from './types'
 import { MoverUserInterfaceRenderer } from './MoverUserInterface'
+import { WaypointsUserInterfaceRenderer } from './WaypointsUserInterface'
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
@@ -30,6 +31,7 @@ import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
   mover: MoverUserInterfaceRenderer,
+  waypoints: WaypointsUserInterfaceRenderer,
   visibility: VisibilityMoverUserInterfaceRenderer,
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.

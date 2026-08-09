@@ -23,6 +23,7 @@ import { BURST_DIRECTIONS, evaluateBurstOffset, type BurstSettings } from './bur
 import { motionMover } from './motion'
 import { symmetricMotionMover } from './symmetricMotion'
 import { conveyorMover } from './conveyor'
+import { waypointsMover } from './waypoints'
 import { radialMotionMover } from './radialMotion'
 import { parametricPatternSplitter } from './parametricPattern'
 import { polyhedronSplitter } from './polyhedron'
@@ -417,6 +418,7 @@ export { evaluateVisibilityOpacity, visibilityMover, type VisibilitySettings } f
  *  All Movers' banks and the parity tests. */
 export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   moverDefinition,
+  waypointsMover,
   consolidatedMover,
   motionMover,
   conveyorMover,

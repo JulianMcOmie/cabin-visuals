@@ -188,6 +188,16 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
     </svg>
   )},
+  { id: 'overlapShape', name: 'Overlap Shape', description: 'A flat one-color shape standing in 3D - where copies cross in the same plane, the overlap cuts out to transparency or flips to a second color.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path
+        fillRule="evenodd"
+        fill="#ff5470"
+        fillOpacity="0.9"
+        d="M0.6 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z"
+      />
+    </svg>
+  )},
   { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M3.2 1 H6.2 L4.4 11 H1.4 Z" fill="#fbbf24" fillOpacity="0.9" />
@@ -322,7 +332,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
@@ -345,6 +355,7 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
+  waypoints: 'Lay out positions (line, grid, ring, or custom) - each MIDI row sends the object to its position, and curve rows switch how it travels (linear, ease, or spring physics with overshoot).',
   mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',

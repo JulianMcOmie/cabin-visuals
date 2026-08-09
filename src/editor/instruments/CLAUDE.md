@@ -179,6 +179,36 @@ These four render `null` and post-process their scene's render target instead. T
 - **A row's PITCH is the saved value, so shipped pitches are frozen.** Strobe's straight rows own 68–72 (1/4 … 1/64) and cannot be renumbered: a project stores the pitch, so remapping would silently re-time every existing strobe. Later families were appended *below* that block — triplets at 67–65, frame rows at 64–61 — which keeps pitch monotonically descending down the row list. Extending a row vocabulary means appending new pitches at one end, never resequencing for a tidier order: the same append-only discipline as the shader modes above. A colocated test pins the frozen five.
 - **Wall-clock rates must still be derived FROM the beat.** Strobe's `f` rows are a fixed Hz on a *nominal* 60fps grid (`STROBE_REFERENCE_FPS`), resolved by `strobeCycleBeats(row, secPerBeat)` — seconds = beat × secPerBeat, so they stay a pure function of the playhead. Reading a real frame counter or `performance.now` would be the obvious implementation and would break everything the one rule buys: a paused frame would keep flickering, scrub would not match playback, and a 30 or 120fps export would run at the wrong speed. The cost of doing it properly is that it assumes a constant tempo (fine — one BPM per project; a tempo map would need integrating instead). `strobeGate` is deliberately unit-agnostic (`position / cycleLength`) so the runtime can pass beats and the panel preview seconds without a second copy of the phase logic.
 
+## Screen-space set operations between copies (OverlapShape's stencil recipe)
+
+`OverlapShape.tsx` renders XOR/parity between coplanar copies with a five-pass
+stencil stack (spec + essay in `overlapShapeCore.ts`, pinned by its test). Facts
+that cost time to establish, for the next instrument that wants set operations:
+
+- **Multi-pass = multiple sibling meshes with consecutive `renderOrder`s**, one
+  material each. Because renderOrder interleaves ACROSS objects, the passes
+  compose over every occurrence of every track of the instrument — which is
+  exactly what makes splitter/mover copies interact. Keep all passes in the
+  same render list: leave `transparent` alone and applyMaterialOpacity flips
+  the whole stack between lists together on fades, preserving pass order.
+- **"Same plane only" is `depthFunc: EqualDepth` against a depth prepass** — a
+  colorWrite-false mesh at the first renderOrder. Coplanar surfaces interpolate
+  identical depth per pixel, different depths fail Equal and just occlude.
+- **Stencil needs a stencil buffer on whatever target the meshes rasterize
+  into** — WebGLRenderTarget defaults to `stencilBuffer: false`, and a missing
+  buffer FAILS OPEN (every stencil test passes, writes ignored). VisualScene's
+  per-scene `target` and ShaderWrapper's `src` now carry one; a new offscreen
+  path that renders instrument geometry must too. Order passes so the
+  fail-open degrade is sane (OverlapShape draws its overlap fill BEFORE its
+  base fill so a stencil-less context shows a plain silhouette).
+- The scene loop's `gl.clear(true, true, true)` clears stencil each frame, but
+  leave the buffer zeroed behind you anyway (a final Always/Zero cleanup pass)
+  so the front pass and other tracks start clean.
+- **An even copy count stacked in place is INVISIBLE by design** under parity
+  (6 identical copies = even coverage everywhere = full cutout). It looks
+  exactly like the instrument not rendering; check the copy transforms before
+  suspecting the passes.
+
 ## Generated surfaces (a texture that travels with the mesh)
 
 `KaleidoSolid.tsx` is the reference for "the mesh's surface IS the visual". The recipe and its traps:
