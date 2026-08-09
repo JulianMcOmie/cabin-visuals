@@ -4,7 +4,7 @@ import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
-import { computeDropTarget } from './trackDrop'
+import { computeDropTarget, isPinnedChildType } from './trackDrop'
 import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 
 interface CopyDragState {
@@ -26,7 +26,6 @@ interface CopyDragState {
 
 interface Session {
   srcId: string
-  srcParentId: string | null
   subtree: Set<string>
   rows: VisualRow[]
   grabOffsetY: number
@@ -70,7 +69,6 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
 
     sessionRef.current = {
       srcId: trackId,
-      srcParentId: track.parentId ?? null,
       subtree: subtreeIds(tracks, trackId),
       rows,
       grabOffsetY,
@@ -112,12 +110,12 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, listLeft: s.listLeft,
         rowHeight: s.rowHeight, clientX: ev.clientX, clientY: ev.clientY,
       })
-      // Automation + envelope + ability tracks live only on their parent object -
-      // a copy can't land under a different parent (or nest into anything).
-      const srcType = tracks[s.srcId]?.type
-      if (drop && (srcType === 'automation' || srcType === 'ability' || srcType === 'envelope')) {
-        if (drop.intoId != null || drop.parentId !== s.srcParentId) drop = null
-      }
+      // Automation + envelope + ability lanes live only ON a parent object: the
+      // copy targets any parent exactly like a regular track's drag (nest-into or
+      // a sibling line at the X-picked depth), but never the root level. A parent
+      // without the lane's target param still takes the drop - the lane sits
+      // inert there until its target is re-picked in the inspector.
+      if (drop && drop.parentId == null && isPinnedChildType(tracks[s.srcId]?.type)) drop = null
 
       s.target = drop ? { parentId: drop.parentId, index: drop.index } : null
       const gapRow = drop?.line ? Math.round(drop.line.top / s.rowHeight) : null

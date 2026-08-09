@@ -4,7 +4,7 @@ import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { suppressTrackSelectBriefly } from '../../utils/selection'
-import { computeDropTarget } from './trackDrop'
+import { computeDropTarget, isPinnedChildType } from './trackDrop'
 
 interface Session {
   activeId: string
@@ -18,11 +18,6 @@ interface Session {
   rowHeight: number
   /** Resolved drop, applied on pointer-up. null = no valid target. */
   target: { parentId: string | null; index: number | undefined } | null
-}
-
-/** Track types that live only on their parent object - never re-parented. */
-function isPinnedChildType(type: string | undefined): boolean {
-  return type === 'automation' || type === 'ability' || type === 'envelope'
 }
 
 /**
