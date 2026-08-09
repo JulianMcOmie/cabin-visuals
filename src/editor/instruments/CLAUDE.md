@@ -87,7 +87,21 @@ nothing. Read the schema instead: `par[key] ?? paramDefault(theInstrument, key)`
 - VisualCopy color shifts arrive via `applyColorShiftToInstrumentParams` / `InstrumentCopyContext` — declare color params properly and this is automatic.
 - `identityColor` — what the track WEARS in the timeline/piano-roll UI (`utils/trackDisplayColor.ts` resolves; OKLCH recipes re-voice it). Movers/splitters/colorizers have their own counterpart - a required `identityColor` on the definition, from `core/visualCopies/identityColors.ts` - and since 2026-07-31 child lanes no longer inherit their instrument's colour at all. A hex literal = fixed identity; `{ param: 'key' }` = follow that color param's current value. Omit it and an instrument with exactly ONE color param follows it automatically; near-achromatic values (white/black text or bg defaults) fall back to the track's hue-cycle color, so a white-defaulting param is safe to point at. Instruments with multiple color params (or an unrepresentative sole one, e.g. a background) must declare explicitly.
 
-Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
+Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the solid vocabulary — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own; the id list is APPEND-ONLY because tracks store the id string, and `fundamentalGeometry.test.ts` pins the order. Its surface toggles — reflective/refractive/lit/textured — resolve through the pure `fundamentalMaterialSettings` and land via `applyFundamentalSurface`, shared by Cube and its panel preview so they can't drift; flag flips set `needsUpdate` only when a shader feature actually toggles).
+
+## A param that shapes GEOMETRY is built in the frame callback, not declared
+
+Cube's TUBE (torus family) and SIDES (prism/cone) change constructor args, and the
+component never re-renders on a param edit — `state.params` only reaches the frame
+callback. Declaring `<torusGeometry args={...}>` from a param therefore renders the
+default forever. The pattern (Cube is the reference): mount the mesh with NO
+declarative geometry (`FundamentalMesh` allows omitting `geometry`), and in the
+callback compare the param against a cached last-built value, swap
+`mesh.geometry` via the shared `build*Geometry` helper only when it moved, dispose
+the old one, and dispose the survivors in a `useEffect` cleanup — the imperative
+geometry is invisible to r3f's auto-dispose. Don't subscribe to ProjectStore for
+this: `s.tracks` only carries the ACTIVE scene, so a previewed-but-inactive scene
+would silently render defaults. The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
 
 ## Camera instruments own the camera, and only one can
 
