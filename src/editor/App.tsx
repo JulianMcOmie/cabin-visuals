@@ -668,19 +668,19 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
           TransportIcons. */}
       <div className="flex h-9 items-center gap-2">
         <button
-          onClick={reset}
-          title="Return to start (Enter)"
+          onClick={isPlaying ? pause : reset}
+          title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
           className={`${transportBtn} rounded-md text-[var(--text-3)] hover:text-[var(--accent-hover)]`}
         >
-          <SkipBackIcon />
+          {isPlaying ? <PauseIcon /> : <SkipBackIcon />}
         </button>
         <button
-          onClick={isPlaying ? pause : play}
-          title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+          onClick={isPlaying ? restart : play}
+          title={isPlaying ? 'Restart playback' : 'Play (Space)'}
           data-tutorial-play=""
           className={`${transportBtn} !w-10 rounded-md text-[var(--text-2)] hover:text-[var(--accent-hover)]`}
         >
-          {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} />}
+          <PlayIcon size={22} />
         </button>
         <button
           onClick={toggleLoop}
@@ -769,13 +769,9 @@ function Header({
             </span>
           )}
       </Link>
-      {/* 4a: the project title rides the CENTER of the bar (still
-          double-click renamable). Inline on phones, where an absolute center
-          would collide with the side clusters. */}
-      <div className="md:hidden"><EditableProjectName /></div>
-      <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
-        <EditableProjectName />
-      </div>
+      {/* The project title, left-aligned beside the wordmark (still
+          double-click renamable). */}
+      <EditableProjectName />
 
       <SaveStatusChip />
       {!authLoading && !user && (

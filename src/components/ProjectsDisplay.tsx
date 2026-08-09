@@ -25,12 +25,6 @@ export interface ProjectMetadata {
   preview?: ProjectPreview
 }
 
-const formatDuration = (seconds?: number): string => {
-  const rounded = Math.max(0, Math.round(seconds ?? 0))
-  const minutes = Math.floor(rounded / 60)
-  const remainingSeconds = rounded % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
 
 // Mini timeline of the project's REAL arrangement: one row per root track drawn
 // in that track's own color, blocks positioned/sized as a percentage of the
@@ -47,7 +41,7 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
         alt=""
         fill
         unoptimized
-        className="h-full w-full bg-black object-contain"
+        className="h-full w-full bg-[var(--bg-panel-raised)] object-contain"
       />
     )
   }
@@ -133,6 +127,15 @@ function ProjectCard({
       </div>
     </div>
   )
+}
+
+// "0:46" from the capture's length - the one number that says what the
+// project IS (a 15s loop vs a full song) at a glance.
+const formatDuration = (seconds?: number): string => {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--:--'
+  const m = Math.floor(seconds / 60)
+  const sec = Math.floor(seconds % 60)
+  return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
 interface ProfileData {

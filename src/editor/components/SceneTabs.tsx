@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Plus, Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
+import { Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 
@@ -182,44 +182,58 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-y border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-2 select-none">
-      {sceneOrder.map((id) => {
+    <div className="flex h-[64px] flex-shrink-0 items-center gap-8 overflow-x-auto no-scrollbar border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-6 select-none" role="tablist" aria-label="Scenes">
+      {sceneOrder.map((id, index) => {
         const scene = scenes[id]
         if (!scene) return null
         const active = id === activeSceneId
         const viewed = id === previewSceneId
         return (
-          <div key={id} className="relative flex flex-shrink-0">
-            <button
-              onClick={() => select(id)}
-              onDoubleClick={() => {
-                if (scene.isMain) return
-                const name = window.prompt('Scene name', scene.name)
-                if (name) renameScene(id, name)
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setMenu({ x: e.clientX, y: e.clientY, id })
-              }}
-              title={`${scene.isMain ? 'Final director composition' : 'Double-click to rename'} · Right-click for options${
-                viewed ? ' · shown on the canvas' : ''
-              }`}
-              className={`flex h-6 min-w-14 max-w-36 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors cursor-pointer ${
+          <button
+            key={id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => select(id)}
+            onDoubleClick={() => {
+              if (scene.isMain) return
+              const name = window.prompt('Scene name', scene.name)
+              if (name) renameScene(id, name)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setMenu({ x: e.clientX, y: e.clientY, id })
+            }}
+            title={`${scene.isMain ? 'Final director composition' : 'Double-click to rename'} · Right-click for options${
+              viewed ? ' · shown on the canvas' : ''
+            }`}
+            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 transition-colors cursor-pointer ${
+              active ? 'border-[var(--accent)]' : 'border-transparent'
+            }`}
+          >
+            <span className={`font-mono text-[10.5px] leading-none ${active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <span
+              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] transition-colors ${
                 active
-                  ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
-                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+                  ? 'text-[var(--accent)]'
+                  : 'text-[rgba(233,237,244,0.32)] group-hover:text-[var(--accent-hover)]'
               }`}
             >
-              {/* The eye marks the scene the canvas is showing, which is not
-                  necessarily the one being edited. */}
-              {viewed && <Eye size={11} className="flex-shrink-0 text-[var(--text-2)]" aria-label="Shown on the canvas" />}
-              <span className="truncate">{scene.name}</span>
-            </button>
-          </div>
+              {scene.name}
+            </span>
+            {/* The eye marks the scene the canvas is showing, which is not
+                necessarily the one being edited. */}
+            {viewed && <Eye size={12} className="flex-shrink-0 self-center text-[var(--text-2)]" aria-label="Shown on the canvas" />}
+          </button>
         )
       })}
-      <button onClick={create} title="Add scene" className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text)] cursor-pointer">
-        <Plus size={13} />
+      <button
+        onClick={create}
+        title="Add scene"
+        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] transition-colors hover:text-[var(--accent)] cursor-pointer"
+      >
+        + new scene
       </button>
       <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* Which scene the canvas shows is the eye on the tabs now, not a second

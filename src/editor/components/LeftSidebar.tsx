@@ -493,13 +493,13 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   {
     id: 'impact',
     title: 'Impact',
-    description: 'Notes hitting the scene itself - camera punches, shockwaves, and sustained rumble.',
+    description: 'Notes hitting the scene itself - camera punches and shockwaves.',
     items: [],
     subfolders: [
       { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
-      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
     ],
   },
+  { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
   {
     id: 'motion',
@@ -577,7 +577,23 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
   const items = current ? current.items : rootItems
 
   return (
-    <div>
+    <div className="flex min-h-full flex-col">
+      {/* The way back, at the top of the list (right under the library
+          header): whole trail as a breadcrumb, click = up one level. Sticky
+          so it stays in reach while the list scrolls. */}
+      {current ? (
+        <button
+          type="button"
+          onClick={() => setPath(path.slice(0, -1))}
+          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
+          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
+        >
+          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
+            {path.map((folder) => folder.title).join(' / ')}
+          </span>
+        </button>
+      ) : null}
       {items.length > 0 && (
         <div className="mt-1">
           <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
@@ -598,22 +614,6 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
           </div>
         ))}
       </div>
-      {/* The way back rides the BOTTOM of the list: one row, whole trail as a
-          breadcrumb, click = up one level. Sticky so it stays in reach while
-          the list scrolls. */}
-      {current ? (
-        <button
-          type="button"
-          onClick={() => setPath(path.slice(0, -1))}
-          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky bottom-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
-        >
-          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
-          <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
-            {path.map((folder) => folder.title).join(' / ')}
-          </span>
-        </button>
-      ) : null}
     </div>
   )
 }
@@ -831,33 +831,36 @@ export function LeftSidebar() {
           threshold is the width where all three labels fit inside the pills'
           px-2 padding without truncating - below it, labels would ellipsize. */}
 
-      {/* Panel title, above the tab strip - the inspector's header, mirrored. */}
-      <div className="relative z-10 flex flex-shrink-0 items-center border-b border-[var(--border-subtle)] px-3 py-2">
-        <span className="text-[15px] italic leading-none [font-family:var(--font-display)] text-[var(--text)] select-none">Library</span>
-      </div>
-      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border-subtle)] px-2 py-1.5">
-        {([
-          { id: 'instruments', label: 'Instruments', Icon: Shapes },
-          { id: 'loops', label: 'Loops', Icon: Repeat },
-          { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
-        ] as const).map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            title={label}
-            className={`flex-1 min-w-0 h-6 flex items-center justify-center gap-1.5 rounded-full px-2 text-[11px] transition-colors cursor-pointer ${
-              tab === id
-                ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
-                : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
-            }`}
-          >
-            <Icon size={13} className="flex-shrink-0" />
-            <span className="hidden @[320px]:inline truncate">{label}</span>
-          </button>
-        ))}
+      {/* One header row: LIBRARY (the landing preview's mono-caps voice) on
+          the left, the three section tabs as bare icons across from it -
+          fill appears only on hover / selection. */}
+      <div className="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-[var(--border-subtle)] py-1.5 pl-3 pr-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none">Library</span>
+        <div className="flex items-center gap-1">
+          {([
+            { id: 'instruments', label: 'Instruments', Icon: Shapes },
+            { id: 'loops', label: 'Loops', Icon: Repeat },
+            { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
+          ] as const).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              title={label}
+              aria-label={label}
+              aria-pressed={tab === id}
+              className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors cursor-pointer ${
+                tab === id
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]'
+                  : 'text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:text-[var(--text-2)]'
+              }`}
+            >
+              <Icon size={13} className="flex-shrink-0" />
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="timeline-scrollbar relative z-10 flex-1 overflow-y-auto pb-4">
+      <div className={`timeline-scrollbar relative z-10 flex-1 overflow-y-auto ${tab === 'instruments' ? '' : 'pb-4'}`}>
         {tab === 'instruments' && (
           // Keyed: the scene/Main views are different folder trees rendered in
           // the same slot - remount so a drill-down path into one never
