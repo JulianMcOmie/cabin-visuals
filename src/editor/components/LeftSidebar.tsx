@@ -10,7 +10,7 @@ import { useUIStore } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
-import { canPreview, InstrumentCardPreview, InstrumentCardPreviewCanvas, InstrumentPreviewLayer } from './InstrumentHoverPreview'
+import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '../../components/TemplateSlideshowPreview'
@@ -307,6 +307,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M1 1 L11 11" stroke="#9adfe0" strokeWidth="1.2" />
     </svg>
   )},
+  { id: 'midiRoll', name: 'Midi Roll', description: 'Your notes as a scrolling neon piano roll - bars glide past a center playhead where diamonds flare as they play.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <rect x="0.8" y="2" width="4.5" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <rect x="6.5" y="4.6" width="4.5" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <rect x="2.5" y="7.2" width="4" height="1.4" fill="none" stroke="#35e0e0" strokeWidth="0.7" />
+      <path d="M6 5.3 L7 6.3 L6 7.3 L5 6.3 Z" fill="#67e8f9" />
+    </svg>
+  )},
 ])
 
 // The curated core: a few good shapes, kept deliberately short so the library
@@ -529,7 +537,7 @@ function ItemGrid({ items, onItemPointerDown, onItemDoubleClick }: { items: Inst
           onPointerDown={(e) => onItemPointerDown(e, item)}
           onDoubleClick={() => onItemDoubleClick(item)}
           title={item.description}
-          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md"
+          className="group min-w-0 cursor-default select-none overflow-hidden rounded-md border border-[var(--border)] transition-colors hover:border-[var(--border-strong)]"
         >
           <div className="relative aspect-video">
             {canPreview(item)
@@ -822,7 +830,6 @@ export function LeftSidebar() {
       <InstrumentPreviewLayer />
       {/* All live 3D cards share this renderer, avoiding browser WebGL-context
           exhaustion when several two-column sections are visible. */}
-      {tab === 'instruments' && <InstrumentCardPreviewCanvas />}
       {/* @container so the tabs show icon-only when the (resizable) sidebar is
           narrow, and icon + label once there's room for the text. The 320px
           threshold is the width where all three labels fit inside the pills'

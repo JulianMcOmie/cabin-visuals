@@ -418,6 +418,11 @@ export interface ProjectState {
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
   setTrackOnTop: (trackId: string, onTop: boolean) => void
+  /** Set an audio track's output volume (linear gain, clamped to [0, 1.5]).
+   *  Unity is stored as absence, like automationAmount. A volume-only change
+   *  is applied as a live gain by the audio engine WITHOUT re-arming players
+   *  (see usePlayback's subscription), so dragging the fader stays smooth. */
+  setTrackVolume: (trackId: string, volume: number) => void
   /** Replace a Video track's ordered pads (its bank of source moments). */
   setTrackVideoPads: (trackId: string, videoPads: VideoPad[]) => void
   /** Replace a Photo track's ordered photos (its bank). */
@@ -432,6 +437,12 @@ export interface ProjectState {
    *  overruns. One set() so the whole import is a single undo step. Returns
    *  the new track ids in order. */
   importMidiTracks: (imported: ImportedMidiTrack[]) => string[]
+  /** The Midi Roll template's refill contract (the Lyrics-track sibling): a
+   *  root 'Midi Roll' track wearing that instrument takes the whole imported
+   *  file's notes - every file track merged onto the one roll, styling kept,
+   *  placeholder pattern replaced. Returns the track id, or null when no such
+   *  track exists (plain imports mint their own tracks via importMidiTracks). */
+  refillMidiRollTrack: (imported: ImportedMidiTrack[]) => string | null
   /** Fill a Text Display track with lyrics: one "Next word" note per word
    *  (beats are project-absolute), the words joined into the text param. A
    *  root track named 'Lyrics' (the lyric templates ship one, styled) is
@@ -1555,6 +1566,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, onTop } } }
     }),
 
+  setTrackVolume: (trackId, volume) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(1.5, volume))
+      // Unity gain is stored as absence, so untouched tracks don't grow a field.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, volume: clamped === 1 ? undefined : clamped } } }
+    }),
+
   setTrackVideoPads: (trackId, videoPads) =>
     set((s) => {
       const track = s.tracks[trackId]
@@ -1623,7 +1643,9 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           id,
           name: t.name || `MIDI ${i + 1}`,
           type: 'base',
-          instrumentId: 'cube',
+          // An imported MIDI file lands as a Midi Roll: the notes ARE the
+          // visual, whatever their pitch range - swap the instrument after.
+          instrumentId: 'midiRoll',
           // Chain through the partially-built maps so multi-track imports
           // step the hue cycle per track.
           color: resolveNextTrackColor({ tracks, rootTrackIds }),
@@ -1644,6 +1666,38 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks, rootTrackIds, totalBars }
     })
     return ids
+  },
+
+  refillMidiRollTrack: (imported) => {
+    let resultId: string | null = null
+    set((s) => {
+      const existingId = s.rootTrackIds.find((tid) => {
+        const t = s.tracks[tid]
+        return t?.type === 'base' && t.instrumentId === 'midiRoll' && t.name === 'Midi Roll'
+      })
+      if (!existingId) return s
+      const notes = imported.flatMap((t) => t.notes)
+      if (notes.length === 0) return s
+      const endBeat = Math.max(...imported.map((t) => t.endBeat))
+      const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(endBeat / s.beatsPerBar)))
+      // One block at bar 0 replaces whatever the track held (the template's
+      // placeholder pattern); file-absolute beats ARE block-relative here.
+      const block: Block = {
+        id: crypto.randomUUID(),
+        startBar: 0,
+        durationBars,
+        loop: false,
+        notes: notes.map((n) => ({ ...n, id: crypto.randomUUID() })),
+      }
+      resultId = existingId
+      // Grow (never shrink) the project if the file overruns, like MIDI import.
+      const totalBars = durationBars > s.totalBars ? durationBars : s.totalBars
+      return {
+        tracks: { ...s.tracks, [existingId]: { ...s.tracks[existingId], blocks: [block] } },
+        totalBars,
+      }
+    })
+    return resultId
   },
 
   addLyricTrack: (words, timing, targetId) => {

@@ -64,7 +64,8 @@ test('importMidiTracks places whole-bar blocks with block-relative notes and gro
 
   const lead = s.tracks[ids[0]]
   assert.equal(lead.name, 'Lead')
-  assert.equal(lead.instrumentId, 'cube')
+  // Imported MIDI lands as a Midi Roll - the notes are the visual.
+  assert.equal(lead.instrumentId, 'midiRoll')
   assert.equal(lead.type, 'base')
   assert.equal(lead.blocks.length, 1)
   // Notes span beats 0..9.5 → block covers bars 0..3 (whole bars).

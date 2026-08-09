@@ -28,6 +28,9 @@ interface ScheduledBlock {
   block: AudioBlock
   audible: boolean
   trackId: string
+  /** The track's linear output gain (1 = unity). Applied to the player's own
+   *  volume - a live signal write, never a reason to re-arm. */
+  volume: number
 }
 
 class AudioEngine {
@@ -73,7 +76,7 @@ class AudioEngine {
     const projectSec = atBeat * 60 / Math.max(1, bpm)
     const windowSec = 1 / 50
 
-    for (const { block, audible, trackId: blockTrackId } of this.blocks) {
+    for (const { block, audible, trackId: blockTrackId, volume } of this.blocks) {
       if (!audible || (trackId && blockTrackId !== trackId)) continue
       const buffer = this.entries.get(block.id)?.buffer
       if (!buffer) continue
@@ -86,7 +89,7 @@ class AudioEngine {
         const frame = Math.min(buffer.length - 1, Math.max(0, Math.floor(clipSec * buffer.sampleRate)))
         let sample = 0
         for (let channel = 0; channel < channels; channel++) sample += channelData[channel][frame]
-        out[i] += (sample / Math.max(1, channels)) * 0.85
+        out[i] += (sample / Math.max(1, channels)) * 0.85 * volume
       }
     }
     return out
@@ -105,8 +108,9 @@ class AudioEngine {
     const live = new Set<string>()
     for (const t of audioTracks) {
       const audible = !t.muted && !(anySolo && !t.solo)
+      const volume = t.volume ?? 1
       for (const b of t.audioBlocks ?? []) {
-        this.blocks.push({ block: b, audible, trackId: t.id })
+        this.blocks.push({ block: b, audible, trackId: t.id, volume })
         live.add(b.id)
       }
     }
@@ -116,17 +120,25 @@ class AudioEngine {
         this.entries.delete(id)
       }
     }
+    // Volume lands on the running players immediately: a fader drag is heard
+    // live without re-arming (a stop/start per pointermove is the earrape
+    // pattern the transport's drag suppression exists to prevent).
+    for (const sb of this.blocks) {
+      const player = this.entries.get(sb.block.id)?.player
+      if (player) player.volume.value = Tone.gainToDb(sb.volume)
+    }
     void this.loadClips()
   }
 
   /** Ensure every block has a player with a decoded buffer (decode-once per ref). */
   async loadClips(): Promise<void> {
     await Promise.all(
-      this.blocks.map(async ({ block }) => {
+      this.blocks.map(async ({ block, volume }) => {
         const existing = this.entries.get(block.id)
         if (existing && existing.ref === block.clipRef) return
         existing?.player.dispose()
         const entry: Entry = { player: new Tone.Player().connect(this.gain()), ref: block.clipRef, loaded: false, buffer: null }
+        entry.player.volume.value = Tone.gainToDb(volume)
         this.entries.set(block.id, entry)
         try {
           const buffer = await getBuffer(block.clipRef)

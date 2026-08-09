@@ -52,6 +52,8 @@ export type AnalyticsEvent =
   | 'lyric_style_chosen' // props: { style } - the look picked at the end of lyric setup
   | 'demo_song_used' // the "no song handy?" Borderline option on the lyric-setup upload card
   | 'photo_setup_filled' // props: { photos, slots } - photos poured into a photo template's slots on /photo-setup
+  | 'midi_setup_midi_added' // props: { tracks } - a MIDI file dropped onto /midi-setup's roll slot
+  | 'midi_setup_song_added' // audio dropped onto /midi-setup
   | 'tutorial_completed'
   | 'tutorial_skipped'
 
