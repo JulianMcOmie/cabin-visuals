@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { strobeGate } from '../instruments/Strobe'
 import { impactEnvelope } from '../instruments/ImpactWarp'
+import { OVERLAP_SHAPE_OPTIONS, overlapShapePoints } from '../instruments/overlapShapeCore'
 
 /**
  * Purpose-built canvas-2D previews for instruments whose real render needs
@@ -698,6 +699,64 @@ const drawCrop: Draw2D = (ctx, w, h, t) => {
   }
 }
 
+/** Overlap Shape: the settings panel's preview, promoted to the library - two
+ *  copies of the shape gliding across each other, the overlap region obeying
+ *  the parity rule. Canvas2D's 'evenodd' fill IS that rule (same trick as the
+ *  panel's SVG), so the card can't misrepresent the instrument - including the
+ *  moment the copies coincide exactly and vanish (2 covers = even = gone).
+ *  The shape advances through the segmented vocabulary each cycle, and the
+ *  overlap treatment alternates with it: cut-out cycles show the checkerboard
+ *  through the lens, color cycles flip it to the second color. The default
+ *  instrument hexes are drawn here so the card matches a fresh track. */
+const OVERLAP_PREVIEW_BASE = '#ff5470'
+const OVERLAP_PREVIEW_OVERLAP = '#2dd4bf'
+const OVERLAP_CYCLE_BEATS = 4
+
+function traceOverlapShape(ctx: CanvasRenderingContext2D, shape: number, cx: number, cy: number, r: number) {
+  const points = overlapShapePoints(shape)
+  ctx.moveTo(cx + points[0][0] * r, cy - points[0][1] * r)
+  for (let i = 1; i < points.length; i++) ctx.lineTo(cx + points[i][0] * r, cy - points[i][1] * r)
+  ctx.closePath()
+}
+
+const drawOverlapShape: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  // The panel stage's transparency checker: what a cut-out reads against.
+  ctx.fillStyle = '#0b0e16'
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#151a26'
+  const cell = 10
+  for (let y = 0; y < h; y += cell) {
+    for (let x = (y / cell) % 2 === 0 ? 0 : cell; x < w; x += cell * 2) {
+      ctx.fillRect(x, y, cell, cell)
+    }
+  }
+
+  const cycle = Math.floor(beat / OVERLAP_CYCLE_BEATS)
+  const shape = cycle % OVERLAP_SHAPE_OPTIONS.length
+  const colorMode = cycle % 2 === 1
+  // The panel preview's glide, plus a gentle note pulse on the shared clock.
+  const r = Math.min(w, h) * 0.34 * (1 + 0.08 * pulseAt(beat, 1, 3))
+  const spread = r * 0.72 * Math.sin(t * 0.9)
+  const lift = r * 0.16 * Math.sin(t * 0.53)
+
+  const both = () => {
+    ctx.beginPath()
+    traceOverlapShape(ctx, shape, w / 2 - spread, h / 2 - lift, r)
+    traceOverlapShape(ctx, shape, w / 2 + spread, h / 2 + lift, r)
+  }
+  if (colorMode) {
+    // COLOR mode: the union wears the overlap color underneath; the evenodd
+    // pass paints only the odd-covered region back to base, leaving the lens.
+    ctx.fillStyle = OVERLAP_PREVIEW_OVERLAP
+    both()
+    ctx.fill('nonzero')
+  }
+  ctx.fillStyle = OVERLAP_PREVIEW_BASE
+  both()
+  ctx.fill('evenodd')
+}
+
 // ── Effect vignettes ─────────────────────────────────────────────────────────
 //
 // The library's Effects tab previews through the same popup. Each vignette
@@ -881,6 +940,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   impactWarp: drawImpactWarp,
   colorFilters: drawColorFilters,
   strobe: drawStrobe,
+  overlapShape: drawOverlapShape,
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
   radialCut: drawRadialCut,

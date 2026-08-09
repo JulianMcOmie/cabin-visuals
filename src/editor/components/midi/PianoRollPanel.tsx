@@ -359,7 +359,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const rows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
-      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor)
+      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor, undefined, track.automationRange)
     : trigger
       ? generateTriggerRows(trigger.rowLabel, midiNoteBaseColor(noteColor ?? trackColor), notes.map((n) => n.pitch))
       : videoTrack

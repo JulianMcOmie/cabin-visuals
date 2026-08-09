@@ -90,7 +90,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
         min: pdef.min,
         max: pdef.max,
         base: pdef.default,
@@ -106,7 +106,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
         mode: 'linear',
         keyframes: [],
         noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
-        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
         min: pdef.min,
         max: pdef.max,
       })
@@ -115,7 +115,7 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
     })
   }
   return out
@@ -191,7 +191,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
         min,
         max,
         base,
@@ -202,7 +202,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
     })
   }
   return out
