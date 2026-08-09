@@ -374,7 +374,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             <button
               onClick={() => void start()}
               disabled={!settings.fileName.trim()}
-              className="mt-1 h-8 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer disabled:cursor-default"
+              className="mt-1 h-10 w-full rounded-full bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-[var(--text-muted)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer disabled:cursor-default"
             >
               Export
             </button>
@@ -392,18 +392,18 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             {rangeNote && <p className="text-[11px] text-[var(--text-muted)] leading-snug">{rangeNote}</p>}
             <button
               onClick={() => downloadBlob(phase.blob, phase.fileName)}
-              className="h-8 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer"
+              className="h-10 w-full rounded-full bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)] text-xs font-bold transition-colors cursor-pointer"
             >
               Download
             </button>
-            <button onClick={onClose} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Close</button>
+            <button onClick={onClose} className="h-10 w-full rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Close</button>
           </div>
         )}
 
         {phase.kind === 'error' && (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-red-400 break-words">Export failed: {phase.message}</p>
-            <button onClick={() => setPhase({ kind: 'settings' })} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Back</button>
+            <button onClick={() => setPhase({ kind: 'settings' })} className="h-10 w-full rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Back</button>
           </div>
         )}
       </div>
@@ -422,16 +422,14 @@ function RunningView({ phase, fps, onCancel }: { phase: Extract<Phase, { kind: '
       <div className="h-2 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
         <div className="h-full bg-[var(--accent)] transition-[width] duration-200" style={{ width: `${pct}%` }} />
       </div>
-      <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-mono tabular-nums">
+      <div className="flex justify-center gap-2 text-[11px] text-[var(--text-muted)] font-mono tabular-nums">
         <span>{phase.frame} / {phase.total} frames</span>
-        <span>
-          {remaining != null && `~${Math.max(1, Math.round(remaining))}s left`}
-        </span>
+        {remaining != null && <span>· ~{Math.max(1, Math.round(remaining))}s left</span>}
       </div>
       <p className="text-[11px] text-[var(--text-muted)] leading-snug">
         Stay on this tab for the fastest export - it keeps going in the background, just slower.
       </p>
-      <button onClick={onCancel} className="h-8 rounded bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Cancel</button>
+      <button onClick={onCancel} className="h-10 w-full rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--border)] text-[var(--text-2)] text-xs font-semibold transition-colors cursor-pointer">Cancel</button>
     </div>
   )
 }

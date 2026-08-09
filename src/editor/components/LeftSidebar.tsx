@@ -2,7 +2,7 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Folder, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
@@ -578,25 +578,6 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
 
   return (
     <div>
-      {/* The location row is always present so entering a folder swaps its
-          label instead of inserting a row above the list (which made the whole
-          menu jump down). Same size and metrics as the folder rows - depth
-          reads from the ‹ chevron and position, not from bolder type. */}
-      {current ? (
-        <button
-          type="button"
-          onClick={() => setPath(path.slice(0, -1))}
-          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky top-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 text-xs text-[var(--text)] transition-colors hover:bg-[var(--bg-elevated)]"
-        >
-          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
-          <span className="min-w-0 truncate">{current.title}</span>
-        </button>
-      ) : (
-        <div className="sticky top-0 z-20 flex h-[30px] select-none items-center bg-[var(--bg-shell)] px-3 text-xs text-[var(--text-muted)]">
-          Library
-        </div>
-      )}
       {items.length > 0 && (
         <div className="mt-1">
           <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
@@ -610,14 +591,29 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
             key={folder.id}
             onClick={() => setPath([...path, folder])}
             title={folder.description}
-            className="flex h-[30px] cursor-default select-none items-center gap-2.5 px-3 transition-colors hover:bg-[var(--bg-elevated)]"
+            className="mx-2 flex h-[30px] cursor-default select-none items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
           >
-            <Folder size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
-            <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{folder.title}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-2)]">{folder.title}</span>
             <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
           </div>
         ))}
       </div>
+      {/* The way back rides the BOTTOM of the list: one row, whole trail as a
+          breadcrumb, click = up one level. Sticky so it stays in reach while
+          the list scrolls. */}
+      {current ? (
+        <button
+          type="button"
+          onClick={() => setPath(path.slice(0, -1))}
+          aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
+          className="sticky bottom-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
+        >
+          <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
+          <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
+            {path.map((folder) => folder.title).join(' / ')}
+          </span>
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -834,7 +830,12 @@ export function LeftSidebar() {
           narrow, and icon + label once there's room for the text. The 320px
           threshold is the width where all three labels fit inside the pills'
           px-2 padding without truncating - below it, labels would ellipsize. */}
-      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 px-2 py-1.5">
+
+      {/* Panel title, above the tab strip - the inspector's header, mirrored. */}
+      <div className="relative z-10 flex flex-shrink-0 items-center border-b border-[var(--border-subtle)] px-3 py-2">
+        <span className="text-[15px] italic leading-none [font-family:var(--font-display)] text-[var(--text)] select-none">Library</span>
+      </div>
+      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border-subtle)] px-2 py-1.5">
         {([
           { id: 'instruments', label: 'Instruments', Icon: Shapes },
           { id: 'loops', label: 'Loops', Icon: Repeat },
@@ -884,7 +885,7 @@ export function LeftSidebar() {
                 }}
                 onMouseLeave={() => setLoopHover(null)}
                 title={pattern.description}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors select-none"
               >
                 <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                   <Repeat size={12} className="text-emerald-400" />
@@ -897,6 +898,7 @@ export function LeftSidebar() {
         )}
         {tab === 'templates' && <TemplatesTab />}
       </div>
+
 
       {/* Floating ghost while dragging a library item into the track list. Centered
           on the cursor (translate -50%/-50%); left/top are set imperatively, so

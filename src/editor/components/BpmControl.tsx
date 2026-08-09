@@ -10,10 +10,10 @@ const BPM_PER_PX = 0.5
 // Two pointer-downs within this window (ms) count as a double-click → type mode.
 const DOUBLE_CLICK_MS = 350
 
-// LCD text metrics - mirrors TransportDisplay's cell so both read as one screen.
-const LCD_VALUE = 'font-mono text-[15px] leading-[1.2] tabular-nums'
+// Quiet corner readout - theme mono, no LCD chrome.
+const LCD_VALUE = 'font-mono text-[12px] leading-none tabular-nums'
 const LCD_CAPTION =
-  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[#4a4a4a] select-none'
+  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[#5a6274] select-none'
 
 /**
  * Tempo cell of the transport display. The value is a vertical drag scrubber
@@ -130,9 +130,9 @@ export function BpmControl() {
     // whole tempo region reads as one control, not just the numerals.
     <div
       ref={groupRef}
-      className="group flex items-center gap-1 px-3.5 transition-colors hover:bg-white/[0.03]"
+      className="group flex items-center gap-1 px-1 transition-colors"
     >
-      <div className="flex flex-col items-start justify-center">
+      <div className="flex items-baseline gap-1.5">
         {editing ? (
           <input
             autoFocus
@@ -147,7 +147,7 @@ export function BpmControl() {
               else if (e.key === 'Escape') setEditing(false)
             }}
             style={chWidth(draft.length)}
-            className={`${LCD_VALUE} border-0 bg-transparent p-0 text-[#dff0fa] caret-[var(--accent)] outline-none`}
+            className={`${LCD_VALUE} border-0 bg-transparent p-0 text-[var(--text)] caret-[var(--accent)] outline-none`}
           />
         ) : (
           <button
@@ -156,12 +156,12 @@ export function BpmControl() {
             onKeyDown={onKeyDown}
             title="Drag or scroll to change tempo - double-click to type"
             style={chWidth(String(bpm).length)}
-            className={`${LCD_VALUE} cursor-ns-resize border-0 bg-transparent p-0 text-left text-[#b8c4cc] outline-none transition-colors hover:text-[#dff0fa] focus-visible:outline-1 focus-visible:outline-[var(--accent)]`}
+            className={`${LCD_VALUE} cursor-ns-resize border-0 bg-transparent p-0 text-left text-[var(--text-3)] outline-none transition-colors hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]`}
           >
             {bpm}
           </button>
         )}
-        <span className={`${LCD_CAPTION} mt-[2px]`}>BPM</span>
+        <span className={LCD_CAPTION}>BPM</span>
       </div>
       {/* Steppers surface on hover / keyboard focus - they advertise the value
           is editable; ±1 clicks are the precision path short of typing. */}
@@ -170,7 +170,7 @@ export function BpmControl() {
           type="button"
           onClick={() => nudge(1)}
           aria-label="Raise tempo"
-          className="cursor-pointer border-0 bg-transparent px-0.5 text-[7px] leading-[8px] text-[#5e5e5e] hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]"
+          className="cursor-pointer border-0 bg-transparent px-0.5 text-[7px] leading-[8px] text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]"
         >
           ▲
         </button>
@@ -178,7 +178,7 @@ export function BpmControl() {
           type="button"
           onClick={() => nudge(-1)}
           aria-label="Lower tempo"
-          className="cursor-pointer border-0 bg-transparent px-0.5 text-[7px] leading-[8px] text-[#5e5e5e] hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]"
+          className="cursor-pointer border-0 bg-transparent px-0.5 text-[7px] leading-[8px] text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-1 focus-visible:outline-[var(--accent)]"
         >
           ▼
         </button>

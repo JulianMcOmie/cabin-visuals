@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Plus, Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
-import { useProjectStore, type ViewAspect } from '../store/ProjectStore'
+import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
-
-const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
 /** Flat right-click menu for a scene tab: view it on the canvas, duplicate, or
  *  delete. Styled like the shared NestedMenu shell (backdrop-to-close, Esc,
@@ -160,8 +158,6 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
   const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
   const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
-  const aspect = useProjectStore((s) => s.viewAspect)
-  const setAspect = useProjectStore((s) => s.setViewAspect)
 
   // Editing a scene and watching a scene are separate choices now: the tab you
   // click is the one you edit, and the eye stays wherever you put it (Main
@@ -186,7 +182,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-app)]/85 px-2 select-none">
+    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-y border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-2 select-none">
       {sceneOrder.map((id) => {
         const scene = scenes[id]
         if (!scene) return null
@@ -228,13 +224,6 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
       <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* Which scene the canvas shows is the eye on the tabs now, not a second
             row of scene names here. Aspect and timeline sizing stay. */}
-        <button
-          onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
-          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
-          className="h-6 min-w-10 rounded-full px-2 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text)] cursor-pointer"
-        >
-          {aspect === 'fill' ? 'Fill' : aspect}
-        </button>
 
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the

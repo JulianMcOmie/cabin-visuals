@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 /* Map Tailwind's font-sans/font-mono utilities onto the next/font variables
-   (IBM Plex Sans / IBM Plex Mono, set on <html> in app/layout.tsx). */
+   (Hanken Grotesk / IBM Plex Mono, set on <html> in app/layout.tsx; the
+   Instrument Serif display face is exposed as --font-display for headings). */
 @theme inline {
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ui-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -15,52 +16,51 @@ body {
 }
 
 /* ============================================================
-   "Console" design tokens (docs: design_handoff_console_redesign)
-   Flat panels, 1px borders, one electric-blue accent, IBM Plex.
+   "DAW Console 1a" design tokens (handoff: design_handoff_daw_console).
+   Dark blue-editorial: near-black blue surfaces, white-alpha hairlines,
+   one ice-blue accent, Instrument Serif display over Hanken Grotesk UI
+   sans with IBM Plex Mono data. Supersedes the true-grey "Console"
+   palette (docs: design_handoff_console_redesign) - same token NAMES,
+   so every surface follows without markup changes.
    ============================================================ */
 :root {
-  /* Surfaces: the "umber sunken stage" room (Tyler's pick from the chrome lab,
-     2026-08-08). Two ideas at once:
-     1. INVERTED hierarchy - the chrome walls step UP into lighter values while
-        the timeline lanes stay the darkest surface on screen (see the
-        timeline scope below), so the work surface reads as a stage sunk into
-        the workspace and the eye falls into it from everywhere.
-     2. A barely-there WARM bias - every neutral carries a few points of umber
-        (r > g > b), never enough to read as a color, enough to read as
-        tungsten-lit material around the cold neon stage. THE blue still lives
-        in --accent alone; the warmth is atmosphere, not accent. */
-  --bg-app: #1c1a17;          /* editor app background / workspace card */
-  --bg-shell: #131110;        /* editor shell: library surface, workspace frame, top bar - the wall the lighter workspace sits in */
+  /* Surfaces. The handoff draws everything on a blue-black family around
+     #0c0d12 with raised panels at #10131c; the hierarchy (shell < canvas <
+     app < panel < raised < elevated) is preserved from the grey palette,
+     re-pitched onto the blue axis. */
+  --bg-app: #0c0d12;          /* editor app background / workspace card */
+  --bg-shell: #0c0d12;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
   --bg-topbar: var(--bg-shell); /* editor top bar follows the library shell */
-  --bg-page: #0a0a0a;         /* marketing/auth page background */
-  --bg-panel: #1d1b18;        /* panels, cards, top bars */
-  --bg-panel-raised: #24211d; /* label columns, corner cells */
-  --bg-track-row: #24211d;    /* every track label row (wall, not pit - the timeline scope no longer overrides it) */
-  --bg-elevated: #2f2b26;     /* buttons, chips, hover surfaces */
-  --bg-canvas: #090909;       /* 3D viewport */
-  --bg-canvas-deep: #060606;
-  --bg-timeline: #151515;     /* timeline lanes + ruler - overridden darker inside the timeline scope (the pit) */
+  --bg-page: #0c0d12;         /* marketing/auth page background */
+  --bg-panel: #0e1119;        /* panels, cards, top bars */
+  --bg-panel-raised: #10131c; /* label columns, corner cells */
+  --bg-track-row: #0c0d12;    /* track label rows - flat with the lanes (4a) */
+  --bg-elevated: #1a1f2c;     /* buttons, chips, hover surfaces */
+  --bg-canvas: #0a0b10;       /* 3D viewport (the handoff's stage) */
+  --bg-canvas-deep: #08090d;
+  --bg-timeline: #0c0d12;     /* timeline lanes + ruler - the lifted work surface above the shell */
 
-  /* Borders - same warm family, one step apart */
-  --border: #3a352f;
-  --border-subtle: #2c2823;
-  --border-strong: #4a443c;
+  /* Borders - white-alpha hairlines per the handoff (panels 0.06-0.10). */
+  --border: rgba(233, 237, 244, 0.10);
+  --border-subtle: rgba(233, 237, 244, 0.05);
+  --border-strong: rgba(233, 237, 244, 0.18);
 
-  /* Text - warmed to sit on the umber walls */
-  --text: #f2efec;
-  --text-2: #cdc8c2;
-  --text-3: #a39d96;
-  --text-muted: #676159;
-  --text-faint: #837d75;
+  /* Text - the handoff's ramp: #e9edf4 / #b8c0d0 / #8a93a6 / #5a6274. */
+  --text: #e9edf4;
+  --text-2: #b8c0d0;
+  --text-3: #8a93a6;
+  --text-muted: #5a6274;
+  --text-faint: #6e7688;
 
-  /* Accent - THE blue */
-  --accent: #35a7e6;
-  --accent-hover: #6fc0ee;
-  --accent-muted: #3f7ca6; /* dampened accent: slider fills and other quiet-active surfaces */
-  --on-accent: #0a0a0a; /* dark text on accent buttons */
+  /* Accent - THE ice blue */
+  --accent: #45c6ff;
+  --accent-hover: #7fd8ff;
+  --accent-muted: #3a8fc0; /* dampened accent: slider fills and other quiet-active surfaces */
+  --accent-button: #bfe6f7; /* the Export pill's fill (hover: --accent-hover) */
+  --on-accent: #0c0d12; /* dark text on accent buttons */
   --warn: #d0a04c;
 
-  /* Track palette */
+  /* Track palette - rainbow clip hues per the 4a spec (notes stay neutral). */
   --track-1: #3a7694;
   --track-2: #3f7f7c;
   --track-3: #76517f;
@@ -71,16 +71,16 @@ body {
      that still reference them land on-palette instead of on the old theme). */
   --highlight: #d0a04c;
   --green: #6a9955;
-  --background: #0d0d0d;
-  --surface: #131313;
-  --lightSurface: #202020;
-  --lightSurfaceHover: #262626;
-  --activeBg: #202020;
-  --electricBlue: #35a7e6;
-  --selectedBlue: #6fc0ee;
+  --background: #0a0b10;
+  --surface: #10131c;
+  --lightSurface: #1a1f2c;
+  --lightSurfaceHover: #222839;
+  --activeBg: #1a1f2c;
+  --electricBlue: #45c6ff;
+  --selectedBlue: #7fd8ff;
   --brightGreen: #00e676;
   --brightYellow: #ffdd00;
-  --windowSelectionColor: rgba(53, 167, 230, 0.35);
+  --windowSelectionColor: rgba(69, 198, 255, 0.35);
 }
 
 /* A tiny copy of the finished visualizer frame creates ONE low-frequency field
@@ -113,14 +113,20 @@ body {
    The values are the neon-signage stage the timeline color lab settled on
    (Tyler, 2026-08-02): lanes drop to near-black #0d0d0e so resting blocks read
    as dark panes with lit-tubing notes and the selected block's supernova has
-   real darkness to burn against, and the bar gridlines switch to a faint
-   white so they read as etched lines on the dark stage rather than raised
-   borders. Under the umber sunken-stage room (2026-08-08) the label rows are
-   deliberately NOT overridden here: they keep the lifted --bg-track-row wall
-   color, which is what makes the lanes read as a pit carved out of the
+   real darkness to burn against. The label rows follow a step above, and the
+   bar gridlines switch to a faint white so they read as etched lines on the
+   dark stage rather than raised borders. Scoped here so the piano roll and
+   inspector (which share none of these vars inside this scope) keep their own
    chrome. */
 .timeline-glass-scope {
-  --bg-timeline: rgba(13, 13, 14, 0.94);
+  --bg-timeline: rgba(12, 13, 18, 0.9);
+  --bg-track-row: #0e1119;
+  /* The piano roll shares the scope; its ruler takes the same dim etched
+     voicing as the timeline's instead of the brighter defaults. */
+  --ruler-number: rgba(255, 255, 255, 0.34);
+  --ruler-line: rgba(255, 255, 255, 0.1);
+  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
+  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
   --timeline-grid-line: rgba(255, 255, 255, 0.055);
 }
 
@@ -138,13 +144,13 @@ body {
 }
 
 .visualizer-glass-surface {
-  background: rgba(19, 19, 19, 0.84);
+  background: rgba(12, 13, 18, 0.85);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
   backdrop-filter: blur(20px) saturate(120%);
 }
 
 .visualizer-glass-control {
-  background: rgba(31, 31, 31, 0.68);
+  background: rgba(19, 24, 35, 0.7);
   -webkit-backdrop-filter: blur(12px) saturate(120%);
   backdrop-filter: blur(12px) saturate(120%);
 }
@@ -579,4 +585,60 @@ body.drag-moving * {
   .cabin-logo-loaded .puff {
     animation: none;
   }
+}
+
+/* ============================================================
+   Editorial skin (2026 landing redesign, spec: dark-but-not-black,
+   serif display, single soft-cyan accent). Scoped remap of the console
+   tokens so whole screens adopt the editorial look without rewriting
+   their markup - wrap a page in <EditorialSkin> from
+   src/components/landing/editorialTheme.tsx and everything built on the
+   global tokens follows. The editor itself is never skinned.
+   ============================================================ */
+.editorial-skin {
+  /* Editorial tokens under their own names (the landing cover uses these). */
+  --lp-bg: #181b22;
+  --lp-bg-deep: #12141a;
+  --lp-text: #e9ebf0;
+  --lp-text-muted: #aab0be;
+  --lp-text-faint: #7d8494;
+  --lp-accent: #9ee8f5;
+  --lp-border: rgba(233, 235, 240, 0.08);
+  --lp-border-strong: rgba(233, 235, 240, 0.1);
+
+  /* Console tokens remapped so skinned screens' existing markup lands on the
+     editorial palette. Surface hierarchy is preserved, just lifted and cooled. */
+  --bg-page: #181b22;
+  --bg-panel: #12141a;
+  --bg-panel-raised: #1b1e26;
+  --bg-elevated: #232733;
+  --bg-app: #0c0d12;
+  --border: rgba(233, 235, 240, 0.08);
+  --border-subtle: rgba(233, 235, 240, 0.06);
+  --border-strong: rgba(233, 235, 240, 0.16);
+  --text: #e9ebf0;
+  --text-2: #ccd1dc;
+  --text-3: #aab0be;
+  --text-muted: #7d8494;
+  --text-faint: #7d8494;
+  --accent: #9ee8f5;
+  --accent-hover: #c3f2fb;
+  --accent-muted: #6fb9c7;
+  --on-accent: #12141a;
+
+  /* Deeper chrome (the landing's editor facsimile draws with these). */
+  --bg-shell: #0e1016;
+  --bg-topbar: #0e1016;
+  --bg-timeline: #10131a;
+  --bg-track-row: #1b1e26;
+  --bg-canvas: #0c0d12;
+  --bg-canvas-deep: #0a0b10;
+
+  /* Reroute the font-sans / font-mono utilities (inlined from these vars by
+     @theme inline) onto the editorial stack for everything inside the skin. */
+  --font-ui-sans: var(--lp-font-body);
+  --font-plex-mono: var(--lp-font-mono);
+
+  background-color: var(--lp-bg);
+  color: var(--lp-text);
 }

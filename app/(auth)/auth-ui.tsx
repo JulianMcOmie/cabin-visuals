@@ -9,16 +9,17 @@ import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { CabinLogo } from '../../src/components/CabinLogo';
 import { Appear } from '../../src/components/motionPresets';
+import { EditorialSkin } from '../../src/components/landing/editorialTheme';
 
 /* Class strings shared by every form on these pages. */
 export const authLabelClass =
   'font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]';
 
 export const authInputClass =
-  'block h-[38px] w-full rounded-[5px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] disabled:opacity-50';
+  'block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] disabled:opacity-50';
 
 export const authSubmitClass =
-  'h-[38px] w-full cursor-pointer rounded-[5px] bg-[var(--accent)] text-[13px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50';
+  'h-[42px] w-full cursor-pointer rounded-[99px] bg-[var(--accent)] text-[14px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50';
 
 export const authLinkClass =
   'cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]';
@@ -62,17 +63,17 @@ export function AuthSubmit({
  *  submissions and OAuth waits - no separate transition page). */
 export function AuthShell({ children, footnote, loading }: { children: ReactNode; footnote?: string; loading?: boolean }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-page)] px-4 py-10 font-sans text-[var(--text)] sm:px-6">
+    <EditorialSkin className="flex min-h-screen flex-col items-center justify-center px-4 py-10 font-sans text-[var(--text)] sm:px-6">
       <Link href="/" className="mb-7 flex cursor-pointer select-none flex-col items-center" aria-label="Cabin Visuals home">
         <CabinLogo className={`h-14 w-auto ${loading ? 'cabin-logo-loading' : ''}`} />
       </Link>
-      <Appear className="w-full max-w-[400px] rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-5 sm:p-7">
+      <Appear className="w-full max-w-[400px] rounded-[12px] border border-[var(--border)] bg-[var(--bg-panel)] p-5 sm:p-7">
         {children}
       </Appear>
       {footnote && (
         <p className="mt-5 text-center font-mono text-[11px] text-[var(--text-muted)]">{footnote}</p>
       )}
-    </div>
+    </EditorialSkin>
   );
 }
 
@@ -80,7 +81,7 @@ export function AuthShell({ children, footnote, loading }: { children: ReactNode
 export function AuthTitle({ title, sub }: { title: string; sub?: ReactNode }) {
   return (
     <>
-      <h1 className={`text-[20px] font-semibold text-[var(--text)] ${sub ? 'mb-1' : 'mb-[22px]'}`}>{title}</h1>
+      <h1 className={`text-[26px] font-normal [font-family:var(--lp-font-display)] text-[var(--text)] ${sub ? 'mb-1' : 'mb-[22px]'}`}>{title}</h1>
       {sub && <p className="mb-[22px] text-[13px] text-[var(--text-3)]">{sub}</p>}
     </>
   );

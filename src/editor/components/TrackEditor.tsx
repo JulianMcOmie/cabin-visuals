@@ -421,54 +421,49 @@ export function TrackEditor() {
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* Identity rides ON the tab rail: the name takes the left, the tabs shrink
-          to the right, and the subject's own color lights the ACTIVE tab instead
-          of the neutral elevated fill. Costs no vertical space, so the panel still
-          starts at its controls - which is why the standalone name header this
-          replaced was dropped. The name truncates before the tabs do; the kind
-          (instrument / mover / scene) lives in its tooltip, the rail having only
-          one line to give. */}
-      <div className="@container flex flex-shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1.5">
-        {identity && (
+      {/* Identity header: the subject's name, serif, at the top. The kind
+          (instrument / mover / scene) lives in its tooltip. */}
+      {identity && (
+        <div className="flex flex-shrink-0 items-center border-b border-[var(--border-subtle)] px-3 py-2">
           <span
-            className="min-w-0 truncate text-[11.5px] font-semibold text-[var(--text)]"
+            className="min-w-0 truncate text-[15px] italic leading-none [font-family:var(--font-display)] text-[var(--text)]"
             title={`${identity.name} · ${identity.kind}`}
           >
             {identity.name}
           </span>
-        )}
-        <div className="ml-auto flex flex-shrink-0 items-center gap-1">
-          {(track || activeScene) ? TABS.map((t) => {
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`h-6 rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
-                  active
-                    ? 'font-semibold'
-                    : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
-                }`}
-                style={active && identity
-                  ? {
-                    background: `color-mix(in srgb, ${identity.color} 18%, transparent)`,
-                    color: identity.color,
-                  }
-                  : undefined}
-              >
-                {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
-                <span className="hidden @[300px]:inline">{track ? t.label : t.sceneLabel}</span>
-                <span className="@[300px]:hidden">{track ? t.short : t.sceneShort}</span>
-              </button>
-            )
-          }) : (
-            <div className="h-6 px-2.5 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
-              Settings
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
+      <div className="@container flex flex-shrink-0 items-center gap-1 border-b border-[var(--border-subtle)] px-2 py-1.5">
+        {(track || activeScene) ? TABS.map((t) => {
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex h-6 flex-1 min-w-0 items-center justify-center rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
+                active
+                  ? 'font-semibold'
+                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+              }`}
+              style={active && identity
+                ? {
+                  background: `color-mix(in srgb, ${identity.color} 18%, transparent)`,
+                  color: identity.color,
+                }
+                : undefined}
+            >
+              {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
+              <span className="hidden @[300px]:inline">{track ? t.label : t.sceneLabel}</span>
+              <span className="@[300px]:hidden">{track ? t.short : t.sceneShort}</span>
+            </button>
+          )
+        }) : (
+          <div className="h-6 flex-1 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
+            Settings
+          </div>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
         {tab === 'instrument' && (
           <>
@@ -793,6 +788,8 @@ export function TrackEditor() {
           )
         })()}
       </div>
+
+
     </div>
   )
 }
