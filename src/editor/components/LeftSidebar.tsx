@@ -138,7 +138,7 @@ const DIRECTOR_EXTRAS = DIRECTOR_INSTRUMENTS.filter((d) => DIRECTOR_EXTRA_IDS.ha
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
-  { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, torus, prism and friends - with per-axis proportions and a metal / glass / unlit surface, swelling with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'kaleidoSolid', name: 'Kaleido Solid', description: 'A solid whose surface is a live kaleidoscope - shapes grow, drift and recolour, and every note twists the barrel.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6" r="5" fill="#0f766e" fillOpacity="0.35" stroke="#5eead4" strokeWidth="0.7" />
@@ -186,6 +186,16 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
       <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
       <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
+    </svg>
+  )},
+  { id: 'overlapShape', name: 'Overlap Shape', description: 'A flat one-color shape standing in 3D - where copies cross in the same plane, the overlap cuts out to transparency or flips to a second color.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path
+        fillRule="evenodd"
+        fill="#ff5470"
+        fillOpacity="0.9"
+        d="M0.6 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z"
+      />
     </svg>
   )},
   { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
@@ -322,7 +332,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what

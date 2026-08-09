@@ -611,7 +611,10 @@ export function VisualScene() {
       const maskOptions = { minFilter: LinearFilter, magFilter: LinearFilter }
       const width = Math.max(1, size.width)
       const height = Math.max(1, size.height)
-      const target = new WebGLRenderTarget(width, height, options)
+      // The scene target (where object geometry actually rasterizes) carries a
+      // stencil buffer for Overlap Shape's parity passes; the filter targets
+      // only ever receive fullscreen quads, so they stay stencil-free.
+      const target = new WebGLRenderTarget(width, height, { ...options, stencilBuffer: true })
       map.set(sceneId, {
         base: new ThreeScene(),
         front: new ThreeScene(),

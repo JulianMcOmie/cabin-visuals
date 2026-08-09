@@ -24,6 +24,7 @@ import { ShapeFlightUserInterfaceRenderer } from './ShapeFlightUserInterface'
 import { MetronomeBallsUserInterfaceRenderer } from './MetronomeBallsUserInterface'
 import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
 import { FlashWallUserInterfaceRenderer } from './FlashWallUserInterface'
+import { OverlapShapeUserInterfaceRenderer } from './OverlapShapeUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 import type { UserInterfaceRendererId } from './ids'
 
@@ -58,6 +59,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   metronomeBalls: MetronomeBallsUserInterfaceRenderer,
   emojiDisplay: EmojiDisplayUserInterfaceRenderer,
   flashWall: FlashWallUserInterfaceRenderer,
+  overlapShape: OverlapShapeUserInterfaceRenderer,
 }
 
 export function getUserInterfaceRenderer(id: UserInterfaceRendererId): UserInterfaceRendererDefinition {

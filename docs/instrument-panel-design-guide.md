@@ -219,9 +219,11 @@ render `ParameterList` for everything rather than a half-empty custom layout.
   surface (the scene panel's etched "SCENE" wordmark, the audio panel's
   oscilloscope label) — never a heading row above the tabs.
 - A real layering solution to replace the deprecated IN FRONT toggle.
-- Migrate the other bespoke renderers (Cube, Hopf, …) to these rules: strip
+- Migrate the other bespoke renderers (Hopf, …) to these rules: strip
   card chrome, headers, reset buttons, gradient backdrops; adopt the accent
-  and glow rules (and `laserKnob.tsx` for their knobs).
+  and glow rules (and `laserKnob.tsx` for their knobs). Cube (3D Shape) was
+  migrated 2026-08 and is the worked example for a panel with a shape
+  vocabulary grid + independent surface-toggle chips.
 - `EnvelopeUserInterface.tsx`'s ADSR pad and `AutomationUserInterface.tsx`'s
   burst window are the same geometry in two skins (theme vars vs. the lane's
   accent). When the envelope panel is migrated, they should become one pad.
