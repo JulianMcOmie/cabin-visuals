@@ -238,6 +238,11 @@ export interface Track {
   /** Top-level movers only: the objects this mover applies to. */
   targets?: Routing[]
   targetParam?: string
+  /** Automation-lane only: the target the lane drove before a drag onto a parent
+   *  that couldn't take it forced a default (store's remapAutomationTarget).
+   *  Restored - and cleared - when a later move lands somewhere it fits again;
+   *  a deliberate retarget (setAutomationTarget) forgets it. */
+  previousTargetParam?: string
   interpolation?: InterpolationMode
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
