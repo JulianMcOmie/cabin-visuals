@@ -406,7 +406,7 @@ function VisualPanel({
       className="visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size]"
     >
       <div
-        className={`relative overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${letterbox ? '' : 'absolute inset-0'}`}
+        className={`overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${letterbox ? 'relative' : 'absolute inset-0'}`}
         style={letterbox ?? undefined}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
