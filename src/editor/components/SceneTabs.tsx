@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
+import { Copy, Trash2, Eye } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 
@@ -79,6 +79,36 @@ function SceneTabMenu({ x, y, isViewed, canDuplicate, canDelete, onView, onDupli
 // Track positions per slider. Fine enough that a drag feels continuous, coarse
 // enough that one arrow key is a visible step.
 const ZOOM_POSITIONS = 240
+
+/**
+ * The zoom sliders' axis cues. Something has to say which slider is which at
+ * rest, but lucide's UnfoldHorizontal/UnfoldVertical spent ~6 strokes each -
+ * arrowheads plus a centre bar - which was most of the control's ink, and at
+ * 11px the arrowheads muddy into blobs.
+ *
+ * These say it in two strokes, and say it about the QUANTITY rather than the
+ * gesture: the GAP between the marks is the thing the slider sets. Uprights for
+ * a beat's width, rules for a track row's height - which is also what the
+ * timeline underneath is made of. Axis-aligned hairlines stay crisp at this
+ * size where diagonal arrowheads cannot.
+ *
+ * Options were explored at /dev/timeline-zoom-lab.
+ */
+function BeatWidthGlyph() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="M1.5 1v8M8.5 1v8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function RowHeightGlyph() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="M1 1.5h8M1 8.5h8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 /**
  * One timeline zoom slider: an icon that says which way it stretches, then a
@@ -244,7 +274,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
             timeline"), not two unrelated settings. */}
         <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 transition-colors hover:bg-white/[0.06]">
           <ZoomSlider
-            icon={<UnfoldHorizontal size={11} strokeWidth={2} />}
+            icon={<BeatWidthGlyph />}
             label="Horizontal zoom - beat width"
             value={pixelsPerBeat}
             min={2}
@@ -254,7 +284,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
           />
           <div className="h-3 w-px flex-shrink-0 bg-[var(--border)]" aria-hidden="true" />
           <ZoomSlider
-            icon={<UnfoldVertical size={11} strokeWidth={2} />}
+            icon={<RowHeightGlyph />}
             label="Vertical zoom - track height"
             value={tracksRowHeight}
             min={28}
