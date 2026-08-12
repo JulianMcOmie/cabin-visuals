@@ -45,7 +45,7 @@ import { readPaneDefaults, writePaneOpen } from './uiSettings'
 import { useIsMobile } from '../components/useIsMobile'
 // Already in the project (landing carousel, projects grid): framer-motion
 // handles the controls' fade-in/out via AnimatePresence.
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 
 // Dev-only: expose the stores for console/E2E debugging. Never ships.
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -336,21 +336,6 @@ function VisualPanel({
     }
   }
   useEffect(() => () => clearTouchTimer(), [])
-  // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
-  // can't contain-fit an aspect-ratio box against both dimensions).
-  const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
-
-  useEffect(() => {
-    const el = panelRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const r = entry.contentRect
-      setPanelSize({ w: r.width, h: r.height })
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current)
     document.addEventListener('fullscreenchange', onChange)
@@ -399,16 +384,17 @@ function VisualPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Contain-fit the chosen aspect inside the panel; 'fill' keeps the old
-  // fill-the-panel behavior (box = null → plain inset-0).
-  let box: { w: number; h: number } | null = null
-  if (aspect !== 'fill' && panelSize && !isFullscreen) {
-    const target = aspect === '16:9' ? 16 / 9 : 9 / 16
-    let w = panelSize.w
-    let h = w / target
-    if (h > panelSize.h) { h = panelSize.h; w = h * target }
-    box = { w, h }
-  }
+  // Contain-fit the chosen aspect inside the panel with pure CSS: container
+  // query units size the box against BOTH panel dimensions, so it tracks the
+  // sidebar glides every frame with no measure → state → render round-trip
+  // (the old ResizeObserver path lagged frames under render load and the box
+  // visibly stepped). 'fill' (and fullscreen) keep the fill-the-panel box.
+  const letterbox = aspect !== 'fill' && !isFullscreen
+    ? {
+        width: `min(100%, calc(100cqh * ${aspect === '16:9' ? 16 / 9 : 9 / 16}))`,
+        aspectRatio: aspect === '16:9' ? '16 / 9' : '9 / 16',
+      }
+    : null
 
   return (
     <div
@@ -417,11 +403,11 @@ function VisualPanel({
       onPointerMove={isMobile ? undefined : revealFullscreenControl}
       onPointerLeave={isMobile ? undefined : hideFullscreenControl}
       onClick={onCanvasTap}
-      className="relative h-full bg-[var(--bg-canvas-deep)]"
+      className="visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size]"
     >
       <div
-        className={`absolute overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${box ? '' : 'inset-0'}`}
-        style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
+        className={`relative overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${letterbox ? '' : 'absolute inset-0'}`}
+        style={letterbox ?? undefined}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
       <div className={`absolute top-2 right-2 z-10 transition-opacity duration-300 ${
@@ -600,7 +586,7 @@ function EditorPanelToggle({
       aria-controls={controls}
       aria-pressed={open}
       title={`${open ? 'Hide' : 'Show'} ${label}`}
-      className={`flex h-9 w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] transition-colors cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] ${
+      className={`flex h-9 w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] transition-[color,background-color] duration-[400ms] ease-[cubic-bezier(0.05,0.7,0.1,1)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] ${
         open ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]' : 'text-[var(--text-3)]'
       }`}
     >
@@ -875,8 +861,41 @@ function Header({
 }
 
 function BottomArea() {
-  const editingBlock = useUIStore((s) => s.editingBlock)
-  return editingBlock ? <PianoRollPanel /> : <TimelineArea />
+  const editing = useUIStore((s) => s.editingBlock) != null
+  // The roll rises over the timeline (Material 3 emphasized-decelerate, the
+  // sidebar glide's curve) and sinks away on dismiss (M3's accelerate exit).
+  // The timeline stays mounted UNDER the roll only while it animates: at rest
+  // the old single-surface swap is preserved, because TimelineArea's
+  // whole-tracks subscription must not re-render beneath the roll's
+  // per-pointermove note edits (render budget, components/CLAUDE.md).
+  const [rollSettled, setRollSettled] = useState(false)
+  useEffect(() => {
+    if (!editing) setRollSettled(false)
+  }, [editing])
+  return (
+    <div className="relative h-full overflow-hidden">
+      {(!editing || !rollSettled) && <TimelineArea />}
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence>
+          {editing && (
+            <motion.div
+              key="piano-roll"
+              className="absolute inset-0 z-10 bg-[var(--bg-app)]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%', transition: { duration: 0.25, ease: [0.3, 0, 0.8, 0.15] } }}
+              transition={{ duration: 0.4, ease: [0.05, 0.7, 0.1, 1] }}
+              onAnimationComplete={(target) => {
+                if (typeof target === 'object' && target !== null && 'y' in target && target.y === 0) setRollSettled(true)
+              }}
+            >
+              <PianoRollPanel />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+    </div>
+  )
 }
 
 /** The transport handles usePlayback returns - created once in EditorApp and
@@ -913,11 +932,38 @@ export default function EditorApp() {
   // Persist only on actual open/closed flips - onResize streams every drag frame.
   const libraryOpenRef = useRef(paneDefaults.library)
   const sceneEditorOpenRef = useRef(paneDefaults.sceneEditor)
+  // A toggle animates the panel over PANEL_TOGGLE_MS, and onResize tracks the
+  // DOM through the whole glide - so open/closed state is set from INTENT at
+  // click (the header icon's accent fades in step with the movement, not at
+  // its end) and onResize's writes are suppressed until the glide settles.
+  // Separator drags never set this, so they keep streaming through onResize.
+  const suppressResizeUntilRef = useRef(0)
 
-  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, domId: string, fallbackSize: string) => {
+  const applyPaneOpen = (
+    pane: 'library' | 'sceneEditor',
+    open: boolean,
+  ) => {
+    const [setOpen, openRef] = pane === 'library'
+      ? [setLibraryOpen, libraryOpenRef] as const
+      : [setSceneEditorOpen, sceneEditorOpenRef] as const
+    setOpen(open)
+    if (openRef.current !== open) {
+      openRef.current = open
+      writePaneOpen(pane, open)
+    }
+  }
+
+  const togglePanel = (
+    panelRef: RefObject<PanelImperativeHandle | null>,
+    pane: 'library' | 'sceneEditor',
+    domId: string,
+    fallbackSize: string,
+  ) => {
     const panel = panelRef.current
     if (!panel) return
     glidePanelToggle(domId)
+    suppressResizeUntilRef.current = Date.now() + PANEL_TOGGLE_MS + 100
+    applyPaneOpen(pane, panel.isCollapsed())
     if (panel.isCollapsed()) {
       panel.expand()
       // A panel that MOUNTED collapsed has no remembered size for expand() to
@@ -959,8 +1005,8 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, 'library-panel', '25%')}
-        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 'scene-editor-panel', '30%')}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, 'library', 'library-panel', '25%')}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 'sceneEditor', 'scene-editor-panel', '30%')}
         playback={playback}
       />
       {/* The library's panel color fills everything below the header, so the
@@ -985,6 +1031,9 @@ export default function EditorApp() {
             collapsible
             collapsedSize="0%"
             onResize={(size, _id, prevSize) => {
+              // Mid-glide sizes are the animation, not intent - see
+              // suppressResizeUntilRef.
+              if (Date.now() < suppressResizeUntilRef.current) return
               const open = size.inPixels > 0
               setLibraryOpen(open)
               // Persist only real transitions (prev defined = not the mount
@@ -1048,6 +1097,7 @@ export default function EditorApp() {
                       collapsible
                       collapsedSize="0%"
                       onResize={(size, _id, prevSize) => {
+                        if (Date.now() < suppressResizeUntilRef.current) return
                         const open = size.inPixels > 0
                         setSceneEditorOpen(open)
                         if (prevSize !== undefined && sceneEditorOpenRef.current !== open) {

@@ -602,6 +602,17 @@ body.drag-moving * {
   }
 }
 
+/* The editor's WebGL canvas tracks its container with pure CSS during panel
+   glides. three.js writes px inline styles on every setSize, and that
+   measure → React → setSize loop drops frames under render load, so the
+   canvas ELEMENT visibly steps while its container moves smoothly.
+   !important beats the inline style: layout stays continuous and only the
+   drawing buffer catches up (a frame of content scaling, imperceptible). */
+.visual-canvas-smooth canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* ============================================================
    Editorial skin (2026 landing redesign, spec: dark-but-not-black,
    serif display, single soft-cyan accent). Scoped remap of the console

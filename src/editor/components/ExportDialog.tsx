@@ -473,9 +473,8 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
       exit={{ opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      {/* Enter is SwiftUI's .smooth: a critically damped spring (bounce 0), so
-          the panel settles with no overshoot. Exit is faster than enter on
-          purpose - dismissal should feel obedient. Mounted under the
+      {/* Radix/shadcn's dialog voice: fade + zoom from 95%, 200ms in, faster
+          out - dismissal should feel obedient. Mounted under the
           AnimatePresence in App.tsx, which is what keeps this rendered
           through the exit animation. */}
       <motion.div
@@ -483,8 +482,8 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
         className={`${showSettings ? 'w-[1180px]' : 'w-[720px]'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] px-[26px] pb-[22px] pt-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]`}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15, ease: 'easeIn' } }}
-        transition={{ type: 'spring', duration: 0.4, bounce: 0 }}
+        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: 'easeIn' } }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
       >
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[14px] font-bold tracking-[0.12em] text-[var(--text)] [font-family:var(--font-archivo)]">{title}</span>
