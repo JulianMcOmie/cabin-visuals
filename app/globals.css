@@ -613,6 +613,22 @@ body.drag-moving * {
   height: 100% !important;
 }
 
+/* Sidebar glides move the canvas horizontally ONLY. While one runs (class
+   added/removed by glidePanelToggle in editor App.tsx), the r3f root is
+   frozen at its pre-toggle width and centered: no buffer resize happens
+   mid-glide (frozen container = no measures), so the picture never
+   stretches - its edges crop or reveal stage background - and the single
+   real resize lands when the freeze lifts. !important because the r3f root
+   carries inline position/width styles. */
+.visual-canvas-smooth.canvas-glide-freeze .visual-canvas-root {
+  position: absolute !important;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--glide-canvas-w) !important;
+  transform: translateX(-50%);
+}
+
 /* ============================================================
    Editorial skin (2026 landing redesign, spec: dark-but-not-black,
    serif display, single soft-cyan accent). Scoped remap of the console

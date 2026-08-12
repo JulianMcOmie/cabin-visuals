@@ -67,13 +67,27 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 // instead of stripping the class out from under the second transition.
 const PANEL_TOGGLE_MS = 400
 const panelToggleTimers = new WeakMap<HTMLElement, number>()
+function holdClassForGlide(el: HTMLElement, className: string) {
+  el.classList.add(className)
+  const prev = panelToggleTimers.get(el)
+  if (prev !== undefined) window.clearTimeout(prev)
+  panelToggleTimers.set(el, window.setTimeout(() => el.classList.remove(className), PANEL_TOGGLE_MS + 50))
+}
 function glidePanelToggle(panelDomId: string) {
   const group = document.getElementById(panelDomId)?.closest('[data-group]')
   if (!(group instanceof HTMLElement)) return
-  group.classList.add('panel-toggle-anim')
-  const prev = panelToggleTimers.get(group)
-  if (prev !== undefined) window.clearTimeout(prev)
-  panelToggleTimers.set(group, window.setTimeout(() => group.classList.remove('panel-toggle-anim'), PANEL_TOGGLE_MS + 50))
+  holdClassForGlide(group, 'panel-toggle-anim')
+  // The glide only moves the canvas horizontally, and resizing the GL buffer
+  // per frame stretches the picture (the buffer lags the element). So the
+  // canvas root is FROZEN at its pre-toggle width and kept centered for the
+  // glide - edges crop or show stage background - and the one real resize
+  // lands when the freeze lifts (.canvas-glide-freeze in globals.css).
+  const panel = document.querySelector<HTMLElement>('.visual-canvas-smooth')
+  const root = panel?.querySelector<HTMLElement>('.visual-canvas-root')
+  if (panel && root) {
+    panel.style.setProperty('--glide-canvas-w', `${root.getBoundingClientRect().width}px`)
+    holdClassForGlide(panel, 'canvas-glide-freeze')
+  }
 }
 
 // Shared segment styling for the header transport band. Segments are flush -
@@ -129,7 +143,7 @@ function Scene({
   // paused). RenderGovernor requests single frames when an input changes.
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
