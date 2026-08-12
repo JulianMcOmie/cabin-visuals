@@ -106,19 +106,56 @@ test('size scales each copy about its own center, independent of radius', () => 
   for (const copy of unscaled) assert.deepEqual(scaleOf(copy), [1, 1, 1])
 })
 
-test('radial MIDI rows disable copies only while their notes are held', () => {
-  const radialSettings = settings({ copies: 3 })
-  const rows = radialSplitter.midiRows!(radialSettings)
-  assert.deepEqual(rows.map((row) => row.label), [
-    'Disable copy 1',
-    'Disable copy 2',
-    'Disable copy 3',
-  ])
+test('the MIDI lane is a value lane: automation-encoded radius rows, top = max', () => {
+  const rows = radialSplitter.midiRows!(settings())
+  assert.equal(rows.length, 49) // the automation pitch span, 36..84
+  assert.deepEqual(rows[0], { pitch: 84, label: 'R 10.0' })
+  assert.deepEqual(rows[rows.length - 1], { pitch: 36, label: 'R 0.0' })
   assert.equal(radialSplitter.strictMidiRows, true)
+})
 
-  const resolved = radialSplitter.resolve({ settings: radialSettings, notes: [note(0, rows[2].pitch)] })
-  assert.deepEqual(resolveVisualCopies([resolved], 0.5).map((copy) => copy.opacity), [1, 1, 0])
-  assert.deepEqual(resolveVisualCopies([resolved], 1).map((copy) => copy.opacity), [1, 1, 1])
+test('between onsets the radius swells 0 → r → 0; outside the span it rests at the knob', () => {
+  // Two onsets at beats 1 and 3, both at pitch 84 (r = 10); knob radius 3.
+  const resolved = radialSplitter.resolve({
+    settings: settings({ copies: 1, radius: 3 }),
+    notes: [note(1, 84), note(3, 84)],
+  })
+  const radiusAtBeat = (beat: number) => positionOf(resolveVisualCopies([resolved], beat)[0])[0]
+  assert.equal(radiusAtBeat(0.5), 3, 'rests at the knob before the first onset')
+  assert.equal(radiusAtBeat(1), 0, 'collapsed on the onset')
+  assert.equal(radiusAtBeat(2), 10, 'peaks at the note value mid-cycle')
+  assert.equal(radiusAtBeat(1.5), 7.5, 'the symmetric swell: 4u(1-u) at u = 0.25')
+  assert.equal(radiusAtBeat(2.5), 7.5, '...and its mirror at u = 0.75')
+  assert.equal(radiusAtBeat(3), 3, 'rests again from the last onset on')
+
+  // Pitch encodes the peak: pitch 60 maps to r = 5 over the 36-84 span.
+  const half = radialSplitter.resolve({
+    settings: settings({ copies: 1, radius: 0 }),
+    notes: [note(0, 60), note(2, 60)],
+  })
+  assert.equal(positionOf(resolveVisualCopies([half], 1)[0])[0], 5)
+})
+
+test('a lone onset is inert, chords keep the largest radius, out-of-span pitches are no-ops', () => {
+  const lone = radialSplitter.resolve({ settings: settings({ copies: 1, radius: 2 }), notes: [note(1, 84)] })
+  assert.equal(positionOf(resolveVisualCopies([lone], 1.5)[0])[0], 2, 'nothing to stretch to')
+
+  // A chord at beat 0 (pitches 60 and 84) collapses to one boundary keeping r = 10.
+  const chord = radialSplitter.resolve({
+    settings: settings({ copies: 1, radius: 0 }),
+    notes: [note(0, 60), note(0, 84), note(2, 60)],
+  })
+  assert.equal(positionOf(resolveVisualCopies([chord], 1)[0])[0], 10)
+
+  // The retired mute rows (pitch 127 downward) fall outside the value span:
+  // old saves degrade to the knob radius instead of misreading.
+  const legacy = radialSplitter.resolve({
+    settings: settings({ copies: 2, radius: 1.5 }),
+    notes: [note(0, 127), note(2, 126)],
+  })
+  const copies = resolveVisualCopies([legacy], 1)
+  assert.equal(positionOf(copies[0])[0], 1.5)
+  assert.deepEqual(copies.map((copy) => copy.opacity), [1, 1], 'no mute gating either')
 })
 
 test('radial above the burst re-frames it: the translation spreads radially (XY plane)', () => {

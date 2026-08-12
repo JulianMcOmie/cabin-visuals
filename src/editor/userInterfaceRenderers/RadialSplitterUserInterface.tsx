@@ -1,25 +1,45 @@
 'use client'
 
-// Bespoke settings for the Radial splitter. The hero is a live ring diagram of
-// the layout the splitter actually produces: N marks at i/N of a full turn
-// (copy 1 accented - it is the unrotated slot), each mark spun by its own slot
-// rotation, with a dashed guide ring at the current radius. Dragging anywhere
-// on the diagram sets the radius radially from the center; the copy count is a
-// stepper whose readout also drags vertically like a knob. The plane select is
-// three oriented-ellipse buttons that re-orient the diagram (the depth planes
-// foreshorten into ellipses). The mute map spells out the splitter's MIDI
-// grammar - pitch 127 downward, note on hides the copy - and hover-syncs with
-// the diagram marks. Presentation only: every control routes through the
-// passed parameter bindings.
+// Bespoke settings for the Radial splitter, following
+// docs/instrument-panel-design-guide.md (the Grid splitter's panel is the
+// nearest sibling - same subject, a LAYOUT):
+//
+// 1. A live preview window: the splitter's REAL resolve() (no notes - the
+//    resting formation is the panel's claim; MIDI bends it) applied to generic
+//    cubes, drawn with a plain 2D canvas - no r3f, because a panel <Canvas>
+//    stays black until the transport plays (see the renderers CLAUDE.md) and a
+//    layout is exactly the thing you dial in while paused. Drag orbits it;
+//    until touched it turns on its own. No readouts or captions in the window:
+//    the knobs already say the numbers.
+// 2. One console row: COPIES / RADIUS (primary) / SIZE knobs and the PLANE
+//    segmented control.
+//
+// The old drag-the-ring pad, header chrome, reset-all and mute map are gone
+// (2026-08 rework, same pass that turned the lane into a value lane - see the
+// definition's comment in core/visualCopies/library.ts).
+//
+// Presentation only: every control routes through the passed parameter
+// bindings; the preview imports the definition read-only.
 
-import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
+import { RADIAL_COLOR } from '../core/visualCopies/identityColors'
+import { radialSplitter, type RadialSettings } from '../core/visualCopies/library'
+import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { ParamSlider } from './ParameterControl'
+import { withAlpha } from './colorWheel'
+import { LaserKnob } from './laserKnob'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const ACCENT = RADIAL_COLOR
+// The guide's hue-true dark shade of the accent (never an alpha tint).
+const PANEL_SHADE = '#120a13'
+const ROOM = '#05070c'
+const PREVIEW_HEIGHT = 140
 
 interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
 interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
@@ -43,382 +63,291 @@ function bind(parameters: readonly UserInterfaceParameter[]) {
   }
 }
 
-// Mirrors the splitter's MIDI grammar in library.ts: with copies <= 32 there is
-// exactly one row per copy, pitch 127 - slot, and a note on hides that copy.
-const SPLITTER_TOP_PITCH = 127
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-const noteName = (pitch: number) => `${NOTE_NAMES[pitch % 12]}${Math.floor(pitch / 12) - 1}`
+// ── 3D formation preview ─────────────────────────────────────────────────────
+// Same painter-sorted-cube-faces approach as GridSplitterUserInterface: the
+// copy matrices carry the slot rotation AND the SIZE scale, so the cubes turn
+// around the ring and grow with the knob for free.
 
-/** How each plane draws: ellipse squash (the depth planes foreshorten), where
- *  copy 1 sits (its translation direction in library.ts), and axis letters. */
-const PLANE_VIEWS = [
-  { sx: 1, sy: 1, start: 0, h: 'X', v: 'Y' }, // XY - ring faces the camera; copy 1 at +X
-  { sx: 1, sy: 0.38, start: 0, h: 'X', v: 'Z' }, // XZ - ring lies flat; copy 1 at +X
-  { sx: 0.38, sy: 1, start: Math.PI / 2, h: 'Z', v: 'Y' }, // YZ - ring edge-on; copy 1 at +Y
+const CUBE_HALF = 0.3
+/** Local cube corners, bit-indexed (bit0 = +X, bit1 = +Y, bit2 = +Z). */
+const CUBE_CORNERS = Array.from({ length: 8 }, (_, i) => [
+  i & 1 ? CUBE_HALF : -CUBE_HALF,
+  i & 2 ? CUBE_HALF : -CUBE_HALF,
+  i & 4 ? CUBE_HALF : -CUBE_HALF,
+])
+const CUBE_FACES = [
+  [1, 5, 7, 3], [0, 2, 6, 4], [2, 3, 7, 6], [0, 4, 5, 1], [4, 6, 7, 5], [0, 1, 3, 2],
 ]
 
-const VB_W = 240
-const VB_H = 170
-const CX = VB_W / 2
-const CY = VB_H / 2
-const RING_MAX_PX = 70
+function hexToRgb(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+}
 
-/** The hero: the splitter's ring, drawn live. Radial drag sets the radius. */
-function RingPad({ count, radius, size, planeValue, planeLabel, hoveredSlot, onHoverSlot }: {
-  count: number
-  radius: NumBinding
-  /** Copy size, scaling the marks so the diagram matches the layout. */
-  size: number
-  planeValue: number
-  planeLabel: string
-  hoveredSlot: number | null
-  onHoverSlot: (slot: number | null) => void
-}) {
-  const padRef = useRef<HTMLDivElement>(null)
-  const view = PLANE_VIEWS[planeValue] ?? PLANE_VIEWS[0]
-  const { def, value, set } = radius
-  const rPx = (clamp(value, def.min, def.max) / def.max) * RING_MAX_PX
+/** The splitter's real output at beat 0 with no notes: copy matrices in slot
+ *  order, plus how far the layout reaches (what the camera has to frame). */
+function resolveLayout(settings: RadialSettings) {
+  const copies = resolveVisualCopies([radialSplitter.resolve({ settings, notes: [] })], 0)
+  const matrices = copies.map((copy) => copy.transform.elements)
+  let reach = 1
+  for (const e of matrices) {
+    // Basis column length = the copy's scale; the cube extends that far.
+    const scale = Math.hypot(e[0], e[1], e[2])
+    reach = Math.max(reach, Math.hypot(e[12], e[13], e[14]) + CUBE_HALF * 2 * scale)
+  }
+  return { matrices, reach }
+}
 
-  /** Client point -> viewBox coords under xMidYMid meet (letterbox-aware). */
-  const toViewBox = (clientX: number, clientY: number) => {
-    const rect = padRef.current?.getBoundingClientRect()
-    if (!rect) return null
-    const scale = Math.min(rect.width / VB_W, rect.height / VB_H)
-    return {
-      u: (clientX - rect.left - (rect.width - VB_W * scale) / 2) / scale,
-      v: (clientY - rect.top - (rect.height - VB_H * scale) / 2) / scale,
+function FormationPreview({ settings }: { settings: RadialSettings }) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const viewRef = useRef({ yaw: -0.55, pitch: 0.38, auto: true })
+  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null)
+
+  const layout = useMemo(() => resolveLayout(settings), [settings])
+  const live = useRef(layout)
+  live.current = layout
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) return
+    const [ar, ag, ab] = hexToRgb(ACCENT)
+    let raf = 0
+
+    const draw = () => {
+      raf = requestAnimationFrame(draw)
+      const host = hostRef.current
+      if (!host) return
+      // Size is re-derived per frame (the pane is user-resizable, and
+      // ResizeObserver callbacks starve in a hidden pane).
+      const w = host.clientWidth
+      const h = host.clientHeight
+      if (w === 0 || h === 0) return
+      const dpr = window.devicePixelRatio || 1
+      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr
+        canvas.height = h * dpr
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, w, h)
+
+      const view = viewRef.current
+      if (view.auto) view.yaw += 0.0035
+      const cy = Math.cos(view.yaw), sy = Math.sin(view.yaw)
+      const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch)
+      const { matrices, reach } = live.current
+      const pxScale = (Math.min(w, h) * 0.42) / reach
+      const camera = reach * 3.5
+      const cx = w / 2, cyPx = h / 2
+
+      // View-rotate (yaw about Y, then pitch about X); camera on +Z.
+      const rotate = (x: number, y: number, z: number): [number, number, number] => {
+        const x1 = cy * x + sy * z
+        const z1 = -sy * x + cy * z
+        return [x1, cp * y - sp * z1, sp * y + cp * z1]
+      }
+      const project = (p: [number, number, number]): [number, number, number] => {
+        const f = camera / Math.max(camera - p[2], camera * 0.2)
+        return [cx + p[0] * pxScale * f, cyPx - p[1] * pxScale * f, f]
+      }
+
+      const faces: { depth: number; points: [number, number, number][]; fill: string }[] = []
+      for (const e of matrices) {
+        const corners = CUBE_CORNERS.map(([lx, ly, lz]) => rotate(
+          e[0] * lx + e[4] * ly + e[8] * lz + e[12],
+          e[1] * lx + e[5] * ly + e[9] * lz + e[13],
+          e[2] * lx + e[6] * ly + e[10] * lz + e[14],
+        ))
+        const center = rotate(e[12], e[13], e[14])
+        for (const face of CUBE_FACES) {
+          let fx = 0, fy = 0, fz = 0
+          for (const i of face) { fx += corners[i][0]; fy += corners[i][1]; fz += corners[i][2] }
+          fx /= 4; fy /= 4; fz /= 4
+          // Outward normal straight from the geometry (centroid minus cube
+          // center) - immune to winding mistakes, and exact for a cube.
+          const nl = Math.hypot(fx - center[0], fy - center[1], fz - center[2]) || 1
+          const nx = (fx - center[0]) / nl, ny = (fy - center[1]) / nl, nz = (fz - center[2]) / nl
+          if (nz <= 0.02) continue
+          const light = 0.28 + 0.72 * Math.max(0, nx * -0.33 + ny * 0.62 + nz * 0.71)
+          const glow = clamp(light * 0.9, 0, 1.2)
+          faces.push({
+            depth: fz,
+            points: face.map((i) => project(corners[i])),
+            fill: `rgb(${Math.round(ar * glow)},${Math.round(ag * glow)},${Math.round(ab * glow)})`,
+          })
+        }
+      }
+      faces.sort((a, b) => a.depth - b.depth)
+      for (const face of faces) {
+        ctx.beginPath()
+        ctx.moveTo(face.points[0][0], face.points[0][1])
+        for (let i = 1; i < 4; i++) ctx.lineTo(face.points[i][0], face.points[i][1])
+        ctx.closePath()
+        ctx.fillStyle = face.fill
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+        ctx.lineWidth = 0.5
+        ctx.stroke()
+      }
     }
-  }
 
-  const setFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const point = toViewBox(event.clientX, event.clientY)
-    if (!point) return
-    // Undo the plane's ellipse squash so the drag distance reads in ring units.
-    const dx = (point.u - CX) / view.sx
-    const dy = (CY - point.v) / view.sy
-    const raw = (Math.hypot(dx, dy) / RING_MAX_PX) * def.max
-    const snapped = Math.round(raw / def.step) * def.step
-    set(clamp(Number(snapped.toFixed(8)), def.min, def.max))
-  }
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    set(clamp(Number((value + direction * (event.shiftKey ? 10 : 1) * def.step).toFixed(8)), def.min, def.max))
-  }
-
-  // The size knob scales each copy about its own center; mirror that on the
-  // marks, clamped so the diagram stays legible at the extremes.
-  const markScale = clamp(size, 0.3, 2.2)
-
-  const marks = Array.from({ length: count }, (_, slot) => {
-    const angle = view.start + (slot / count) * Math.PI * 2
-    return {
-      slot,
-      x: CX + Math.cos(angle) * rPx * view.sx,
-      y: CY - Math.sin(angle) * rPx * view.sy,
-      spin: -(slot / count) * 360, // each copy is rotated by its slot angle
-    }
-  })
-
-  const hoverInfo = hoveredSlot != null
-    ? `COPY ${hoveredSlot + 1} · MUTE ${SPLITTER_TOP_PITCH - hoveredSlot} (${noteName(SPLITTER_TOP_PITCH - hoveredSlot)})`
-    : `${count} ${count === 1 ? 'COPY' : 'COPIES'} · 1 UNROTATED`
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   return (
     <div
-      ref={padRef}
-      data-testid="radial-ring-pad"
-      role="slider"
-      tabIndex={0}
-      aria-label="Radius"
-      aria-valuemin={def.min}
-      aria-valuemax={def.max}
-      aria-valuenow={value}
-      title="Drag from the center to set radius · double-click to reset"
+      ref={hostRef}
+      data-testid="radial-formation-preview"
+      title="Drag to orbit"
+      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
+      style={{ height: PREVIEW_HEIGHT, background: ROOM }}
       onPointerDown={(event) => {
         event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        setFromPointer(event)
+        try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+        const view = viewRef.current
+        view.auto = false
+        dragRef.current = { x: event.clientX, y: event.clientY, yaw: view.yaw, pitch: view.pitch }
       }}
       onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) setFromPointer(event)
+        const drag = dragRef.current
+        if (!drag) return
+        viewRef.current.yaw = drag.yaw + (event.clientX - drag.x) * 0.01
+        viewRef.current.pitch = clamp(drag.pitch + (event.clientY - drag.y) * 0.01, -1.35, 1.35)
       }}
       onPointerUp={(event) => {
+        dragRef.current = null
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       }}
-      onDoubleClick={() => set(def.default)}
-      onKeyDown={onKeyDown}
-      className="relative w-full cursor-crosshair touch-none select-none border-y border-[var(--border)] bg-[var(--bg-canvas)] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-      style={{ aspectRatio: `${VB_W} / ${VB_H}` }}
     >
-      <svg aria-hidden="true" viewBox={`0 0 ${VB_W} ${VB_H}`} className="h-full w-full">
-        {/* max-radius bound + center + axis letters */}
-        <ellipse cx={CX} cy={CY} rx={RING_MAX_PX * view.sx} ry={RING_MAX_PX * view.sy} className="fill-none stroke-[var(--border-subtle)]" strokeWidth="1" />
-        <path d={`M${CX - 4} ${CY}H${CX + 4}M${CX} ${CY - 4}V${CY + 4}`} className="fill-none stroke-[var(--border-strong)]" strokeWidth="1" />
-        <text x={CX + (RING_MAX_PX + 7) * view.sx} y={CY + 2.5} className="fill-[var(--text-muted)] font-mono text-[7px]">{view.h}</text>
-        <text x={CX} y={CY - (RING_MAX_PX + 5) * view.sy} textAnchor="middle" className="fill-[var(--text-muted)] font-mono text-[7px]">{view.v}</text>
-
-        {/* spokes + dashed guide ring at the current radius */}
-        {rPx > 2 && (
-          <>
-            {marks.map((mark) => (
-              <line key={mark.slot} x1={CX} y1={CY} x2={mark.x} y2={mark.y} className="stroke-[var(--border)]" strokeWidth="1" />
-            ))}
-            <ellipse cx={CX} cy={CY} rx={rPx * view.sx} ry={rPx * view.sy} className="fill-none stroke-[var(--accent-muted)]" strokeWidth="1" strokeDasharray="3 3" />
-          </>
-        )}
-
-        {/* copy marks - small squares, each spun by its own slot rotation */}
-        {marks.map((mark) => {
-          const active = hoveredSlot === mark.slot
-          return (
-            <g key={mark.slot} onPointerEnter={() => onHoverSlot(mark.slot)} onPointerLeave={() => onHoverSlot(null)}>
-              <circle cx={mark.x} cy={mark.y} r="9" fill="transparent" />
-              {(active || mark.slot === 0) && (
-                <circle
-                  cx={mark.x}
-                  cy={mark.y}
-                  r="7"
-                  className={`fill-none ${active ? 'stroke-[var(--accent-hover)]' : 'stroke-[var(--accent-muted)]'}`}
-                  strokeWidth="1"
-                  strokeDasharray={mark.slot === 0 && !active ? '2 2' : undefined}
-                />
-              )}
-              <rect
-                x="-3.6"
-                y="-3.6"
-                width="7.2"
-                height="7.2"
-                rx="1.2"
-                transform={`translate(${mark.x} ${mark.y}) rotate(${mark.spin}) scale(${markScale})`}
-                className={mark.slot === 0 ? 'fill-[var(--accent)]' : active ? 'fill-[var(--accent-hover)]' : 'fill-[var(--text-muted)]'}
-              />
-              {mark.slot === 0 && (
-                <text x={mark.x} y={mark.y - 10} textAnchor="middle" className="fill-[var(--accent)] font-mono text-[7px]">1</text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-[var(--text-3)]">R {value.toFixed(1)}</span>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">{planeLabel}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-muted)]">{hoverInfo}</span>
+      <canvas ref={canvasRef} className="h-full w-full" />
     </div>
   )
 }
 
-/** Copy count: - / + stepper whose readout also drags vertically like a knob. */
-function CopiesStepper({ b }: { b: NumBinding }) {
-  const dragRef = useRef<{ y: number; start: number } | null>(null)
-  const { def } = b
-  const count = clamp(Math.round(b.value), def.min, def.max)
-  const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
-  const buttonClass =
-    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-sm leading-none text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+// ── Controls ─────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="flex items-stretch gap-1">
-      <button aria-label="One fewer copy" className={buttonClass} onClick={() => commit(count - 1)} disabled={count <= def.min}>−</button>
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={def.label}
-        aria-valuemin={def.min}
-        aria-valuemax={def.max}
-        aria-valuenow={count}
-        title="Drag vertically · double-click to reset"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = { y: event.clientY, start: count }
-        }}
-        onPointerMove={(event) => {
-          const drag = dragRef.current
-          if (drag) commit(drag.start + (drag.y - event.clientY) / 7)
-        }}
-        onPointerUp={(event) => {
-          dragRef.current = null
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-        }}
-        onDoubleClick={() => b.set(def.default)}
-        onKeyDown={(event) => {
-          if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-          event.preventDefault()
-          commit(count + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
-        }}
-        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
-      >
-        <span className="font-mono text-[16px] leading-none tabular-nums text-[var(--text)]">{count}</span>
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">COPIES</span>
-      </div>
-      <button aria-label="One more copy" className={buttonClass} onClick={() => commit(count + 1)} disabled={count >= def.max}>+</button>
-    </div>
-  )
-}
-
-/** Plane glyph: the ring as it will be drawn, with a dot where copy 1 sits. */
-function PlaneGlyph({ value }: { value: number }) {
-  const [rx, ry] = value === 1 ? [7.5, 3] : value === 2 ? [3, 7.5] : [6.5, 6.5]
-  const [dx, dy] = value === 2 ? [10, 10 - ry] : [10 + rx, 10]
-  return (
-    <svg viewBox="0 0 20 20" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.4" aria-hidden="true">
-      <ellipse cx="10" cy="10" rx={rx} ry={ry} />
-      <circle cx={dx} cy={dy} r="1.7" className="fill-current stroke-none" />
-    </svg>
-  )
-}
-
-function PlaneSelector({ b }: { b: SelectBinding }) {
-  return (
-    <div role="radiogroup" aria-label={b.def.label} className="grid grid-cols-3 gap-1">
-      {b.def.options.map((option) => {
-        const active = option.value === b.value
-        return (
-          <button
-            key={option.value}
-            role="radio"
-            aria-checked={active}
-            title={`${b.def.label}: ${option.label}`}
-            onClick={() => b.set(option.value)}
-            className={`flex flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${active
-              ? 'border-[var(--accent-muted)] bg-[rgba(53,167,230,0.12)] text-[var(--accent-hover)]'
-              : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)]'}`}
-          >
-            <PlaneGlyph value={option.value} />
-            <span className="text-[7px] font-semibold tracking-[0.08em]">{option.label}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** The splitter's MIDI grammar, compact: one pitch chip per copy, hover-synced
- *  with the ring diagram. A note on at that pitch hides the copy. */
-function MuteMap({ count, hoveredSlot, onHoverSlot }: {
-  count: number
-  hoveredSlot: number | null
-  onHoverSlot: (slot: number | null) => void
+function Knob({ b, label, large = false, format }: {
+  b: NumBinding
+  label: string
+  large?: boolean
+  format?: (value: number) => string
 }) {
   return (
-    <div data-testid="radial-mute-map" className="rounded-md border border-[var(--border)] bg-[var(--bg-app)] p-1.5">
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">MUTE MAP</span>
-        <span className="text-[7px] text-[var(--text-muted)] select-none">note on hides the copy</span>
-      </div>
-      <div className="grid grid-cols-8 gap-[3px]">
-        {Array.from({ length: count }, (_, slot) => {
-          const pitch = SPLITTER_TOP_PITCH - slot
-          const hovered = hoveredSlot === slot
+    <LaserKnob
+      value={b.value}
+      min={b.def.min}
+      max={b.def.max}
+      step={b.def.step}
+      defaultValue={b.def.default}
+      curve={b.def.curve ?? 1}
+      label={label}
+      ariaLabel={b.def.label}
+      accent={ACCENT}
+      large={large}
+      format={format}
+      onChange={b.set}
+    />
+  )
+}
+
+/** Segmented selector over the plane select's options. */
+function PlaneSegmented({ b }: { b: SelectBinding }) {
+  return (
+    <div className="flex flex-col items-center gap-1" data-testid="radial-plane">
+      <div className="flex overflow-hidden rounded-md border border-white/10">
+        {b.def.options.map((option) => {
+          const active = option.value === b.value
           return (
-            <span
-              key={slot}
-              title={`Copy ${slot + 1} · mute with pitch ${pitch} (${noteName(pitch)})`}
-              onPointerEnter={() => onHoverSlot(slot)}
-              onPointerLeave={() => onHoverSlot(null)}
-              className={`cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors ${hovered
-                ? 'border-[var(--accent)] bg-[rgba(53,167,230,0.14)] text-[var(--accent-hover)]'
-                : slot === 0
-                  ? 'border-[var(--accent-muted)] text-[var(--text-3)]'
-                  : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+            <button
+              key={option.value}
+              aria-label={`${b.def.label}: ${option.label}`}
+              aria-pressed={active}
+              title={`${b.def.label}: ${option.label}`}
+              onClick={() => b.set(option.value)}
+              className={`flex h-[22px] min-w-[30px] items-center justify-center px-1.5 text-[8px] font-bold tracking-[0.1em] transition-colors ${
+                active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
+              }`}
+              style={active ? { background: ACCENT } : undefined}
             >
-              {pitch}
-            </span>
+              {option.label}
+            </button>
           )
         })}
       </div>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">PLANE</span>
     </div>
   )
 }
 
-function RadialGlyph() {
+// ── Renderer ─────────────────────────────────────────────────────────────────
+
+interface RadialBindings {
+  copies: NumBinding
+  radius: NumBinding
+  size: NumBinding
+  plane: SelectBinding
+  rest: UserInterfaceParameter[]
+}
+
+/** Hooks live here, below the renderer's fallback branch. */
+function RadialConsole({ bound }: { bound: RadialBindings }) {
+  const { copies, radius, size, plane, rest } = bound
+  const [showMore, setShowMore] = useState(false)
+
+  const settings = useMemo(() => ({
+    ...(mergeDefinitionSettings(radialSplitter, undefined) as unknown as RadialSettings),
+    copies: copies.value,
+    radius: radius.value,
+    size: size.value,
+    plane: plane.value,
+  }), [copies.value, radius.value, size.value, plane.value])
+
   return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
-      {Array.from({ length: 6 }, (_, index) => {
-        const angle = (index / 6) * Math.PI * 2
-        return <circle key={index} cx={10 + Math.cos(angle) * 6.2} cy={10 - Math.sin(angle) * 6.2} r={index === 0 ? 2.1 : 1.4} />
-      })}
-    </svg>
+    <section data-testid="radial-user-interface" className="-mx-3 -mt-3" style={{ background: PANEL_SHADE }}>
+      <FormationPreview settings={settings} />
+      {/* The preview's light spilling through the seam onto the controls. */}
+      <div
+        className="pointer-events-none h-0"
+        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
+      />
+      <div className="flex items-end justify-center gap-5 px-4 pt-2.5">
+        <Knob b={copies} label="COPIES" format={(v) => `${Math.round(v)}`} />
+        <Knob b={radius} label="RADIUS" large />
+        <Knob b={size} label="SIZE" />
+      </div>
+      <div className="flex justify-center px-4 pb-3 pt-2">
+        <PlaneSegmented b={plane} />
+      </div>
+      {rest.length > 0 && (
+        <div className="px-4 pb-2">
+          <button
+            aria-expanded={showMore}
+            onClick={() => setShowMore((v) => !v)}
+            className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
+          >
+            {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
+            MORE
+          </button>
+          {showMore && (
+            <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
+              <ParameterList parameters={rest} />
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 
 export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const [hoveredSlot, setHoveredSlot] = useState<number | null>(null)
   const pool = bind(parameters)
   const copies = pool.num('copies')
   const radius = pool.num('radius')
   const size = pool.num('size')
   const plane = pool.select('plane')
 
-  if (!copies || !radius || !plane) return <ParameterList parameters={parameters} />
-  const rest = pool.rest()
+  if (!copies || !radius || !size || !plane) return <ParameterList parameters={parameters} />
 
-  const count = clamp(Math.round(copies.value), copies.def.min, copies.def.max)
-  const planeLabel = plane.def.options.find((option) => option.value === plane.value)?.label ?? plane.def.options[0]?.label ?? ''
-  const safeHover = hoveredSlot != null && hoveredSlot < count ? hoveredSlot : null
-  const resetAll = () => {
-    for (const bound of parameters) bound.setValue(bound.definition.default)
-  }
-
-  return (
-    <section
-      data-testid="radial-user-interface"
-      className="-mx-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_14px_34px_rgba(0,0,0,.35)]"
-    >
-      <header className="flex h-9 items-center justify-between px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--accent)]">
-            <RadialGlyph />
-          </div>
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text)]">Radial</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="rounded border border-[var(--border)] bg-[var(--bg-app)] px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-[var(--text-3)]">{count} ×</span>
-          <button
-            aria-label="Reset all Radial parameters"
-            title="Reset all"
-            onClick={resetAll}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-      </header>
-
-      <RingPad
-        count={count}
-        radius={radius}
-        size={size?.value ?? 1}
-        planeValue={plane.value}
-        planeLabel={planeLabel}
-        hoveredSlot={safeHover}
-        onHoverSlot={setHoveredSlot}
-      />
-
-      <div className="space-y-2 p-2">
-        <CopiesStepper b={copies} />
-        {size && (
-          <div className="-mb-[13px]">
-            <ParamSlider
-              label={size.def.label}
-              value={size.value}
-              min={size.def.min}
-              max={size.def.max}
-              step={size.def.step}
-              onChange={size.set}
-            />
-          </div>
-        )}
-        <PlaneSelector b={plane} />
-        <MuteMap count={count} hoveredSlot={safeHover} onHoverSlot={setHoveredSlot} />
-        {rest.length > 0 && (
-          <div className="border-t border-[var(--border-subtle)] pt-2">
-            <ParameterList parameters={rest} />
-          </div>
-        )}
-      </div>
-    </section>
-  )
+  return <RadialConsole bound={{ copies, radius, size, plane, rest: pool.rest() }} />
 }
