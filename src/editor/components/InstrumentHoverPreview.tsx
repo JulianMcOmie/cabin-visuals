@@ -472,6 +472,21 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     turntable: 0.4,
     notes: [holdNote(127, 4, 1), holdNote(124, 8, 1), holdNote(121, 12, 1)],
   },
+  // Line's story is the aimed axis and the size ramp, so the card shows both:
+  // a diagonal aim off the -Z default (the turntable then sweeps the tail
+  // around the unmoved base copy) and a growth high enough to read at card
+  // size. Spacing is pre-divided by seedScale like the others; mute notes
+  // blink the base, middle and tail copies off.
+  line: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.3,
+    // Kept short and gently ramped: the tumble inevitably points the tail at
+    // the camera, where length and growth compound with perspective - at
+    // spacing 2 / growth 1.3 that pass blew past the card's frame.
+    settings: { copies: 5, spacing: 1.5, growth: 1.25, angle: 25, tilt: 15 },
+    turntable: 0.4,
+    notes: [holdNote(127, 4, 1), holdNote(125, 8, 1), holdNote(123, 12, 1)],
+  },
   polyhedron: {
     seeds: [[0, 0, 0]],
     seedScale: 0.24,

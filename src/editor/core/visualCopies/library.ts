@@ -33,7 +33,7 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
-import { GRID_COLOR, RADIAL_COLOR } from './identityColors'
+import { GRID_COLOR, LINE_COLOR, RADIAL_COLOR } from './identityColors'
 
 // ── Burst (RETIRED) ──────────────────────────────────────────────────────────
 // Directional step mover: each note permanently steps the object a fixed
@@ -238,6 +238,95 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
             colorShift: { ...visualCopy.colorShift },
           }
         })
+      },
+    }
+  },
+}
+
+// ── Line ─────────────────────────────────────────────────────────────────────
+// Line splitter: N copies marching along one axis, the axis aimed anywhere by
+// two angles instead of a plane select. The FIRST copy is the base object
+// itself - unmoved and unscaled, so adding the splitter never disturbs the
+// object's placement - and the rest step away behind it. The default aim is
+// -Z (straight back from the camera), so an untouched Line reads as depth;
+// ANGLE swings the aim left/right about +Y and TILT lifts it toward +Y, and
+// both stay ordinary automatable number params. The aim rotation is IDENTITY
+// at the default, so copies keep facing whatever the object faces; a non-zero
+// aim rotates each copy's frame WITH the axis (the same LOCAL re-framing as
+// Radial's slots), so movers below the splitter work in line-aligned axes.
+//
+// GROWTH is a per-step size ratio anchored at the base copy: copy i wears
+// scale growth^i, so the original keeps its size and the tail ramps
+// geometrically - a RATIO can never cross zero (size is an exponent, the
+// scale-mover rule). The scale composes AFTER the translation
+// (R · T(spacing·i) · S) so each copy grows about its own center and spacing
+// stays exactly spacing, whatever the growth. Growth is a WORLD-space ratio
+// on purpose - the default backward aim additionally shrinks copies by
+// perspective, but the axis is not always depth, so nothing here divides the
+// camera's shrink out (that apparent-size treatment belongs to the dedicated
+// depth splitters - see duplicateTrail).
+//
+// The MIDI lane is the shared slot mute map (Grid's convention): one row per
+// copy, a held note hides that copy; animation beyond that belongs to
+// automation lanes on the knobs.
+
+export interface LineSettings {
+  copies: number
+  /** Distance between adjacent copy centers, in world units. */
+  spacing: number
+  /** Per-step size ratio between neighboring copies, anchored at the base copy. */
+  growth: number
+  /** Aim swing left/right, in degrees about +Y (0 = straight back, -Z). */
+  angle: number
+  /** Aim lift up/down, in degrees toward +Y. */
+  tilt: number
+}
+
+const LINE_MAX_COPIES = 32
+
+export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
+  id: 'line',
+  label: 'Line',
+  kind: 'splitter',
+  identityColor: LINE_COLOR,
+  params: [
+    { key: 'copies', label: 'Copies', min: 1, max: LINE_MAX_COPIES, step: 1, default: 5 },
+    { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.05, default: 1 },
+    { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
+    { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, default: 0 },
+    { key: 'tilt', label: 'Tilt', min: -90, max: 90, step: 1, default: 0 },
+  ],
+  midiRows: (settings) => {
+    const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
+    return splitterMidiRows(count, 'copy', 'copies')
+  },
+  strictMidiRows: true,
+  resolve({ settings, notes }) {
+    const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
+    const spacing = Math.max(0, settings.spacing ?? 1)
+    const growth = Math.max(0.05, settings.growth ?? 1)
+    const angle = ((settings.angle ?? 0) * Math.PI) / 180
+    const tilt = ((settings.tilt ?? 0) * Math.PI) / 180
+    // Aim the step direction: identity at (0, 0) stepping along local -Z, so
+    // R·(0,0,-1) = (cos t · sin a, sin t, -cos t · cos a) - lift about X
+    // first, then swing about Y.
+    const rotation = new Matrix4()
+      .makeRotationY(-angle)
+      .multiply(new Matrix4().makeRotationX(tilt))
+    const slots = Array.from({ length: count }, (_, index) => {
+      const size = Math.pow(growth, index)
+      const slot = rotation.clone()
+        .multiply(new Matrix4().makeTranslation(0, 0, -spacing * index))
+      if (size !== 1) slot.multiply(new Matrix4().makeScale(size, size, size))
+      return slot
+    })
+    return {
+      apply(visualCopy, { beat }) {
+        return slots.map((slot, index) => ({
+          transform: visualCopy.transform.clone().multiply(slot),
+          opacity: noteDisablesSplitterSlot(notes, beat, index, slots.length) ? 0 : visualCopy.opacity,
+          colorShift: { ...visualCopy.colorShift },
+        }))
       },
     }
   },
@@ -501,6 +590,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   noteColorizer,
   gradientColorizer,
   radialSplitter,
+  lineSplitter,
   symmetrySplitter,
   gridSplitter,
   polyhedronSplitter,
