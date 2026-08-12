@@ -717,16 +717,6 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             </div>
 
             <form action={initiateSignup} onSubmit={() => track('signup_started')} className="flex flex-col gap-[14px]">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label htmlFor="export-gate-first" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">First name</label>
-                  <input id="export-gate-first" name="firstName" type="text" required placeholder="First name" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor="export-gate-last" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Last name</label>
-                  <input id="export-gate-last" name="lastName" type="text" required placeholder="Last name" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
-                </div>
-              </div>
               <div>
                 <label htmlFor="export-gate-email" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</label>
                 <input id="export-gate-email" name="email" type="email" required placeholder="you@example.com" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
