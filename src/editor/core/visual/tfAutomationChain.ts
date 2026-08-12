@@ -19,16 +19,16 @@ import { Matrix4 } from 'three'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { sampleAutomationLane } from './automation'
 import type { ResolvedAutomation } from './types'
-import { TF_X, TF_Y, TF_Z, TF_ROT_X, TF_ROT_Y, TF_ROT_Z, TF_SIZE } from '../transform'
+import { SPATIAL_TRANSFORM_PARAM_DEFS, TF_X, TF_Y, TF_Z, TF_ROT_X, TF_ROT_Y, TF_ROT_Z, TF_SIZE } from '../transform'
 
 const DEG = Math.PI / 180
 
 /** The tf params whose lane position among mover/splitter siblings matters: the
  *  spatial ones. tfOpacity multiplies scalars (order-free) and stays a placement
  *  overlay wherever its lane sits. */
-export const SPATIAL_TF_PARAMS: ReadonlySet<string> = new Set([
-  TF_X, TF_Y, TF_Z, TF_ROT_X, TF_ROT_Y, TF_ROT_Z, TF_SIZE,
-])
+export const SPATIAL_TF_PARAMS: ReadonlySet<string> = new Set(
+  SPATIAL_TRANSFORM_PARAM_DEFS.map((p) => p.key),
+)
 
 /** The single-param delta transform between the panel value and the lane's
  *  sampled value, matching transform.ts's conventions (degrees, uniform size). */
