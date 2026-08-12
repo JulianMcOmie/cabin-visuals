@@ -623,11 +623,13 @@ body.drag-moving * {
 
 /* Sidebar glides move the canvas horizontally ONLY. While one runs (class
    added/removed by glidePanelToggle in editor App.tsx), the r3f root is
-   frozen at its pre-toggle width and centered: no buffer resize happens
-   mid-glide (frozen container = no measures), so the picture never
-   stretches - its edges crop or reveal stage background - and the single
-   real resize lands when the freeze lifts. !important because the r3f root
-   carries inline position/width styles. */
+   frozen, centered, at a width ≥ wherever the glide lands (current width +
+   the toggled panel's width), so the moving panel edge reveals/covers a
+   fully-rendered scene: no bars, and no mid-glide buffer resizes to stretch
+   the picture. The camera's FOV is vertical, so the wider render
+   center-crops pixel-identically to the narrower one - the start and settle
+   resizes are invisible. !important because the r3f root carries inline
+   position/width styles. */
 .visual-canvas-smooth.canvas-glide-freeze .visual-canvas-root {
   position: absolute !important;
   top: 0;

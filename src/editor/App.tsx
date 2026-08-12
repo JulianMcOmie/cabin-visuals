@@ -74,18 +74,24 @@ function holdClassForGlide(el: HTMLElement, className: string) {
   panelToggleTimers.set(el, window.setTimeout(() => el.classList.remove(className), PANEL_TOGGLE_MS + 50))
 }
 function glidePanelToggle(panelDomId: string) {
-  const group = document.getElementById(panelDomId)?.closest('[data-group]')
-  if (!(group instanceof HTMLElement)) return
+  const toggled = document.getElementById(panelDomId)
+  const group = toggled?.closest('[data-group]')
+  if (!toggled || !(group instanceof HTMLElement)) return
   holdClassForGlide(group, 'panel-toggle-anim')
   // The glide only moves the canvas horizontally, and resizing the GL buffer
   // per frame stretches the picture (the buffer lags the element). So the
-  // canvas root is FROZEN at its pre-toggle width and kept centered for the
-  // glide - edges crop or show stage background - and the one real resize
-  // lands when the freeze lifts (.canvas-glide-freeze in globals.css).
+  // canvas root is FROZEN for the glide, centered, at a width ≥ wherever it
+  // will land: its current width plus everything the toggled panel could
+  // hand it. The camera's FOV is vertical, so the wider render center-crops
+  // to exactly the narrower one - the overshoot and the settle resize are
+  // invisible, and the glide just reveals/covers a fully-rendered scene
+  // (no bars, no stretching; one buffer resize at start, one at settle).
+  // (.canvas-glide-freeze in globals.css.)
   const panel = document.querySelector<HTMLElement>('.visual-canvas-smooth')
   const root = panel?.querySelector<HTMLElement>('.visual-canvas-root')
   if (panel && root) {
-    panel.style.setProperty('--glide-canvas-w', `${root.getBoundingClientRect().width}px`)
+    const bound = root.getBoundingClientRect().width + toggled.getBoundingClientRect().width
+    panel.style.setProperty('--glide-canvas-w', `${bound}px`)
     holdClassForGlide(panel, 'canvas-glide-freeze')
   }
 }
