@@ -769,9 +769,13 @@ function Header({
             </span>
           )}
       </Link>
-      {/* The project title, left-aligned beside the wordmark (still
-          double-click renamable). */}
-      <EditableProjectName />
+      {/* The project title rides the CENTER of the bar (still double-click
+          renamable). Inline on phones, where an absolute center would
+          collide with the side clusters. */}
+      <div className="md:hidden"><EditableProjectName /></div>
+      <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+        <EditableProjectName />
+      </div>
 
       <SaveStatusChip />
       {!authLoading && !user && (
@@ -807,10 +811,10 @@ function Header({
             "New project" button: an instant CSS group-hover panel, not a
             native title - titles never fire over disabled buttons in Firefox
             (the very browser the capability gate fires on), and the panel
-            appears with no tooltip dwell. Two gates share it: browser
-            capability first (signing in wouldn't help there), then account
-            (export requires a real sign-in; anonymous sessions don't count).
-            Ungated, the button keeps a short native title. */}
+            appears with no tooltip dwell. Only the browser-capability gate
+            lives here now - the account gate moved INSIDE the export flow
+            (ExportDialog's final button invites signup), so the button reads
+            fully functional to everyone whose browser can export. */}
         <div className="group relative">
           <button
             onClick={() => {
@@ -818,14 +822,14 @@ function Header({
               // panel - hover never happens on touch, and a disabled button
               // swallows the tap silently (the mobile "where is export?"
               // failure mode).
-              if (exportGate?.ok === false || !permanent) { setGateNoteOpen((v) => !v); return }
+              if (exportGate?.ok === false) { setGateNoteOpen((v) => !v); return }
               track('export_clicked')
               setExportOpen(true)
             }}
-            aria-disabled={exportGate?.ok === false || !permanent}
-            title={exportGate?.ok === false || !permanent ? undefined : 'Export as MP4'}
+            aria-disabled={exportGate?.ok === false}
+            title={exportGate?.ok === false ? undefined : 'Export as MP4'}
             className={`flex items-center gap-1.5 h-7 px-4 rounded-full text-[11px] font-semibold [font-family:var(--font-plex-sans)] transition-colors cursor-pointer ${
-              exportGate?.ok === false || !permanent
+              exportGate?.ok === false
                 ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
                 : 'bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
             }`}
@@ -833,40 +837,18 @@ function Header({
             <Upload size={11} strokeWidth={2.5} />
             Export
           </button>
-          {(exportGate?.ok === false || (!authLoading && !permanent)) && (
+          {exportGate?.ok === false && (
             // Padding on a hidden wrapper (not a margin) so the pointer can
             // cross from the button into the panel without leaving the group.
             <div className={`absolute right-0 top-full z-40 pt-1.5 ${gateNoteOpen ? 'block' : 'hidden group-hover:block'}`}>
               <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-                {exportGate?.ok === false
-                  ? exportGate.reason ?? 'Video export is not available in this browser.'
-                  : (
-                    <>
-                      Video export needs a free account.{' '}
-                      <Link
-                        href="/signup"
-                        onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'signup' })}
-                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
-                      >
-                        Sign up
-                      </Link>
-                      {' or '}
-                      <Link
-                        href="/login"
-                        onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'login' })}
-                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
-                      >
-                        sign in
-                      </Link>
-                      {' '}to export your video.
-                    </>
-                  )}
+                {exportGate.reason ?? 'Video export is not available in this browser.'}
               </div>
             </div>
           )}
         </div>
       </div>
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} canExport={permanent} />}
     </div>
   )
 }

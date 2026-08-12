@@ -618,7 +618,7 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
           type="button"
           onClick={() => setPath(path.slice(0, -1))}
           aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
+          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-shell))]"
         >
           <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
           <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
