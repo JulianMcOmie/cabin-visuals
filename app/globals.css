@@ -127,7 +127,15 @@ body {
   --ruler-line: rgba(255, 255, 255, 0.1);
   --ruler-tick-minor: rgba(255, 255, 255, 0.08);
   --ruler-tick-sub: rgba(255, 255, 255, 0.05);
-  --timeline-grid-line: rgba(255, 255, 255, 0.055);
+  /* The STRUCTURAL hairlines (bar gridlines, row dividers, label-column edge,
+     hierarchy brackets) are OPAQUE on purpose: as translucent whites they sum
+     wherever two lines cross - every grid/divider crossing and bracket joint
+     rendered a brighter dot at the corner - and the brackets' overpaint trick
+     (extending 1px over the divider above) doubled instead of covering. These
+     are the same alphas they always were (5.5% and 10% white), pre-composited
+     against the lane's effective near-black, so a crossing just paints flat. */
+  --timeline-grid-line: #191a1f;
+  --timeline-row-line: #23252c;
 }
 
 /* Ruler voicing for the TIMELINE's ruler only. Applied on TimelineArea's root

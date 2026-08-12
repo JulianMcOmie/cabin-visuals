@@ -599,7 +599,7 @@ export function TimelineArea() {
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-track-row)] ${
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}
