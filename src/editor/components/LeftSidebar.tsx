@@ -198,6 +198,17 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       />
     </svg>
   )},
+  { id: 'overlapSolid', name: 'Overlap Solid', description: 'A one-color 3D solid - wherever copies share volume, the overlap punches a see-through window or flips to a second color.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path fill="#2dd4bf" fillOpacity="0.9" d="M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z" />
+      <path
+        fillRule="evenodd"
+        fill="#ff5470"
+        fillOpacity="0.95"
+        d="M0.6 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z"
+      />
+    </svg>
+  )},
   { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M3.2 1 H6.2 L4.4 11 H1.4 Z" fill="#fbbf24" fillOpacity="0.9" />
@@ -332,7 +343,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape', 'overlapSolid'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what

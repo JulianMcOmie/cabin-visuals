@@ -24,7 +24,8 @@ test('v4 migration creates Main and Scene 1 with exclusive visual ownership', ()
   assert.deepEqual(first.rootTrackIds, ['visual'])
   assert.deepEqual(first.tracks.visual, {
     ...visual,
-    params: {},
+    // finish: 1 = UPGRADES[13] pinning pre-FINISH cubes to the Gloss look.
+    params: { finish: 1 },
     stringParams: { baseColor: '#5757db' },
   })
   assert.equal(doc.audioTracks.audio, audio)
@@ -134,7 +135,8 @@ test('v8 migration converts basic-shape hue sliders to concrete colors', () => {
 
   assert.equal(doc.schemaVersion, CURRENT_VERSION)
   assert.equal(doc.scenes.one.tracks.visual.stringParams?.baseColor, '#57afdb')
-  assert.deepEqual(doc.scenes.one.tracks.visual.params, { tfSize: 1.25 })
+  // finish: 1 = UPGRADES[13] pinning pre-FINISH cubes to the Gloss look.
+  assert.deepEqual(doc.scenes.one.tracks.visual.params, { tfSize: 1.25, finish: 1 })
 })
 
 test('v10 migration pins existing oscilloscopes to the screen', () => {
