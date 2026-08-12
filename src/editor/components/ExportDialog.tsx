@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Check, Upload } from 'lucide-react'
+import Link from 'next/link'
+import Script from 'next/script'
+import { X, Check, Upload, Loader2 } from 'lucide-react'
+import { track } from '../../analytics/analytics'
+import { initiateSignup } from '../../../app/(auth)/signup/actions'
+import { handleSignInWithGoogle } from '../../../app/(auth)/login/actions'
+import { stashAnonWork } from '../../persistence/carryover'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { useTimeStore } from '../store/TimeStore'
@@ -18,6 +24,11 @@ const SETTINGS_KEY = 'cabin.exportSettings'
 
 type Phase =
   | { kind: 'settings' }
+  /** The account gate, reached by CLICKING Export without an account: the
+   *  real signup form floats over the blurred settings (which stay mounted
+   *  behind it), so backing out returns exactly where they were. Never a
+   *  disabled button. */
+  | { kind: 'gate' }
   | { kind: 'running'; frame: number; total: number; startedAt: number }
   | { kind: 'done'; fileName: string; blob: Blob }
   | { kind: 'error'; message: string }
@@ -272,7 +283,7 @@ function AspectCard({ aspect, selected, onPick }: { aspect: ExportAspect; select
  * (partial file discarded); settings freeze once rendering starts. The file
  * auto-downloads on completion - the receipt screen is the retry path.
  */
-export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: boolean }) {
+export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => void; isPro: boolean; canExport: boolean }) {
   const [settings, setSettings] = useState<ExportSettings>(() => loadSavedSettings(isPro))
   const [phase, setPhase] = useState<Phase>({ kind: 'settings' })
   const [audioOk, setAudioOk] = useState(true)
@@ -283,8 +294,16 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const [freeze, setFreeze] = useState<{ src: string; rect: DOMRect } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const gateRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
+  // once the script is actually available.
+  const [gsiReady, setGsiReady] = useState(false)
+  const [googleBusy, setGoogleBusy] = useState(false)
   const idle = phase.kind === 'settings'
+  const gated = phase.kind === 'gate'
+  // The gate floats OVER the settings, which stay mounted (blurred) behind it.
+  const showSettings = idle || gated
   const running = phase.kind === 'running'
 
   const totalBeats = Math.max(1, totalBars) * beatsPerBar
@@ -298,8 +317,10 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
   useEffect(() => {
     const block = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (t && panelRef.current?.contains(t)) return
+      if (t && (panelRef.current?.contains(t) || gateRef.current?.contains(t))) return
       if (e.key === 'Escape' && phase.kind === 'settings') { onClose(); return }
+      // The gate is a detour, not a dead end - Escape backs out to settings.
+      if (e.key === 'Escape' && phase.kind === 'gate') { setPhase({ kind: 'settings' }); return }
       e.stopPropagation()
       if (e.code === 'Space' || e.code === 'Enter') e.preventDefault()
     }
@@ -312,7 +333,52 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
     return () => useUIStore.getState().setModalOpen(false)
   }, [])
 
+  // Mirror /signup's arrival behavior when the gate opens: stash anonymous
+  // work so the Google path (new session) can carry this project over.
+  useEffect(() => {
+    if (gated) void stashAnonWork()
+  }, [gated])
+
+  // Google sign-in inside the gate card. Imperative initialize+renderButton:
+  // the declarative g_id_onload path only scans the DOM at script load, and
+  // the GSI script may already be loaded by the time the gate opens.
+  useEffect(() => {
+    if (!gated) return
+    const google = (window as unknown as { google?: any }).google
+    const container = document.getElementById('export-gate-google-btn')
+    if (!google?.accounts?.id || !container || container.childElementCount > 0) return
+    google.accounts.id.initialize({
+      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      callback: async (response: { credential?: string }) => {
+        if (!response?.credential) return
+        track('google_signin_submitted', { page: 'export-gate' })
+        setGoogleBusy(true)
+        try {
+          await stashAnonWork()
+          await handleSignInWithGoogle(response.credential)
+        } catch (err) {
+          // Next.js signals a server-action redirect by throwing - let it fly.
+          if (err instanceof Error && err.message.includes('NEXT_REDIRECT')) throw err
+          console.error('Google sign-in failed:', err)
+          setGoogleBusy(false)
+        }
+      },
+    })
+    google.accounts.id.renderButton(container, {
+      theme: 'filled_black', size: 'large', type: 'standard', text: 'signup_with',
+      shape: 'rectangular', logo_alignment: 'left',
+      width: Math.min(342, Math.max(200, container.clientWidth || 342)),
+    })
+  }, [gated, gsiReady])
+
   const start = async () => {
+    // No account: the render is ready, but the file (and the project) need a
+    // home first. Show the invitation instead of a dead click.
+    if (!canExport) {
+      track('export_gate_shown')
+      setPhase({ kind: 'gate' })
+      return
+    }
     const { bpm, beatsPerBar, totalBars, tracks, rootTrackIds } = useProjectStore.getState()
     const audioTracks = rootTrackIds.map((id) => tracks[id]).filter((t) => t?.type === 'audio')
     const tiered = isPro ? { ...settings, watermark: false } : clampToFreeTier(settings)
@@ -404,15 +470,15 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
     >
       <div
         ref={panelRef}
-        className={`${idle ? 'w-[1180px]' : 'w-[720px]'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] px-[26px] pb-[22px] pt-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]`}
+        className={`${showSettings ? 'w-[1180px]' : 'w-[720px]'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] px-[26px] pb-[22px] pt-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]`}
       >
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[14px] font-bold tracking-[0.12em] text-[var(--text)] [font-family:var(--font-archivo)]">{title}</span>
           {closeButton}
         </div>
 
-        {/* ── Idle: monitor + clip map | settings rail ── */}
-        {idle && (
+        {/* ── Idle (and behind the gate): monitor + clip map | settings rail ── */}
+        {showSettings && (
           <div className="flex gap-6">
             <div className="min-w-0 flex-1">
               <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[rgba(69,198,255,0.4)]' : 'border-[rgba(255,255,255,0.08)]'}`}>
@@ -626,6 +692,79 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
           </div>
         )}
       </div>
+
+      {/* ── The signup gate: the real /signup form floating over the blurred
+          settings. Every way out (X, scrim, Escape) goes BACK to settings. ── */}
+      {gated && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center"
+          style={{ background: 'rgba(8,9,13,0.45)', backdropFilter: 'blur(6px)' }}
+          onPointerDown={(e) => { if (e.target === e.currentTarget) setPhase({ kind: 'settings' }) }}
+        >
+          <div
+            ref={gateRef}
+            className="relative w-[400px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] p-[26px] shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <span className="text-[15px] font-semibold text-[var(--text)]">Sign up to export your project.</span>
+              <button
+                onClick={() => setPhase({ kind: 'settings' })}
+                aria-label="Back to export settings"
+                className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form action={initiateSignup} onSubmit={() => track('signup_started')} className="flex flex-col gap-[14px]">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label htmlFor="export-gate-first" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">First name</label>
+                  <input id="export-gate-first" name="firstName" type="text" required placeholder="First name" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="export-gate-last" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Last name</label>
+                  <input id="export-gate-last" name="lastName" type="text" required placeholder="Last name" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="export-gate-email" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</label>
+                <input id="export-gate-email" name="email" type="email" required placeholder="you@example.com" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
+              </div>
+              <button type="submit" className="mt-1 h-[42px] w-full cursor-pointer rounded-[99px] bg-[var(--accent)] text-[14px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)]">
+                Continue
+              </button>
+            </form>
+
+            <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+              <span className="flex-1 border-t border-[var(--border)]" />
+              or
+              <span className="flex-1 border-t border-[var(--border)]" />
+            </div>
+
+            <div id="export-gate-google-btn" className="flex w-full justify-center" />
+
+            <p className="mt-4 text-center text-[13px] text-[var(--text-3)]">
+              Already have an account?{' '}
+              <Link
+                href="/login"
+                onClick={() => track('nav_clicked', { from: 'export-gate', to: 'login' })}
+                className="cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]"
+              >
+                Log in
+              </Link>
+            </p>
+
+            {googleBusy && (
+              <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-[14px] bg-[rgba(15,17,24,0.85)] text-[13px] text-[var(--text-2)]">
+                <Loader2 size={14} className="animate-spin" />
+                Signing you in…
+              </div>
+            )}
+          </div>
+          <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)} />
+        </div>
+      )}
     </div>
     </>,
     document.body,

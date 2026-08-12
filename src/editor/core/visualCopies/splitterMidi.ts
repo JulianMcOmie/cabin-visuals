@@ -1,4 +1,5 @@
-// Shared MIDI grammar for slot-gating splitters (Radial, Grid, Polyhedron):
+// Shared MIDI grammar for slot-gating splitters (Grid, Polyhedron; Radial
+// retired its mute rows for a value lane in 2026-08):
 // rows count DOWN from pitch 127, one row per slot (or per slot range when the
 // slot count exceeds 128 pitches), and a held note drives its slots' opacity to
 // zero. Notes never add or remove slots - the count stays structural so
