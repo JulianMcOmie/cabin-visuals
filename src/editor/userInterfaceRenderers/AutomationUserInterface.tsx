@@ -436,6 +436,9 @@ function CycleWindow({ cycle, accent, onCycle }: {
   const p1y = cyLevel(clamp(cycle.y1, -0.5, CY_CTRL_MAX))
   const p2x = xOf(cycle.x2)
   const p2y = cyLevel(clamp(cycle.y2, -0.5, CY_CTRL_MAX))
+  // In noteSpan mode the next cycle starts at the next NOTE, not where this
+  // one ends - the ghost slides right and the empty stretch is the inert gap.
+  const ghostX0 = cycle.noteSpan ? CXM + 8 : CXM
 
   return (
     <LaneWindow testId="automation-cycle-pad" title="One cycle between two note onsets - the fainter repeat shows the seam. Drag the endpoints' heights and the control points; matching endpoints make the wave seamless.">
@@ -444,15 +447,15 @@ function CycleWindow({ cycle, accent, onCycle }: {
           {/* The note's row: the cycle's high lands here (its low, inverted). */}
           <line x1={CX0} y1={cyLevel(1)} x2={CX1} y2={cyLevel(1)} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
           <line x1={CX0} y1={Y_BASE} x2={CX1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          {/* The onsets that bound each cycle. */}
-          {[CX0, CXM, CX1].map((x) => (
+          {/* The boundaries of each cycle (onsets; note ends in noteSpan mode). */}
+          {[CX0, ghostX0, CX1].map((x) => (
             <line key={x} x1={x} y1={Y_PEAK - 8} x2={x} y2={Y_BASE} stroke="rgba(255,255,255,0.10)" strokeWidth={1} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
           ))}
           {/* Control arms, the way every curve tool draws them. */}
           <line x1={CX0} y1={cyLevel(cycle.y0)} x2={p1x} y2={p1y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
           <line x1={CXM} y1={cyLevel(cycle.y3)} x2={p2x} y2={p2y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          {/* The next pair's repeat: where the seam lands is visible, not imagined. */}
-          <path d={cyclePath(cycle, CXM, CX1)} fill="none" stroke={withAlpha(accent, 0.3)} strokeWidth={1.25} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {/* The next cycle's repeat: where the seam (or gap) lands is visible, not imagined. */}
+          <path d={cyclePath(cycle, ghostX0, CX1)} fill="none" stroke={withAlpha(accent, 0.3)} strokeWidth={1.25} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           <GlowPath d={cyclePath(cycle, CX0, CXM)} accent={accent} />
         </svg>
         <CurveHandle
@@ -903,10 +906,16 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, color, mode, interpolation, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onCycle, onAmount, onRange,
+  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onCycle, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
+  /** The lane's targetParam key (fx-namespaced for effect settings). */
+  targetKey?: string
+  /** Every param this lane could drive instead; siblings' targets arrive
+   *  disabled. Empty/absent hides the picker row. */
+  targetOptions?: { key: string; label: string; disabled: boolean }[]
+  onTarget?: (key: string, label: string) => void
   /** The lane's display color; every accent in the panel derives from it. */
   color: string
   mode: AutomationMode
@@ -978,6 +987,30 @@ export function AutomationUserInterface({
         // room is lit by the lane, not painted.
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(accent, 0.14)}, transparent)` }}
       >
+        {/* What the lane drives - retargetable in place. The current target
+            rides the list even when unresolvable, so the select never lies. */}
+        {targetOptions && targetOptions.length > 0 && onTarget && (
+          <div className="flex items-center gap-2.5" data-testid="automation-target-row">
+            <span className="w-[44px] shrink-0 text-[8px] font-semibold tracking-[0.12em] text-white/40">TARGET</span>
+            <select
+              value={targetKey ?? ''}
+              aria-label="Which parameter this lane drives"
+              onChange={(e) => {
+                const option = targetOptions.find((o) => o.key === e.target.value)
+                if (option && !option.disabled) onTarget(option.key, option.label)
+              }}
+              className="h-6 min-w-0 flex-1 cursor-pointer rounded-[5px] border border-white/[0.07] bg-black/30 px-1.5 text-[11px] text-white/70 outline-none"
+            >
+              {targetKey !== undefined && !targetOptions.some((o) => o.key === targetKey) && (
+                <option value={targetKey} disabled>{targetLabel}</option>
+              )}
+              {targetOptions.map((o) => (
+                <option key={o.key} value={o.key} disabled={o.disabled}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <ModeSegmented mode={mode} accent={accent} onMode={onMode} />
 
         {/* Knob rows cluster from the left like Laser Sphere's; each mode's
@@ -1093,6 +1126,18 @@ export function AutomationUserInterface({
                 >
                   INVERT
                 </button>
+                <button
+                  onClick={() => onCycle({ ...cycle, noteSpan: !cycle.noteSpan })}
+                  aria-pressed={!!cycle.noteSpan}
+                  title="End each cycle at its note's end instead of stretching to the next onset - duration matters, a lone note cycles, and the gap after a note lets go"
+                  data-testid="automation-cycle-notespan"
+                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+                    cycle.noteSpan ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+                  }`}
+                  style={cycle.noteSpan ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
+                >
+                  NOTE END
+                </button>
                 {/* The bound the notes do NOT own - the cycle rests here. */}
                 <div className="ml-auto">
                   {invert ? (
@@ -1166,15 +1211,21 @@ export function AutomationUserInterface({
               whatever value is underneath and heading for the note&apos;s own row. Velocity is the note&apos;s intensity;
               between bursts the lane lets go.</>
           ) : mode === 'cycle' ? (
-            cycle?.invert ? (
-              <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
-                stretched to fit. The earlier note&apos;s row is the cycle&apos;s LOW; its high part holds the ceiling.
-                Outside the onsets the lane lets go.</>
-            ) : (
-              <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
-                stretched to fit. The earlier note&apos;s row is the cycle&apos;s peak; it rests on the floor. Matching
-                endpoint heights make the wave seamless. Outside the onsets the lane lets go.</>
-            )
+            <>
+              {cycle?.noteSpan ? (
+                <>The curve plays once over each note on <span className="text-white/75">{targetLabel}</span>, onset
+                  to note end; in the gap after a note the lane lets go. </>
+              ) : (
+                <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
+                  stretched to fit; outside the onsets the lane lets go. </>
+              )}
+              {cycle?.invert ? (
+                <>The note&apos;s row is the cycle&apos;s LOW; its high part holds the ceiling.</>
+              ) : (
+                <>The note&apos;s row is the cycle&apos;s peak; it rests on the floor. Matching endpoint heights make
+                  the wave seamless.</>
+              )}
+            </>
           ) : mode === 'noise' ? (
             <>While a note is held, <span className="text-white/75">{targetLabel}</span> wanders around the note&apos;s
               row; between notes the lane lets go. The seed is fixed per take, so scrubbing and export replay the

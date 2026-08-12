@@ -308,8 +308,10 @@ test('ranged mapping: sub-range, row count, integer snap, spread curve', () => {
  *  expected values read by hand. */
 const LINEAR_CYCLE: CycleConfig = { y0: 0, x1: 1 / 3, y1: 1 / 3, x2: 2 / 3, y2: 2 / 3, y3: 1 }
 
-function cycleGate(beat: number, value: number): CycleGate {
-  return { beat, value }
+/** Default endBeat = one beat long, matching pitchBlock's notes; the stretch
+ *  mode never reads it. */
+function cycleGate(beat: number, value: number, endBeat = beat + 1): CycleGate {
+  return { beat, endBeat, value }
 }
 
 test('cycle: the curve stretches between consecutive onsets, scaled by the EARLIER note', () => {
@@ -416,4 +418,25 @@ test('bounds: cycle reach spans rest → note through the shape\'s height hull',
     cycles: [cycleGate(0, 2), cycleGate(4, 6)],
   }
   assert.deepEqual(automationLaneValueBounds(inv, 3), { min: 2, max: 9 })
+})
+
+test('cycle noteSpan: each note carries its own cycle over its own length', () => {
+  const cfg: CycleConfig = { ...LINEAR_CYCLE, noteSpan: true }
+  // A lone note works - its span is self-contained.
+  const lone = [cycleGate(0, 10, 4)]
+  close(sampleCycleLane(cfg, lone, 2, 0, 10), 5)
+  close(sampleCycleLane(cfg, lone, 3, 0, 10), 7.5)
+  // The gap after a note is inert, however far the next onset is.
+  assert.ok(Number.isNaN(sampleCycleLane(cfg, [cycleGate(0, 10, 1), cycleGate(8, 10, 9)], 2, 0, 10)))
+  // A zero-length note has no span to cycle over.
+  assert.ok(Number.isNaN(sampleCycleLane(cfg, [cycleGate(0, 10, 0)], 0, 0, 10)))
+})
+
+test('cycle noteSpan: the newest sounding note wins; an older long note resumes', () => {
+  const cfg: CycleConfig = { ...LINEAR_CYCLE, noteSpan: true }
+  const gates = [cycleGate(0, 10, 8), cycleGate(2, 4, 3)]
+  // While the short note sounds it owns the cycle (its own value and span)...
+  close(sampleCycleLane(cfg, gates, 2.5, 0, 10), 2)
+  // ...and when it ends, the long note's cycle is still mid-flight underneath.
+  close(sampleCycleLane(cfg, gates, 4, 0, 10), 5)
 })

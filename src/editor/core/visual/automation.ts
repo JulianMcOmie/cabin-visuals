@@ -407,6 +407,10 @@ export interface CycleConfig {
   floor?: number
   /** Invert mode's constant high, param units. Absent = the param's max. */
   ceiling?: number
+  /** Each cycle ends at its NOTE's end instead of stretching to the next
+   *  onset: duration matters again, a lone note carries its own cycle, the
+   *  gap after a note is inert, and the newest sounding note wins an overlap. */
+  noteSpan?: boolean
 }
 
 /** What flipping a lane to cycle mode starts from: a seamless smooth swell -
@@ -417,15 +421,19 @@ export const DEFAULT_CYCLE: CycleConfig = {
   y0: 0, x1: 1 / 3, y1: 4 / 3, x2: 2 / 3, y2: 4 / 3, y3: 0,
 }
 
-/** One cycle boundary: a note onset and its pitch-mapped value. */
+/** One cycle boundary: a note onset, its end, and its pitch-mapped value.
+ *  `endBeat` is read only by the noteSpan mode; the stretch mode divides time
+ *  by onsets alone. */
 export interface CycleGate {
   beat: number
+  endBeat: number
   value: number
 }
 
 /** Flatten a cycle-mode track's blocks into onset gates (sorted by beat).
  *  Chords collapse to ONE boundary - simultaneous onsets can't divide time -
- *  keeping the largest value so the stack's reach wins deterministically. */
+ *  keeping the largest value so the stack's reach wins deterministically (the
+ *  kept note's own end rides along for noteSpan mode). */
 export function extractCycleGates(
   blocks: Block[],
   beatsPerBar: number,
@@ -438,6 +446,7 @@ export function extractCycleGates(
   const gates = flattenBlocks(blocks, beatsPerBar, totalBars)
     .map((note) => ({
       beat: note.beat,
+      endBeat: note.beat + note.durationBeats,
       value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
     }))
     .sort((a, b) => a.beat - b.beat || a.value - b.value)
@@ -457,10 +466,13 @@ export function cycleShapeY(cfg: CycleConfig, u: number): number {
     + t * t * t * cfg.y3
 }
 
-/** Sample a cycle lane at `beat`: NaN outside the onset span (lane inert; a
- *  lone onset has nothing to stretch to), else the curve stretched over the
- *  surrounding onset pair, scaled between the EARLIER note's value and the
- *  configured resting bound, clamped to the param range. */
+/** Sample a cycle lane at `beat`: NaN outside the cycling region (lane inert),
+ *  else the curve scaled between the owning note's value and the configured
+ *  resting bound, clamped to the param range. Two spans, per `noteSpan`:
+ *  stretched over the surrounding onset PAIR and owned by the earlier note
+ *  (default; a lone onset has nothing to stretch to), or over each note's own
+ *  LENGTH (a lone note carries its cycle, the gap after a note is inert, and
+ *  the newest sounding note wins an overlap). */
 export function sampleCycleLane(
   cfg: CycleConfig,
   gates: readonly CycleGate[],
@@ -469,8 +481,9 @@ export function sampleCycleLane(
   paramMax: number,
 ): number {
   const n = gates.length
-  if (n < 2 || beat < gates[0].beat || beat >= gates[n - 1].beat) return NaN
-  // Largest i with gates[i].beat <= beat (guaranteed 0 <= i < n-1 by the guards).
+  const needed = cfg.noteSpan ? 1 : 2
+  if (n < needed || beat < gates[0].beat || (!cfg.noteSpan && beat >= gates[n - 1].beat)) return NaN
+  // Largest i with gates[i].beat <= beat (guaranteed 0 <= i < n by the guards).
   let lo = 0
   let hi = n - 1
   while (lo < hi) {
@@ -478,9 +491,25 @@ export function sampleCycleLane(
     if (gates[mid].beat <= beat) lo = mid
     else hi = mid - 1
   }
-  const a = gates[lo]
-  const b = gates[lo + 1]
-  const u = (beat - a.beat) / (b.beat - a.beat)
+  let a: CycleGate
+  let u: number
+  if (cfg.noteSpan) {
+    // The newest note still sounding at `beat` owns the cycle; an older, longer
+    // note resumes when it ends. Backward scan - like noise's gate walk, the
+    // lane's note count bounds it.
+    let owner: CycleGate | undefined
+    for (let i = lo; i >= 0; i--) {
+      const g = gates[i]
+      if (beat < g.endBeat && g.endBeat > g.beat) { owner = g; break }
+    }
+    if (!owner) return NaN
+    a = owner
+    u = (beat - a.beat) / (a.endBeat - a.beat)
+  } else {
+    a = gates[lo]
+    const b = gates[lo + 1]
+    u = (beat - a.beat) / (b.beat - a.beat)
+  }
   const y = cycleShapeY(cfg, u)
   // The bound the note does NOT own: floor under it normally, ceiling over it
   // inverted. Either way y = 0 rests there and y = 1 lands on the note.

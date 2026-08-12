@@ -210,6 +210,8 @@ export interface Track {
     floor?: number
     /** Param units, invert mode's constant high. Absent = the param's max. */
     ceiling?: number
+    /** Cycles span each note's own LENGTH instead of the gap to the next onset. */
+    noteSpan?: boolean
   }
   /** Automation tracks only: how the pitch rows spread onto the value range -
    *  a value sub-range, a row count, integer snapping, and the spread's curve.

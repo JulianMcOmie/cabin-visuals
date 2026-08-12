@@ -10,11 +10,11 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
 import { CompositionSettingsPanel } from './CompositionSettingsPanel'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { TRANSFORM_PARAM_DEFS } from '../core/transform'
+import { TRANSFORM_PARAM_DEFS, withTransformParams } from '../core/transform'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
-import { parseFxTarget } from '../effects/automation'
+import { fxTarget, parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { AudioTrackDetail } from './AudioTrackDetail'
 import { SceneSettingsPanel } from './SceneSettingsPanel'
@@ -388,6 +388,7 @@ export function TrackEditor() {
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setTrackCycle = useProjectStore((s) => s.setTrackCycle)
+  const setAutomationTarget = useProjectStore((s) => s.setAutomationTarget)
   const setTrackAutomationRange = useProjectStore((s) => s.setTrackAutomationRange)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
   const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
@@ -607,9 +608,47 @@ export function TrackEditor() {
                       if (pdef) targetLabel = pdef.label
                       if (pdef && isNumberParam(pdef)) laneBounds = { min: pdef.min, max: pdef.max }
                     }
+                    // Every param this lane COULD drive - the same list the
+                    // context menu offers when creating one (parent's params +
+                    // canonical transforms, or the mover/composition def's, plus
+                    // fx-namespaced effect settings). Params already driven by a
+                    // sibling lane are offered but disabled.
+                    const parentInstrumentDef = parent ? getInstrument(parent.instrumentId) : undefined
+                    const parentParams = (parentInstrumentDef
+                      ? withTransformParams(parentInstrumentDef.params)
+                      : parent && (parent.type === 'mover' || parent.type === 'splitter')
+                        ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)?.params ?? []
+                        : parent && isCompositionTrack(parent)
+                          ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+                          : []
+                    ).filter(isNumberParam)
+                    const fxOptions = (parent?.effects ?? []).flatMap((inst) => {
+                      const plugin = getEffect(inst.pluginId)
+                      if (!plugin) return []
+                      return [
+                        { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
+                        ...plugin.params.filter(isNumberParam).map((p) => ({
+                          key: fxTarget(inst.id, p.key),
+                          label: `${plugin.name} · ${p.label}`,
+                        })),
+                      ]
+                    })
+                    // getState, not a subscription: the disabled flags are
+                    // cosmetic and refresh with this panel's own re-renders
+                    // (same accepted staleness as the guide's other getState reads).
+                    const siblingTracks = useProjectStore.getState().tracks
+                    const siblingTargets = new Set((parent?.childIds ?? [])
+                      .map((cid) => siblingTracks[cid])
+                      .filter((c) => !!c && c.id !== track.id && c.type === 'automation')
+                      .map((c) => c!.targetParam))
+                    const targetOptions = [...parentParams.map((p) => ({ key: p.key, label: p.label })), ...fxOptions]
+                      .map((o) => ({ ...o, disabled: siblingTargets.has(o.key) }))
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
+                        targetKey={track.targetParam}
+                        targetOptions={targetOptions}
+                        onTarget={(key, label) => setAutomationTarget(track.id, key, label, track.name === targetLabel)}
                         color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}

@@ -417,6 +417,12 @@ export interface ProjectState {
   /** Put an automation lane in one of its four modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  /** Retarget an automation lane onto another of its parent's params (same
+   *  addressing as addAutomationTrack, fx: keys included). No-ops if a sibling
+   *  lane already drives that param. `rename` carries the new label onto the
+   *  lane's name (the caller passes true when the old name was the auto-name,
+   *  so a user's custom name survives). */
+  setAutomationTarget: (trackId: string, paramKey: string, paramLabel: string, rename: boolean) => void
   /** Set an automation lane's output amount (a whole-lane gain, any mode).
    *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
   setTrackAutomationAmount: (trackId: string, amount: number) => void
@@ -1554,6 +1560,26 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
         cycle: mode === 'cycle' ? track.cycle ?? { ...DEFAULT_CYCLE } : undefined,
       }
+      return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  setAutomationTarget: (trackId, paramKey, paramLabel, rename) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'automation' || track.targetParam === paramKey) return s
+      // Same one-lane-per-param rule as addAutomationTrack: retargeting onto a
+      // param a sibling lane already drives would stack duplicates.
+      const parent = track.parentId ? s.tracks[track.parentId] : undefined
+      const taken = (parent?.childIds ?? []).some((cid) => {
+        const c = s.tracks[cid]
+        return !!c && c.id !== trackId && c.type === 'automation' && c.targetParam === paramKey
+      })
+      if (taken) return s
+      // The row-spread config speaks the OLD param's value units; a stale
+      // sub-range on a new param is nonsense, so it resets to the full span.
+      // Note pitches re-map onto the new param's range by construction.
+      const next: Track = { ...track, targetParam: paramKey, automationRange: undefined }
+      if (rename) next.name = paramLabel
       return { tracks: { ...s.tracks, [trackId]: next } }
     }),
 

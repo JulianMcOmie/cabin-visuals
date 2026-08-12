@@ -35,9 +35,18 @@ endpoints match. The earlier onset's pitch-value is the cycle's high (y = 1)
 over a configurable `floor` (default 0); `invert` flips the note to the LOW
 under a constant `ceiling` (default param max). Duration is deliberately
 ignored (onsets only), chords collapse to one boundary keeping the largest
-value, and a lone onset is inert — there is nothing to stretch to. Works on
-`fx:` lanes like burst does (`enabled` stays keyframes). Bounds for structural
-budgets come from the bezier's height hull (min/max of the four Ys).
+value, and a lone onset is inert — there is nothing to stretch to. The
+`noteSpan` toggle flips the span rule: each cycle runs onset → its own note's
+END (duration matters again, a lone note cycles, the gap after a note is
+inert, and the newest sounding note wins an overlap — an older longer note
+resumes mid-flight when it ends). Works on `fx:` lanes like burst does
+(`enabled` stays keyframes). Bounds for structural budgets come from the
+bezier's height hull (min/max of the four Ys).
+
+Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
+same one-lane-per-param rule as creation, `automationRange` resets (its
+min/max speak the old param's units), and the lane renames only when it still
+wore the auto-name.
 
 **`sampleAutomationLane(lane, beat, base)` is the only place the mode is read.**
 The engine, the hover preview and `paramAtBeat` all go through it, so they cannot
