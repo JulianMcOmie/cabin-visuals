@@ -59,6 +59,23 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
 }
 
+// Sidebar toggles glide (Material 3 emphasized-decelerate - the .panel-toggle-anim
+// rule in globals.css). The class goes on the panel's GROUP so both siblings'
+// flex-grow interpolate together - animating only the toggled panel makes the
+// neighbor's share jump, then drift. It lives only for the toggle's duration,
+// so separator drags stay 1:1; re-toggling mid-glide re-arms the removal timer
+// instead of stripping the class out from under the second transition.
+const PANEL_TOGGLE_MS = 400
+const panelToggleTimers = new WeakMap<HTMLElement, number>()
+function glidePanelToggle(panelDomId: string) {
+  const group = document.getElementById(panelDomId)?.closest('[data-group]')
+  if (!(group instanceof HTMLElement)) return
+  group.classList.add('panel-toggle-anim')
+  const prev = panelToggleTimers.get(group)
+  if (prev !== undefined) window.clearTimeout(prev)
+  panelToggleTimers.set(group, window.setTimeout(() => group.classList.remove('panel-toggle-anim'), PANEL_TOGGLE_MS + 50))
+}
+
 // Shared segment styling for the header transport band. Segments are flush -
 // the band's overflow clipping rounds the two ends at rest, but the END
 // segments also carry their own matching outer radius so the press
@@ -866,7 +883,11 @@ function Header({
           )}
         </div>
       </div>
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+      {/* AnimatePresence keeps the dialog mounted through its 150ms exit
+          animation (the motion divs inside portal to document.body). */}
+      <AnimatePresence>
+        {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+      </AnimatePresence>
     </div>
   )
 }
@@ -911,9 +932,10 @@ export default function EditorApp() {
   const libraryOpenRef = useRef(paneDefaults.library)
   const sceneEditorOpenRef = useRef(paneDefaults.sceneEditor)
 
-  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, fallbackSize: string) => {
+  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, domId: string, fallbackSize: string) => {
     const panel = panelRef.current
     if (!panel) return
+    glidePanelToggle(domId)
     if (panel.isCollapsed()) {
       panel.expand()
       // A panel that MOUNTED collapsed has no remembered size for expand() to
@@ -955,8 +977,8 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, '25%')}
-        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '30%')}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, 'library-panel', '25%')}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 'scene-editor-panel', '30%')}
         playback={playback}
       />
       {/* The library's panel color fills everything below the header, so the

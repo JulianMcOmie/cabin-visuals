@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { MotionConfig, motion } from 'framer-motion'
 import { X, Check, Upload } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
@@ -386,7 +387,7 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
   )
 
   return createPortal(
-    <>
+    <MotionConfig reducedMotion="user">
       {/* The freeze still hides the garbled pinned canvas BENEATH the scrim -
           above it, it read as the visualizer floating over the export UI. */}
       {freeze && (
@@ -397,14 +398,27 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
           style={{ left: freeze.rect.left, top: freeze.rect.top, width: freeze.rect.width, height: freeze.rect.height }}
         />
       )}
-    <div
+    <motion.div
       className="fixed inset-0 z-[100] flex items-center justify-center"
       style={{ background: 'rgba(8,9,13,0.72)', backdropFilter: 'blur(2px)' }}
       onPointerDown={(e) => { if (idle && e.target === e.currentTarget) onClose() }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <div
+      {/* Enter is SwiftUI's .smooth: a critically damped spring (bounce 0), so
+          the panel settles with no overshoot. Exit is faster than enter on
+          purpose - dismissal should feel obedient. Mounted under the
+          AnimatePresence in App.tsx, which is what keeps this rendered
+          through the exit animation. */}
+      <motion.div
         ref={panelRef}
         className={`${idle ? 'w-[1180px]' : 'w-[720px]'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] px-[26px] pb-[22px] pt-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]`}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15, ease: 'easeIn' } }}
+        transition={{ type: 'spring', duration: 0.4, bounce: 0 }}
       >
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[14px] font-bold tracking-[0.12em] text-[var(--text)] [font-family:var(--font-archivo)]">{title}</span>
@@ -625,9 +639,9 @@ export function ExportDialog({ onClose, isPro }: { onClose: () => void; isPro: b
             </button>
           </div>
         )}
-      </div>
-    </div>
-    </>,
+      </motion.div>
+    </motion.div>
+    </MotionConfig>,
     document.body,
   )
 }
