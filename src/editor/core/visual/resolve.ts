@@ -11,7 +11,7 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, automationLaneValueBounds, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, automationLaneValueBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
 import { withTransformParams } from '../transform'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
@@ -112,6 +112,20 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
       })
       continue
     }
+    // Cycle mode: the motion curve plays once between each pair of note onsets,
+    // scaled to the earlier note's pitch-value.
+    if (child.cycle) {
+      out.push({
+        param,
+        mode: 'linear',
+        keyframes: [],
+        cycle: child.cycle,
+        cycles: extractCycleGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
+        min: pdef.min,
+        max: pdef.max,
+      })
+      continue
+    }
     out.push({
       param,
       mode: child.interpolation ?? 'linear',
@@ -192,6 +206,22 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         keyframes: [],
         burst: child.burst,
         bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
+        min,
+        max,
+        base,
+      })
+      continue
+    }
+    // Cycle mode rides fx lanes the same way burst does; 'enabled' stays a
+    // keyframe lane for the same reason (a 0/1 switch has no span to cycle).
+    if (child.cycle && target.key !== 'enabled') {
+      out.push({
+        instanceId: target.instanceId,
+        key: target.key,
+        mode: 'linear',
+        keyframes: [],
+        cycle: child.cycle,
+        cycles: extractCycleGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
         min,
         max,
         base,
