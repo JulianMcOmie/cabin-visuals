@@ -25,6 +25,10 @@ export interface StateVector {
  *  only sampleAutomationLane reads it apart; computeAtBeat samples it per frame. */
 export interface ResolvedAutomation extends AutomationLane {
   param: string
+  /** The automation child track that produced this lane. The resolver reads it to
+   *  place a tf* lane relative to its mover/splitter siblings (resolve.ts's weave
+   *  step); consumers sampling the lane never need it. */
+  sourceTrackId?: string
 }
 
 /** A resolved automation lane targeting one effect instance's setting (or its
