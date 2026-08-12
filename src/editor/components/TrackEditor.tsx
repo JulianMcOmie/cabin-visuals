@@ -387,6 +387,7 @@ export function TrackEditor() {
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setTrackCycle = useProjectStore((s) => s.setTrackCycle)
   const setTrackAutomationRange = useProjectStore((s) => s.setTrackAutomationRange)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
   const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
@@ -614,11 +615,13 @@ export function TrackEditor() {
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}
                         burst={track.burst}
+                        cycle={track.cycle}
                         amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
+                        onCycle={(cycle) => setTrackCycle(track.id, cycle)}
                         onAmount={(amount) => setTrackAutomationAmount(track.id, amount)}
                         paramBounds={laneBounds}
                         range={track.automationRange}

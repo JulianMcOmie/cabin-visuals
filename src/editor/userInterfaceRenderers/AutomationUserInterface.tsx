@@ -16,8 +16,10 @@
 //   CURVE - the easing the lane rides between two value keyframes.
 //   NOISE - the seeded wobble at this rate/smoothness/range; the dice redraw it.
 //   BURST - the ADSR every note fires, its three stages grabbable on the curve.
+//   CYCLE - the motion curve stretched between note onsets, plus its ghost
+//           repeat so the seam is visible while shaping it.
 //
-// Burst mode is the one place the window is also an EDITOR: an envelope's shape
+// Burst and cycle modes are where the window is also an EDITOR: an envelope's shape
 // is the thing being authored, so the handles ride the curve (the same
 // interaction as EnvelopeUserInterface's pad) while the knobs below give the
 // same four values fine, numeric control. Everything else keeps the guide's one
@@ -36,13 +38,16 @@ import {
   DEFAULT_BURST,
   DEFAULT_BURST_BEZIER,
   DEFAULT_BURST_SPRING,
+  DEFAULT_CYCLE,
   DEFAULT_NOISE,
   bezierY,
   burstGateGain,
+  cycleShapeY,
   easeFraction,
   sampleNoiseLane,
   type BurstConfig,
   type BurstShape,
+  type CycleConfig,
   type NoiseConfig,
 } from '../core/visual/automation'
 import { LaserKnob } from './laserKnob'
@@ -390,6 +395,159 @@ function SpringBurstWindow({ burst, accent }: {
   )
 }
 
+// ── Cycle window ────────────────────────────────────────────────────────────
+// One cycle of the wave as an EDITOR: the endpoints' heights ride the onset
+// lines (whether the wave is seamless is exactly whether they match - there is
+// no separate continuity switch), the control points are free, and a fainter
+// SECOND cycle over a shorter span shows the next onset pair - so the seam,
+// and any snap the user's curve makes across it, is visible while dragging.
+// Its own overshoot headroom (larger than the burst windows'): the SPIKE
+// preset parks a control point near y = 2.25.
+const CY_SPAN = 33
+const CY_CTRL_MAX = 2.4
+const cyLevel = (level: number) => Y_BASE - level * CY_SPAN
+/** The edited cycle spans onset CX0 → CXM; the ghost repeat CXM → CX1 is
+ *  deliberately NARROWER - cycles stretch to the phrasing, and unequal spans
+ *  say so. */
+const CX0 = 6, CXM = 56, CX1 = 94
+
+/** One cycle of the shape as an SVG path over [x0, x1]. `yBase`/`span` scale
+ *  the heights, so the preset thumbnails can reuse it at their own size. */
+function cyclePath(cfg: CycleConfig, x0: number, x1: number, yBase = Y_BASE, span = CY_SPAN, steps = 48): string {
+  let d = `M ${x0.toFixed(2)} ${(yBase - cfg.y0 * span).toFixed(2)}`
+  for (let i = 1; i <= steps; i++) {
+    const u = i / steps
+    d += ` L ${(x0 + (x1 - x0) * u).toFixed(2)} ${(yBase - cycleShapeY(cfg, u) * span).toFixed(2)}`
+  }
+  return d
+}
+
+function CycleWindow({ cycle, accent, onCycle }: {
+  cycle: CycleConfig
+  accent: string
+  onCycle: (next: CycleConfig) => void
+}) {
+  const padRef = useRef<HTMLDivElement>(null)
+  const levelFromY = (fy: number) => (Y_BASE - fy) / CY_SPAN
+  const xOf = (u: number) => CX0 + clamp(u, 0, 1) * (CXM - CX0)
+  const uFromX = (fx: number) => clamp((fx - CX0) / (CXM - CX0), 0, 1)
+
+  const p1x = xOf(cycle.x1)
+  const p1y = cyLevel(clamp(cycle.y1, -0.5, CY_CTRL_MAX))
+  const p2x = xOf(cycle.x2)
+  const p2y = cyLevel(clamp(cycle.y2, -0.5, CY_CTRL_MAX))
+
+  return (
+    <LaneWindow testId="automation-cycle-pad" title="One cycle between two note onsets - the fainter repeat shows the seam. Drag the endpoints' heights and the control points; matching endpoints make the wave seamless.">
+      <div ref={padRef} role="group" aria-label="Cycle motion curve" className="absolute inset-0">
+        <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+          {/* The note's row: the cycle's high lands here (its low, inverted). */}
+          <line x1={CX0} y1={cyLevel(1)} x2={CX1} y2={cyLevel(1)} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <line x1={CX0} y1={Y_BASE} x2={CX1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {/* The onsets that bound each cycle. */}
+          {[CX0, CXM, CX1].map((x) => (
+            <line key={x} x1={x} y1={Y_PEAK - 8} x2={x} y2={Y_BASE} stroke="rgba(255,255,255,0.10)" strokeWidth={1} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+          ))}
+          {/* Control arms, the way every curve tool draws them. */}
+          <line x1={CX0} y1={cyLevel(cycle.y0)} x2={p1x} y2={p1y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line x1={CXM} y1={cyLevel(cycle.y3)} x2={p2x} y2={p2y} stroke={withAlpha(accent, 0.35)} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {/* The next pair's repeat: where the seam lands is visible, not imagined. */}
+          <path d={cyclePath(cycle, CXM, CX1)} fill="none" stroke={withAlpha(accent, 0.3)} strokeWidth={1.25} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <GlowPath d={cyclePath(cycle, CX0, CXM)} accent={accent} />
+        </svg>
+        <CurveHandle
+          padRef={padRef} x={CX0} y={cyLevel(cycle.y0)} accent={accent}
+          ariaLabel="Cycle start height" ariaMin={0} ariaMax={1} ariaNow={cycle.y0}
+          ariaText={`Starts at ${cycle.y0.toFixed(2)}`} cursor="ns-resize"
+          onDragTo={(_fx, fy) => onCycle({ ...cycle, y0: snap(clamp(levelFromY(fy), 0, 1)) })}
+          onNudge={(_dx, dy) => onCycle({ ...cycle, y0: snap(clamp(cycle.y0 + dy * 0.02, 0, 1)) })}
+          onReset={() => onCycle({ ...cycle, y0: DEFAULT_CYCLE.y0 })}
+        />
+        <CurveHandle
+          padRef={padRef} x={CXM} y={cyLevel(cycle.y3)} accent={accent}
+          ariaLabel="Cycle end height" ariaMin={0} ariaMax={1} ariaNow={cycle.y3}
+          ariaText={`Ends at ${cycle.y3.toFixed(2)}`} cursor="ns-resize"
+          onDragTo={(_fx, fy) => onCycle({ ...cycle, y3: snap(clamp(levelFromY(fy), 0, 1)) })}
+          onNudge={(_dx, dy) => onCycle({ ...cycle, y3: snap(clamp(cycle.y3 + dy * 0.02, 0, 1)) })}
+          onReset={() => onCycle({ ...cycle, y3: DEFAULT_CYCLE.y3 })}
+        />
+        <CurveHandle
+          padRef={padRef} x={p1x} y={p1y} accent={accent}
+          ariaLabel="First control point" ariaMin={0} ariaMax={1} ariaNow={cycle.x1}
+          ariaText={`Control 1 at ${cycle.x1.toFixed(2)}, ${cycle.y1.toFixed(2)}`} cursor="move"
+          onDragTo={(fx, fy) => onCycle({ ...cycle, x1: snap(uFromX(fx)), y1: snap(clamp(levelFromY(fy), -0.5, CY_CTRL_MAX)) })}
+          onNudge={(dx, dy) => onCycle({ ...cycle, x1: snap(clamp(cycle.x1 + dx * 0.02, 0, 1)), y1: snap(clamp(cycle.y1 + dy * 0.02, -0.5, CY_CTRL_MAX)) })}
+          onReset={() => onCycle({ ...cycle, x1: DEFAULT_CYCLE.x1, y1: DEFAULT_CYCLE.y1 })}
+        />
+        <CurveHandle
+          padRef={padRef} x={p2x} y={p2y} accent={accent}
+          ariaLabel="Second control point" ariaMin={0} ariaMax={1} ariaNow={cycle.x2}
+          ariaText={`Control 2 at ${cycle.x2.toFixed(2)}, ${cycle.y2.toFixed(2)}`} cursor="move"
+          onDragTo={(fx, fy) => onCycle({ ...cycle, x2: snap(uFromX(fx)), y2: snap(clamp(levelFromY(fy), -0.5, CY_CTRL_MAX)) })}
+          onNudge={(dx, dy) => onCycle({ ...cycle, x2: snap(clamp(cycle.x2 + dx * 0.02, 0, 1)), y2: snap(clamp(cycle.y2 + dy * 0.02, -0.5, CY_CTRL_MAX)) })}
+          onReset={() => onCycle({ ...cycle, x2: DEFAULT_CYCLE.x2, y2: DEFAULT_CYCLE.y2 })}
+        />
+      </div>
+    </LaneWindow>
+  )
+}
+
+/** The classic wave shapes as one-click starting points; each loads the editor
+ *  with its control points (polarity and bounds stay put). Matching is by the
+ *  shape fields, so the row also SHOWS which classic the current curve is. */
+const CYCLE_PRESETS: { id: string; label: string; title: string; shape: Pick<CycleConfig, 'y0' | 'x1' | 'y1' | 'x2' | 'y2' | 'y3'> }[] = [
+  { id: 'swell', label: 'SWELL', title: 'A seamless rise and fall that peaks on the note', shape: { y0: DEFAULT_CYCLE.y0, x1: DEFAULT_CYCLE.x1, y1: DEFAULT_CYCLE.y1, x2: DEFAULT_CYCLE.x2, y2: DEFAULT_CYCLE.y2, y3: DEFAULT_CYCLE.y3 } },
+  { id: 'ramp', label: 'RAMP', title: 'A saw: climbs to the note, snaps back at the next onset', shape: { y0: 0, x1: 1 / 3, y1: 1 / 3, x2: 2 / 3, y2: 2 / 3, y3: 1 } },
+  { id: 'fall', label: 'FALL', title: 'Starts on the note and slides away until the next onset', shape: { y0: 1, x1: 1 / 3, y1: 2 / 3, x2: 2 / 3, y2: 1 / 3, y3: 0 } },
+  { id: 'spike', label: 'SPIKE', title: 'A percussive hit on the onset, decaying across the span', shape: { y0: 0, x1: 0.1, y1: 2.25, x2: 0.35, y2: 0.1, y3: 0 } },
+]
+
+function CyclePresetRow({ cycle, accent, onCycle }: {
+  cycle: CycleConfig
+  accent: string
+  onCycle: (next: CycleConfig) => void
+}) {
+  const matches = (shape: (typeof CYCLE_PRESETS)[number]['shape']) =>
+    (Object.keys(shape) as (keyof typeof shape)[]).every((k) => Math.abs(cycle[k] - shape[k]) < 0.005)
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Cycle shape preset"
+      data-testid="automation-cycle-presets"
+      className="flex gap-[2px] rounded-[7px] border border-white/[0.07] bg-black/30 p-[2px]"
+    >
+      {CYCLE_PRESETS.map((preset) => {
+        const active = matches(preset.shape)
+        return (
+          <button
+            key={preset.id}
+            role="radio"
+            aria-checked={active}
+            aria-label={preset.label}
+            title={preset.title}
+            onClick={() => onCycle({ ...cycle, ...preset.shape })}
+            className={`h-7 min-w-0 flex-1 cursor-pointer rounded-[5px] px-[3px] transition-colors ${
+              active ? '' : 'hover:bg-white/[0.04]'
+            }`}
+            style={active ? { background: withAlpha(accent, 0.2) } : undefined}
+          >
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" className="h-full w-full">
+              <path
+                d={cyclePath({ ...preset.shape }, 8, 92, 86, 62, 24)}
+                fill="none"
+                stroke={active ? towardWhite(accent, 0.6) : 'rgba(255,255,255,0.35)'}
+                strokeWidth={active ? 1.75 : 1.25}
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 const SHAPE_OPTIONS: { value: BurstShape; label: string; title: string }[] = [
   { value: 'adsr', label: 'ADSR', title: 'The classic piecewise envelope: attack, decay, sustain, release' },
   { value: 'bezier', label: 'BEZIER', title: 'A user cubic-bezier rise and fall - control Ys past 1 overshoot' },
@@ -446,6 +604,7 @@ const MODE_OPTIONS: { value: AutomationMode; label: string; title: string }[] = 
   { value: 'curve', label: 'CURVE', title: 'Notes are value keyframes joined by a curve' },
   { value: 'noise', label: 'NOISE', title: 'Held notes gate a seeded random wobble around their value' },
   { value: 'burst', label: 'BURST', title: 'Each note fires an ADSR envelope toward its value' },
+  { value: 'cycle', label: 'CYCLE', title: 'A motion curve plays once between each pair of note onsets' },
 ]
 
 /** The console's segmented control: one lit segment on a recessed track. The
@@ -744,7 +903,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, color, mode, interpolation, noise, burst, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onAmount, onRange,
+  targetLabel, color, mode, interpolation, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onCycle, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -754,12 +913,14 @@ export function AutomationUserInterface({
   interpolation: InterpolationMode
   noise: NoiseConfig | undefined
   burst: BurstConfig | undefined
+  cycle: CycleConfig | undefined
   /** The lane's output gain (Track.automationAmount, defaulted to 1). */
   amount: number
   onMode: (mode: AutomationMode) => void
   onInterpolation: (mode: InterpolationMode) => void
   onNoise: (noise: NoiseConfig) => void
   onBurst: (burst: BurstConfig) => void
+  onCycle: (cycle: CycleConfig) => void
   onAmount: (amount: number) => void
   /** The target param's own bounds; null hides the row-spread console (the
    *  lane's target could not be resolved to a numeric param). */
@@ -787,6 +948,8 @@ export function AutomationUserInterface({
           : (burst.shape ?? 'adsr') === 'spring'
             ? <SpringBurstWindow burst={burst} accent={accent} />
             : <BurstWindow burst={burst} accent={accent} onBurst={onBurst} />
+      ) : mode === 'cycle' && cycle ? (
+        <CycleWindow cycle={cycle} accent={accent} onCycle={onCycle} />
       ) : mode === 'noise' && noise ? (
         <LaneWindow testId="automation-noise-plot" title={`${NOISE_WINDOW_BEATS} beats of this seed`}>
           <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
@@ -907,6 +1070,50 @@ export function AutomationUserInterface({
           </div>
         )}
 
+        {mode === 'cycle' && cycle && (() => {
+          // The resting-bound knob speaks param units; an unresolvable target
+          // falls back to a unit range (same fallback the engine samples with).
+          const kmin = paramBounds?.min ?? 0
+          const kmax = paramBounds?.max ?? 1
+          const step = Math.max(0.01, Number(((kmax - kmin) / 200).toPrecision(2)))
+          const invert = cycle.invert ?? false
+          return (
+            <>
+              <CyclePresetRow cycle={cycle} accent={accent} onCycle={onCycle} />
+              <div className="flex items-end gap-4">
+                <button
+                  onClick={() => onCycle({ ...cycle, invert: !invert })}
+                  aria-pressed={invert}
+                  title="Flip which bound the notes own: normally a note is the cycle's high over the floor; inverted it is the low under a constant ceiling"
+                  data-testid="automation-cycle-invert"
+                  className={`mb-4 h-[22px] rounded-full px-2.5 font-mono text-[8px] font-semibold tracking-[0.1em] transition-colors cursor-pointer ${
+                    invert ? '' : 'border border-white/10 text-white/40 hover:text-white/70'
+                  }`}
+                  style={invert ? { background: withAlpha(accent, 0.25), color: towardWhite(accent, 0.6) } : undefined}
+                >
+                  INVERT
+                </button>
+                {/* The bound the notes do NOT own - the cycle rests here. */}
+                <div className="ml-auto">
+                  {invert ? (
+                    <LaserKnob
+                      value={clamp(cycle.ceiling ?? kmax, kmin, kmax)} min={kmin} max={kmax} step={step} defaultValue={kmax}
+                      label="CEIL" ariaLabel="Ceiling: the constant high the cycle reaches; notes set its lows" accent={accent} large
+                      onChange={(v) => onCycle({ ...cycle, ceiling: v })}
+                    />
+                  ) : (
+                    <LaserKnob
+                      value={clamp(cycle.floor ?? 0, kmin, kmax)} min={kmin} max={kmax} step={step} defaultValue={clamp(0, kmin, kmax)}
+                      label="FLOOR" ariaLabel="Floor: the value the cycle rests on; notes set its peaks" accent={accent} large
+                      onChange={(v) => onCycle({ ...cycle, floor: v })}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )
+        })()}
+
         {mode === 'noise' && noise && (
           <div className="flex items-end gap-4">
             <LaserKnob
@@ -958,6 +1165,16 @@ export function AutomationUserInterface({
             <>Every note fires this envelope on <span className="text-white/75">{targetLabel}</span>, starting from
               whatever value is underneath and heading for the note&apos;s own row. Velocity is the note&apos;s intensity;
               between bursts the lane lets go.</>
+          ) : mode === 'cycle' ? (
+            cycle?.invert ? (
+              <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
+                stretched to fit. The earlier note&apos;s row is the cycle&apos;s LOW; its high part holds the ceiling.
+                Outside the onsets the lane lets go.</>
+            ) : (
+              <>The curve plays once between each pair of note onsets on <span className="text-white/75">{targetLabel}</span>,
+                stretched to fit. The earlier note&apos;s row is the cycle&apos;s peak; it rests on the floor. Matching
+                endpoint heights make the wave seamless. Outside the onsets the lane lets go.</>
+            )
           ) : mode === 'noise' ? (
             <>While a note is held, <span className="text-white/75">{targetLabel}</span> wanders around the note&apos;s
               row; between notes the lane lets go. The seed is fixed per take, so scrubbing and export replay the

@@ -15,18 +15,29 @@ Per-frame state must never trigger React re-renders; renderers pull it from `use
 
 Flattens each scene's track forest depth-first (cycle-guarded), expands looped blocks' notes (`noteFlatten.ts`), gathers child lanes per object: `automation` (in one of its three modes, below), `envelope` (ADSR), `ability`, effect-automation (`fx:<instanceId>:<key>` targets, parsed by `effects/automation.ts`), and the track's mover/splitter chain. `ProjectSnapshot` is a structural slice of ProjectStore — the engine never imports store internals.
 
-## automation.ts — one lane, three modes
+## automation.ts — one lane, four modes
 
-An automation child track's notes mean one of three things, and which one is
+An automation child track's notes mean one of four things, and which one is
 implied by the config the track carries (`automationMode()` owns that precedence;
-burst beats noise if a document somehow has both). All three are pure functions of
-the beat, so the pause invariant holds for every mode:
+burst beats noise beats cycle if a document somehow has several). All four are
+pure functions of the beat, so the pause invariant holds for every mode:
 
 | mode | config | what a note is | between notes |
 |---|---|---|---|
 | curve | `interpolation` | a value keyframe (pitch → value) | interpolated / endpoints held |
 | noise | `Track.noise` | a gate for seeded random wander around its value | **inert** |
 | burst | `Track.burst` | an ADSR burst from the value underneath toward its own pitch-value, velocity = intensity | **inert** |
+| cycle | `Track.cycle` | an ONSET dividing time: the motion curve plays once between each consecutive onset pair, stretched to fit | the cycle itself; **inert** outside the onset span |
+
+**CYCLE mode** (`Track.cycle`): the shape is one cubic bezier y(x) with editable
+ENDPOINT heights — seam continuity is not an option, it is whether the user's
+endpoints match. The earlier onset's pitch-value is the cycle's high (y = 1)
+over a configurable `floor` (default 0); `invert` flips the note to the LOW
+under a constant `ceiling` (default param max). Duration is deliberately
+ignored (onsets only), chords collapse to one boundary keeping the largest
+value, and a lone onset is inert — there is nothing to stretch to. Works on
+`fx:` lanes like burst does (`enabled` stays keyframes). Bounds for structural
+budgets come from the bezier's height hull (min/max of the four Ys).
 
 **`sampleAutomationLane(lane, beat, base)` is the only place the mode is read.**
 The engine, the hover preview and `paramAtBeat` all go through it, so they cannot
