@@ -131,11 +131,12 @@ export interface AudioBlock {
 export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
 
 /** What an automation lane's notes MEAN: value keyframes joined by a curve, gates
- *  for seeded noise, or ADSR bursts. Never stored directly - it is implied by which
- *  config the track carries (`Track.noise` / `Track.burst`); read it through
+ *  for seeded noise, ADSR bursts, or onset-to-onset cycles of a motion curve.
+ *  Never stored directly - it is implied by which config the track carries
+ *  (`Track.noise` / `Track.burst` / `Track.cycle`); read it through
  *  `automationMode()` in core/visual/automation.ts so the precedence stays in one
  *  place. */
-export type AutomationMode = 'curve' | 'noise' | 'burst'
+export type AutomationMode = 'curve' | 'noise' | 'burst' | 'cycle'
 
 /**
  * A targeting route for a top-level mover: `scope` picks a single track, a whole
@@ -194,6 +195,23 @@ export interface Track {
     shape?: 'adsr' | 'bezier' | 'spring'
     bezier?: { x1: number; y1: number; x2: number; y2: number; riseBeats: number; fallBeats: number }
     spring?: { stiffness: number; damping: number; mass: number }
+  }
+  /** Automation tracks only: flips the lane into cycle mode - the motion curve
+   *  (one cubic bezier y(x), endpoint heights included so the user decides
+   *  whether the wave is seamless) plays once between each pair of consecutive
+   *  note ONSETS, stretched to fit. The earlier note's pitch-value is the
+   *  cycle's high (curve y = 1); `floor` is its resting value (y = 0). With
+   *  `invert`, the note's value becomes the LOW and `ceiling` the constant
+   *  high. (See core/visual/automation.ts CycleConfig.) */
+  cycle?: {
+    y0: number; x1: number; y1: number; x2: number; y2: number; y3: number
+    invert?: boolean
+    /** Param units. Absent = 0 (clamped into the param's range). */
+    floor?: number
+    /** Param units, invert mode's constant high. Absent = the param's max. */
+    ceiling?: number
+    /** Cycles span each note's own LENGTH instead of the gap to the next onset. */
+    noteSpan?: boolean
   }
   /** Automation tracks only: how the pitch rows spread onto the value range -
    *  a value sub-range, a row count, integer snapping, and the spread's curve.

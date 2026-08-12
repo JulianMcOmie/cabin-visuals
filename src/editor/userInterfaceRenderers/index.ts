@@ -25,6 +25,7 @@ import { MetronomeBallsUserInterfaceRenderer } from './MetronomeBallsUserInterfa
 import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
 import { FlashWallUserInterfaceRenderer } from './FlashWallUserInterface'
 import { OverlapShapeUserInterfaceRenderer } from './OverlapShapeUserInterface'
+import { OverlapSolidUserInterfaceRenderer } from './OverlapSolidUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 import type { UserInterfaceRendererId } from './ids'
 
@@ -60,6 +61,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   emojiDisplay: EmojiDisplayUserInterfaceRenderer,
   flashWall: FlashWallUserInterfaceRenderer,
   overlapShape: OverlapShapeUserInterfaceRenderer,
+  overlapSolid: OverlapSolidUserInterfaceRenderer,
 }
 
 export function getUserInterfaceRenderer(id: UserInterfaceRendererId): UserInterfaceRendererDefinition {

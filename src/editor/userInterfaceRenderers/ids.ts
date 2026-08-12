@@ -26,3 +26,4 @@ export type UserInterfaceRendererId =
   | 'emojiDisplay'
   | 'flashWall'
   | 'overlapShape'
+  | 'overlapSolid'

@@ -41,6 +41,7 @@ import { polyFxInstrument } from './PolyFx'
 import { waterDropInstrument } from './WaterDrop'
 import { flashWallInstrument } from './FlashWall'
 import { overlapShapeInstrument } from './OverlapShape'
+import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
 import { paramDefault, type ObjectInstrumentDef } from './types'
@@ -86,6 +87,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [waterDropInstrument.id]: waterDropInstrument,
   [flashWallInstrument.id]: flashWallInstrument,
   [overlapShapeInstrument.id]: overlapShapeInstrument,
+  [overlapSolidInstrument.id]: overlapSolidInstrument,
   [cropMaskInstrument.id]: cropMaskInstrument,
   [midiRollInstrument.id]: midiRollInstrument,
 }

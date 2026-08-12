@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Color, Group, Mesh, MeshPhysicalMaterial, type BufferGeometry } from 'three'
 import { cubeSpinRotation } from '../core/visual/cubeSpin'
 import { useInstrumentFrame } from '../core/visual/instrumentFrame'
@@ -19,6 +19,7 @@ import {
   normalizeSides,
   type FundamentalGeometryId,
 } from './FundamentalGeometry'
+import { POSTER_SHADE_DEFAULT, createPosterMaterial } from './posterShading'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 const DEFAULT_BASE_COLOR = DEFAULT_FUNDAMENTAL_COLOR
@@ -52,12 +53,30 @@ export const cubeInstrument: ObjectInstrumentDef = {
     { key: 'sides', label: 'Sides', min: MIN_SIDES, max: MAX_SIDES, step: 1, default: DEFAULT_SIDES },
     // Spin is opt-in: 0 = still (the default), 1 = the classic steady tumble.
     { key: 'spinSpeed', label: 'Spin Speed', min: 0, max: 4, step: 0.05, default: 0 },
-    // Surface toggles - resolved through fundamentalMaterialSettings. Defaults
-    // reproduce the original material exactly, so existing projects keep their look.
-    { key: 'reflective', label: 'Reflective', type: 'boolean', default: 0 },
-    { key: 'refractive', label: 'Refractive', type: 'boolean', default: 0 },
-    { key: 'shaded', label: 'Lit', type: 'boolean', default: 1 },
-    { key: 'textured', label: 'Textured', type: 'boolean', default: 0 },
+    // The FINISH: Matte is the Overlap instruments' poster surface (flat color
+    // + a fixed-light lambert, tone-map-free - pretty without glaring) and the
+    // default for NEW tracks; Gloss is the original physical material.
+    // Existing projects are pinned to Gloss by persistence UPGRADES[13], so no
+    // saved look changes.
+    {
+      key: 'finish',
+      label: 'Finish',
+      type: 'select',
+      options: [
+        { value: 0, label: 'Matte' },
+        { value: 1, label: 'Gloss' },
+      ],
+      default: 0,
+    },
+    // How much of the lambert model the Matte finish mixes over the flat fill.
+    { key: 'shading', label: 'Shading', min: 0, max: 1, step: 0.01, default: POSTER_SHADE_DEFAULT, showIf: 'finish=0' },
+    // Surface toggles - resolved through fundamentalMaterialSettings, and only
+    // meaningful on the Gloss finish (Matte ignores scene light entirely).
+    // Defaults reproduce the original material exactly.
+    { key: 'reflective', label: 'Reflective', type: 'boolean', default: 0, showIf: 'finish=1' },
+    { key: 'refractive', label: 'Refractive', type: 'boolean', default: 0, showIf: 'finish=1' },
+    { key: 'shaded', label: 'Lit', type: 'boolean', default: 1, showIf: 'finish=1' },
+    { key: 'textured', label: 'Textured', type: 'boolean', default: 0, showIf: 'finish=1' },
   ],
   // Notes drive the pulse envelope (scale swell + emissive glow); higher pitch = stronger pulse.
   midiRows: [
@@ -104,10 +123,16 @@ export function Cube({ trackId }: { trackId: string }) {
   // a param edit. We own these builds; `value` is whichever param drives the id.
   const paramBuilt = useRef<Partial<Record<FundamentalGeometryId, { value: number; geometry: BufferGeometry }>>>({})
   const tint = useRef(new Color()).current
+  // The Matte finish's poster surface (shared with the Overlap instruments) -
+  // one instance swapped onto whichever solid is visible; each mesh's own
+  // physical material is remembered so Gloss can take it back.
+  const posterMaterial = useMemo(() => createPosterMaterial(), [])
+  const glossMaterials = useRef(new WeakMap<Mesh, Mesh['material']>()).current
 
   useEffect(() => () => {
     for (const entry of Object.values(paramBuilt.current)) entry?.geometry.dispose()
-  }, [])
+    posterMaterial.dispose()
+  }, [posterMaterial])
 
   useInstrumentFrame(trackId, (state) => {
     if (!spinRef.current) return false
@@ -147,13 +172,27 @@ export function Cube({ trackId }: { trackId: string }) {
     else if (legacyBaseHue !== undefined) tint.setHSL(legacyBaseHue / 360, 0.65, 0.6)
     else tint.set(DEFAULT_BASE_COLOR)
 
-    const mat = mesh.material as MeshPhysicalMaterial
-    applyFundamentalSurface(mat, {
-      reflective: (state.params.reflective ?? paramDefault(cubeInstrument, 'reflective')) >= 0.5,
-      refractive: (state.params.refractive ?? paramDefault(cubeInstrument, 'refractive')) >= 0.5,
-      shaded: (state.params.shaded ?? paramDefault(cubeInstrument, 'shaded')) >= 0.5,
-      textured: (state.params.textured ?? paramDefault(cubeInstrument, 'textured')) >= 0.5,
-    }, tint, energy)
+    const matte = (state.params.finish ?? paramDefault(cubeInstrument, 'finish')) < 0.5
+    if (matte) {
+      if (mesh.material !== posterMaterial) {
+        glossMaterials.set(mesh, mesh.material)
+        mesh.material = posterMaterial
+      }
+      const uniforms = posterMaterial.uniforms
+      ;(uniforms.uColor.value as Color).copy(tint)
+      uniforms.uShade.value = state.params.shading ?? paramDefault(cubeInstrument, 'shading')
+      uniforms.uEnergy.value = energy
+    } else {
+      const gloss = glossMaterials.get(mesh)
+      if (gloss && mesh.material === posterMaterial) mesh.material = gloss
+      const mat = mesh.material as MeshPhysicalMaterial
+      applyFundamentalSurface(mat, {
+        reflective: (state.params.reflective ?? paramDefault(cubeInstrument, 'reflective')) >= 0.5,
+        refractive: (state.params.refractive ?? paramDefault(cubeInstrument, 'refractive')) >= 0.5,
+        shaded: (state.params.shaded ?? paramDefault(cubeInstrument, 'shaded')) >= 0.5,
+        textured: (state.params.textured ?? paramDefault(cubeInstrument, 'textured')) >= 0.5,
+      }, tint, energy)
+    }
 
     // Shatter: sample this track's Shatter lane at the current beat - a pure function
     // of the beat, so scrubbing mirrors playback exactly. The burst is MAX at the note

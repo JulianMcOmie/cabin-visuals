@@ -4,6 +4,11 @@ import { useEffect, useRef } from 'react'
 import { strobeGate } from '../instruments/Strobe'
 import { impactEnvelope } from '../instruments/ImpactWarp'
 import { OVERLAP_SHAPE_OPTIONS, overlapShapePoints } from '../instruments/overlapShapeCore'
+import {
+  OVERLAP_SOLID_OPTIONS,
+  OVERLAP_SOLID_TORUS_RADIUS,
+  OVERLAP_SOLID_TORUS_TUBE,
+} from '../instruments/overlapSolidCore'
 
 /**
  * Purpose-built canvas-2D previews for instruments whose real render needs
@@ -757,6 +762,88 @@ const drawOverlapShape: Draw2D = (ctx, w, h, t) => {
   ctx.fill('evenodd')
 }
 
+/** Overlap Solid: the 3D sibling's vignette - the same gliding-parity story
+ *  told with the solids' front-view projections (sphere→disc, cube→square,
+ *  cone→triangle, torus→donut whose hole evenodd carves for free), plus a
+ *  soft top-left sheen over the surviving fill as the "this one is a volume"
+ *  tell. Same cycle clock as Overlap Shape so the two cards read as a pair. */
+function traceOverlapSolid(ctx: CanvasRenderingContext2D, solid: number, cx: number, cy: number, r: number) {
+  switch (solid) {
+    case 1:
+      ctx.rect(cx - r, cy - r, 2 * r, 2 * r)
+      break
+    case 2:
+      ctx.rect(cx - r * 0.82, cy - r, 2 * r * 0.82, 2 * r)
+      break
+    case 3:
+      ctx.moveTo(cx, cy - r)
+      ctx.lineTo(cx + r, cy + r)
+      ctx.lineTo(cx - r, cy + r)
+      ctx.closePath()
+      break
+    case 4:
+      ctx.moveTo(cx + r * (OVERLAP_SOLID_TORUS_RADIUS + OVERLAP_SOLID_TORUS_TUBE), cy)
+      ctx.arc(cx, cy, r * (OVERLAP_SOLID_TORUS_RADIUS + OVERLAP_SOLID_TORUS_TUBE), 0, Math.PI * 2)
+      ctx.moveTo(cx + r * (OVERLAP_SOLID_TORUS_RADIUS - OVERLAP_SOLID_TORUS_TUBE), cy)
+      ctx.arc(cx, cy, r * (OVERLAP_SOLID_TORUS_RADIUS - OVERLAP_SOLID_TORUS_TUBE), 0, Math.PI * 2)
+      break
+    default:
+      ctx.moveTo(cx + r, cy)
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  }
+}
+
+const drawOverlapSolid: Draw2D = (ctx, w, h, t) => {
+  const beat = t * BEATS_PER_SEC
+  ctx.fillStyle = '#0b0e16'
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = '#151a26'
+  const cell = 10
+  for (let y = 0; y < h; y += cell) {
+    for (let x = (y / cell) % 2 === 0 ? 0 : cell; x < w; x += cell * 2) {
+      ctx.fillRect(x, y, cell, cell)
+    }
+  }
+
+  const cycle = Math.floor(beat / OVERLAP_CYCLE_BEATS)
+  const solid = cycle % OVERLAP_SOLID_OPTIONS.length
+  const colorMode = cycle % 2 === 1
+  const r = Math.min(w, h) * 0.36 * (1 + 0.08 * pulseAt(beat, 1, 3))
+  const spread = r * 0.72 * Math.sin(t * 0.9)
+  const lift = r * 0.16 * Math.sin(t * 0.53)
+
+  const both = () => {
+    ctx.beginPath()
+    traceOverlapSolid(ctx, solid, w / 2 - spread, h / 2 - lift, r)
+    traceOverlapSolid(ctx, solid, w / 2 + spread, h / 2 + lift, r)
+  }
+  if (colorMode) {
+    // Union underlay drawn one copy at a time, each evenodd, so the torus's
+    // own hole stays a hole (it is not overlap volume).
+    ctx.fillStyle = OVERLAP_PREVIEW_OVERLAP
+    ctx.beginPath()
+    traceOverlapSolid(ctx, solid, w / 2 - spread, h / 2 - lift, r)
+    ctx.fill('evenodd')
+    ctx.beginPath()
+    traceOverlapSolid(ctx, solid, w / 2 + spread, h / 2 + lift, r)
+    ctx.fill('evenodd')
+  }
+  ctx.fillStyle = OVERLAP_PREVIEW_BASE
+  both()
+  ctx.fill('evenodd')
+  // The volume tell: clip the sheen to the fill so the checker stays flat.
+  ctx.save()
+  both()
+  ctx.clip('evenodd')
+  const sheen = ctx.createRadialGradient(w * 0.38, h * 0.26, 0, w * 0.42, h * 0.4, Math.max(w, h) * 0.7)
+  sheen.addColorStop(0, 'rgba(255,255,255,0.30)')
+  sheen.addColorStop(0.55, 'rgba(255,255,255,0.04)')
+  sheen.addColorStop(1, 'rgba(0,0,0,0.28)')
+  ctx.fillStyle = sheen
+  ctx.fillRect(0, 0, w, h)
+  ctx.restore()
+}
+
 // ── Effect vignettes ─────────────────────────────────────────────────────────
 //
 // The library's Effects tab previews through the same popup. Each vignette
@@ -941,6 +1028,7 @@ const PREVIEWS_2D: Record<string, Draw2D> = {
   colorFilters: drawColorFilters,
   strobe: drawStrobe,
   overlapShape: drawOverlapShape,
+  overlapSolid: drawOverlapSolid,
   sceneSwitcher: drawSceneSwitcher,
   cut: drawCut,
   radialCut: drawRadialCut,

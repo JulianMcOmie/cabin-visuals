@@ -246,10 +246,8 @@ const bezierComponent = (c1: number, c2: number, t: number): [number, number] =>
   ]
 }
 
-/** y at time-progress u of cubic-bezier(x1, y1, x2, y2) - Newton, bisection net. */
-export function bezierY(x1: number, y1: number, x2: number, y2: number, u: number): number {
-  if (u <= 0) return 0
-  if (u >= 1) return 1
+/** Curve-parameter t whose bezier x equals time-progress u - Newton, bisection net. */
+function solveBezierT(x1: number, x2: number, u: number): number {
   let t = u
   for (let i = 0; i < 8; i++) {
     const [x, dx] = bezierComponent(x1, x2, t)
@@ -266,7 +264,14 @@ export function bezierY(x1: number, y1: number, x2: number, y2: number, u: numbe
       else hi = t
     }
   }
-  return bezierComponent(y1, y2, t)[0]
+  return t
+}
+
+/** y at time-progress u of cubic-bezier(x1, y1, x2, y2) - Newton, bisection net. */
+export function bezierY(x1: number, y1: number, x2: number, y2: number, u: number): number {
+  if (u <= 0) return 0
+  if (u >= 1) return 1
+  return bezierComponent(y1, y2, solveBezierT(x1, x2, u))[0]
 }
 
 function bezierGateGain(note: BurstGate, beat: number, bez: BurstBezier): number {
@@ -370,6 +375,151 @@ export function sampleBurstLane(
   return base + (target - base) * travel
 }
 
+// ── Cycle mode ───────────────────────────────────────────────────────────────
+// The fourth lane mode. Notes stop being keyframes and become the BEATS of a
+// wave: the motion curve plays exactly once between each pair of consecutive
+// note ONSETS, stretched to fit however far apart they are - an LFO whose
+// period is the phrasing itself. The earlier onset's pitch-value scales the
+// cycle (curve y = 1 lands ON that value; y = 0 is the `floor`), so a row of
+// notes IS the wave's amplitude ride. Note duration is deliberately ignored -
+// only onsets divide time. Outside the onsets (before the first, at/after the
+// last, or with fewer than two) the lane is inert (NaN) like noise/burst.
+//
+// There is no seam/continuity option ON PURPOSE: the curve's endpoint heights
+// are the user's to drag, so a wave that starts and ends at the same value is
+// seamless by construction and a saw that snaps back is equally sayable.
+
+/** The cycle's shape: one cubic bezier y(x) over x 0..1, endpoint heights
+ *  included (P0 = (0, y0), P3 = (1, y3)). Control Ys past 1 overshoot the
+ *  note's value, exactly like the burst bezier; sampling clamps back to the
+ *  param range. `invert` flips which bound the note owns: normally the note's
+ *  value is the cycle's HIGH over `floor`; inverted it is the LOW under the
+ *  constant `ceiling`. */
+export interface CycleConfig {
+  y0: number
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  y3: number
+  invert?: boolean
+  /** The cycle's resting value (curve y = 0), param units. Absent = 0. */
+  floor?: number
+  /** Invert mode's constant high, param units. Absent = the param's max. */
+  ceiling?: number
+  /** Each cycle ends at its NOTE's end instead of stretching to the next
+   *  onset: duration matters again, a lone note carries its own cycle, the
+   *  gap after a note is inert, and the newest sounding note wins an overlap. */
+  noteSpan?: boolean
+}
+
+/** What flipping a lane to cycle mode starts from: a seamless smooth swell -
+ *  control Ys at 4/3 put the bezier's midpoint exactly on the note's value
+ *  (y(0.5) = 0.75 · 4/3 = 1), so the default already keeps the spec's promise
+ *  that the cycle's peak IS the note. */
+export const DEFAULT_CYCLE: CycleConfig = {
+  y0: 0, x1: 1 / 3, y1: 4 / 3, x2: 2 / 3, y2: 4 / 3, y3: 0,
+}
+
+/** One cycle boundary: a note onset, its end, and its pitch-mapped value.
+ *  `endBeat` is read only by the noteSpan mode; the stretch mode divides time
+ *  by onsets alone. */
+export interface CycleGate {
+  beat: number
+  endBeat: number
+  value: number
+}
+
+/** Flatten a cycle-mode track's blocks into onset gates (sorted by beat).
+ *  Chords collapse to ONE boundary - simultaneous onsets can't divide time -
+ *  keeping the largest value so the stack's reach wins deterministically (the
+ *  kept note's own end rides along for noteSpan mode). */
+export function extractCycleGates(
+  blocks: Block[],
+  beatsPerBar: number,
+  paramMin: number,
+  paramMax: number,
+  totalBars?: number,
+  amount = 1,
+  range?: AutomationRange,
+): CycleGate[] {
+  const gates = flattenBlocks(blocks, beatsPerBar, totalBars)
+    .map((note) => ({
+      beat: note.beat,
+      endBeat: note.beat + note.durationBeats,
+      value: scaleValue(pitchToValueRanged(range, note.pitch, paramMin, paramMax), amount, paramMin, paramMax),
+    }))
+    .sort((a, b) => a.beat - b.beat || a.value - b.value)
+  return gates.filter((g, i) => i === gates.length - 1 || gates[i + 1].beat !== g.beat)
+}
+
+/** The curve's height at time-progress u - the full four-height bezier
+ *  (endpoints included), unlike bezierY's fixed 0→1 rise. */
+export function cycleShapeY(cfg: CycleConfig, u: number): number {
+  if (u <= 0) return cfg.y0
+  if (u >= 1) return cfg.y3
+  const t = solveBezierT(cfg.x1, cfg.x2, u)
+  const inv = 1 - t
+  return inv * inv * inv * cfg.y0
+    + 3 * inv * inv * t * cfg.y1
+    + 3 * inv * t * t * cfg.y2
+    + t * t * t * cfg.y3
+}
+
+/** Sample a cycle lane at `beat`: NaN outside the cycling region (lane inert),
+ *  else the curve scaled between the owning note's value and the configured
+ *  resting bound, clamped to the param range. Two spans, per `noteSpan`:
+ *  stretched over the surrounding onset PAIR and owned by the earlier note
+ *  (default; a lone onset has nothing to stretch to), or over each note's own
+ *  LENGTH (a lone note carries its cycle, the gap after a note is inert, and
+ *  the newest sounding note wins an overlap). */
+export function sampleCycleLane(
+  cfg: CycleConfig,
+  gates: readonly CycleGate[],
+  beat: number,
+  paramMin: number,
+  paramMax: number,
+): number {
+  const n = gates.length
+  const needed = cfg.noteSpan ? 1 : 2
+  if (n < needed || beat < gates[0].beat || (!cfg.noteSpan && beat >= gates[n - 1].beat)) return NaN
+  // Largest i with gates[i].beat <= beat (guaranteed 0 <= i < n by the guards).
+  let lo = 0
+  let hi = n - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (gates[mid].beat <= beat) lo = mid
+    else hi = mid - 1
+  }
+  let a: CycleGate
+  let u: number
+  if (cfg.noteSpan) {
+    // The newest note still sounding at `beat` owns the cycle; an older, longer
+    // note resumes when it ends. Backward scan - like noise's gate walk, the
+    // lane's note count bounds it.
+    let owner: CycleGate | undefined
+    for (let i = lo; i >= 0; i--) {
+      const g = gates[i]
+      if (beat < g.endBeat && g.endBeat > g.beat) { owner = g; break }
+    }
+    if (!owner) return NaN
+    a = owner
+    u = (beat - a.beat) / (a.endBeat - a.beat)
+  } else {
+    a = gates[lo]
+    const b = gates[lo + 1]
+    u = (beat - a.beat) / (b.beat - a.beat)
+  }
+  const y = cycleShapeY(cfg, u)
+  // The bound the note does NOT own: floor under it normally, ceiling over it
+  // inverted. Either way y = 0 rests there and y = 1 lands on the note.
+  const rest = Math.max(paramMin, Math.min(paramMax, cfg.invert ? cfg.ceiling ?? paramMax : cfg.floor ?? 0))
+  const value = cfg.invert
+    ? a.value + y * (rest - a.value)
+    : rest + y * (a.value - rest)
+  return Math.max(paramMin, Math.min(paramMax, value))
+}
+
 /** Ease a normalized 0..1 fraction per the interpolation mode. Exported so the
  *  automation panel can PLOT the curve the lane will actually ride, instead of
  *  drawing its own idea of one. */
@@ -413,20 +563,22 @@ export function sampleLane(keyframes: AutomationKeyframe[], beat: number, mode: 
   return a.value + (b.value - a.value) * easeFraction(t, mode)
 }
 
-// ── One lane, three modes ────────────────────────────────────────────────────
+// ── One lane, four modes ─────────────────────────────────────────────────────
 
 /** Which model a lane's notes follow. Burst wins if a document somehow carries
- *  both configs - the same precedence resolve.ts applies, kept in one place so
- *  the editor can never disagree with the engine about what a lane is. */
-export function automationMode(track: Pick<Track, 'noise' | 'burst'>): AutomationMode {
-  return track.burst ? 'burst' : track.noise ? 'noise' : 'curve'
+ *  several configs (then noise, then cycle) - the same precedence resolve.ts
+ *  applies, kept in one place so the editor can never disagree with the engine
+ *  about what a lane is. */
+export function automationMode(track: Pick<Track, 'noise' | 'burst' | 'cycle'>): AutomationMode {
+  return track.burst ? 'burst' : track.noise ? 'noise' : track.cycle ? 'cycle' : 'curve'
 }
 
 /**
  * The mode-bearing fields every resolved lane carries, whatever it drives (an
  * instrument/mover param or an effect setting - see core/visual/types.ts, whose
  * ResolvedAutomation and ResolvedEffectAutomation both extend this). Exactly one
- * mode is populated: `noise`+`gates`, `burst`+`bursts`, or plain `keyframes`.
+ * mode is populated: `noise`+`gates`, `burst`+`bursts`, `cycle`+`cycles`, or
+ * plain `keyframes`.
  */
 export interface AutomationLane {
   mode: InterpolationMode
@@ -435,6 +587,8 @@ export interface AutomationLane {
   gates?: NoiseGate[]
   burst?: BurstConfig
   bursts?: BurstGate[]
+  cycle?: CycleConfig
+  cycles?: CycleGate[]
   /** Param range, for noise's deviation scaling. */
   min?: number
   max?: number
@@ -465,6 +619,11 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
   if (lane.noise) {
     return lane.gates?.length
       ? sampleNoiseLane(lane.noise, lane.gates, beat, lane.min ?? 0, lane.max ?? 1)
+      : NaN
+  }
+  if (lane.cycle) {
+    return lane.cycles?.length
+      ? sampleCycleLane(lane.cycle, lane.cycles, beat, lane.min ?? 0, lane.max ?? 1)
       : NaN
   }
   return lane.keyframes.length ? sampleLane(lane.keyframes, beat, lane.mode) : NaN
@@ -513,6 +672,27 @@ export function automationLaneValueBounds(
       const deviation = (paramMax - paramMin) * (lane.noise.range ?? 0) * g.amp * 0.5
       min = Math.min(min, Math.max(paramMin, g.center - deviation))
       max = Math.max(max, Math.min(paramMax, g.center + deviation))
+    }
+    return { min, max }
+  }
+  if (lane.cycle) {
+    const paramMin = lane.min ?? 0
+    const paramMax = lane.max ?? 1
+    const cfg = lane.cycle
+    // A bezier stays inside its control heights' hull, so the shape's reach is
+    // the min/max of the four Ys; each gate then spans rest → note by that.
+    const yMin = Math.min(cfg.y0, cfg.y1, cfg.y2, cfg.y3)
+    const yMax = Math.max(cfg.y0, cfg.y1, cfg.y2, cfg.y3)
+    const rest = Math.max(paramMin, Math.min(paramMax, cfg.invert ? cfg.ceiling ?? paramMax : cfg.floor ?? 0))
+    let min = base
+    let max = base
+    for (const g of lane.cycles ?? []) {
+      for (const y of [yMin, yMax]) {
+        const value = cfg.invert ? g.value + y * (rest - g.value) : rest + y * (g.value - rest)
+        const clamped = Math.max(paramMin, Math.min(paramMax, value))
+        min = Math.min(min, clamped)
+        max = Math.max(max, clamped)
+      }
     }
     return { min, max }
   }
