@@ -372,6 +372,7 @@ const MOVER_DESCRIPTIONS: Record<string, string> = {
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  line: 'Marches N copies back into depth - or along any axis you aim - with sizes ramping step by step, the original object staying put.',
   symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
