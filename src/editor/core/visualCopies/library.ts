@@ -115,6 +115,8 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 export interface RadialSettings {
   copies: number
   radius: number
+  /** Uniform scale on each copy, about its own center — independent of radius. */
+  size: number
   /** 0 = XY (about Z), 1 = XZ (about Y), 2 = YZ (about X). */
   plane: number
 }
@@ -131,6 +133,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
     { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 0 },
+    { key: 'size', label: 'Size', min: 0.05, max: 4, step: 0.05, default: 1 },
     {
       key: 'plane',
       label: 'Plane',
@@ -154,16 +157,22 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const plane = settings.plane === 1 || settings.plane === 2 ? settings.plane : 0
     const axis = RADIAL_AXES[plane]
     const direction = RADIAL_DIRECTIONS[plane]
-    // Structural slot transforms, in slot order (slot 0 is unrotated).
-    const transforms = Array.from({ length: count }, (_, slot) =>
-      new Matrix4()
+    const size = Math.max(0.05, settings.size ?? 1)
+    // Structural slot transforms, in slot order (slot 0 is unrotated). Size
+    // composes AFTER the translation - R · T(radius) · S(size) - so it scales
+    // each copy about its own center and the ring radius stays exactly the
+    // radius knob, whatever the size.
+    const transforms = Array.from({ length: count }, (_, slot) => {
+      const transform = new Matrix4()
         .makeRotationAxis(axis, (slot / count) * Math.PI * 2)
         .multiply(new Matrix4().makeTranslation(
           direction[0] * settings.radius,
           direction[1] * settings.radius,
           direction[2] * settings.radius,
-        )),
-    )
+        ))
+      if (size !== 1) transform.multiply(new Matrix4().makeScale(size, size, size))
+      return transform
+    })
     return {
       apply(visualCopy, { beat }) {
         return transforms.map((transform, slot) => ({

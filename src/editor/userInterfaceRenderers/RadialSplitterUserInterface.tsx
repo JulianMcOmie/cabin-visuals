@@ -15,6 +15,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
+import { ParamSlider } from './ParameterControl'
 import { ParameterList } from './ParametersUserInterface'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
@@ -63,9 +64,11 @@ const CY = VB_H / 2
 const RING_MAX_PX = 70
 
 /** The hero: the splitter's ring, drawn live. Radial drag sets the radius. */
-function RingPad({ count, radius, planeValue, planeLabel, hoveredSlot, onHoverSlot }: {
+function RingPad({ count, radius, size, planeValue, planeLabel, hoveredSlot, onHoverSlot }: {
   count: number
   radius: NumBinding
+  /** Copy size, scaling the marks so the diagram matches the layout. */
+  size: number
   planeValue: number
   planeLabel: string
   hoveredSlot: number | null
@@ -104,6 +107,10 @@ function RingPad({ count, radius, planeValue, planeLabel, hoveredSlot, onHoverSl
     const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
     set(clamp(Number((value + direction * (event.shiftKey ? 10 : 1) * def.step).toFixed(8)), def.min, def.max))
   }
+
+  // The size knob scales each copy about its own center; mirror that on the
+  // marks, clamped so the diagram stays legible at the extremes.
+  const markScale = clamp(size, 0.3, 2.2)
 
   const marks = Array.from({ length: count }, (_, slot) => {
     const angle = view.start + (slot / count) * Math.PI * 2
@@ -185,7 +192,7 @@ function RingPad({ count, radius, planeValue, planeLabel, hoveredSlot, onHoverSl
                 width="7.2"
                 height="7.2"
                 rx="1.2"
-                transform={`translate(${mark.x} ${mark.y}) rotate(${mark.spin})`}
+                transform={`translate(${mark.x} ${mark.y}) rotate(${mark.spin}) scale(${markScale})`}
                 className={mark.slot === 0 ? 'fill-[var(--accent)]' : active ? 'fill-[var(--accent-hover)]' : 'fill-[var(--text-muted)]'}
               />
               {mark.slot === 0 && (
@@ -342,6 +349,7 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
   const pool = bind(parameters)
   const copies = pool.num('copies')
   const radius = pool.num('radius')
+  const size = pool.num('size')
   const plane = pool.select('plane')
 
   if (!copies || !radius || !plane) return <ParameterList parameters={parameters} />
@@ -382,6 +390,7 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
       <RingPad
         count={count}
         radius={radius}
+        size={size?.value ?? 1}
         planeValue={plane.value}
         planeLabel={planeLabel}
         hoveredSlot={safeHover}
@@ -390,6 +399,18 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
 
       <div className="space-y-2 p-2">
         <CopiesStepper b={copies} />
+        {size && (
+          <div className="-mb-[13px]">
+            <ParamSlider
+              label={size.def.label}
+              value={size.value}
+              min={size.def.min}
+              max={size.def.max}
+              step={size.def.step}
+              onChange={size.set}
+            />
+          </div>
+        )}
         <PlaneSelector b={plane} />
         <MuteMap count={count} hoveredSlot={safeHover} onHoverSlot={setHoveredSlot} />
         {rest.length > 0 && (

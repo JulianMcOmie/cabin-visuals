@@ -24,12 +24,20 @@ function positionOf(copy: VisualCopy): [number, number, number] {
   return [r(e[12]), r(e[13]), r(e[14])]
 }
 
+/** Per-axis scale: the lengths of the matrix's three basis columns. */
+function scaleOf(copy: VisualCopy): [number, number, number] {
+  const e = copy.transform.elements
+  const len = (i: number) => Math.round(Math.hypot(e[i], e[i + 1], e[i + 2]) * 1e9) / 1e9
+  return [len(0), len(4), len(8)]
+}
+
 test('radial is registered as a production splitter defaulting to 6 XY copies', () => {
   const def = getMoverOrSplitterDefinition('radial')
   assert.equal(def?.kind, 'splitter')
   assert.equal(def?.label, 'Radial')
   assert.equal(DEFAULTS.copies, 6)
   assert.equal(DEFAULTS.radius, 0)
+  assert.equal(DEFAULTS.size, 1)
   assert.equal(DEFAULTS.plane, 0)
   const copies = resolveVisualCopies([radialSplitter.resolve({ settings: settings(), notes: [] })], 0)
   assert.equal(copies.length, 6)
@@ -75,6 +83,27 @@ test('radius spaces copies around the selected radial plane', () => {
     [0, -1, 0],
     [0, 0, -1],
   ])
+})
+
+test('size scales each copy about its own center, independent of radius', () => {
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, size: 0.5 }), notes: [] }),
+  ], 0)
+  // The ring stays exactly at the radius knob...
+  assert.deepEqual(copies.map(positionOf), [
+    [2, 0, 0],
+    [0, 2, 0],
+    [-2, 0, 0],
+    [0, -2, 0],
+  ])
+  // ...while every copy is uniformly half size.
+  for (const copy of copies) assert.deepEqual(scaleOf(copy), [0.5, 0.5, 0.5])
+
+  // The default size of 1 leaves the transforms untouched.
+  const unscaled = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2 }), notes: [] }),
+  ], 0)
+  for (const copy of unscaled) assert.deepEqual(scaleOf(copy), [1, 1, 1])
 })
 
 test('radial MIDI rows disable copies only while their notes are held', () => {
