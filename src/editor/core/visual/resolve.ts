@@ -13,7 +13,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationAmount, automationLaneValueBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
-import { transformDefault, withTransformParams } from '../transform'
+import { SPATIAL_TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
 import { SPATIAL_TF_PARAMS, tfAutomationChainEntry } from './tfAutomationChain'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
@@ -401,13 +401,58 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   const own = resolveOwnMoverOrSplitter(track, p)
   if (!own) return null
   const children = resolveMoverAndSplitterChain(track, p)
-  if (track.type === 'splitter') return splitterWithChildChain(own, children)
+  if (track.type === 'splitter') return splitterWithChildChain(own, weaveSplitterTfLanes(track, children, p))
   const entry = framedMoverOrSplitter(own, children)
   // Structural variants stay the BARE resolutions: frames don't change counts,
   // so they skip the framing wrapper (splitterWithChildChain, whose children DO
   // change counts, composes its own variants instead).
   if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
   return entry
+}
+
+/** A splitter's own spatial tf* automation lanes (x/y/z, rotations, size): each
+ *  becomes a count-neutral delta entry (tfAutomationChain.ts) woven among the
+ *  splitter's mover/splitter children at the lane's own child position, so a
+ *  lane behaves exactly like a mover child added in that slot - it moves the
+ *  splitter's copies in the splitter's reference frame, about the splitter's
+ *  origin, as internal motion that never re-frames the chain below
+ *  (visualCopies/splitterChildChain.ts). No mirroring here, unlike the object
+ *  chain's weave: the child chain composes top-down in child order already.
+ *  The delta's base is the panel value under the lane - splitters store no tf*
+ *  params today, so the transform default - keeping inert lanes genuine no-ops
+ *  and keyframe values absolute. */
+function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: ProjectSnapshot): MoverOrSplitter[] {
+  const lanes = resolveAutomationLanes(track, SPATIAL_TRANSFORM_PARAM_DEFS, p)
+  if (lanes.length === 0) return chain
+  const laneBySource = new Map<string, ResolvedAutomation>()
+  for (const lane of lanes) {
+    if (lane.sourceTrackId !== undefined) laneBySource.set(lane.sourceTrackId, lane)
+  }
+  // Walk childIds interleaving lane deltas with the resolved chain entries.
+  // Mirrors resolveMoverAndSplitterChain's filters (known definition, mute/solo
+  // pool) so the chain entries line up with the walk.
+  const chainChildren = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+  const anySolo = chainChildren.some((c) => c.solo)
+  const woven: MoverOrSplitter[] = []
+  let chainIndex = 0
+  for (const cid of track.childIds ?? []) {
+    const child = p.tracks[cid]
+    if (!child) continue
+    const lane = laneBySource.get(cid)
+    if (lane) {
+      const base = track.params?.[lane.param] ?? transformDefault(lane.param)
+      woven.push(tfAutomationChainEntry(lane, base))
+    } else if (
+      getMoverOrSplitterDefinition(moverOrSplitterId(child)) &&
+      !child.muted && (!anySolo || child.solo) &&
+      chainIndex < chain.length
+    ) {
+      woven.push(chain[chainIndex++])
+    }
+  }
+  return woven
 }
 
 /** Collect an object track's mover and splitter children together, in exact

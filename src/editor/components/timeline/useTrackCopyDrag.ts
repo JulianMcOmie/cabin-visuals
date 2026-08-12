@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { selectNewTrack, suppressTrackSelectBriefly } from '../../utils/selection'
+import { automationTargetsForParent, laneWearsAutoName } from '../../utils/automationTargets'
 import { computeDropTarget, isPinnedChildType } from './trackDrop'
 import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
 
@@ -136,8 +137,23 @@ export function useTrackCopyDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       unlockCursor()
       useUIStore.getState().setTrackDrop(null)
       if (s?.target) {
-        const copyId = useProjectStore.getState().insertTrackCopy(s.srcId, s.target.parentId, s.target.index)
+        const store = useProjectStore.getState()
+        // An automation-lane copy landing under a DIFFERENT parent gets its
+        // target fixed like a moved lane would (store's remapAutomationTarget);
+        // the auto-name flag reads off the source under its own parent.
+        const src = store.tracks[s.srcId]
+        const mainActive = !!store.scenes[store.activeSceneId]?.isMain
+        const remap = !!src && src.type === 'automation' && s.target.parentId != null
+          && s.target.parentId !== (src.parentId ?? null)
+        const rename = remap && !!src.parentId && !!store.tracks[src.parentId]
+          && laneWearsAutoName(src, store.tracks[src.parentId], mainActive)
+        const copyId = store.insertTrackCopy(s.srcId, s.target.parentId, s.target.index)
         if (copyId) {
+          if (remap) {
+            const post = useProjectStore.getState()
+            const parent = post.tracks[s.target.parentId!]
+            if (parent) post.remapAutomationTarget(copyId, automationTargetsForParent(parent, mainActive), rename)
+          }
           selectNewTrack(copyId)
           // Reveal the drop: expand the parent if it was collapsed.
           if (s.target.parentId) useUIStore.getState().setTrackCollapsed(s.target.parentId, false)

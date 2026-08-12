@@ -10,7 +10,7 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
 import { CompositionSettingsPanel } from './CompositionSettingsPanel'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { TRANSFORM_PARAM_DEFS, withTransformParams } from '../core/transform'
+import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../core/transform'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
@@ -616,11 +616,16 @@ export function TrackEditor() {
                     const parentInstrumentDef = parent ? getInstrument(parent.instrumentId) : undefined
                     const parentParams = (parentInstrumentDef
                       ? withTransformParams(parentInstrumentDef.params)
-                      : parent && (parent.type === 'mover' || parent.type === 'splitter')
-                        ? getMoverOrSplitterDefinition(parent.type === 'splitter' ? parent.splitterId : parent.moverId)?.params ?? []
-                        : parent && isCompositionTrack(parent)
-                          ? compositionAutomatableParams(compositionDef(parent.instrumentId))
-                          : []
+                      // A splitter offers the spatial tf* params too: such a lane
+                      // moves its copies in the splitter's own frame (resolve.ts's
+                      // splitter weave), so it retargets like any other param.
+                      : parent && parent.type === 'splitter'
+                        ? withSpatialTransformParams(getMoverOrSplitterDefinition(parent.splitterId)?.params ?? [])
+                        : parent && parent.type === 'mover'
+                          ? getMoverOrSplitterDefinition(parent.moverId)?.params ?? []
+                          : parent && isCompositionTrack(parent)
+                            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+                            : []
                     ).filter(isNumberParam)
                     const fxOptions = (parent?.effects ?? []).flatMap((inst) => {
                       const plugin = getEffect(inst.pluginId)

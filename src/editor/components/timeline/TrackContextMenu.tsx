@@ -3,7 +3,7 @@ import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
-import { withTransformParams } from '../../core/transform'
+import { withSpatialTransformParams, withTransformParams } from '../../core/transform'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
@@ -51,10 +51,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   )
   const abilities = def?.abilities ?? []
   // Only numeric params can be automated (keyframes interpolate a number). Object
-  // tracks also offer the canonical transform params (core/transform.ts).
+  // tracks also offer the canonical transform params (core/transform.ts); SPLITTER
+  // tracks offer the spatial ones - such a lane moves the splitter's copies in the
+  // splitter's own reference frame, like a mover child (resolve.ts's splitter weave).
   const params = (def
     ? withTransformParams(def.params)
-    : moverDef?.params ?? (isComposition ? compositionAutomatableParams(directorDef) : [])
+    : moverDef
+      ? track.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
+      : isComposition ? compositionAutomatableParams(directorDef) : []
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
   // there, and never join the object's chain: under a MOVER a child moves its

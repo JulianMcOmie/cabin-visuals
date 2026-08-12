@@ -5,6 +5,7 @@
 
 import { Matrix4, Vector3 } from 'three'
 import type { MidiRowDef } from '../../instruments/types'
+import { AUTOMATION_PITCH_MAX, AUTOMATION_PITCH_MIN, pitchToValue } from '../trackTypes'
 import type { MoverOrSplitterDefinition } from './definitions'
 import type { VisualCopy } from './types'
 import { moverDefinition } from './mover'
@@ -110,7 +111,19 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 // in its own direction. Movers above it are unaffected by the split frames
 // (each copy inherits their motion, then rotates in place).
 // Slot count comes only from settings, never from MIDI, so downstream indices
-// and the React occurrence list stay stable; notes are ignored.
+// and the React occurrence list stay stable.
+//
+// The MIDI lane is a VALUE lane, not a mute map (reworked 2026-08): a note's
+// pitch names a radius through the same 36-84 encoding automation lanes use,
+// and between consecutive note ONSETS the radius swells 0 → r → 0 along the
+// cycle-automation default curve (y = 4u(1-u), the DEFAULT_CYCLE bezier's
+// closed form) where r is the earlier onset's pitch-value. Outside the onset
+// span - before the first note, at/after the last, or with fewer than two -
+// the ring rests at the RADIUS knob: the panel says what the piece looks
+// like, MIDI bends it. Duration and velocity are deliberately ignored (onsets
+// only), chords collapse to one boundary keeping the largest radius, and
+// out-of-span pitches (including the retired mute rows at 122-127) are
+// no-ops, so old saves degrade to their knob radius instead of misreading.
 
 export interface RadialSettings {
   copies: number
@@ -122,8 +135,23 @@ export interface RadialSettings {
 }
 
 const RADIAL_MAX_COPIES = 32
+const RADIAL_RADIUS_MIN = 0
+const RADIAL_RADIUS_MAX = 10
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
+
+// Rows span the automation pitch range top-down (top row = full radius,
+// bottom = 0) so the roll reads like an automation lane's value rows.
+const RADIAL_VALUE_ROWS: MidiRowDef[] = Array.from(
+  { length: AUTOMATION_PITCH_MAX - AUTOMATION_PITCH_MIN + 1 },
+  (_, index) => {
+    const pitch = AUTOMATION_PITCH_MAX - index
+    return {
+      pitch,
+      label: `R ${pitchToValue(pitch, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX).toFixed(1)}`,
+    }
+  },
+)
 
 export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   id: 'radial',
@@ -146,11 +174,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
       default: 0,
     },
   ],
-  midiRows: (settings) => splitterMidiRows(
-    Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies))),
-    'copy',
-    'copies',
-  ),
+  midiRows: () => RADIAL_VALUE_ROWS,
   strictMidiRows: true,
   resolve({ settings, notes }) {
     const count = Math.max(1, Math.min(RADIAL_MAX_COPIES, Math.round(settings.copies)))
@@ -158,28 +182,62 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const axis = RADIAL_AXES[plane]
     const direction = RADIAL_DIRECTIONS[plane]
     const size = Math.max(0.05, settings.size ?? 1)
-    // Structural slot transforms, in slot order (slot 0 is unrotated). Size
-    // composes AFTER the translation - R · T(radius) · S(size) - so it scales
-    // each copy about its own center and the ring radius stays exactly the
-    // radius knob, whatever the size.
-    const transforms = Array.from({ length: count }, (_, slot) => {
-      const transform = new Matrix4()
-        .makeRotationAxis(axis, (slot / count) * Math.PI * 2)
-        .multiply(new Matrix4().makeTranslation(
-          direction[0] * settings.radius,
-          direction[1] * settings.radius,
-          direction[2] * settings.radius,
-        ))
-      if (size !== 1) transform.multiply(new Matrix4().makeScale(size, size, size))
-      return transform
-    })
+    // Structural slot rotations, in slot order (slot 0 is unrotated).
+    const rotations = Array.from({ length: count }, (_, slot) =>
+      new Matrix4().makeRotationAxis(axis, (slot / count) * Math.PI * 2),
+    )
+    // Cycle gates: sorted onsets with pitch-mapped radii; simultaneous onsets
+    // can't divide time, so chords collapse to one boundary keeping the
+    // largest radius (the sort puts it last in the beat group) - the same
+    // rules as extractCycleGates in core/visual/automation.ts.
+    const gates = notes
+      .filter((note) => note.pitch >= AUTOMATION_PITCH_MIN && note.pitch <= AUTOMATION_PITCH_MAX)
+      .map((note) => ({
+        beat: note.beat,
+        value: pitchToValue(note.pitch, RADIAL_RADIUS_MIN, RADIAL_RADIUS_MAX),
+      }))
+      .sort((a, b) => a.beat - b.beat || a.value - b.value)
+      .filter((gate, index, all) => index === all.length - 1 || all[index + 1].beat !== gate.beat)
+    const radiusAt = (beat: number): number => {
+      const n = gates.length
+      if (n < 2 || beat < gates[0].beat || beat >= gates[n - 1].beat) return settings.radius
+      // Largest i with gates[i].beat <= beat (guaranteed 0 <= i < n-1 by the guards).
+      let lo = 0
+      let hi = n - 1
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1
+        if (gates[mid].beat <= beat) lo = mid
+        else hi = mid - 1
+      }
+      const a = gates[lo]
+      const b = gates[lo + 1]
+      const u = (beat - a.beat) / (b.beat - a.beat)
+      // The cycle-automation default swell in closed form: with control points
+      // at (1/3, 4/3) and (2/3, 4/3) the bezier's x(t) = t exactly, and y
+      // reduces to 4u(1-u) - symmetric, 0 at both onsets, peak r mid-cycle.
+      return 4 * u * (1 - u) * a.value
+    }
     return {
       apply(visualCopy, { beat }) {
-        return transforms.map((transform, slot) => ({
-          transform: visualCopy.transform.clone().multiply(transform),
-          opacity: noteDisablesSplitterSlot(notes, beat, slot, count) ? 0 : visualCopy.opacity,
-          colorShift: { ...visualCopy.colorShift },
-        }))
+        const radius = radiusAt(beat)
+        // Size composes AFTER the translation - R · T(radius) · S(size) - so
+        // it scales each copy about its own center and the ring radius stays
+        // exactly the sampled radius, whatever the size.
+        return rotations.map((rotation) => {
+          const transform = visualCopy.transform.clone()
+            .multiply(rotation)
+            .multiply(new Matrix4().makeTranslation(
+              direction[0] * radius,
+              direction[1] * radius,
+              direction[2] * radius,
+            ))
+          if (size !== 1) transform.multiply(new Matrix4().makeScale(size, size, size))
+          return {
+            transform,
+            opacity: visualCopy.opacity,
+            colorShift: { ...visualCopy.colorShift },
+          }
+        })
       },
     }
   },

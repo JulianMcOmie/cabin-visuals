@@ -423,6 +423,14 @@ export interface ProjectState {
    *  lane's name (the caller passes true when the old name was the auto-name,
    *  so a user's custom name survives). */
   setAutomationTarget: (trackId: string, paramKey: string, paramLabel: string, rename: boolean) => void
+  /** Fix an automation lane's target after a drag moved (or copied) it under a
+   *  new parent. `available` is every target the new parent offers (the caller
+   *  resolves it - the store can't read instrument defs; see the import note at
+   *  the top). Prefers restoring `previousTargetParam` when the lane fits here
+   *  again (that's what makes dragging BACK work), keeps a target that still
+   *  fits, and otherwise falls to the first free option while remembering the
+   *  displaced one. `rename` mirrors setAutomationTarget's flag. */
+  remapAutomationTarget: (trackId: string, available: { key: string; label: string }[], rename: boolean) => void
   /** Set an automation lane's output amount (a whole-lane gain, any mode).
    *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
   setTrackAutomationAmount: (trackId: string, amount: number) => void
@@ -1577,10 +1585,44 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (taken) return s
       // The row-spread config speaks the OLD param's value units; a stale
       // sub-range on a new param is nonsense, so it resets to the full span.
-      // Note pitches re-map onto the new param's range by construction.
-      const next: Track = { ...track, targetParam: paramKey, automationRange: undefined }
+      // Note pitches re-map onto the new param's range by construction. A
+      // deliberate retarget also forgets any drag-displaced previous target.
+      const next: Track = { ...track, targetParam: paramKey, automationRange: undefined, previousTargetParam: undefined }
       if (rename) next.name = paramLabel
       return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  remapAutomationTarget: (trackId, available, rename) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'automation') return s
+      const parent = track.parentId ? s.tracks[track.parentId] : undefined
+      if (!parent) return s
+      // Same one-lane-per-param rule as setAutomationTarget: a target a sibling
+      // lane already drives counts as unavailable here.
+      const taken = new Set((parent.childIds ?? [])
+        .map((cid) => s.tracks[cid])
+        .filter((c) => !!c && c.id !== trackId && c.type === 'automation')
+        .map((c) => c!.targetParam))
+      const usable = (key: string | undefined) =>
+        !!key && !taken.has(key) && available.some((o) => o.key === key)
+      const retarget = (key: string, label: string, previous: string | undefined): { tracks: Record<string, Track> } => {
+        // Range resets like setAutomationTarget's: it speaks the old param's units.
+        const next: Track = { ...track, targetParam: key, previousTargetParam: previous, automationRange: undefined }
+        if (rename) next.name = label
+        return { tracks: { ...s.tracks, [trackId]: next } }
+      }
+      // The displaced original wins over a still-fitting default: that is what
+      // makes dragging the lane back to its old parent restore it.
+      const previous = track.previousTargetParam
+      if (usable(previous)) {
+        const option = available.find((o) => o.key === previous)!
+        return retarget(option.key, option.label, undefined)
+      }
+      if (usable(track.targetParam)) return s
+      const fallback = available.find((o) => !taken.has(o.key))
+      if (!fallback || fallback.key === track.targetParam) return s
+      return retarget(fallback.key, fallback.label, track.previousTargetParam ?? track.targetParam)
     }),
 
   setTrackAutomationAmount: (trackId, amount) =>

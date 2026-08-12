@@ -46,6 +46,22 @@ export function withTransformParams(params: ParamDef[]): ParamDef[] {
   return [...TRANSFORM_PARAM_DEFS, ...params]
 }
 
+/** The SPATIAL canonical params (everything but Opacity): what a SPLITTER track
+ *  offers its own automation lanes. A lane on one of these moves the splitter's
+ *  copies in the splitter's reference frame, exactly like a mover child of the
+ *  splitter (resolve.ts's splitter weave) - where opacity isn't a transform, so
+ *  it stays an object-track affordance. */
+export const SPATIAL_TRANSFORM_PARAM_DEFS: NumberParamDef[] = TRANSFORM_PARAM_DEFS.filter(
+  (p) => p.key !== TF_OPACITY,
+)
+
+/** A splitter track's automatable param list: the spatial transform params
+ *  first, then the definition's own - the splitter counterpart of
+ *  withTransformParams, shared by the same lane/target surfaces. */
+export function withSpatialTransformParams(params: ParamDef[]): ParamDef[] {
+  return [...SPATIAL_TRANSFORM_PARAM_DEFS, ...params]
+}
+
 const DEG = Math.PI / 180
 
 /** True when every canonical key is at its identity default (the common case -

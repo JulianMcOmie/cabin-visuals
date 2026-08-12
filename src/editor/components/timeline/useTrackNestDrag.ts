@@ -4,6 +4,7 @@ import { useUIStore } from '../../store/UIStore'
 import { lockCursor, unlockCursor } from '../../utils/dragCursor'
 import { flattenVisualRows, subtreeIds, type VisualRow } from './trackTree'
 import { suppressTrackSelectBriefly } from '../../utils/selection'
+import { automationTargetsForParent, laneWearsAutoName } from '../../utils/automationTargets'
 import { computeDropTarget, isPinnedChildType } from './trackDrop'
 
 interface Session {
@@ -36,10 +37,13 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
     if (!sc) return
     const { tracks, rootTrackIds } = useProjectStore.getState()
     if (!tracks[trackId]) return
-    // Automation + envelope + ability tracks live only on their parent object - they
-    // can't be re-parented or moved to the root. (A plain pointer-down still selects
-    // the row.)
-    if (isPinnedChildType(tracks[trackId].type)) return
+    // Envelope + ability lanes live only on their parent object - they can't be
+    // re-parented (opt+drag copies them; a plain pointer-down still selects the
+    // row). AUTOMATION lanes DO move between parents: the drop remaps their
+    // target when the new parent can't take it (remapAutomationTarget), so they
+    // ride the normal drag; only the root level stays off-limits (below).
+    const grabbedType = tracks[trackId].type
+    if (isPinnedChildType(grabbedType) && grabbedType !== 'automation') return
     const ui = useUIStore.getState()
     const rowHeight = ui.tracksRowHeight
     const rows = flattenVisualRows(tracks, rootTrackIds, ui.collapsedTrackIds)
@@ -53,7 +57,10 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       ? rows
           .filter((r) => r.kind === 'track' && selection.has(r.id))
           .map((r) => r.id)
-          .filter((id) => tracks[id] && tracks[id].type !== 'audio' && !isPinnedChildType(tracks[id].type))
+          .filter((id) => {
+            const t = tracks[id]
+            return !!t && t.type !== 'audio' && (!isPinnedChildType(t.type) || t.type === 'automation')
+          })
       : [trackId]
     // A member whose ancestor is also dragged rides along inside that subtree.
     const groupSet = new Set(groupIds)
@@ -88,10 +95,13 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
       const s = sessionRef.current
       if (!s) return
       const { tracks, rootTrackIds } = useProjectStore.getState()
-      const drop = computeDropTarget({
+      let drop = computeDropTarget({
         tracks, rootTrackIds, rows: s.rows, listTop: s.listTop, listLeft: s.listLeft,
         rowHeight: s.rowHeight, clientX: ev.clientX, clientY: ev.clientY, excludeSubtree: s.subtree,
       })
+      // An automation lane lives only ON a parent - a drag carrying one can't
+      // land at the root level (any parent is fine; the commit remaps targets).
+      if (drop && drop.parentId == null && s.activeIds.some((id) => tracks[id]?.type === 'automation')) drop = null
       s.target = drop ? { parentId: drop.parentId, index: drop.index } : null
       useUIStore.getState().setTrackDrop({ activeId: s.activeId, line: drop?.line ?? null, intoId: drop?.intoId ?? null })
     }
@@ -119,7 +129,25 @@ export function useTrackNestDrag(scrollRef: RefObject<HTMLDivElement | null>) {
         useUIStore.getState().setTrackDrop(null)
       }
       if (started && s?.target) {
-        useProjectStore.getState().setTracksParent(s.activeIds, s.target.parentId, s.target.index)
+        const store = useProjectStore.getState()
+        const mainActive = !!store.scenes[store.activeSceneId]?.isMain
+        // Automation lanes changing parent get their target fixed after the
+        // move; the auto-name flag must be read BEFORE it, while the old parent
+        // still resolves the current target's label. Both writes land in the
+        // same tick, so history collapses them into one undo step.
+        const remaps = s.activeIds.flatMap((id) => {
+          const lane = store.tracks[id]
+          if (!lane || lane.type !== 'automation' || (lane.parentId ?? null) === s.target!.parentId) return []
+          const oldParent = lane.parentId ? store.tracks[lane.parentId] : undefined
+          return [{ id, rename: !!oldParent && laneWearsAutoName(lane, oldParent, mainActive) }]
+        })
+        store.setTracksParent(s.activeIds, s.target.parentId, s.target.index)
+        const post = useProjectStore.getState()
+        for (const { id, rename } of remaps) {
+          const lane = post.tracks[id]
+          const parent = lane?.parentId ? post.tracks[lane.parentId] : undefined
+          if (lane && parent) post.remapAutomationTarget(id, automationTargetsForParent(parent, mainActive), rename)
+        }
         // Reveal the drop: expand the parent if it was collapsed.
         if (s.target.parentId) useUIStore.getState().setTrackCollapsed(s.target.parentId, false)
       }
