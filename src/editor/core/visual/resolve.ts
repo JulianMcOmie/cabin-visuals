@@ -11,9 +11,10 @@ import type {
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
-import { automationAmount, automationLaneValueBounds, extractBurstGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
+import { automationAmount, automationLaneValueBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
-import { withTransformParams } from '../transform'
+import { SPATIAL_TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
+import { SPATIAL_TF_PARAMS, tfAutomationChainEntry } from './tfAutomationChain'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
 import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
@@ -87,10 +88,11 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.burst) {
       out.push({
         param,
+        sourceTrackId: child.id,
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
         min: pdef.min,
         max: pdef.max,
         base: pdef.default,
@@ -103,10 +105,26 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     if (child.noise) {
       out.push({
         param,
+        sourceTrackId: child.id,
         mode: 'linear',
         keyframes: [],
         noise: amount === 1 ? child.noise : { ...child.noise, range: child.noise.range * amount },
-        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+        gates: extractNoiseGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
+        min: pdef.min,
+        max: pdef.max,
+      })
+      continue
+    }
+    // Cycle mode: the motion curve plays once between each pair of note onsets,
+    // scaled to the earlier note's pitch-value.
+    if (child.cycle) {
+      out.push({
+        param,
+        sourceTrackId: child.id,
+        mode: 'linear',
+        keyframes: [],
+        cycle: child.cycle,
+        cycles: extractCycleGates(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
         min: pdef.min,
         max: pdef.max,
       })
@@ -114,8 +132,9 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
     }
     out.push({
       param,
+      sourceTrackId: child.id,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
     })
   }
   return out
@@ -191,7 +210,23 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
         mode: 'linear',
         keyframes: [],
         burst: child.burst,
-        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
+        bursts: extractBurstGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
+        min,
+        max,
+        base,
+      })
+      continue
+    }
+    // Cycle mode rides fx lanes the same way burst does; 'enabled' stays a
+    // keyframe lane for the same reason (a 0/1 switch has no span to cycle).
+    if (child.cycle && target.key !== 'enabled') {
+      out.push({
+        instanceId: target.instanceId,
+        key: target.key,
+        mode: 'linear',
+        keyframes: [],
+        cycle: child.cycle,
+        cycles: extractCycleGates(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
         min,
         max,
         base,
@@ -202,7 +237,7 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
-      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount),
+      keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
     })
   }
   return out
@@ -366,13 +401,58 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   const own = resolveOwnMoverOrSplitter(track, p)
   if (!own) return null
   const children = resolveMoverAndSplitterChain(track, p)
-  if (track.type === 'splitter') return splitterWithChildChain(own, children)
+  if (track.type === 'splitter') return splitterWithChildChain(own, weaveSplitterTfLanes(track, children, p))
   const entry = framedMoverOrSplitter(own, children)
   // Structural variants stay the BARE resolutions: frames don't change counts,
   // so they skip the framing wrapper (splitterWithChildChain, whose children DO
   // change counts, composes its own variants instead).
   if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
   return entry
+}
+
+/** A splitter's own spatial tf* automation lanes (x/y/z, rotations, size): each
+ *  becomes a count-neutral delta entry (tfAutomationChain.ts) woven among the
+ *  splitter's mover/splitter children at the lane's own child position, so a
+ *  lane behaves exactly like a mover child added in that slot - it moves the
+ *  splitter's copies in the splitter's reference frame, about the splitter's
+ *  origin, as internal motion that never re-frames the chain below
+ *  (visualCopies/splitterChildChain.ts). No mirroring here, unlike the object
+ *  chain's weave: the child chain composes top-down in child order already.
+ *  The delta's base is the panel value under the lane - splitters store no tf*
+ *  params today, so the transform default - keeping inert lanes genuine no-ops
+ *  and keyframe values absolute. */
+function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: ProjectSnapshot): MoverOrSplitter[] {
+  const lanes = resolveAutomationLanes(track, SPATIAL_TRANSFORM_PARAM_DEFS, p)
+  if (lanes.length === 0) return chain
+  const laneBySource = new Map<string, ResolvedAutomation>()
+  for (const lane of lanes) {
+    if (lane.sourceTrackId !== undefined) laneBySource.set(lane.sourceTrackId, lane)
+  }
+  // Walk childIds interleaving lane deltas with the resolved chain entries.
+  // Mirrors resolveMoverAndSplitterChain's filters (known definition, mute/solo
+  // pool) so the chain entries line up with the walk.
+  const chainChildren = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+  const anySolo = chainChildren.some((c) => c.solo)
+  const woven: MoverOrSplitter[] = []
+  let chainIndex = 0
+  for (const cid of track.childIds ?? []) {
+    const child = p.tracks[cid]
+    if (!child) continue
+    const lane = laneBySource.get(cid)
+    if (lane) {
+      const base = track.params?.[lane.param] ?? transformDefault(lane.param)
+      woven.push(tfAutomationChainEntry(lane, base))
+    } else if (
+      getMoverOrSplitterDefinition(moverOrSplitterId(child)) &&
+      !child.muted && (!anySolo || child.solo) &&
+      chainIndex < chain.length
+    ) {
+      woven.push(chain[chainIndex++])
+    }
+  }
+  return woven
 }
 
 /** Collect an object track's mover and splitter children together, in exact
@@ -390,6 +470,76 @@ function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOr
     if (resolved) chain.push(resolved)
   }
   return chain
+}
+
+/** Child order decides WHERE a spatial tf* automation lane applies (the user's
+ *  mental model reads children as a top-to-bottom pipeline):
+ *
+ *   - lane ABOVE a splitter: the splitter duplicates the already-animated
+ *     object, so the lane's motion belongs to each copy individually (a grid
+ *     under a rotation lane shows every cell spinning in place);
+ *   - lane BELOW every chain child: the lane animates the finished formation as
+ *     one - the historical placement behavior, kept bit-exact by leaving such
+ *     lanes on the params-overlay path.
+ *
+ *  Chain composition runs the OTHER way round (an entry re-frames everything
+ *  below it, so "applies per copy" means sitting LATER in the chain), so a
+ *  lane's slot MIRRORS across the chain: a lane with g chain siblings above it
+ *  becomes a per-copy delta entry (tfAutomationChain.ts) inserted after chain
+ *  position n - g. Lanes between two splitters land between them mirrored -
+ *  outside the split above them, inside the one below. Delta entries are
+ *  count-neutral, so structural budgets and getPriorVisualCopyCount's prefix
+ *  math (which ignores them) stay exact. */
+function weaveTfAutomationLanes(
+  track: Track,
+  chain: MoverOrSplitter[],
+  lanes: ResolvedAutomation[],
+  p: ProjectSnapshot,
+): { chain: MoverOrSplitter[]; overlay: ResolvedAutomation[] } {
+  if (chain.length === 0 || lanes.length === 0) return { chain, overlay: lanes }
+  // How many chain ENTRIES sit above each automation child. Mirrors
+  // resolveMoverAndSplitterChain's filters exactly (candidates with a known
+  // definition, mute/solo pool), so the count lines up with `chain`.
+  const chainChildren = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+  const anySolo = chainChildren.some((c) => c.solo)
+  const gapByChildId = new Map<string, number>()
+  let entriesAbove = 0
+  for (const cid of track.childIds ?? []) {
+    const child = p.tracks[cid]
+    if (!child) continue
+    if (!child.instrumentId && child.type === 'automation') gapByChildId.set(cid, entriesAbove)
+    else if (
+      getMoverOrSplitterDefinition(moverOrSplitterId(child)) &&
+      !child.muted && (!anySolo || child.solo)
+    ) entriesAbove++
+  }
+  const n = chain.length
+  const overlay: ResolvedAutomation[] = []
+  // Keyed by how many chain entries precede the delta in the woven chain.
+  const deltasByPosition = new Map<number, MoverOrSplitter[]>()
+  for (const lane of lanes) {
+    const g = lane.sourceTrackId !== undefined ? gapByChildId.get(lane.sourceTrackId) : undefined
+    if (g === undefined || g >= n || !SPATIAL_TF_PARAMS.has(lane.param)) {
+      overlay.push(lane)
+      continue
+    }
+    const base = track.params?.[lane.param] ?? transformDefault(lane.param)
+    const entry = tfAutomationChainEntry(lane, base)
+    const position = n - g
+    const slot = deltasByPosition.get(position)
+    if (slot) slot.push(entry)
+    else deltasByPosition.set(position, [entry])
+  }
+  if (deltasByPosition.size === 0) return { chain, overlay }
+  const woven: MoverOrSplitter[] = []
+  for (let i = 0; i < n; i++) {
+    woven.push(chain[i])
+    const deltas = deltasByPosition.get(i + 1)
+    if (deltas) woven.push(...deltas)
+  }
+  return { chain: woven, overlay }
 }
 
 /** True when this mover/splitter belongs to a parent's chain rather than routing
@@ -556,6 +706,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     if (cached && depsEqual(cached.deps, deps)) {
       base = cached.entry
     } else {
+      // Child order routes spatial tf* lanes: above a chain sibling they become
+      // per-copy chain entries, below them all they stay placement overlays.
+      const { chain, overlay } = weaveTfAutomationLanes(
+        track,
+        resolveMoverAndSplitterChain(track, p),
+        resolveAutomations(track, def, p),
+        p,
+      )
       base = {
         trackId: id,
         instrumentId: track.instrumentId,
@@ -566,10 +724,10 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         localTransform: def?.localTransform,
         notes: flattenTrackNotes(track, p),
         abilityEvents: resolveAbilityEvents(track, p),
-        automations: resolveAutomations(track, def, p),
+        automations: overlay,
         effectAutomations: resolveEffectAutomations(track, p),
         envelopes: resolveEnvelopes(track, def, p),
-        moverAndSplitterChain: resolveMoverAndSplitterChain(track, p),
+        moverAndSplitterChain: chain,
         // Fresh array whenever the track changed: the gate ref-compares it, so
         // a pad-bank edit (which lands via resolve) is always visible to it.
         videoPads: track.videoPads ? [...track.videoPads] : undefined,

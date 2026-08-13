@@ -9,6 +9,7 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
 import { INDENT_PX, LABEL_BASE_PX } from './trackDrop'
 import type { RowGuide } from './trackTree'
 import { resolveTrackDisplayColor } from '../../utils/trackDisplayColor'
+import { midiSelectionSpill } from '../../utils/colors'
 import { selectTrack, selectTrackRange, shouldSuppressTrackSelect, toggleTrackInSelection } from '../../utils/selection'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { canPreview, setInstrumentPreview } from '../InstrumentHoverPreview'
@@ -86,6 +87,9 @@ interface TrackProps {
  *  select primitives. */
 export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, pickupPx, selectedBlockIds, onBlockPointerDown, onLanePointerDown, isLast, depth = 0, guides, dividerInset, descendantRows = 0, liftOffset, dimmed, dropInto, onCopyDragStart, onNestDragStart, onLabelContextMenu }: TrackProps) {
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  // Audio lanes only need this for the selection spill's geometry (an audio
+  // block's width is derived from its trimmed seconds at the current tempo).
+  const bpm = useProjectStore((s) => s.bpm)
   const isPlaying = useTimeStore((s) => s.isPlaying)
 
   const selectedTrackId = useUIStore((s) => s.selectedTrackId)
@@ -263,7 +267,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)]"
+        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--timeline-row-line,var(--border))]"
       >
         {/* Row-state background, scoped to this row's own region: a child row's
             colour starts at its bracket line, never bleeding into a parent's
@@ -297,7 +301,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         {guides?.map((g, level) => (
           <span
             key={level}
-            className={`pointer-events-none absolute right-0 border-[var(--border)] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
+            className={`pointer-events-none absolute right-0 border-[var(--timeline-row-line,var(--border))] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
             style={{ left: LABEL_BASE_PX + level * INDENT_PX, top: -1, bottom: 0 }}
           />
         ))}
@@ -306,7 +310,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             is drawn by that child's curve instead. */}
         {dividerInset != null && (
           <span
-            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--border)]"
+            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--timeline-row-line,var(--border))]"
             style={{ left: dividerInset }}
           />
         )}
@@ -495,11 +499,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
           playhead triangle has room to show its left half at beat 0. The row
           divider lives on the gutter + lane (not the row itself), so the label
           column can inset its own divider around the hierarchy brackets. */}
-      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[var(--border)]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
+      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--border)]'}`}
+        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
         // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
         // state reads from the MIDI side without the blocks fading into the lane.
         style={{ width: timelineWidthPx, filter: track.muted ? 'grayscale(1)' : undefined }}
@@ -514,6 +518,35 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             into the lane, so audio with startBar < 0 still renders on-lane
             (flush with the left edge when it defines the pickup). */}
         <div className="absolute inset-y-0" style={{ left: pickupPx, right: 0 }}>
+        {/* A selected block's light spills onto its lane: a wide wash behind
+            the blocks (first child = painted under them), clipped to the row.
+            The cross-row reach comes from the block's own bloom shadows.
+            Audio blocks spill too - their width is derived (trimmed seconds at
+            the current tempo), mirroring AudioBlock's own layout math. */}
+        {(track.type === 'audio'
+          ? (track.audioBlocks ?? []).map((block) => {
+              if (!selectedBlockIds.has(block.id)) return null
+              const widthBars = ((block.trimEnd - block.trimStart) * bpm) / 60 / beatsPerBar
+              const widthPx = Math.max(widthBars * barWidthPx, 4)
+              return { id: block.id, centerPx: block.startBar * barWidthPx + widthPx / 2, widthPx }
+            })
+          : track.blocks.map((block) =>
+              selectedBlockIds.has(block.id)
+                ? {
+                    id: block.id,
+                    centerPx: (block.startBar + block.durationBars / 2) * barWidthPx,
+                    widthPx: block.durationBars * barWidthPx,
+                  }
+                : null)
+        ).map((spill) =>
+          spill && (
+            <div
+              key={`spill:${spill.id}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{ background: midiSelectionSpill(blockColor, spill.centerPx, spill.widthPx) }}
+            />
+          ))}
         {track.type === 'audio'
           ? (track.audioBlocks ?? []).map((block) => (
               <AudioBlock

@@ -30,11 +30,11 @@ export async function renderAudioTrack(
   const anySolo = audioTracks.some((t) => t.solo)
   const blocks = audioTracks
     .filter((t) => !t.muted && !(anySolo && !t.solo))
-    .flatMap((t) => t.audioBlocks ?? [])
+    .flatMap((t) => (t.audioBlocks ?? []).map((block) => ({ block, volume: t.volume ?? 1 })))
   if (blocks.length === 0 || durationSec <= 0) return null
 
   // Decode first (cached - playback has usually already paid this).
-  const buffers = await Promise.all(blocks.map((b) => getBuffer(b.clipRef)))
+  const buffers = await Promise.all(blocks.map(({ block }) => getBuffer(block.clipRef)))
 
   const sampleRate = 48_000
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(durationSec * sampleRate)), sampleRate)
@@ -42,12 +42,20 @@ export async function renderAudioTrack(
   master.gain.value = 0.85 // the live engine's headroom - same loudness as the editor
   master.connect(ctx.destination)
 
-  blocks.forEach((block, i) => {
+  blocks.forEach(({ block, volume }, i) => {
     const p = blockPlacement(block, fromBeat, bpm, beatsPerBar)
     if (!p) return
     const src = ctx.createBufferSource()
     src.buffer = buffers[i] // resampled by the source node if rates differ
-    src.connect(master)
+    if (volume !== 1) {
+      // The track's fader, same linear gain the live players apply.
+      const g = ctx.createGain()
+      g.gain.value = volume
+      src.connect(g)
+      g.connect(master)
+    } else {
+      src.connect(master)
+    }
     src.start(p.delaySec, p.offset, p.duration)
   })
 

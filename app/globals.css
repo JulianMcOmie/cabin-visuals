@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 /* Map Tailwind's font-sans/font-mono utilities onto the next/font variables
-   (IBM Plex Sans / IBM Plex Mono, set on <html> in app/layout.tsx). */
+   (Hanken Grotesk / IBM Plex Mono, set on <html> in app/layout.tsx; the
+   Instrument Serif display face is exposed as --font-display for headings). */
 @theme inline {
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-ui-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
@@ -15,48 +16,51 @@ body {
 }
 
 /* ============================================================
-   "Console" design tokens (docs: design_handoff_console_redesign)
-   Flat panels, 1px borders, one electric-blue accent, IBM Plex.
+   "DAW Console 1a" design tokens (handoff: design_handoff_daw_console).
+   Dark blue-editorial: near-black blue surfaces, white-alpha hairlines,
+   one ice-blue accent, Instrument Serif display over Hanken Grotesk UI
+   sans with IBM Plex Mono data. Supersedes the true-grey "Console"
+   palette (docs: design_handoff_console_redesign) - same token NAMES,
+   so every surface follows without markup changes.
    ============================================================ */
 :root {
-  /* Surfaces. Every neutral here is a TRUE grey (r = g = b): the palette used
-     to carry a few points of extra blue in each channel, which read as a cold
-     tinge across the whole editor and made the odd genuinely-neutral surface
-     look wrong next to it. Each value is the grey with the same perceived
-     lightness as the tinted colour it replaced, so the surface hierarchy is
-     unchanged - only the hue is gone. THE blue lives in --accent alone. */
-  --bg-app: #121212;          /* editor app background / workspace card */
-  --bg-shell: #080808;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
+  /* Surfaces. The handoff draws everything on a blue-black family around
+     #0c0d12 with raised panels at #10131c; the hierarchy (shell < canvas <
+     app < panel < raised < elevated) is preserved from the grey palette,
+     re-pitched onto the blue axis. */
+  --bg-app: #0c0d12;          /* editor app background / workspace card */
+  --bg-shell: #0c0d12;        /* editor shell: library surface, workspace frame, top bar - darker than the inset card, so the eye falls into the lighter workspace */
   --bg-topbar: var(--bg-shell); /* editor top bar follows the library shell */
-  --bg-page: #0a0a0a;         /* marketing/auth page background */
-  --bg-panel: #131313;        /* panels, cards, top bars */
-  --bg-panel-raised: #181818; /* label columns, corner cells */
-  --bg-track-row: #181818;    /* every track label row (a step above the lanes) */
-  --bg-elevated: #202020;     /* buttons, chips, hover surfaces */
-  --bg-canvas: #090909;       /* 3D viewport */
-  --bg-canvas-deep: #060606;
-  --bg-timeline: #151515;     /* timeline lanes + ruler - the lifted work surface above the shell */
+  --bg-page: #0c0d12;         /* marketing/auth page background */
+  --bg-panel: #0e1119;        /* panels, cards, top bars */
+  --bg-panel-raised: #10131c; /* label columns, corner cells */
+  --bg-track-row: #0c0d12;    /* track label rows - flat with the lanes (4a) */
+  --bg-elevated: #1a1f2c;     /* buttons, chips, hover surfaces */
+  --bg-canvas: #0a0b10;       /* 3D viewport (the handoff's stage) */
+  --bg-canvas-deep: #08090d;
+  --bg-timeline: #0c0d12;     /* timeline lanes + ruler - the lifted work surface above the shell */
 
-  /* Borders */
-  --border: #262626;
-  --border-subtle: #1c1c1c;
-  --border-strong: #3a3a3a;
+  /* Borders - white-alpha hairlines per the handoff (panels 0.06-0.10). */
+  --border: rgba(233, 237, 244, 0.10);
+  --border-subtle: rgba(233, 237, 244, 0.05);
+  --border-strong: rgba(233, 237, 244, 0.18);
 
-  /* Text */
-  --text: #ededed;
-  --text-2: #c7c7c7;
-  --text-3: #9b9b9b;
-  --text-muted: #5e5e5e;
-  --text-faint: #7b7b7b;
+  /* Text - the handoff's ramp: #e9edf4 / #b8c0d0 / #8a93a6 / #5a6274. */
+  --text: #e9edf4;
+  --text-2: #b8c0d0;
+  --text-3: #8a93a6;
+  --text-muted: #5a6274;
+  --text-faint: #6e7688;
 
-  /* Accent - THE blue */
-  --accent: #35a7e6;
-  --accent-hover: #6fc0ee;
-  --accent-muted: #3f7ca6; /* dampened accent: slider fills and other quiet-active surfaces */
-  --on-accent: #0a0a0a; /* dark text on accent buttons */
+  /* Accent - THE ice blue */
+  --accent: #45c6ff;
+  --accent-hover: #7fd8ff;
+  --accent-muted: #3a8fc0; /* dampened accent: slider fills and other quiet-active surfaces */
+  --accent-button: #bfe6f7; /* the Export pill's fill (hover: --accent-hover) */
+  --on-accent: #0c0d12; /* dark text on accent buttons */
   --warn: #d0a04c;
 
-  /* Track palette */
+  /* Track palette - rainbow clip hues per the 4a spec (notes stay neutral). */
   --track-1: #3a7694;
   --track-2: #3f7f7c;
   --track-3: #76517f;
@@ -67,16 +71,16 @@ body {
      that still reference them land on-palette instead of on the old theme). */
   --highlight: #d0a04c;
   --green: #6a9955;
-  --background: #0d0d0d;
-  --surface: #131313;
-  --lightSurface: #202020;
-  --lightSurfaceHover: #262626;
-  --activeBg: #202020;
-  --electricBlue: #35a7e6;
-  --selectedBlue: #6fc0ee;
+  --background: #0a0b10;
+  --surface: #10131c;
+  --lightSurface: #1a1f2c;
+  --lightSurfaceHover: #222839;
+  --activeBg: #1a1f2c;
+  --electricBlue: #45c6ff;
+  --selectedBlue: #7fd8ff;
   --brightGreen: #00e676;
   --brightYellow: #ffdd00;
-  --windowSelectionColor: rgba(53, 167, 230, 0.35);
+  --windowSelectionColor: rgba(69, 198, 255, 0.35);
 }
 
 /* A tiny copy of the finished visualizer frame creates ONE low-frequency field
@@ -104,19 +108,57 @@ body {
    paint --bg-timeline, so overriding it here (and only here) lets the ambient
    field's tail glow through the whole work surface. Label rows and the frozen
    corner keep their opaque --bg-track-row - solid chrome over glass, the same
-   split the inspector makes. */
+   split the inspector makes.
+
+   The values are the neon-signage stage the timeline color lab settled on
+   (Tyler, 2026-08-02): lanes drop to near-black #0d0d0e so resting blocks read
+   as dark panes with lit-tubing notes and the selected block's supernova has
+   real darkness to burn against. The label rows follow a step above, and the
+   bar gridlines switch to a faint white so they read as etched lines on the
+   dark stage rather than raised borders. Scoped here so the piano roll and
+   inspector (which share none of these vars inside this scope) keep their own
+   chrome. */
 .timeline-glass-scope {
-  --bg-timeline: rgba(21, 21, 21, 0.8);
+  --bg-timeline: rgba(12, 13, 18, 0.9);
+  --bg-track-row: #0e1119;
+  /* The piano roll shares the scope; its ruler takes the same dim etched
+     voicing as the timeline's instead of the brighter defaults. */
+  --ruler-number: rgba(255, 255, 255, 0.34);
+  --ruler-line: rgba(255, 255, 255, 0.1);
+  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
+  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
+  /* The STRUCTURAL hairlines (bar gridlines, row dividers, label-column edge,
+     hierarchy brackets) are OPAQUE on purpose: as translucent whites they sum
+     wherever two lines cross - every grid/divider crossing and bracket joint
+     rendered a brighter dot at the corner - and the brackets' overpaint trick
+     (extending 1px over the divider above) doubled instead of covering. These
+     are the same alphas they always were (5.5% and 10% white), pre-composited
+     against the lane's effective near-black, so a crossing just paints flat. */
+  --timeline-grid-line: #191a1f;
+  --timeline-row-line: #23252c;
+}
+
+/* Ruler voicing for the TIMELINE's ruler only. Applied on TimelineArea's root
+   rather than the glass scope because the piano roll's ruler is the same
+   shared Ruler component inside the same scope - its numbers sit over the
+   hue-tinted clip-header band and need the brighter defaults to stay
+   readable. Here the numbers recede to etched marks on the dark stage so the
+   blocks (and the selected block's supernova) carry the scene. */
+.timeline-neon {
+  --ruler-number: rgba(255, 255, 255, 0.34);
+  --ruler-line: rgba(255, 255, 255, 0.1);
+  --ruler-tick-minor: rgba(255, 255, 255, 0.08);
+  --ruler-tick-sub: rgba(255, 255, 255, 0.05);
 }
 
 .visualizer-glass-surface {
-  background: rgba(19, 19, 19, 0.84);
+  background: rgba(12, 13, 18, 0.85);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
   backdrop-filter: blur(20px) saturate(120%);
 }
 
 .visualizer-glass-control {
-  background: rgba(31, 31, 31, 0.68);
+  background: rgba(19, 24, 35, 0.7);
   -webkit-backdrop-filter: blur(12px) saturate(120%);
   backdrop-filter: blur(12px) saturate(120%);
 }
@@ -551,4 +593,122 @@ body.drag-moving * {
   .cabin-logo-loaded .puff {
     animation: none;
   }
+}
+
+/* Editor sidebar toggles glide: Material 3 emphasized-decelerate over 400ms
+   (motion study, 2026-08-12). react-resizable-panels drives pane sizes via
+   flex-grow, so that's the animated property. The class is added by
+   glidePanelToggle (editor App.tsx) for the toggle's duration only, so
+   separator drags stay 1:1. */
+.panel-toggle-anim [data-panel] {
+  transition: flex-grow 400ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-toggle-anim [data-panel] {
+    transition: none;
+  }
+}
+
+/* The editor's WebGL canvas tracks its container with pure CSS during panel
+   glides. three.js writes px inline styles on every setSize, and that
+   measure → React → setSize loop drops frames under render load, so the
+   canvas ELEMENT visibly steps while its container moves smoothly.
+   !important beats the inline style: layout stays continuous and only the
+   drawing buffer catches up (a frame of content scaling, imperceptible). */
+.visual-canvas-smooth:not(.canvas-glide-freeze) canvas {
+  width: 100% !important;
+  height: 100% !important;
+  /* If the element and the GL buffer ever disagree for a frame (a resize the
+     sync render in RenderGovernor didn't cover), show the buffer center-crop
+     rather than squashed - cover can crop but geometrically cannot distort,
+     and it is a no-op whenever element and buffer aspects match (always, at
+     rest). */
+  object-fit: cover;
+}
+
+/* During the freeze the canvas follows three's own inline px styles instead
+   of tracking the (just-widened) root: gl.setSize updates the element and
+   the buffer ATOMICALLY, so no paint can ever catch a mismatched frame - the
+   100% rule here let a pre-resize paint slip through as a one-frame zoom
+   when a collapse widened the root under object-fit: cover. Centered in the
+   oversized root, the pre-resize frame is pixel-identical to the last frame
+   before the toggle, and the post-resize frame is the center-crop identity. */
+.visual-canvas-smooth.canvas-glide-freeze canvas {
+  display: block;
+  margin-inline: auto;
+}
+
+/* Sidebar glides move the canvas horizontally ONLY. While one runs (class
+   added/removed by glidePanelToggle in editor App.tsx), the r3f root is
+   frozen, centered, at a width ≥ wherever the glide lands (current width +
+   the toggled panel's width), so the moving panel edge reveals/covers a
+   fully-rendered scene: no bars, and no mid-glide buffer resizes to stretch
+   the picture. The camera's FOV is vertical, so the wider render
+   center-crops pixel-identically to the narrower one - the start and settle
+   resizes are invisible. !important because the r3f root carries inline
+   position/width styles. */
+.visual-canvas-smooth.canvas-glide-freeze .visual-canvas-root {
+  position: absolute !important;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: var(--glide-canvas-w) !important;
+  transform: translateX(-50%);
+}
+
+/* ============================================================
+   Editorial skin (2026 landing redesign, spec: dark-but-not-black,
+   serif display, single soft-cyan accent). Scoped remap of the console
+   tokens so whole screens adopt the editorial look without rewriting
+   their markup - wrap a page in <EditorialSkin> from
+   src/components/landing/editorialTheme.tsx and everything built on the
+   global tokens follows. The editor itself is never skinned.
+   ============================================================ */
+.editorial-skin {
+  /* Editorial tokens under their own names (the landing cover uses these). */
+  --lp-bg: #181b22;
+  --lp-bg-deep: #12141a;
+  --lp-text: #e9ebf0;
+  --lp-text-muted: #aab0be;
+  --lp-text-faint: #7d8494;
+  --lp-accent: #9ee8f5;
+  --lp-border: rgba(233, 235, 240, 0.08);
+  --lp-border-strong: rgba(233, 235, 240, 0.1);
+
+  /* Console tokens remapped so skinned screens' existing markup lands on the
+     editorial palette. Surface hierarchy is preserved, just lifted and cooled. */
+  --bg-page: #181b22;
+  --bg-panel: #12141a;
+  --bg-panel-raised: #1b1e26;
+  --bg-elevated: #232733;
+  --bg-app: #0c0d12;
+  --border: rgba(233, 235, 240, 0.08);
+  --border-subtle: rgba(233, 235, 240, 0.06);
+  --border-strong: rgba(233, 235, 240, 0.16);
+  --text: #e9ebf0;
+  --text-2: #ccd1dc;
+  --text-3: #aab0be;
+  --text-muted: #7d8494;
+  --text-faint: #7d8494;
+  --accent: #9ee8f5;
+  --accent-hover: #c3f2fb;
+  --accent-muted: #6fb9c7;
+  --on-accent: #12141a;
+
+  /* Deeper chrome (the landing's editor facsimile draws with these). */
+  --bg-shell: #0e1016;
+  --bg-topbar: #0e1016;
+  --bg-timeline: #10131a;
+  --bg-track-row: #1b1e26;
+  --bg-canvas: #0c0d12;
+  --bg-canvas-deep: #0a0b10;
+
+  /* Reroute the font-sans / font-mono utilities (inlined from these vars by
+     @theme inline) onto the editorial stack for everything inside the skin. */
+  --font-ui-sans: var(--lp-font-body);
+  --font-plex-mono: var(--lp-font-mono);
+
+  background-color: var(--lp-bg);
+  color: var(--lp-text);
 }

@@ -1,7 +1,6 @@
 'use client'
 
-// Bespoke settings for the Colorizer, following
-// docs/instrument-panel-design-guide.md (Laser Sphere is the reference).
+// Bespoke settings for the Colorizer, built from the console kit (./console).
 //
 // The preview is a FIELD OF OBJECTS, not a diagram: a grid of solids, indexed
 // row-major exactly the way a Grid splitter indexes its copies, each one fed
@@ -12,13 +11,15 @@
 //
 // The accent is color slot 1, per the guide: the palette's first pill is both
 // the panel's light source and an input for it, and it wears the
-// INTENSITY-driven halo.
+// INTENSITY-driven halo. The panel wash is a FIXED near-black rather than the
+// accent's shade - with five live palette colors, a wash that re-tinted on
+// every palette edit would make the whole room flicker.
 //
 // The demo performance deliberately plays SEVERAL slots, including one genuine
 // two-slot chord, because the palette and the blend between its colors are the
 // things a single-color preview cannot show.
 
-import { useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, InstancedMesh, Object3D, type OrthographicCamera } from 'three'
@@ -37,11 +38,21 @@ import {
 } from '../core/visualCopies/colorizer'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
-import { isNumberParam } from '../instruments/types'
 import { mixOklabLinearRgb } from '../utils/oklch'
-import { ParameterList } from './ParametersUserInterface'
-import { ColorWheelPill, towardWhite, withAlpha } from './colorWheel'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import {
+  bindPanel,
+  Console,
+  ControlRow,
+  ColorWheelPill,
+  emitterHalo,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  useConsoleAccent,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -201,11 +212,7 @@ function ObjectField({ settings }: { settings: ColorizerSettings }) {
 
 function FieldPreview({ settings }: { settings: ColorizerSettings }) {
   return (
-    <div
-      data-testid="colorizer-preview"
-      className="relative border-b border-white/[0.06]"
-      style={{ height: FIELD_HEIGHT, background: ROOM }}
-    >
+    <PreviewWindow height={FIELD_HEIGHT} testId="colorizer-preview">
       {/* Orthographic on purpose: the panel is short and very wide, so a
           perspective frustum wide enough to fill it shears the outer columns
           into trapezoids. Flat projection keeps every object in the field the
@@ -222,111 +229,11 @@ function FieldPreview({ settings }: { settings: ColorizerSettings }) {
           <Bloom intensity={0.7} luminanceThreshold={0.5} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
       </Canvas>
-    </div>
+    </PreviewWindow>
   )
 }
 
-// ── Knobs ────────────────────────────────────────────────────────────────────
-
-/** Per the guide: the value arc IS the light - a wide soft bloom under a hot
- *  core, white-hot dot at the terminus - lit by the panel's accent, which is
- *  the colorizer's own COLOR. */
-function ChromaKnob({ parameter: bound, label, large = false }: {
-  parameter: UserInterfaceParameter
-  label: string
-  large?: boolean
-}) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-
-  const value = bound.value
-  const range = definition.max - definition.min
-  const curve = definition.curve ?? 1
-  // Travel is in curve space so a curved param's low end gets the room it
-  // exists for; the arc follows the hand, not the raw value.
-  const percent = range === 0 ? 0 : Math.pow(clamp((value - definition.min) / range, 0, 1), 1 / curve)
-  const angle = -135 + percent * 270
-
-  const commitNorm = (t: number) => {
-    const raw = definition.min + Math.pow(clamp(t, 0, 1), curve) * range
-    const snapped = curve === 1
-      ? definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-      : (raw === 0 ? 0 : Number(raw.toPrecision(3)))
-    bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
-  }
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
-  }
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / 140)
-  }
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
-  }
-
-  const readout = definition.step >= 1
-    ? value.toFixed(0)
-    : value !== 0 && Math.abs(value) < 0.01 ? value.toPrecision(1) : value.toFixed(2)
-
-  return (
-    <div className="flex min-w-0 flex-col items-center">
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={definition.label}
-        aria-valuemin={definition.min}
-        aria-valuemax={definition.max}
-        aria-valuenow={value}
-        title={`${definition.label} · drag vertically · double-click to reset`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => bound.setValue(definition.default)}
-        onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[50px] w-[50px]' : 'h-10 w-10'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
-      >
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, var(--cz-accent) 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(6px)',
-            transform: 'scale(1.14)',
-            opacity: 0.85,
-          }}
-        />
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, var(--cz-accent-hot) 0deg ${percent * 270}deg, rgba(255,255,255,0.07) ${percent * 270}deg 270deg, transparent 270deg)`,
-          }}
-        />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#101219]" />
-        <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
-          <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
-            style={{ boxShadow: '0 0 5px 1.5px var(--cz-accent)' }}
-          />
-        </div>
-      </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] tabular-nums text-white/70">{readout}</span>
-    </div>
-  )
-}
+// ── Selectors ────────────────────────────────────────────────────────────────
 
 /** Segmented release-curve selector. Each option draws its own falloff, so the
  *  choice is legible without reading the word. */
@@ -336,14 +243,16 @@ const SHAPE_GLYPHS: Record<number, string> = {
   [SHAPE_SWELL]: 'M1 11 L3 1 C9 1.4 11 4 15 10.6',
 }
 
-function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+/** The solid-fill segment family this panel already speaks (shared with Bass
+ *  Ripple's pattern picker): the active segment is a full accent block with a
+ *  dark glyph, deliberately hotter than the kit's recessed Segmented. */
+function ShapeSelector({ b }: { b: SelectBinding }) {
+  const accent = useConsoleAccent()
+  const selected = Math.round(b.value)
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
+        {b.def.options.map((option) => {
           const active = option.value === selected
           return (
             <button
@@ -351,8 +260,9 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
               aria-label={option.label}
               aria-pressed={active}
               title={`${option.label} falloff`}
-              onClick={() => bound.setValue(option.value)}
-              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? 'bg-[var(--cz-accent)]' : 'bg-black/25 hover:bg-white/5'}`}
+              onClick={() => b.set(option.value)}
+              className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
+              style={active ? { background: accent } : undefined}
             >
               <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
                 <path
@@ -368,33 +278,31 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
       </div>
       <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">SHAPE</span>
       <span className="font-mono text-[9px] text-white/70">
-        {definition.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
+        {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>
   )
 }
 
-// ── Panel ────────────────────────────────────────────────────────────────────
-
 /** Word-labelled segmented control, for a select whose options are not curves.
  *  Same chassis as ShapeSelector so the two read as one family. */
-function WordSelector({ bound, label }: { bound: UserInterfaceParameter; label: string }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+function WordSelector({ b, label }: { b: SelectBinding; label: string }) {
+  const accent = useConsoleAccent()
+  const selected = Math.round(b.value)
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
+        {b.def.options.map((option) => {
           const active = option.value === selected
           return (
             <button
               key={option.value}
               aria-pressed={active}
-              onClick={() => bound.setValue(option.value)}
+              onClick={() => b.set(option.value)}
               className={`px-1.5 py-[3px] text-[8px] font-semibold tracking-[0.1em] transition-colors ${
-                active ? 'bg-[var(--cz-accent)] text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'
+                active ? 'text-black' : 'bg-black/25 text-white/45 hover:bg-white/5'
               }`}
+              style={active ? { background: accent } : undefined}
             >
               {option.label.slice(0, 4).toUpperCase()}
             </button>
@@ -406,14 +314,19 @@ function WordSelector({ bound, label }: { bound: UserInterfaceParameter; label: 
   )
 }
 
-const REQUIRED_KEYS = [
-  'intensity', 'attackBeats', 'releaseBeats', 'staggerBeats', 'shape', 'blend',
-  'rainbowRate', 'rainbowSpread',
-  ...COLORIZER_FLASH_SLOTS.map((slot) => slot.key),
-]
+// ── Panel ────────────────────────────────────────────────────────────────────
 
 export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
+  const b = bindPanel(parameters)
+  const intensity = b.num('intensity')
+  const attackBeats = b.num('attackBeats')
+  const releaseBeats = b.num('releaseBeats')
+  const staggerBeats = b.num('staggerBeats')
+  const shape = b.select('shape')
+  const blend = b.select('blend')
+  const rainbowRate = b.num('rainbowRate')
+  const rainbowSpread = b.num('rainbowSpread')
+  const slots = COLORIZER_FLASH_SLOTS.map((slot) => b.color(slot.key))
 
   // Memoized on the VALUES, so the field's resolve() reruns only on a real
   // change. Computed before the fallback return - hooks run unconditionally.
@@ -429,31 +342,22 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuesKey])
 
-  if (REQUIRED_KEYS.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
+  if (!intensity || !attackBeats || !releaseBeats || !staggerBeats || !shape || !blend
+    || !rainbowRate || !rainbowSpread || slots.some((slot) => !slot)) {
+    return <ParameterList parameters={parameters} />
+  }
 
   const accent = settings.color
-  const intensity = clamp(settings.intensity, 0, 1)
+  const intensityValue = clamp(settings.intensity, 0, 1)
 
   return (
-    <section
-      data-testid="colorizer-user-interface"
-      className="-mx-3 -mt-3"
-      style={{
-        background: PANEL_SHADE,
-        '--cz-accent': accent,
-        '--cz-accent-hot': towardWhite(accent, 0.4),
-        '--cz-glow': withAlpha(accent, 0.16),
-      } as CSSProperties}
-    >
+    <Console accent={accent} shade={PANEL_SHADE} testId="colorizer-user-interface">
       <FieldPreview settings={settings} />
-      <div
-        className="flex items-end gap-1 px-3 pb-3 pt-2.5"
-        style={{ background: 'radial-gradient(58% 30px at 50% 0, var(--cz-glow), transparent)' }}
-      >
-        <ChromaKnob parameter={bound.intensity} label="INTENSITY" large />
-        <ChromaKnob parameter={bound.attackBeats} label="ATTACK" />
-        <ChromaKnob parameter={bound.releaseBeats} label="RELEASE" />
-        <ChromaKnob parameter={bound.staggerBeats} label="STAGGER" />
+      <ControlRow spill className="gap-1 px-3 pb-3 pt-2.5">
+        <Knob b={intensity} label="INTENSITY" large />
+        <Knob b={attackBeats} label="ATTACK" />
+        <Knob b={releaseBeats} label="RELEASE" />
+        <Knob b={staggerBeats} label="STAGGER" />
         {/* The two rainbow knobs belong to the second MIDI row, so they get a
             spectrum rule instead of a caption - it says "different row" in the
             one language this panel already speaks. */}
@@ -462,13 +366,13 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
           className="mb-4 h-9 w-px flex-shrink-0 self-end rounded-full"
           style={{ background: 'linear-gradient(#ff4d4d, #ffd166, #4dff88, #4dd2ff, #b84dff)' }}
         />
-        <ChromaKnob parameter={bound.rainbowRate} label="SPIN" />
-        <ChromaKnob parameter={bound.rainbowSpread} label="SPREAD" />
-        <ShapeSelector bound={bound.shape} />
+        <Knob b={rainbowRate} label="SPIN" />
+        <Knob b={rainbowSpread} label="SPREAD" />
+        <ShapeSelector b={shape} />
         <div className="ml-auto">
-          <WordSelector bound={bound.blend} label="MIX" />
+          <WordSelector b={blend} label="MIX" />
         </div>
-      </div>
+      </ControlRow>
       {/* The palette gets its own shelf rather than a slot in the knob row:
           five pills are the panel's second subject, and the piano roll shows
           these same five colors on its five rows, so they need to read as a
@@ -478,19 +382,20 @@ export const ColorizerUserInterfaceRenderer: UserInterfaceRendererDefinition = (
           <ColorWheelPill
             key={slot.key}
             value={settings[slot.key]}
-            onChange={(hex) => bound[slot.key].setValue(hex)}
+            onChange={(hex) => slots[index]!.set(hex)}
             label={String(index + 1)}
             ariaLabel={`${slot.label} flash color`}
             title={`${slot.label} - the color that row's notes flash toward`}
             align={index < 3 ? 'left' : 'right'}
             // Slot 1 is the panel's light source, so it alone wears the
             // INTENSITY halo; five blazing pills would just be noise.
-            halo={index === 0 ? `0 0 ${5 + intensity * 16}px ${withAlpha(accent, 0.2 + intensity * 0.5)}` : undefined}
+            halo={index === 0 ? emitterHalo(accent, intensityValue) : undefined}
             pillTestId={index === 0 ? 'colorizer-color-pill' : `colorizer-color-pill-${index + 1}`}
           />
         ))}
         <span className="mb-1 ml-auto text-[8px] font-semibold tracking-[0.12em] text-white/25">PALETTE</span>
       </div>
-    </section>
+      <More parameters={b.rest()} />
+    </Console>
   )
 }

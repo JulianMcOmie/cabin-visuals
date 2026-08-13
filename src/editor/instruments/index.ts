@@ -40,7 +40,10 @@ import { photoSlotInstrument } from './PhotoSlot'
 import { polyFxInstrument } from './PolyFx'
 import { waterDropInstrument } from './WaterDrop'
 import { flashWallInstrument } from './FlashWall'
+import { overlapShapeInstrument } from './OverlapShape'
+import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
+import { midiRollInstrument } from './MidiRoll'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -83,7 +86,10 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [polyFxInstrument.id]: polyFxInstrument,
   [waterDropInstrument.id]: waterDropInstrument,
   [flashWallInstrument.id]: flashWallInstrument,
+  [overlapShapeInstrument.id]: overlapShapeInstrument,
+  [overlapSolidInstrument.id]: overlapSolidInstrument,
   [cropMaskInstrument.id]: cropMaskInstrument,
+  [midiRollInstrument.id]: midiRollInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

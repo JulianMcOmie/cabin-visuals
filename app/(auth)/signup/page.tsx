@@ -116,16 +116,6 @@ function SignupPageContent() {
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
       <form action={initiateSignup} onSubmit={() => { track('signup_started'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label htmlFor="firstName" className={`mb-[6px] block ${authLabelClass}`}>First name</label>
-            <input id="firstName" name="firstName" type="text" required className={authInputClass} placeholder="First name" />
-          </div>
-          <div className="flex-1">
-            <label htmlFor="lastName" className={`mb-[6px] block ${authLabelClass}`}>Last name</label>
-            <input id="lastName" name="lastName" type="text" required className={authInputClass} placeholder="Last name" />
-          </div>
-        </div>
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />

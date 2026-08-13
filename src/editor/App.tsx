@@ -4,12 +4,12 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Upload, ChevronLeft, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
+import { Play, Pause, Upload, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { getPlaybackEngine } from './core/playback'
-import { useProjectStore } from './store/ProjectStore'
+import { useProjectStore, type ViewAspect } from './store/ProjectStore'
 import { useUIStore } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
@@ -21,9 +21,8 @@ import { track } from '../analytics/analytics'
 // import { TutorialOverlay } from './components/TutorialOverlay'
 import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
-import { TransportDisplay } from './components/TransportDisplay'
-import { PlayIcon, StopIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
-import { BooksIcon, SlidersIcon } from './components/PanelToggleIcons'
+import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
+import { BpmControl } from './components/BpmControl'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -46,7 +45,7 @@ import { readPaneDefaults, writePaneOpen } from './uiSettings'
 import { useIsMobile } from '../components/useIsMobile'
 // Already in the project (landing carousel, projects grid): framer-motion
 // handles the controls' fade-in/out via AnimatePresence.
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 
 // Dev-only: expose the stores for console/E2E debugging. Never ships.
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -58,6 +57,43 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   // The VisualCopy pull API too, so E2E checks can read a track's resolved
   // copies (transform + opacity) without reaching into an R3F scene graph.
   ;(window as unknown as Record<string, unknown>).__cabinVisual = { getVisualCopies, getVisualCopyCount, getMountedRenderScenes, getCompositionLayers, getObjectState }
+}
+
+// Sidebar toggles glide (Material 3 emphasized-decelerate - the .panel-toggle-anim
+// rule in globals.css). The class goes on the panel's GROUP so both siblings'
+// flex-grow interpolate together - animating only the toggled panel makes the
+// neighbor's share jump, then drift. It lives only for the toggle's duration,
+// so separator drags stay 1:1; re-toggling mid-glide re-arms the removal timer
+// instead of stripping the class out from under the second transition.
+const PANEL_TOGGLE_MS = 400
+const panelToggleTimers = new WeakMap<HTMLElement, number>()
+function holdClassForGlide(el: HTMLElement, className: string) {
+  el.classList.add(className)
+  const prev = panelToggleTimers.get(el)
+  if (prev !== undefined) window.clearTimeout(prev)
+  panelToggleTimers.set(el, window.setTimeout(() => el.classList.remove(className), PANEL_TOGGLE_MS + 50))
+}
+function glidePanelToggle(panelDomId: string) {
+  const toggled = document.getElementById(panelDomId)
+  const group = toggled?.closest('[data-group]')
+  if (!toggled || !(group instanceof HTMLElement)) return
+  holdClassForGlide(group, 'panel-toggle-anim')
+  // The glide only moves the canvas horizontally, and resizing the GL buffer
+  // per frame stretches the picture (the buffer lags the element). So the
+  // canvas root is FROZEN for the glide, centered, at a width ≥ wherever it
+  // will land: its current width plus everything the toggled panel could
+  // hand it. The camera's FOV is vertical, so the wider render center-crops
+  // to exactly the narrower one - the overshoot and the settle resize are
+  // invisible, and the glide just reveals/covers a fully-rendered scene
+  // (no bars, no stretching; one buffer resize at start, one at settle).
+  // (.canvas-glide-freeze in globals.css.)
+  const panel = document.querySelector<HTMLElement>('.visual-canvas-smooth')
+  const root = panel?.querySelector<HTMLElement>('.visual-canvas-root')
+  if (panel && root) {
+    const bound = root.getBoundingClientRect().width + toggled.getBoundingClientRect().width
+    panel.style.setProperty('--glide-canvas-w', `${bound}px`)
+    holdClassForGlide(panel, 'canvas-glide-freeze')
+  }
 }
 
 // Shared segment styling for the header transport band. Segments are flush -
@@ -113,7 +149,7 @@ function Scene({
   // paused). RenderGovernor requests single frames when an input changes.
   const isPlaying = useTimeStore((s) => s.isPlaying)
   return (
-    <Canvas shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
+    <Canvas className="visual-canvas-root" shadows="soft" frameloop={isPlaying ? 'always' : 'demand'} dpr={[1, 1.5]} camera={{ position: [0, 0, 5], fov: 55 }} gl={{ antialias: true }}>
       <color attach="background" args={['#09090b']} />
       <CanvasSourceBridge sourceRef={sourceCanvasRef} />
       <PreviewSceneSync sceneId={previewSceneId} />
@@ -258,7 +294,7 @@ function CanvasTransportBar({
               else void playback.play()
             }}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(30,30,35,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
+            className="visualizer-glass-control flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(16,19,28,0.8)] text-white/90 transition-colors hover:text-white cursor-pointer"
           >
             {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="translate-x-px" />}
           </button>
@@ -320,21 +356,6 @@ function VisualPanel({
     }
   }
   useEffect(() => () => clearTouchTimer(), [])
-  // Panel size, tracked so the letterboxed canvas box is computed (CSS alone
-  // can't contain-fit an aspect-ratio box against both dimensions).
-  const [panelSize, setPanelSize] = useState<{ w: number; h: number } | null>(null)
-
-  useEffect(() => {
-    const el = panelRef.current
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const r = entry.contentRect
-      setPanelSize({ w: r.width, h: r.height })
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current)
     document.addEventListener('fullscreenchange', onChange)
@@ -383,16 +404,17 @@ function VisualPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Contain-fit the chosen aspect inside the panel; 'fill' keeps the old
-  // fill-the-panel behavior (box = null → plain inset-0).
-  let box: { w: number; h: number } | null = null
-  if (aspect !== 'fill' && panelSize) {
-    const target = aspect === '16:9' ? 16 / 9 : 9 / 16
-    let w = panelSize.w
-    let h = w / target
-    if (h > panelSize.h) { h = panelSize.h; w = h * target }
-    box = { w, h }
-  }
+  // Contain-fit the chosen aspect inside the panel with pure CSS: container
+  // query units size the box against BOTH panel dimensions, so it tracks the
+  // sidebar glides every frame with no measure → state → render round-trip
+  // (the old ResizeObserver path lagged frames under render load and the box
+  // visibly stepped). 'fill' (and fullscreen) keep the fill-the-panel box.
+  const letterbox = aspect !== 'fill' && !isFullscreen
+    ? {
+        width: `min(100%, calc(100cqh * ${aspect === '16:9' ? 16 / 9 : 9 / 16}))`,
+        aspectRatio: aspect === '16:9' ? '16 / 9' : '9 / 16',
+      }
+    : null
 
   return (
     <div
@@ -401,13 +423,31 @@ function VisualPanel({
       onPointerMove={isMobile ? undefined : revealFullscreenControl}
       onPointerLeave={isMobile ? undefined : hideFullscreenControl}
       onClick={onCanvasTap}
-      className={`relative h-full ${box ? 'bg-[var(--bg-canvas-deep)]' : 'bg-[var(--bg-canvas)]'}`}
+      className="visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size]"
     >
       <div
-        className={`absolute ${box ? 'border border-[var(--border-subtle)]' : 'inset-0'}`}
-        style={box ? { width: box.w, height: box.h, left: (panelSize!.w - box.w) / 2, top: (panelSize!.h - box.h) / 2 } : undefined}
+        className={`overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${letterbox ? 'relative' : 'absolute inset-0'}`}
+        style={letterbox ?? undefined}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
+      <div className={`absolute top-2 right-2 z-10 transition-opacity duration-300 ${
+        (isMobile ? touchControlsVisible : fullscreenControlVisible)
+          ? 'pointer-events-auto opacity-100'
+          : 'pointer-events-none opacity-0'
+      }`}>
+        <button
+          onClick={(e) => { e.stopPropagation(); toggle() }}
+          onFocus={() => {
+            clearFullscreenControlTimer()
+            setFullscreenControlVisible(true)
+          }}
+          onBlur={hideFullscreenControl}
+          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
+          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(16,19,28,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
+        >
+          {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
+        </button>
+      </div>
       </div>
       {/* First-run tutorial: switched OFF in the UI, kept intact in the code.
           Re-enable by uncommenting this and its import at the top of the file -
@@ -434,24 +474,6 @@ function VisualPanel({
           )}
         </AnimatePresence>
       )}
-      <div className={`absolute top-2 right-3 z-10 transition-opacity duration-300 ${
-        (isMobile ? touchControlsVisible : fullscreenControlVisible)
-          ? 'pointer-events-auto opacity-100'
-          : 'pointer-events-none opacity-0'
-      }`}>
-        <button
-          onClick={(e) => { e.stopPropagation(); toggle() }}
-          onFocus={() => {
-            clearFullscreenControlTimer()
-            setFullscreenControlVisible(true)
-          }}
-          onBlur={hideFullscreenControl}
-          title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-          className="visualizer-glass-control flex items-center justify-center w-6 h-6 rounded border border-[var(--border)] bg-[rgba(30,30,35,0.8)] text-[var(--text-3)] hover:text-[var(--text)] transition-colors cursor-pointer"
-        >
-          {isFullscreen ? <Minimize size={11} /> : <Maximize size={11} />}
-        </button>
-      </div>
     </div>
   )
 }
@@ -506,15 +528,15 @@ function EditableProjectName() {
     <div
       onDoubleClick={startRename}
       title="Double-click to rename"
-      className="group flex items-center gap-1.5 min-w-0 cursor-text select-none"
+      className="group relative flex items-center min-w-0 cursor-text select-none"
     >
-      <span className="text-xs font-medium text-[var(--text)] whitespace-nowrap truncate max-w-[180px]">
+      <span className="mr-[-0.06em] text-[13px] leading-none [font-family:var(--font-archivo)] font-bold tracking-[0.06em] text-[var(--text)] whitespace-nowrap truncate max-w-[calc(100vw-600px)]">
         {projectName ?? 'Untitled Project'}
       </span>
       <button
         onClick={startRename}
         aria-label="Rename project"
-        className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
+        className="absolute left-full ml-1.5 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--text)] transition-opacity cursor-pointer"
       >
         <Pencil size={10} />
       </button>
@@ -560,23 +582,22 @@ function SaveStatusChip() {
   )
 }
 
-// Styled as a transport-band segment (transportBtn): same elevated strip,
-// flush segments, press contraction, and a lit accent fill while the panel
-// is open - the header's two bands read as one family.
+/** Panel toggle (Console spec): a "window with a sidebar" glyph whose divider
+ *  side names the panel it controls - library at the bar's far left, inspector
+ *  at its far right, each directly above its panel. Open = soft accent fill +
+ *  accent icon; closed = quiet muted; hover shows the fill in either state. */
 function EditorPanelToggle({
   label,
   open,
   onToggle,
   controls,
-  position,
-  children,
+  side,
 }: {
   label: string
   open: boolean
   onToggle: () => void
   controls: string
-  position: 'first' | 'last'
-  children: ReactNode
+  side: 'left' | 'right'
 }) {
   return (
     <button
@@ -585,34 +606,26 @@ function EditorPanelToggle({
       aria-controls={controls}
       aria-pressed={open}
       title={`${open ? 'Hide' : 'Show'} ${label}`}
-      className={`${transportBtn} ${position === 'first' ? 'rounded-l-md' : 'rounded-r-md'} ${
-        open
-          ? 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
-          : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
+      className={`flex h-9 w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] transition-[color,background-color] duration-[400ms] ease-[cubic-bezier(0.05,0.7,0.1,1)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] ${
+        open ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]' : 'text-[var(--text-3)]'
       }`}
     >
-      {children}
+      <span className="relative block h-[12px] w-[16px] rounded-[3px] border-[1.5px] border-current">
+        <span className={`absolute inset-y-0 w-[1.5px] bg-current ${side === 'left' ? 'left-[2.5px]' : 'right-[2.5px]'}`} />
+      </span>
     </button>
   )
 }
 
-function Header({
-  libraryOpen,
-  sceneEditorOpen,
-  onToggleLibrary,
-  onToggleSceneEditor,
-  playback,
-}: {
-  libraryOpen: boolean
-  sceneEditorOpen: boolean
-  onToggleLibrary: () => void
-  onToggleSceneEditor: () => void
-  playback: PlaybackControls
-}) {
+const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
+
+/** The transport, below the preview (DAW Console 4a): band of skip/play/loop
+ *  segments plus the recessed position+tempo readout, centered under the
+ *  canvas. Hidden on phones - the canvas overlay carries play/pause/scrub
+ *  there. Keyboard transport stays wired in the Header (it owns the page). */
+function TransportStrip({ playback }: { playback: PlaybackControls }) {
   const isPlaying = useTimeStore((s) => s.isPlaying)
   const { play, pause, reset, restart } = playback
-  useTransportKeys({ play, pause, reset })
-  useUndoRedoKeys()
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
   const loopEnabled = useTimeStore((s) => !!s.loopRegion?.enabled)
@@ -632,6 +645,104 @@ function Header({
       ? { ...loopRegion, enabled: !loopRegion.enabled }
       : { startBeat: 0, endBeat: defaultLoopEndBeat, enabled: true })
   }
+
+  const aspect = useProjectStore((s) => s.viewAspect)
+  const setAspect = useProjectStore((s) => s.setViewAspect)
+  const [aspectOpen, setAspectOpen] = useState(false)
+
+  return (
+    <div className="relative hidden md:flex h-12 flex-shrink-0 items-center justify-center select-none px-4">
+      {/* Preview aspect, bottom-left under the canvas: a quiet select. */}
+      <div className="absolute left-4">
+        <button
+          onClick={() => setAspectOpen((v) => !v)}
+          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
+          className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+        >
+          {aspect === 'fill' ? 'Fill' : aspect}
+          <span className="text-[7px] leading-none">▾</span>
+        </button>
+        {aspectOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setAspectOpen(false)} />
+            <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[76px] rounded-md border border-[var(--border)] bg-[var(--bg-panel-raised)] py-1 shadow-lg shadow-black/50">
+              {VIEW_ASPECTS.map((a) => (
+                <button
+                  key={a}
+                  onClick={() => { setAspect(a); setAspectOpen(false) }}
+                  className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
+                    a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
+                  }`}
+                >
+                  {a === 'fill' ? 'Fill' : a}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      {/* Transport band - a continuous elevated strip matching the
+          display's height and radius. Segment highlights run flush to the
+          band's edges (overflow clipping rounds the two ends); the 1px gap
+          is invisible at rest and becomes a hairline seam only between two
+          lit/hovered segments. Each active control has its own hue: play
+          goes green while playing; loop goes the looped-region blue
+          (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
+          TransportIcons. */}
+      <div className="flex h-9 items-center gap-2">
+        <button
+          onClick={isPlaying ? pause : reset}
+          title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
+          className={`${transportBtn} rounded-md text-[var(--text-3)] hover:text-[var(--accent-hover)]`}
+        >
+          {isPlaying ? <PauseIcon /> : <SkipBackIcon />}
+        </button>
+        <button
+          onClick={isPlaying ? restart : play}
+          title={isPlaying ? 'Restart playback' : 'Play (Space)'}
+          data-tutorial-play=""
+          className={`${transportBtn} !w-10 rounded-md text-[var(--text-2)] hover:text-[var(--accent-hover)]`}
+        >
+          <PlayIcon size={22} />
+        </button>
+        <button
+          onClick={toggleLoop}
+          title={loopEnabled ? 'Loop on' : 'Loop off'}
+          className={`${transportBtn} rounded-md ${
+            loopEnabled
+              ? 'text-[var(--accent)] hover:text-[var(--accent-hover)]'
+              : 'text-[var(--text-3)] hover:text-[var(--accent-hover)]'
+          }`}
+        >
+          <LoopIcon />
+        </button>
+      </div>
+
+      {/* Tempo, bottom-right - quiet inline readout, no chrome. The bar:beat
+          position readout is gone; the playhead and ruler carry position. */}
+      <div className="absolute right-4 flex h-9 items-stretch">
+        <BpmControl />
+      </div>
+    </div>
+  )
+}
+
+function Header({
+  libraryOpen,
+  sceneEditorOpen,
+  onToggleLibrary,
+  onToggleSceneEditor,
+  playback,
+}: {
+  libraryOpen: boolean
+  sceneEditorOpen: boolean
+  onToggleLibrary: () => void
+  onToggleSceneEditor: () => void
+  playback: PlaybackControls
+}) {
+  const { play, pause, reset } = playback
+  useTransportKeys({ play, pause, reset })
+  useUndoRedoKeys()
 
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
@@ -654,7 +765,16 @@ function Header({
   const [leavingToProjects, setLeavingToProjects] = useState(false)
 
   return (
-    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 bg-[var(--bg-topbar)] relative">
+    <div className="h-12 flex-shrink-0 flex items-center gap-3 px-3 bg-[var(--bg-topbar)] border-b border-[var(--border-subtle)] relative">
+      <EditorPanelToggle
+        label="library"
+        open={libraryOpen}
+        onToggle={onToggleLibrary}
+        controls="library-panel"
+        side="left"
+      />
+      {/* The wordmark, top-left beside the library toggle - it IS the way
+          back to projects. Serif italic ice, per the Console spec. */}
       <Link
         href="/projects"
         aria-label="Back to projects"
@@ -662,35 +782,22 @@ function Header({
         onClick={(e) => {
           if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setLeavingToProjects(true)
         }}
-        className="flex-shrink-0 flex items-center text-[var(--text-3)] hover:text-[var(--text)] active:scale-[0.94] transition-[color,transform] cursor-pointer"
+        className="flex-shrink-0 flex items-center active:scale-[0.96] transition-transform cursor-pointer"
       >
-        {leavingToProjects ? <Loader2 size={13} className="animate-spin" /> : <ChevronLeft size={13} />}
+        {leavingToProjects
+          ? <Loader2 size={16} className="animate-spin text-[var(--text-3)]" />
+          : (
+            <span className="text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--accent)] select-none">
+              Cabin
+            </span>
+          )}
       </Link>
-      <EditableProjectName />
-
-      <div
-        className="flex h-9 flex-shrink-0 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]"
-        role="group"
-        aria-label="Editor panels"
-      >
-        <EditorPanelToggle
-          label="library"
-          open={libraryOpen}
-          onToggle={onToggleLibrary}
-          controls="library-panel"
-          position="first"
-        >
-          <BooksIcon />
-        </EditorPanelToggle>
-        <EditorPanelToggle
-          label="scene editor"
-          open={sceneEditorOpen}
-          onToggle={onToggleSceneEditor}
-          controls="scene-editor-panel"
-          position="last"
-        >
-          <SlidersIcon />
-        </EditorPanelToggle>
+      {/* The project title rides the CENTER of the bar (still double-click
+          renamable). Inline on phones, where an absolute center would
+          collide with the side clusters. */}
+      <div className="md:hidden"><EditableProjectName /></div>
+      <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+        <EditableProjectName />
       </div>
 
       <SaveStatusChip />
@@ -714,81 +821,23 @@ function Header({
       )}
       <TemplateDemoChip />
 
-      {/* Center transport - absolutely centered on the bar. Hidden on phones:
-          it would collide with the side clusters, and the canvas overlay
-          carries play/pause/scrub there. */}
-      <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-2 pointer-events-none select-none">
-        <div className="flex items-center gap-2 pointer-events-auto">
-          {/* Transport band - a continuous elevated strip matching the
-              display's height and radius. Segment highlights run flush to the
-              band's edges (overflow clipping rounds the two ends); the 1px gap
-              is invisible at rest and becomes a hairline seam only between two
-              lit/hovered segments. Each active control has its own hue: play
-              goes green while playing; loop goes the looped-region blue
-              (LOOP_REGION_ENABLED_COLOR) while enabled. Custom glyphs - see
-              TransportIcons. */}
-          <div className="flex h-9 items-stretch gap-px overflow-hidden rounded-md bg-[var(--bg-elevated)]">
-            <button
-              onClick={isPlaying ? pause : reset}
-              title={isPlaying ? 'Pause (Space)' : 'Return to start (Enter)'}
-              className={`${transportBtn} rounded-l-md text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]`}
-            >
-              {isPlaying ? <StopIcon /> : <SkipBackIcon />}
-            </button>
-            <button
-              onClick={isPlaying ? restart : play}
-              title={isPlaying ? 'Restart playback' : 'Play (Space)'}
-              data-tutorial-play=""
-              className={`${transportBtn} ${
-                isPlaying
-                  ? 'bg-[#3db26a] text-[var(--on-accent)] hover:bg-[#58c37f]'
-                  : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
-              }`}
-            >
-              <PlayIcon />
-            </button>
-            <button
-              onClick={toggleLoop}
-              title={loopEnabled ? 'Loop on' : 'Loop off'}
-              className={`${transportBtn} rounded-r-md ${
-                loopEnabled
-                  ? 'bg-[#4da3d9] text-[var(--on-accent)] hover:bg-[#6fb8e2]'
-                  : 'text-[var(--text-3)] hover:bg-white/10 hover:text-[var(--text)]'
-              }`}
-            >
-              <LoopIcon />
-            </button>
-          </div>
-
-          {/* The readout is a recessed instrument screen (position + tempo);
-              project length moved into the timeline. See TransportDisplay. */}
-          <TransportDisplay />
-        </div>
-      </div>
-
       <div className="ml-auto flex items-center gap-2 flex-shrink-0">
         {process.env.NODE_ENV === 'development' && <PreviewCaptureButton />}
-        <a
-          href="https://discord.gg/ZrbQMFwCsb"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track('editor_discord_clicked')}
-          aria-label="Join the Cabin Visuals Discord"
-          title="Join the Cabin Visuals Discord"
-          className="hidden md:flex items-center justify-center h-7 w-7 rounded border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-3)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition-colors cursor-pointer"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-3 w-3 flex-shrink-0">
-            <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
-          </svg>
-        </a>
+        <EditorPanelToggle
+          label="scene editor"
+          open={sceneEditorOpen}
+          onToggle={onToggleSceneEditor}
+          controls="scene-editor-panel"
+          side="right"
+        />
         {/* Gated Export explains itself like the projects page's blocked
             "New project" button: an instant CSS group-hover panel, not a
             native title - titles never fire over disabled buttons in Firefox
             (the very browser the capability gate fires on), and the panel
-            appears with no tooltip dwell. Two gates share it: browser
-            capability first (signing in wouldn't help there), then account
-            (export requires a real sign-in; anonymous sessions don't count).
-            Ungated, the button keeps a short native title. */}
+            appears with no tooltip dwell. Only the browser-capability gate
+            lives here now - the account gate moved INSIDE the export flow
+            (ExportDialog's final button invites signup), so the button reads
+            fully functional to everyone whose browser can export. */}
         <div className="group relative">
           <button
             onClick={() => {
@@ -796,62 +845,79 @@ function Header({
               // panel - hover never happens on touch, and a disabled button
               // swallows the tap silently (the mobile "where is export?"
               // failure mode).
-              if (exportGate?.ok === false || !permanent) { setGateNoteOpen((v) => !v); return }
+              if (exportGate?.ok === false) { setGateNoteOpen((v) => !v); return }
               track('export_clicked')
               setExportOpen(true)
             }}
-            aria-disabled={exportGate?.ok === false || !permanent}
-            title={exportGate?.ok === false || !permanent ? undefined : 'Export as MP4'}
-            className={`flex items-center gap-1.5 h-7 px-3 rounded text-[11px] font-bold transition-colors cursor-pointer ${
-              exportGate?.ok === false || !permanent
+            aria-disabled={exportGate?.ok === false}
+            title={exportGate?.ok === false ? undefined : 'Export as MP4'}
+            className={`flex items-center gap-1.5 h-7 px-4 rounded-full text-[11px] font-semibold [font-family:var(--font-plex-sans)] transition-colors cursor-pointer ${
+              exportGate?.ok === false
                 ? 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'
-                : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
+                : 'bg-[var(--accent-button)] hover:bg-[var(--accent-hover)] text-[var(--on-accent)]'
             }`}
           >
             <Upload size={11} strokeWidth={2.5} />
             Export
           </button>
-          {(exportGate?.ok === false || (!authLoading && !permanent)) && (
+          {exportGate?.ok === false && (
             // Padding on a hidden wrapper (not a margin) so the pointer can
             // cross from the button into the panel without leaving the group.
             <div className={`absolute right-0 top-full z-40 pt-1.5 ${gateNoteOpen ? 'block' : 'hidden group-hover:block'}`}>
               <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-                {exportGate?.ok === false
-                  ? exportGate.reason ?? 'Video export is not available in this browser.'
-                  : (
-                    <>
-                      Video export needs a free account.{' '}
-                      <Link
-                        href="/signup"
-                        onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'signup' })}
-                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
-                      >
-                        Sign up
-                      </Link>
-                      {' or '}
-                      <Link
-                        href="/login"
-                        onClick={() => track('nav_clicked', { from: 'editor-export-gate', to: 'login' })}
-                        className="whitespace-nowrap text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]"
-                      >
-                        sign in
-                      </Link>
-                      {' '}to export your video.
-                    </>
-                  )}
+                {exportGate.reason ?? 'Video export is not available in this browser.'}
               </div>
             </div>
           )}
         </div>
       </div>
-      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} />}
+      {/* AnimatePresence keeps the dialog mounted through its 150ms exit
+          animation (the motion divs inside portal to document.body). */}
+      <AnimatePresence>
+        {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} canExport={permanent} />}
+      </AnimatePresence>
     </div>
   )
 }
 
 function BottomArea() {
-  const editingBlock = useUIStore((s) => s.editingBlock)
-  return editingBlock ? <PianoRollPanel /> : <TimelineArea />
+  const editing = useUIStore((s) => s.editingBlock) != null
+  // The roll rises over the timeline (Material 3 emphasized-decelerate, the
+  // sidebar glide's curve) and sinks away on dismiss (M3's accelerate exit).
+  // The timeline stays mounted UNDER the roll only while it animates: at rest
+  // the old single-surface swap is preserved, because TimelineArea's
+  // whole-tracks subscription must not re-render beneath the roll's
+  // per-pointermove note edits (render budget, components/CLAUDE.md).
+  const [rollSettled, setRollSettled] = useState(false)
+  useEffect(() => {
+    if (!editing) setRollSettled(false)
+  }, [editing])
+  return (
+    <div className="relative h-full overflow-hidden">
+      {(!editing || !rollSettled) && <TimelineArea />}
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence>
+          {/* z-[80]: the timeline's own chrome stacks up to z-[70] (loop
+              badge popovers), and the rising roll must cover ALL of it. */}
+          {editing && (
+            <motion.div
+              key="piano-roll"
+              className="absolute inset-0 z-[80] bg-[var(--bg-app)]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%', transition: { duration: 0.25, ease: [0.3, 0, 0.8, 0.15] } }}
+              transition={{ duration: 0.4, ease: [0.05, 0.7, 0.1, 1] }}
+              onAnimationComplete={(target) => {
+                if (typeof target === 'object' && target !== null && 'y' in target && target.y === 0) setRollSettled(true)
+              }}
+            >
+              <PianoRollPanel />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+    </div>
+  )
 }
 
 /** The transport handles usePlayback returns - created once in EditorApp and
@@ -888,10 +954,38 @@ export default function EditorApp() {
   // Persist only on actual open/closed flips - onResize streams every drag frame.
   const libraryOpenRef = useRef(paneDefaults.library)
   const sceneEditorOpenRef = useRef(paneDefaults.sceneEditor)
+  // A toggle animates the panel over PANEL_TOGGLE_MS, and onResize tracks the
+  // DOM through the whole glide - so open/closed state is set from INTENT at
+  // click (the header icon's accent fades in step with the movement, not at
+  // its end) and onResize's writes are suppressed until the glide settles.
+  // Separator drags never set this, so they keep streaming through onResize.
+  const suppressResizeUntilRef = useRef(0)
 
-  const togglePanel = (panelRef: RefObject<PanelImperativeHandle | null>, fallbackSize: string) => {
+  const applyPaneOpen = (
+    pane: 'library' | 'sceneEditor',
+    open: boolean,
+  ) => {
+    const [setOpen, openRef] = pane === 'library'
+      ? [setLibraryOpen, libraryOpenRef] as const
+      : [setSceneEditorOpen, sceneEditorOpenRef] as const
+    setOpen(open)
+    if (openRef.current !== open) {
+      openRef.current = open
+      writePaneOpen(pane, open)
+    }
+  }
+
+  const togglePanel = (
+    panelRef: RefObject<PanelImperativeHandle | null>,
+    pane: 'library' | 'sceneEditor',
+    domId: string,
+    fallbackSize: string,
+  ) => {
     const panel = panelRef.current
     if (!panel) return
+    glidePanelToggle(domId)
+    suppressResizeUntilRef.current = Date.now() + PANEL_TOGGLE_MS + 100
+    applyPaneOpen(pane, panel.isCollapsed())
     if (panel.isCollapsed()) {
       panel.expand()
       // A panel that MOUNTED collapsed has no remembered size for expand() to
@@ -933,13 +1027,17 @@ export default function EditorApp() {
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}
-        onToggleLibrary={() => togglePanel(libraryPanelRef, '25%')}
-        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, '55%')}
+        onToggleLibrary={() => togglePanel(libraryPanelRef, 'library', 'library-panel', '25%')}
+        onToggleSceneEditor={() => togglePanel(sceneEditorPanelRef, 'sceneEditor', 'scene-editor-panel', '30%')}
         playback={playback}
       />
       {/* The library's panel color fills everything below the header, so the
           workspace reads as one card inset within the library's surface. */}
       <div className="flex-1 min-h-0 bg-[var(--bg-shell)]">
+        <div ref={containerRef} className="flex h-full flex-col">
+        {/* Upper row: library | workspace card. The timeline lives BELOW this
+            whole row (DAW Console 4a), so it runs under the library too. */}
+        <div className="relative min-h-0" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
         {/* overflow visible so the workspace card's glow can spill past the
             group's top edge onto the header band. */}
         <PanelGroup orientation="horizontal" style={{ height: '100%', overflow: 'visible' }} disabled={modalOpen}>
@@ -955,6 +1053,9 @@ export default function EditorApp() {
             collapsible
             collapsedSize="0%"
             onResize={(size, _id, prevSize) => {
+              // Mid-glide sizes are the animation, not intent - see
+              // suppressResizeUntilRef.
+              if (Date.now() < suppressResizeUntilRef.current) return
               const open = size.inPixels > 0
               setLibraryOpen(open)
               // Persist only real transitions (prev defined = not the mount
@@ -971,40 +1072,54 @@ export default function EditorApp() {
           {/* No visible rule: the card's inset gap separates library from
               workspace now. A slim invisible strip keeps the drag target,
               tinting on hover so it stays discoverable. */}
-          <PanelResizeHandle className="w-1 cursor-col-resize bg-transparent outline-none transition-colors hover:bg-[var(--border-strong)] focus:outline-none" />
+          <PanelResizeHandle className="w-px cursor-col-resize bg-[var(--border-subtle)] outline-none transition-colors hover:bg-[var(--border-strong)] focus:outline-none" />
 
           {/* Right section: inspector + canvas above, tracks + audio strip below.
               The shell shows only along the top and left; the workspace runs
               flush to the viewport's right and bottom edges. */}
           {/* overflow-visible (overriding the wrapper's overflow:auto) lets the
               card's glow bleed past the inset gap onto the shell surface. */}
-          <Panel className="pt-2 pl-2" style={{ overflow: 'visible' }}>
+          <Panel style={{ overflow: 'visible' }}>
             {/* relative: the header band is positioned, so the card must be
                 positioned too (and later in the DOM) for its glow to paint
                 over the header and the library rather than under them. */}
             {/* isolate: the ambient bleed paints at z-index -1, and the card's
                 stacking context keeps that above the card's own background
                 instead of letting it vanish beneath it. */}
-            <div className="relative isolate flex h-full flex-col overflow-hidden rounded-tl-[10px] bg-[var(--bg-app)]">
+            <div className="relative isolate flex h-full flex-col overflow-hidden">
               <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
-              <div ref={containerRef} className="flex flex-col flex-1 min-h-0">
-
-                {/* Upper: TRACK inspector + Canvas, resizable */}
-                <div className="relative min-h-0 overflow-hidden" style={{ flexBasis: `${topFrac * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+              <div className="min-h-0 flex-1">
                   <PanelGroup
                     orientation="horizontal"
                     style={{ height: '100%' }}
                     disabled={modalOpen}
                   >
+                    {/* DAW Console 4a: preview center (with margin, transport
+                        beneath it), plugin-style inspector on the RIGHT. */}
+                    <Panel>
+                      {/* The stage: a step darker than the chrome around it,
+                          so the preview area reads as the room the canvas
+                          sits in (spec: stage #0a0b10 vs app #0c0d12). */}
+                      <div className="flex h-full flex-col bg-[var(--bg-canvas-deep)]">
+                        <div className="min-h-0 flex-1 p-3 sm:px-6 sm:pt-5">
+                          <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} playback={playback} />
+                        </div>
+                        <TransportStrip playback={playback} />
+                      </div>
+                    </Panel>
+
+                    <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
+
                     <Panel
                       id="scene-editor-panel"
                       panelRef={sceneEditorPanelRef}
-                      defaultSize={paneDefaults.sceneEditor ? '55%' : '0%'}
+                      defaultSize={paneDefaults.sceneEditor ? '30%' : '0%'}
                       minSize="15%"
                       maxSize="60%"
                       collapsible
                       collapsedSize="0%"
                       onResize={(size, _id, prevSize) => {
+                        if (Date.now() < suppressResizeUntilRef.current) return
                         const open = size.inPixels > 0
                         setSceneEditorOpen(open)
                         if (prevSize !== undefined && sceneEditorOpenRef.current !== open) {
@@ -1015,43 +1130,33 @@ export default function EditorApp() {
                     >
                       <TrackEditor />
                     </Panel>
-
-                    <PanelResizeHandle className="w-px bg-[var(--border)] cursor-col-resize outline-none focus:outline-none" />
-
-                    {/* The visualizer keeps its original panel and dimensions;
-                        only the cheap ambient copy extends behind its sibling. */}
-                    <Panel>
-                      <VisualPanel previewSceneId={resolvedPreviewSceneId} sourceCanvasRef={visualCanvasRef} playback={playback} />
-                    </Panel>
                   </PanelGroup>
-                </div>
-
-                {/* Window-resize divider: invisible 1px line (the timeline's own border-t
-                    draws the visible rule) with a grab pad on top of its neighbours. */}
-                <div className="relative h-px bg-transparent shrink-0">
-                  <div
-                    onPointerDown={startResize}
-                    className={`absolute inset-x-0 z-50 cursor-ns-resize ${modalOpen ? 'pointer-events-none' : ''}`}
-                    style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
-                  />
-                </div>
-
-                {/* Tracks / Piano Roll */}
-                <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
-                {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
-                    strip) slightly translucent, so the card-level ambient
-                    bleed's fading tail reads through the work surface - the
-                    same light as the inspector's glass, continued downward.
-                    Label rows and blocks keep their opaque chrome. */}
-                <div className="timeline-glass-scope flex-1 min-h-0">
-                  <BottomArea />
-                </div>
-
               </div>
             </div>
           </Panel>
 
         </PanelGroup>
+        </div>
+
+        {/* Window-resize divider: invisible 1px line (the timeline's own border-t
+            draws the visible rule) with a grab pad on top of its neighbours. */}
+        <div className="relative h-px bg-transparent shrink-0">
+          <div
+            onPointerDown={startResize}
+            className={`absolute inset-x-0 z-50 cursor-ns-resize ${modalOpen ? 'pointer-events-none' : ''}`}
+            style={{ top: -DIVIDER_GRAB_INSET, bottom: -DIVIDER_GRAB_INSET }}
+          />
+        </div>
+
+        {/* Tracks / Piano Roll - full width, running under the library (4a). */}
+        <SceneTabs previewSceneId={resolvedPreviewSceneId} onPreviewSceneChange={setPreviewSceneId} />
+        {/* timeline-glass-scope makes --bg-timeline (the lanes + ruler
+            strip) slightly translucent. Label rows and blocks keep their
+            opaque chrome. */}
+        <div className="timeline-glass-scope flex-1 min-h-0">
+          <BottomArea />
+        </div>
+        </div>
       </div>
     </div>
   )

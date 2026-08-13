@@ -236,6 +236,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
     'particleEnabled', 'particleCount', 'particleSize', 'particleGlow', 'particleOpaque', 'particleMorphBeats',
     'particleFillGap', 'particleStagger', 'particleVariation', 'particlePulse',
+    'particleField', 'fieldDepth', 'fieldDrift', 'fieldDensity',
   ])
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
@@ -451,6 +452,13 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
             </SectionLabel>
           )
         })()}
+        {/* Field Mode sits directly under the particle toggle: it changes what
+            the particles ARE (an ambient screen the words condense out of), so
+            it reads before the shared sliders that tune either behavior. */}
+        <BoundToggleRow bound={findParam(parameters, 'particleField')} />
+        <BoundSlider bound={findParam(parameters, 'fieldDepth')} />
+        <BoundSlider bound={findParam(parameters, 'fieldDrift')} />
+        <BoundSlider bound={findParam(parameters, 'fieldDensity')} />
         <BoundSlider bound={findParam(parameters, 'particleCount')} />
         <BoundSlider bound={findParam(parameters, 'particleSize')} />
         <BoundSlider bound={findParam(parameters, 'particleGlow')} />

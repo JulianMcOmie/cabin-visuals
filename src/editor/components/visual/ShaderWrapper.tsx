@@ -83,7 +83,10 @@ export function ShaderWrapper({
 
     const w = Math.max(1, Math.floor(size.width)), h = Math.max(1, Math.floor(size.height))
     const opts = { minFilter: LinearFilter, magFilter: LinearFilter }
-    const src = new WebGLRenderTarget(w, h, opts)
+    // `src` is where the object's real geometry rasterizes, so it carries a
+    // stencil buffer (Overlap Shape's parity passes need one wherever the
+    // meshes draw); ping/pong only ever receive fullscreen quad passes.
+    const src = new WebGLRenderTarget(w, h, { ...opts, stencilBuffer: true })
     const ping = new WebGLRenderTarget(w, h, opts)
     const pong = new WebGLRenderTarget(w, h, opts)
 

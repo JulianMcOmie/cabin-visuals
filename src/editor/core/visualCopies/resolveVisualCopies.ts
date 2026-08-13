@@ -3,15 +3,6 @@ import { identityVisualCopy } from './identityVisualCopy'
 import type { MoverOrSplitter, VisualCopy } from './types'
 
 /**
- * Hard maximum copy count. Chained splitters multiply, so an accidental
- * exponential explosion is one typo away; the cap bounds every step's output.
- * Overflow keeps the FIRST `MAX_VISUAL_COPIES` copies in pipeline order and
- * drops the rest - the next step sees the truncated count. Applied per step so
- * later steps never fan out from an over-cap intermediate result.
- */
-export const MAX_VISUAL_COPIES = 1024
-
-/**
  * Evaluates an ordered mover-and-splitter chain at one beat.
  *
  * Ordering rules (all deterministic):
@@ -82,8 +73,8 @@ export function resolveVisualCopies(
       }
     })
 
-    visualCopies = nextVisualCopies.slice(0, MAX_VISUAL_COPIES)
-    internals = nextInternals.slice(0, MAX_VISUAL_COPIES)
+    visualCopies = nextVisualCopies
+    internals = nextInternals
   }
 
   return visualCopies.map((visualCopy, index) => {

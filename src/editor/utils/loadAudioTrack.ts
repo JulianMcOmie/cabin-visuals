@@ -17,8 +17,13 @@ const BEAT_CONFIDENCE_MIN = 0.2
  *    block renders as a loading placeholder - duration 0 is the signal), and
  *  - the upload runs as pure durability, progress shown on the block.
  * Files dropped onto the track area (and the lyric-setup flow) come here.
+ *
+ * `matchTempo: false` skips the detect-BPM + trim-to-downbeat step: audio
+ * extracted FROM a video must stay sample-aligned with its source clip, so
+ * neither the grid nor the in-point may move under it.
  */
-export async function loadAudioTrack(file: File): Promise<void> {
+export async function loadAudioTrack(file: File, opts: { matchTempo?: boolean } = {}): Promise<void> {
+  const matchTempo = opts.matchTempo ?? true
   const audio = useAudioStore.getState()
   let refBox: string | null = null
   const { ref, completion } = await beginSaveAudio(file, (progress) => {
@@ -54,7 +59,7 @@ export async function loadAudioTrack(file: File): Promise<void> {
     // beat 0 of the grid IS the song's downbeat - no manual trimming. Low
     // confidence (no steady pulse) leaves everything untouched. Note the
     // store keeps integer BPM; genuinely fractional live tempos will drift.
-    const beats = detectBeats(buffer)
+    const beats = matchTempo ? detectBeats(buffer) : null
     const confident = beats !== null && beats.confidence >= BEAT_CONFIDENCE_MIN
     if (confident) useProjectStore.getState().setBpm(beats.bpm)
 

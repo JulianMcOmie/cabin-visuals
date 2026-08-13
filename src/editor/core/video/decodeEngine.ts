@@ -198,7 +198,11 @@ export class VideoDecodeEngine {
       const octx = off.getContext('2d')!
       const headSink = new VideoSampleSink(track)
       for await (const sample of headSink.samples(rt.inPoint, rt.inPoint + HEAD_SPAN_S)) {
-        octx.drawImage(sample.toCanvasImageSource() as CanvasImageSource, 0, 0, w, h)
+        // sample.draw (NOT ctx.drawImage of toCanvasImageSource) - it applies
+        // the file's rotation metadata, which our canvas dims already assume
+        // (displayWidth/Height are post-rotation). Raw drawImage rendered
+        // phone footage sideways AND squished into the upright canvas.
+        sample.draw(octx, 0, 0, w, h)
         rt.head.timestamps.push(sample.timestamp)
         sample.close()
         rt.head.bitmaps.push(off.transferToImageBitmap())
@@ -287,6 +291,7 @@ export class VideoDecodeEngine {
       if (idx >= 0) {
         const changed = key !== this.lastDrawnKey || rt.head.timestamps[idx] !== this.lastDrawnTime
         if (changed) {
+          // Head bitmaps were baked rotation-correct at arm time.
           this.ctx.drawImage(rt.head.bitmaps[idx], 0, 0, rt.w, rt.h)
           this.lastDrawnKey = key
           this.lastDrawnTime = rt.head.timestamps[idx]
@@ -302,7 +307,7 @@ export class VideoDecodeEngine {
       // on canvas - no black flash. Hidden only if we've drawn nothing for it.
       return { visible: this.lastDrawnKey === key, updated: false, aspect }
     }
-    this.ctx.drawImage(sample.toCanvasImageSource() as CanvasImageSource, 0, 0, rt.w, rt.h)
+    sample.draw(this.ctx, 0, 0, rt.w, rt.h) // rotation-aware, like the head cache
     this.lastDrawnKey = key
     this.lastDrawnTime = sample.timestamp
     sample.close()
@@ -325,7 +330,7 @@ export class VideoDecodeEngine {
     this.ensureCanvasSize(rt!)
     const sample = await rt!.sink!.getSample(sourceTime)
     if (!sample) return rt!.w / rt!.h
-    this.ctx.drawImage(sample.toCanvasImageSource() as CanvasImageSource, 0, 0, rt!.w, rt!.h)
+    sample.draw(this.ctx, 0, 0, rt!.w, rt!.h) // rotation-aware, like the head cache
     sample.close()
     this.exactKey = key
     this.exactTime = sourceTime

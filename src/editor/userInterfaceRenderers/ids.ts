@@ -25,3 +25,5 @@ export type UserInterfaceRendererId =
   | 'metronomeBalls'
   | 'emojiDisplay'
   | 'flashWall'
+  | 'overlapShape'
+  | 'overlapSolid'

@@ -59,10 +59,16 @@ export function usePlayback() {
       const next = gatherAudioTracks(s.tracks)
       // Cheap change test: the immutable store makes reference compares exact.
       const changed = next.length !== prev.length || next.some((t, i) => t !== prev[i])
+      // Re-arm only when audibility or placement moved. A volume-only change
+      // (the fader drag writes per pointermove) is a live gain write inside
+      // setBlocks - re-arming would stop/start every player per move, which is
+      // the runaway-gain "earrape" failure the drag suppression exists for.
+      const needsRearm = next.length !== prev.length
+        || next.some((t, i) => t.muted !== prev[i].muted || t.solo !== prev[i].solo || t.audioBlocks !== prev[i].audioBlocks)
       prev = next
       if (!changed) return
       audio.setBlocks(next)
-      void audio.loadClips().then(() => engine.rearmAudio())
+      if (needsRearm) void audio.loadClips().then(() => engine.rearmAudio())
     })
 
     // Keep the live transport tempo in sync with the project bpm while playing -

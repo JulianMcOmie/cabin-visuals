@@ -1,10 +1,9 @@
 'use client'
 
-import { Suspense, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { View } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { CanvasTexture, Group, LinearFilter, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
+import { Group, Matrix4, Mesh, MeshStandardMaterial, Color } from 'three'
 import { getInstrument } from '../instruments'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
@@ -157,12 +156,6 @@ const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, b
 // ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
 // black. Both word notes land at beat 0, so the full phrase is up from the
 // first frame and never rebuilds - the font flicker alone is the animation.
-// Object cards with a stylized in-canvas caption, same treatment as the
-// compound movers' field labels (baked into captured clips).
-const OBJECT_PREVIEW_LABELS: Record<string, string> = {
-  cube: '3d shape',
-}
-
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
   textDisplay: Array.from({ length: 2 }, () => ({
     beat: 0,
@@ -263,12 +256,10 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
       <Comp trackId={trackId} />
     </Suspense>
   )
-  const label = OBJECT_PREVIEW_LABELS[instrumentId]
   return (
     <>
       <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
-      {label && <PreviewFieldLabel text={label} />}
     </>
   )
 }
@@ -334,25 +325,43 @@ interface CompoundMoverPreview {
   seedScale: number
   settings?: Record<string, number>
   notes: ResolvedNote[]
-  /** Stylized in-canvas caption naming the mover (baked into captured clips). */
-  label?: string
+  /** Cycle setting overlays over time: every `beatsPer` beats the preview
+   *  re-resolves the definition with the next cell merged over `settings` -
+   *  how one card demos a whole (motion x mode) matrix in sequence. */
+  sequence?: { beatsPer: number; cells: Record<string, number>[] }
+  /** Radians per beat of presentation tumble applied to each SEED (outside the
+   *  definition - the layout stays exactly what the def builds). Splitters
+   *  build STILL arrangements, so without this their cards (and captured
+   *  clips) are freeze-frames; a slow turntable keeps them honest AND alive.
+   *  For a single origin seed the whole formation turns; for a seed field
+   *  each seed tumbles in place. */
+  turntable?: number
 }
 const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // The unified Mover's default cell (translate x burst) stepping a ring of
   // seeds through the generic 60-65 arc - the same phrase every mover card
   // speaks, so the card reads as the family's fundamental.
   mover: {
-    label: 'mover',
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: MOVER_NOTES,
+    // The card demos the whole family: the ring steps outward (translate x
+    // burst), spins in place (rotate x constant), then revolves around the
+    // center (orbit x constant) - eight beats each, on repeat.
+    sequence: {
+      beatsPer: 8,
+      cells: [
+        { motion: 0, mode: 0 },
+        { motion: 1, mode: 1, angleX: 0, angleY: 0, angleZ: 45 },
+        { motion: 2, mode: 1, angleX: 0, angleY: 0, angleZ: 45 },
+      ],
+    },
   },
   // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
   // on their own - the mover needs no notes to move - so the only notes here
   // step the OUTER radius multiplier (36-39 = collapse/half/home/double) and
   // the arrangement BLOOMS out of the center and folds back in while it spins.
   radialMotion: {
-    label: 'radial motion',
     seeds: [[0, 0, 0]],
     seedScale: 0.34,
     settings: {
@@ -364,7 +373,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // Motion's Step block is the 60-65 signed basis the generic arc already
   // speaks; a held Spin +Z (72+4) keeps the whole ring turning while it steps.
   motion: {
-    label: 'motion',
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: [...MOVER_NOTES, holdNote(76)],
@@ -373,7 +381,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // at 0 with rows drift 0-5, return 6, step 7-12, spin 13-18 - so this is the
   // same step arc + held spin as `motion`, transposed into the rack's lane.
   allMovers: {
-    label: 'all movers',
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: [...makeLoopNotes([7, 9, 11, 8, 10, 12, 7, 10], 2, 2), holdNote(17)],
@@ -382,7 +389,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // front visibly travels outward through the neighbors, springs and settles
   // (60 = Impact, once per bar).
   meteorImpact: {
-    label: 'meteor impact',
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     notes: makeLoopNotes([60], 0.5, 4),
@@ -391,7 +397,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // grid rides the rolling surface while Amplitude-up (60) is held, settling
   // as the hold ends so the loop restarts from calm water.
   waveTerrain: {
-    label: 'wave terrain',
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     notes: [holdNote(60, 0, 12)],
@@ -400,7 +405,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // breathes out, anticipates in-then-out, pulls in, and spiral-twists, one
   // gesture per bar (its four note vocabularies).
   forceFieldPush: {
-    label: 'force field pulse',
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     notes: makeLoopNotes([60, 62, 61, 64], 0.5, 4),
@@ -411,7 +415,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // yanked home mid-flight by the settle row. IMPACT is preview-tamed so the
   // throw stays inside the popup's frame.
   impactScatter: {
-    label: 'impact scatter',
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     settings: { impact: 0.5, recoverBeats: 2, chaos: 0.6 },
@@ -430,7 +433,6 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // tall-and-narrow and shrink short-and-wide, and a decay long enough to
   // watch fall away at popup scale.
   impactPulse: {
-    label: 'impact pulse',
     seeds: gridSeeds(7, 5, 0.72),
     seedScale: 0.3,
     settings: { hit: 0.55, decayBeats: 1, stretch: 0.6 },
@@ -439,51 +441,104 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
   // Visibility gates existence itself: ONE full-size cube popping in and out
   // with its note (127 = the single copy's row).
   visibility: {
-    label: 'visibility',
     seeds: [[0, 0, 0]],
     seedScale: 1,
     notes: makeLoopNotes([127], 0.5, 1),
   },
-}
-
-/** An item's name as a stylized caption INSIDE the GL frame - drawn to a
- *  canvas texture, so captured clips carry it (a DOM overlay never would).
- *  Depth test off + late renderOrder: the caption is a title, not a scene
- *  object, so it reads over anything the preview swings through its plane
- *  (the 3D Shape's tumbling solid reaches it; movers' small cubes can too). */
-function PreviewFieldLabel({ text }: { text: string }) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 1024
-    canvas.height = 192
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      let size = 116
-      const font = (s: number) => `900 ${s}px "Arial Black", Impact, sans-serif`
-      ctx.font = font(size)
-      const measured = ctx.measureText(text).width
-      if (measured > 940) size *= 940 / measured
-      ctx.font = font(size)
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.shadowColor = 'rgba(0,0,0,0.65)'
-      ctx.shadowBlur = 18
-      ctx.shadowOffsetY = 6
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(text, 512, 96)
-    }
-    const tex = new CanvasTexture(canvas)
-    tex.minFilter = LinearFilter
-    tex.magFilter = LinearFilter
-    return tex
-  }, [text])
-  useEffect(() => () => texture.dispose(), [texture])
-  return (
-    <mesh position={[0, -1.35, 0.7]} renderOrder={10}>
-      <planeGeometry args={[3.4, 0.6375]} />
-      <meshBasicMaterial map={texture} transparent depthWrite={false} depthTest={false} toneMapped={false} />
-    </mesh>
-  )
+  // ── Structural splitters ──
+  // These build STILL arrangements, so without an entry their cards captured
+  // as freeze-frames (found in the 2026-08-07 clip audit). Each gets the
+  // turntable plus, where the vocabulary has one, slot-disable notes blinking
+  // cells off (top row = 127, descending) so MIDI's reach is visible too.
+  // NOTE for all single-seed structural entries: the chain composes LOCALLY,
+  // so the splitter's distances are measured in the SEED's scaled frame - a
+  // 0.3x seed shrinks every spacing/radius by 0.3x too. Settings distances
+  // here are therefore pre-divided by seedScale to land at the intended world
+  // size (get this wrong and the formation collapses into one merged blob,
+  // which is exactly how the first capture round came out).
+  grid: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.34,
+    settings: { rows: 3, columns: 3, depth: 1, spacing: 3 },
+    turntable: 0.35,
+    notes: [holdNote(127, 4, 1), holdNote(123, 8, 1), holdNote(119, 12, 1)],
+  },
+  radial: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.3,
+    // Radius up from its 0 default: at 0 all copies rotate IN PLACE, which on
+    // a cube renders as one static rosette - the old broken card.
+    settings: { copies: 8, radius: 4.5, plane: 0 },
+    turntable: 0.4,
+    notes: [holdNote(127, 4, 1), holdNote(124, 8, 1), holdNote(121, 12, 1)],
+  },
+  // Line's story is the aimed axis and the size ramp, so the card shows both:
+  // a diagonal aim off the -Z default (the turntable then sweeps the tail
+  // around the unmoved base copy) and a growth high enough to read at card
+  // size. Spacing is pre-divided by seedScale like the others; mute notes
+  // blink the base, middle and tail copies off.
+  line: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.3,
+    // Kept short and gently ramped: the tumble inevitably points the tail at
+    // the camera, where length and growth compound with perspective - at
+    // spacing 2 / growth 1.3 that pass blew past the card's frame.
+    settings: { copies: 5, spacing: 1.5, growth: 1.25, angle: 25, tilt: 15 },
+    turntable: 0.4,
+    notes: [holdNote(127, 4, 1), holdNote(125, 8, 1), holdNote(123, 12, 1)],
+  },
+  polyhedron: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.24,
+    settings: { radius: 6 },
+    turntable: 0.4,
+    notes: [],
+  },
+  // Symmetry mirrors the SEED about lines through the center - a tumbling
+  // off-axis seed is the story, its reflections counter-tumbling in step.
+  symmetry: {
+    seeds: [[1.0, 0.35, 0]],
+    seedScale: 0.4,
+    settings: { mirrors: 3, spread: 1.5 },
+    turntable: 0.8,
+    notes: [],
+  },
+  // Parametric Pattern moves on its own; the entry exists for FRAMING - the
+  // default 48 copies at full seed scale filled the card with illegible slabs
+  // (and overflowed the 24-copy preview pool).
+  parametricPattern: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.22,
+    settings: { copies: 20, radius: 7, amount: 1 },
+    turntable: 0.3,
+    notes: [],
+  },
+  // ── Movers/colorizers whose default single-cube card sat still ──
+  // Symmetric Motion moves copies about the center, so it needs a FORMATION
+  // to move: a ring breathing out, turning, pulling in, counter-turning - one
+  // gesture per bar in its radial vocabulary (60/61 = out/in, 62/63 = turn).
+  symmetricMotion: {
+    seeds: ringSeeds(8, 1.4),
+    seedScale: 0.36,
+    notes: makeLoopNotes([60, 62, 61, 63], 1, 4),
+  },
+  // Gradient is a passive ramp across copies BY WORLD POSITION - a turning
+  // ring shows the two-stop ramp sweeping through the field. Span is pinned to
+  // the ring's diameter so the full A-to-B travel is on screen.
+  gradient: {
+    seeds: ringSeeds(10, 1.5),
+    seedScale: 0.36,
+    settings: { span: 3.2 },
+    turntable: 0.5,
+    notes: [],
+  },
+  // Conveyor carries the formation as a belt - a field of seeds sliding
+  // right for a bar-pair, then up (held notes = belt running, Burst pitches).
+  conveyor: {
+    seeds: gridSeeds(5, 3, 0.8),
+    seedScale: 0.3,
+    notes: [holdNote(60, 0, 8), holdNote(62, 8, 8)],
+  },
 }
 
 export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {
@@ -498,23 +553,48 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
     })
   }, [def, notes, inputValues, compound])
   const offsetSeed = def?.kind === 'mover' && !compound
+  // Sequenced previews re-resolve on each cell boundary (resolve is a cheap
+  // closure build); the current cell's chain is cached between boundaries.
+  const sequencedRef = useRef<{ cell: number; chain: NonNullable<typeof chain> } | null>(null)
 
   useFrame((root) => {
     if (!chain) return
-    const beat = previewBeatNow(root.clock.elapsedTime, sync)
+    let beat = previewBeatNow(root.clock.elapsedTime, sync)
+    let activeChain = chain
+    const sequence = !inputValues && !notes?.length ? compound?.sequence : undefined
+    if (def && sequence) {
+      const cell = Math.floor(beat / sequence.beatsPer) % sequence.cells.length
+      if (sequencedRef.current?.cell !== cell) {
+        sequencedRef.current = {
+          cell,
+          chain: def.resolve({
+            settings: mergeDefinitionSettings(def, { ...compound?.settings, ...sequence.cells[cell] }),
+            notes: compound?.notes ?? MOVER_NOTES,
+          }),
+        }
+      }
+      activeChain = sequencedRef.current.chain
+      // Each cell reads time from its own start, so constant cells don't jump
+      // in mid-spin and burst notes land at the cell's opening beats.
+      beat = beat % sequence.beatsPer
+    }
     const meshes = meshesRef.current
     let used = 0
     for (const seedPosition of compound?.seeds ?? [null]) {
       if (used >= meshes.length) break
       const seed = identityVisualCopy()
       if (seedPosition) {
-        seed.transform
-          .makeTranslation(seedPosition[0], seedPosition[1], seedPosition[2])
-          .multiply(_seedScaleMatrix.makeScale(compound.seedScale, compound.seedScale, compound.seedScale))
+        seed.transform.makeTranslation(seedPosition[0], seedPosition[1], seedPosition[2])
+        if (compound?.turntable) {
+          seed.transform
+            .multiply(_seedSpinMatrix.makeRotationY(beat * compound.turntable))
+            .multiply(_seedTiltMatrix.makeRotationX(beat * compound.turntable * 0.53))
+        }
+        seed.transform.multiply(_seedScaleMatrix.makeScale(compound!.seedScale, compound!.seedScale, compound!.seedScale))
       } else if (offsetSeed) {
         seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
       }
-      const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
+      const copies: VisualCopy[] = activeChain.apply(seed, { beat, index: 0, count: 1 })
       for (const copy of copies) {
         if (used >= meshes.length) break
         const mesh = meshes[used++]
@@ -525,7 +605,15 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
         const mat = mesh.material as MeshStandardMaterial
         mat.transparent = true
         mat.opacity = copy.opacity
-        mat.color.copy(CUBE_BASE_COLOR).offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
+        mat.color.copy(CUBE_BASE_COLOR)
+        // The ABSOLUTE color channel (colorizers' tint) mixes first, then the
+        // relative HSL offsets ride on top - same order as the real pipeline
+        // (core/visual/instrumentColor.ts). Skipping tint left the Gradient
+        // colorizer's card all base-blue.
+        if (copy.colorShift.tint && copy.colorShift.tintAmount > 0) {
+          mat.color.lerp(_tintColor.set(copy.colorShift.tint), Math.min(1, copy.colorShift.tintAmount))
+        }
+        mat.color.offsetHSL(copy.colorShift.hue, copy.colorShift.saturation, copy.colorShift.lightness)
       }
     }
     for (let i = used; i < meshes.length; i++) {
@@ -555,7 +643,6 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
           <meshStandardMaterial color={CUBE_BASE_COLOR} transparent opacity={0.12} wireframe />
         </mesh>
       )}
-      {compound?.label && <PreviewFieldLabel text={compound.label} />}
       {Array.from({ length: poolSize }, (_, i) => (
         <mesh key={i} ref={(m) => { if (m) meshesRef.current[i] = m }} visible={false}>
           <boxGeometry args={[1, 1, 1]} />
@@ -566,6 +653,9 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
   )
 }
 const _seedScaleMatrix = new Matrix4()
+const _seedSpinMatrix = new Matrix4()
+const _seedTiltMatrix = new Matrix4()
+const _tintColor = new Color()
 
 // ── Project-accurate track-row previews ─────────────────────────────────────
 //
@@ -972,36 +1062,6 @@ export function InstrumentPreviewLayer() {
   )
 }
 
-/** One WebGL renderer shared by every 3D instrument card. A separate Canvas
- * per card can exceed the browser's context limit as sections open or a drag
- * starts, at which point three.js receives a null context. */
-function ClearInstrumentCardPreviewFrame() {
-  // Drei View renders each card with a scissor and disables the root renderer's
-  // automatic clear. Clear the full transparent framebuffer before the views
-  // move/render so scrolling cannot leave pixels at their previous positions.
-  useFrame(({ gl }) => {
-    gl.setScissorTest(false)
-    gl.clear(true, true, true)
-  }, -1)
-  return null
-}
-
-export function InstrumentCardPreviewCanvas() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-0">
-      <Canvas
-        dpr={[1, 2]}
-        frameloop="always"
-        camera={{ position: [0, 0.9, 4.2], fov: 55 }}
-        gl={{ antialias: true, alpha: true }}
-      >
-        <ClearInstrumentCardPreviewFrame />
-        <View.Port />
-      </Canvas>
-    </div>
-  )
-}
-
 // Expanding a section mounts a whole column of clip cards at once; letting
 // every <video> fetch + spin up a decoder simultaneously stalls the main
 // thread. This tiny gate staggers the INITIAL loads: a card may mount its
@@ -1054,16 +1114,15 @@ function useClipLoadSlot(wanted: boolean): { ready: boolean; done: () => void } 
 /** The library card's preview. Clip-first: 3D previews play their captured 8s
  * loop from the instrument-previews bucket (one <video>, no per-frame GPU cost,
  * and the bloom pass baked in - see InstrumentPreviewCapture). Ids without a
- * clip yet (or a failed load) fall back to the live render through a View into
- * InstrumentCardPreviewCanvas, so a new instrument previews correctly before
- * its capture ever runs. 2D instrument vignettes keep their lightweight
- * ordinary canvases. */
+ * clip (or a failed load) show a quiet NAMEPLATE - never a live render: a
+ * column of WebGL Views is exactly the card lag the clip pipeline removed, so
+ * a new instrument's card stays blank-with-name until
+ * `npm run previews:instruments` captures it. 2D instrument vignettes keep
+ * their lightweight ordinary canvases; the hover POPUP stays live. */
 export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [nearViewport, setNearViewport] = useState(false)
   const [clipFailed, setClipFailed] = useState(false)
-  const reactId = useId()
-  const trackId = `${PREVIEW_TRACK_ID}-${reactId}`
   const draw2d = get2DPreview(item.id)
   // undefined = manifest still resolving; hold the card empty instead of
   // mounting a live View that the arriving clip would immediately replace.
@@ -1104,13 +1163,9 @@ export function InstrumentCardPreview({ item }: { item: InstrumentItem }) {
         />
       )}
       {nearViewport && !draw2d && (clip === null || clipFailed) && (
-        <View className="absolute inset-0">
-          <ambientLight intensity={0.7} />
-          <directionalLight position={[3, 4, 5]} intensity={1.1} />
-          {item.kind === 'object'
-            ? <ObjectPreview instrumentId={item.id} trackId={trackId} />
-            : <MoverPreview moverId={item.id} />}
-        </View>
+        <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs font-medium text-[var(--text-muted)] select-none">
+          {item.name}
+        </span>
       )}
     </div>
   )

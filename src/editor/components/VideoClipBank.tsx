@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ArrowDown, ArrowUp, Film, Pause, Play, Plus, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Film, Music, Pause, Play, Plus, X } from 'lucide-react'
 import { Input, ALL_FORMATS, BlobSource, VideoSampleSink, type Input as MbInput } from 'mediabunny'
 import { claimMediaDrop } from './MediaFileDropLayer'
 import { dragCarriesFiles, isVideoFile } from '../core/mediaFileKinds'
@@ -9,6 +9,7 @@ import { useProjectStore } from '../store/ProjectStore'
 import { useVideoStore } from '../store/VideoStore'
 import { useUIStore } from '../store/UIStore'
 import { getVideoSource } from '../core/video/videoSource'
+import { extractAudioTrack } from '../core/video/extractAudio'
 import {
   FREE_MAX_PADS,
   addVideoClipsToTrack,
@@ -518,6 +519,21 @@ export function VideoClipBank({ track }: { track: Track }) {
     if (core?.ref) cleanOrphanSource(core.ref)
   }
 
+  // One extraction at a time; the row's music button pulses while it runs.
+  const [extractingRef, setExtractingRef] = useState<string | null>(null)
+  const extractAudio = async (ref: string) => {
+    if (extractingRef) return
+    setError(null)
+    setExtractingRef(ref)
+    try {
+      await extractAudioTrack(ref, videoClips[ref]?.fileName ?? 'video')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setExtractingRef(null)
+    }
+  }
+
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir
     if (j < 0 || j >= pads.length) return
@@ -611,6 +627,13 @@ export function VideoClipBank({ track }: { track: Track }) {
                 !
               </span>
             ))}
+            <button
+              onClick={(e) => { e.stopPropagation(); void extractAudio(pad.ref) }}
+              disabled={extractingRef !== null}
+              title="Extract this video's audio to a new audio track"
+              className={`flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-30 cursor-pointer disabled:cursor-default ${extractingRef === pad.ref ? 'animate-pulse text-[var(--accent)]' : ''}`}
+              aria-label="Extract audio to a new track"
+            ><Music size={11} /></button>
             <button onClick={(e) => { e.stopPropagation(); move(i, -1) }} disabled={i === 0} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip up"><ArrowUp size={11} /></button>
             <button onClick={(e) => { e.stopPropagation(); move(i, 1) }} disabled={i === pads.length - 1} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-2)] disabled:opacity-30 cursor-pointer disabled:cursor-default" aria-label="Move clip down"><ArrowDown size={11} /></button>
             <button onClick={(e) => { e.stopPropagation(); remove(i) }} className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--warn)] cursor-pointer" aria-label="Remove clip"><X size={11} /></button>
