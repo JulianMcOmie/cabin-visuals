@@ -25,8 +25,14 @@ export function usePlan(): PlanState {
     let mounted = true
 
     const fetchPlan = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // getSession(), not getUser(): this only needs to know whether there is a
+      // session at all, and getUser() is a network round trip taken on the auth
+      // lock that useAuth is also waiting on - so paying for it here delayed the
+      // whole page's auth resolution, not just this hook's. The stored session
+      // is enough because it isn't trusted for anything: the subscriptions row
+      // is RLS-guarded, so a forged one still reads back nothing.
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
         if (mounted) setState({ loading: false, isPro: false })
         return
       }
