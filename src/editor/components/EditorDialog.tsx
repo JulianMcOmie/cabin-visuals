@@ -74,7 +74,14 @@ export function EditorDialog({
   dismissOnScrimClick?: boolean
   /** False for a dialog opened INSIDE another one - the outer already claimed it. */
   claimModal?: boolean
-  /** False to appear instantly - a nested card over an already-open dialog doesn't re-announce itself. */
+  /**
+   * False to appear instantly. Nothing passes it today: the export gate did,
+   * on the theory that a nested card over an already-open dialog shouldn't
+   * re-announce itself, and in practice popping in on one frame just read as a
+   * glitch beside the panel it floats over (Tyler, 2026-08-13). A nested dialog
+   * wants the shell's motion; reach for this only if a surface genuinely must
+   * appear without any.
+   */
   animated?: boolean
   /** Announced on the close square; say where it goes when it isn't "close". */
   closeLabel?: string

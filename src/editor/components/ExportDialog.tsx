@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Upload } from 'lucide-react'
 import { track } from '../../analytics/analytics'
 import { EditorDialog } from './EditorDialog'
@@ -246,6 +247,14 @@ function ClipMap({
 
 // ── Rail controls ────────────────────────────────────────────────────────────
 
+// Aspect switching wears the viewport's glide (M3 emphasized, 400ms - see
+// .aspect-glide-anim / ASPECT_GLIDE_MS in the editor): the 16:9 monitor keeps
+// its box and the 9:16 crop mattes travel instead. Half the 16:9 frame minus
+// half the 9:16 column (9/16 of the frame's height = 28.125% of its width), so
+// one matte covers 50% - 14.0625%.
+const ASPECT_GLIDE = { duration: 0.4, ease: [0.2, 0, 0, 1] } as const
+const CROP_MATTE_PCT = 50 - 14.0625
+
 const RAIL_LABEL = 'font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none'
 const CHIP_SELECT =
   'h-8 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[#10131c] px-2 font-mono text-[12px] text-[var(--text-2)] outline-none cursor-pointer'
@@ -403,15 +412,28 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             <div className="min-w-0 flex-1">
               <div className={`relative overflow-hidden rounded-[10px] border ${running ? 'border-[rgba(69,198,255,0.4)]' : 'border-[rgba(255,255,255,0.08)]'}`}>
                 <MonitorCanvas live />
-                {/* 9:16 shows the live center-crop: bright column, dimmed sides. */}
-                {vertical && (
-                  <>
-                    <div className="pointer-events-none absolute inset-y-0 left-0 bg-black/60" style={{ width: 'calc(50% - 14.0625%)' }} />
-                    <div className="pointer-events-none absolute inset-y-0 right-0 bg-black/60" style={{ width: 'calc(50% - 14.0625%)' }} />
-                    <div className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)]" style={{ left: 'calc(50% - 14.0625%)' }} />
-                    <div className="pointer-events-none absolute inset-y-0 w-px bg-[var(--accent)]" style={{ right: 'calc(50% - 14.0625%)' }} />
-                  </>
-                )}
+                {/* 9:16 shows the live center-crop: bright column, dimmed sides.
+                    The guides SWEEP in from the frame edges to the crop, on the
+                    viewport's aspect-glide curve - same switch, same motion, so
+                    picking an aspect feels like one gesture whether you do it
+                    here or under the canvas. Both mattes stay mounted and
+                    animate to zero width, so 16:9 sweeps them back out to the
+                    edges instead of blinking them away; each carries its own
+                    accent hairline on its inner edge, which is what makes the
+                    line travel with the matte for free. `initial={false}` keeps
+                    a dialog that OPENS on 9:16 from animating on arrival. */}
+                {(['left', 'right'] as const).map((side) => (
+                  <motion.div
+                    key={side}
+                    aria-hidden
+                    className={`pointer-events-none absolute inset-y-0 ${side === 'left' ? 'left-0' : 'right-0'} overflow-hidden bg-black/60`}
+                    initial={false}
+                    animate={{ width: vertical ? `${CROP_MATTE_PCT}%` : '0%', opacity: vertical ? 1 : 0 }}
+                    transition={ASPECT_GLIDE}
+                  >
+                    <span className={`absolute inset-y-0 w-px bg-[var(--accent)] ${side === 'left' ? 'right-0' : 'left-0'}`} />
+                  </motion.div>
+                ))}
               </div>
               <div className="mt-3">
                 <ClipMap lanes={lanes} totalBeats={totalBeats} loop={loopFractions} progress={null} scrubbable />
@@ -615,21 +637,26 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
 
       {/* ── The signup gate: the same shell and the same form as Save to
           cloud, floating over the blurred settings. Every way out (X, scrim,
-          Escape) goes BACK to settings - it's a detour, not a dead end. ── */}
-      {gated && (
-        <EditorDialog
-          title="Sign up to export your project."
-          onClose={() => setPhase({ kind: 'settings' })}
-          closeLabel="Back to export settings"
-          width="w-[400px]"
-          variant="prompt"
-          scrim="nested"
-          claimModal={false}
-          animated={false}
-        >
-          <SignupCard page="export-gate" />
-        </EditorDialog>
-      )}
+          Escape) goes BACK to settings - it's a detour, not a dead end.
+          It keeps the shell's motion (Tyler, 2026-08-13: appearing on one frame
+          read as a glitch next to the panel it floats over) with its own
+          AnimatePresence, so backing out to settings glides too - a detour that
+          vanishes instantly is the same glitch in reverse. ── */}
+      <AnimatePresence>
+        {gated && (
+          <EditorDialog
+            title="Sign up to export your project."
+            onClose={() => setPhase({ kind: 'settings' })}
+            closeLabel="Back to export settings"
+            width="w-[400px]"
+            variant="prompt"
+            scrim="nested"
+            claimModal={false}
+          >
+            <SignupCard page="export-gate" />
+          </EditorDialog>
+        )}
+      </AnimatePresence>
     </>
   )
 }
