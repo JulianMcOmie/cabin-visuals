@@ -66,8 +66,17 @@ reads solid black — which looks exactly like a compositing bug and is the
 symptom the components guide describes as "a full-frame instrument in the
 front pass hides the whole scene". The fix is one prop:
 `userData={{ [FORCE_TRANSPARENT_KEY]: true }}` on the material (TextDisplay,
-Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall all carry it). Any instrument
-whose material must keep blending at full opacity needs it.
+Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall, MidiRoll all carry it). Any
+instrument whose material must keep blending at full opacity needs it.
+
+A second, sneakier symptom of the same bug (found on MidiRoll 2026-08-12): the
+opaque quad renders each texel's **unpremultiplied rgb at full brightness with
+alpha ignored**, so a canvas texture's near-zero-alpha pixels - soft glow
+falloff especially - show their premultiply-rounding garbage as BRIGHT
+posterized cyan/magenta rings with hard edges. Looks exactly like a broken
+bloom shader; over a black scene with black transparent pixels it is invisible,
+which is why an instrument can carry the bug for weeks until it first draws
+low-alpha color.
 
 ## Keep runtime fallbacks and schema defaults in ONE place
 
