@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
+import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
-import { useUIStore } from '../store/UIStore'
+import { useUIStore, type LibraryTabId } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
@@ -651,7 +651,7 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
   )
 }
 
-type LibraryTab = 'instruments' | 'loops' | 'templates'
+type LibraryTab = LibraryTabId
 
 /** Hover popup for a loop row: the pattern as a mini piano roll - one lane
  *  per used row, notes as bars (velocity = brightness), beat gridlines. */
@@ -892,6 +892,12 @@ const LIBRARY_TABS: { id: LibraryTab; label: string; Mark: () => ReactElement }[
 
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
+  // The empty scene's action list can ask for a tab (see UIStore.libraryRequest);
+  // App opens the pane, this switches what's inside it.
+  const libraryRequest = useUIStore((s) => s.libraryRequest)
+  useEffect(() => {
+    if (libraryRequest) setTab(libraryRequest.tab)
+  }, [libraryRequest])
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
   const { startLoopBlockDrag, ghostRef: loopGhostRef, ghostName: loopGhostName } = useLoopBlockDrag()
   const [loopHover, setLoopHover] = useState<{ pattern: LoopPattern; left: number; top: number } | null>(null)

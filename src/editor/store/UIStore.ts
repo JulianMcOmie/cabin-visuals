@@ -7,6 +7,10 @@ export interface EditingBlockRef {
   blockId: string
 }
 
+/** The library sidebar's tabs. Declared here rather than in LeftSidebar so the
+ *  store can type a request to open one without importing the component. */
+export type LibraryTabId = 'instruments' | 'loops' | 'templates'
+
 // The MIDI editor's vertical zoom range (row height in px), 28 as the default.
 export const MIDI_ROW_HEIGHT_MIN = 14
 export const MIDI_ROW_HEIGHT_MAX = 56
@@ -104,6 +108,16 @@ interface UIState {
   libraryDragging: boolean
   setLibraryDragging: (v: boolean) => void
 
+  // A one-shot request to bring the library forward on a given tab - fired by
+  // the empty scene's action list, which offers "start from a template" from a
+  // surface that can't reach either piece of state (the pane's open/closed
+  // lives in App's local state behind the toggle glide, the tab inside
+  // LeftSidebar). Both consumers react to a CHANGE rather than to presence, so
+  // neither has to clear it and there is no race over who clears first; the
+  // nonce is what makes a repeat request re-fire.
+  libraryRequest: { tab: LibraryTabId; nonce: number } | null
+  requestLibraryTab: (tab: LibraryTabId) => void
+
   // Live state of a loop-pattern drag from the library: non-null lights the
   // lane region as the drop zone, and `target` is the row/bar under the
   // cursor - Track.tsx draws the would-be block there so the drag literally
@@ -198,6 +212,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   libraryDragging: false,
   setLibraryDragging: (v) => set({ libraryDragging: v }),
+
+  libraryRequest: null,
+  requestLibraryTab: (tab) => set({ libraryRequest: { tab, nonce: Date.now() } }),
 
   loopDrag: null,
   setLoopDrag: (v) => set({ loopDrag: v }),

@@ -9,6 +9,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { Track } from './Track'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
+import { EmptySceneActions } from './EmptySceneActions'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useLoopDrag, type LoopDragGuide } from '../../hooks/useLoopDrag'
@@ -47,6 +48,10 @@ export function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
+  // Primitive, never the scenes record - this is a whole-timeline subscriber
+  // and the record's identity changes on every edit (see components/CLAUDE.md).
+  // Only the empty scene's first action reads it, to name what it will add.
+  const activeSceneIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -462,11 +467,11 @@ export function TimelineArea() {
           </div>
         )}
         {rootTrackIds.length === 0 && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <p className="text-xs text-[var(--text-muted)] text-center px-4">
-              No tracks yet. Click <span className="text-[var(--text-3)] text-lg">+</span> to add a track, then right-click a lane to draw blocks.
-            </p>
-          </div>
+          <EmptySceneActions
+            labelWidth={labelWidth}
+            isMain={activeSceneIsMain}
+            onAddTrack={insertTrack}
+          />
         )}
         <div
           ref={scrollRef}

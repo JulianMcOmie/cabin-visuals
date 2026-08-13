@@ -1138,6 +1138,22 @@ export default function EditorApp() {
       panel.collapse()
     }
   }
+  // The empty scene's action list offers "start from a template", which lives
+  // in the library - so a request to show a tab has to be able to OPEN the pane
+  // too. Reacts to the request object changing (nonce), never to its presence,
+  // so a second request re-fires and nothing has to clear it. Only expands:
+  // togglePanel flips, and calling it on an already-open library would close it.
+  const libraryRequest = useUIStore((s) => s.libraryRequest)
+  useEffect(() => {
+    if (!libraryRequest) return
+    if (libraryPanelRef.current?.isCollapsed()) {
+      togglePanel(libraryPanelRef, 'library', 'library-panel', '25%')
+    }
+    // togglePanel is re-created every render and reads only refs; depending on
+    // it would fire this effect on every render instead of on a new request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryRequest])
+
   // The library's resize hit-testing is document-level, so a modal's overlay
   // div can't block it - disable the groups outright while a dialog is up.
   // The conflict dialog counts: it's blocking, and it rides on autosave state
