@@ -9,6 +9,7 @@ const settings = (overrides: Partial<LineSettings> = {}): LineSettings => ({
   copies: 5,
   spacing: 1,
   growth: 1,
+  size: 1,
   angle: 0,
   tilt: 0,
   ...overrides,
@@ -62,6 +63,21 @@ test('growth is a per-step ratio anchored at the base copy', () => {
     [0, 0, -1],
     [0, 0, -2],
   ])
+})
+
+test('size scales the whole run, with growth riding on top of it', () => {
+  const copies = resolveLine({ copies: 3, size: 0.5 })
+  // Every copy INCLUDING the base, unlike growth, which anchors at 1.
+  assert.deepEqual(copies.map((c) => Number(scaleOf(c).toFixed(10))), [0.5, 0.5, 0.5])
+  // Spacing is untouched: the scale still composes after the translation.
+  assert.deepEqual(rounded(copies.map(position)), [
+    [0, 0, 0],
+    [0, 0, -1],
+    [0, 0, -2],
+  ])
+  // The two multiply - size · growth^i - so the ramp keeps its shape.
+  const ramped = resolveLine({ copies: 3, size: 0.5, growth: 2 })
+  assert.deepEqual(ramped.map((c) => Number(scaleOf(c).toFixed(10))), [0.5, 1, 2])
 })
 
 test('angle swings the aim about +Y; tilt lifts it toward +Y', () => {

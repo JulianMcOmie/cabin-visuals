@@ -10,6 +10,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { POLYHEDRON_COLOR } from './identityColors'
 
 export interface PolyhedronSettings {
@@ -18,6 +19,8 @@ export interface PolyhedronSettings {
   /** 0 = vertices, 1 = face centers (the dual's vertex directions). */
   placement: number
   radius: number
+  /** Uniform scale on each copy, about its own center — independent of radius. */
+  size: number
 }
 
 const PHI = (1 + Math.sqrt(5)) / 2
@@ -131,6 +134,7 @@ export const polyhedronSplitter: MoverOrSplitterDefinition<PolyhedronSettings> =
       default: 0,
     },
     { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 2 },
+    SPLITTER_SIZE_PARAM,
   ],
   midiRows: (settings) => splitterMidiRows(
     polyhedronDirections(settings.shape, settings.placement).length,
@@ -142,14 +146,18 @@ export const polyhedronSplitter: MoverOrSplitterDefinition<PolyhedronSettings> =
     const directions = polyhedronDirections(settings.shape, settings.placement)
     const count = directions.length
     const radius = Math.max(0, settings.radius)
+    const size = splitterSize(settings.size)
     // Structural slot transforms: minimal rotation carrying local +Z onto the
     // outward direction (deterministic, no up-vector degeneracy), positioned on
     // the shell. Radius 0 keeps the copies coincident but still aimed inward.
+    // SIZE post-multiplies (the shared splitter knob), so it scales the basis
+    // and leaves the shell radius exactly where the radius knob put it.
     const transforms = directions.map((outward) => {
       const rotation = new Quaternion().setFromUnitVectors(Z_AXIS, outward)
-      return new Matrix4()
+      const slot = new Matrix4()
         .makeRotationFromQuaternion(rotation)
         .setPosition(outward.x * radius, outward.y * radius, outward.z * radius)
+      return applySplitterSize(slot, size)
     })
     return {
       apply(visualCopy, { beat }) {

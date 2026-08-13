@@ -33,6 +33,7 @@ import { tunnelSplitter } from './tunnel'
 import { duplicateTrailSplitter } from './duplicateTrail'
 import { approachSplitter } from './approach'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import { GRID_COLOR, LINE_COLOR, RADIAL_COLOR } from './identityColors'
 
 // ── Burst (RETIRED) ──────────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: RADIAL_MAX_COPIES, step: 1, default: 6 },
     { key: 'radius', label: 'Radius', min: 0, max: 10, step: 0.1, default: 0 },
-    { key: 'size', label: 'Size', min: 0.05, max: 4, step: 0.05, default: 1 },
+    SPLITTER_SIZE_PARAM,
     {
       key: 'plane',
       label: 'Plane',
@@ -181,7 +182,7 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const plane = settings.plane === 1 || settings.plane === 2 ? settings.plane : 0
     const axis = RADIAL_AXES[plane]
     const direction = RADIAL_DIRECTIONS[plane]
-    const size = Math.max(0.05, settings.size ?? 1)
+    const size = splitterSize(settings.size)
     // Structural slot rotations, in slot order (slot 0 is unrotated).
     const rotations = Array.from({ length: count }, (_, slot) =>
       new Matrix4().makeRotationAxis(axis, (slot / count) * Math.PI * 2),
@@ -222,7 +223,8 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         const radius = radiusAt(beat)
         // Size composes AFTER the translation - R · T(radius) · S(size) - so
         // it scales each copy about its own center and the ring radius stays
-        // exactly the sampled radius, whatever the size.
+        // exactly the sampled radius, whatever the size. (The shared splitter
+        // knob; see splitterSize.ts.)
         return rotations.map((rotation) => {
           const transform = visualCopy.transform.clone()
             .multiply(rotation)
@@ -231,9 +233,8 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
               direction[1] * radius,
               direction[2] * radius,
             ))
-          if (size !== 1) transform.multiply(new Matrix4().makeScale(size, size, size))
           return {
-            transform,
+            transform: applySplitterSize(transform, size),
             opacity: visualCopy.opacity,
             colorShift: { ...visualCopy.colorShift },
           }
@@ -258,7 +259,10 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
 // GROWTH is a per-step size ratio anchored at the base copy: copy i wears
 // scale growth^i, so the original keeps its size and the tail ramps
 // geometrically - a RATIO can never cross zero (size is an exponent, the
-// scale-mover rule). The scale composes AFTER the translation
+// scale-mover rule). SIZE is the shared splitter size knob and multiplies the
+// whole run (size · growth^i), so the two read as what they say: SIZE moves
+// every copy including the base, GROWTH only tilts the ramp between them. The
+// scale composes AFTER the translation
 // (R · T(spacing·i) · S) so each copy grows about its own center and spacing
 // stays exactly spacing, whatever the growth. Growth is a WORLD-space ratio
 // on purpose - the default backward aim additionally shrinks copies by
@@ -276,6 +280,8 @@ export interface LineSettings {
   spacing: number
   /** Per-step size ratio between neighboring copies, anchored at the base copy. */
   growth: number
+  /** Uniform scale on every copy, about its own center — independent of spacing. */
+  size: number
   /** Aim swing left/right, in degrees about +Y (0 = straight back, -Z). */
   angle: number
   /** Aim lift up/down, in degrees toward +Y. */
@@ -292,6 +298,7 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
   params: [
     { key: 'copies', label: 'Copies', min: 1, max: LINE_MAX_COPIES, step: 1, default: 5 },
     { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.05, default: 1 },
+    SPLITTER_SIZE_PARAM,
     { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
     { key: 'angle', label: 'Angle', min: -180, max: 180, step: 1, default: 0 },
     { key: 'tilt', label: 'Tilt', min: -90, max: 90, step: 1, default: 0 },
@@ -305,6 +312,7 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
     const count = Math.max(1, Math.min(LINE_MAX_COPIES, Math.round(settings.copies)))
     const spacing = Math.max(0, settings.spacing ?? 1)
     const growth = Math.max(0.05, settings.growth ?? 1)
+    const uniformSize = splitterSize(settings.size)
     const angle = ((settings.angle ?? 0) * Math.PI) / 180
     const tilt = ((settings.tilt ?? 0) * Math.PI) / 180
     // Aim the step direction: identity at (0, 0) stepping along local -Z, so
@@ -314,11 +322,10 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
       .makeRotationY(-angle)
       .multiply(new Matrix4().makeRotationX(tilt))
     const slots = Array.from({ length: count }, (_, index) => {
-      const size = Math.pow(growth, index)
+      const size = uniformSize * Math.pow(growth, index)
       const slot = rotation.clone()
         .multiply(new Matrix4().makeTranslation(0, 0, -spacing * index))
-      if (size !== 1) slot.multiply(new Matrix4().makeScale(size, size, size))
-      return slot
+      return applySplitterSize(slot, size)
     })
     return {
       apply(visualCopy, { beat }) {
@@ -356,6 +363,11 @@ export const lineSplitter: MoverOrSplitterDefinition<LineSettings> = {
 //   dimension's own linear axis, so slot 0 sits unrotated on that axis.
 // The rotation lands in each copy's frame (copies face around their ring), the
 // same convention as the Radial splitter.
+//
+// SIZE is the shared splitter size knob (Radial's convention): a uniform scale
+// composed AFTER every offset, so it grows each copy about its own center and
+// spacing/radius stay exactly what their knobs say - the two are independent
+// axes of the layout, which is the whole point of having both.
 
 export interface GridSettings {
   rows: number
@@ -364,6 +376,8 @@ export interface GridSettings {
   depth: number
   /** Distance between adjacent cell centers along every linear dimension. */
   spacing: number
+  /** Uniform scale on each copy, about its own center — independent of spacing. */
+  size: number
   /** 0 = XY, 1 = XZ, 2 = YZ. */
   plane: number
   /** 0 = English, 1 = reverse English, 2 = columns first, 3 = reverse columns. */
@@ -430,6 +444,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     { key: 'columns', label: 'Columns', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 3 },
     { key: 'depth', label: 'Depth', min: 1, max: GRID_MAX_DIMENSION, step: 1, default: 1 },
     { key: 'spacing', label: 'Spacing', min: 0, max: 4, step: 0.1, default: 1 },
+    SPLITTER_SIZE_PARAM,
     {
       key: 'columnsMode',
       label: 'Columns layout',
@@ -500,6 +515,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     const depth = Math.max(1, Math.min(GRID_MAX_DIMENSION, Math.round(settings.depth ?? 1)))
     const [horizontalAxis, verticalAxis] = GRID_PLANES[settings.plane] ?? GRID_PLANES[0]
     const normalAxis = (3 - horizontalAxis - verticalAxis) as 0 | 1 | 2
+    const size = splitterSize(settings.size)
     // One record per dimension, in composition order. `offset` keeps the exact
     // legacy centering (rows grow downward from the top, layer 0 is the front).
     const dimensions = [
@@ -531,8 +547,10 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
     const cells = gridCellOrder3(rows, columns, depth, settings.indexing).map(([row, column, layer]) => {
       const indices = [column, row, layer]
       // Grid is a layout, not a fit-to-frame operation: adding rows/columns
-      // expands the occupied area while every copy retains the incoming size.
-      // Linear offsets sum in world axes, outside the circular steps.
+      // expands the occupied area while every copy retains the incoming size
+      // (scaled only by the SIZE knob, which is applied last so it never feeds
+      // back into the offsets). Linear offsets sum in world axes, outside the
+      // circular steps.
       const translation = new Vector3()
       for (let d = 0; d < 3; d++) {
         const dim = dimensions[d]
@@ -547,7 +565,7 @@ export const gridSplitter: MoverOrSplitterDefinition<GridSettings> = {
           .multiply(new Matrix4().makeRotationAxis(GRID_AXIS_VECTORS[dim.rotationAxis], (indices[d] / dim.count) * Math.PI * 2))
           .multiply(new Matrix4().makeTranslation(arm.x, arm.y, arm.z))
       }
-      return cell
+      return applySplitterSize(cell, size)
     })
     return {
       apply(visualCopy, { beat }) {

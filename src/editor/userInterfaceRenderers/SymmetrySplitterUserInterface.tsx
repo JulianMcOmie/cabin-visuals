@@ -21,10 +21,12 @@ import {
   type SymmetrySettings,
 } from '../core/visualCopies/symmetry'
 import { SYMMETRY_COLOR } from '../core/visualCopies/identityColors'
+import { SPLITTER_SIZE_DEFAULT } from '../core/visualCopies/splitterSize'
 import type { NumberParamDef } from '../instruments/types'
 import {
   bindPanel,
   Console,
+  Knob,
   More,
   ParameterList,
   PreviewWindow,
@@ -381,6 +383,8 @@ export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
   const tilt = pool.num('tilt')
   const spread = pool.num('spread')
   const plane = pool.select('plane')
+  // Optional: the console must survive a definition without the shared knob.
+  const size = pool.num('size', { optional: true })
 
   if (!mirrors || !tilt || !spread || !plane) return <ParameterList parameters={parameters} />
 
@@ -388,6 +392,11 @@ export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
     mirrors: clamp(Math.round(mirrors.value), mirrors.def.min, mirrors.def.max),
     tilt: tilt.value,
     spread: spread.value,
+    // The pad draws the FOLD - mirror lines, the fundamental wedge, and each
+    // copy's handedness - so it deliberately draws every copy at one glyph
+    // size. Scaling the glyphs by SIZE would bury the lines you drag at the
+    // top of the knob's range without saying anything the knob doesn't.
+    size: size?.value ?? SPLITTER_SIZE_DEFAULT,
     plane: plane.value,
   }
   const count = settings.mirrors * 2
@@ -406,6 +415,11 @@ export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
       />
       <div className="flex flex-col gap-2 px-3 pb-3 pt-2">
         <MirrorsStepper b={mirrors} />
+        {size && (
+          <div className="flex justify-center">
+            <Knob b={size} label="SIZE" />
+          </div>
+        )}
         <PlaneSelector b={plane} />
         <MuteMap
           count={count}

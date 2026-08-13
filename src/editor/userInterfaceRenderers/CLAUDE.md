@@ -137,6 +137,29 @@ rAF - no r3f, because a panel `<Canvas>` stays black until the transport plays
 `clientWidth/Height` per frame instead of using a ResizeObserver (those starve
 in a hidden pane), and drops to a point cloud past a few hundred copies.
 
+**The shared splitter SIZE knob** (`core/visualCopies/splitterSize.ts`, worn by Radial,
+Grid, Line, Symmetry, Polyhedron, Parametric Pattern and Tunnel) lands differently in each
+console, and three things about wiring it are worth copying:
+
+- **Bind it OPTIONALLY**, like a `showIf` param — `bindPanel`'s `num('size', { optional:
+  true })`, or outside the required-keys check on a panel that predates the kit. A console
+  that treats it as required falls back to the generic slider list wholesale the day a
+  definition ships without it.
+- **A preview that frames itself from the copies must include their SCALE in the reach**
+  (`Math.hypot(e[0], e[1], e[2])` — the basis column length), or a large SIZE grows the
+  formation out through the window's edges. Radial's preview always did; Grid's measured
+  bare positions and needed the fix.
+- **A schematic diagram is allowed to ignore it.** Symmetry's fold pad draws one glyph
+  size on purpose — scaling the glyphs by SIZE would bury the mirror lines you drag at the
+  top of the knob's range without saying anything the knob's own readout doesn't. Previews
+  that render the real copies (Grid, Line, Radial, Tunnel) show it for free.
+
+Placement follows the panel's own grammar: Grid pairs SPACING and SIZE in one group (the
+two independent axes of a layout, read together), Line keeps three-knob rows and puts SIZE
+with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometry row
+gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
+overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
+
 **Give a stage zone a FIXED width, never a percentage.** The settings panel is
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide
 empty field with a 34px object marooned in the middle of it the moment the panel was

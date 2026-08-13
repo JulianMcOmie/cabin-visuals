@@ -11,8 +11,11 @@
 //    CLAUDE.md) and a layout is exactly the thing you dial in while paused.
 //    Drag orbits it; until touched it turns on its own. No readouts or
 //    captions in the window: the knobs already say the numbers.
-// 2. Two console rows: COPIES / SPACING (primary) / GROWTH, then the axis
-//    aim - ANGLE / TILT, both bipolar (zero is the dark centered arc).
+// 2. Two console rows of three: what the run IS - COPIES / SPACING (primary) /
+//    SIZE - then what bends it: GROWTH, and the axis aim ANGLE / TILT (the aim
+//    pair bipolar, so zero is the dark centered arc). SIZE and GROWTH are
+//    deliberately on different rows: SIZE is a property of the formation like
+//    spacing, GROWTH only tilts the ramp between copies.
 //
 // The GROWTH knob is a LaserKnob driven in LOG2 units (Radial Motion's
 // detent-index pattern): the stored param stays an honest ratio 0.5-2 for the
@@ -273,6 +276,7 @@ function GrowthKnob({ b }: { b: NumBinding }) {
 interface LineBindings {
   copies: NumBinding
   spacing: NumBinding
+  size: NumBinding | null
   growth: NumBinding
   angle: NumBinding
   tilt: NumBinding
@@ -281,9 +285,10 @@ interface LineBindings {
 
 /** Hooks live here, below the renderer's fallback branch. */
 function LineConsole({ bound }: { bound: LineBindings }) {
-  const { copies, spacing, growth, angle, tilt, rest } = bound
+  const { copies, spacing, size, growth, angle, tilt, rest } = bound
   const [showMore, setShowMore] = useState(false)
 
+  const sizeValue = size?.value
   const settings = useMemo(() => ({
     ...(mergeDefinitionSettings(lineSplitter, undefined) as unknown as LineSettings),
     copies: copies.value,
@@ -291,7 +296,8 @@ function LineConsole({ bound }: { bound: LineBindings }) {
     growth: growth.value,
     angle: angle.value,
     tilt: tilt.value,
-  }), [copies.value, spacing.value, growth.value, angle.value, tilt.value])
+    ...(sizeValue !== undefined ? { size: sizeValue } : {}),
+  }), [copies.value, spacing.value, growth.value, angle.value, tilt.value, sizeValue])
 
   return (
     <section data-testid="line-user-interface" className="-mx-3 -mt-3" style={{ background: PANEL_SHADE }}>
@@ -304,9 +310,10 @@ function LineConsole({ bound }: { bound: LineBindings }) {
       <div className="flex items-end justify-center gap-5 px-4 pt-2.5">
         <Knob b={copies} label="COPIES" format={(v) => `${Math.round(v)}`} />
         <Knob b={spacing} label="SPACING" large />
-        <GrowthKnob b={growth} />
+        {size && <Knob b={size} label="SIZE" />}
       </div>
       <div className="flex items-end justify-center gap-5 px-4 pb-1 pt-2">
+        <GrowthKnob b={growth} />
         <Knob b={angle} label="ANGLE" bipolar format={(v) => `${Math.round(v)}°`} />
         <Knob b={tilt} label="TILT" bipolar format={(v) => `${Math.round(v)}°`} />
       </div>
@@ -337,11 +344,13 @@ export const LineSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition 
   const pool = bind(parameters)
   const copies = pool.num('copies')
   const spacing = pool.num('spacing')
+  // Optional binding: the console must still render without the shared knob.
+  const size = pool.num('size')
   const growth = pool.num('growth')
   const angle = pool.num('angle')
   const tilt = pool.num('tilt')
 
   if (!copies || !spacing || !growth || !angle || !tilt) return <ParameterList parameters={parameters} />
 
-  return <LineConsole bound={{ copies, spacing, growth, angle, tilt, rest: pool.rest() }} />
+  return <LineConsole bound={{ copies, spacing, size, growth, angle, tilt, rest: pool.rest() }} />
 }

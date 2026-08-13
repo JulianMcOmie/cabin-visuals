@@ -20,6 +20,7 @@ import { Matrix4, Vector3 } from 'three'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { SYMMETRY_COLOR } from './identityColors'
 import { noteDisablesSplitterSlot, splitterMidiRows } from './splitterMidi'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 
 export interface SymmetrySettings {
   /** Mirror lines through the center; the splitter emits 2 × this many copies. */
@@ -30,6 +31,8 @@ export interface SymmetrySettings {
   /** How far the object sits from the symmetry center before mirroring. At 0
    *  every copy is coincident until a mover below pushes them apart. */
   spread: number
+  /** Uniform scale on each copy, about its own center — independent of spread. */
+  size: number
   /** 0 = XY, 1 = XZ, 2 = YZ - which plane the mirror lines live in. */
   plane: number
 }
@@ -165,6 +168,7 @@ export const symmetrySplitter: MoverOrSplitterDefinition<SymmetrySettings> = {
     { key: 'mirrors', label: 'Mirrors', min: 1, max: SYMMETRY_MAX_MIRRORS, step: 1, default: 1 },
     { key: 'tilt', label: 'Tilt', min: 0, max: 180, step: 1, default: 0 },
     { key: 'spread', label: 'Spread', min: 0, max: 10, step: 0.1, default: 1.5 },
+    SPLITTER_SIZE_PARAM,
     {
       key: 'plane',
       label: 'Plane',
@@ -180,7 +184,15 @@ export const symmetrySplitter: MoverOrSplitterDefinition<SymmetrySettings> = {
   midiRows: (settings) => splitterMidiRows(symmetryCopyCount(settings.mirrors), 'copy', 'copies'),
   strictMidiRows: true,
   resolve({ settings, notes }) {
-    const transforms = symmetryTransforms(settings)
+    // SIZE rides on top of the group math rather than inside it: the exported
+    // slot transforms ARE the dihedral group (and the panel's fold diagram
+    // reads its `basis` as "how the axes are turned or flipped"), so the scale
+    // post-multiplies here - each copy grows about its own center, and spread
+    // stays exactly spread. A positive uniform scale leaves the reflections'
+    // negative determinant intact, so mirrored copies still light and cull as
+    // genuine mirror images.
+    const size = splitterSize(settings.size)
+    const transforms = symmetryTransforms(settings).map((slot) => applySplitterSize(slot, size))
     const count = transforms.length
     return {
       apply(visualCopy, { beat }) {

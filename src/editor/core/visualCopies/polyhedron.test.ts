@@ -98,6 +98,34 @@ test('octahedron vertices land on the axes; cube face centers are its dual', () 
   assert.deepEqual(cubeFaces.map(positionOf), copies.map(positionOf))
 })
 
+test('size scales each copy about its own center, independent of the shell radius', () => {
+  const scaled = resolveVisualCopies([
+    polyhedronSplitter.resolve({ settings: settings({ shape: 1, radius: 2, size: 1.5 }), notes: [] }),
+  ], 0)
+  // Copies stay exactly on the radius knob's shell...
+  assert.deepEqual(scaled.map(positionOf), [
+    [2, 0, 0],
+    [-2, 0, 0],
+    [0, 2, 0],
+    [0, -2, 0],
+    [0, 0, 2],
+    [0, 0, -2],
+  ])
+  // ...at 1.5× (basis column length: the slots are rotated to aim inward).
+  for (const copy of scaled) {
+    const e = copy.transform.elements
+    assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 1.5) < 1e-9)
+  }
+  // Default 1 is neutral, so saves written before the knob are unchanged.
+  const plain = resolveVisualCopies([
+    polyhedronSplitter.resolve({ settings: settings({ shape: 1, radius: 2 }), notes: [] }),
+  ], 0)
+  for (const copy of plain) {
+    const e = copy.transform.elements
+    assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 1) < 1e-9)
+  }
+})
+
 test('copies preserve opacity and color shift and do not mutate the input', () => {
   const resolved = polyhedronSplitter.resolve({ settings: settings(), notes: [] })
   const input = identityVisualCopy()

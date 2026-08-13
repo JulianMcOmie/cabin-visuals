@@ -271,10 +271,12 @@ function Segmented({ bound, label, shortLabels, testId }: {
 // Both speed keys are PLACED even though only the active mode's knob renders:
 // the inactive one must not leak into MORE as a stray slider.
 const PLACED_KEYS = new Set([
-  'copiesPerRing', 'rings', 'radius', 'depth', 'twistDegrees',
+  'copiesPerRing', 'rings', 'radius', 'depth', 'size', 'twistDegrees',
   'speedMode', 'speed', 'syncRingsPerBeat', 'midiSpeed', 'orientation',
 ])
-const REQUIRED_KEYS = [...PLACED_KEYS]
+// `size` is placed but NOT required: an older definition without the shared
+// knob should still get the full console rather than the generic list.
+const REQUIRED_KEYS = [...PLACED_KEYS].filter((key) => key !== 'size')
 
 export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -312,9 +314,12 @@ export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
         // room is lit by the splitter, not painted.
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(CORRIDOR, 0.13)}, transparent)` }}
       >
-        <div className="flex items-end gap-3 px-4">
+        {/* Four knobs plus the stepper column overrun a narrow inspector pane,
+            so this row WRAPS rather than clipping its right end. */}
+        <div className="flex flex-wrap items-end gap-3 px-4">
           <BoundKnob bound={bound.radius} label="RADIUS" large />
           <BoundKnob bound={bound.depth} label="DEPTH" />
+          {bound.size && <BoundKnob bound={bound.size} label="SIZE" />}
           <BoundKnob bound={bound.twistDegrees} label="TWIST" bipolar />
           <div className="ml-auto flex flex-col items-center gap-2 pb-0.5">
             <CountStepper bound={bound.copiesPerRing} label="SPOKES" />

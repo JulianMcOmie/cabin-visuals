@@ -10,6 +10,7 @@ const settings = (overrides: Partial<GridSettings> = {}): GridSettings => ({
   columns: 3,
   depth: 1,
   spacing: 1,
+  size: 1,
   plane: 0,
   indexing: 0,
   columnsMode: 0,
@@ -74,6 +75,31 @@ test('grid spacing changes cell-center distance while every copy stays full size
     [1, -1, 0],
   ])
   for (const copy of copies) assert.deepEqual(scale(copy), [1, 1, 1])
+})
+
+test('size scales every copy about its own center, independent of spacing', () => {
+  const plain = resolveGrid({ rows: 2, columns: 2, spacing: 2 })
+  const scaled = resolveGrid({ rows: 2, columns: 2, spacing: 2, size: 0.5 })
+  // Same lattice - SIZE never feeds back into the offsets...
+  assert.deepEqual(rounded(scaled.map(position)), rounded(plain.map(position)))
+  // ...and every copy is uniformly half size.
+  for (const copy of scaled) assert.deepEqual(scale(copy), [0.5, 0.5, 0.5])
+  // The default of 1 is neutral, so a save written before the knob existed
+  // resolves to exactly the matrices it always did.
+  for (const copy of plain) assert.deepEqual(scale(copy), [1, 1, 1])
+})
+
+test('size leaves a circular dimension its ring radius', () => {
+  const ring = { columns: 4, rows: 1, depth: 1, columnsMode: 1, columnsRadius: 3 }
+  const plain = resolveGrid(ring)
+  const scaled = resolveGrid({ ...ring, size: 2 })
+  assert.deepEqual(rounded(scaled.map(position)), rounded(plain.map(position)))
+  // Circular copies are ROTATED, so read the scale off the basis column length
+  // rather than the diagonal.
+  for (const copy of scaled) {
+    const e = copy.transform.elements
+    assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 2) < 1e-10)
+  }
 })
 
 test('grid preserves an incoming non-unit scale', () => {

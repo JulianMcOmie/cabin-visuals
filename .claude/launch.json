@@ -27,6 +27,12 @@
       "port": 3004
     },
     {
+      "name": "dev-3003",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3003", "npm", "run", "dev", "--", "--port", "3003"],
+      "port": 3003
+    },
+    {
       "name": "dev-3005",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3005", "npm", "run", "dev", "--", "--port", "3005"],

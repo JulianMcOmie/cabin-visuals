@@ -101,6 +101,26 @@ test('the plane select moves the whole arrangement onto the floor or the side wa
   }
 })
 
+test('size scales each copy about its own center, independent of spread', () => {
+  const plain = copiesFor({ mirrors: 2, spread: Math.SQRT2 })
+  const scaled = copiesFor({ mirrors: 2, spread: Math.SQRT2, size: 0.5 })
+  // The arrangement keeps its footprint...
+  assert.deepEqual(scaled.map(positionOf), plain.map(positionOf))
+  // ...while every copy halves (basis column length, since the slots turn and
+  // flip), and the mirrors stay genuine mirrors: a positive uniform scale must
+  // not undo the reflections' negative determinant.
+  scaled.forEach((copy, slot) => {
+    const e = copy.transform.elements
+    assert.equal(round(Math.hypot(e[0], e[1], e[2])), 0.5, `slot ${slot} scale`)
+    assert.equal(Math.sign(round(copy.transform.determinant())), slot % 2 === 0 ? 1 : -1)
+  })
+  // Default 1 is neutral - old saves resolve to the untouched group math.
+  for (const copy of plain) {
+    const e = copy.transform.elements
+    assert.equal(round(Math.hypot(e[0], e[1], e[2])), 1)
+  }
+})
+
 test('spread 0 stacks the copies on the center, leaving movers below to part them', () => {
   const positions = copiesFor({ mirrors: 3, spread: 0 }).map(positionOf)
   for (const position of positions) assert.deepEqual(position, [0, 0, 0])
