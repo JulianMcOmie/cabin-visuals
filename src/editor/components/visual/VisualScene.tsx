@@ -41,7 +41,9 @@ import { IMPACT_WARP_FIELD_GLSL, resolveActiveImpactWarp } from '../../instrumen
 import { CROP_MASK_FRAGMENT, resolveActiveCropMask } from '../../instruments/Crop'
 import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
+import { isExportPinned, subscribeExportPinned } from '../../core/export/frameDriver'
 import { useTimeStore } from '../../store/TimeStore'
+import { useUIStore } from '../../store/UIStore'
 
 RectAreaLightUniformsLib.init()
 
@@ -580,7 +582,15 @@ function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumen
  */
 export function VisualScene() {
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
-  const { gl, camera, size } = useThree()
+  const { gl, camera, size, invalidate } = useThree()
+  // Draft playback resolution: every offscreen target shrinks by this factor
+  // and the final grade pass upscales it (all targets are LinearFilter), so a
+  // frame costs scale² of the full fragment work. Pinned renders (export,
+  // preview capture) must be full-size regardless of the preference, so the
+  // scale stands down for the pin's duration.
+  const previewScale = useUIStore((s) => s.previewResolutionScale)
+  const exportPinned = useSyncExternalStore(subscribeExportPinned, isExportPinned, () => false)
+  const targetScale = exportPinned ? 1 : previewScale
   const environment = useMemo(() => {
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)
@@ -609,8 +619,8 @@ export function VisualScene() {
       }
       const options = { minFilter: LinearFilter, magFilter: LinearFilter, type: HalfFloatType }
       const maskOptions = { minFilter: LinearFilter, magFilter: LinearFilter }
-      const width = Math.max(1, size.width)
-      const height = Math.max(1, size.height)
+      const width = Math.max(1, Math.round(size.width * targetScale))
+      const height = Math.max(1, Math.round(size.height * targetScale))
       // The scene target (where object geometry actually rasterizes) carries a
       // stencil buffer for Overlap Shape's parity passes; the filter targets
       // only ever receive fullscreen quads, so they stay stencil-free.
@@ -756,17 +766,22 @@ export function VisualScene() {
   }, [gl])
 
   useEffect(() => {
+    const width = Math.max(1, Math.round(size.width * targetScale))
+    const height = Math.max(1, Math.round(size.height * targetScale))
     for (const runtime of mounted.values()) {
-      runtime.target.setSize(Math.max(1, size.width), Math.max(1, size.height))
-      runtime.invertTarget.setSize(Math.max(1, size.width), Math.max(1, size.height))
-      runtime.filterTargets.forEach((target) => target.setSize(Math.max(1, size.width), Math.max(1, size.height)))
+      runtime.target.setSize(width, height)
+      runtime.invertTarget.setSize(width, height)
+      runtime.filterTargets.forEach((target) => target.setSize(width, height))
     }
-    const width = Math.max(1, size.width)
-    const height = Math.max(1, size.height)
     compositor.compositeTarget.setSize(width, height)
     compositor.bloomEffect.setSize(width, height)
+    // FXAA texel steps sample the composite target, so this must be the
+    // target's (scaled) size, not the canvas size.
     compositor.finalMaterial.uniforms.resolution.value.set(width, height)
-  }, [compositor, mounted, size.width, size.height])
+    // A scale change while paused must repaint - RenderGovernor only watches
+    // the stores and the CSS size, both untouched by a resolution switch.
+    invalidate()
+  }, [compositor, mounted, size.width, size.height, targetScale, invalidate])
 
   useEffect(() => {
     for (const runtime of mounted.values()) {

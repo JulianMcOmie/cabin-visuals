@@ -26,3 +26,25 @@ export function registerFrameDriver(d: FrameDriver | null): void {
 export function getFrameDriver(): FrameDriver | null {
   return driver
 }
+
+// Whether the canvas is currently pinned to an exact output resolution (export,
+// preview capture). VisualScene subscribes to suspend the draft preview scale
+// for the pin's duration - a fractional playback resolution must never leak
+// into pinned frames.
+let exportPinned = false
+const exportPinListeners = new Set<() => void>()
+
+export function setExportPinned(pinned: boolean): void {
+  if (exportPinned === pinned) return
+  exportPinned = pinned
+  exportPinListeners.forEach((listener) => listener())
+}
+
+export function isExportPinned(): boolean {
+  return exportPinned
+}
+
+export function subscribeExportPinned(listener: () => void): () => void {
+  exportPinListeners.add(listener)
+  return () => exportPinListeners.delete(listener)
+}

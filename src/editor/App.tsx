@@ -707,6 +707,11 @@ function EditorPanelToggle({
 
 const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
+// Draft playback resolutions for the canvas (UIStore.previewResolutionScale):
+// each step quarters the offscreen fragment work. Export is never affected.
+const PREVIEW_SCALES = [1, 0.5, 0.25]
+const PREVIEW_SCALE_LABELS: Record<number, string> = { 1: '1×', 0.5: '½×', 0.25: '¼×' }
+
 /** The transport, below the preview (DAW Console 4a): band of skip/play/loop
  *  segments plus the recessed position+tempo readout, centered under the
  *  canvas. Hidden on phones - the canvas overlay carries play/pause/scrub
@@ -737,37 +742,57 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
   const aspect = useProjectStore((s) => s.viewAspect)
   const setAspect = useProjectStore((s) => s.setViewAspect)
   const [aspectOpen, setAspectOpen] = useState(false)
+  const previewScale = useUIStore((s) => s.previewResolutionScale)
+  const setPreviewScale = useUIStore((s) => s.setPreviewResolutionScale)
 
   return (
     <div className="relative hidden md:flex h-12 flex-shrink-0 items-center justify-center select-none px-4">
-      {/* Preview aspect, bottom-left under the canvas: a quiet select. */}
-      <div className="absolute left-4">
+      {/* Preview aspect + draft resolution, bottom-left under the canvas. */}
+      <div className="absolute left-4 flex items-center gap-1.5">
+        <div className="relative">
+          <button
+            onClick={() => setAspectOpen((v) => !v)}
+            title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
+            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+          >
+            {aspect === 'fill' ? 'Fill' : aspect}
+            <span className="text-[7px] leading-none">▾</span>
+          </button>
+          {aspectOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setAspectOpen(false)} />
+              <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[76px] rounded-md border border-[var(--border)] bg-[var(--bg-panel-raised)] py-1 shadow-lg shadow-black/50">
+                {VIEW_ASPECTS.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => { setAspect(a); setAspectOpen(false) }}
+                    className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
+                      a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    {a === 'fill' ? 'Fill' : a}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        {/* Draft playback resolution: renders the canvas pipeline at a fraction
+            of full size for smoother playback on heavy projects. Lit while a
+            draft scale is active so degraded quality reads as a chosen mode,
+            not a bug. Export always renders full resolution. */}
         <button
-          onClick={() => setAspectOpen((v) => !v)}
-          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
-          className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+          onClick={() => {
+            const index = PREVIEW_SCALES.indexOf(previewScale)
+            setPreviewScale(PREVIEW_SCALES[(index + 1) % PREVIEW_SCALES.length])
+          }}
+          title="Preview resolution - render the canvas at a fraction of full size for smoother playback. Export is always full resolution."
+          className={`flex h-7 items-center rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
+            previewScale === 1 ? 'text-[var(--text-3)] hover:text-[var(--text)]' : 'text-[var(--accent)]'
+          }`}
         >
-          {aspect === 'fill' ? 'Fill' : aspect}
-          <span className="text-[7px] leading-none">▾</span>
+          {PREVIEW_SCALE_LABELS[previewScale] ?? `${previewScale}×`}
         </button>
-        {aspectOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setAspectOpen(false)} />
-            <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[76px] rounded-md border border-[var(--border)] bg-[var(--bg-panel-raised)] py-1 shadow-lg shadow-black/50">
-              {VIEW_ASPECTS.map((a) => (
-                <button
-                  key={a}
-                  onClick={() => { setAspect(a); setAspectOpen(false) }}
-                  className={`flex w-full items-center px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
-                    a === aspect ? 'text-[var(--accent)]' : 'text-[var(--text-3)] hover:text-[var(--text)]'
-                  }`}
-                >
-                  {a === 'fill' ? 'Fill' : a}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
       </div>
       {/* Transport band - a continuous elevated strip matching the
           display's height and radius. Segment highlights run flush to the

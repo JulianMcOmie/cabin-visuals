@@ -45,6 +45,13 @@ interface UIState {
   tracksRowHeight: number
   setTracksRowHeight: (px: number) => void
 
+  // Playback resolution for the 3D preview (1 = full, 0.5 / 0.25 = draft).
+  // Fractional values shrink every offscreen render target so a frame costs
+  // scale² of the full fragment work; the final pass upscales to the canvas.
+  // Pinned renders (export, preview capture) always run at full resolution.
+  previewResolutionScale: number
+  setPreviewResolutionScale: (scale: number) => void
+
   // Width of the frozen track-label column (drag its right edge to resize).
   tracksLabelWidth: number
   setTracksLabelWidth: (px: number) => void
@@ -145,6 +152,10 @@ export const useUIStore = create<UIState>((set) => ({
   tracksRowHeight: 44,
   setTracksRowHeight: (px) =>
     set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
+
+  previewResolutionScale: 1,
+  setPreviewResolutionScale: (scale) =>
+    set({ previewResolutionScale: Math.max(0.25, Math.min(1, scale)) }),
 
   tracksLabelWidth: TRACK_LABEL_WIDTH,
   setTracksLabelWidth: (px) =>
