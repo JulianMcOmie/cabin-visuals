@@ -15,3 +15,30 @@ Thin shell around `src/`. Pages are mostly small; the product lives in `src/edit
 - `dev/` — internal playgrounds (`landing-lab` A/B/C prototypes, `instrument-previews` capture rig used by `scripts/generate-instrument-previews.mjs`). `spike/` — scratch. Neither is linked from the product.
 
 DB schema for Drizzle lives in `db/` (`drizzle.config.ts`, migrations in `db/migrations`); Supabase envs in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, plus `DATABASE_URL` for migrations, Stripe keys for billing).
+
+## The middleware is on every page load's critical path
+
+`src/middleware.ts` matches everything except `_next/static`, `_next/image`, `ingest`,
+the favicon and image extensions — so `src/utils/supabase/middleware.ts` runs before a
+single byte of HTML goes out on **every full page load**. Whatever it awaits is pure
+serialized latency in front of the whole app, and it is invisible to client-side
+navigation (Next has already prefetched the RSC payload by click time). That asymmetry
+is the standard explanation for "fast when I navigate, slow when I refresh" — measure
+the middleware before hunting in the page.
+
+- It reads `getSession()` (cookie, local), **not** `getUser()` (unconditional round trip
+  to the auth server, ~200-500ms). The redirect decision is the only thing it uses the
+  value for, and every page re-derives auth client-side with RLS as the real gate. The
+  full reasoning, and why the boilerplate's "DO NOT REMOVE auth.getUser()" does not apply
+  here, is written at the call site.
+- **Session rotation does not depend on which one you call.** It lives in
+  `GoTrueClient.__loadSession()`, which both go through, and is *not* gated on the
+  `autoRefreshToken: false` that `createServerClient` sets. A token within
+  `EXPIRY_MARGIN_MS` (90s) of expiry is refreshed there and the new cookies ride out on
+  `TOKEN_REFRESHED` through the `setAll` adapter.
+- Never read `session.user` on the server: it is behind a Proxy that logs an "insecure"
+  warning on property access. Truthiness of `session` is free.
+- `getClaims()` (local JWT verify, no round trip) is **not** an option on this project yet
+  — `/auth/v1/.well-known/jwks.json` returns `{"keys":[]}`, i.e. legacy HS256 shared
+  secret, and `getClaims()` silently falls back to `getUser()` for HS256. It becomes
+  available only after migrating the project to asymmetric JWT signing keys.
