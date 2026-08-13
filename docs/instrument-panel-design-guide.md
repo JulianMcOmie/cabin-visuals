@@ -32,19 +32,39 @@ instrument fits above the tags section in a typical window.
 ## Remove, don't decorate (the deprecations)
 
 - **No in-panel titles, icons, or status dots.** The panel already says which
-  track this is; repeating it inside the renderer is noise. Identity lives on
-  the TAB RAIL (`TrackEditor.tsx`): the track/scene name takes the left of the
-  tab row, the tabs shrink to the right, and the subject's own color tints the
-  ACTIVE tab instead of the neutral elevated fill. That color is
-  `resolveTrackIdentityColor` — the INSTRUMENT's declared color, achromatic
-  included — not the timeline's `resolveTrackDisplayColor`, whose achromatic
-  guard would send a white instrument to its hue-cycle color; the cycle is
-  seeded from the audio sapphire, so that came out blue and read as the app
-  accent rather than as the instrument. Scenes have no color of their own and
-  use `var(--accent)`. It costs no vertical space, which
-  is why the old standalone name header above the tabs stayed dead. The rail is
-  a `@container`: under 300px the tabs fall back to short labels so the name
-  keeps room. Renderers still start flush under the rail and own nothing above it.
+  track this is; repeating it inside the renderer is noise. Identity is the
+  MASTHEAD at the top of `TrackEditor.tsx`: the track/scene name in 22px display
+  serif on the panel surface, with the tab rail below it, and the subject's own
+  color tinting the ACTIVE tab. That color is `resolveTrackIdentityColor` — the
+  INSTRUMENT's declared color, achromatic included — not the timeline's
+  `resolveTrackDisplayColor`, whose achromatic guard would send a white
+  instrument to its hue-cycle color; the cycle is seeded from the audio
+  sapphire, so that came out blue and read as the app accent rather than as the
+  instrument. Scenes have no color of their own and use `var(--accent)`.
+  What the 2026-08-12 pass settled (thirteen options mocked, three built into
+  the live editor behind a temporary switcher — a mock could not show the cost):
+  - **The name row draws no rule.** Size does the separating and the tab rail's
+    own hairline closes the header; two stacked rules read as two toolbars
+    stapled together, which is what the old 15px-serif version looked like.
+  - **Louder identity was tried and rejected.** Putting the header on its own
+    raised/recessed surface, and tinting that surface + the name with the track
+    color, both work visually but are too much for a panel this small. If one
+    ever comes back, two traps are waiting: colors must go through `color-mix`
+    (`panelIdentity` hands SCENES `var(--accent)`, not a hex string, so
+    hex-parsing helpers like `towardWhite` yield `NaN`), and the name must never
+    wear the raw hue — several track colors are genuinely dark (`#3a7694`,
+    `#62589a`) and illegible at 22px.
+  The masthead costs ~6px over the old 15px row, and that is the trade: the
+  display serif is the one place the panel gets to be editorial. Watch it
+  against the height budget — at the inspector's default height the extra
+  height comes out of the last control row, and a knob's value readout is the
+  first thing to fall below the fold. The rail is a `@container`: under 300px
+  the tabs fall back to short labels. Renderers still start flush under the
+  rail and own nothing above it.
+- **Display serif at 22px needs `leading-[1.3]`, not `leading-none`.**
+  `truncate` is `overflow:hidden`, so the LINE BOX is the clip box — a tight
+  line-height crops every descender (the y in "Poly Gyre" loses its tail) and
+  reads as a broken font rather than a CSS bug.
 - **No reset-all buttons.** Per-control double-click reset covers it.
 - **No IN FRONT toggle.** Deprecated from the panel until a better layering
   solution exists. `track.onTop` / `defaultOnTop` still drive the engine —
@@ -242,11 +262,15 @@ render `ParameterList` for everything rather than a half-empty custom layout.
 
 ## Open items
 
-- ~~Remove the panel-top track-name header~~ — done, and then answered
-  properly: the standalone header stayed dead, but identity came back ON the
-  tab rail (name left, tabs right, the track's color lighting the active tab).
-  A panel that wants *more* identity than that bakes it into its own surface
-  (the audio panel's oscilloscope label) — never a heading row above the tabs.
+- ~~Remove the panel-top track-name header~~ — done, then answered twice. First
+  identity came back ON the tab rail (name left, tabs right, the track's color
+  lighting the active tab); then 2026-08-12 the name took its own line again as
+  the 22px serif MASTHEAD, once the rail-only version had to share its line
+  with two tabs and the name lost. What stayed dead is the *undecorated*
+  heading row — a 15px name on a hairline, which is chrome that names things
+  without belonging to them. A panel that wants *more* identity than the
+  masthead bakes it into its own surface (the audio panel's oscilloscope
+  label).
   Even that is worth questioning: the scene stage's etched "SCENE" wordmark was
   removed 2026-08-12 as obnoxious — with the name already on the rail it was a
   caption sitting on top of the picture it labelled.

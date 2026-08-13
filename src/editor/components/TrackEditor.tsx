@@ -426,12 +426,21 @@ export function TrackEditor() {
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* Identity header: the subject's name, serif, at the top. The kind
-          (instrument / mover / scene) lives in its tooltip. */}
+      {/* Identity masthead: the subject's name in display serif at the top. The
+          kind (instrument / mover / scene) lives in its tooltip - the row has
+          one line to give.
+
+          It draws NO rule of its own; the size gap between it and the tab rail
+          is what separates them, and the rail's own hairline closes the header.
+          Two stacked rules read as two toolbars stapled together. */}
       {identity && (
-        <div className="flex flex-shrink-0 items-center border-b border-[var(--border-subtle)] px-3 py-2">
+        <div className="flex flex-shrink-0 items-center px-3 pt-1.5 pb-0.5">
+          {/* `truncate` is overflow:hidden, so the LINE BOX is the clip box - at
+              22px Instrument Serif a tight line-height crops every descender
+              (the y in "Poly Gyre" loses its tail), which reads as a broken
+              font rather than a CSS bug. 1.3 clears them. */}
           <span
-            className="min-w-0 truncate text-[15px] italic leading-none [font-family:var(--font-display)] text-[var(--text)]"
+            className="min-w-0 truncate text-[22px] italic leading-[1.3] [font-family:var(--font-display)] text-[var(--text)]"
             title={`${identity.name} · ${identity.kind}`}
           >
             {identity.name}
@@ -852,8 +861,6 @@ export function TrackEditor() {
           )
         })()}
       </div>
-
-
     </div>
   )
 }
