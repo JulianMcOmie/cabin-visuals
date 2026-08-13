@@ -23,7 +23,7 @@ Conventions baked into actions:
 
 ## The others
 
-- **TimeStore** — `currentBeat` (written ONLY by the transport/scrub paths), `isPlaying`, `loopRegion` (persisted; the rest ephemeral). `setCurrentBeat` clamps to project length.
+- **TimeStore** — `currentBeat` (written ONLY by the transport/scrub paths), `isPlaying`, `loopRegion` (persisted; the rest ephemeral), `playbackRate` (monitoring speed: 1 / 0.5 / 0.25 — session-only by design, so it never persists and never reaches an export). `setCurrentBeat` clamps to project length.
 - **HistoryStore** — undo/redo as generic snapshots of ProjectStore's non-function fields. A store subscription is the only writer of `past`; 80ms burst window collapses drags to one step; any edit clears `future`. `reset()` (not `clear()`) for project loads so hydrate isn't undoable. Restore shallow-merges data back — actions untouched.
 - **UIStore** — selection (track single + multi, block set), collapsed tracks, editing block (piano-roll target), zoom levels (`tracksPixelsPerBeat`, `midiPixelsPerBeat`, `midiRowHeight`), panel visibility.
 - **AudioStore / VideoStore / PhotoStore** — serializable clip CATALOGS keyed by ref (`{ref, fileName, duration}`-shaped descriptors; bytes live behind core/audio|video|photo). Deliberately not undoable: loading a file isn't an edit. Persisted via serialize's ride-along. Also hold ephemeral upload progress (never persisted).

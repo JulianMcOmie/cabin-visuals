@@ -35,3 +35,17 @@ export function blockPlacement(
   const offset = block.trimStart + ((atBeat - startBeat) * 60) / bpm
   return { delaySec: 0, offset, duration: Math.max(0, block.trimEnd - offset) }
 }
+
+/**
+ * `delaySec` on the wall clock when monitoring below 1×.
+ *
+ * A placement is computed at the PROJECT tempo, so its delay is "how many
+ * seconds of normal-speed music until this block starts". Slow monitoring
+ * stretches wall-clock time by 1/rate without moving anything musically, so the
+ * same wait takes proportionally longer. `offset` and `duration` are NOT scaled
+ * here: both are source-buffer seconds, and Tone's Player already divides
+ * duration by the player's own playbackRate when it schedules the stop.
+ */
+export function delayAtRate(delaySec: number, rate: number): number {
+  return delaySec / rate
+}

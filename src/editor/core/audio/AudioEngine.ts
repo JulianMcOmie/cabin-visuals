@@ -1,7 +1,7 @@
 import * as Tone from 'tone'
 import type { AudioBlock, Track } from '../../types'
 import { getBuffer } from './waveform'
-import { blockPlacement } from './placement'
+import { blockPlacement, delayAtRate } from './placement'
 
 // The audio engine: everything that makes sound, behind one door. A module
 // singleton beside the transport (core/playback.ts) and the visual engine
@@ -159,7 +159,7 @@ class AudioEngine {
    * in placement.ts (shared with the offline export render - they cannot
    * diverge); play, seek, and the bpm re-arm all come through here.
    */
-  private armBlock(sb: ScheduledBlock, atBeat: number, when: number, bpm: number, beatsPerBar: number) {
+  private armBlock(sb: ScheduledBlock, atBeat: number, when: number, bpm: number, beatsPerBar: number, rate: number) {
     const entry = this.entries.get(sb.block.id)
     if (!entry || !entry.loaded) return
     const { player } = entry
@@ -169,12 +169,23 @@ class AudioEngine {
 
     const p = blockPlacement(sb.block, atBeat, bpm, beatsPerBar)
     if (!p) return // past - leave idle
-    player.start(when + p.delaySec, p.offset, p.duration)
+    // Slow monitoring runs the clip itself slower (varispeed - it drops in
+    // pitch, it is not time-stretched). Placement stays PROJECT-tempo math, so
+    // the block's beat window never moves; a source running at `rate` fills
+    // exactly that window's now-longer wall-clock length. `duration` stays in
+    // source seconds - Player.start divides it by playbackRate itself - while
+    // the delay is wall-clock and has to be stretched here.
+    // Set before start(): the rate is copied into each source as it is created,
+    // and every rate change re-arms rather than retuning a sounding player
+    // (whose stop was scheduled at the old rate).
+    player.playbackRate = rate
+    player.start(when + delayAtRate(p.delaySec, rate), p.offset, p.duration)
   }
 
-  /** Re-window every block at `atBeat`, all against the same `when` anchor. */
-  armAll(atBeat: number, when: number, bpm: number, beatsPerBar: number) {
-    for (const sb of this.blocks) this.armBlock(sb, atBeat, when, bpm, beatsPerBar)
+  /** Re-window every block at `atBeat`, all against the same `when` anchor.
+   *  `rate` is the transport's monitoring speed (1 unless slowed). */
+  armAll(atBeat: number, when: number, bpm: number, beatsPerBar: number, rate = 1) {
+    for (const sb of this.blocks) this.armBlock(sb, atBeat, when, bpm, beatsPerBar, rate)
   }
 
   /** Silence everything (pause / end of project). */

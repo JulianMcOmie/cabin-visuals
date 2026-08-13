@@ -23,6 +23,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
 import { BpmControl } from './components/BpmControl'
+import { PlaybackRateControl } from './components/PlaybackRateControl'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -806,8 +807,12 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       </div>
 
       {/* Tempo, bottom-right - quiet inline readout, no chrome. The bar:beat
-          position readout is gone; the playhead and ruler carry position. */}
-      <div className="absolute right-4 flex h-9 items-stretch">
+          position readout is gone; the playhead and ruler carry position.
+          Monitoring speed sits beside it: the two things that set how fast the
+          playhead moves read as one corner (the tempo is the document, the
+          speed is only the lens - see PlaybackRateControl). */}
+      <div className="absolute right-4 flex h-9 items-center gap-2.5">
+        <PlaybackRateControl />
         <BpmControl />
       </div>
     </div>
