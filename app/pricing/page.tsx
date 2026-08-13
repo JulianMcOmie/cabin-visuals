@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Loader2 } from 'lucide-react'
-import { CabinLogo } from '../../src/components/CabinLogo'
 import { ProfileMenu } from '../../src/components/ProfileMenu'
+import { EditorialSkin, EditorialHeader } from '../../src/components/landing/editorialTheme'
 import { startCheckout, usePlan } from '../../src/billing/usePlan'
 import { track } from '../../src/analytics/analytics'
 import { useAuth } from '../../src/persistence/hooks/useAuth'
@@ -54,30 +54,23 @@ export default function PricingPage() {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text)] font-sans">
-      {/* Nav - 64px, hairline border (same as Landing) */}
-      <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
-          <Link href="/" className="flex min-w-0 items-center gap-2.5 select-none cursor-pointer">
-            <CabinLogo className="h-[30px] w-auto flex-shrink-0" />
-            <span className="hidden translate-y-[5px] text-[15px] font-semibold text-[var(--text)] min-[430px]:inline">Cabin Visuals</span>
-          </Link>
-          <nav className="flex flex-shrink-0 items-center gap-4 text-[13px] sm:gap-5">
-            <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Editor</Link>
-            {hasAccount ? (
-              <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Projects</Link>
-            ) : (
-              <Link href="/login" onClick={() => track('nav_clicked', { from: 'pricing', to: 'login' })} className="text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer">Log in</Link>
-            )}
-            <ProfileMenu />
-          </nav>
-        </div>
-      </header>
+    <EditorialSkin className="min-h-screen font-sans">
+      <EditorialHeader>
+        <Link href="/editor" onClick={() => track('nav_clicked', { from: 'pricing', to: 'editor' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Editor</Link>
+        {hasAccount ? (
+          <Link href="/projects" onClick={() => track('nav_clicked', { from: 'pricing', to: 'projects' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Projects</Link>
+        ) : (
+          <Link href="/login" onClick={() => track('nav_clicked', { from: 'pricing', to: 'login' })} className="text-[15px] text-[var(--text-3)] transition-colors hover:text-[var(--accent)] cursor-pointer">Log in</Link>
+        )}
+        <ProfileMenu />
+      </EditorialHeader>
 
       <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 sm:px-6 sm:pb-24">
         <Appear className="mt-10 mb-3 text-center sm:mt-16">
-          <h1 className="m-0 text-[26px] font-bold tracking-[-0.02em] text-[var(--text)] sm:text-[36px]">Seriously, just use it for free (it&apos;s great).</h1>
-          <p className="mx-auto mt-3 max-w-[560px] text-[15px] text-[var(--text-3)]">
+          <h1 className="m-0 text-[34px] font-normal leading-[1.1] [font-family:var(--lp-font-display)] [text-wrap:balance] text-[var(--text)] sm:text-[52px]">
+            Seriously, just use it <em className="italic text-[var(--accent)]">for free</em> (it&apos;s great).
+          </h1>
+          <p className="mx-auto mt-4 max-w-[560px] text-[16px] leading-[1.65] text-[var(--text-3)]">
             The whole editor - the instruments, templates, and AI lyric videos - is free.
             Pro is for the person who wants to use it seriously and professionally.
           </p>
@@ -89,7 +82,7 @@ export default function PricingPage() {
 
         <div className="mx-auto grid max-w-[760px] gap-5 md:grid-cols-2">
           {/* Free */}
-          <Appear delay={0.05} className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-7">
+          <Appear delay={0.05} className="flex flex-col rounded-[12px] border border-[var(--border)] bg-[var(--bg-panel)] p-7">
             <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--text-muted)]">FREE</span>
             <p className="mt-1.5 mb-0 text-[13px] text-[var(--text-3)]">Pretty dang good, more than enough for most people.</p>
             <div className="mt-[18px] flex items-baseline gap-1">
@@ -108,7 +101,7 @@ export default function PricingPage() {
             <Link
               href={hasAccount ? '/projects' : '/editor'}
               onClick={() => track('pricing_start_creating_clicked', { destination: hasAccount ? 'projects' : 'editor' })}
-              className={`mt-7 flex h-[38px] items-center justify-center rounded-[5px] text-[13px] transition-colors cursor-pointer ${
+              className={`mt-7 flex h-[42px] items-center justify-center rounded-[99px] text-[14px] transition-colors cursor-pointer ${
                 hasAccount
                   ? 'border border-[var(--border)] font-semibold text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]'
                   : 'bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)]'
@@ -119,8 +112,8 @@ export default function PricingPage() {
           </Appear>
 
           {/* Pro */}
-          <Appear delay={0.1} className="relative flex flex-col rounded-lg border border-[rgba(53,167,230,0.5)] bg-[var(--bg-panel)] p-7">
-            <span className="absolute -top-2.5 right-5 rounded px-[9px] py-[3px] font-mono text-[10px] font-bold tracking-[0.08em] bg-[var(--accent)] text-[var(--on-accent)]">
+          <Appear delay={0.1} className="relative flex flex-col rounded-[12px] border border-[rgba(158,232,245,0.4)] bg-[var(--bg-panel)] p-7">
+            <span className="absolute -top-2.5 right-5 rounded-[99px] px-[9px] py-[3px] font-mono text-[10px] font-bold tracking-[0.08em] bg-[var(--accent)] text-[var(--on-accent)]">
               PRO
             </span>
             <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--accent)]">PRO</span>
@@ -138,17 +131,17 @@ export default function PricingPage() {
               ))}
             </ul>
             {plan.isPro ? (
-              <div className="mt-7 flex h-[38px] items-center justify-center rounded-[5px] bg-[var(--bg-elevated)] text-[13px] font-semibold text-[var(--text-3)]">
+              <div className="mt-7 flex h-[42px] items-center justify-center rounded-[99px] bg-[var(--bg-elevated)] text-[14px] font-semibold text-[var(--text-3)]">
                 You&apos;re on Pro - thank you!
               </div>
             ) : (
               <button
                 onClick={handleUpgrade}
                 disabled={opening}
-                className={`mt-7 flex h-[38px] items-center justify-center gap-2 rounded-[5px] text-[13px] transition-colors disabled:opacity-60 cursor-pointer ${
+                className={`mt-7 flex h-[42px] items-center justify-center gap-2 rounded-[99px] text-[14px] transition-colors disabled:opacity-60 cursor-pointer ${
                   hasAccount
                     ? 'border-0 bg-[var(--accent)] font-bold text-[var(--on-accent)] hover:bg-[var(--accent-hover)] disabled:hover:bg-[var(--accent)]'
-                    : 'border border-[rgba(53,167,230,0.5)] bg-transparent font-semibold text-[var(--accent)] hover:bg-[rgba(53,167,230,0.08)]'
+                    : 'border border-[rgba(158,232,245,0.4)] bg-transparent font-semibold text-[var(--accent)] hover:bg-[rgba(158,232,245,0.08)]'
                 }`}
               >
                 {opening ? (
@@ -164,7 +157,7 @@ export default function PricingPage() {
           </Appear>
         </div>
       </main>
-    </div>
+    </EditorialSkin>
     </MotionConfig>
   )
 }

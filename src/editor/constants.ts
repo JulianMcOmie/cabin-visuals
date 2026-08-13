@@ -30,7 +30,7 @@ export const LOOP_MOVE_EDGE_INSET = 10
 export const BLOCK_EDGE_HIT = 10
 /** Shared loop-band fills, also used by its drag-alignment guides. Enabled is
  *  the accent blue; disabled is a plain grey - off reads as off. */
-export const LOOP_REGION_ENABLED_COLOR = '#4da3d9'
+export const LOOP_REGION_ENABLED_COLOR = '#45c6ff'
 export const LOOP_REGION_DISABLED_COLOR = 'rgba(155, 155, 155, 0.3)'
 
 /**

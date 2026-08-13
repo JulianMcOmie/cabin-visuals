@@ -484,6 +484,42 @@ test('an automated count entry carries structural variants bracketing its reach'
   assert.equal(structuralCopyCount([entry]), 8)
 })
 
+test('a spatial tf lane on a splitter moves the copies in the splitter frame', () => {
+  // The splitter lays copies at x = ±2; a tfRotZ lane holding 90° turns the
+  // FORMATION about the splitter's origin (exactly like a rotation mover child
+  // would - the splitter weave), landing the copies at y = ±2 rather than
+  // spinning each copy in place.
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['rot'] }),
+    track({
+      id: 'rot', type: 'automation', parentId: 's', targetParam: 'tfRotZ', interpolation: 'linear',
+      blocks: [{
+        id: 'b1', startBar: 0, durationBars: 4, loop: false,
+        notes: [{ id: 'n1', startBeat: 0, pitch: 72, durationBeats: 1, velocity: 100 }], // -180..180 → 90°
+      }],
+    }),
+  ], ['cube'])
+  const copies = resolveVisualCopies(objectByTrackId(p, 'cube').moverAndSplitterChain, 0)
+  assert.equal(copies.length, 2)
+  for (const copy of copies) {
+    assert.ok(Math.abs(copy.transform.elements[12]) < 1e-9, `x ≈ 0, got ${copy.transform.elements[12]}`)
+  }
+  const ys = copies.map((copy) => Math.round(copy.transform.elements[13])).sort((a, b) => a - b)
+  assert.deepEqual(ys, [-2, 2])
+})
+
+test('an empty tf lane on a splitter is a genuine no-op', () => {
+  const p = snapshot([
+    track({ id: 'cube', instrumentId: 'cube', childIds: ['s'] }),
+    track({ id: 's', type: 'splitter', splitterId: 'test.chainSplit', parentId: 'cube', childIds: ['lane'] }),
+    track({ id: 'lane', type: 'automation', parentId: 's', targetParam: 'tfX', interpolation: 'linear', blocks: [] }),
+  ], ['cube'])
+  const copies = resolveVisualCopies(objectByTrackId(p, 'cube').moverAndSplitterChain, 0)
+  const xs = copies.map((copy) => copy.transform.elements[12]).sort((a, b) => a - b)
+  assert.deepEqual(xs, [-2, 2])
+})
+
 test('prior copy count under an automated splitter addresses the mounted pool', () => {
   const p = snapshot([
     track({ id: 'cube', instrumentId: 'cube', childIds: ['s', 'm'] }),

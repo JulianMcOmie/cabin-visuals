@@ -79,6 +79,22 @@ test('loop length is inferred from the note extent when unset', () => {
   assert.deepEqual(out.map((n) => n.beat), [0, 8])
 })
 
+test('notes past the loop window play once, unlooped', () => {
+  const out = flattenBlocks([
+    block({
+      durationBars: 3, // beats 0..12
+      loop: true,
+      loopLengthBars: 1, // 4-beat pattern window
+      notes: [
+        note('a', 1, 0.5), // in-window: tiles at 1, 5, 9
+        note('b', 6, 0.5), // past the window: sounds at 6 only, no fold to 2
+      ],
+    }),
+  ], 4)
+
+  assert.deepEqual(out.map((n) => n.beat), [1, 5, 6, 9])
+})
+
 test('split-shifted phases fold modulo the loop length', () => {
   // The right half of a split looped block historically stored negative
   // startBeats; the fold keeps every repeat, including the trailing ones.

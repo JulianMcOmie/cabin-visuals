@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ProjectsDisplay from '../../src/components/ProjectsDisplay'
+import { EditorialSkin } from '../../src/components/landing/editorialTheme'
 import { ProjectsSkeleton } from '../../src/components/ProjectsSkeleton'
 import { LoadingScreen } from '../../src/components/LoadingScreen'
 import { createClient } from '../../src/utils/supabase/client'
@@ -212,10 +213,12 @@ export default function ProjectsPage() {
   const handingOff = loadHandoff !== 'done'
 
   return (
-    <>
+    <EditorialSkin>
       {/* Covers the page the INSTANT a create/open is clicked - the project
           write and navigation happen behind the same smoking-cabin screen the
-          route transition shows, so the grid never visibly reshuffles. */}
+          route transition shows, so the grid never visibly reshuffles. The
+          skin wrapper puts the overlays on the editorial surface too - they
+          were flashing the near-black root --bg-page. */}
       {creating && <LoadingScreen />}
       <div
         className={`transition-opacity duration-500 ease-out motion-reduce:transition-none ${
@@ -244,6 +247,6 @@ export default function ProjectsPage() {
           <ProjectsSkeleton />
         </div>
       )}
-    </>
+    </EditorialSkin>
   )
 }

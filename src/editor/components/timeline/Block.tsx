@@ -42,17 +42,11 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
   const palette = useMemo(() => midiBlockPalette(color), [color])
   const active = isSelected || isEditing
 
-  // A looped block's surface is the UNION of its touching rounded sections, so
-  // its perimeter has a small notch (divot) at every loop boundary. A box-shadow
-  // ring can't express that - it traces the bounding RECTANGLE and paves the
-  // divots over. drop-shadow is built from the rendered alpha instead, so four
-  // 1px offsets lay a ring that hugs the real silhouette, divots included. The
-  // sections meet flush, so nothing is drawn along their shared edge (which is
-  // why the ring can't live on the sections themselves - see NotePreview).
-  const silhouetteRing = (ringColor: string) =>
-    `drop-shadow(1px 0 0 ${ringColor}) drop-shadow(-1px 0 0 ${ringColor})` +
-    ` drop-shadow(0 1px 0 ${ringColor}) drop-shadow(0 -1px 0 ${ringColor})`
   const activityFilter = 'brightness(calc(1 + var(--midi-activity-opacity, 0) * 1.5))'
+  // Resting: the neon-signage pane - an inset hue hairline plus a near-black
+  // separation ring against the lane. Selected: the supernova - the body IS
+  // the light, so the only "edge" is the burning rim inside its bloom stack.
+  const restingShadow = `inset 0 0 0 1px ${palette.edge}, 0 0 0 1px rgba(0,0,0,0.45)`
 
   useEffect(() => {
     const element = blockRef.current
@@ -70,28 +64,16 @@ export const Block = memo(function Block({ block, trackId, barWidthPx, beatsPerB
       style={{
         left: `${left}px`,
         width: `${renderedWidth}px`,
-        // No borders: instead each block casts a super-thin, almost-black ring
-        // shadow - significant in darkness, hairline in geometry - so it reads
-        // as a border/margin against the lane and neighbouring blocks. The ring
-        // lives on THIS outer element for looped blocks too, so a looped block
-        // has ONE perimeter border; per-section rings would double up where two
-        // sections touch and read as a hard dividing line (the loop boundary is
-        // shown by the sections' corner notch instead).
-        backgroundColor: hasLoopSections ? 'transparent' : active ? palette.selectedFill : palette.fill,
-        // Square-cornered blocks keep the cheaper box-shadow ring; only looped
-        // blocks pay for the silhouette filter, and only they need it.
-        boxShadow: hasLoopSections
-          ? undefined
-          : active
-            ? `0 0 0 1px ${palette.selectedOutline}, 0 0 0 2px rgba(0,0,0,0.6), 0 3px 10px rgba(0,0,0,0.24)`
-            : '0 0 0 1px rgba(0,0,0,0.6)',
-        filter: hasLoopSections
-          // Selected: the accent ring first, then a black ring laid around the
-          // result - the same colour order the box-shadow version stacks in.
-          ? active
-            ? `${activityFilter} ${silhouetteRing(palette.selectedOutline)} ${silhouetteRing('rgba(0,0,0,0.6)')}`
-            : `${activityFilter} ${silhouetteRing('rgba(0,0,0,0.6)')}`
-          : activityFilter,
+        // No borders in either state. A looped block keeps its fill on the
+        // flush rounded sections (their touching corners form the loop-divot
+        // notches) while the shadow work - resting hairlines or the selected
+        // bloom - lives on THIS outer element, one perimeter for the whole
+        // block. The bloom is pure light, so it needs no silhouette hugging;
+        // the resting inset hairline sits under the sections and survives only
+        // at the notches, which reads as intended.
+        background: hasLoopSections ? 'transparent' : active ? palette.selectedBody : palette.fill,
+        boxShadow: active ? palette.selectedBloom : restingShadow,
+        filter: activityFilter,
         willChange: 'filter',
       }}
       onPointerDown={(e) => onBlockPointerDown(e, trackId, block.id)}
@@ -207,11 +189,13 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               width: `max(${widthPct}%, 1px)`,
               top: 0,
               bottom: 0,
-              backgroundColor: selected ? palette.selectedFill : palette.fill,
-              // No per-section ring: the perimeter border lives on the outer
+              background: selected ? palette.selectedBody : palette.fill,
+              // No per-section ring: the perimeter shadows live on the outer
               // block, so touching sections merge into one fill and the loop
               // boundary reads only from the small corner notch their rounding
-              // leaves - never a hard dark dividing line.
+              // leaves - never a hard dark dividing line. Each selected section
+              // gets its own star-anatomy gradient (per-section cores), which
+              // makes the loop repeats read as a chain of small suns.
             }}
           >
             <div
@@ -235,6 +219,17 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
         // 8%–88% band keeps dashes inside the rounded border. Semantic tracks
         // follow their declared row order; plain piano rolls keep high pitch up.
         const topPct = 8 + pitchPosition * 80
+        // Resting: lit tubing with a glow. Selected: the notes flip DARK -
+        // outshone by the ignited body - and the body's light wraps around
+        // each first-pass mark (repeats stay unwrapped so they read dimmer).
+        const noteFill = selected
+          ? (repeat > 0 ? palette.selectedRepeatedNote : palette.selectedNote)
+          : (repeat > 0 ? palette.repeatedNote : palette.note)
+        const noteHalo = repeat > 0
+          ? undefined
+          : selected
+            ? `0 0 4px ${palette.selectedNoteWrap}`
+            : `0 0 6px ${palette.noteGlow}`
         return (
           <div
             key={`${note.id}:${repeat}`}
@@ -245,7 +240,8 @@ const NotePreview = memo(function NotePreview({ notes, totalBeats, loopBeats, pa
               width: `max(${widthPct}%, 3px)`,
               top: `${topPct}%`,
               height: 2,
-              backgroundColor: repeat > 0 ? palette.repeatedNote : palette.note,
+              backgroundColor: noteFill,
+              boxShadow: noteHalo,
               // No will-change here (or on the spans below): these hint-promoted
               // compositor layers numbered in the tens of thousands on a large
               // project. A 2px dash repaints trivially when its activity var

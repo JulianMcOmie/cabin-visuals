@@ -70,12 +70,23 @@ export const MOVER_MODE_BURST = 0
 export const MOVER_MODE_CONSTANT = 1
 export const MOVER_MODE_OSCILLATE = 2
 
+// Constant rotate/orbit's third choice: whether the always-on baseline spin
+// runs at all. Auto keeps the shipped behavior; MIDI-only parks the mover
+// until a basis-row note drives it (translate-constant already works this
+// way, so the param only surfaces for rotate/orbit).
+export const MOVER_DRIVE_AUTO = 0
+export const MOVER_DRIVE_MIDI = 1
+
 export const MOVER_MOTION_LABELS = ['Translate', 'Rotate', 'Orbit'] as const
 export const MOVER_MODE_LABELS = ['Burst', 'Constant', 'Oscillate'] as const
+export const MOVER_DRIVE_LABELS = ['Auto spin', 'MIDI only'] as const
 
 export interface MoverSettings extends BasisSettings {
   motion: number
   mode: number
+  // Constant rotate/orbit only: MOVER_DRIVE_AUTO spins passively (baseline),
+  // MOVER_DRIVE_MIDI moves only while basis-row notes are held.
+  drive: number
   // Per-axis translate amounts: units per hit (burst), per beat (constant),
   // or of swing (oscillate). `distance` is the overall multiplier.
   distanceX: number
@@ -115,6 +126,13 @@ const MOVER_PARAMS: ParamDef[] = [
     type: 'select',
     options: MOVER_MODE_LABELS.map((label, value) => ({ value, label })),
     default: MOVER_MODE_BURST,
+  },
+  {
+    key: 'drive',
+    label: 'Drive',
+    type: 'select',
+    options: MOVER_DRIVE_LABELS.map((label, value) => ({ value, label })),
+    default: MOVER_DRIVE_AUTO,
   },
   { key: 'distanceX', label: 'Distance X', min: 0, max: 20, step: 0.1, default: 1 },
   { key: 'distanceY', label: 'Distance Y', min: 0, max: 20, step: 0.1, default: 1 },
@@ -250,6 +268,7 @@ export function evaluateMoverAngles(
       speedZ: settings.angleZ,
       speed: settings.angle,
       returnBeats: settings.returnBeats,
+      baselineSpin: settings.drive !== MOVER_DRIVE_MIDI,
     }, beat)
   }
   if (settings.mode === MOVER_MODE_OSCILLATE) {

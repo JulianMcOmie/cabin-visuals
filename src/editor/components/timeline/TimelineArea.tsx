@@ -122,7 +122,7 @@ export function TimelineArea() {
     const { majorBars } = computeRulerGrid(pixelsPerBeat, beatsPerBar, displayBars)
     const majorPx = majorBars * beatsPerBar * pixelsPerBeat
     return {
-      backgroundImage: `repeating-linear-gradient(to right, var(--border-strong) 0px 1px, transparent 1px ${majorPx}px)`,
+      backgroundImage: `repeating-linear-gradient(to right, var(--timeline-grid-line, var(--border-strong)) 0px 1px, transparent 1px ${majorPx}px)`,
       backgroundSize: `${majorPx}px 100%`,
       // Phase the repeat so a line still lands exactly on musical bar 0 when
       // the pickup shifts the content (the pattern extends back through it).
@@ -356,7 +356,7 @@ export function TimelineArea() {
   }
 
   return (
-    <div className="relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
+    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[#08090d]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -464,8 +464,19 @@ export function TimelineArea() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
+            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%', paddingBottom: rowHeight * 3 }}
           >
+            {/* The lane surface lives only behind the actual track stack; the
+                area below it keeps the root's darker void. The label column,
+                though, wears its normal color all the way down. */}
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 bg-[var(--bg-track-row)]"
+              style={{ width: labelWidth }}
+            />
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--bg-timeline)]"
+              style={{ height: visualRows.length * rowHeight }}
+            />
             {/* Vertical grid lines aligned to the ruler's divisions (DAW-style).
                 Their height is the visible track stack, rather than the scroll
                 viewport, so they stop at the bottom of the lowest track. First
@@ -588,7 +599,7 @@ export function TimelineArea() {
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-track-row)] ${
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}

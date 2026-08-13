@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 13
+export const CURRENT_VERSION = 14
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -425,6 +425,26 @@ UPGRADES[12] = (doc) => {
         }
       }
       tracks[trackId] = track
+    }
+    scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v13 → v14 ────────────────────────────────────────────────────────────────
+// The 3D Shape grew a FINISH param whose default is the new Matte poster look.
+// Tracks saved before the param existed were authored against the physical
+// material, so they get pinned to Gloss (finish = 1) explicitly - the new
+// default only applies to tracks created after this shipped.
+UPGRADES[13] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene> } & Record<string, unknown>
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    for (const [trackId, track] of Object.entries(scene.tracks)) {
+      tracks[trackId] = track.type === 'base' && track.instrumentId === 'cube' && track.params?.finish === undefined
+        ? { ...track, params: { ...track.params, finish: 1 } }
+        : track
     }
     scenes[sceneId] = { ...scene, tracks }
   }

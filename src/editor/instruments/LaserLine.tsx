@@ -51,7 +51,7 @@ export const laserLineInstrument: ObjectInstrumentDef = {
     ],
   },
   params: [
-    { key: 'length', label: 'Length', min: 0.25, max: 12, step: 0.05, default: 4 },
+    { key: 'length', label: 'Length', min: 0.25, max: 60, step: 0.05, curve: 2, default: 4 },
     { key: 'thickness', label: 'Thickness', min: 0.01, max: 0.5, step: 0.01, default: 0.06 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },

@@ -10,10 +10,11 @@ import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
 import { CompositionSettingsPanel } from './CompositionSettingsPanel'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
+import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../core/transform'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
 import { automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
-import { parseFxTarget } from '../effects/automation'
+import { fxTarget, parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
 import { AudioTrackDetail } from './AudioTrackDetail'
 import { SceneSettingsPanel } from './SceneSettingsPanel'
@@ -387,6 +388,9 @@ export function TrackEditor() {
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
+  const setTrackCycle = useProjectStore((s) => s.setTrackCycle)
+  const setAutomationTarget = useProjectStore((s) => s.setAutomationTarget)
+  const setTrackAutomationRange = useProjectStore((s) => s.setTrackAutomationRange)
   const setAutomationMode = useProjectStore((s) => s.setAutomationMode)
   const setTrackAutomationAmount = useProjectStore((s) => s.setTrackAutomationAmount)
   const setEffectSetting = useProjectStore((s) => s.setEffectSetting)
@@ -422,54 +426,49 @@ export function TrackEditor() {
 
   return (
     <div className="visualizer-glass-surface flex flex-col h-full border-r border-[var(--border)] bg-[var(--bg-panel)]">
-      {/* Identity rides ON the tab rail: the name takes the left, the tabs shrink
-          to the right, and the subject's own color lights the ACTIVE tab instead
-          of the neutral elevated fill. Costs no vertical space, so the panel still
-          starts at its controls - which is why the standalone name header this
-          replaced was dropped. The name truncates before the tabs do; the kind
-          (instrument / mover / scene) lives in its tooltip, the rail having only
-          one line to give. */}
-      <div className="@container flex flex-shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-1.5">
-        {identity && (
+      {/* Identity header: the subject's name, serif, at the top. The kind
+          (instrument / mover / scene) lives in its tooltip. */}
+      {identity && (
+        <div className="flex flex-shrink-0 items-center border-b border-[var(--border-subtle)] px-3 py-2">
           <span
-            className="min-w-0 truncate text-[11.5px] font-semibold text-[var(--text)]"
+            className="min-w-0 truncate text-[15px] italic leading-none [font-family:var(--font-display)] text-[var(--text)]"
             title={`${identity.name} · ${identity.kind}`}
           >
             {identity.name}
           </span>
-        )}
-        <div className="ml-auto flex flex-shrink-0 items-center gap-1">
-          {(track || activeScene) ? TABS.map((t) => {
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`h-6 rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
-                  active
-                    ? 'font-semibold'
-                    : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
-                }`}
-                style={active && identity
-                  ? {
-                    background: `color-mix(in srgb, ${identity.color} 18%, transparent)`,
-                    color: identity.color,
-                  }
-                  : undefined}
-              >
-                {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
-                <span className="hidden @[300px]:inline">{track ? t.label : t.sceneLabel}</span>
-                <span className="@[300px]:hidden">{track ? t.short : t.sceneShort}</span>
-              </button>
-            )
-          }) : (
-            <div className="h-6 px-2.5 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
-              Settings
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
+      <div className="@container flex flex-shrink-0 items-center gap-1 border-b border-[var(--border-subtle)] px-2 py-1.5">
+        {(track || activeScene) ? TABS.map((t) => {
+          const active = tab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex h-6 flex-1 min-w-0 items-center justify-center rounded-full px-2.5 text-[11px] transition-colors cursor-pointer ${
+                active
+                  ? 'font-semibold'
+                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+              }`}
+              style={active && identity
+                ? {
+                  background: `color-mix(in srgb, ${identity.color} 18%, transparent)`,
+                  color: identity.color,
+                }
+                : undefined}
+            >
+              {/* Scene mode reuses the tab pair; the first slot holds scene settings. */}
+              <span className="hidden @[300px]:inline">{track ? t.label : t.sceneLabel}</span>
+              <span className="@[300px]:hidden">{track ? t.short : t.sceneShort}</span>
+            </button>
+          )
+        }) : (
+          <div className="h-6 flex-1 flex items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[11px] font-semibold text-[var(--text)]">
+            Settings
+          </div>
+        )}
+      </div>
       <div className="flex-1 overflow-y-auto no-scrollbar p-3 pb-12">
         {tab === 'instrument' && (
           <>
@@ -587,11 +586,14 @@ export function TrackEditor() {
                   if (track.type === 'automation') {
                     const fx = track.targetParam ? parseFxTarget(track.targetParam) : null
                     let targetLabel = track.targetParam ?? 'value'
+                    // The target param's own bounds, for the row-spread console.
+                    let laneBounds: { min: number; max: number } | null = null
                     if (fx) {
                       const inst = (parent?.effects ?? []).find((e) => e.id === fx.instanceId)
                       const plugin = inst ? getEffect(inst.pluginId) : undefined
                       const pd = plugin?.params.find((p) => p.key === fx.key)
                       if (pd) targetLabel = `${plugin?.name} · ${pd.label}`
+                      if (pd && isNumberParam(pd)) laneBounds = { min: pd.min, max: pd.max }
                     } else if (parent && track.targetParam) {
                       const pdef = getInstrument(parent.instrumentId)?.params.find((p) => p.key === track.targetParam)
                         ?? (parent.type === 'mover' || parent.type === 'splitter'
@@ -601,22 +603,74 @@ export function TrackEditor() {
                             ? compositionAutomatableParams(compositionDef(parent.instrumentId))
                                 .find((p) => p.key === track.targetParam)
                             : undefined)
+                        // The canonical transform lanes (tfSize etc.) have no
+                        // instrument def to be found in - they live here.
+                        ?? TRANSFORM_PARAM_DEFS.find((p) => p.key === track.targetParam)
                       if (pdef) targetLabel = pdef.label
+                      if (pdef && isNumberParam(pdef)) laneBounds = { min: pdef.min, max: pdef.max }
                     }
+                    // Every param this lane COULD drive - the same list the
+                    // context menu offers when creating one (parent's params +
+                    // canonical transforms, or the mover/composition def's, plus
+                    // fx-namespaced effect settings). Params already driven by a
+                    // sibling lane are offered but disabled.
+                    const parentInstrumentDef = parent ? getInstrument(parent.instrumentId) : undefined
+                    const parentParams = (parentInstrumentDef
+                      ? withTransformParams(parentInstrumentDef.params)
+                      // A splitter offers the spatial tf* params too: such a lane
+                      // moves its copies in the splitter's own frame (resolve.ts's
+                      // splitter weave), so it retargets like any other param.
+                      : parent && parent.type === 'splitter'
+                        ? withSpatialTransformParams(getMoverOrSplitterDefinition(parent.splitterId)?.params ?? [])
+                        : parent && parent.type === 'mover'
+                          ? getMoverOrSplitterDefinition(parent.moverId)?.params ?? []
+                          : parent && isCompositionTrack(parent)
+                            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+                            : []
+                    ).filter(isNumberParam)
+                    const fxOptions = (parent?.effects ?? []).flatMap((inst) => {
+                      const plugin = getEffect(inst.pluginId)
+                      if (!plugin) return []
+                      return [
+                        { key: fxTarget(inst.id, 'enabled'), label: `${plugin.name} · On/Off` },
+                        ...plugin.params.filter(isNumberParam).map((p) => ({
+                          key: fxTarget(inst.id, p.key),
+                          label: `${plugin.name} · ${p.label}`,
+                        })),
+                      ]
+                    })
+                    // getState, not a subscription: the disabled flags are
+                    // cosmetic and refresh with this panel's own re-renders
+                    // (same accepted staleness as the guide's other getState reads).
+                    const siblingTracks = useProjectStore.getState().tracks
+                    const siblingTargets = new Set((parent?.childIds ?? [])
+                      .map((cid) => siblingTracks[cid])
+                      .filter((c) => !!c && c.id !== track.id && c.type === 'automation')
+                      .map((c) => c!.targetParam))
+                    const targetOptions = [...parentParams.map((p) => ({ key: p.key, label: p.label })), ...fxOptions]
+                      .map((o) => ({ ...o, disabled: siblingTargets.has(o.key) }))
                     return (
                       <AutomationUserInterface
                         targetLabel={targetLabel}
+                        targetKey={track.targetParam}
+                        targetOptions={targetOptions}
+                        onTarget={(key, label) => setAutomationTarget(track.id, key, label, track.name === targetLabel)}
                         color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
                         noise={track.noise}
                         burst={track.burst}
+                        cycle={track.cycle}
                         amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
+                        onCycle={(cycle) => setTrackCycle(track.id, cycle)}
                         onAmount={(amount) => setTrackAutomationAmount(track.id, amount)}
+                        paramBounds={laneBounds}
+                        range={track.automationRange}
+                        onRange={(range) => setTrackAutomationRange(track.id, range)}
                       />
                     )
                   }
@@ -798,6 +852,8 @@ export function TrackEditor() {
           )
         })()}
       </div>
+
+
     </div>
   )
 }

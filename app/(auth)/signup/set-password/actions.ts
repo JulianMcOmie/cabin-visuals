@@ -10,8 +10,6 @@ export async function completeSignup(formData: FormData) {
   // Extract data from formData
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
-  const firstName = formData.get('firstName') as string;
-  const lastName = formData.get('lastName') as string;
   const confirmPassword = formData.get('confirmPassword') as string; // Also get confirm password
 
   // *** DEBUG LOGGING START ***
@@ -19,22 +17,18 @@ export async function completeSignup(formData: FormData) {
   console.log("Email from formData:", email);
   console.log("Password from formData:", password ? '[Exists]' : '[Missing]');
   console.log("ConfirmPassword from formData:", confirmPassword ? '[Exists]' : '[Missing]');
-  console.log("First Name from formData:", firstName);
-  console.log("Last Name from formData:", lastName);
   // *** DEBUG LOGGING END ***
 
   // Rebuild params for potential redirects
   const params = new URLSearchParams();
   if (email) params.set('email', email);
-  if (firstName) params.set('firstName', firstName);
-  if (lastName) params.set('lastName', lastName);
 
-  // --- Validation --- 
-  if (!email || !password || !firstName || !lastName || !confirmPassword) {
-    console.error('CompleteSignup: Missing form data. Received:', 
-        { email, passwordExists: !!password, firstName, lastName, confirmPasswordExists: !!confirmPassword }
+  // --- Validation ---
+  if (!email || !password || !confirmPassword) {
+    console.error('CompleteSignup: Missing form data. Received:',
+        { email, passwordExists: !!password, confirmPasswordExists: !!confirmPassword }
     );
-    return redirect('/signup?message=Something went wrong, please start over.'); 
+    return redirect('/signup?message=Something went wrong, please start over.');
   }
 
   if (password !== confirmPassword) {
@@ -50,17 +44,11 @@ export async function completeSignup(formData: FormData) {
   }
   // --- End Validation ---
 
-  console.log(`Attempting supabase.auth.signUp for ${email} with names: ${firstName} ${lastName}`);
+  console.log(`Attempting supabase.auth.signUp for ${email}`);
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: {
-        given_name: firstName,
-        family_name: lastName,
-      },
-      // emailRedirectTo: `${origin}/auth/callback` // Optional: Specify explicit redirect
-    },
+    // emailRedirectTo: `${origin}/auth/callback` // Optional: Specify explicit redirect
   });
 
   if (error) {
@@ -82,7 +70,6 @@ export async function completeSignup(formData: FormData) {
   // only a real new signup carries an identity.
   if (data.user && (data.user.identities?.length ?? 0) > 0) {
     await notifyOwner('🎉 New Cabin Visuals signup', [
-      `Name: ${firstName} ${lastName}`,
       `Email: ${email}`,
       `Method: email/password`,
       `User id: ${data.user.id}`,

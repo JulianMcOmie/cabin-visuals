@@ -128,19 +128,32 @@ function VideoComponent({ trackId }: { trackId: string }) {
     }
     // Viewport-filling plane, scaled to restore the clip's true aspect. Cover
     // (default) crops the overflowing axis; Fit letterboxes inside the frame.
+    //
+    // Rotate exists because phone footage often carries its orientation as
+    // metadata the decode engine ignores (a "landscape" stream flagged
+    // rotate-90), so the raw frames arrive sideways. A quarter turn also swaps
+    // the aspect the cover/fit math must fill against.
+    const rotate = Math.round(state.params.rotate ?? paramDefault(videoInstrument, 'rotate'))
+    const swapped = rotate === 1 || rotate === 3
     const videoAspect = res.aspect
+    const shownAspect = swapped && videoAspect > 0 ? 1 / videoAspect : videoAspect
     const viewAspect = viewport.height > 0 ? viewport.width / viewport.height : 16 / 9
     const cover = (state.params.fit ?? paramDefault(videoInstrument, 'fit')) === 0
     let sx = 1
     let sy = 1
-    if (cover ? videoAspect > viewAspect : videoAspect < viewAspect) sx = videoAspect / viewAspect
-    else sy = viewAspect / videoAspect
+    if (cover ? shownAspect > viewAspect : shownAspect < viewAspect) sx = shownAspect / viewAspect
+    else sy = viewAspect / shownAspect
     if (!cover) {
       const shrink = 1 / Math.max(sx, sy)
       sx *= shrink
       sy *= shrink
     }
-    mesh.scale.set(sx, sy, 1)
+    // sx/sy are SCREEN-space fill factors; under a quarter turn the plane's
+    // local axes land on the opposite screen axes, so the local scale swaps
+    // and trades the view aspect to keep the on-screen extents the same.
+    if (swapped) mesh.scale.set(sy / viewAspect, sx * viewAspect, 1)
+    else mesh.scale.set(sx, sy, 1)
+    mesh.rotation.z = rotate === 1 ? -Math.PI / 2 : rotate === 2 ? Math.PI : rotate === 3 ? Math.PI / 2 : 0
   })
 
   return (
@@ -165,6 +178,21 @@ export const videoInstrument: ObjectInstrumentDef = {
       options: [
         { value: 0, label: 'Cover (fill, crop edges)' },
         { value: 1, label: 'Fit (letterbox)' },
+      ],
+      default: 0,
+    },
+    // Escape hatch for phone footage whose orientation lives in metadata the
+    // decode engine doesn't apply - the clip-bank preview (<video>, which does)
+    // looks upright while the render comes out sideways.
+    {
+      key: 'rotate',
+      label: 'Rotate',
+      type: 'select' as const,
+      options: [
+        { value: 0, label: 'None' },
+        { value: 1, label: '90° clockwise' },
+        { value: 2, label: '180°' },
+        { value: 3, label: '90° counter-clockwise' },
       ],
       default: 0,
     },

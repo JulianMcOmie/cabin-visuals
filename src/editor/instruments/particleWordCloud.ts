@@ -10,6 +10,7 @@ import {
 } from 'three'
 import { seededRand } from '../core/visual/instrumentFrame'
 import { FORCE_TRANSPARENT_KEY } from '../core/visual/animatedOpacity'
+import { fieldHash } from './particleFieldCore'
 
 // The particle-words mode of the Text Display instrument, adapted from a
 // standalone three.js sketch: thousands of additive-blended points that morph
@@ -217,27 +218,31 @@ export interface ParticleCloudFrame {
   stackComp: number
 }
 
+/** Per-particle colors: the sketch's per-channel jitter around a base color,
+ *  cached by (color, variation) key. Shared by the cloud and field updaters. */
+function fillCloudColors(handles: ParticleCloudHandles, color: string, variation: number): void {
+  const colorKey = `${color}|${variation}`
+  if (colorKey === handles.lastColorKey) return
+  handles.lastColorKey = colorKey
+  _baseColor.set(color)
+  const colors = handles.colorAttr.array as Float32Array
+  for (let i = 0; i < MAX_PARTICLES; i++) {
+    const i3 = i * 3
+    colors[i3] = Math.max(0, _baseColor.r * (1 + (seededRand(i * 5.13) - 0.5) * variation))
+    colors[i3 + 1] = Math.max(0, _baseColor.g * (1 + (seededRand(i * 5.13 + 17.7) - 0.5) * variation))
+    colors[i3 + 2] = Math.max(0, _baseColor.b * (1 + (seededRand(i * 5.13 + 35.4) - 0.5) * variation))
+  }
+  handles.colorAttr.needsUpdate = true
+}
+
 /** Write one frame of the cloud: per-particle colors (cached by key), material
  *  size/glow, and the staggered eased lerp of every particle position. The
  *  caller owns material opacity (via setAnimatedOpacity) and group transforms. */
 export function updateParticleCloud(handles: ParticleCloudHandles, frame: ParticleCloudFrame): void {
-  const { points, positionAttr, colorAttr } = handles
+  const { points, positionAttr } = handles
   const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(frame.count)))
 
-  // Per-particle colors: the sketch's per-channel jitter around a base color.
-  const colorKey = `${frame.color}|${frame.variation}`
-  if (colorKey !== handles.lastColorKey) {
-    handles.lastColorKey = colorKey
-    _baseColor.set(frame.color)
-    const colors = colorAttr.array as Float32Array
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      const i3 = i * 3
-      colors[i3] = Math.max(0, _baseColor.r * (1 + (seededRand(i * 5.13) - 0.5) * frame.variation))
-      colors[i3 + 1] = Math.max(0, _baseColor.g * (1 + (seededRand(i * 5.13 + 17.7) - 0.5) * frame.variation))
-      colors[i3 + 2] = Math.max(0, _baseColor.b * (1 + (seededRand(i * 5.13 + 35.4) - 0.5) * frame.variation))
-    }
-    colorAttr.needsUpdate = true
-  }
+  fillCloudColors(handles, frame.color, frame.variation)
 
   const material = points.material as PointsMaterial
   material.size = frame.dotSize
@@ -296,6 +301,123 @@ export function updateParticleCloud(handles: ParticleCloudHandles, frame: Partic
     positions[i3 + 1] = (prevTargets[i3 + 1] + (curTargets[i3 + 1] - prevTargets[i3 + 1]) * e) * pulseScale
     positions[i3 + 2] = (prevTargets[i3 + 2] + (curTargets[i3 + 2] - prevTargets[i3 + 2]) * e) * pulseScale
   }
+  points.geometry.setDrawRange(0, count)
+  positionAttr.needsUpdate = true
+}
+
+// --- Field mode ---
+// The cloud's sibling behavior (Text Display's "Field Mode"): instead of the
+// WHOLE cloud being the word, a screen-filling slab of ambient particles sits
+// still forever, and only the ones recruited near the text anchor condense
+// into glyphs - then fly back to exactly the homes they left. Recruitment maps
+// come from particleFieldCore (cached by the caller); this updater is just the
+// per-frame position/material write.
+
+/** One text formation: the glyph shape, which field particles it borrows
+ *  (rank r forms target r), where it sits, and where it is in its life. */
+export interface FieldFormation {
+  shape: WordShape
+  map: Uint32Array
+  anchorX: number
+  anchorY: number
+  /** World units per shape-canvas unit (the cloud path's sizeAt x 0.22). */
+  scale: number
+  /** 0..1 formation progress (pre-ease, pre-stagger). */
+  progress: number
+  /** 0..1 dissolve progress (0 while held). */
+  release: number
+  /** Per-formation stagger salt. */
+  seed: number
+}
+
+export interface ParticleFieldFrame {
+  beat: number
+  count: number
+  dotSize: number
+  glow: number
+  opaque: boolean
+  color: string
+  variation: number
+  stagger: number
+  /** Ambient wander amount 0..1; stills where a formation has settled. */
+  drift: number
+  /** World-space basis for the wander amplitude (min viewport dimension). */
+  driftScale: number
+  /** The ambient slab (particleFieldCore.fieldPositions), count*3 long. */
+  ambient: Float32Array
+  cur: FieldFormation | null
+  prev: FieldFormation | null
+}
+
+export function updateParticleField(handles: ParticleCloudHandles, frame: ParticleFieldFrame): void {
+  const { points, positionAttr } = handles
+  const count = Math.max(1, Math.min(MAX_PARTICLES, Math.round(frame.count)))
+
+  fillCloudColors(handles, frame.color, frame.variation)
+
+  // Material: dot size + bloom lift. Unlike the word cloud's hundreds-deep
+  // additive stacks, the field is mostly UNstacked (spread over the whole
+  // frame), so glow maps near-directly: a floor keeps dots visible at 0, the
+  // quartic top end pushes single dots over the 1.15 bloom threshold. Both
+  // branches normalize by luminance so blue reads like yellow (see the cloud
+  // updater's note).
+  const material = points.material as PointsMaterial
+  material.size = frame.dotSize
+  _baseColor.set(frame.color)
+  const luma = Math.max(0.05, 0.2126 * _baseColor.r + 0.7152 * _baseColor.g + 0.0722 * _baseColor.b)
+  if (frame.opaque) {
+    material.blending = NormalBlending
+    const lift = 1 + (frame.glow * 4) / luma
+    material.color.setRGB(lift, lift, lift)
+  } else {
+    material.blending = AdditiveBlending
+    const lift = (0.35 + 3.5 * frame.glow ** 4) / luma
+    material.color.setRGB(lift, lift, lift)
+  }
+
+  const positions = positionAttr.array as Float32Array
+  const { ambient, beat: b } = frame
+  const driftAmp = frame.drift * 0.05 * frame.driftScale
+
+  // Ambient home + gentle deterministic wander, damped by `settle` so a formed
+  // letter holds still instead of shimmering off its glyph.
+  const writeAmbient = (i: number, settle: number) => {
+    const i3 = i * 3
+    const wander = driftAmp * (1 - settle)
+    positions[i3] = ambient[i3] + Math.sin(b * 0.9 + fieldHash(i * 1.7) * 6.283) * wander
+    positions[i3 + 1] = ambient[i3 + 1] + Math.cos(b * 0.7 + fieldHash(i * 2.9) * 6.283) * wander
+    positions[i3 + 2] = ambient[i3 + 2] + Math.sin(b * 0.5 + fieldHash(i * 4.3) * 6.283) * wander * 0.5
+  }
+
+  for (let i = 0; i < count; i++) writeAmbient(i, 0)
+
+  // Fly rank r of the formation's map toward glyph target r. Stagger salts the
+  // formation per particle (everyone still lands at 1); dissolve staggers with
+  // the same salt so a letter frays apart the way it condensed.
+  const applyFormation = (f: FieldFormation) => {
+    const { shape, map } = f
+    for (let r = 0; r < map.length; r++) {
+      const i = map[r]
+      if (i >= count) continue
+      const delay = seededRand(f.seed + r * 7.7) * frame.stagger * 0.6
+      const tIn = f.progress >= 1 ? 1 : Math.max(0, Math.min(1, (f.progress - delay) / (1 - delay)))
+      const tOut = f.release <= 0 ? 0 : f.release >= 1 ? 1 : Math.max(0, Math.min(1, (f.release - delay) / (1 - delay)))
+      const amp = easeInOutQuad(tIn) * (1 - easeInOutQuad(tOut))
+      if (amp <= 0) continue
+      const i3 = i * 3
+      const r3 = r * 3
+      writeAmbient(i, amp)
+      positions[i3] += (f.anchorX + shape.targets[r3] * f.scale - positions[i3]) * amp
+      positions[i3 + 1] += (f.anchorY + shape.targets[r3 + 1] * f.scale - positions[i3 + 1]) * amp
+      positions[i3 + 2] += (shape.targets[r3 + 2] * f.scale - positions[i3 + 2]) * amp
+    }
+  }
+
+  // Previous text first (still flying home), current second - the current one
+  // wins any particle both claim, which IS the handoff between words.
+  if (frame.prev) applyFormation(frame.prev)
+  if (frame.cur) applyFormation(frame.cur)
+
   points.geometry.setDrawRange(0, count)
   positionAttr.needsUpdate = true
 }

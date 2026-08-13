@@ -1,11 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Plus, Copy, Trash2, Eye, UnfoldHorizontal, UnfoldVertical } from 'lucide-react'
-import { useProjectStore, type ViewAspect } from '../store/ProjectStore'
+import { Copy, Trash2, Eye } from 'lucide-react'
+import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
-
-const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
 /** Flat right-click menu for a scene tab: view it on the canvas, duplicate, or
  *  delete. Styled like the shared NestedMenu shell (backdrop-to-close, Esc,
@@ -81,6 +79,36 @@ function SceneTabMenu({ x, y, isViewed, canDuplicate, canDelete, onView, onDupli
 // Track positions per slider. Fine enough that a drag feels continuous, coarse
 // enough that one arrow key is a visible step.
 const ZOOM_POSITIONS = 240
+
+/**
+ * The zoom sliders' axis cues. Something has to say which slider is which at
+ * rest, but lucide's UnfoldHorizontal/UnfoldVertical spent ~6 strokes each -
+ * arrowheads plus a centre bar - which was most of the control's ink, and at
+ * 11px the arrowheads muddy into blobs.
+ *
+ * These say it in two strokes, and say it about the QUANTITY rather than the
+ * gesture: the GAP between the marks is the thing the slider sets. Uprights for
+ * a beat's width, rules for a track row's height - which is also what the
+ * timeline underneath is made of. Axis-aligned hairlines stay crisp at this
+ * size where diagonal arrowheads cannot.
+ *
+ * Options were explored at /dev/timeline-zoom-lab.
+ */
+function BeatWidthGlyph() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="M1.5 1v8M8.5 1v8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function RowHeightGlyph() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+      <path d="M1 1.5h8M1 8.5h8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 /**
  * One timeline zoom slider: an icon that says which way it stretches, then a
@@ -160,8 +188,6 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
   const setTracksPixelsPerBeat = useUIStore((s) => s.setTracksPixelsPerBeat)
   const tracksRowHeight = useUIStore((s) => s.tracksRowHeight)
   const setTracksRowHeight = useUIStore((s) => s.setTracksRowHeight)
-  const aspect = useProjectStore((s) => s.viewAspect)
-  const setAspect = useProjectStore((s) => s.setViewAspect)
 
   // Editing a scene and watching a scene are separate choices now: the tab you
   // click is the one you edit, and the eye stays wherever you put it (Main
@@ -186,62 +212,69 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
     // Slightly translucent (the /85) so the workspace's ambient light passes
     // through the seam between visualizer and timeline instead of stopping at
     // an opaque bar - the strip sits exactly on that boundary.
-    <div className="h-8 flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-app)]/85 px-2 select-none">
-      {sceneOrder.map((id) => {
+    <div className="flex h-[64px] flex-shrink-0 items-center gap-8 overflow-x-auto no-scrollbar border-t border-[rgba(255,255,255,0.06)] bg-[var(--bg-app)]/85 px-6 select-none" role="tablist" aria-label="Scenes">
+      {sceneOrder.map((id, index) => {
         const scene = scenes[id]
         if (!scene) return null
         const active = id === activeSceneId
         const viewed = id === previewSceneId
         return (
-          <div key={id} className="relative flex flex-shrink-0">
-            <button
-              onClick={() => select(id)}
-              onDoubleClick={() => {
-                if (scene.isMain) return
-                const name = window.prompt('Scene name', scene.name)
-                if (name) renameScene(id, name)
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setMenu({ x: e.clientX, y: e.clientY, id })
-              }}
-              title={`${scene.isMain ? 'Final director composition' : 'Double-click to rename'} · Right-click for options${
-                viewed ? ' · shown on the canvas' : ''
-              }`}
-              className={`flex h-6 min-w-14 max-w-36 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors cursor-pointer ${
+          <button
+            key={id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => select(id)}
+            onDoubleClick={() => {
+              if (scene.isMain) return
+              const name = window.prompt('Scene name', scene.name)
+              if (name) renameScene(id, name)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setMenu({ x: e.clientX, y: e.clientY, id })
+            }}
+            title={`${scene.isMain ? 'Final director composition' : 'Double-click to rename'} · Right-click for options${
+              viewed ? ' · shown on the canvas' : ''
+            }`}
+            className={`group flex flex-shrink-0 items-baseline gap-2.5 border-b-2 pb-1 transition-colors cursor-pointer ${
+              active ? 'border-[var(--accent)]' : 'border-transparent'
+            }`}
+          >
+            <span className={`font-mono text-[10.5px] leading-none ${active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <span
+              className={`max-w-44 truncate text-[22px] italic leading-none [font-family:var(--font-display)] transition-colors ${
                 active
-                  ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
-                  : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
+                  ? 'text-[var(--accent)]'
+                  : 'text-[rgba(233,237,244,0.32)] group-hover:text-[var(--accent-hover)]'
               }`}
             >
-              {/* The eye marks the scene the canvas is showing, which is not
-                  necessarily the one being edited. */}
-              {viewed && <Eye size={11} className="flex-shrink-0 text-[var(--text-2)]" aria-label="Shown on the canvas" />}
-              <span className="truncate">{scene.name}</span>
-            </button>
-          </div>
+              {scene.name}
+            </span>
+            {/* The eye marks the scene the canvas is showing, which is not
+                necessarily the one being edited. */}
+            {viewed && <Eye size={12} className="flex-shrink-0 self-center text-[var(--text-2)]" aria-label="Shown on the canvas" />}
+          </button>
         )
       })}
-      <button onClick={create} title="Add scene" className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text)] cursor-pointer">
-        <Plus size={13} />
+      <button
+        onClick={create}
+        title="Add scene"
+        className="flex-shrink-0 pb-1 text-[17px] italic leading-none [font-family:var(--font-display)] text-[var(--text-muted)] transition-colors hover:text-[var(--accent)] cursor-pointer"
+      >
+        + new scene
       </button>
       <div className="ml-auto flex min-w-0 items-center gap-1">
         {/* Which scene the canvas shows is the eye on the tabs now, not a second
             row of scene names here. Aspect and timeline sizing stay. */}
-        <button
-          onClick={() => setAspect(VIEW_ASPECTS[(VIEW_ASPECTS.indexOf(aspect) + 1) % VIEW_ASPECTS.length])}
-          title="Preview aspect ratio - see the visual as a 16:9 or 9:16 export would compose it"
-          className="h-6 min-w-10 rounded-full px-2 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text)] cursor-pointer"
-        >
-          {aspect === 'fill' ? 'Fill' : aspect}
-        </button>
 
         {/* Timeline zoom lives here so it never covers track content. The two
             sliders share one pill: they are one control ("how big is the
             timeline"), not two unrelated settings. */}
         <div className="ml-1 flex h-6 flex-shrink-0 items-center gap-2.5 rounded-full bg-white/[0.03] px-2.5 transition-colors hover:bg-white/[0.06]">
           <ZoomSlider
-            icon={<UnfoldHorizontal size={11} strokeWidth={2} />}
+            icon={<BeatWidthGlyph />}
             label="Horizontal zoom - beat width"
             value={pixelsPerBeat}
             min={2}
@@ -251,7 +284,7 @@ export function SceneTabs({ previewSceneId, onPreviewSceneChange }: SceneTabsPro
           />
           <div className="h-3 w-px flex-shrink-0 bg-[var(--border)]" aria-hidden="true" />
           <ZoomSlider
-            icon={<UnfoldVertical size={11} strokeWidth={2} />}
+            icon={<RowHeightGlyph />}
             label="Vertical zoom - track height"
             value={tracksRowHeight}
             min={28}

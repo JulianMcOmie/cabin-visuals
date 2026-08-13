@@ -7,6 +7,7 @@ import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2, MoreHoriz
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
+import { EditorialSkin } from "./landing/editorialTheme"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { GALLERY_TEMPLATES, type TemplateDef } from "../templates"
@@ -24,12 +25,6 @@ export interface ProjectMetadata {
   preview?: ProjectPreview
 }
 
-const formatDuration = (seconds?: number): string => {
-  const rounded = Math.max(0, Math.round(seconds ?? 0))
-  const minutes = Math.floor(rounded / 60)
-  const remainingSeconds = rounded % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
 
 // Mini timeline of the project's REAL arrangement: one row per root track drawn
 // in that track's own color, blocks positioned/sized as a percentage of the
@@ -46,7 +41,7 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
         alt=""
         fill
         unoptimized
-        className="h-full w-full bg-black object-contain"
+        className="h-full w-full bg-[var(--bg-panel-raised)] object-contain"
       />
     )
   }
@@ -132,6 +127,15 @@ function ProjectCard({
       </div>
     </div>
   )
+}
+
+// "0:46" from the capture's length - the one number that says what the
+// project IS (a 15s loop vs a full song) at a glance.
+const formatDuration = (seconds?: number): string => {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--:--'
+  const m = Math.floor(seconds / 60)
+  const sec = Math.floor(seconds % 60)
+  return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
 interface ProfileData {
@@ -255,7 +259,7 @@ export default function ProjectsDisplay({
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
+    <EditorialSkin className="min-h-screen font-sans text-[var(--text)]">
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
           <Link href="/" className="flex min-w-0 select-none items-center gap-2.5">
@@ -343,12 +347,12 @@ export default function ProjectsDisplay({
 
       <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
+          <h1 className="text-[28px] font-normal [font-family:var(--lp-font-display)]">Projects</h1>
           <div className="group relative">
             <button
               onClick={openCreate}
               disabled={createBlocked}
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
             >
               <Plus size={14} strokeWidth={2.5} />
               New project
@@ -420,7 +424,7 @@ export default function ProjectsDisplay({
           </motion.div>
         </div>
       </main>
-    </div>
+    </EditorialSkin>
     </MotionConfig>
   )
 }
@@ -550,7 +554,7 @@ function CreateProjectModal({
               <button
                 onClick={submitName}
                 disabled={!name.trim()}
-                className="flex h-[36px] cursor-pointer items-center rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
+                className="flex h-[36px] cursor-pointer items-center rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
               >
                 Create project
               </button>

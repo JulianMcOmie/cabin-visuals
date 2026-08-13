@@ -21,7 +21,7 @@ import { BpmControl } from './BpmControl'
 // Shared "LCD" text metrics - BpmControl mirrors these so both cells match.
 const LCD_VALUE = 'font-mono text-[15px] leading-[1.2] tabular-nums'
 const LCD_CAPTION =
-  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[#4a4a4a] select-none'
+  'font-mono text-[8px] font-semibold uppercase tracking-[0.12em] leading-none text-[#5a6274] select-none'
 
 const MODE_KEY = 'cabin:transport-display-mode'
 
@@ -40,9 +40,9 @@ function formatMinSec(beat: number, bpm: number): string {
 
 export function TransportDisplay() {
   return (
-    <div className="flex h-9 select-none items-stretch overflow-hidden rounded-md border border-[#202020] bg-[#0a0a0a] shadow-[inset_0_1px_4px_rgba(0,0,0,0.7)]">
+    <div className="flex h-9 select-none items-stretch overflow-hidden rounded-md border border-[var(--border-subtle)] bg-[#080a0f] shadow-[inset_0_1px_4px_rgba(0,0,0,0.7)]">
       <PositionCell />
-      <div className="my-1.5 w-px bg-[#1c1c1c]" />
+      <div className="my-1.5 w-px bg-[rgba(255,255,255,0.06)]" />
       <BpmControl />
     </div>
   )
