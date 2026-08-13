@@ -28,8 +28,13 @@ export interface ProjectMetadata {
 
 // Mini timeline of the project's REAL arrangement: one row per root track drawn
 // in that track's own color, blocks positioned/sized as a percentage of the
-// project length (derived server-side in projectStorage.documentToPreview). An
-// empty project (no blocks yet) shows a muted hint instead of fake rows.
+// project length. An empty project (no blocks yet) shows a muted hint instead
+// of fake rows.
+//
+// `rows` is empty for every project at the moment - deriving it needs the whole
+// document, and fetching that per card is what made /projects slow (see
+// projectStorage.list). The branch stays because it is driven by data: once the
+// sketch has a projected column, the cards render it again with no change here.
 function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
   // A real captured frame beats the row sketch whenever the project has one.
   // It spans the full container, letterboxed on black when the aspect ratio

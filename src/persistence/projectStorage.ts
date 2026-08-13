@@ -27,6 +27,11 @@ export interface ProjectPreview {
   image?: string
   /** Project timeline length in seconds. */
   durationSeconds: number
+  /** Empty from `list()` today: the sketch can only be derived from the whole
+   *  document, and pulling that per card is what made this page slow (see
+   *  `list`). The card falls back to its empty state. Kept in the shape - and
+   *  still rendered when non-empty - so restoring it is a write-side change
+   *  only, once the sketch has a projected column of its own. */
   rows: ProjectPreviewRow[]
 }
 
@@ -50,88 +55,52 @@ export class ProjectConflictError extends Error {
   }
 }
 
-const MAX_PREVIEW_ROWS = 6
-const MAX_PREVIEW_BLOCKS = 32
-
-/** Collapse a stored document into the card thumbnail: each root track becomes a
- *  row of its real blocks (positions as a percentage of the project length),
- *  drawn in the track's own color. Audio blocks convert their trimmed seconds to
- *  bars the same way the editor sizes them. Tolerant of partial/legacy shapes -
- *  a bad field just yields a thinner preview, never a throw. */
-function documentToPreview(doc: unknown): ProjectPreview {
-  const d = (doc ?? {}) as {
-    tracks?: Record<string, {
-      type?: string
-      color?: string
-      blocks?: { startBar?: number; durationBars?: number }[]
-      audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
-    }>
-    rootTrackIds?: string[]
-    scenes?: Record<string, {
-      isMain?: boolean
-      tracks?: Record<string, {
-        type?: string
-        color?: string
-        blocks?: { startBar?: number; durationBars?: number }[]
-        audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
-      }>
-      rootTrackIds?: string[]
-    }>
-    sceneOrder?: string[]
-    audioTracks?: Record<string, {
-      type?: string
-      color?: string
-      blocks?: { startBar?: number; durationBars?: number }[]
-      audioBlocks?: { startBar?: number; trimStart?: number; trimEnd?: number }[]
-    }>
-    audioRootTrackIds?: string[]
-    totalBars?: number
-    beatsPerBar?: number
-    bpm?: number
+/** Project length in seconds from the document's top-level tempo scalars.
+ *  Tolerant of absent/legacy fields - a missing one falls back to the value a
+ *  fresh project starts at, so an old blob yields a plausible number, never NaN. */
+function durationSecondsOf(totalBars: unknown, beatsPerBar: unknown, bpm: unknown): number {
+  // Accepts a numeric string as well as a number: `data->key` hands back a JSON
+  // number, `data->>key` the same value as text, and the difference between
+  // those two arrows is one character in a select string. Coercing here means
+  // getting it wrong shows a wrong-typed value rather than silently falling
+  // back to a fresh project's tempo and mislabelling every card.
+  const num = (v: unknown, fallback: number) => {
+    const n = typeof v === 'string' ? Number(v) : v
+    return typeof n === 'number' && Number.isFinite(n) ? n : fallback
   }
-  const firstScene = d.sceneOrder?.map((id) => d.scenes?.[id]).find((scene) => scene && !scene.isMain)
-  const tracks = firstScene
-    ? { ...(d.audioTracks ?? {}), ...(firstScene.tracks ?? {}) }
-    : d.tracks ?? {}
-  const rootIds = firstScene
-    ? [...(d.audioRootTrackIds ?? []), ...(firstScene.rootTrackIds ?? [])]
-    : Array.isArray(d.rootTrackIds) ? d.rootTrackIds : []
-  const totalBars = Math.max(1, d.totalBars ?? 1)
-  const beatsPerBar = d.beatsPerBar ?? 4
-  const bpm = d.bpm ?? 120
-  const durationSeconds = Math.round((totalBars * beatsPerBar * 60) / Math.max(1, bpm))
-  const rows: ProjectPreviewRow[] = []
-  for (const id of rootIds) {
-    if (rows.length >= MAX_PREVIEW_ROWS) break
-    const t = tracks[id]
-    if (!t) continue
-    const isAudio = t.type === 'audio'
-    const raw = isAudio ? t.audioBlocks ?? [] : t.blocks ?? []
-    if (raw.length === 0) continue
-    const blocks: ProjectPreviewBlock[] = []
-    for (const b of raw) {
-      if (blocks.length >= MAX_PREVIEW_BLOCKS) break
-      const startBar = b.startBar ?? 0
-      const durationBars = isAudio
-        ? (Math.max(0, ((b as { trimEnd?: number }).trimEnd ?? 0) - ((b as { trimStart?: number }).trimStart ?? 0)) * bpm) / 60 / beatsPerBar
-        : (b as { durationBars?: number }).durationBars ?? 1
-      const left = Math.max(0, Math.min(100, (startBar / totalBars) * 100))
-      const width = Math.max(1.5, Math.min(100 - left, (durationBars / totalBars) * 100))
-      blocks.push({ left, width })
-    }
-    if (blocks.length > 0) rows.push({ color: t.color ?? '#3a7694', blocks })
-  }
-  return { durationSeconds, rows }
+  return Math.round((Math.max(1, num(totalBars, 1)) * num(beatsPerBar, 4) * 60) / Math.max(1, num(bpm, 120)))
 }
 
-/** List the caller's projects, newest-edited first. Pulls each document so the
- *  card thumbnail reflects the real arrangement (see documentToPreview) - a full
- *  blob per project, fine at the current per-account project counts; a projected
- *  preview column is the scale fix if lists ever get large. */
+/**
+ * List the caller's projects, newest-edited first.
+ *
+ * Selects PROJECTED fields only - never `data`. A card needs a thumbnail and a
+ * duration; `data` is the entire project (every scene, track, note, effect and
+ * automation curve, plus the base64 thumbnail), which runs from tens of KB to
+ * megabytes a row. Pulling one per card made this query the whole load time of
+ * /projects: the page gates its first paint on it, so every byte of every
+ * document was in front of the grid appearing.
+ *
+ * `data->>key` extracts inside Postgres, so only the extracted values cross the
+ * wire and the client parses kilobytes instead of megabytes. The thumbnail comes
+ * back through `->>` as text; the tempo scalars through `->`, which
+ * durationSecondsOf reads without depending on which of the two it got.
+ *
+ * What this gives up: `preview.rows` (the mini-timeline sketch) can't be derived
+ * without the whole document, so it comes back empty and a project with no
+ * captured frame shows the card's empty state instead of a sketch of its blocks.
+ * That only affects projects never edited in the editor - the thumbnail is
+ * written by autosave's first flush. Restoring the sketch means storing it in a
+ * projected column written at save time, which is also what lets this query stop
+ * touching `data` at all.
+ */
 export async function list(): Promise<ProjectSummary[]> {
   const { data, error } = await getSupabase()
     .from('projects')
-    .select('id, name, updated_at, rev, data')
+    // One string literal on purpose: supabase-js infers the row type by parsing
+    // this at the type level, and a concatenated string widens to `string`,
+    // which collapses the whole result to GenericStringError.
+    .select('id, name, updated_at, rev, thumbnail:data->>thumbnail, totalBars:data->totalBars, beatsPerBar:data->beatsPerBar, bpm:data->bpm')
     .order('updated_at', { ascending: false })
   if (error) throw error
   return data.map((r) => ({
@@ -140,10 +109,9 @@ export async function list(): Promise<ProjectSummary[]> {
     updatedAt: r.updated_at,
     rev: r.rev,
     preview: {
-      ...documentToPreview(r.data),
-      image: typeof (r.data as { thumbnail?: unknown })?.thumbnail === 'string'
-        ? (r.data as { thumbnail: string }).thumbnail
-        : undefined,
+      image: typeof r.thumbnail === 'string' ? r.thumbnail : undefined,
+      durationSeconds: durationSecondsOf(r.totalBars, r.beatsPerBar, r.bpm),
+      rows: [],
     },
   }))
 }
