@@ -897,10 +897,12 @@ function BottomArea() {
       {(!editing || !rollSettled) && <TimelineArea />}
       <MotionConfig reducedMotion="user">
         <AnimatePresence>
+          {/* z-[80]: the timeline's own chrome stacks up to z-[70] (loop
+              badge popovers), and the rising roll must cover ALL of it. */}
           {editing && (
             <motion.div
               key="piano-roll"
-              className="absolute inset-0 z-10 bg-[var(--bg-app)]"
+              className="absolute inset-0 z-[80] bg-[var(--bg-app)]"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%', transition: { duration: 0.25, ease: [0.3, 0, 0.8, 0.15] } }}

@@ -616,9 +616,27 @@ body.drag-moving * {
    canvas ELEMENT visibly steps while its container moves smoothly.
    !important beats the inline style: layout stays continuous and only the
    drawing buffer catches up (a frame of content scaling, imperceptible). */
-.visual-canvas-smooth canvas {
+.visual-canvas-smooth:not(.canvas-glide-freeze) canvas {
   width: 100% !important;
   height: 100% !important;
+  /* If the element and the GL buffer ever disagree for a frame (a resize the
+     sync render in RenderGovernor didn't cover), show the buffer center-crop
+     rather than squashed - cover can crop but geometrically cannot distort,
+     and it is a no-op whenever element and buffer aspects match (always, at
+     rest). */
+  object-fit: cover;
+}
+
+/* During the freeze the canvas follows three's own inline px styles instead
+   of tracking the (just-widened) root: gl.setSize updates the element and
+   the buffer ATOMICALLY, so no paint can ever catch a mismatched frame - the
+   100% rule here let a pre-resize paint slip through as a one-frame zoom
+   when a collapse widened the root under object-fit: cover. Centered in the
+   oversized root, the pre-resize frame is pixel-identical to the last frame
+   before the toggle, and the post-resize frame is the center-crop identity. */
+.visual-canvas-smooth.canvas-glide-freeze canvas {
+  display: block;
+  margin-inline: auto;
 }
 
 /* Sidebar glides move the canvas horizontally ONLY. While one runs (class
