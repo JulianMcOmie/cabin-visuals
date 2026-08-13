@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Matrix4, Vector3 } from 'three'
+import type { ResolvedNote } from '../visual/types'
 import { mergeDefinitionSettings } from './definitions'
 import { identityVisualCopy } from './identityVisualCopy'
 import { gridSplitter, type GridSettings } from './library'
 import { resolveVisualCopies, structuralCopyCount } from './resolveVisualCopies'
 import { splitterWithChildChain } from './splitterChildChain'
+import { symmetricMotionMover, type SymmetricMotionSettings } from './symmetricMotion'
 import type { MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
 // The semantics under test: a mover child of a splitter moves the splitter's
@@ -226,6 +228,49 @@ test('two wrapped splitters compose deepest-contributor-innermost', () => {
   assertNear(out[1], [0, -2.5, 0], 'slot −2, dup +0.5')
   assertNear(out[2], [0, 2.5, 0], 'slot +2, dup −0.5')
   assertNear(out[3], [0, 1.5, 0], 'slot +2, dup +0.5')
+})
+
+// ── Position-reading children: Symmetric Motion aims per slot ───────────────
+
+function symmetricOut(): MoverOrSplitter {
+  const note: ResolvedNote = { beat: 0, pitch: 60, durationBeats: 4, velocity: 1, blockStartBeat: 0, blockEndBeat: 1024 }
+  // Constant mode: travel accumulates while the Out note is held, so the
+  // offset at beat 1 is deterministic and nonzero.
+  const settings = {
+    ...mergeDefinitionSettings(symmetricMotionMover, undefined),
+    motion: 1,
+  } as SymmetricMotionSettings
+  return symmetricMotionMover.resolve({ settings, notes: [note] })
+}
+
+test('a Symmetric Motion child reads each slot position and pushes the formation outward', () => {
+  const base = positions(resolveVisualCopies([gridRow(2)], 1))
+  const out = positions(resolveVisualCopies([splitterWithChildChain(gridRow(2), [symmetricOut()])], 1))
+  assert.ok(out[0].x < base[0].x - 0.5, `slot −1 pushed further out (-x): ${out[0].x}`)
+  assert.ok(out[1].x > base[1].x + 0.5, `slot +1 pushed further out (+x): ${out[1].x}`)
+  assert.ok(Math.abs(out[0].x + out[1].x) < 1e-9, 'push stays symmetric about the splitter center')
+})
+
+test('nested last-in-chain, Symmetric Motion matches the same mover as a sibling below', () => {
+  const sibling = positions(resolveVisualCopies([gridRow(2), symmetricOut()], 1))
+  const nested = positions(resolveVisualCopies([splitterWithChildChain(gridRow(2), [symmetricOut()])], 1))
+  sibling.forEach((p, i) => assertNear(nested[i], p.toArray() as [number, number, number], `copy ${i} agrees`))
+})
+
+test('a grid below duplicates the blooming formation on its unmoved lattice', () => {
+  const out = positions(resolveVisualCopies([
+    splitterWithChildChain(gridRow(2, 4), [symmetricOut()]),
+    gridRow(2, 1),
+  ], 1))
+  // Slots ±2 bloom outward by the same travel k; duplicates at ±0.5 must ride
+  // the UNMOVED lattice: x = ±(2+k) ± 0.5, with each duplicate pair centered
+  // on its blooming slot.
+  const k = -out[0].x - 2.5
+  assert.ok(k > 0.5, `slots actually bloomed (k=${k})`)
+  assertNear(out[0], [-2.5 - k, 0, 0], 'slot −2 bloomed, dup −0.5')
+  assertNear(out[1], [-1.5 - k, 0, 0], 'slot −2 bloomed, dup +0.5')
+  assertNear(out[2], [1.5 + k, 0, 0], 'slot +2 bloomed, dup −0.5')
+  assertNear(out[3], [2.5 + k, 0, 0], 'slot +2 bloomed, dup +0.5')
 })
 
 test('structural variants compose through the wrapper, so the probe sees child fan-out', () => {

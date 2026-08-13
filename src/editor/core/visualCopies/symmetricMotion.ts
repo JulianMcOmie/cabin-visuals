@@ -237,6 +237,10 @@ export const symmetricMotionMover: MoverOrSplitterDefinition<SymmetricMotionSett
     const normal = PLANE_NORMALS[plane]
     const sphere = plane === 3
     return {
+      // Declared so a splitter's child chain knows this delta is already
+      // anchored on the chain frame's fixed axes (see the header) and must
+      // not be re-anchored the way LOCAL deltas are.
+      composition: 'chainRoot',
       apply(visualCopy, { beat }) {
         const channels = evaluateSymmetricMotionChannels(notes, settings, beat)
         const te = visualCopy.transform.elements
