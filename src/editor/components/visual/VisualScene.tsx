@@ -43,7 +43,7 @@ import { MAX_DIVISIONS as CROP_MAX_DIVISIONS } from '../../core/directors/crop'
 import { getBeatOverride } from '../../core/visual/beatOverride'
 import { isExportPinned, subscribeExportPinned } from '../../core/export/frameDriver'
 import { useTimeStore } from '../../store/TimeStore'
-import { useUIStore } from '../../store/UIStore'
+import { PREVIEW_QUALITY_SCALE, useUIStore } from '../../store/UIStore'
 
 RectAreaLightUniformsLib.init()
 
@@ -583,14 +583,14 @@ function postProcessTracksByScene(objects: readonly ObjectListEntry[], instrumen
 export function VisualScene() {
   const objects = useSyncExternalStore(subscribeObjects, getObjectList, getObjectList)
   const { gl, camera, size, invalidate } = useThree()
-  // Draft playback resolution: every offscreen target shrinks by this factor
-  // and the final grade pass upscales it (all targets are LinearFilter), so a
-  // frame costs scale² of the full fragment work. Pinned renders (export,
-  // preview capture) must be full-size regardless of the preference, so the
-  // scale stands down for the pin's duration.
-  const previewScale = useUIStore((s) => s.previewResolutionScale)
+  // Fast Preview: every offscreen target shrinks by the level's factor and the
+  // final grade pass upscales it (all targets are LinearFilter), so a frame
+  // costs scale² of the full fragment work. Pinned renders (export, preview
+  // capture) must be full-size regardless of the preference, so the scale
+  // stands down for the pin's duration.
+  const previewQuality = useUIStore((s) => s.previewQuality)
   const exportPinned = useSyncExternalStore(subscribeExportPinned, isExportPinned, () => false)
-  const targetScale = exportPinned ? 1 : previewScale
+  const targetScale = exportPinned ? 1 : PREVIEW_QUALITY_SCALE[previewQuality]
   const environment = useMemo(() => {
     const room = new RoomEnvironment()
     const pmrem = new PMREMGenerator(gl)

@@ -10,7 +10,7 @@ import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
 import { getPlaybackEngine } from './core/playback'
 import { useProjectStore, type ViewAspect } from './store/ProjectStore'
-import { useUIStore } from './store/UIStore'
+import { PREVIEW_QUALITIES, useUIStore, type PreviewQuality } from './store/UIStore'
 import { VisualScene } from './components/visual/VisualScene'
 import { ExportDriver } from './components/visual/ExportDriver'
 import { RenderGovernor } from './components/visual/RenderGovernor'
@@ -707,10 +707,13 @@ function EditorPanelToggle({
 
 const VIEW_ASPECTS: ViewAspect[] = ['fill', '16:9', '9:16']
 
-// Draft playback resolutions for the canvas (UIStore.previewResolutionScale):
-// each step quarters the offscreen fragment work. Export is never affected.
-const PREVIEW_SCALES = [1, 0.5, 0.25]
-const PREVIEW_SCALE_LABELS: Record<number, string> = { 1: '1×', 0.5: '½×', 0.25: '¼×' }
+// Fast Preview levels as the toolbar spells them (the store owns the order and
+// the resolution each one renders at - see UIStore.PREVIEW_QUALITY_SCALE).
+const PREVIEW_QUALITY_LABELS: Record<PreviewQuality, string> = {
+  final: 'Final',
+  fast: 'Fast',
+  fastest: 'Fastest',
+}
 
 /** The transport, below the preview (DAW Console 4a): band of skip/play/loop
  *  segments plus the recessed position+tempo readout, centered under the
@@ -742,8 +745,8 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
   const aspect = useProjectStore((s) => s.viewAspect)
   const setAspect = useProjectStore((s) => s.setViewAspect)
   const [aspectOpen, setAspectOpen] = useState(false)
-  const previewScale = useUIStore((s) => s.previewResolutionScale)
-  const setPreviewScale = useUIStore((s) => s.setPreviewResolutionScale)
+  const previewQuality = useUIStore((s) => s.previewQuality)
+  const setPreviewQuality = useUIStore((s) => s.setPreviewQuality)
 
   return (
     <div className="relative hidden md:flex h-12 flex-shrink-0 items-center justify-center select-none px-4">
@@ -777,21 +780,31 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             </>
           )}
         </div>
-        {/* Draft playback resolution: renders the canvas pipeline at a fraction
-            of full size for smoother playback on heavy projects. Lit while a
-            draft scale is active so degraded quality reads as a chosen mode,
-            not a bug. Export always renders full resolution. */}
+        {/* Fast Preview: renders the canvas pipeline at a fraction of full size
+            for smoother playback on heavy projects. The field name rides INSIDE
+            the chip at the muted level so the control says what it is at rest -
+            a lone "Final" says nothing. Lit while a faster level is active, so
+            a softer picture reads as a chosen mode rather than a bug. */}
         <button
           onClick={() => {
-            const index = PREVIEW_SCALES.indexOf(previewScale)
-            setPreviewScale(PREVIEW_SCALES[(index + 1) % PREVIEW_SCALES.length])
+            const index = PREVIEW_QUALITIES.indexOf(previewQuality)
+            setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
-          title="Preview resolution - render the canvas at a fraction of full size for smoother playback. Export is always full resolution."
-          className={`flex h-7 items-center rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer ${
-            previewScale === 1 ? 'text-[var(--text-3)] hover:text-[var(--text)]' : 'text-[var(--accent)]'
-          }`}
+          title="Fast Preview - trades sharpness for smoother playback. Export always renders final quality."
+          className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
         >
-          {PREVIEW_SCALE_LABELS[previewScale] ?? `${previewScale}×`}
+          <span className={previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}>
+            Quality
+          </span>
+          <span
+            className={
+              previewQuality === 'final'
+                ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
+                : 'text-[var(--accent)]'
+            }
+          >
+            {PREVIEW_QUALITY_LABELS[previewQuality]}
+          </span>
         </button>
       </div>
       {/* Transport band - a continuous elevated strip matching the
