@@ -231,11 +231,10 @@ render `ParameterList` for everything rather than a half-empty custom layout.
   controls earned their keep (Pixel Blast's cell meters, the gradient-track
   sliders). Cube (3D Shape) and Radial were independently REDESIGNED to the
   guide in the same window — 3D Shape is the worked example for a shape
-  vocabulary grid + independent surface-toggle chips — but predate the kit,
-  so they turn the shared LaserKnob while still hand-rolling the chassis,
-  binder and disclosure; they are re-port candidates. The remaining theme-var panels (Stars, Neon Polar,
-  Oscilloscope, Fractal Tunnel, TextDisplay, the effect panels…) are still
-  pre-guide.
+  vocabulary grid + independent surface-toggle chips — and were then
+  re-ported onto the kit too. The remaining theme-var panels (Stars, Neon
+  Polar, Oscilloscope, Fractal Tunnel, TextDisplay, the effect panels…) are
+  still pre-guide.
 - `EnvelopeUserInterface.tsx`'s ADSR pad and `AutomationUserInterface.tsx`'s
   burst window are the same geometry in two skins (theme vars vs. the lane's
   accent). When the envelope panel is migrated, they should become one pad.
