@@ -13,11 +13,10 @@
 // gem icosahedra every frame. What ripples here is exactly what ripples on
 // stage, so every knob reads live.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
 import {
   METEOR_IMPACT_PITCH,
@@ -27,10 +26,18 @@ import {
 } from '../core/visualCopies/meteorImpact'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { towardWhite, withAlpha } from './colorWheel'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import {
+  bindPanel,
+  Console,
+  GutterRow,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  spillOf,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 import { METEOR_IMPACT_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -39,7 +46,6 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 // SHIFT of each object's own color), so the panel wears the material it
 // evokes: molten rock.
 const EMBER = METEOR_IMPACT_COLOR
-const EMBER_SHADE = '#140b06'
 const ROOM = '#05070c'
 
 // ── The looping demo performance ─────────────────────────────────────────────
@@ -176,11 +182,11 @@ function GemField({ settings }: { settings: MeteorImpactSettings }) {
 function ImpactPreview({ settings }: { settings: MeteorImpactSettings }) {
   const groundImpact = Math.round(settings.swirlAxis) === 1
   return (
-    <div
-      data-testid="meteor-impact-preview"
+    <PreviewWindow
+      height={188}
+      testId="meteor-impact-preview"
       title="Drag to orbit the field"
-      className="relative h-[188px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
-      style={{ background: ROOM }}
+      className="cursor-grab active:cursor-grabbing"
     >
       <Canvas
         dpr={[1, 2]}
@@ -219,127 +225,20 @@ function ImpactPreview({ settings }: { settings: MeteorImpactSettings }) {
           maxPolarAngle={Math.PI * 0.72}
         />
       </Canvas>
-    </div>
+    </PreviewWindow>
   )
 }
 
 // ── Knobs ────────────────────────────────────────────────────────────────────
 
-/** Flat ember knob per the guide: the value arc IS the molten seam - a wide
- *  soft ember bloom under a hot core, white-hot tip dot at the terminus.
- *  Vertical drag, double-click resets, arrows nudge. */
-function EmberKnob({ parameter: bound, label, large = false }: {
-  parameter: UserInterfaceParameter
-  label: string
-  large?: boolean
-}) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-
-  const value = bound.value
-  const range = definition.max - definition.min
-  const percent = range === 0 ? 0 : clamp((value - definition.min) / range, 0, 1)
-  const angle = -135 + percent * 270
-
-  const commitNorm = (t: number) => {
-    const raw = definition.min + clamp(t, 0, 1) * range
-    const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-    bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
-  }
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
-  }
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / 140)
-  }
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col items-center">
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={definition.label}
-        aria-valuemin={definition.min}
-        aria-valuemax={definition.max}
-        aria-valuenow={value}
-        title={`${definition.label} · drag vertically · double-click to reset`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => bound.setValue(definition.default)}
-        onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[50px] w-[50px]' : 'h-10 w-10'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
-      >
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${EMBER} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(6px)',
-            transform: 'scale(1.14)',
-            opacity: 0.85,
-          }}
-        />
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(EMBER, 0.4)} 0deg ${percent * 270}deg, rgba(255,255,255,0.07) ${percent * 270}deg 270deg, transparent 270deg)`,
-          }}
-        />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#171310]" />
-        <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
-          <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
-            style={{ boxShadow: `0 0 5px 1.5px ${EMBER}` }}
-          />
-        </div>
-      </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] tabular-nums text-white/70">
-        {definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
-      </span>
-    </div>
-  )
-}
-
-/** One row of the console: a rotated section word in the gutter, knobs after. */
-function KnobRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 px-3">
-      <span className="w-[46px] flex-shrink-0 pt-4 text-right text-[7px] font-bold tracking-[0.22em] text-white/25">
-        {label}
-      </span>
-      <div className="flex flex-1 items-end justify-between gap-1">{children}</div>
-    </div>
-  )
-}
-
 /** Segmented swirl-axis selector: which plane the impact spins. */
-function AxisSelector({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+function AxisSelector({ b }: { b: SelectBinding }) {
+  const selected = Math.round(b.value)
   const SHORT: Record<number, string> = { 2: 'FACE', 1: 'GROUND', 0: 'SIDE' }
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
+        {b.def.options.map((option) => {
           const active = option.value === selected
           return (
             <button
@@ -347,7 +246,7 @@ function AxisSelector({ bound }: { bound: UserInterfaceParameter }) {
               aria-label={option.label}
               aria-pressed={active}
               title={option.label}
-              onClick={() => bound.setValue(option.value)}
+              onClick={() => b.set(option.value)}
               className={`px-1.5 py-1 text-[7px] font-bold tracking-[0.08em] transition-colors ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
@@ -365,17 +264,17 @@ function AxisSelector({ bound }: { bound: UserInterfaceParameter }) {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-const PLACED_KEYS = new Set([
+const KNOB_KEYS = [
   'strength', 'reach', 'waveSpeed', 'dispersion', 'responseBeats',
   'bounce', 'drag', 'strikeBeats', 'anticipation', 'leadBeats',
-  'stretch', 'tumbleDegrees', 'swirl', 'overlapBeats', 'swirlAxis',
+  'stretch', 'tumbleDegrees', 'swirl', 'overlapBeats',
   'vortexRate', 'vortexTwist', 'vortexShear', 'vortexGrow', 'vortexOuter',
-])
+] as const
 
 export const MeteorImpactMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const [showMore, setShowMore] = useState(false)
-
-  const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
+  const b = bindPanel(parameters)
+  const k = Object.fromEntries(KNOB_KEYS.map((key) => [key, b.num(key)]))
+  const swirlAxis = b.select('swirlAxis')
 
   // The preview's settings: every bound numeric value over the definition's
   // defaults. Memoized on the VALUES so resolve() reruns only on real change.
@@ -390,72 +289,42 @@ export const MeteorImpactMoverUserInterfaceRenderer: UserInterfaceRendererDefini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuesKey])
 
-  const required = [
-    'strength', 'reach', 'waveSpeed', 'dispersion', 'responseBeats', 'bounce', 'drag',
-    'strikeBeats', 'anticipation', 'leadBeats', 'stretch', 'tumbleDegrees', 'swirl',
-    'overlapBeats', 'swirlAxis', 'vortexRate', 'vortexTwist', 'vortexShear', 'vortexGrow', 'vortexOuter',
-  ]
-  if (required.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
-
-  const unplaced = parameters.filter((p) => !PLACED_KEYS.has(p.definition.key))
+  if (b.missing || !swirlAxis) return <ParameterList parameters={parameters} />
 
   return (
-    <section
-      data-testid="meteor-impact-user-interface"
-      className="-mx-3 -mt-3"
-      style={{ background: EMBER_SHADE }}
-    >
+    <Console accent={EMBER} testId="meteor-impact-user-interface">
       <ImpactPreview settings={settings} />
-      <div
-        className="flex flex-col gap-2 pb-3 pt-2"
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(EMBER, 0.13)}, transparent)` }}
-      >
-        <KnobRow label="IMPACT">
-          <EmberKnob parameter={bound.strength} label="STRIKE" large />
-          <EmberKnob parameter={bound.reach} label="REACH" />
-          <EmberKnob parameter={bound.waveSpeed} label="SPEED" />
-          <EmberKnob parameter={bound.dispersion} label="SPREAD" />
-          <EmberKnob parameter={bound.responseBeats} label="WEIGHT" />
-        </KnobRow>
-        <KnobRow label="FEEL">
-          <EmberKnob parameter={bound.bounce} label="BOUNCE" />
-          <EmberKnob parameter={bound.drag} label="DRAG" />
-          <EmberKnob parameter={bound.strikeBeats} label="CRACK" />
-          <EmberKnob parameter={bound.anticipation} label="LEAN" />
-          <EmberKnob parameter={bound.leadBeats} label="LEAD" />
-        </KnobRow>
-        <KnobRow label="MOTION">
-          <EmberKnob parameter={bound.stretch} label="STRETCH" />
-          <EmberKnob parameter={bound.tumbleDegrees} label="TUMBLE" />
-          <EmberKnob parameter={bound.swirl} label="SWIRL" />
-          <EmberKnob parameter={bound.overlapBeats} label="OVERLAP" />
-          <AxisSelector bound={bound.swirlAxis} />
-        </KnobRow>
-        <KnobRow label="VORTEX">
-          <EmberKnob parameter={bound.vortexRate} label="RATE" />
-          <EmberKnob parameter={bound.vortexTwist} label="TWIST" />
-          <EmberKnob parameter={bound.vortexShear} label="FUNNEL" />
-          <EmberKnob parameter={bound.vortexGrow} label="GROW" />
-          <EmberKnob parameter={bound.vortexOuter} label="SPAN" />
-        </KnobRow>
-        {unplaced.length > 0 && (
-          <div className="px-3">
-            <button
-              aria-expanded={showMore}
-              onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
-            >
-              {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-              MORE
-            </button>
-            {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
-                <ParameterList parameters={unplaced} />
-              </div>
-            )}
-          </div>
-        )}
+      <div className="flex flex-col gap-2 pb-3 pt-2" style={{ background: spillOf(EMBER) }}>
+        <GutterRow label="IMPACT">
+          <Knob b={k.strength} label="STRIKE" large />
+          <Knob b={k.reach} label="REACH" />
+          <Knob b={k.waveSpeed} label="SPEED" />
+          <Knob b={k.dispersion} label="SPREAD" />
+          <Knob b={k.responseBeats} label="WEIGHT" />
+        </GutterRow>
+        <GutterRow label="FEEL">
+          <Knob b={k.bounce} label="BOUNCE" />
+          <Knob b={k.drag} label="DRAG" />
+          <Knob b={k.strikeBeats} label="CRACK" />
+          <Knob b={k.anticipation} label="LEAN" />
+          <Knob b={k.leadBeats} label="LEAD" />
+        </GutterRow>
+        <GutterRow label="MOTION">
+          <Knob b={k.stretch} label="STRETCH" />
+          <Knob b={k.tumbleDegrees} label="TUMBLE" />
+          <Knob b={k.swirl} label="SWIRL" />
+          <Knob b={k.overlapBeats} label="OVERLAP" />
+          <AxisSelector b={swirlAxis} />
+        </GutterRow>
+        <GutterRow label="VORTEX">
+          <Knob b={k.vortexRate} label="RATE" />
+          <Knob b={k.vortexTwist} label="TWIST" />
+          <Knob b={k.vortexShear} label="FUNNEL" />
+          <Knob b={k.vortexGrow} label="GROW" />
+          <Knob b={k.vortexOuter} label="SPAN" />
+        </GutterRow>
+        <More parameters={b.rest()} label="MORE" className="px-3" />
       </div>
-    </section>
+    </Console>
   )
 }

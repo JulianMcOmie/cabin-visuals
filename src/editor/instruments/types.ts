@@ -5,6 +5,7 @@
 
 import type { FC } from 'react'
 import type { UserInterfaceRendererId } from '../userInterfaceRenderers/ids'
+import type { PanelSpec } from '../userInterfaceRenderers/console/spec'
 
 // A param is either numeric-valued (number / select / boolean - stored in track.params)
 // or string-valued (color / string - stored in track.stringParams). The union keeps the
@@ -136,8 +137,15 @@ export interface ObjectInstrumentDef {
    *  values (white/black/grey) also fall back to the cycle - see
    *  utils/trackDisplayColor.ts. */
   identityColor?: string | { param: string }
-  /** Registered settings UI. Every instrument explicitly chooses one. */
+  /** Registered settings UI. Every instrument explicitly chooses one.
+   *  Ignored when `panelSpec` is declared. */
   userInterfaceRenderer: UserInterfaceRendererId
+  /** A declarative console panel (userInterfaceRenderers/console/spec.tsx):
+   *  accent, optional preview component, rows of knobs/segments. Declaring one
+   *  here IS the whole settings UI - no ids.ts entry, no registry entry -
+   *  and it wins over `userInterfaceRenderer`. Type-only import: the def
+   *  carries data, TrackEditor does the rendering. */
+  panelSpec?: PanelSpec
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
