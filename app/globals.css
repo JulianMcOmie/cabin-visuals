@@ -627,6 +627,18 @@ body.drag-moving * {
   object-fit: cover;
 }
 
+/* Instrument-panel previews (userInterfaceRenderers/console/PreviewCanvas):
+   the inspector is one of the panes the sidebar toggles glide, so a preview's
+   width changes every frame of a 400ms animation. Same cure as the viewport -
+   CSS owns the canvas geometry so it can't step behind three's inline px
+   styles, and a stale buffer crops rather than squashes. The sync render on
+   resize lives in PreviewCanvas. */
+.preview-canvas-smooth canvas {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
+
 /* During the freeze the canvas follows three's own inline px styles instead
    of tracking the (just-widened) root: gl.setSize updates the element and
    the buffer ATOMICALLY, so no paint can ever catch a mismatched frame - the

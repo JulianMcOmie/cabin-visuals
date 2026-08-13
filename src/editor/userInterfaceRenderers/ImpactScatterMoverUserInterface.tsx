@@ -24,7 +24,7 @@
 // the next hit.
 
 import { useMemo, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import {
   Color,
@@ -59,6 +59,7 @@ import {
   towardWhite,
   type NumBinding,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { IMPACT_SCATTER_COLOR } from '../core/visualCopies/identityColors'
@@ -312,7 +313,7 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
           middle. Flat projection keeps every piece the same size, which is what
           makes the falloff comparable across the field. The frustum itself is set
           per frame in ScatterField. */}
-      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 14] }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 14] }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <ScatterField settings={settings} />
         <directionalLight position={[3, 6, 8]} intensity={1.35} color="#dfe8ff" />
@@ -323,7 +324,7 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

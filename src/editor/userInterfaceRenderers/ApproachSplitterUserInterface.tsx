@@ -19,7 +19,7 @@
 // the loop wraps.
 
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Music, Waves, ZoomIn, ZoomOut } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
@@ -43,6 +43,7 @@ import {
   spillOf,
   useConsoleAccent,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { APPROACH_COLOR } from '../core/visualCopies/identityColors'
@@ -175,7 +176,7 @@ function ApproachPreview({ settings }: { settings: ApproachSettings }) {
       {/* The camera sits exactly where the splitter's defaults assume the stage
           camera sits, and does NOT orbit: the whole illusion is defined
           relative to the lens, so a free camera would misrepresent it. */}
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <ApproachField settings={settings} />
         <pointLight position={[0, 1.5, APPROACH_CAMERA_Z - 1]} color={WARP} intensity={14} distance={30} decay={2} />
@@ -184,7 +185,7 @@ function ApproachPreview({ settings }: { settings: ApproachSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.16} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

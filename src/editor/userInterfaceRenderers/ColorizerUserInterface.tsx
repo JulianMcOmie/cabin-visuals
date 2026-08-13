@@ -20,7 +20,7 @@
 // things a single-color preview cannot show.
 
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, InstancedMesh, Object3D, type OrthographicCamera } from 'three'
 import {
@@ -51,6 +51,7 @@ import {
   PreviewWindow,
   useConsoleAccent,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 
@@ -218,7 +219,7 @@ function FieldPreview({ settings }: { settings: ColorizerSettings }) {
           into trapezoids. Flat projection keeps every object in the field the
           same size and shape, which is what makes the color comparable across
           it. The frustum itself is set per frame in ObjectField. */}
-      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 12] }} gl={{ antialias: true }}>
+      <PreviewCanvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 12] }} gl={{ antialias: true }}>
         <color attach="background" args={[ROOM]} />
         <ObjectField settings={settings} />
         <directionalLight position={[3, 5, 6]} intensity={1.5} color="#cfd8ff" />
@@ -228,7 +229,7 @@ function FieldPreview({ settings }: { settings: ColorizerSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.7} luminanceThreshold={0.5} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

@@ -26,7 +26,7 @@
 // what GLIDE does, and the ease-out into it is half of what the knob buys you.
 
 import { useMemo, useRef, type ReactNode } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, Euler, InstancedMesh, Matrix4, Object3D, type OrthographicCamera } from 'three'
 import { BELT_LOOP, GROUP_LOOP, conveyorMover, type ConveyorSettings } from '../core/visualCopies/conveyor'
@@ -44,6 +44,7 @@ import {
   spillOf,
   type NumBinding,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { CONVEYOR_COLOR } from '../core/visualCopies/identityColors'
@@ -232,7 +233,7 @@ function ConveyorPreview({ settings }: { settings: ConveyorSettings }) {
           same spacing look bigger at the edges than in the middle - which is
           exactly the comparison this preview exists to support. The frustum is
           set per frame in ConveyorBelt. */}
-      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 12] }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 12] }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <ConveyorBelt settings={settings} />
         <directionalLight position={[3, 6, 8]} intensity={1.3} color="#e6fff8" />
@@ -241,7 +242,7 @@ function ConveyorPreview({ settings }: { settings: ConveyorSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.5} luminanceThreshold={0.72} luminanceSmoothing={0.2} mipmapBlur radius={0.7} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

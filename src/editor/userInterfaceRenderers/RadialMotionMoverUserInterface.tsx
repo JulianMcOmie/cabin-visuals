@@ -28,7 +28,8 @@
 // while the transport runs, the mover is broken.
 
 import { useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Object3D, type OrthographicCamera } from 'three'
@@ -195,13 +196,13 @@ function RadialPreview({ settings }: { settings: RadialMotionSettings }) {
       {/* Orthographic: concentric rings are the subject, and a perspective
           frustum would make the same radius read differently at the edges of
           the frame than at its centre. The frustum is set per frame above. */}
-      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 20] }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 20] }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <RadialNest settings={settings} />
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.85} luminanceThreshold={0.6} luminanceSmoothing={0.15} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }

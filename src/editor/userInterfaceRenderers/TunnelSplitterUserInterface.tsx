@@ -22,7 +22,8 @@
 // honest numeric readout until the knob is touched and snaps it.
 
 import { useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Object3D } from 'three'
@@ -120,7 +121,7 @@ function TunnelPreview({ settings }: { settings: TunnelSettings }) {
       {/* The camera sits exactly where the splitter's defaults assume the stage
           camera sits, and does NOT orbit: the corridor is a camera-relative
           illusion, so a free camera would misrepresent it (the wrap would show). */}
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, TUNNEL_CAMERA_Z], fov: 60 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, TUNNEL_CAMERA_Z], fov: 60 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <TunnelField settings={settings} />
         <pointLight position={[0, 0, TUNNEL_CAMERA_Z - 2]} color={CORRIDOR} intensity={16} distance={40} decay={2} />
@@ -129,7 +130,7 @@ function TunnelPreview({ settings }: { settings: TunnelSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.55} luminanceThreshold={0.72} luminanceSmoothing={0.16} mipmapBlur radius={0.7} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }

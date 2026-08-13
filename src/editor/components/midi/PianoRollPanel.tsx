@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type ReactNode } from 'react'
 import { X, ChevronDown, Waves, Dices, TrendingUp, Zap } from 'lucide-react'
-import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX } from '../../store/UIStore'
+import { useUIStore, MIDI_ROW_HEIGHT_MIN, MIDI_ROW_HEIGHT_MAX, type EditingBlockRef } from '../../store/UIStore'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { useMidiEditorState } from './useMidiEditorState'
@@ -25,7 +25,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
 import { resolveDeclaredMidiRows } from './resolveDeclaredRows'
-import type { AutomationMode, Block, InterpolationMode } from '../../types'
+import type { AutomationMode, Block, InterpolationMode, Track } from '../../types'
 
 /** Filled-track position for .slider-console inputs (drives the --fill var);
  *  `color` retints the filled portion (--slider-color) to the edited track. */
@@ -153,21 +153,38 @@ function quantizeLabel(beats: number, beatsPerBar: number): string {
   return beats === 1 ? '1 beat' : `${beats} beats`
 }
 
-export function PianoRollPanel() {
-  const editingBlock = useUIStore((s) => s.editingBlock)
+/** `frozenRef` keeps the roll rendering a block the store has already dropped.
+ *  Dismissing sets `editingBlock` to null, which is the same signal that starts
+ *  the roll's slide-away - without this the panel re-renders empty and what
+ *  slides off screen is a black box (BottomArea in App.tsx passes the last ref
+ *  for the length of the exit). */
+export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | null } = {}) {
+  const storeEditingBlock = useUIStore((s) => s.editingBlock)
+  const editingBlock = storeEditingBlock ?? frozenRef ?? null
   const setEditingBlock = useUIStore((s) => s.setEditingBlock)
   // Subscribe to the edited track and its parent only - never the whole tracks
   // record, whose identity changes on EVERY project edit and would re-render
   // the entire piano roll per pointermove of any timeline gesture.
-  const track = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
+  const liveTrack = useProjectStore((s) => (editingBlock ? s.tracks[editingBlock.trackId] : undefined))
+  const liveBlock = liveTrack?.blocks.find((b) => b.id === editingBlock?.blockId)
+
+  // Deleting the edited block is the OTHER way the roll dismisses, and it
+  // empties the panel the same way. While frozen, fall back to the last pair
+  // that rendered so the slide-away still shows the roll it is closing.
+  const lastGood = useRef<{ track: Track; block: Block } | null>(null)
+  if (liveTrack && liveBlock) lastGood.current = { track: liveTrack, block: liveBlock }
+  const frozen = storeEditingBlock == null
+  const track = liveTrack ?? (frozen ? lastGood.current?.track : undefined)
+  const block = liveBlock ?? (frozen ? lastGood.current?.block : undefined)
+
   const parent = useProjectStore((s) => (track?.parentId ? s.tracks[track.parentId] : undefined))
 
-  const block = track?.blocks.find((b) => b.id === editingBlock?.blockId)
-
-  // Auto-close if the block disappeared (track/block deleted)
+  // Auto-close if the block disappeared (track/block deleted). Skipped while
+  // frozen: the store is already closed, and the block legitimately may not
+  // exist any more (deleting a block is one of the ways the roll dismisses).
   useEffect(() => {
-    if (editingBlock && !block) setEditingBlock(null)
-  }, [editingBlock, block, setEditingBlock])
+    if (storeEditingBlock && !liveBlock) setEditingBlock(null)
+  }, [storeEditingBlock, liveBlock, setEditingBlock])
 
   // Esc closes (MidiEditor consumes Esc first when notes are selected)
   useEffect(() => {

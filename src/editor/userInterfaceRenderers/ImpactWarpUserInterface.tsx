@@ -24,7 +24,8 @@
 // is being thrown), which only makes sense if the style is the thing above it.
 
 import { useMemo, useRef, type ReactElement } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { OrbitControls } from '@react-three/drei'
 import { EffectComposer } from '@react-three/postprocessing'
 import { Effect } from 'postprocessing'
@@ -297,7 +298,7 @@ function ImpactPreview({ style, impact, release, size }: {
       title="Drag to orbit the lattice"
       className="relative h-[148px] cursor-grab overflow-hidden border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, 6.1], fov: 40 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, 6.1], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         {/* Opaque in-scene background: the field samples the rendered image, and
             a transparent canvas would drag alpha seams around with it. */}
         <color attach="background" args={['#05070c']} />
@@ -321,7 +322,7 @@ function ImpactPreview({ style, impact, release, size }: {
           minAzimuthAngle={-0.6}
           maxAzimuthAngle={0.6}
         />
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }

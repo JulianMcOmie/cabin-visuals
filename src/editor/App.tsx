@@ -968,7 +968,15 @@ function Header({
 }
 
 function BottomArea() {
-  const editing = useUIStore((s) => s.editingBlock) != null
+  // The ref itself, not a boolean: it only changes when a different block is
+  // opened (never per pointermove), and the exit animation needs its value.
+  const editingBlock = useUIStore((s) => s.editingBlock)
+  const editing = editingBlock != null
+  // PianoRollPanel reads editingBlock from the store too, so dismissing would
+  // empty it in the same commit that starts its slide away - a black box
+  // moving down. Hand it the last ref to render while it leaves.
+  const lastBlockRef = useRef(editingBlock)
+  if (editingBlock) lastBlockRef.current = editingBlock
   // The roll rises over the timeline (Material 3 emphasized-decelerate, the
   // sidebar glide's curve) and sinks away on dismiss (M3's accelerate exit).
   // The timeline stays mounted UNDER the roll only while it animates: at rest
@@ -998,7 +1006,7 @@ function BottomArea() {
                 if (typeof target === 'object' && target !== null && 'y' in target && target.y === 0) setRollSettled(true)
               }}
             >
-              <PianoRollPanel />
+              <PianoRollPanel frozenRef={lastBlockRef.current} />
             </motion.div>
           )}
         </AnimatePresence>

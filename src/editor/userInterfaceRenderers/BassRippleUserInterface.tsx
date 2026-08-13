@@ -12,7 +12,7 @@
 // runs the instrument's real field shader over them.
 
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { EffectComposer } from '@react-three/postprocessing'
 import { Effect } from 'postprocessing'
@@ -28,6 +28,7 @@ import {
   PreviewWindow,
   towardWhite,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 
@@ -183,7 +184,7 @@ function RipplePreview({ pattern, amount, scale, speed, frequency, release }: {
       title="Drag to orbit the lattice"
       className="cursor-grab active:cursor-grabbing"
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, 6.1], fov: 40 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, 6.1], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         {/* Opaque in-scene background: the warp samples the rendered image, and
             a transparent canvas would drag alpha seams around with it. */}
         <color attach="background" args={['#05070c']} />
@@ -207,7 +208,7 @@ function RipplePreview({ pattern, amount, scale, speed, frequency, release }: {
           minAzimuthAngle={-0.6}
           maxAzimuthAngle={0.6}
         />
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

@@ -10,7 +10,8 @@
 // right, and the WIDTH / HEIGHT / DEPTH proportions beneath.
 
 import { useEffect, useMemo, useRef } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { ContactShadows, OrbitControls } from '@react-three/drei'
 import { Color, PMREMGenerator, type Group, type Mesh, type MeshPhysicalMaterial } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -155,7 +156,7 @@ function SolidPreview({ geometry, tube, sides, color, surface, matte, shading, s
       title="Drag to orbit the solid"
       className="relative h-[132px] cursor-grab overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
     >
-      <Canvas dpr={[1, 1.5]} camera={{ position: [0, 1.1, 4.6], fov: 42 }} gl={{ antialias: true, alpha: true }} shadows>
+      <PreviewCanvas dpr={[1, 1.5]} camera={{ position: [0, 1.1, 4.6], fov: 42 }} gl={{ antialias: true, alpha: true }} shadows>
         <color attach="background" args={['#05070c']} />
         <MatchingEnvironment />
         <ambientLight intensity={0.08} />
@@ -179,7 +180,7 @@ function SolidPreview({ geometry, tube, sides, color, surface, matte, shading, s
           minPolarAngle={0.15}
           maxPolarAngle={Math.PI * 0.62}
         />
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }

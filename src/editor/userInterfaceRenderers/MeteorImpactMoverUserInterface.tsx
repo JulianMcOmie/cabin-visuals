@@ -14,7 +14,7 @@
 // stage, so every knob reads live.
 
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
@@ -36,6 +36,7 @@ import {
   PreviewWindow,
   spillOf,
   type SelectBinding,
+  PreviewCanvas,
 } from './console'
 import type { UserInterfaceRendererDefinition } from './types'
 import { METEOR_IMPACT_COLOR } from '../core/visualCopies/identityColors'
@@ -188,7 +189,7 @@ function ImpactPreview({ settings }: { settings: MeteorImpactSettings }) {
       title="Drag to orbit the field"
       className="cursor-grab active:cursor-grabbing"
     >
-      <Canvas
+      <PreviewCanvas
         dpr={[1, 2]}
         camera={{ position: groundImpact ? [0, 5.2, 7.6] : [0, 1.4, 8.6], fov: 42 }}
         gl={{ antialias: true, alpha: true }}
@@ -224,7 +225,7 @@ function ImpactPreview({ settings }: { settings: MeteorImpactSettings }) {
           minPolarAngle={0.15}
           maxPolarAngle={Math.PI * 0.72}
         />
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }

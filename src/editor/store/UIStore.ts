@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { TRACK_LABEL_WIDTH } from '../constants'
 import type { LoopRegion } from '../core/loopRegion'
 
-interface EditingBlockRef {
+export interface EditingBlockRef {
   trackId: string
   blockId: string
 }

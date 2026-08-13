@@ -16,6 +16,17 @@ Adding a bespoke instrument UI: add the id to `ids.ts` (union type), create `<Na
 
 The `showIf` trap below is encoded in the binder: look gated keys up with `{ optional: true }` (string shorthand `'key?'` in a spec).
 
+**Mount an r3f preview through `PreviewCanvas` (console kit), never a bare `<Canvas>`.**
+The inspector is one of the panes the sidebar toggles GLIDE (400ms), so a preview's width
+changes on every frame of an animation, and a bare Canvas gets both failure modes the main
+viewport had: three writes inline px on the canvas element per `setSize` through a
+ResizeObserver → React round-trip, so the element visibly STEPS inside its smoothly-moving
+window; and resizing a WebGL drawing buffer CLEARS it, so a preview that isn't looping
+(see the black-until-play note below) goes black or stale for the rest of the glide.
+`PreviewCanvas` fixes both — `.preview-canvas-smooth` (globals.css) hands the canvas
+geometry to CSS so layout can't lag, and its `ResizeSync` advances THAT root synchronously
+pre-paint on every size change. Same cure as `VisualPanel`'s in editor/App.tsx.
+
 **A panel's live 3D preview may not animate until the transport PLAYS.** Observed 2026-07-29 on both Impact Scatter's and Conveyor's previews: the canvas is created and sized, but `useFrame` never fires while paused, so the window stays BLACK — hitting play starts it, pausing freezes the last frame. Likely because r3f's render loop is global and the main canvas runs `frameloop='demand'` (RenderGovernor), so once the loop stops nothing restarts it for a panel root that mounted later. It is app-wide, not a panel bug: **smoke-test previews with the transport running** before suspecting your own preview code.
 
 `AutomationUserInterface.tsx` is the second panel built to the guide (after Laser Sphere): a live window onto the lane — the easing curve, the real seeded wobble, or a grabbable ADSR — over a segmented MODE control and a knob row. Its window is drawn with the engine's own samplers (`easeFraction`, `sampleNoiseLane`) so the picture can't drift from playback, and its emission comes from three stacked strokes of the same path rather than a blur filter (a stretched viewBox smears blurs anisotropically). Its AMOUNT fader is the panel's one sanctioned slider: a lane-level gain (mode-independent, so it sits below whichever mode console is up) with its lit fill growing from a 100% center detent — the horizontal-throw sibling of LaserKnob's `bipolar` rule that neutral must never read as half-on. The curve/noise windows scale with it, using the same math resolve.ts applies, so the plot stays the real signal.

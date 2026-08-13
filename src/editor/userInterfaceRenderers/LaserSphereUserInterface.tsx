@@ -11,7 +11,7 @@
 // glows on stage.
 
 import { useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { Color, type ShaderMaterial } from 'three'
@@ -21,7 +21,7 @@ import {
   LASER_VERTEX_SHADER,
 } from '../instruments/LaserSphere'
 import { evaluateCoreAppearance } from '../instruments/laserSphereCore'
-import { consolePanel, PreviewWindow, type PanelPreviewProps } from './console'
+import { consolePanel, PreviewCanvas, PreviewWindow, type PanelPreviewProps } from './console'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
@@ -89,7 +89,7 @@ function OrbPreview({ color, size, glow, whiteCore, light }: {
       title="Drag to orbit the laser"
       className="cursor-grab active:cursor-grabbing"
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0.9, 4.3], fov: 40 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0.9, 4.3], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         {/* Opaque scene background: bloom composited onto a transparent canvas
             leaves visible alpha seams around the halo; an in-scene near-black
             keeps the glow falloff clean like the main compositor's. */}
@@ -118,7 +118,7 @@ function OrbPreview({ color, size, glow, whiteCore, light }: {
           minPolarAngle={0.2}
           maxPolarAngle={Math.PI * 0.66}
         />
-      </Canvas>
+      </PreviewCanvas>
     </PreviewWindow>
   )
 }
