@@ -76,13 +76,16 @@ re-resolves one track, not the scene.
   hovering. Instruments and Loops are duotone — a plane at ~0.38–0.55 with the load-bearing part
   lit at full — and **a plane much below 0.38 disappears entirely**, because the row rests at
   `--text-muted` over `--bg-shell`; that opacity is the first thing to check if the marks ever look
-  hollow. Two traps in the widths: the thresholds are **content-box**, because that is what a
-  container query sizes against, so they read 20px *lower* than the layout width they fire at
-  (`@[248px]`/`@[310px]` → ~268px/~330px of sidebar); and they are **measured in Hanken Grotesk**,
-  not guessed — the pills lay out at 260px, 320px with the caption. Between the two thresholds the
-  LIBRARY caption steps aside rather than the labels, since labelled tabs already name the panel; a
-  1280-wide window at the 25% default lands at 320px, inside that band. Re-measure when the UI font,
-  a tab name, or the tab count changes. The caption also carries `min-w-0 truncate` and the buttons
+  hollow. Two traps in the width: the threshold is **content-box**, because that is what a
+  container query sizes against, so it reads 20px *lower* than the layout width it fires at
+  (`@[310px]` → ~330px of sidebar); and it is **measured in Hanken Grotesk**, not guessed — the
+  pills lay out at 320px alongside the caption. **Collapse order is load-bearing: the labels go
+  first and LIBRARY only yields after them.** An earlier two-step ladder dropped the caption in the
+  band where labelled tabs fit alone; it reads fine still, but the caption vanishing while the tabs
+  are fully dressed looks like a bug mid-drag (rejected in review 2026-08-13). A 1280-wide window at
+  the 25% default lands at 320px, just under the threshold, so that size shows icons.
+  Re-measure when the UI font, a tab name, or the tab count changes.
+  The caption also carries `min-w-0 truncate` and the buttons
   `flex-shrink-0`, so at the panel's 8% minimum the caption ellipsizes instead of the 24px hit
   targets collapsing to ~9px. Loop ROWS still draw lucide `Repeat` in emerald — deliberately not
   yet unified with the tab's block mark.

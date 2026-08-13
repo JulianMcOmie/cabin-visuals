@@ -924,31 +924,31 @@ export function LeftSidebar() {
           left, the three section tabs across from it - fill appears only on
           hover / selection.
 
-          The row is a @container, and the two thresholds are a ladder that
-          gives up the LEAST useful thing first. Labelled pills need ~276px on
-          their own and ~336px alongside the caption, so between those widths
-          the caption steps aside: once the tabs read "Instruments / Loops /
-          Templates" they ARE the panel's name, and the word LIBRARY is the
-          redundant one. Below the lower threshold the labels drop instead and
-          the caption returns, so the header is never three unexplained marks
-          AND nameless at the same time.
+          The row is a @container with ONE threshold, and the collapse order is
+          deliberate: the LABELS go first, and LIBRARY only gives ground after
+          they already have (at the very bottom of the range it ellipsizes rather
+          than disappearing). An earlier version dropped the caption first, in
+          the band where labelled tabs fit alone - the tabs do name the panel, so
+          it reads fine in isolation - but the caption vanishing while the tabs
+          are still fully dressed looks like a bug mid-drag, and it means two
+          different things disappear on the way down instead of one.
 
-          The two numbers are MEASURED in Hanken Grotesk, not guessed: the three
-          pills lay out at 260px, and 320px with the caption beside them, both
-          including this row's 20px of padding. The thresholds read 248/310
-          because a container query sizes against the CONTENT box - the padding
-          is already subtracted out - so they fire at sidebar widths of ~268 and
-          ~330, each ~8px clear of the measurement. Re-measure if the UI font or
-          a tab's name changes; a fourth tab would blow past the default width
-          entirely. (The sidebar is 8-30% of the window, so ~115-430px, and a
-          1280-wide window at the 25% default lands at 320 - inside the middle
-          band, which is exactly the case the band exists for.) */}
+          The number is MEASURED in Hanken Grotesk, not guessed: the three pills
+          lay out at 320px alongside the caption, including this row's 20px of
+          padding. It reads 310 because a container query sizes against the
+          CONTENT box - the padding is already subtracted out - so labels appear
+          at a sidebar width of ~330, ~10px clear of the measurement. Re-measure
+          if the UI font or a tab's name changes; a fourth tab would blow past
+          the default width entirely. (The sidebar is 8-30% of the window, so
+          ~115-430px, and a 1280-wide window at the 25% default lands at 320 -
+          just under the threshold, so that size shows icons.) */}
       <div className="@container relative z-10 flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--border-subtle)] py-1.5 pl-3 pr-2">
-        {/* min-w-0 + truncate: at the panel's 8% minimum there isn't room for
-            the caption AND three 24px targets, and it's the caption that gives
-            - the tabs are the control. Without this the buttons squeeze to ~9px
-            and the icons overhang them. */}
-        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none @[248px]:hidden @[310px]:inline">Library</span>
+        {/* The caption never leaves on its own - it only gives ground after the
+            labels already have. min-w-0 + truncate covers the very bottom of the
+            range, where at the panel's 8% minimum there isn't room for the
+            caption AND three 24px targets: it ellipsizes rather than shoving the
+            tabs, which without this squeeze to ~9px with the icons overhanging. */}
+        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none">Library</span>
         <div className="flex flex-shrink-0 items-center gap-1">
           {LIBRARY_TABS.map(({ id, label, Mark }) => (
             <button
@@ -957,14 +957,14 @@ export function LeftSidebar() {
               title={label}
               aria-label={label}
               aria-pressed={tab === id}
-              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center gap-1.5 rounded-md transition-colors cursor-pointer @[248px]:w-auto @[248px]:px-1.5 ${
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center gap-1.5 rounded-md transition-colors cursor-pointer @[310px]:w-auto @[310px]:px-1.5 ${
                 tab === id
                   ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]'
                   : 'text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:text-[var(--text-2)]'
               }`}
             >
               <Mark />
-              <span className="hidden truncate text-[11px] font-medium @[248px]:inline">{label}</span>
+              <span className="hidden truncate text-[11px] font-medium @[310px]:inline">{label}</span>
             </button>
           ))}
         </div>
