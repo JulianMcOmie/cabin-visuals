@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AudioLines, LayoutTemplate, Music4, Plus } from 'lucide-react'
 import { useUIStore } from '../../store/UIStore'
 import { PLAYHEAD_TRIANGLE_HALF } from '../../constants'
@@ -28,7 +28,22 @@ import { loadAudioTrack } from '../../utils/loadAudioTrack'
  * first row promoted, no keyboard chips - nothing binds an add-track key
  * today and a chip that lies is worse than no chip. If one is ever bound,
  * the row has room for it.
+ *
+ * Motion (the `.empty-scene-*` rules in globals.css): each row drifts in from
+ * the left on its own beat, 105ms apart. The exit is why this component owns
+ * its own presence instead of being a plain `&&` in TimelineArea - the moment
+ * a track lands, `empty` goes false, and a conditional render would rip the
+ * cluster out with no chance to fade. It stays mounted for EXIT_MS and then
+ * unmounts itself.
+ *
+ * Deliberately NOT framer-motion/AnimatePresence, which the project has: its
+ * animations never complete when the tab is hidden (no rAF), so AnimatePresence
+ * holds the exiting child mounted FOREVER there - a documented past bug, see
+ * components/CLAUDE.md. A timeout fires either way, so this always unmounts.
  */
+
+/** Must match the `.empty-scene-exit` animation duration in globals.css. */
+const EXIT_MS = 200
 
 type Action = {
   key: string
@@ -38,13 +53,16 @@ type Action = {
 }
 
 export function EmptySceneActions({
+  empty,
   labelWidth,
   isMain,
   onAddTrack,
 }: {
-  /** Left inset of the lane region: the cluster centers over the lanes, not
-   *  over the whole timeline, so the frozen label column doesn't drag it off
-   *  the work surface. */
+  /** Whether the scene has no tracks. Owned by the caller, but this component
+   *  outlives a false to play its exit - see EXIT_MS above. */
+  empty: boolean
+  /** Left inset of the lane region: the cluster sits at the top-left of the
+   *  lanes, not over the frozen label column. */
   labelWidth: number
   /** Main composes the other scenes, so its first track is a Scene Switcher
    *  rather than an object - the row says what it will actually add. */
@@ -54,6 +72,19 @@ export function EmptySceneActions({
   const requestLibraryTab = useUIStore((s) => s.requestLibraryTab)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingKindRef = useRef<'midi' | 'audio'>('midi')
+
+  // Presence lags `empty` by the exit animation. Mounting straight into
+  // `empty` (rather than an effect) means the entrance plays on the first
+  // paint, with no frame of fully-opaque list before the animation starts.
+  const [present, setPresent] = useState(empty)
+  useEffect(() => {
+    if (empty) {
+      setPresent(true)
+      return
+    }
+    const timer = setTimeout(() => setPresent(false), EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [empty])
 
   // One input, re-pointed per use: `accept` is set immediately before the
   // click so the OS dialog filters to the kind that was asked for.
@@ -102,6 +133,9 @@ export function EmptySceneActions({
     },
   ]
 
+  // Fully gone: `empty` went false and the exit has played out.
+  if (!present) return null
+
   return (
     // Parked at the top-left of the lane region - where bar 1 begins and where
     // the first track will land - rather than centered in the void. The list
@@ -120,32 +154,42 @@ export function EmptySceneActions({
       className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-start justify-start pt-5"
       style={{ left: labelWidth + PLAYHEAD_TRIANGLE_HALF }}
     >
-      <div className="pointer-events-auto flex flex-col items-start gap-3 pl-4">
-        <p className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--text)]">
+      {/* The headline and every row are DIRECT children of the animated
+          element, so one `> *` rule staggers all five - hence `mb` on the
+          headline instead of nesting the rows in their own gap-3 wrapper.
+          `--i` is the child's place in the waterfall. */}
+      <div
+        className={`pointer-events-auto flex flex-col items-start gap-px pl-4 ${
+          empty ? 'empty-scene-enter' : 'empty-scene-exit'
+        }`}
+      >
+        <p
+          className="mb-[11px] text-[15px] font-semibold tracking-[-0.01em] text-[var(--text)]"
+          style={{ '--i': 0 } as CSSProperties}
+        >
           Let&apos;s start composing
         </p>
-        <div className="flex flex-col gap-px">
-          {actions.map(({ key, label, icon: Icon, run }, i) => (
-            <button
-              key={key}
-              type="button"
-              onClick={run}
-              className={`group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13.5px] transition-colors cursor-pointer ${
-                i === 0
-                  ? 'bg-[var(--accent)]/[0.07] font-medium text-[var(--text)] hover:bg-[var(--accent)]/[0.15]'
-                  : 'text-[var(--text-3)] hover:bg-[rgba(233,237,244,0.055)] hover:text-[var(--text)]'
+        {actions.map(({ key, label, icon: Icon, run }, i) => (
+          <button
+            key={key}
+            type="button"
+            onClick={run}
+            style={{ '--i': i + 1 } as CSSProperties}
+            className={`group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13.5px] transition-colors cursor-pointer ${
+              i === 0
+                ? 'bg-[var(--accent)]/[0.07] font-medium text-[var(--text)] hover:bg-[var(--accent)]/[0.15]'
+                : 'text-[var(--text-3)] hover:bg-[rgba(233,237,244,0.055)] hover:text-[var(--text)]'
+            }`}
+          >
+            <Icon
+              size={15}
+              className={`flex-shrink-0 transition-colors ${
+                i === 0 ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--accent)]'
               }`}
-            >
-              <Icon
-                size={15}
-                className={`flex-shrink-0 transition-colors ${
-                  i === 0 ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--accent)]'
-                }`}
-              />
-              <span className="whitespace-nowrap">{label}</span>
-            </button>
-          ))}
-        </div>
+            />
+            <span className="whitespace-nowrap">{label}</span>
+          </button>
+        ))}
       </div>
       <input
         ref={fileInputRef}

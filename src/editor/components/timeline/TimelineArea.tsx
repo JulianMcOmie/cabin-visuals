@@ -52,6 +52,7 @@ export function TimelineArea() {
   // and the record's identity changes on every edit (see components/CLAUDE.md).
   // Only the empty scene's first action reads it, to name what it will add.
   const activeSceneIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
+  const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -466,13 +467,18 @@ export function TimelineArea() {
             </div>
           </div>
         )}
-        {rootTrackIds.length === 0 && (
-          <EmptySceneActions
-            labelWidth={labelWidth}
-            isMain={activeSceneIsMain}
-            onAddTrack={insertTrack}
-          />
-        )}
+        {/* Mounted unconditionally: it has an exit animation, so it needs to
+            SEE `empty` go false rather than be unmounted by it (it renders
+            null once the fade is done). Keyed on the scene so switching to a
+            different empty scene replays the entrance - the view genuinely
+            appeared again - instead of silently reusing the settled one. */}
+        <EmptySceneActions
+          key={activeSceneId}
+          empty={rootTrackIds.length === 0}
+          labelWidth={labelWidth}
+          isMain={activeSceneIsMain}
+          onAddTrack={insertTrack}
+        />
         <div
           ref={scrollRef}
           data-tracks-scroll
