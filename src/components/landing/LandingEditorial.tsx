@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -10,6 +10,7 @@ import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
 import { CursorParticles } from "./CursorParticles"
+import { PolarRipples } from "./PolarRipples"
 import { EditorialSkin, EditorialHeader } from "./editorialTheme"
 import { SOCIAL_LINKS, VISUAL_EXAMPLES } from "./content"
 
@@ -69,6 +70,10 @@ const FEATURES = [
  *  Swap covers via ACTIVE_LANDING in ./index.tsx. */
 export function LandingEditorial() {
   const { user } = useAuth()
+  // Hovering (or focusing) the hero CTA arms the polar ripples, which radiate
+  // from it.
+  const [ctaHot, setCtaHot] = useState(false)
+  const ctaRef = useRef<HTMLDivElement>(null)
 
   return (
     <EditorialSkin className="flex min-h-screen flex-col font-sans">
@@ -107,41 +112,62 @@ export function LandingEditorial() {
       </EditorialHeader>
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="flex flex-col items-center px-6 pt-16 pb-16 text-center sm:pt-24 sm:pb-[100px]">
-          <CabinLogo className="block h-[88px] w-auto sm:h-[112px]" />
-          <h1 className="m-0 mt-10 max-w-[900px] text-[40px] font-normal leading-[1.05] [font-family:var(--lp-font-display)] [text-wrap:balance] sm:text-[56px] lg:text-[96px]">
-            Create <em className="italic text-[var(--lp-accent)]">insanely great</em> visuals for music
-          </h1>
-          <p className="m-0 mt-8 max-w-[480px] text-[20px] leading-[1.6] text-[var(--lp-text-muted)]">
-            The best workstation for music-synced visuals.
-          </p>
-          <div className="mt-11">
-            <CreateCta />
-          </div>
-        </section>
+        {/* The ripples' clipping box. `relative overflow-hidden` is load-bearing
+            twice over: it is what holds the effect strictly under the top bar,
+            and it is what the canvas measures itself against. It spans the hero
+            AND the app preview on purpose - the rings radiate from the button,
+            which sits near the hero's bottom edge, so a hero-sized box would
+            slice them off while they were still bright. Both sections are
+            `relative` so they paint above the canvas. */}
+        <div className="relative overflow-hidden">
+          <PolarRipples active={ctaHot} originRef={ctaRef} />
 
-        {/* App preview */}
-        <section className="mx-auto w-full max-w-[1440px] px-4 pb-20 sm:px-10 sm:pb-[120px] lg:px-24">
-          {/* A real screenshot of /editor (Wormhole template, instrument track
-              selected) rather than a drawn facsimile - the shot IS the card,
-              its own transport bar is the title bar, so the wrapper only adds
-              the shadow and the image carries the border + hover ring.
-              Recapture: see docs/editor-preview-shot.md. */}
-          <div className="rounded-[12px] shadow-[0_40px_80px_rgba(0,0,0,0.4)]">
-            <Image
-              src="/editor-preview.webp"
-              alt="The Cabin Visuals editor: an instrument library, a 3D preview of a glowing particle tunnel with a lyric on it, an instrument parameter inspector, and a MIDI timeline underneath"
-              width={2560}
-              height={1294}
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 92vw, 1248px"
-              // The source is already WebP q88; the default q75 re-encode
-              // softens the 11px inspector labels into mush.
-              quality={88}
-              className="block h-auto w-full rounded-[12px] border border-[rgba(255,255,255,0.07)] [transition:border-color_.5s] hover:border-[rgba(158,232,245,0.35)]"
-            />
-          </div>
-        </section>
+          {/* Hero */}
+          <section className="relative flex flex-col items-center px-6 pt-16 pb-16 text-center sm:pt-24 sm:pb-[100px]">
+            <CabinLogo className="block h-[88px] w-auto sm:h-[112px]" />
+            <h1 className="m-0 mt-10 max-w-[900px] text-[40px] font-normal leading-[1.05] [font-family:var(--lp-font-display)] [text-wrap:balance] sm:text-[56px] lg:text-[96px]">
+              Create <em className="italic text-[var(--lp-accent)]">insanely great</em> visuals for music
+            </h1>
+            <p className="m-0 mt-8 max-w-[480px] text-[20px] leading-[1.6] text-[var(--lp-text-muted)]">
+              The best workstation for music-synced visuals.
+            </p>
+            {/* The ripples' origin. Keyboard focus arms them too, so the effect
+                is not mouse-only; CreateCta renders a Link or a button depending
+                on auth, so both the ref and the handlers live on the wrapper. */}
+            <div
+              ref={ctaRef}
+              className="mt-11"
+              onPointerEnter={() => setCtaHot(true)}
+              onPointerLeave={() => setCtaHot(false)}
+              onFocus={() => setCtaHot(true)}
+              onBlur={() => setCtaHot(false)}
+            >
+              <CreateCta />
+            </div>
+          </section>
+
+          {/* App preview */}
+          <section className="relative mx-auto w-full max-w-[1440px] px-4 pb-20 sm:px-10 sm:pb-[120px] lg:px-24">
+            {/* A real screenshot of /editor (Wormhole template, instrument track
+                selected) rather than a drawn facsimile - the shot IS the card,
+                its own transport bar is the title bar, so the wrapper only adds
+                the shadow and the image carries the border + hover ring.
+                Recapture: see docs/editor-preview-shot.md. */}
+            <div className="rounded-[12px] shadow-[0_40px_80px_rgba(0,0,0,0.4)]">
+              <Image
+                src="/editor-preview.webp"
+                alt="The Cabin Visuals editor: an instrument library, a 3D preview of a glowing particle tunnel with a lyric on it, an instrument parameter inspector, and a MIDI timeline underneath"
+                width={2560}
+                height={1294}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 92vw, 1248px"
+                // The source is already WebP q88; the default q75 re-encode
+                // softens the 11px inspector labels into mush.
+                quality={88}
+                className="block h-auto w-full rounded-[12px] border border-[rgba(255,255,255,0.07)] [transition:border-color_.5s] hover:border-[rgba(158,232,245,0.35)]"
+              />
+            </div>
+          </section>
+        </div>
 
         {/* Features */}
         <section className="mx-auto grid w-full max-w-[1100px] grid-cols-1 gap-10 px-6 pb-20 sm:grid-cols-3 sm:gap-14 sm:pb-[120px]">
