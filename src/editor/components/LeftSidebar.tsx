@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, Repeat } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
@@ -829,6 +829,67 @@ function TemplateCard({ tpl, onApply, selected = false, label }: {
   )
 }
 
+/* The three library-tab marks. Drawn here rather than taken from lucide
+ * because the shipped set (Shapes / Repeat / LayoutTemplate) had two glyphs
+ * sharing one silhouette at 13px - small outlined rectangles - so Instruments
+ * and Templates could only be told apart by hovering. These three differ by
+ * OUTER SHAPE, which is the only thing that survives the icon-only fallback:
+ * a hexagon, a wide rounded pane, a frame with a horizon.
+ *
+ * Instruments and Loops are duotone on one rule: a dim plane at ~0.38-0.55
+ * with the load-bearing part lit at full. The tab row rests at --text-muted,
+ * and a plane much below 0.38 of that disappears into --bg-shell entirely -
+ * that opacity is the first thing to check if these ever look hollow. */
+const TAB_ICON_SIZE = 13
+
+/** A cube by its three faces - the library's first instrument, and the shape
+ *  the mover previews ghost. */
+function CubeMark() {
+  return (
+    <svg width={TAB_ICON_SIZE} height={TAB_ICON_SIZE} viewBox="0 0 24 24" fill="currentColor" aria-hidden className="flex-shrink-0">
+      <path d="M12 2.2 21 7.4 12 12.6 3 7.4Z" />
+      <path d="M2.6 8.6 11.4 13.7v8.1L2.6 16.7Z" opacity="0.55" />
+      <path d="M21.4 8.6 12.6 13.7v8.1l8.8-5.1Z" opacity="0.33" />
+    </svg>
+  )
+}
+
+/** A MIDI block: dim pane, lit notes - the same contrast the timeline draws a
+ *  resting clip with (near-black pane, neon notes; see midiBlockPalette). */
+function BlockMark() {
+  return (
+    <svg width={TAB_ICON_SIZE} height={TAB_ICON_SIZE} viewBox="0 0 24 24" fill="currentColor" aria-hidden className="flex-shrink-0">
+      <rect x="2" y="4.5" width="20" height="15" rx="3" opacity="0.38" />
+      <rect x="5" y="7.6" width="7" height="2.6" rx="1.3" />
+      <rect x="13" y="11" width="6" height="2.6" rx="1.3" />
+      <rect x="7.5" y="14.4" width="5" height="2.6" rx="1.3" />
+    </svg>
+  )
+}
+
+/** A framed composition - horizon and an object already placed, which is what
+ *  applying a template gives you. Stroked at lucide's weight on purpose: it
+ *  keeps one outlined mark in the row against the two duotone ones. */
+function FramedSceneMark() {
+  return (
+    <svg
+      width={TAB_ICON_SIZE} height={TAB_ICON_SIZE} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden className="flex-shrink-0"
+    >
+      <rect x="2.5" y="4.5" width="19" height="15" rx="2.5" />
+      <path d="M2.5 15.5h19" />
+      <circle cx="9" cy="10.5" r="2.5" />
+    </svg>
+  )
+}
+
+const LIBRARY_TABS: { id: LibraryTab; label: string; Mark: () => ReactElement }[] = [
+  { id: 'instruments', label: 'Instruments', Mark: CubeMark },
+  { id: 'loops', label: 'Loops', Mark: BlockMark },
+  { id: 'templates', label: 'Templates', Mark: FramedSceneMark },
+]
+
 export function LeftSidebar() {
   const [tab, setTab] = useState<LibraryTab>('instruments')
   const { startLibraryDrag, ghostRef, ghostName } = useLibraryDrag()
@@ -859,35 +920,51 @@ export function LeftSidebar() {
       <InstrumentPreviewLayer />
       {/* All live 3D cards share this renderer, avoiding browser WebGL-context
           exhaustion when several two-column sections are visible. */}
-      {/* @container so the tabs show icon-only when the (resizable) sidebar is
-          narrow, and icon + label once there's room for the text. The 320px
-          threshold is the width where all three labels fit inside the pills'
-          px-2 padding without truncating - below it, labels would ellipsize. */}
+      {/* One header row: LIBRARY (the landing preview's mono-caps voice) on the
+          left, the three section tabs across from it - fill appears only on
+          hover / selection.
 
-      {/* One header row: LIBRARY (the landing preview's mono-caps voice) on
-          the left, the three section tabs as bare icons across from it -
-          fill appears only on hover / selection. */}
-      <div className="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-[var(--border-subtle)] py-1.5 pl-3 pr-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none">Library</span>
-        <div className="flex items-center gap-1">
-          {([
-            { id: 'instruments', label: 'Instruments', Icon: Shapes },
-            { id: 'loops', label: 'Loops', Icon: Repeat },
-            { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
-          ] as const).map(({ id, label, Icon }) => (
+          The row is a @container, and the two thresholds are a ladder that
+          gives up the LEAST useful thing first. Labelled pills need ~276px on
+          their own and ~336px alongside the caption, so between those widths
+          the caption steps aside: once the tabs read "Instruments / Loops /
+          Templates" they ARE the panel's name, and the word LIBRARY is the
+          redundant one. Below the lower threshold the labels drop instead and
+          the caption returns, so the header is never three unexplained marks
+          AND nameless at the same time.
+
+          The two numbers are MEASURED in Hanken Grotesk, not guessed: the three
+          pills lay out at 260px, and 320px with the caption beside them, both
+          including this row's 20px of padding. The thresholds read 248/310
+          because a container query sizes against the CONTENT box - the padding
+          is already subtracted out - so they fire at sidebar widths of ~268 and
+          ~330, each ~8px clear of the measurement. Re-measure if the UI font or
+          a tab's name changes; a fourth tab would blow past the default width
+          entirely. (The sidebar is 8-30% of the window, so ~115-430px, and a
+          1280-wide window at the 25% default lands at 320 - inside the middle
+          band, which is exactly the case the band exists for.) */}
+      <div className="@container relative z-10 flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--border-subtle)] py-1.5 pl-3 pr-2">
+        {/* min-w-0 + truncate: at the panel's 8% minimum there isn't room for
+            the caption AND three 24px targets, and it's the caption that gives
+            - the tabs are the control. Without this the buttons squeeze to ~9px
+            and the icons overhang them. */}
+        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none @[248px]:hidden @[310px]:inline">Library</span>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {LIBRARY_TABS.map(({ id, label, Mark }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               title={label}
               aria-label={label}
               aria-pressed={tab === id}
-              className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors cursor-pointer ${
+              className={`flex h-6 w-6 flex-shrink-0 items-center justify-center gap-1.5 rounded-md transition-colors cursor-pointer @[248px]:w-auto @[248px]:px-1.5 ${
                 tab === id
                   ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]'
                   : 'text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:text-[var(--text-2)]'
               }`}
             >
-              <Icon size={13} className="flex-shrink-0" />
+              <Mark />
+              <span className="hidden truncate text-[11px] font-medium @[248px]:inline">{label}</span>
             </button>
           ))}
         </div>
