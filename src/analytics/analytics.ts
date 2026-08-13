@@ -44,6 +44,7 @@ export type AnalyticsEvent =
   | 'editor_upgrade_clicked'
   | 'editor_discord_clicked'
   | 'export_clicked'
+  | 'export_gate_shown' // a guest reached the final Export click and was shown the keep-&-export signup invitation
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
   | 'lyrics_align_clicked'

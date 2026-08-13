@@ -325,6 +325,10 @@ interface CompoundMoverPreview {
   seedScale: number
   settings?: Record<string, number>
   notes: ResolvedNote[]
+  /** Cycle setting overlays over time: every `beatsPer` beats the preview
+   *  re-resolves the definition with the next cell merged over `settings` -
+   *  how one card demos a whole (motion x mode) matrix in sequence. */
+  sequence?: { beatsPer: number; cells: Record<string, number>[] }
   /** Radians per beat of presentation tumble applied to each SEED (outside the
    *  definition - the layout stays exactly what the def builds). Splitters
    *  build STILL arrangements, so without this their cards (and captured
@@ -341,6 +345,17 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seeds: ringSeeds(8, 1.5),
     seedScale: 0.42,
     notes: MOVER_NOTES,
+    // The card demos the whole family: the ring steps outward (translate x
+    // burst), spins in place (rotate x constant), then revolves around the
+    // center (orbit x constant) - eight beats each, on repeat.
+    sequence: {
+      beatsPer: 8,
+      cells: [
+        { motion: 0, mode: 0 },
+        { motion: 1, mode: 1, angleX: 0, angleY: 0, angleZ: 45 },
+        { motion: 2, mode: 1, angleX: 0, angleY: 0, angleZ: 45 },
+      ],
+    },
   },
   // Three nested rings of 6x3x2, shrunk to fit the card. All three depths turn
   // on their own - the mover needs no notes to move - so the only notes here
@@ -457,6 +472,21 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     turntable: 0.4,
     notes: [holdNote(127, 4, 1), holdNote(124, 8, 1), holdNote(121, 12, 1)],
   },
+  // Line's story is the aimed axis and the size ramp, so the card shows both:
+  // a diagonal aim off the -Z default (the turntable then sweeps the tail
+  // around the unmoved base copy) and a growth high enough to read at card
+  // size. Spacing is pre-divided by seedScale like the others; mute notes
+  // blink the base, middle and tail copies off.
+  line: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.3,
+    // Kept short and gently ramped: the tumble inevitably points the tail at
+    // the camera, where length and growth compound with perspective - at
+    // spacing 2 / growth 1.3 that pass blew past the card's frame.
+    settings: { copies: 5, spacing: 1.5, growth: 1.25, angle: 25, tilt: 15 },
+    turntable: 0.4,
+    notes: [holdNote(127, 4, 1), holdNote(125, 8, 1), holdNote(123, 12, 1)],
+  },
   polyhedron: {
     seeds: [[0, 0, 0]],
     seedScale: 0.24,
@@ -523,10 +553,31 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
     })
   }, [def, notes, inputValues, compound])
   const offsetSeed = def?.kind === 'mover' && !compound
+  // Sequenced previews re-resolve on each cell boundary (resolve is a cheap
+  // closure build); the current cell's chain is cached between boundaries.
+  const sequencedRef = useRef<{ cell: number; chain: NonNullable<typeof chain> } | null>(null)
 
   useFrame((root) => {
     if (!chain) return
-    const beat = previewBeatNow(root.clock.elapsedTime, sync)
+    let beat = previewBeatNow(root.clock.elapsedTime, sync)
+    let activeChain = chain
+    const sequence = !inputValues && !notes?.length ? compound?.sequence : undefined
+    if (def && sequence) {
+      const cell = Math.floor(beat / sequence.beatsPer) % sequence.cells.length
+      if (sequencedRef.current?.cell !== cell) {
+        sequencedRef.current = {
+          cell,
+          chain: def.resolve({
+            settings: mergeDefinitionSettings(def, { ...compound?.settings, ...sequence.cells[cell] }),
+            notes: compound?.notes ?? MOVER_NOTES,
+          }),
+        }
+      }
+      activeChain = sequencedRef.current.chain
+      // Each cell reads time from its own start, so constant cells don't jump
+      // in mid-spin and burst notes land at the cell's opening beats.
+      beat = beat % sequence.beatsPer
+    }
     const meshes = meshesRef.current
     let used = 0
     for (const seedPosition of compound?.seeds ?? [null]) {
@@ -543,7 +594,7 @@ export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: s
       } else if (offsetSeed) {
         seed.transform.makeTranslation(MOVER_BASE_OFFSET, 0, 0)
       }
-      const copies: VisualCopy[] = chain.apply(seed, { beat, index: 0, count: 1 })
+      const copies: VisualCopy[] = activeChain.apply(seed, { beat, index: 0, count: 1 })
       for (const copy of copies) {
         if (used >= meshes.length) break
         const mesh = meshes[used++]

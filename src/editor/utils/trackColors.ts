@@ -12,7 +12,8 @@ export const AUDIO_WAVEFORM_COLOR = '#7fc0ee'
 // related but distinguishable, and 15 tracks pass before hues revisit.
 // The cycle walks OKLCH, not HSL: fixed perceptual lightness and chroma
 // mean every stop on the wheel reads equally bright - no neon/murky swings
-// between neighbouring tracks.
+// between neighbouring tracks. (The 4a Console spec keeps rainbow clip
+// hues; only the NOTES inside clips stay neutral.)
 const TRACK_HUE_STEP = 24
 const TRACK_CYCLE_CHROMA = 0.2
 const TRACK_CYCLE_LIGHTNESS = 0.73

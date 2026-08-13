@@ -20,7 +20,7 @@ import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
-import { withTransformParams } from '../../core/transform'
+import { withSpatialTransformParams, withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
@@ -237,9 +237,13 @@ export function PianoRollPanel() {
       const instrumentDef = parent && !parentComposition ? getInstrument(parent.instrumentId) : undefined
       const parentParams = instrumentDef
         ? withTransformParams(instrumentDef.params)
-        : moverDef?.params ?? (parentComposition
-          ? compositionAutomatableParams(compositionDef(parent.instrumentId))
-          : undefined)
+        : moverDef
+          // Splitter lanes also target the spatial tf* params (they move the
+          // splitter's copies in its own frame - resolve.ts's splitter weave).
+          ? parent?.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
+          : parentComposition
+            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+            : undefined
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }
@@ -359,7 +363,7 @@ function PianoRollContent({ trackId, trackName, trackColor, noteColor, automatio
   const rows = automation
     ? automation.kind === 'toggle'
       ? generateToggleRows(notes.map((n) => n.pitch), trackColor)
-      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor)
+      : generateValueRows(automation.paramMin, automation.paramMax, notes.map((n) => n.pitch), trackColor, undefined, track.automationRange)
     : trigger
       ? generateTriggerRows(trigger.rowLabel, midiNoteBaseColor(noteColor ?? trackColor), notes.map((n) => n.pitch))
       : videoTrack

@@ -109,8 +109,8 @@ export function Ruler({
     : []
 
   return (
-    <div className="flex border-b border-[var(--border)] bg-[var(--bg-timeline)] select-none flex-shrink-0" style={{ height, paddingRight: gutterPx }}>
-      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--border)] bg-[var(--bg-track-row)]">
+    <div className="flex border-b border-[var(--timeline-row-line,var(--border))] bg-[var(--bg-timeline)] select-none flex-shrink-0" style={{ height, paddingRight: gutterPx }}>
+      <div style={{ width: labelWidth }} className="flex-shrink-0 flex items-center border-r border-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)]">
         {corner}
       </div>
       <div

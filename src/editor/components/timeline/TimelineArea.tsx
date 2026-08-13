@@ -356,7 +356,7 @@ export function TimelineArea() {
   }
 
   return (
-    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
+    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[#08090d]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -464,8 +464,19 @@ export function TimelineArea() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
+            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%', paddingBottom: rowHeight * 3 }}
           >
+            {/* The lane surface lives only behind the actual track stack; the
+                area below it keeps the root's darker void. The label column,
+                though, wears its normal color all the way down. */}
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 bg-[var(--bg-track-row)]"
+              style={{ width: labelWidth }}
+            />
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--bg-timeline)]"
+              style={{ height: visualRows.length * rowHeight }}
+            />
             {/* Vertical grid lines aligned to the ruler's divisions (DAW-style).
                 Their height is the visible track stack, rather than the scroll
                 viewport, so they stop at the bottom of the lowest track. First
@@ -588,7 +599,7 @@ export function TimelineArea() {
                 the lane portion behaves like the grid. */}
             <div className="flex-1 min-h-0 flex">
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-track-row)] ${
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}

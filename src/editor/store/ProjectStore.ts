@@ -8,7 +8,7 @@ import { compositionDef, isCompositionTrack } from '../core/directors'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_NOISE } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
@@ -406,11 +406,31 @@ export interface ProjectState {
   /** Set (or clear, with undefined) an automation track's noise mode. */
   setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
   /** Set (or clear, with undefined) an automation track's burst mode. Setting one
-   *  mode clears the other - a lane is in exactly one mode. */
+   *  mode clears the others - a lane is in exactly one mode. */
   setTrackBurst: (trackId: string, burst: Track['burst'] | undefined) => void
-  /** Put an automation lane in one of its three modes, in ONE action (so it is one
+  /** Set (or clear, with undefined) an automation track's cycle mode (the motion
+   *  curve stretched between note onsets). Same exclusivity as noise/burst. */
+  setTrackCycle: (trackId: string, cycle: Track['cycle'] | undefined) => void
+  /** Set (or clear) an automation lane's row-spread config (value sub-range,
+   *  row count, integer snap, spread curve). An empty object clears. */
+  setTrackAutomationRange: (trackId: string, range: Track['automationRange'] | undefined) => void
+  /** Put an automation lane in one of its four modes, in ONE action (so it is one
    *  undo step). Re-entering a mode starts from that mode's defaults. */
   setAutomationMode: (trackId: string, mode: AutomationMode) => void
+  /** Retarget an automation lane onto another of its parent's params (same
+   *  addressing as addAutomationTrack, fx: keys included). No-ops if a sibling
+   *  lane already drives that param. `rename` carries the new label onto the
+   *  lane's name (the caller passes true when the old name was the auto-name,
+   *  so a user's custom name survives). */
+  setAutomationTarget: (trackId: string, paramKey: string, paramLabel: string, rename: boolean) => void
+  /** Fix an automation lane's target after a drag moved (or copied) it under a
+   *  new parent. `available` is every target the new parent offers (the caller
+   *  resolves it - the store can't read instrument defs; see the import note at
+   *  the top). Prefers restoring `previousTargetParam` when the lane fits here
+   *  again (that's what makes dragging BACK work), keeps a target that still
+   *  fits, and otherwise falls to the first free option while remembering the
+   *  displaced one. `rename` mirrors setAutomationTarget's flag. */
+  remapAutomationTarget: (trackId: string, available: { key: string; label: string }[], rename: boolean) => void
   /** Set an automation lane's output amount (a whole-lane gain, any mode).
    *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
   setTrackAutomationAmount: (trackId: string, amount: number) => void
@@ -1504,20 +1524,34 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
     }),
 
-  // The two non-keyframe modes are mutually exclusive: setting one drops the
-  // other, so a lane is never ambiguous (the engine would silently prefer burst).
+  // The non-keyframe modes are mutually exclusive: setting one drops the
+  // others, so a lane is never ambiguous (the engine would silently prefer burst).
   setTrackNoise: (trackId, noise) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, noise, burst: noise ? undefined : track.burst, cycle: noise ? undefined : track.cycle } } }
     }),
 
+  setTrackAutomationRange: (trackId, range) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const empty = !range || Object.keys(range).length === 0
+      return { tracks: { ...s.tracks, [trackId]: { ...track, automationRange: empty ? undefined : range } } }
+    }),
   setTrackBurst: (trackId, burst) =>
     set((s) => {
       const track = s.tracks[trackId]
       if (!track) return s
-      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise } } }
+      return { tracks: { ...s.tracks, [trackId]: { ...track, burst, noise: burst ? undefined : track.noise, cycle: burst ? undefined : track.cycle } } }
+    }),
+
+  setTrackCycle: (trackId, cycle) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, cycle, noise: cycle ? undefined : track.noise, burst: cycle ? undefined : track.burst } } }
     }),
 
   setAutomationMode: (trackId, mode) =>
@@ -1532,8 +1566,63 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           ? track.noise ?? { ...DEFAULT_NOISE, seed: Math.floor(Math.random() * 1e9) }
           : undefined,
         burst: mode === 'burst' ? track.burst ?? { ...DEFAULT_BURST } : undefined,
+        cycle: mode === 'cycle' ? track.cycle ?? { ...DEFAULT_CYCLE } : undefined,
       }
       return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  setAutomationTarget: (trackId, paramKey, paramLabel, rename) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'automation' || track.targetParam === paramKey) return s
+      // Same one-lane-per-param rule as addAutomationTrack: retargeting onto a
+      // param a sibling lane already drives would stack duplicates.
+      const parent = track.parentId ? s.tracks[track.parentId] : undefined
+      const taken = (parent?.childIds ?? []).some((cid) => {
+        const c = s.tracks[cid]
+        return !!c && c.id !== trackId && c.type === 'automation' && c.targetParam === paramKey
+      })
+      if (taken) return s
+      // The row-spread config speaks the OLD param's value units; a stale
+      // sub-range on a new param is nonsense, so it resets to the full span.
+      // Note pitches re-map onto the new param's range by construction. A
+      // deliberate retarget also forgets any drag-displaced previous target.
+      const next: Track = { ...track, targetParam: paramKey, automationRange: undefined, previousTargetParam: undefined }
+      if (rename) next.name = paramLabel
+      return { tracks: { ...s.tracks, [trackId]: next } }
+    }),
+
+  remapAutomationTarget: (trackId, available, rename) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track || track.type !== 'automation') return s
+      const parent = track.parentId ? s.tracks[track.parentId] : undefined
+      if (!parent) return s
+      // Same one-lane-per-param rule as setAutomationTarget: a target a sibling
+      // lane already drives counts as unavailable here.
+      const taken = new Set((parent.childIds ?? [])
+        .map((cid) => s.tracks[cid])
+        .filter((c) => !!c && c.id !== trackId && c.type === 'automation')
+        .map((c) => c!.targetParam))
+      const usable = (key: string | undefined) =>
+        !!key && !taken.has(key) && available.some((o) => o.key === key)
+      const retarget = (key: string, label: string, previous: string | undefined): { tracks: Record<string, Track> } => {
+        // Range resets like setAutomationTarget's: it speaks the old param's units.
+        const next: Track = { ...track, targetParam: key, previousTargetParam: previous, automationRange: undefined }
+        if (rename) next.name = label
+        return { tracks: { ...s.tracks, [trackId]: next } }
+      }
+      // The displaced original wins over a still-fitting default: that is what
+      // makes dragging the lane back to its old parent restore it.
+      const previous = track.previousTargetParam
+      if (usable(previous)) {
+        const option = available.find((o) => o.key === previous)!
+        return retarget(option.key, option.label, undefined)
+      }
+      if (usable(track.targetParam)) return s
+      const fallback = available.find((o) => !taken.has(o.key))
+      if (!fallback || fallback.key === track.targetParam) return s
+      return retarget(fallback.key, fallback.label, track.previousTargetParam ?? track.targetParam)
     }),
 
   setTrackAutomationAmount: (trackId, amount) =>

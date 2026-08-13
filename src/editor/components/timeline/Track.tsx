@@ -267,7 +267,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onLabelContextMenu?.(e, track.id) }}
         style={{ width: labelWidth, paddingLeft: LABEL_BASE_PX + depth * INDENT_PX }}
-        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--border)]"
+        className="sticky left-0 z-20 flex-shrink-0 flex items-center gap-2 pr-3 border-r border-r-[var(--timeline-row-line,var(--border))]"
       >
         {/* Row-state background, scoped to this row's own region: a child row's
             colour starts at its bracket line, never bleeding into a parent's
@@ -301,7 +301,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
         {guides?.map((g, level) => (
           <span
             key={level}
-            className={`pointer-events-none absolute right-0 border-[var(--border)] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
+            className={`pointer-events-none absolute right-0 border-[var(--timeline-row-line,var(--border))] border-l ${g.curve ? 'border-t rounded-tl-md' : ''}`}
             style={{ left: LABEL_BASE_PX + level * INDENT_PX, top: -1, bottom: 0 }}
           />
         ))}
@@ -310,7 +310,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             is drawn by that child's curve instead. */}
         {dividerInset != null && (
           <span
-            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--border)]"
+            className="pointer-events-none absolute right-0 bottom-0 border-b border-b-[var(--timeline-row-line,var(--border))]"
             style={{ left: dividerInset }}
           />
         )}
@@ -499,11 +499,11 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
           playhead triangle has room to show its left half at beat 0. The row
           divider lives on the gutter + lane (not the row itself), so the label
           column can inset its own divider around the hierarchy brackets. */}
-      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[var(--border)]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
+      <div className={`flex-shrink-0 ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`} style={{ width: PLAYHEAD_TRIANGLE_HALF }} />
 
       <div
         data-track-lane={track.id}
-        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--border)]'}`}
+        className={`relative flex-shrink-0 ${isDarkenedRow ? 'bg-black/10' : ''} ${isLast ? '' : 'border-b border-[var(--timeline-row-line,var(--border))]'}`}
         // A muted track's blocks go gray (hue stripped, alpha kept) so the mute
         // state reads from the MIDI side without the blocks fading into the lane.
         style={{ width: timelineWidthPx, filter: track.muted ? 'grayscale(1)' : undefined }}

@@ -302,9 +302,10 @@ export function MidiEditor({
 
   // Loop ghosts: the pattern's repeats, dimmed and non-interactive, computed from
   // the live local notes so they track in-flight edits. repeat 0 is the authored
-  // note itself and is skipped - except when a note sits outside the pattern
-  // window (its phase folds modulo the loop length); then the folded position
-  // shows as a ghost too, because that is where it plays.
+  // note itself and is skipped - except for split-shifted (negative-phase)
+  // notes, whose folded position shows as a ghost because that is where they
+  // play. Notes PAST the window don't loop at all (they play once, in place),
+  // so they produce no ghosts.
   const loopBeats = block.loop
     ? loopLengthBeats({ loopLengthBars: block.loopLengthBars, notes: allNotes }, beatsPerBar)
     : null

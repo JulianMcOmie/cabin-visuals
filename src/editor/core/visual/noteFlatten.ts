@@ -26,14 +26,25 @@ export interface TiledNote {
   repeat: number
 }
 
-/** Tile a looped block's pattern across the block length. Each note's phase is
- *  its startBeat modulo the loop length (split-produced blocks store shifted
- *  phases, possibly negative); the final partial repeat clips at the block end. */
+/** Tile a looped block's pattern across the block length. Each pattern note's
+ *  phase is its startBeat modulo the loop length (split-produced blocks store
+ *  shifted phases, possibly NEGATIVE - folding those is their storage
+ *  contract); the final partial repeat clips at the block end.
+ *
+ *  Notes PAST the pattern window (startBeat >= loop length) do not loop: they
+ *  play once, where they were authored. Folding them into the window turned a
+ *  note the user placed after the pattern into a mystery repeat inside it. */
 export function tileLoopNotes(notes: Note[], loopBeats: number, blockBeats: number, maxNotes = NOTE_CAP_PER_BLOCK): TiledNote[] {
   const out: TiledNote[] = []
   if (loopBeats <= 0 || blockBeats <= 0) return out
+  for (const note of notes) {
+    if (note.startBeat < loopBeats || note.startBeat >= blockBeats) continue
+    out.push({ note, startBeat: note.startBeat, durationBeats: Math.min(note.durationBeats, blockBeats - note.startBeat), repeat: 0 })
+    if (out.length >= maxNotes) return out
+  }
   for (let repeat = 0, offset = 0; offset < blockBeats; repeat++, offset += loopBeats) {
     for (const note of notes) {
+      if (note.startBeat >= loopBeats) continue
       // Plain remainder, not a double modulo: an in-window startBeat must come
       // back bit-identical so previews can match occurrences to authored notes.
       const rem = note.startBeat % loopBeats

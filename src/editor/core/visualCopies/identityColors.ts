@@ -74,6 +74,8 @@ export const METEOR_IMPACT_COLOR = '#ff8a3c'
  * so the palette has real gaps again - the 86-150 band and ~200-210 are open.
  */
 export const MOVER_COLOR = '#f5a623'
+/** Waypoints' chartreuse. Hue 120°. */
+export const WAYPOINTS_COLOR = '#b7d34e'
 /** Visibility's emerald. Hue 163°. */
 export const VISIBILITY_COLOR = '#34d399'
 /** Conveyor's current teal. Hue 175°. */
@@ -108,6 +110,8 @@ export const GRADIENT_COLORIZER_COLOR = '#ff7b5a'
  * reopened the 86-150 band and ~200-210 - see MOVER_COLOR.)
  */
 export const SYMMETRY_COLOR = '#fdb97d'
+/** Hue 135° - the middle of the band the mover consolidation reopened. */
+export const LINE_COLOR = '#95db6c'
 /** Hue 150°. */
 export const WAVE_TERRAIN_COLOR = '#6de18b'
 /** Hue 191° - ice, for the mover that stops time. */

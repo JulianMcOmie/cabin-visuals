@@ -2,7 +2,7 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Check, ChevronLeft, ChevronRight, Folder, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Plus, Sparkles, LayoutTemplate, Repeat, Shapes } from 'lucide-react'
 import { useLibraryDrag } from './useLibraryDrag'
 import { useLoopBlockDrag } from './useLoopBlockDrag'
 import { LOOP_PATTERNS, type LoopPattern } from './loops'
@@ -138,7 +138,7 @@ const DIRECTOR_EXTRAS = DIRECTOR_INSTRUMENTS.filter((d) => DIRECTOR_EXTRA_IDS.ha
 // Every object instrument, icons and all. Partitioned below into the curated
 // core list and the Extras back catalog - nothing is removed, only demoted.
 const ALL_OBJECT_INSTRUMENTS = withKind('object', [
-  { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, tetrahedron and friends - that swells and glows with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
+  { id: 'cube', name: '3D Shape', description: 'A solid - cube, sphere, torus, prism and friends - with per-axis proportions and a metal / glass / unlit surface, swelling with every note.', icon: <div className="w-3 h-3 border border-indigo-400 rounded-sm" /> },
   { id: 'kaleidoSolid', name: 'Kaleido Solid', description: 'A solid whose surface is a live kaleidoscope - shapes grow, drift and recolour, and every note twists the barrel.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <circle cx="6" cy="6" r="5" fill="#0f766e" fillOpacity="0.35" stroke="#5eead4" strokeWidth="0.7" />
@@ -186,6 +186,27 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <rect x="3.4" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.95" />
       <rect x="6.3" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.45" />
       <rect x="9.2" y="2" width="2.4" height="8" rx="0.6" fill="#8de1ff" fillOpacity="0.2" />
+    </svg>
+  )},
+  { id: 'overlapShape', name: 'Overlap Shape', description: 'A flat one-color shape standing in 3D - where copies cross in the same plane, the overlap cuts out to transparency or flips to a second color.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path
+        fillRule="evenodd"
+        fill="#ff5470"
+        fillOpacity="0.9"
+        d="M0.6 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z"
+      />
+    </svg>
+  )},
+  { id: 'overlapSolid', name: 'Overlap Solid', description: 'A one-color 3D solid - wherever copies share volume, the overlap punches a see-through window or flips to a second color.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <path fill="#2dd4bf" fillOpacity="0.9" d="M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z" />
+      <path
+        fillRule="evenodd"
+        fill="#ff5470"
+        fillOpacity="0.95"
+        d="M0.6 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z M4.2 6 a3.6 3.6 0 1 0 7.2 0 a3.6 3.6 0 1 0 -7.2 0 Z"
+      />
     </svg>
   )},
   { id: 'crop', name: 'Crop', description: 'Masks this scene into evenly spaced slices at any angle - each held row shows its slice, silence hides it. Check targets in its settings to mask specific instruments instead.', icon: (
@@ -322,7 +343,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape', 'overlapSolid'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
@@ -345,11 +366,13 @@ const EXTRA_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter(
 
 // The registry defs carry no user-facing copy, so the tooltip sentences live here.
 const MOVER_DESCRIPTIONS: Record<string, string> = {
+  waypoints: 'Lay out positions (line, grid, ring, or custom) - each MIDI row sends the object to its position, and curve rows switch how it travels (linear, ease, or spring physics with overshoot).',
   mover: 'The fundamental mover: translate, rotate or orbit its objects, with notes bursting, holding or oscillating the motion - one lane, seven rows.',
   allMovers: 'Combines every distinct mover capability into one modular, collision-free MIDI lane.',
   forceFieldPush: 'Launches stackable radial pulses, anticipation-to-strike transitions, and a distance-shaped spiral pulse.',
   radialMotion: 'Nests three rings of copies inside each other and keeps every depth turning on its own - MIDI collapses, blooms, freezes or reverses any of them.',
   radial: 'Splits its object into N copies fanned around a circle - movers below it move each copy along its own axes.',
+  line: 'Marches N copies back into depth - or along any axis you aim - with sizes ramping step by step, the original object staying put.',
   symmetry: 'Folds its object across mirror lines through its own center - one line for a plain mirror image, more for a kaleidoscope.',
   impactPulse: "Punches its objects' size on every note - a snare's envelope, instant at the onset and gone again, with optional squash-and-stretch.",
   symmetricMotion: 'Moves a whole formation symmetrically about its own center - notes bloom it out, pull it in, turn it, or split it apart across an axis.',
@@ -493,19 +516,29 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   {
     id: 'impact',
     title: 'Impact',
-    description: 'Notes hitting the scene itself - camera punches, shockwaves, and sustained rumble.',
+    description: 'Notes hitting the scene itself - camera punches and shockwaves.',
     items: [],
     subfolders: [
       { id: 'impulse', title: 'Impulse', description: 'One sharp hit per note - strikes, then decays.', items: pick(IMPULSE_IDS) },
-      { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
     ],
   },
+  { id: 'rumble', title: 'Rumble', description: 'Continuous shaking, warping or masking while the note is held.', items: [...pick(RUMBLE_IDS), ...CROP_OBJECT_ITEMS] },
   { id: 'splitters', title: 'Splitters', description: 'Splitters render their objects several times, giving each copy its own reference frame - movers BELOW a splitter move every copy along its own axes.', items: SPLITTER_INSTRUMENTS },
   {
     id: 'motion',
     title: 'Motion',
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
-    items: MOTION_ITEMS,
+    // The legacy compound movers (All Movers, Motion) are demoted - never
+    // deleted - into the Extras shelf; the unified Mover supersedes them.
+    items: MOTION_ITEMS.filter((m) => m.id !== 'allMovers' && m.id !== 'motion'),
+    subfolders: [
+      {
+        id: 'motion-extras',
+        title: 'Extras',
+        description: 'The legacy compound movers - all fully working, superseded by Mover.',
+        items: MOTION_ITEMS.filter((m) => m.id === 'allMovers' || m.id === 'motion'),
+      },
+    ],
   },
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
@@ -577,26 +610,23 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
   const items = current ? current.items : rootItems
 
   return (
-    <div>
-      {/* The location row is always present so entering a folder swaps its
-          label instead of inserting a row above the list (which made the whole
-          menu jump down). Same size and metrics as the folder rows - depth
-          reads from the ‹ chevron and position, not from bolder type. */}
+    <div className="flex min-h-full flex-col">
+      {/* The way back, at the top of the list (right under the library
+          header): whole trail as a breadcrumb, click = up one level. Sticky
+          so it stays in reach while the list scrolls. */}
       {current ? (
         <button
           type="button"
           onClick={() => setPath(path.slice(0, -1))}
           aria-label={`Back to ${path[path.length - 2]?.title ?? 'the library'}`}
-          className="sticky top-0 z-20 flex h-[30px] w-full cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 text-xs text-[var(--text)] transition-colors hover:bg-[var(--bg-elevated)]"
+          className="sticky top-0 z-20 flex h-[30px] w-full flex-shrink-0 cursor-pointer select-none items-center gap-2.5 bg-[var(--bg-shell)] px-3 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,var(--bg-shell))]"
         >
           <ChevronLeft size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
-          <span className="min-w-0 truncate">{current.title}</span>
+          <span className="min-w-0 truncate text-[13px] text-[var(--text)]">
+            {path.map((folder) => folder.title).join(' / ')}
+          </span>
         </button>
-      ) : (
-        <div className="sticky top-0 z-20 flex h-[30px] select-none items-center bg-[var(--bg-shell)] px-3 text-xs text-[var(--text-muted)]">
-          Library
-        </div>
-      )}
+      ) : null}
       {items.length > 0 && (
         <div className="mt-1">
           <ItemGrid items={items} onItemPointerDown={onItemPointerDown} onItemDoubleClick={onItemDoubleClick} />
@@ -610,10 +640,9 @@ function FolderBrowser({ folders, rootItems = [], onItemPointerDown, onItemDoubl
             key={folder.id}
             onClick={() => setPath([...path, folder])}
             title={folder.description}
-            className="flex h-[30px] cursor-default select-none items-center gap-2.5 px-3 transition-colors hover:bg-[var(--bg-elevated)]"
+            className="mx-2 flex h-[30px] cursor-default select-none items-center gap-2.5 rounded-md px-2 transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]"
           >
-            <Folder size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
-            <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-2)]">{folder.title}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-2)]">{folder.title}</span>
             <ChevronRight size={12} className="flex-shrink-0 text-[var(--text-muted)]" />
           </div>
         ))}
@@ -834,29 +863,37 @@ export function LeftSidebar() {
           narrow, and icon + label once there's room for the text. The 320px
           threshold is the width where all three labels fit inside the pills'
           px-2 padding without truncating - below it, labels would ellipsize. */}
-      <div className="@container relative z-10 flex flex-shrink-0 items-center gap-1 px-2 py-1.5">
-        {([
-          { id: 'instruments', label: 'Instruments', Icon: Shapes },
-          { id: 'loops', label: 'Loops', Icon: Repeat },
-          { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
-        ] as const).map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            title={label}
-            className={`flex-1 min-w-0 h-6 flex items-center justify-center gap-1.5 rounded-full px-2 text-[11px] transition-colors cursor-pointer ${
-              tab === id
-                ? 'bg-[var(--bg-elevated)] text-[var(--text)] font-semibold'
-                : 'bg-transparent text-[var(--text-muted)] font-medium hover:bg-white/[0.05] hover:text-[var(--text-2)]'
-            }`}
-          >
-            <Icon size={13} className="flex-shrink-0" />
-            <span className="hidden @[320px]:inline truncate">{label}</span>
-          </button>
-        ))}
+
+      {/* One header row: LIBRARY (the landing preview's mono-caps voice) on
+          the left, the three section tabs as bare icons across from it -
+          fill appears only on hover / selection. */}
+      <div className="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-[var(--border-subtle)] py-1.5 pl-3 pr-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)] select-none">Library</span>
+        <div className="flex items-center gap-1">
+          {([
+            { id: 'instruments', label: 'Instruments', Icon: Shapes },
+            { id: 'loops', label: 'Loops', Icon: Repeat },
+            { id: 'templates', label: 'Templates', Icon: LayoutTemplate },
+          ] as const).map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              title={label}
+              aria-label={label}
+              aria-pressed={tab === id}
+              className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors cursor-pointer ${
+                tab === id
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent)]'
+                  : 'text-[var(--text-muted)] hover:bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] hover:text-[var(--text-2)]'
+              }`}
+            >
+              <Icon size={13} className="flex-shrink-0" />
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="timeline-scrollbar relative z-10 flex-1 overflow-y-auto pb-4">
+      <div className={`timeline-scrollbar relative z-10 flex-1 overflow-y-auto ${tab === 'instruments' ? '' : 'pb-4'}`}>
         {tab === 'instruments' && (
           // Keyed: the scene/Main views are different folder trees rendered in
           // the same slot - remount so a drill-down path into one never
@@ -884,7 +921,7 @@ export function LeftSidebar() {
                 }}
                 onMouseLeave={() => setLoopHover(null)}
                 title={pattern.description}
-                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[var(--bg-elevated)] transition-colors select-none"
+                className="flex items-center gap-2.5 h-[26px] px-3 cursor-default hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors select-none"
               >
                 <span className="flex-shrink-0 flex items-center justify-center w-3.5">
                   <Repeat size={12} className="text-emerald-400" />
@@ -897,6 +934,7 @@ export function LeftSidebar() {
         )}
         {tab === 'templates' && <TemplatesTab />}
       </div>
+
 
       {/* Floating ghost while dragging a library item into the track list. Centered
           on the cursor (translate -50%/-50%); left/top are set imperatively, so

@@ -1,5 +1,6 @@
 import type { UserInterfaceRendererDefinition } from './types'
 import { MoverUserInterfaceRenderer } from './MoverUserInterface'
+import { WaypointsUserInterfaceRenderer } from './WaypointsUserInterface'
 import { VisibilityMoverUserInterfaceRenderer } from './VisibilityMoverUserInterface'
 import { MeteorImpactMoverUserInterfaceRenderer } from './MeteorImpactMoverUserInterface'
 import { ColorizerUserInterfaceRenderer } from './ColorizerUserInterface'
@@ -10,6 +11,7 @@ import { ConveyorMoverUserInterfaceRenderer } from './ConveyorMoverUserInterface
 import { SymmetricMotionMoverUserInterfaceRenderer } from './SymmetricMotionMoverUserInterface'
 import { RadialMotionMoverUserInterfaceRenderer } from './RadialMotionMoverUserInterface'
 import { RadialSplitterUserInterfaceRenderer } from './RadialSplitterUserInterface'
+import { LineSplitterUserInterfaceRenderer } from './LineSplitterUserInterface'
 import { GridSplitterUserInterfaceRenderer } from './GridSplitterUserInterface'
 import { SymmetrySplitterUserInterfaceRenderer } from './SymmetrySplitterUserInterface'
 import { ApproachSplitterUserInterfaceRenderer } from './ApproachSplitterUserInterface'
@@ -30,6 +32,7 @@ import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface
 
 export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRendererDefinition>> = {
   mover: MoverUserInterfaceRenderer,
+  waypoints: WaypointsUserInterfaceRenderer,
   visibility: VisibilityMoverUserInterfaceRenderer,
   meteorImpact: MeteorImpactMoverUserInterfaceRenderer,
   // The Colorizer's definition id is still its original `calmHueRotate`.
@@ -41,6 +44,7 @@ export const MOVER_USER_INTERFACES: Partial<Record<string, UserInterfaceRenderer
   symmetricMotion: SymmetricMotionMoverUserInterfaceRenderer,
   radialMotion: RadialMotionMoverUserInterfaceRenderer,
   radial: RadialSplitterUserInterfaceRenderer,
+  line: LineSplitterUserInterfaceRenderer,
   symmetry: SymmetrySplitterUserInterfaceRenderer,
   grid: GridSplitterUserInterfaceRenderer,
   approach: ApproachSplitterUserInterfaceRenderer,
