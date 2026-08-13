@@ -396,6 +396,18 @@ export function TimelineArea() {
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
+        {/* The label column's surface and its divider against the lanes, in
+            VIEWPORT space (behind the scroll container, which is transparent).
+            Content space would be wrong: the column is frozen (each row's label
+            is `sticky left-0`), so a content-space fill slides away under
+            horizontal scroll and the strip below the last track - the only place
+            nothing else paints over it - visibly scrolls out from under the
+            frozen labels. Full height also carries the divider past the last
+            row, so the label/lane seam runs the whole pane. */}
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)]"
+          style={{ width: labelWidth }}
+        />
         {/* A loop drag lights the LANES as its drop zone - the mirror of the
             label-column glow an instrument drag gets. */}
         {loopDragging && (
@@ -464,15 +476,12 @@ export function TimelineArea() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%', paddingBottom: rowHeight * 3 }}
+            style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
             {/* The lane surface lives only behind the actual track stack; the
                 area below it keeps the root's darker void. The label column,
-                though, wears its normal color all the way down. */}
-            <div
-              className="pointer-events-none absolute inset-y-0 left-0 bg-[var(--bg-track-row)]"
-              style={{ width: labelWidth }}
-            />
+                though, wears its normal color all the way down - painted in
+                viewport space by the frozen strip above this scroll container. */}
             <div
               className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--bg-timeline)]"
               style={{ height: visualRows.length * rowHeight }}
@@ -596,8 +605,12 @@ export function TimelineArea() {
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the
                 label section - it deselects but is otherwise inert (no marquee); only
-                the lane portion behaves like the grid. */}
-            <div className="flex-1 min-h-0 flex">
+                the lane portion behaves like the grid. Its min-height (not a
+                paddingBottom on the content) is what gives the stack three rows of
+                scroll room past the last track, so this row - and its sticky label
+                strip's border - actually covers that space instead of leaving a
+                padding gap that only a background could reach. */}
+            <div className="flex-1 flex" style={{ minHeight: rowHeight * 3 }}>
               <div
                 className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
