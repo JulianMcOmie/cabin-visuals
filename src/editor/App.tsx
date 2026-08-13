@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
@@ -214,6 +214,35 @@ function VisualAmbientBleed({ sourceCanvasRef }: { sourceCanvasRef: RefObject<HT
 // aspect-aware instruments re-compose - the same path the export pin
 // exercises, which is exactly why pinning the editor view to 16:9 or 9:16
 // previews what an export at that aspect will compose like.
+
+// Aspect switches glide (.aspect-glide-anim in globals.css - keep the two
+// durations in step): the framed box travels between the two contain-fit
+// rects, so the letterbox bars grow in from the edges and slide horizontally
+// when the orientation flips, instead of appearing on one frame.
+const ASPECT_GLIDE_MS = 400
+
+/** The aspect's contain-fit box inside a cw×ch panel - the px form of the
+ *  resting CSS below, and the glide's two endpoints. */
+function fitAspectBox(cw: number, ch: number, aspect: ViewAspect): { width: number; height: number } {
+  if (aspect === 'fill') return { width: cw, height: ch }
+  const ratio = aspect === '16:9' ? 16 / 9 : 9 / 16
+  return { width: Math.min(cw, ch * ratio), height: Math.min(ch, cw / ratio) }
+}
+
+/** Resting geometry: container query units size the box against BOTH panel
+ *  dimensions, so it tracks the sidebar glides every frame with no
+ *  measure → state → render round-trip (the old ResizeObserver path lagged
+ *  frames under render load and the box visibly stepped). Both axes are
+ *  written out rather than leaning on aspect-ratio, so the glide's px pair
+ *  hands back to exactly the same two properties. */
+function restingAspectBox(aspect: ViewAspect): { width: string; height: string } {
+  if (aspect === 'fill') return { width: '100cqw', height: '100cqh' }
+  const ratio = aspect === '16:9' ? 16 / 9 : 9 / 16
+  return {
+    width: `min(100cqw, calc(100cqh * ${ratio}))`,
+    height: `min(100cqh, calc(100cqw * ${1 / ratio}))`,
+  }
+}
 
 /** The phone canvas transport (YouTube-style): play/pause, a seek bar mapped
  *  over the whole project, and the current position. Mounted only while the
@@ -493,17 +522,87 @@ function VisualPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Contain-fit the chosen aspect inside the panel with pure CSS: container
-  // query units size the box against BOTH panel dimensions, so it tracks the
-  // sidebar glides every frame with no measure → state → render round-trip
-  // (the old ResizeObserver path lagged frames under render load and the box
-  // visibly stepped). 'fill' (and fullscreen) keep the fill-the-panel box.
-  const letterbox = aspect !== 'fill' && !isFullscreen
-    ? {
-        width: `min(100%, calc(100cqh * ${aspect === '16:9' ? 16 / 9 : 9 / 16}))`,
-        aspectRatio: aspect === '16:9' ? '16 / 9' : '9 / 16',
-      }
-    : null
+  // The framed box: contain-fit for 16:9 / 9:16, fill-the-panel for 'fill'
+  // and fullscreen. Everything outside it is the panel's deep background -
+  // that IS the letterbox bar - so animating the box animates the bars.
+  //
+  // While a switch glides, React hands the box an explicit px pair instead of
+  // the resting container-query math: both endpoints have to be px, because a
+  // transition between two min()/cq expressions is not a portable
+  // interpolation. The px pair also can't track a panel resize, so it is only
+  // in force for the glide and the box snaps back onto the container at the
+  // end (same geometry - the handover is invisible).
+  //
+  // Two commits, and the `moving` flag (which carries the transition) has to
+  // stay off for the first one: this effect MEASURES the panel, and that flush
+  // recalculates the box's style too - so by the time the old rect is pinned,
+  // the browser's before-change value is already the NEW resting box. Arming
+  // the transition on the same commit therefore animates backwards (from the
+  // destination to the origin) and the rAF retarget swallows the glide whole.
+  // Pin the old rect untransitioned, let it paint, then move.
+  //
+  // `pin` is the canvas half, and it is not optional: an element that GROWS
+  // ahead of the GL buffer is exactly the case object-fit: cover resolves by
+  // scaling the frame UP, so a glide out to Fill visibly zoomed the picture
+  // for its duration (shrinking only crops, which is why the artifact was
+  // one-directional). So the r3f root is pinned, centered, and unresized for
+  // the whole glide - one buffer resize at the start, none during - and the
+  // moving box just reveals/covers a fully-rendered scene.
+  //
+  // It is pinned at the LARGER of the two boxes per axis, not at the
+  // destination: pin the destination and a SHRINKING glide starts with the box
+  // wider than the render and opens a dark gap down each side before the edge
+  // catches up. `≥ wherever the glide lands` is the same rule the sidebar
+  // freeze follows, and it leans on the same identity - the camera's FOV is
+  // vertical, so an over-wide render center-crops pixel-identically to the
+  // narrower one, making both the start and the settle resize invisible. (All
+  // three aspects are height-limited in a panel wider than 16:9, so the height
+  // is normally constant across a switch and only the width is over-rendered.
+  // In a panel TALLER than 16:9 the over-rendered height does change the
+  // vertical extent for the glide's duration - bounded and uniform, the same
+  // trade the sidebar freeze documents.) It also spares the instrument tree
+  // ~24 re-renders per switch.
+  const [glide, setGlide] = useState<{
+    width: number
+    height: number
+    moving: boolean
+    pin: { width: number; height: number }
+  } | null>(null)
+  const prevAspectRef = useRef(aspect)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const from = prevAspectRef.current
+    prevAspectRef.current = aspect
+    const panel = panelRef.current
+    if (!panel || from === aspect || isFullscreen || reducedMotion()) return
+    const { width: cw, height: ch } = panel.getBoundingClientRect()
+    // Switching again mid-glide starts from where the box actually IS (the
+    // running transition's live rect), not from the previous aspect's box.
+    const live = glide ? boxRef.current?.getBoundingClientRect() : null
+    const start = live ? { width: live.width, height: live.height } : fitAspectBox(cw, ch, from)
+    const end = fitAspectBox(cw, ch, aspect)
+    // The box is border-box sized over a 1px border, so its inner box - what
+    // the r3f root fills at rest - is 2px smaller on each axis.
+    const pin = {
+      width: Math.max(0, Math.max(start.width, end.width) - 2),
+      height: Math.max(0, Math.max(start.height, end.height) - 2),
+    }
+    setGlide({ ...start, moving: false, pin })
+    const raf = requestAnimationFrame(() => setGlide({ ...end, moving: true, pin }))
+    const settle = window.setTimeout(() => setGlide(null), ASPECT_GLIDE_MS + 60)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(settle)
+    }
+    // glide is read for the mid-glide handoff, never a trigger - depending on
+    // it would restart the glide on its own first commit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspect, isFullscreen])
+
+  const boxStyle = glide
+    ? { width: glide.width, height: glide.height }
+    : restingAspectBox(isFullscreen ? 'fill' : aspect)
 
   return (
     <div
@@ -512,11 +611,15 @@ function VisualPanel({
       onPointerMove={isMobile ? undefined : revealFullscreenControl}
       onPointerLeave={isMobile ? undefined : hideFullscreenControl}
       onClick={onCanvasTap}
-      className="visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size]"
+      className={`visual-canvas-smooth relative flex h-full items-center justify-center bg-[var(--bg-canvas-deep)] [container-type:size] ${glide ? 'aspect-canvas-pin' : ''}`}
+      style={glide
+        ? ({ '--aspect-canvas-w': `${glide.pin.width}px`, '--aspect-canvas-h': `${glide.pin.height}px` } as CSSProperties)
+        : undefined}
     >
       <div
-        className={`overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${letterbox ? 'relative' : 'absolute inset-0'}`}
-        style={letterbox ?? undefined}
+        ref={boxRef}
+        className={`relative overflow-hidden ${isFullscreen ? '' : 'rounded-[6px] border border-[rgba(255,255,255,0.07)]'} ${glide?.moving ? 'aspect-glide-anim' : ''}`}
+        style={boxStyle}
       >
         <Scene previewSceneId={previewSceneId} sourceCanvasRef={sourceCanvasRef} />
       <div className={`absolute top-2 right-2 z-10 transition-opacity duration-300 ${

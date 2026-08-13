@@ -647,6 +647,48 @@ body.drag-moving * {
   }
 }
 
+/* Preview aspect switches (Fill / 16:9 / 9:16) glide: the framed box travels
+   between the two contain-fit rects, so the letterbox bars grow in from the
+   edges - and slide horizontally when the orientation flips - instead of
+   appearing on one frame. Material 3 emphasized (the two-way curve, not the
+   sidebar toggles' decelerate-only one): a switch grows one axis while it
+   shrinks the other, so neither end of the move is the "entrance". The class
+   and the px endpoints are held by VisualPanel for the glide's duration only -
+   at rest the box's container-query sizing must stay 1:1 with the panel, or it
+   lags every sidebar glide and window resize. Keep the duration in step with
+   ASPECT_GLIDE_MS in editor/App.tsx. */
+.aspect-glide-anim {
+  transition:
+    width 400ms cubic-bezier(0.2, 0, 0, 1),
+    height 400ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aspect-glide-anim {
+    transition: none;
+  }
+}
+
+/* ...and for that glide the r3f root is PINNED, centered, at the LARGER of the
+   two boxes per axis (vars set by VisualPanel, which explains the choice). A box
+   that grows ahead of the GL buffer is precisely what object-fit: cover answers
+   by scaling the frame up, so an unpinned glide out to Fill zoomed the picture
+   the whole way (shrinking merely crops - hence a bug that only appeared in one
+   direction). Pinned, the buffer resizes once at the start and the moving box
+   just reveals/covers a fully-rendered scene: the camera's FOV is vertical, so
+   an over-wide render center-crops pixel-identically to the narrow one.
+   !important because the r3f root carries inline position/size styles. Listed
+   BEFORE .canvas-glide-freeze on purpose: same specificity, so a sidebar toggle
+   that lands mid-switch wins with the stricter freeze. */
+.visual-canvas-smooth.aspect-canvas-pin .visual-canvas-root {
+  position: absolute !important;
+  top: 50%;
+  left: 50%;
+  width: var(--aspect-canvas-w) !important;
+  height: var(--aspect-canvas-h) !important;
+  transform: translate(-50%, -50%);
+}
+
 /* The editor's WebGL canvas tracks its container with pure CSS during panel
    glides. three.js writes px inline styles on every setSize, and that
    measure → React → setSize loop drops frames under render load, so the

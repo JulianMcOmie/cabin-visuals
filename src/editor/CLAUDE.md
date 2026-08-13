@@ -30,6 +30,31 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
 - `constants.ts` — shared layout px constants (track label width, playhead triangle).
 - `uiSettings.ts` — localStorage-backed pane open/closed defaults.
 - **Panel-toggle motion (App.tsx)**: sidebar toggles glide by putting `.panel-toggle-anim` (globals.css, M3 emphasized-decelerate 400ms on `flex-grow`) on the panel's GROUP for the toggle's duration. Two traps: react-resizable-panels v4's `onResize` tracks the DOM *through* the CSS transition, so open/closed state is set from INTENT at click and `onResize` writes are suppressed for the glide window (`suppressResizeUntilRef`) — otherwise the header icon re-blues mid-close; and the WebGL canvas must not resize DURING a glide (per-frame buffer resizes stretch the picture — the buffer lags the element), so the toggle also freezes the r3f root (`.canvas-glide-freeze`), centered, at a width ≥ its landing size (current + the toggled panel's width) — the glide is horizontal-only and the camera's FOV is vertical, so the wider render center-crops pixel-identically and the panel edge just reveals/covers a fully-rendered scene; the start/settle resizes are invisible. `.visual-canvas-smooth canvas` pins the canvas to 100% of its root with `!important` (bridges the inline-px lag at the snap), and the letterbox box is pure CSS (`cqh` contain-fit, no ResizeObserver).
+- **Aspect-switch motion (App.tsx `VisualPanel`)**: Fill / 16:9 / 9:16 glide instead of
+  snapping — the framed box travels between the two contain-fit rects on M3 emphasized
+  400ms (`.aspect-glide-anim` in globals.css; keep it in step with `ASPECT_GLIDE_MS`), and
+  since everything outside that box is the panel's deep background, animating the box IS
+  animating the letterbox bars. At rest the box is sized in container-query units on BOTH
+  axes (`restingAspectBox`) so it tracks sidebar glides with no measure→render round-trip;
+  the glide swaps in an explicit px pair, because a transition between two `min()`/`cq`
+  expressions is not a portable interpolation, and hands the box back to the CSS at the end
+  (identical geometry, invisible handover). Two traps: the effect measures the panel, and
+  that flush recalculates the box's style too — so the browser's before-change value is
+  already the NEW resting box, and arming the transition on the same commit animates
+  BACKWARDS (destination → origin) until the rAF retarget swallows the glide whole; hence
+  the untransitioned `moving: false` commit that pins the old rect, then a rAF commit that
+  moves. And while the px pair is in force the box cannot track a panel resize — it snaps
+  onto the container at the settle, which is why the class/px live only for the glide.
+  **`object-fit: cover` scales the frame UP whenever the element outruns the GL buffer, and
+  that asymmetry is a bug generator**: a box that GROWS (any glide out to Fill) rendered
+  visibly zoomed for the glide's duration, while a shrinking one merely cropped and looked
+  perfect — so the artifact shows up in one direction only and reads as "Fill zooms the
+  preview". The cure is the sidebar freeze's: pin the r3f root (`.aspect-canvas-pin`),
+  centered, at the LARGER of the two boxes per axis — `≥ wherever the glide lands`, because
+  pinning the DESTINATION instead opens a dark gap down each side of a shrinking glide — so
+  the buffer resizes once at the start, never during, and the moving box only ever crops a
+  fully-rendered scene. Anything else that animates the canvas's container owes the same
+  pin; a continuous per-frame resize also re-renders the whole instrument tree ~24 times.
 - `useVerticalSplit.ts` — the timeline/piano-roll divider.
 - `utils/` — pure helpers: `selection.ts` (track select), `edgeResize.ts` (shared block-edge drag), `snapStep.ts`, `oklch.ts` + `trackColors.ts` (hue-cycled track colors), `trackTags.ts`, `zoomAroundBeat.ts`, `multiStyleApply.ts` (lyric style switching), `midiEditorPalette.ts`.
 - `hooks/` — transport-facing hooks: `usePlayback` (wires PlaybackEngine callbacks), `usePlayhead` (RAF playhead px), `useScrub`, `useTransportKeys` (space/enter/F), `useUndoRedoKeys`, `useProjectPersistence` (load + autosave lifecycle), `useAnonymousAdoption` (anon → signed-in project handoff).
