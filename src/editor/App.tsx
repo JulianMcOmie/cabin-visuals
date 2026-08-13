@@ -23,6 +23,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { TrackEditor } from './components/TrackEditor'
 import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/TransportIcons'
 import { BpmControl } from './components/BpmControl'
+import { PlaybackRateControl } from './components/PlaybackRateControl'
 import { ExportDialog } from './components/ExportDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
@@ -356,8 +357,69 @@ function VisualPanel({
     }
   }
   useEffect(() => () => clearTouchTimer(), [])
+
+  // Fullscreen is a two-phase theater glide (mock pick: "house hybrid",
+  // outro rule copied from MaterialContainerTransform - returns DECELERATE
+  // into their resting box, never the accelerate curve):
+  //   enter - FLIP the panel to fixed at its own rect, glide it over the
+  //   editor to fill the window (the sidebars' 400ms emphasized-decelerate),
+  //   and only THEN request native fullscreen: layout already fills the
+  //   window, so the native snap is invisible.
+  //   exit - leave native fullscreen first (button OR Esc both land in the
+  //   fullscreenchange listener), then glide home on the full emphasized
+  //   curve, 300ms. The canvas resizes continuously through both glides -
+  //   RenderGovernor's sync pre-paint render keeps every frame undistorted.
+  const fsBusyRef = useRef(false)
+  const wasNativeRef = useRef(false)
+  const FS_ENTER = '400ms cubic-bezier(0.05, 0.7, 0.1, 1)'
+  const FS_EXIT = '300ms cubic-bezier(0.2, 0, 0, 1)'
+
+  const setGlideRect = (el: HTMLElement, r: { top: number; left: number; width: number; height: number }) => {
+    el.style.top = `${r.top}px`
+    el.style.left = `${r.left}px`
+    el.style.width = `${r.width}px`
+    el.style.height = `${r.height}px`
+  }
+  const clearGlideStyles = (el: HTMLElement) => {
+    for (const p of ['position', 'top', 'left', 'width', 'height', 'zIndex', 'transition'] as const) el.style[p] = ''
+  }
+  const beginGlide = (el: HTMLElement, timing: string) => {
+    // z-90: over the whole editor, under modals (z-100).
+    el.style.position = 'fixed'
+    el.style.zIndex = '90'
+    void el.offsetWidth
+    el.style.transition = ['top', 'left', 'width', 'height'].map((p) => `${p} ${timing}`).join(', ')
+  }
+  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
   useEffect(() => {
-    const onChange = () => setIsFullscreen(document.fullscreenElement === panelRef.current)
+    const onChange = () => {
+      const el = panelRef.current
+      const isFs = document.fullscreenElement === el
+      setIsFullscreen(isFs)
+      if (!el) return
+      if (isFs) {
+        // Native fullscreen holds the screen now - drop the glide's inline
+        // styles so the top-layer styling owns the element.
+        clearGlideStyles(el)
+        wasNativeRef.current = true
+        fsBusyRef.current = false
+      } else if (wasNativeRef.current) {
+        // Left native fullscreen (button or Esc): the element is back in
+        // flow at its resting rect - glide home from the full window.
+        wasNativeRef.current = false
+        if (reducedMotion()) return
+        fsBusyRef.current = true
+        const home = el.getBoundingClientRect()
+        setGlideRect(el, { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight })
+        beginGlide(el, FS_EXIT)
+        setGlideRect(el, home)
+        window.setTimeout(() => {
+          clearGlideStyles(el)
+          fsBusyRef.current = false
+        }, 320)
+      }
+    }
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
@@ -387,9 +449,35 @@ function VisualPanel({
   }
 
   const toggle = () => {
-    if (document.fullscreenElement) void document.exitFullscreen()
-    // Denied requests (kiosk/embedded contexts) fail quietly - the button just does nothing.
-    else void panelRef.current?.requestFullscreen().catch(() => {})
+    if (fsBusyRef.current) return
+    if (document.fullscreenElement) {
+      // The return glide runs from the fullscreenchange listener, so Esc and
+      // the button share one path.
+      void document.exitFullscreen()
+      return
+    }
+    const el = panelRef.current
+    if (!el) return
+    // Denied requests (kiosk/embedded contexts) fail quietly - the panel just
+    // snaps back to rest.
+    if (reducedMotion()) {
+      void el.requestFullscreen().catch(() => {})
+      return
+    }
+    fsBusyRef.current = true
+    setGlideRect(el, el.getBoundingClientRect())
+    beginGlide(el, FS_ENTER)
+    setGlideRect(el, { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight })
+    window.setTimeout(() => {
+      el.style.transition = ''
+      el.requestFullscreen().then(
+        () => {}, // fullscreenchange clears the glide styles
+        () => {
+          clearGlideStyles(el)
+          fsBusyRef.current = false
+        },
+      )
+    }, 420)
   }
 
   // F toggles fullscreen (guarded like the transport keys: not while typing).
@@ -719,8 +807,12 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       </div>
 
       {/* Tempo, bottom-right - quiet inline readout, no chrome. The bar:beat
-          position readout is gone; the playhead and ruler carry position. */}
-      <div className="absolute right-4 flex h-9 items-stretch">
+          position readout is gone; the playhead and ruler carry position.
+          Monitoring speed sits beside it: the two things that set how fast the
+          playhead moves read as one corner (the tempo is the document, the
+          speed is only the lens - see PlaybackRateControl). */}
+      <div className="absolute right-4 flex h-9 items-center gap-2.5">
+        <PlaybackRateControl />
         <BpmControl />
       </div>
     </div>
