@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CabinLogo } from "../CabinLogo"
@@ -9,7 +10,6 @@ import { useAuth } from "../../persistence/hooks/useAuth"
 import { getLastProjectId } from "../../persistence/lastProject"
 import { track } from "../../analytics/analytics"
 import { CursorParticles } from "./CursorParticles"
-import { EditorFacsimile } from "./EditorFacsimile"
 import { EditorialSkin, EditorialHeader } from "./editorialTheme"
 import { SOCIAL_LINKS, VISUAL_EXAMPLES } from "./content"
 
@@ -123,10 +123,23 @@ export function LandingEditorial() {
 
         {/* App preview */}
         <section className="mx-auto w-full max-w-[1440px] px-4 pb-20 sm:px-10 sm:pb-[120px] lg:px-24">
-          {/* The facsimile is the whole card: its own transport bar is the
-              title bar, so the wrapper only adds the shadow + hover ring. */}
+          {/* A real screenshot of /editor (Wormhole template, instrument track
+              selected) rather than a drawn facsimile - the shot IS the card,
+              its own transport bar is the title bar, so the wrapper only adds
+              the shadow and the image carries the border + hover ring.
+              Recapture: see docs/editor-preview-shot.md. */}
           <div className="rounded-[12px] shadow-[0_40px_80px_rgba(0,0,0,0.4)]">
-            <EditorFacsimile className="rounded-[12px] [transition:border-color_.5s] hover:!border-[rgba(158,232,245,0.35)]" />
+            <Image
+              src="/editor-preview.webp"
+              alt="The Cabin Visuals editor: an instrument library, a 3D preview of a glowing particle tunnel with a lyric on it, an instrument parameter inspector, and a MIDI timeline underneath"
+              width={2560}
+              height={1294}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 92vw, 1248px"
+              // The source is already WebP q88; the default q75 re-encode
+              // softens the 11px inspector labels into mush.
+              quality={88}
+              className="block h-auto w-full rounded-[12px] border border-[rgba(255,255,255,0.07)] [transition:border-color_.5s] hover:border-[rgba(158,232,245,0.35)]"
+            />
           </div>
         </section>
 

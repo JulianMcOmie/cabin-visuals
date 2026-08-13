@@ -5,22 +5,27 @@
 // waiting to be lit. Full-bleed in the inspector, no card chrome, no title.
 // The hero is a live miniature stage you can orbit: an R3F room whose clear
 // color is the scene's real backdrop and a grid floor whose lines are a
-// contrast-mix of that same backdrop - nothing else. A faint "SCENE" wordmark
-// is etched into the stage like a console engraving, not a heading. Turning on
-// transparency removes the room's walls for real: the canvas clears to alpha
-// over a checkerboard, exactly what the export will do. Below, one console
-// row: a segmented backdrop control - the backdrop IS a choice (a color, a
-// gradient, or nothing). The color segment opens the shared HSV wheel; the
-// gradient segment reveals a second console row: kind, the two stops, and the
-// angle knob. The CSS gradient previews here are pixel-honest - the renderer's
-// backdrop shader mixes the same stops in sRGB, exactly as CSS does.
+// contrast-mix of that same backdrop - nothing else, not even a wordmark.
+// Turning on transparency removes the room's walls for real: the canvas clears
+// to alpha over a checkerboard, exactly what the export will do.
+//
+// Below the stage, the backdrop IS a choice - fill, gradient, or nothing - so
+// it reads as a segmented deck whose three segments always wear their NAME and
+// their real preview (an unlabelled swatch can only be read by clicking it).
+// Under the deck, one anatomy in every state: a captioned `ColorField` laid
+// flat in the panel. Fill has one (BACKGROUND); gradient has the SAME control
+// twice, FROM stacked over TO, both live at once - no selector deciding which
+// one a drag lands on - with the angle knob and the kind below them. Nothing
+// floats: the old wheel popover opened over the very stage you were judging.
+// The stage holds ONE height across all three modes, so reaching for a
+// gradient no longer re-lays the console out under the pointer. The CSS
+// gradient previews here are pixel-honest - the renderer's backdrop shader
+// mixes the same stops in sRGB, exactly as CSS does.
 
-import { useEffect, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
-import { ChevronDown } from 'lucide-react'
 import { useProjectStore } from '../store/ProjectStore'
-import { ColorWheelPopover, ColorWheelPill, hexToHsv, hsvToHex, withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { ColorField, hexToHsv, hsvToHex, withAlpha } from '../userInterfaceRenderers/colorWheel'
 import { LaserKnob } from '../userInterfaceRenderers/laserKnob'
 import { defaultSceneGradient, sceneBackdropMode, type Scene, type SceneGradient, type SceneGradientKind } from '../types'
 
@@ -73,22 +78,22 @@ function StagePreview({ scene }: { scene: Scene }) {
   const mode = sceneBackdropMode(scene)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
   const transparent = mode === 'transparent'
-  // Gradient mode adds a second console row below; the stage cedes the height
-  // so the panel keeps owning its exact height (the no-scrollbar rule).
-  const height = mode === 'gradient' ? 'h-[118px]' : 'h-[148px]'
+  // ONE height in every mode. The stage used to cede 30px to gradient's extra
+  // row, which bought a shorter panel at the price of the whole console
+  // jumping the moment you reached for a gradient - the wrong trade for the
+  // control you are actively judging by eye.
   // Over the real backdrop the lines are a hue-true contrast mix - against a
   // gradient they contrast with its average - and over the checkerboard
   // (transparent) they're fixed neutrals.
   const anchor = mode === 'gradient' ? mixHex(gradient.from, gradient.to) : scene.backgroundColor
   const cellColor = transparent ? '#5a5f6b' : contrastMix(anchor, 0.14)
   const sectionColor = transparent ? '#767c89' : contrastMix(anchor, 0.24)
-  const etch = transparent ? '#9298a4' : contrastMix(anchor, 0.42)
 
   return (
     <div
       data-testid="scene-stage-preview"
       title="Drag to orbit the stage"
-      className={`relative ${height} cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing`}
+      className="relative h-[132px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
       // The checkerboard is the "nothing behind this" of the compositor - it
       // only shows when the canvas actually clears to alpha. A gradient
       // backdrop paints here in CSS while the canvas stays alpha: same stops,
@@ -127,124 +132,79 @@ function StagePreview({ scene }: { scene: Scene }) {
           maxPolarAngle={Math.PI * 0.55}
         />
       </Canvas>
-      {/* Etched into the room like an engraving on the console, not a title -
-          identity carried by the surface itself. */}
-      <span
-        className="pointer-events-none absolute bottom-2 left-3 text-[9px] font-semibold tracking-[0.42em] select-none"
-        style={{ color: etch }}
-      >
-        SCENE
-      </span>
+      {/* No wordmark. The stage carried an etched "SCENE" as identity-in-the-
+          surface; with the name already on the tab rail it was a caption over
+          the picture, and the picture is the point. */}
     </div>
   )
 }
 
-/** The backdrop is a CHOICE - a color, a gradient, or nothing - so it reads as
- *  a three-way segmented control, not switches bolted next to swatches. Only
- *  the active segment wears its text (three choices still fit one pill); the
- *  others are just their swatch. Clicking the active color segment opens the
- *  shared HSV wheel; the gradient segment's editing lives in its own console
- *  row below. The transparent segment wears a tiny checkerboard - the same
- *  "nothing behind this" the stage shows at full size. */
-function BackdropControl({ scene }: { scene: Scene }) {
-  const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
+/** The backdrop is a CHOICE - a fill, a gradient, or nothing - so it reads as
+ *  a three-way segmented deck. Every segment wears its NAME and its real
+ *  preview at all times: the fill segment IS the color, the gradient segment IS
+ *  the gradient, and "None" wears the checkerboard - the same "nothing behind
+ *  this" the stage shows at full size. (The old deck labelled only the active
+ *  segment, which left the other two choices as unlabelled 14px dots you could
+ *  only read by clicking them.) Editing lives below the deck, never inside it. */
+function BackdropDeck({ scene }: { scene: Scene }) {
   const setSceneBackdropMode = useProjectStore((s) => s.setSceneBackdropMode)
-  const hostRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
   const mode = sceneBackdropMode(scene)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
 
-  useEffect(() => {
-    if (!open) return
-    const controller = new AbortController()
-    window.addEventListener('pointerdown', (event) => {
-      if (!hostRef.current?.contains(event.target as Node)) setOpen(false)
-    }, { signal: controller.signal, capture: true })
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }, { signal: controller.signal })
-    return () => controller.abort()
-  }, [open])
-
-  const segment = (active: boolean) =>
-    `flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2.5 transition-colors ${
-      active ? 'bg-[var(--bg-elevated)]' : 'hover:bg-white/[0.05]'
-    }`
+  const segments = [
+    {
+      kind: 'color' as const, label: 'Fill', testId: 'scene-backdrop-color-segment',
+      ariaLabel: `Fill backdrop ${scene.backgroundColor}`, title: 'Backdrop is one flat color',
+      swatch: { background: scene.backgroundColor },
+    },
+    {
+      kind: 'gradient' as const, label: 'Gradient', testId: 'scene-backdrop-gradient-segment',
+      ariaLabel: 'Gradient backdrop', title: 'Backdrop is a two-stop gradient',
+      swatch: { background: cssGradient(gradient) },
+    },
+    {
+      kind: 'transparent' as const, label: 'None', testId: 'scene-backdrop-transparent-segment',
+      ariaLabel: 'No backdrop', title: 'No backdrop - the scene renders and exports with alpha',
+      swatch: {
+        backgroundImage: 'repeating-conic-gradient(#777d88 0% 25%, #2e323a 0% 50%)',
+        backgroundSize: '5px 5px',
+      },
+    },
+  ]
 
   return (
-    <div ref={hostRef} className="relative">
-      <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+    <div className="flex w-full items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+      {segments.map(({ kind, label, testId, ariaLabel, title, swatch }) => (
         <button
-          data-testid="scene-backdrop-color-segment"
-          aria-label={`Backdrop color ${scene.backgroundColor}`}
-          aria-pressed={mode === 'color'}
-          aria-expanded={open}
-          title={mode === 'color' ? 'Change the backdrop color' : 'Use a backdrop color'}
-          onClick={() => {
-            if (mode !== 'color') setSceneBackdropMode(scene.id, 'color')
-            else setOpen((o) => !o)
-          }}
-          className={segment(mode === 'color')}
+          key={kind}
+          data-testid={testId}
+          aria-label={ariaLabel}
+          aria-pressed={mode === kind}
+          title={title}
+          onClick={() => { if (mode !== kind) setSceneBackdropMode(scene.id, kind) }}
+          // min-w-0 + nowrap: the deck is three EQUAL segments in a panel the
+          // user can drag narrow - let them shrink rather than wrap a label
+          // onto a second line and grow the pill.
+          className={`flex h-6 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full px-2 text-[10px] font-semibold whitespace-nowrap transition-colors ${
+            mode === kind ? 'bg-[var(--bg-elevated)] text-white/85' : 'text-white/40 hover:bg-white/[0.05] hover:text-white/70'
+          }`}
         >
           <span
-            className={`h-3.5 w-3.5 rounded-full border border-white/20 ${mode === 'color' ? '' : 'opacity-50'}`}
-            style={{ background: scene.backgroundColor }}
+            className={`h-3.5 w-3.5 flex-none rounded-full border border-white/20 ${mode === kind ? '' : 'opacity-50'}`}
+            style={swatch}
           />
-          {mode === 'color' && (
-            <>
-              <span className="font-mono text-[9px] uppercase text-white/85">{scene.backgroundColor}</span>
-              <ChevronDown size={10} className="text-white/50" />
-            </>
-          )}
+          {label}
         </button>
-        <button
-          data-testid="scene-backdrop-gradient-segment"
-          aria-label="Gradient backdrop"
-          aria-pressed={mode === 'gradient'}
-          title="Backdrop is a two-stop gradient"
-          onClick={() => { setOpen(false); if (mode !== 'gradient') setSceneBackdropMode(scene.id, 'gradient') }}
-          className={segment(mode === 'gradient')}
-        >
-          <span
-            className={`h-3.5 w-3.5 rounded-full border border-white/20 ${mode === 'gradient' ? '' : 'opacity-50'}`}
-            style={{ background: cssGradient(gradient) }}
-          />
-          {mode === 'gradient' && <span className="text-[10px] font-semibold text-white/85">Gradient</span>}
-        </button>
-        <button
-          data-testid="scene-backdrop-transparent-segment"
-          aria-label="Transparent backdrop"
-          aria-pressed={mode === 'transparent'}
-          title="No backdrop - the scene exports with alpha"
-          onClick={() => { setOpen(false); setSceneBackdropMode(scene.id, 'transparent') }}
-          className={segment(mode === 'transparent')}
-        >
-          <span
-            className={`h-3.5 w-3.5 rounded-full border border-white/20 ${mode === 'transparent' ? '' : 'opacity-50'}`}
-            style={{
-              backgroundImage: 'repeating-conic-gradient(#777d88 0% 25%, #2e323a 0% 50%)',
-              backgroundSize: '5px 5px',
-            }}
-          />
-          {mode === 'transparent' && <span className="text-[10px] font-semibold text-white/85">Transparent</span>}
-        </button>
-      </div>
-
-      {open && mode === 'color' && (
-        <ColorWheelPopover
-          value={scene.backgroundColor}
-          onChange={(hex) => setSceneBackgroundColor(scene.id, hex)}
-          align="right"
-          testId="scene-backdrop-wheel"
-        />
-      )}
+      ))}
     </div>
   )
 }
 
-/** The gradient's own console row: which kind, the two stops, the angle.
- *  Radial has no angle, so the knob dims instead of vanishing - the row never
- *  reflows under the pointer. */
+/** Gradient's editor: the fill control REPEATED - FROM stacked over TO, both
+ *  armed, so editing the second stop costs reaching for it and nothing else -
+ *  then the angle knob and the kind, centered, below both. Radial has no angle,
+ *  so the knob dims instead of vanishing: the rows never reflow under the
+ *  pointer. */
 function GradientControls({ scene }: { scene: Scene }) {
   const setSceneBackgroundGradient = useProjectStore((s) => s.setSceneBackgroundGradient)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
@@ -258,44 +218,26 @@ function GradientControls({ scene }: { scene: Scene }) {
   ]
 
   return (
-    <div data-testid="scene-gradient-controls" className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pb-2">
-      <div className="mt-2.5 flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
-        {kinds.map(({ kind, label, title }) => (
-          <button
-            key={kind}
-            data-testid={`scene-gradient-kind-${kind}`}
-            aria-pressed={gradient.kind === kind}
-            title={title}
-            onClick={() => setSceneBackgroundGradient(scene.id, { kind })}
-            className={`h-5 cursor-pointer rounded-full px-2 text-[9px] transition-colors ${
-              gradient.kind === kind
-                ? 'bg-[var(--bg-elevated)] font-semibold text-white/85'
-                : 'font-medium text-white/40 hover:bg-white/[0.05]'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-start gap-3">
-        <ColorWheelPill
+    <div data-testid="scene-gradient-controls">
+      <div className="px-4 pb-3">
+        <ColorField
           value={gradient.from}
           onChange={(hex) => setSceneBackgroundGradient(scene.id, { from: hex })}
-          label="FROM"
+          label="From"
           ariaLabel="Gradient start color"
-          align="left"
-          pillTestId="scene-gradient-from-pill"
-          wheelTestId="scene-gradient-from-wheel"
+          testId="scene-gradient-from-field"
         />
-        <ColorWheelPill
+      </div>
+      <div className="px-4 pb-3">
+        <ColorField
           value={gradient.to}
           onChange={(hex) => setSceneBackgroundGradient(scene.id, { to: hex })}
-          label="TO"
+          label="To"
           ariaLabel="Gradient end color"
-          align="right"
-          pillTestId="scene-gradient-to-pill"
-          wheelTestId="scene-gradient-to-wheel"
+          testId="scene-gradient-to-field"
         />
+      </div>
+      <div className="flex justify-center pb-1.5">
         <div
           className={gradient.kind === 'radial' ? 'pointer-events-none opacity-30' : ''}
           title={gradient.kind === 'radial' ? 'Radial gradients have no angle' : undefined}
@@ -314,11 +256,32 @@ function GradientControls({ scene }: { scene: Scene }) {
           />
         </div>
       </div>
+      <div className="flex justify-center pb-3">
+        <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+          {kinds.map(({ kind, label, title }) => (
+            <button
+              key={kind}
+              data-testid={`scene-gradient-kind-${kind}`}
+              aria-pressed={gradient.kind === kind}
+              title={title}
+              onClick={() => setSceneBackgroundGradient(scene.id, { kind })}
+              className={`h-5 cursor-pointer rounded-full px-2.5 text-[9px] transition-colors ${
+                gradient.kind === kind
+                  ? 'bg-[var(--bg-elevated)] font-semibold text-white/85'
+                  : 'font-medium text-white/40 hover:bg-white/[0.05]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
 export function SceneSettingsPanel({ scene }: { scene: Scene }) {
+  const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
   const mode = sceneBackdropMode(scene)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
   // The console's own tint anchors to what the backdrop actually shows: the
@@ -331,20 +294,38 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
 
   return (
     // -mx-3/-mt-3 cancel the inspector container's padding (full-bleed rule);
-    // -mb-12 cancels its pb-12 so the panel owns its exact height and the
-    // container never gains a scrollbar.
+    // -mb-12 cancels its pb-12 so the panel owns its exact height. Gradient's
+    // two stacked fields DO run past the pane's opening height - the sanctioned
+    // trade for "both stops visible at once, no selector" (design guide, grid
+    // console): the pane scrolls, and it is the caller's explicit ask.
     <section data-testid="scene-settings-panel" className="-mx-3 -mt-3 -mb-12" style={{ background: shade }}>
       <StagePreview scene={scene} />
       <div
-        className="flex items-center justify-between gap-3 px-4 py-3"
+        className="px-4 pt-3 pb-2.5"
         style={mode === 'transparent' ? undefined : {
           background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(anchor, 0.14)}, transparent)`,
         }}
       >
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">BACKDROP</span>
-        <BackdropControl scene={scene} />
+        <BackdropDeck scene={scene} />
       </div>
+      {mode === 'color' && (
+        <div className="px-4 pb-3">
+          <ColorField
+            value={scene.backgroundColor}
+            onChange={(hex) => setSceneBackgroundColor(scene.id, hex)}
+            label="Background"
+            ariaLabel="Backdrop color"
+            testId="scene-backdrop-field"
+          />
+        </div>
+      )}
       {mode === 'gradient' && <GradientControls scene={scene} />}
+      {mode === 'transparent' && (
+        // The one state with no header: there is no color to name.
+        <p className="px-4 pb-4 text-center text-[11px] text-white/45 select-none">
+          Rendering with transparent background
+        </p>
+      )}
     </section>
   )
 }

@@ -1,13 +1,14 @@
 'use client'
 
-// Bespoke settings for the 3D Shape instrument, following
-// docs/instrument-panel-design-guide.md: full-bleed in the chassis, washed with
-// a dark shade of the instrument's own color, no in-panel title or reset
-// chrome. A live orbitable preview of the real solid (the instrument's actual
-// physical material, driven by the same applyFundamentalSurface the scene
-// uses), then the geometry vocabulary as a glyph grid, the four surface
-// toggles, and two knob rows - SIZE / SPIN / TUBE with the color pill far
-// right, and the WIDTH / HEIGHT / DEPTH proportions beneath.
+// Bespoke settings for the 3D Shape instrument, built from the console kit
+// (./console) to docs/instrument-panel-design-guide.md: full-bleed in the
+// chassis, washed with a dark shade of the instrument's own color, no
+// in-panel title or reset chrome. A live orbitable preview of the real solid
+// (the instrument's actual physical material, driven by the same
+// applyFundamentalSurface the scene uses), then the geometry vocabulary as a
+// glyph grid, the FINISH segments with the four surface toggles, and two knob
+// rows - SIZE / SPIN / TUBE with the color pill far right, and the WIDTH /
+// HEIGHT / DEPTH proportions beneath.
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -32,29 +33,26 @@ import {
   type FundamentalGeometryId,
   type FundamentalSurface,
 } from '../instruments/FundamentalGeometry'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { ColorWheelPill, hexToHsv, hsvToHex, towardWhite, withAlpha } from './colorWheel'
-import { LaserKnob } from './laserKnob'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import {
+  bindPanel,
+  ColorPill,
+  Console,
+  ControlRow,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  Segmented,
+  spillOf,
+  towardWhite,
+  useConsoleAccent,
+  withAlpha,
+  type BooleanBinding,
+  type StringBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
-
-function parameter(parameters: readonly UserInterfaceParameter[], key: string) {
-  return parameters.find((candidate) => candidate.definition.key === key)
-}
-
-function numericValue(bound: UserInterfaceParameter | undefined, fallback: number): number {
-  return typeof bound?.value === 'number' ? bound.value : fallback
-}
-
-function stringValue(bound: UserInterfaceParameter | undefined, fallback: string): string {
-  return typeof bound?.value === 'string' ? bound.value : fallback
-}
-
-function toggleOn(bound: UserInterfaceParameter | undefined, fallback: boolean): boolean {
-  return typeof bound?.value === 'number' ? bound.value >= 0.5 : fallback
-}
 
 // ── Live preview ────────────────────────────────────────────────────────────
 
@@ -151,10 +149,12 @@ function SolidPreview({ geometry, tube, sides, color, surface, matte, shading, s
   spinSpeed: number
 }) {
   return (
-    <div
-      data-testid="cube-live-preview"
+    <PreviewWindow
+      height={132}
+      rounded
+      testId="cube-live-preview"
       title="Drag to orbit the solid"
-      className="relative h-[132px] cursor-grab overflow-hidden rounded-t-[9px] border-b border-white/[0.06] bg-[#05070c] active:cursor-grabbing"
+      className="cursor-grab active:cursor-grabbing"
     >
       <PreviewCanvas dpr={[1, 1.5]} camera={{ position: [0, 1.1, 4.6], fov: 42 }} gl={{ antialias: true, alpha: true }} shadows>
         <color attach="background" args={['#05070c']} />
@@ -181,7 +181,7 @@ function SolidPreview({ geometry, tube, sides, color, surface, matte, shading, s
           maxPolarAngle={Math.PI * 0.62}
         />
       </PreviewCanvas>
-    </div>
+    </PreviewWindow>
   )
 }
 
@@ -274,8 +274,11 @@ function GeometryGlyph({ geometry }: { geometry: FundamentalGeometryId }) {
   }
 }
 
-function GeometryGrid({ bound, accent }: { bound: UserInterfaceParameter; accent: string }) {
-  const selected = normalizeFundamentalGeometry(bound.value)
+/** Each option IS its solid (the guide's segments-with-shapes rule), on the
+ *  same accent-lit chip vocabulary as the other glyph grids. */
+function GeometryGrid({ b }: { b: StringBinding }) {
+  const accent = useConsoleAccent()
+  const selected = normalizeFundamentalGeometry(b.value)
   return (
     <div className="grid grid-cols-6 gap-1 px-2 pt-2">
       {FUNDAMENTAL_GEOMETRIES.map((option) => {
@@ -286,7 +289,7 @@ function GeometryGrid({ bound, accent }: { bound: UserInterfaceParameter; accent
             data-testid={`geometry-${option.id}`}
             aria-label={`Use ${option.label} geometry`}
             aria-pressed={active}
-            onClick={() => bound.setValue(option.id)}
+            onClick={() => b.set(option.id)}
             className={`flex min-w-0 flex-col items-center gap-0.5 rounded-[4px] border py-1 transition-colors ${active
               ? ''
               : 'border-white/[0.07] bg-black/20 text-white/35 hover:bg-white/[0.05] hover:text-white/65'}`}
@@ -305,64 +308,26 @@ function GeometryGrid({ bound, accent }: { bound: UserInterfaceParameter; accent
   )
 }
 
-// ── Finish ──────────────────────────────────────────────────────────────────
-
-/** The guide's segmented control: one lit segment on a recessed track. */
-function Segmented({ options, value, accent, ariaLabel, onChange }: {
-  options: { value: number; label: string; title?: string }[]
-  value: number
-  accent: string
-  ariaLabel: string
-  onChange: (value: number) => void
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={ariaLabel}
-      className="flex h-6 gap-[2px] rounded-[5px] border border-white/[0.07] bg-black/30 p-[2px]"
-    >
-      {options.map((option) => {
-        const active = option.value === value
-        return (
-          <button
-            key={option.value}
-            role="radio"
-            aria-checked={active}
-            title={option.title}
-            onClick={() => onChange(option.value)}
-            className={`flex-1 cursor-pointer rounded-[3px] px-1.5 text-[7px] font-semibold tracking-[0.12em] transition-colors ${
-              active ? '' : 'text-white/40 hover:bg-white/[0.04] hover:text-white/65'
-            }`}
-            style={active
-              ? { background: withAlpha(accent, 0.2), color: towardWhite(accent, 0.62) }
-              : undefined}
-          >
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 // ── Surface toggles ─────────────────────────────────────────────────────────
 
 /** A segmented-control-style chip for one boolean surface param: the lit state
  *  wears the accent as light, off stays neutral - same vocabulary as the
  *  guide's segmented control, one independent segment per physical property. */
-function SurfaceToggle({ bound, label, accent }: {
-  bound: UserInterfaceParameter | undefined
+function SurfaceToggle({ b, label }: {
+  b: BooleanBinding | null
   label: string
-  accent: string
 }) {
-  if (!bound || typeof bound.value !== 'number') return null
-  const on = bound.value >= 0.5
+  const accent = useConsoleAccent()
+  if (!b) return null
+  const on = b.value >= 0.5
   return (
     <button
       aria-pressed={on}
-      aria-label={`${bound.definition.label} ${on ? 'on' : 'off'}`}
-      onClick={() => bound.setValue(on ? 0 : 1)}
-      className={`h-6 rounded-[4px] border text-[7px] font-semibold tracking-[0.12em] transition-colors ${on
+      aria-label={`${b.def.label} ${on ? 'on' : 'off'}`}
+      onClick={() => b.set(on ? 0 : 1)}
+      // h-full: the row is items-stretch, so the toggles track the kit
+      // Segmented's height instead of pinning their own.
+      className={`h-full min-h-6 rounded-[4px] border text-[7px] font-semibold tracking-[0.12em] transition-colors ${on
         ? ''
         : 'border-white/[0.07] bg-black/25 text-white/40 hover:bg-white/[0.05] hover:text-white/65'}`}
       style={on ? {
@@ -376,159 +341,101 @@ function SurfaceToggle({ bound, label, accent }: {
   )
 }
 
-// ── Knobs ───────────────────────────────────────────────────────────────────
-
-function ParamKnob({ parameter: bound, label, accent, large = false }: {
-  parameter: UserInterfaceParameter | undefined
-  label: string
-  accent: string
-  large?: boolean
-}) {
-  if (!bound) return null
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-  return (
-    <LaserKnob
-      value={bound.value}
-      min={definition.min}
-      max={definition.max}
-      step={definition.step}
-      defaultValue={definition.default}
-      curve={definition.curve ?? 1}
-      label={label}
-      ariaLabel={definition.label}
-      accent={accent}
-      large={large}
-      onChange={bound.setValue}
-    />
-  )
-}
-
 // ── The panel ───────────────────────────────────────────────────────────────
 
 export const CubeUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const color = parameter(parameters, 'baseColor')
-  const geometry = parameter(parameters, 'geometry')
-  const size = parameter(parameters, 'size')
-  const spin = parameter(parameters, 'spinSpeed')
-  const dimX = parameter(parameters, 'dimX')
-  const dimY = parameter(parameters, 'dimY')
-  const dimZ = parameter(parameters, 'dimZ')
-  const tube = parameter(parameters, 'tube')
-  const sides = parameter(parameters, 'sides')
-  const finish = parameter(parameters, 'finish')
-  const shading = parameter(parameters, 'shading')
+  const b = bindPanel(parameters)
+  const color = b.color('baseColor')
+  const geometry = b.string('geometry')
+  const size = b.num('size')
+  const spin = b.num('spinSpeed')
+  const dimX = b.num('dimX')
+  const dimY = b.num('dimY')
+  const dimZ = b.num('dimZ')
+  const tube = b.num('tube')
+  const sides = b.num('sides')
+  const finish = b.select('finish')
   // The surface toggles and SHADE are showIf-gated on the finish, so whichever
   // set is off-mode is absent here - optional bindings, never fallback checks.
-  const reflective = parameter(parameters, 'reflective')
-  const refractive = parameter(parameters, 'refractive')
-  const shaded = parameter(parameters, 'shaded')
-  const textured = parameter(parameters, 'textured')
+  const shading = b.num('shading', { optional: true })
+  const reflective = b.boolean('reflective', { optional: true })
+  const refractive = b.boolean('refractive', { optional: true })
+  const shaded = b.boolean('shaded', { optional: true })
+  const textured = b.boolean('textured', { optional: true })
 
   if (!color || !geometry || !size || !spin) return <ParameterList parameters={parameters} />
 
-  const accent = stringValue(color, DEFAULT_FUNDAMENTAL_COLOR)
-  const accentHsv = hexToHsv(accent)
-  // A hue-true dark shade of the accent, never an alpha tint over the panel gray.
-  const shade = hsvToHex(accentHsv.h, Math.min(accentHsv.s, 0.5), 0.075)
+  const accent = color.value || DEFAULT_FUNDAMENTAL_COLOR
   const pillHalo = `0 0 10px ${withAlpha(accent, 0.35)}`
 
   const selectedGeometry = normalizeFundamentalGeometry(geometry.value)
-  const tubeFraction = numericValue(tube, DEFAULT_TUBE_FRACTION)
-  const sideCount = normalizeSides(numericValue(sides, DEFAULT_SIDES))
-  const matte = numericValue(finish, 0) < 0.5
-  const shadeAmount = numericValue(shading, POSTER_SHADE_DEFAULT)
+  const matte = (finish?.value ?? 0) < 0.5
   const surface: FundamentalSurface = {
-    reflective: toggleOn(reflective, false),
-    refractive: toggleOn(refractive, false),
-    shaded: toggleOn(shaded, true),
-    textured: toggleOn(textured, false),
+    reflective: (reflective?.value ?? 0) >= 0.5,
+    refractive: (refractive?.value ?? 0) >= 0.5,
+    shaded: (shaded?.value ?? 1) >= 0.5,
+    textured: (textured?.value ?? 0) >= 0.5,
   }
-  const dims: [number, number, number] = [
-    numericValue(dimX, 1),
-    numericValue(dimY, 1),
-    numericValue(dimZ, 1),
-  ]
 
   return (
-    <section
-      data-testid="cube-user-interface"
-      className="-m-3 rounded-[9px]"
-      style={{ background: shade }}
-    >
+    <Console accent={accent} bleed="full" testId="cube-user-interface">
       <SolidPreview
         geometry={selectedGeometry}
-        tube={tubeFraction}
-        sides={sideCount}
+        tube={tube?.value ?? DEFAULT_TUBE_FRACTION}
+        sides={normalizeSides(sides?.value ?? DEFAULT_SIDES)}
         color={accent}
         surface={surface}
         matte={matte}
-        shading={shadeAmount}
-        size={numericValue(size, 1)}
-        dims={dims}
-        spinSpeed={numericValue(spin, 0)}
+        shading={shading?.value ?? POSTER_SHADE_DEFAULT}
+        size={size.value}
+        dims={[dimX?.value ?? 1, dimY?.value ?? 1, dimZ?.value ?? 1]}
+        spinSpeed={spin.value}
       />
       <div
         // The solid's light spilling through the seam onto the console - the
         // room is lit by the instrument, not painted.
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(accent, 0.14)}, transparent)` }}
+        style={{ background: spillOf(accent) }}
       >
-        <GeometryGrid bound={geometry} accent={accent} />
+        <GeometryGrid b={geometry} />
         {/* The FINISH picks which surface console follows it: Gloss brings the
             four physical toggles, Matte swaps them for the SHADE knob below. */}
         <div className="flex items-stretch gap-1 px-2 pt-1.5">
           {finish && (
             <div className="w-[108px] shrink-0">
-              <Segmented
-                ariaLabel="Finish"
-                options={[
-                  { value: 0, label: 'MATTE', title: 'Flat poster surface - the Overlap instruments’ look' },
-                  { value: 1, label: 'GLOSS', title: 'The physical material with reflections and refraction' },
-                ]}
-                value={matte ? 0 : 1}
-                accent={accent}
-                onChange={(v) => finish.setValue(v)}
-              />
+              <Segmented b={finish} name="Finish" />
             </div>
           )}
           {!matte && (
             <div className="grid flex-1 grid-cols-4 gap-1">
-              <SurfaceToggle bound={reflective} label="REFLECT" accent={accent} />
-              <SurfaceToggle bound={refractive} label="REFRACT" accent={accent} />
-              <SurfaceToggle bound={shaded} label="LIT" accent={accent} />
-              <SurfaceToggle bound={textured} label="TEXTURE" accent={accent} />
+              <SurfaceToggle b={reflective} label="REFLECT" />
+              <SurfaceToggle b={refractive} label="REFRACT" />
+              <SurfaceToggle b={shaded} label="LIT" />
+              <SurfaceToggle b={textured} label="TEXTURE" />
             </div>
           )}
         </div>
-        <div className="flex items-end gap-4 px-3 pt-2">
-          <ParamKnob parameter={size} label="SIZE" accent={accent} large />
-          <ParamKnob parameter={spin} label="SPIN" accent={accent} />
-          {matte && <ParamKnob parameter={shading} label="SHADE" accent={accent} />}
-          {TUBED_GEOMETRIES.has(selectedGeometry) && (
-            <ParamKnob parameter={tube} label="TUBE" accent={accent} />
-          )}
-          {SIDED_GEOMETRIES.has(selectedGeometry) && (
-            <ParamKnob parameter={sides} label="SIDES" accent={accent} />
-          )}
+        <ControlRow className="gap-4 px-3 pt-2">
+          <Knob b={size} label="SIZE" large />
+          <Knob b={spin} label="SPIN" />
+          {matte && <Knob b={shading} label="SHADE" />}
+          {TUBED_GEOMETRIES.has(selectedGeometry) && <Knob b={tube} label="TUBE" />}
+          {SIDED_GEOMETRIES.has(selectedGeometry) && <Knob b={sides} label="SIDES" />}
           <div className="ml-auto">
-            <ColorWheelPill
-              value={accent}
-              onChange={(hex) => color.setValue(hex)}
-              label="COLOR"
-              ariaLabel="Shape color"
+            <ColorPill
+              b={color}
               halo={pillHalo}
-              align="right"
               pillTestId="cube-color-pill"
               wheelTestId="cube-color-wheel"
             />
           </div>
-        </div>
-        <div className="flex items-end gap-4 px-3 pb-3 pt-1.5">
-          <ParamKnob parameter={dimX} label="WIDTH" accent={accent} />
-          <ParamKnob parameter={dimY} label="HEIGHT" accent={accent} />
-          <ParamKnob parameter={dimZ} label="DEPTH" accent={accent} />
-        </div>
+        </ControlRow>
+        <ControlRow className="gap-4 px-3 pb-3 pt-1.5">
+          <Knob b={dimX} label="WIDTH" />
+          <Knob b={dimY} label="HEIGHT" />
+          <Knob b={dimZ} label="DEPTH" />
+        </ControlRow>
+        <More parameters={b.rest()} label="MORE" className="px-3 pb-3" />
       </div>
-    </section>
+    </Console>
   )
 }

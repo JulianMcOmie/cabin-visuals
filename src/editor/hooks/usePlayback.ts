@@ -40,6 +40,7 @@ export function usePlayback() {
       // An in-progress audio sync drag overrides the user's loop region for the
       // length of the gesture (see timeline/audioSyncDrag.ts).
       getLoopRegion: () => useUIStore.getState().audioSyncDrag?.loop ?? useTimeStore.getState().loopRegion,
+      getPlaybackRate: () => useTimeStore.getState().playbackRate,
       onEnd: () => setIsPlaying(false),
     });
 
@@ -76,9 +77,18 @@ export function usePlayback() {
     const unsubBpm = useProjectStore.subscribe((s, p) => {
       if (s.bpm !== p.bpm && useTimeStore.getState().isPlaying) engine.setBpm(s.bpm)
     })
+
+    // Monitoring speed follows the same shape: the control writes the store, the
+    // transport hears about it here. Unconditional (unlike bpm) because a rate
+    // picked while paused must be in effect at the next play() - the engine
+    // re-arms only if something is actually sounding.
+    const unsubRate = useTimeStore.subscribe((s, p) => {
+      if (s.playbackRate !== p.playbackRate) engine.setPlaybackRate(s.playbackRate)
+    })
     return () => {
       unsubAudio()
       unsubBpm()
+      unsubRate()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
