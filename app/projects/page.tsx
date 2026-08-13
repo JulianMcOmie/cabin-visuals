@@ -56,6 +56,15 @@ export default function ProjectsPage() {
   // tamper-proofing.
   const projectLimit = isAnonymous ? ANON_PROJECT_LIMIT : FREE_PROJECT_LIMIT
   const atFreeLimit = !plan.loading && !plan.isPro && projects.length >= projectLimit
+  // The two ways the cap can bite read differently, so they look different. A
+  // signed-in free account is genuinely capped until it upgrades: the create
+  // buttons grey out. A guest is one signup away from four more projects, so
+  // its buttons stay live and clicking one opens the signup gate.
+  const createNeedsSignup = atFreeLimit && isAnonymous
+  const createBlocked = atFreeLimit && !isAnonymous
+  // The last-resort guard behind the buttons. The guest branch is not reached
+  // from the grid any more (the signup gate catches that click first); it stays
+  // as the backstop for any other caller.
   const promptUpgrade = () => {
     if (isAnonymous) {
       if (window.confirm(`Guest sessions hold ${ANON_PROJECT_LIMIT} project. Sign up to get ${FREE_PROJECT_LIMIT} free projects?`)) {
@@ -234,7 +243,8 @@ export default function ProjectsPage() {
           onDeleteProject={handleDeleteProject}
           onDuplicateProject={handleDuplicateProject}
           onCreateFromTemplate={handleCreateFromTemplate}
-          createBlocked={atFreeLimit}
+          createBlocked={createBlocked}
+          createNeedsSignup={createNeedsSignup}
         />
       </div>
       {handingOff && (

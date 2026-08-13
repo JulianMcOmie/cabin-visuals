@@ -30,6 +30,7 @@ export type AnalyticsEvent =
   | 'project_opened'
   | 'project_deleted'
   | 'project_duplicated'
+  | 'project_gate_shown' // props: { source: 'create' | 'duplicate' } - a guest at the guest-session cap clicked a create affordance and was shown the signup invitation
   // Auth
   | 'signup_started'
   | 'signup_password_set'

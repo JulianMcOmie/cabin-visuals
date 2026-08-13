@@ -7,7 +7,7 @@ import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2, MoreHoriz
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
-import { EditorialSkin } from "./landing/editorialTheme"
+import { EditorialSkin, editorialFontClasses } from "./landing/editorialTheme"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { GALLERY_TEMPLATES, type TemplateDef } from "../templates"
@@ -17,6 +17,8 @@ import { TemplateLyricPreview } from "./TemplateLyricPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
 import { track } from "../analytics/analytics"
 import { midiBlockPalette } from "../editor/utils/colors"
+import { EditorDialog } from "../editor/components/EditorDialog"
+import { SignupCard } from "../editor/components/SignupCard"
 
 export interface ProjectMetadata {
   id: string
@@ -163,6 +165,11 @@ interface ProjectsDisplayProps {
   /** Free-plan limit reached: the create buttons grey out and explain
    *  themselves on hover instead of opening the create flow. */
   createBlocked: boolean
+  /** Guest at the guest-session cap: the create affordances stay LIVE and
+   *  clicking one opens the signup gate instead of the create flow. Never true
+   *  at the same time as `createBlocked` - signing up is the way out here, so
+   *  there is nothing to grey out. */
+  createNeedsSignup: boolean
 }
 
 export default function ProjectsDisplay({
@@ -174,45 +181,41 @@ export default function ProjectsDisplay({
   onDuplicateProject,
   onCreateFromTemplate,
   createBlocked,
+  createNeedsSignup,
 }: ProjectsDisplayProps) {
   const openCreate = () => {
     if (createBlocked) return
+    if (createNeedsSignup) { openSignupGate('create'); return }
     track('new_project_clicked')
     setCreateStep('choice')
   }
+  const openSignupGate = (source: 'create' | 'duplicate') => {
+    track('project_gate_shown', { source })
+    setSignupGate(true)
+  }
   // The hover explanation for a greyed-out create button - a clickable exit
-  // inside (sign up for guests, upgrade for free accounts), so the dead end
-  // has a way out.
-  const isAnonymous = !!user?.is_anonymous
+  // inside (upgrade to Pro), so the dead end has a way out. Guests never see
+  // this: their button still works and the signup gate carries the same words.
   const limitHint = (
     // The offset is PADDING on a hidden wrapper, not a margin - the pointer
     // crossing from the button to the popup never leaves the hover group, so
     // the popup stays put long enough to click the link inside.
     <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
       <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-      {isAnonymous ? (
-        <>
-          Guest sessions hold 1 project.{' '}
-          <Link href="/signup" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
-            Sign up
-          </Link>{' '}
-          to get 5 free projects.
-        </>
-      ) : (
-        <>
-          The free plan includes 5 projects.{' '}
-          <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
-            Upgrade to Pro
-          </Link>{' '}
-          for unlimited projects.
-        </>
-      )}
+        The free plan includes 5 projects.{' '}
+        <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
+          Upgrade to Pro
+        </Link>{' '}
+        for unlimited projects.
       </div>
     </div>
   )
   // The create flow: closed, the Empty/Template choice, the name entry, or the
   // template catalog.
   const [createStep, setCreateStep] = useState<null | 'choice' | 'name' | 'catalog'>(null)
+  // The guest-cap signup invitation - the same dialog shell and the same form
+  // as the editor's export gate.
+  const [signupGate, setSignupGate] = useState(false)
   // The project pending an in-UI delete confirmation, with the click position
   // to anchor the popover near (null = no popover).
   const [deleteTarget, setDeleteTarget] = useState<{ project: ProjectMetadata; x: number; y: number } | null>(null)
@@ -319,6 +322,28 @@ export default function ProjectsDisplay({
         )}
       </AnimatePresence>
 
+      {/* The guest cap is an invitation, not a wall: every create affordance
+          stays live and lands here instead of greying out. Same shell, same
+          form, same voice as the editor's export gate - the sentence the
+          buttons used to whisper on hover is now the subtitle. */}
+      <AnimatePresence>
+        {signupGate && (
+          <EditorDialog
+            title="Sign up to start another project."
+            subtitle="Guest sessions only hold one project. Create an account to create more projects."
+            onClose={() => setSignupGate(false)}
+            variant="prompt"
+            width="w-[400px]"
+            // The portal lands on document.body, outside this page's skin
+            // wrapper - carry the skin across or the card wears the editor's
+            // blue accent on a teal page.
+            portalClassName={`editorial-skin font-sans ${editorialFontClasses}`}
+          >
+            <SignupCard page="projects-gate" />
+          </EditorDialog>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {deleteTarget && (
           <ConfirmDeletePopover
@@ -339,8 +364,11 @@ export default function ProjectsDisplay({
             createBlocked={createBlocked}
             onClose={() => setProjectMenu(null)}
             onDuplicate={() => {
-              onDuplicateProject(projectMenu.project.id)
               setProjectMenu(null)
+              // A copy is a new project, so it meets the same gate the create
+              // buttons do rather than silently doing nothing.
+              if (createNeedsSignup) { openSignupGate('duplicate'); return }
+              onDuplicateProject(projectMenu.project.id)
             }}
             onDelete={() => {
               setDeleteTarget(projectMenu)

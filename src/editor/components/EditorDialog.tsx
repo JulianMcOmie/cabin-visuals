@@ -35,6 +35,7 @@ const dialogStack: string[] = []
 
 export function EditorDialog({
   title,
+  subtitle,
   onClose,
   children,
   width = 'w-[420px]',
@@ -45,9 +46,16 @@ export function EditorDialog({
   animated = true,
   closeLabel = 'Close',
   panelRef: panelRefProp,
+  portalClassName = '',
 }: {
   /** `chrome` renders it uppercase; `prompt` renders it exactly as written. */
   title: string
+  /**
+   * Optional second line under the title, for the detail the title shouldn't
+   * carry (a limit, a consequence). Quieter and never uppercase, in both
+   * variants - the title stays the sentence you read first.
+   */
+  subtitle?: ReactNode
   onClose: () => void
   children: ReactNode
   /** Tailwind width class for the card. */
@@ -72,6 +80,14 @@ export function EditorDialog({
   closeLabel?: string
   /** Supply one if the caller needs to hit-test the panel itself. */
   panelRef?: RefObject<HTMLDivElement | null>
+  /**
+   * Classes for the SCRIM. The dialog portals to document.body, so it lands
+   * outside any wrapper the caller sits in - a screen under `<EditorialSkin>`
+   * passes that skin's classes here or its dialog wears the unskinned palette
+   * (editor blue on a teal page). Editor callers want exactly that default and
+   * pass nothing.
+   */
+  portalClassName?: string
 }) {
   const ownRef = useRef<HTMLDivElement>(null)
   const panelRef = panelRefProp ?? ownRef
@@ -118,7 +134,7 @@ export function EditorDialog({
   const scrimStyle = nested
     ? { background: 'rgba(8,9,13,0.45)', backdropFilter: 'blur(6px)' }
     : { background: 'rgba(8,9,13,0.72)', backdropFilter: 'blur(2px)' }
-  const scrimClass = `fixed inset-0 flex items-center justify-center ${nested ? 'z-[110]' : 'z-[100]'}`
+  const scrimClass = `fixed inset-0 flex items-center justify-center ${nested ? 'z-[110]' : 'z-[100]'} ${portalClassName}`
   // --gsi-surface travels with the card colour it has to match: Google's
   // personalized sign-in button falls back to a white base, and globals.css
   // repaints it onto this value (see the .gsi-host rules there).
@@ -127,16 +143,24 @@ export function EditorDialog({
     if (dismissOnScrimClick && e.target === e.currentTarget) onClose()
   }
 
+  // The margin lives on the wrapper rather than the title row so that adding a
+  // subtitle doesn't change the spacing below the header - with no subtitle the
+  // box is identical to the row that shipped.
   const head = (
-    <div className={`${headRow} flex items-center justify-between gap-3`}>
-      <span className={titleClass}>{title}</span>
-      <button
-        onClick={onClose}
-        aria-label={closeLabel}
-        className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
-      >
-        <X size={14} />
-      </button>
+    <div className={headRow}>
+      <div className="flex items-center justify-between gap-3">
+        <span className={titleClass}>{title}</span>
+        <button
+          onClick={onClose}
+          aria-label={closeLabel}
+          className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      {subtitle && (
+        <p className="mt-2 pr-[38px] text-[13px] leading-relaxed text-[var(--text-3)]">{subtitle}</p>
+      )}
     </div>
   )
 
