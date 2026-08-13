@@ -175,6 +175,43 @@ button, input, select, textarea {
   color-scheme: light;
 }
 
+/* GSI draws its BUTTON as real page DOM (only its comms frame is an iframe),
+   so the button is ours to restyle. `theme: 'filled_black'` is a MODIFIER
+   class layered over a base rule whose own declaration is
+   `background-color: rgb(255,255,255)` - so anything that renders without the
+   modifier falls back to white.
+
+   That is what the PERSONALIZED button does: `.jVeSEe` is the "Sign in as
+   <name>" form GSI switches to once the browser already carries a Google
+   session, and it lands on the base white, so the card grows a white slab
+   where every other control is near-black. These rules put it back on the
+   surface it sits on.
+
+   Scoped to `.gsi-host` so it can never reach a Google button somewhere else,
+   and keyed off `--gsi-surface` so each host states its own colour (the auth
+   card is --bg-panel, the editor's dialog is #0f1118). Deliberately NOT
+   touching the themed variants - a non-personalized button keeps exactly the
+   pixels Google draws today. The tile behind the G stays white on purpose:
+   that is the brand mark's own background, not our chrome. */
+.gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe {
+  background-color: var(--gsi-surface, var(--bg-panel));
+  border-color: var(--border);
+  color: var(--text);
+}
+.gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe .nsm7Bb-HzV7m-LgbsSe-BPrWId .K4efff {
+  color: var(--text-3);
+  fill: var(--text-3);
+}
+/* Google's default hover wash is a blue tint meant for a white button; the
+   white-alpha one is what its own dark themes use. */
+.gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:hover .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+  background: rgba(255, 255, 255, 0.08);
+}
+.gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
+.gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* Blob animations */
 .blob-container {
   position: fixed;

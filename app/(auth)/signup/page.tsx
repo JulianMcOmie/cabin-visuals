@@ -134,7 +134,7 @@ function SignupPageContent() {
              behind whatever width GSI decides to render). */}
          {/* w-full so the empty container measures the card's inner width -
              renderButton reads clientWidth before anything is in it. */}
-         <div id="google-signin-button-container" className="flex w-full justify-center"></div>
+         <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
       </div>
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">

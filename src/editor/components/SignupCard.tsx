@@ -84,7 +84,7 @@ export function SignupCard({ page }: { page: string }) {
         <span className="flex-1 border-t border-[var(--border)]" />
       </div>
 
-      <div id={googleId} className="flex w-full justify-center" />
+      <div id={googleId} className="gsi-host flex w-full justify-center" />
 
       <p className="mt-4 text-center text-[13px] text-[var(--text-3)]">
         Already have an account?{' '}

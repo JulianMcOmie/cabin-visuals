@@ -119,7 +119,10 @@ export function EditorDialog({
     ? { background: 'rgba(8,9,13,0.45)', backdropFilter: 'blur(6px)' }
     : { background: 'rgba(8,9,13,0.72)', backdropFilter: 'blur(2px)' }
   const scrimClass = `fixed inset-0 flex items-center justify-center ${nested ? 'z-[110]' : 'z-[100]'}`
-  const panelClass = `relative ${width} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] ${pad} shadow-[0_30px_80px_rgba(0,0,0,0.6)]`
+  // --gsi-surface travels with the card colour it has to match: Google's
+  // personalized sign-in button falls back to a white base, and globals.css
+  // repaints it onto this value (see the .gsi-host rules there).
+  const panelClass = `relative ${width} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] [--gsi-surface:#0f1118] ${pad} shadow-[0_30px_80px_rgba(0,0,0,0.6)]`
   const onScrimDown = (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => {
     if (dismissOnScrimClick && e.target === e.currentTarget) onClose()
   }
