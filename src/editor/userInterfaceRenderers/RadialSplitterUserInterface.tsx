@@ -1,8 +1,8 @@
 'use client'
 
-// Bespoke settings for the Radial splitter, following
-// docs/instrument-panel-design-guide.md (the Grid splitter's panel is the
-// nearest sibling - same subject, a LAYOUT):
+// Bespoke settings for the Radial splitter, built from the console kit
+// (./console) to docs/instrument-panel-design-guide.md (the Grid splitter's
+// panel is the nearest sibling - same subject, a LAYOUT):
 //
 // 1. A live preview window: the splitter's REAL resolve() (no notes - the
 //    resting formation is the panel's claim; MIDI bends it) applied to generic
@@ -21,47 +21,30 @@
 // Presentation only: every control routes through the passed parameter
 // bindings; the preview imports the definition read-only.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { RADIAL_COLOR } from '../core/visualCopies/identityColors'
 import { radialSplitter, type RadialSettings } from '../core/visualCopies/library'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { withAlpha } from './colorWheel'
-import { LaserKnob } from './laserKnob'
-import { ParameterList } from './ParametersUserInterface'
+import {
+  bindPanel,
+  Console,
+  ControlRow,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  type NumBinding,
+  type SelectBinding,
+} from './console'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
+// The accent comes FROM THE DEFINITION - the same hue this splitter's timeline
+// blocks and piano-roll notes wear.
 const ACCENT = RADIAL_COLOR
-// The guide's hue-true dark shade of the accent (never an alpha tint).
-const PANEL_SHADE = '#120a13'
-const ROOM = '#05070c'
 const PREVIEW_HEIGHT = 140
-
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
 
 // ── 3D formation preview ─────────────────────────────────────────────────────
 // Same painter-sorted-cube-faces approach as GridSplitterUserInterface: the
@@ -196,62 +179,38 @@ function FormationPreview({ settings }: { settings: RadialSettings }) {
   }, [])
 
   return (
-    <div
-      ref={hostRef}
-      data-testid="radial-formation-preview"
-      title="Drag to orbit"
-      className="relative w-full cursor-grab touch-none select-none overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
-      style={{ height: PREVIEW_HEIGHT, background: ROOM }}
-      onPointerDown={(event) => {
-        event.preventDefault()
-        try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-        const view = viewRef.current
-        view.auto = false
-        dragRef.current = { x: event.clientX, y: event.clientY, yaw: view.yaw, pitch: view.pitch }
-      }}
-      onPointerMove={(event) => {
-        const drag = dragRef.current
-        if (!drag) return
-        viewRef.current.yaw = drag.yaw + (event.clientX - drag.x) * 0.01
-        viewRef.current.pitch = clamp(drag.pitch + (event.clientY - drag.y) * 0.01, -1.35, 1.35)
-      }}
-      onPointerUp={(event) => {
-        dragRef.current = null
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-      }}
-    >
-      <canvas ref={canvasRef} className="h-full w-full" />
-    </div>
+    <PreviewWindow height={PREVIEW_HEIGHT} testId="radial-formation-preview" title="Drag to orbit">
+      <div
+        ref={hostRef}
+        className="absolute inset-0 cursor-grab touch-none select-none active:cursor-grabbing"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+          const view = viewRef.current
+          view.auto = false
+          dragRef.current = { x: event.clientX, y: event.clientY, yaw: view.yaw, pitch: view.pitch }
+        }}
+        onPointerMove={(event) => {
+          const drag = dragRef.current
+          if (!drag) return
+          viewRef.current.yaw = drag.yaw + (event.clientX - drag.x) * 0.01
+          viewRef.current.pitch = clamp(drag.pitch + (event.clientY - drag.y) * 0.01, -1.35, 1.35)
+        }}
+        onPointerUp={(event) => {
+          dragRef.current = null
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+        }}
+      >
+        <canvas ref={canvasRef} className="h-full w-full" />
+      </div>
+    </PreviewWindow>
   )
 }
 
 // ── Controls ─────────────────────────────────────────────────────────────────
 
-function Knob({ b, label, large = false, format }: {
-  b: NumBinding
-  label: string
-  large?: boolean
-  format?: (value: number) => string
-}) {
-  return (
-    <LaserKnob
-      value={b.value}
-      min={b.def.min}
-      max={b.def.max}
-      step={b.def.step}
-      defaultValue={b.def.default}
-      curve={b.def.curve ?? 1}
-      label={label}
-      ariaLabel={b.def.label}
-      accent={ACCENT}
-      large={large}
-      format={format}
-      onChange={b.set}
-    />
-  )
-}
-
-/** Segmented selector over the plane select's options. */
+/** Segmented selector over the plane select's options, in the solid-fill
+ *  family (Approach's icon segments are the sibling). */
 function PlaneSegmented({ b }: { b: SelectBinding }) {
   return (
     <div className="flex flex-col items-center gap-1" data-testid="radial-plane">
@@ -293,7 +252,6 @@ interface RadialBindings {
 /** Hooks live here, below the renderer's fallback branch. */
 function RadialConsole({ bound }: { bound: RadialBindings }) {
   const { copies, radius, size, plane, rest } = bound
-  const [showMore, setShowMore] = useState(false)
 
   const settings = useMemo(() => ({
     ...(mergeDefinitionSettings(radialSplitter, undefined) as unknown as RadialSettings),
@@ -304,44 +262,24 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
   }), [copies.value, radius.value, size.value, plane.value])
 
   return (
-    <section data-testid="radial-user-interface" className="-mx-3 -mt-3" style={{ background: PANEL_SHADE }}>
+    <Console accent={ACCENT} testId="radial-user-interface">
       <FormationPreview settings={settings} />
       {/* The preview's light spilling through the seam onto the controls. */}
-      <div
-        className="pointer-events-none h-0"
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(ACCENT, 0.14)}, transparent)` }}
-      />
-      <div className="flex items-end justify-center gap-5 px-4 pt-2.5">
+      <ControlRow spill className="justify-center gap-5 px-4 pt-2.5">
         <Knob b={copies} label="COPIES" format={(v) => `${Math.round(v)}`} />
         <Knob b={radius} label="RADIUS" large />
         <Knob b={size} label="SIZE" />
-      </div>
+      </ControlRow>
       <div className="flex justify-center px-4 pb-3 pt-2">
         <PlaneSegmented b={plane} />
       </div>
-      {rest.length > 0 && (
-        <div className="px-4 pb-2">
-          <button
-            aria-expanded={showMore}
-            onClick={() => setShowMore((v) => !v)}
-            className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
-          >
-            {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-            MORE
-          </button>
-          {showMore && (
-            <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
-              <ParameterList parameters={rest} />
-            </div>
-          )}
-        </div>
-      )}
-    </section>
+      <More parameters={rest} label="MORE" className="px-4 pb-2" />
+    </Console>
   )
 }
 
 export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const copies = pool.num('copies')
   const radius = pool.num('radius')
   const size = pool.num('size')
