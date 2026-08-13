@@ -103,6 +103,31 @@ browser picker with its discrete swatches:
 
 Reuse this pattern anywhere an instrument exposes a color.
 
+### When the color is the subject: the flat field
+
+`ColorField` (same module) is the wheel's anatomy laid flat and always open — a
+captioned header with the live hex, a hue rail, a saturation/brightness field.
+Take it over the pill when either is true:
+
+- **The popover would cover the thing you are judging.** The scene backdrop's
+  wheel opened upward over the stage that *shows* the backdrop, so every drag
+  was made blind. A flat field keeps the preview under your thumb.
+- **Two colors must be live at once.** Two stacked fields give a two-stop
+  gradient one editor per stop with no selector deciding where a drag lands —
+  which is what SceneSettingsPanel does (FROM over TO, angle knob and kind
+  centered below). One anatomy serves both states: fill is the same field once,
+  captioned BACKGROUND.
+
+It costs ~85px per color against the pill's ~50px, so it is a trade you make on
+purpose. Two fields plus a knob row DO run the panel past the height budget;
+that is the sanctioned grid-console trade (below) when the ask is explicitly
+"everything visible at once".
+
+A panel whose modes swap controls should hold its PREVIEW at one height across
+all of them. The scene panel used to crop its stage 148 → 118px to pay for
+gradient's extra row: the whole console jumped at the exact moment you reached
+for the control, which is worse than the scroll it bought.
+
 ## Glow is the instrument speaking, not the cursor
 
 Lean into each instrument's character — the panel should look like what it
@@ -220,9 +245,11 @@ render `ParameterList` for everything rather than a half-empty custom layout.
 - ~~Remove the panel-top track-name header~~ — done, and then answered
   properly: the standalone header stayed dead, but identity came back ON the
   tab rail (name left, tabs right, the track's color lighting the active tab).
-  A panel that wants *more* identity than that still bakes it into its own
-  surface (the scene panel's etched "SCENE" wordmark, the audio panel's
-  oscilloscope label) — never a heading row above the tabs.
+  A panel that wants *more* identity than that bakes it into its own surface
+  (the audio panel's oscilloscope label) — never a heading row above the tabs.
+  Even that is worth questioning: the scene stage's etched "SCENE" wordmark was
+  removed 2026-08-12 as obnoxious — with the name already on the rail it was a
+  caption sitting on top of the picture it labelled.
 - A real layering solution to replace the deprecated IN FRONT toggle.
 - ~~Migrate the other bespoke renderers to these rules~~ — done 2026-08-02
   on the console kit: Hopf, DotField, Pixel Blast, Particle Burst,
