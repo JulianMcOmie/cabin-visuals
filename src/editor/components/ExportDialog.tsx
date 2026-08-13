@@ -2,14 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import Link from 'next/link'
-import Script from 'next/script'
-import { MotionConfig, motion } from 'framer-motion'
-import { X, Check, Upload, Loader2 } from 'lucide-react'
+import { Check, Upload } from 'lucide-react'
 import { track } from '../../analytics/analytics'
-import { initiateSignup } from '../../../app/(auth)/signup/actions'
-import { handleSignInWithGoogle } from '../../../app/(auth)/login/actions'
-import { stashAnonWork } from '../../persistence/carryover'
+import { EditorDialog } from './EditorDialog'
+import { SignupCard } from './SignupCard'
 import { useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { useTimeStore } from '../store/TimeStore'
@@ -295,12 +291,7 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const [freeze, setFreeze] = useState<{ src: string; rect: DOMRect } | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const gateRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
-  // Bumped by the GSI <Script>'s onLoad so the render-button effect re-runs
-  // once the script is actually available.
-  const [gsiReady, setGsiReady] = useState(false)
-  const [googleBusy, setGoogleBusy] = useState(false)
   const idle = phase.kind === 'settings'
   const gated = phase.kind === 'gate'
   // The gate floats OVER the settings, which stay mounted (blurred) behind it.
@@ -313,64 +304,6 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
   useEffect(() => {
     void isExportSupported().then((s) => setAudioOk(s.audioOk))
   }, [])
-
-  // Kill background shortcuts while the dialog is up; dialog fields pass through.
-  useEffect(() => {
-    const block = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
-      if (t && (panelRef.current?.contains(t) || gateRef.current?.contains(t))) return
-      if (e.key === 'Escape' && phase.kind === 'settings') { onClose(); return }
-      // The gate is a detour, not a dead end - Escape backs out to settings.
-      if (e.key === 'Escape' && phase.kind === 'gate') { setPhase({ kind: 'settings' }); return }
-      e.stopPropagation()
-      if (e.code === 'Space' || e.code === 'Enter') e.preventDefault()
-    }
-    window.addEventListener('keydown', block, { capture: true })
-    return () => window.removeEventListener('keydown', block, { capture: true })
-  }, [phase.kind, onClose])
-
-  useEffect(() => {
-    useUIStore.getState().setModalOpen(true)
-    return () => useUIStore.getState().setModalOpen(false)
-  }, [])
-
-  // Mirror /signup's arrival behavior when the gate opens: stash anonymous
-  // work so the Google path (new session) can carry this project over.
-  useEffect(() => {
-    if (gated) void stashAnonWork()
-  }, [gated])
-
-  // Google sign-in inside the gate card. Imperative initialize+renderButton:
-  // the declarative g_id_onload path only scans the DOM at script load, and
-  // the GSI script may already be loaded by the time the gate opens.
-  useEffect(() => {
-    if (!gated) return
-    const google = (window as unknown as { google?: any }).google
-    const container = document.getElementById('export-gate-google-btn')
-    if (!google?.accounts?.id || !container || container.childElementCount > 0) return
-    google.accounts.id.initialize({
-      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      callback: async (response: { credential?: string }) => {
-        if (!response?.credential) return
-        track('google_signin_submitted', { page: 'export-gate' })
-        setGoogleBusy(true)
-        try {
-          await stashAnonWork()
-          await handleSignInWithGoogle(response.credential)
-        } catch (err) {
-          // Next.js signals a server-action redirect by throwing - let it fly.
-          if (err instanceof Error && err.message.includes('NEXT_REDIRECT')) throw err
-          console.error('Google sign-in failed:', err)
-          setGoogleBusy(false)
-        }
-      },
-    })
-    google.accounts.id.renderButton(container, {
-      theme: 'filled_black', size: 'large', type: 'standard', text: 'signup_with',
-      shape: 'rectangular', logo_alignment: 'left',
-      width: Math.min(342, Math.max(200, container.clientWidth || 342)),
-    })
-  }, [gated, gsiReady])
 
   const start = async () => {
     // No account: the render is ready, but the file (and the project) need a
@@ -442,54 +375,28 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
   const vertical = settings.aspect === '9:16'
   const title = phase.kind === 'running' ? 'RENDERING' : phase.kind === 'done' ? 'EXPORT COMPLETE' : phase.kind === 'error' ? 'EXPORT FAILED' : 'EXPORT'
 
-  const closeButton = (
-    <button
-      onClick={() => { abortRef.current?.abort(); onClose() }}
-      aria-label="Close"
-      className="flex h-[30px] w-[30px] items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
-    >
-      <X size={14} />
-    </button>
-  )
-
-  return createPortal(
-    <MotionConfig reducedMotion="user">
+  return (
+    <>
       {/* The freeze still hides the garbled pinned canvas BENEATH the scrim -
-          above it, it read as the visualizer floating over the export UI. */}
-      {freeze && (
+          above it, it read as the visualizer floating over the export UI.
+          A sibling of the dialog rather than a child, so it sits under the
+          scrim at its own z. */}
+      {freeze && createPortal(
         <img
           src={freeze.src}
           alt=""
           className="fixed z-[90] pointer-events-none select-none"
           style={{ left: freeze.rect.left, top: freeze.rect.top, width: freeze.rect.width, height: freeze.rect.height }}
-        />
+        />,
+        document.body,
       )}
-    <motion.div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ background: 'rgba(8,9,13,0.72)', backdropFilter: 'blur(2px)' }}
-      onPointerDown={(e) => { if (idle && e.target === e.currentTarget) onClose() }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-    >
-      {/* Radix/shadcn's dialog voice: fade + zoom from 95%, 200ms in, faster
-          out - dismissal should feel obedient. Mounted under the
-          AnimatePresence in App.tsx, which is what keeps this rendered
-          through the exit animation. */}
-      <motion.div
-        ref={panelRef}
-        className={`${showSettings ? 'w-[1180px]' : 'w-[720px]'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] px-[26px] pb-[22px] pt-5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]`}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15, ease: 'easeIn' } }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
+      <EditorDialog
+        title={title}
+        onClose={() => { abortRef.current?.abort(); onClose() }}
+        width={showSettings ? 'w-[1180px]' : 'w-[720px]'}
+        dismissOnScrimClick={idle}
+        panelRef={panelRef}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <span className="text-[14px] font-bold tracking-[0.12em] text-[var(--text)] [font-family:var(--font-archivo)]">{title}</span>
-          {closeButton}
-        </div>
-
         {/* ── Idle (and behind the gate): monitor + clip map | settings rail ── */}
         {showSettings && (
           <div className="flex gap-6">
@@ -704,73 +611,26 @@ export function ExportDialog({ onClose, isPro, canExport }: { onClose: () => voi
             </button>
           </div>
         )}
-      </motion.div>
+      </EditorDialog>
 
-      {/* ── The signup gate: the real /signup form floating over the blurred
-          settings. Every way out (X, scrim, Escape) goes BACK to settings. ── */}
+      {/* ── The signup gate: the same shell and the same form as Save to
+          cloud, floating over the blurred settings. Every way out (X, scrim,
+          Escape) goes BACK to settings - it's a detour, not a dead end. ── */}
       {gated && (
-        <div
-          className="fixed inset-0 z-[110] flex items-center justify-center"
-          style={{ background: 'rgba(8,9,13,0.45)', backdropFilter: 'blur(6px)' }}
-          onPointerDown={(e) => { if (e.target === e.currentTarget) setPhase({ kind: 'settings' }) }}
+        <EditorDialog
+          title="Sign up to export your project."
+          onClose={() => setPhase({ kind: 'settings' })}
+          closeLabel="Back to export settings"
+          width="w-[400px]"
+          variant="prompt"
+          scrim="nested"
+          claimModal={false}
+          animated={false}
         >
-          <div
-            ref={gateRef}
-            className="relative w-[400px] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] p-[26px] shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
-          >
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <span className="text-[15px] font-semibold text-[var(--text)]">Sign up to export your project.</span>
-              <button
-                onClick={() => setPhase({ kind: 'settings' })}
-                aria-label="Back to export settings"
-                className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <form action={initiateSignup} onSubmit={() => track('signup_started')} className="flex flex-col gap-[14px]">
-              <div>
-                <label htmlFor="export-gate-email" className="mb-[6px] block font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">Email</label>
-                <input id="export-gate-email" name="email" type="email" required placeholder="you@example.com" className="block h-[40px] w-full rounded-[8px] border border-[var(--border)] bg-[var(--bg-app)] px-3 text-[13px] text-[var(--text)] outline-none transition-colors duration-100 placeholder:text-[var(--text-muted)] focus:border-[var(--accent)]" />
-              </div>
-              <button type="submit" className="mt-1 h-[42px] w-full cursor-pointer rounded-[99px] bg-[var(--accent)] text-[14px] font-bold text-[var(--on-accent)] transition-colors duration-100 hover:bg-[var(--accent-hover)]">
-                Continue
-              </button>
-            </form>
-
-            <div className="my-4 flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-              <span className="flex-1 border-t border-[var(--border)]" />
-              or
-              <span className="flex-1 border-t border-[var(--border)]" />
-            </div>
-
-            <div id="export-gate-google-btn" className="flex w-full justify-center" />
-
-            <p className="mt-4 text-center text-[13px] text-[var(--text-3)]">
-              Already have an account?{' '}
-              <Link
-                href="/login"
-                onClick={() => track('nav_clicked', { from: 'export-gate', to: 'login' })}
-                className="cursor-pointer text-[var(--accent)] transition-colors duration-100 hover:text-[var(--accent-hover)]"
-              >
-                Log in
-              </Link>
-            </p>
-
-            {googleBusy && (
-              <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-[14px] bg-[rgba(15,17,24,0.85)] text-[13px] text-[var(--text-2)]">
-                <Loader2 size={14} className="animate-spin" />
-                Signing you in…
-              </div>
-            )}
-          </div>
-          <Script src="https://accounts.google.com/gsi/client" async defer strategy="afterInteractive" onLoad={() => setGsiReady(true)} />
-        </div>
+          <SignupCard page="export-gate" />
+        </EditorDialog>
       )}
-    </motion.div>
-    </MotionConfig>,
-    document.body,
+    </>
   )
 }
 

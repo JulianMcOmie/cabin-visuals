@@ -45,6 +45,7 @@ export type AnalyticsEvent =
   | 'editor_discord_clicked'
   | 'export_clicked'
   | 'export_gate_shown' // a guest reached the final Export click and was shown the keep-&-export signup invitation
+  | 'save_to_cloud_clicked' // props: { from: 'guest' | 'demo' } - the top bar's "Saved locally · Save to cloud" chip
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
   | 'lyrics_align_clicked'

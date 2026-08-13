@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type Re
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Play, Pause, Upload, Maximize, Minimize, CloudOff, Pencil, Loader2 } from 'lucide-react'
+import { Play, Pause, Upload, Maximize, Minimize, Cloud, Pencil, Loader2 } from 'lucide-react'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, type PanelImperativeHandle } from 'react-resizable-panels'
 import { useVerticalSplit, DIVIDER_GRAB_INSET } from './useVerticalSplit'
 import { useTimeStore } from './store/TimeStore'
@@ -25,6 +25,7 @@ import { PlayIcon, PauseIcon, SkipBackIcon, LoopIcon } from './components/Transp
 import { BpmControl } from './components/BpmControl'
 import { PlaybackRateControl } from './components/PlaybackRateControl'
 import { ExportDialog } from './components/ExportDialog'
+import { SaveToCloudDialog } from './components/SaveToCloudDialog'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
@@ -632,16 +633,31 @@ function EditableProjectName() {
   )
 }
 
-// In ?template= demo mode nothing persists - say so, and point at signup.
-function TemplateDemoChip() {
+/** Where the work is, and where it could go. Two plain facts and a separator.
+ *
+ *  Deliberately NOT a warning: an anonymous session is autosaving to real rows,
+ *  so amber here would spend the alarm colour on a system that is working - and
+ *  the accent is the only affordance, which is why the cloud glyph rides the
+ *  ACTION half rather than prefixing the whole chip (the same icon+verb pairing
+ *  as the Export pill beside it). The word "sign up" belongs to the dialog this
+ *  opens, not to the bar.
+ *
+ *  In ?template= demo mode nothing persists at all, so the left half tells that
+ *  truth instead. */
+function SaveToCloudChip({ onOpen }: { onOpen: () => void }) {
   const search = useSearchParams()
-  if (search.get('project') || !search.get('template')) return null
+  const demo = !search.get('project') && !!search.get('template')
   return (
-    <span className="text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
-      Demo project - {' '}
-      <Link href="/signup" onClick={() => track('nav_clicked', { from: 'editor-demo-chip', to: 'signup' })} className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
-        sign up to save it
-      </Link>
+    <span className="hidden md:inline-flex items-center gap-[5px] text-[11px] leading-none select-none whitespace-nowrap">
+      <span className="text-[var(--text-3)]">{demo ? 'Demo project' : 'Saved locally'}</span>
+      <span className="text-[var(--text-muted)]">·</span>
+      <button
+        onClick={() => { track('save_to_cloud_clicked', { from: demo ? 'demo' : 'guest' }); onOpen() }}
+        className="group inline-flex items-center gap-1 text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)] cursor-pointer"
+      >
+        <Cloud size={12} />
+        <span className="group-hover:underline underline-offset-2">Save to cloud</span>
+      </button>
     </span>
   )
 }
@@ -876,6 +892,7 @@ function Header({
 
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)
+  const [saveToCloudOpen, setSaveToCloudOpen] = useState(false)
   const [exportGate, setExportGate] = useState<{ ok: boolean; reason?: string } | null>(null)
   // Touch path for the gate explanation: tap toggles what hover reveals.
   const [gateNoteOpen, setGateNoteOpen] = useState(false)
@@ -931,25 +948,9 @@ function Header({
       </div>
 
       <SaveStatusChip />
-      {!authLoading && !user && (
-        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
-          <CloudOff size={12} />
-          Not saved -{' '}
-          <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
-            sign up to save
-          </Link>
-        </span>
-      )}
-      {!authLoading && user && isAnonymous && (
-        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--warn)] select-none whitespace-nowrap">
-          <CloudOff size={12} />
-          Saved on this device -{' '}
-          <Link href="/signup" className="text-[var(--warn)] underline underline-offset-2 hover:text-[#e0b568]">
-            sign up to keep it forever
-          </Link>
-        </span>
-      )}
-      <TemplateDemoChip />
+      {/* One chip for every account-less state (no session yet, or an
+          anonymous one): both mean "this lives in this browser". */}
+      {!authLoading && !permanent && <SaveToCloudChip onOpen={() => setSaveToCloudOpen(true)} />}
 
       <div className="ml-auto flex items-center gap-2 flex-shrink-0">
         {process.env.NODE_ENV === 'development' && <PreviewCaptureButton />}
@@ -1005,6 +1006,9 @@ function Header({
           animation (the motion divs inside portal to document.body). */}
       <AnimatePresence>
         {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} isPro={plan.isPro} canExport={permanent} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {saveToCloudOpen && <SaveToCloudDialog onClose={() => setSaveToCloudOpen(false)} />}
       </AnimatePresence>
     </div>
   )
