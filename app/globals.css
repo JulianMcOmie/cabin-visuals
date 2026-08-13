@@ -619,6 +619,12 @@ body.drag-moving * {
 .visual-canvas-smooth canvas {
   width: 100% !important;
   height: 100% !important;
+  /* If the element and the GL buffer ever disagree for a frame (a resize the
+     sync render in RenderGovernor didn't cover), show the buffer center-crop
+     rather than squashed - cover can crop but geometrically cannot distort,
+     and it is a no-op whenever element and buffer aspects match (always, at
+     rest). */
+  object-fit: cover;
 }
 
 /* Sidebar glides move the canvas horizontally ONLY. While one runs (class

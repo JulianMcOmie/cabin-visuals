@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect } from 'react'
+import { advance, useThree } from '@react-three/fiber'
 import { useTimeStore } from '../../store/TimeStore'
 import { useProjectStore } from '../../store/ProjectStore'
 import { subscribeObjects } from '../../core/visual/VisualEngine'
@@ -61,10 +61,21 @@ export function RenderGovernor() {
     }
   }, [invalidate])
 
-  // First frame on mount, and one frame per resize.
-  useEffect(() => {
+  // First frame on mount, and one frame per resize - rendered SYNCHRONOUSLY
+  // (layout effect, pre-paint). r3f applies gl.setSize + the camera update in
+  // its store subscription BEFORE this component is notified of the new size,
+  // so advancing here paints the resized frame in the same visual frame as
+  // the element's new geometry. Without it the compositor scales the LAST
+  // presented frame into the new box for a beat - the squashed-aspect stutter
+  // at the settle of a sidebar glide. invalidate() stays as the safety net
+  // for any path the sync render misses. frameloop 'never' is the export pin,
+  // and advance() is exactly the API that drives 'never' - so it is guarded
+  // out here (invalidate is already a no-op there); the governor must not
+  // fight the export's frame stepping.
+  useLayoutEffect(() => {
+    if (get().frameloop !== 'never') advance(performance.now(), true)
     invalidate()
-  }, [size, invalidate])
+  }, [size, get, invalidate])
 
   return null
 }
