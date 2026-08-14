@@ -386,6 +386,12 @@ export interface ProjectState {
   setSceneBindings: (trackId: string, bindings: NonNullable<Track['sceneBindings']>) => void
   addMoverTrack: (parentId: string, moverId: string, moverLabel: string) => void
   setMoverInput: (trackId: string, key: string, value: number) => void
+  /** Add a `wordFormation` child track under `parentId` (a text instrument): one
+   *  arrangement its words are seated into while this lane's notes are the most
+   *  recent. Unlike the other lane types there is no uniqueness rule - several
+   *  formations under one text track is the whole point, and they are told apart
+   *  by which one played last. */
+  addWordFormationTrack: (parentId: string) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
@@ -1383,7 +1389,10 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   setMoverInput: (trackId, key, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      if (!track || (track.type !== 'mover' && track.type !== 'splitter')) return s
+      // Word Formation lanes store their geometry in the same `inputValues` field,
+      // so they share this setter (and with it undo, autosave and the panel's
+      // param binding) rather than growing a parallel one.
+      if (!track || (track.type !== 'mover' && track.type !== 'splitter' && track.type !== 'wordFormation')) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
     }),
 
@@ -1480,6 +1489,36 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track || track.type !== 'envelope') return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, envTarget: value } } }
+    }),
+
+  addWordFormationTrack: (parentId) =>
+    set((s) => {
+      const parent = s.tracks[parentId]
+      if (!parent) return s
+      const id = crypto.randomUUID()
+      // Formations are named by their order under this parent - "Formation A",
+      // "Formation B" - because what distinguishes them is which one you play,
+      // and the timeline row is where you play it.
+      const existing = parent.childIds.filter((cid) => s.tracks[cid]?.type === 'wordFormation').length
+      const track: Track = {
+        id,
+        name: `Formation ${String.fromCharCode(65 + Math.min(existing, 25))}`,
+        type: 'wordFormation',
+        instrumentId: '',
+        color: resolveNextTrackColor(s, parentId),
+        muted: false,
+        solo: false,
+        blocks: [],
+        childIds: [],
+        parentId,
+      }
+      return {
+        tracks: {
+          ...s.tracks,
+          [id]: track,
+          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
+        },
+      }
     }),
 
   addAbilityTrack: (parentId, abilityKey, abilityLabel) =>

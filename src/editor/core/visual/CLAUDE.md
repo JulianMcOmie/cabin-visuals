@@ -111,6 +111,22 @@ off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
 - `VisualBeatSync.tsx` — mounted once in Canvas; per-frame `computeAtBeat`, plus synchronous `syncParams` on store changes and a debounced (~80ms) structural re-resolve.
 - `pauseCanary.ts` — dev-only: hashes the scene while paused, names any object that moves (backstop for the purity rule).
 - `beatOverride.ts` — export's hook: overrides the beat the engine computes at, bypassing the transport.
+- `wordFormation.ts` — Word Formation lanes: the geometry a text instrument seats its
+  words into. Pure (no three, no store, no React), so it is imported by the resolver,
+  the instrument AND the settings panel — all three read the same `formationSeats`, so
+  the panel's preview cannot drift from what renders. Three things worth knowing:
+  - **It is deliberately NOT a splitter.** A splitter gives geometry without content
+    (`VisualCopy` is content-blind, so all four cells of a 2×2 render the same word) and
+    its copy count may not depend on the beat. Because these are not copies, the COUNTS
+    are freely automatable — nothing has to size a mounted pool ahead of the playhead —
+    which is the one capability the chain could never have given this.
+  - The lanes are gathered in `resolve.ts` (`resolveWordFormations`, mute/solo like the
+    ability lanes) and their settings are sampled per frame in `VisualEngine` beside
+    `params`, so an automated Columns arrives already resolved at the instrument.
+  - **Geometry is knob-driven, so `syncParams` refreshes it at 60fps** like the envelope
+    lanes' sliders — and it REPLACES the lane array rather than mutating it, because
+    `instrumentFrame`'s signature compares it by reference. Mutating in place drags a
+    knob with no repaint at all while paused, which reads exactly like a dead panel.
 - `automation.ts` — the three automation-lane MODES and the one function that dispatches between them.
 - `energy.ts` — the note-pulse "energy" signal instruments receive.
 - `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. `tintPerceptual` chooses how that mix walks: `Color.lerp` (default) runs in LINEAR light and so overshoots perceived brightness at partial amounts, while `mixOklabLinearRgb` tracks it honestly — see the visualCopies guide for why that reads as "the flash goes white". Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint; `tintPerceptual` is in there for exactly that reason (flipping MIX at a frozen beat has to repaint).

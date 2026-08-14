@@ -20,6 +20,8 @@ import { AudioTrackDetail } from './AudioTrackDetail'
 import { SceneSettingsPanel } from './SceneSettingsPanel'
 import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
+import { WordFormationUserInterface } from '../userInterfaceRenderers/WordFormationUserInterface'
+import { WORD_FORMATION_PARAMS } from '../core/visual/wordFormation'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { consolePanel } from '../userInterfaceRenderers/console'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
@@ -241,6 +243,7 @@ function panelIdentity(
       : track.type === 'automation' ? 'Automation'
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
+      : track.type === 'wordFormation' ? 'Word Formation'
       : 'Track'
     // The instrument's own color, not the timeline's display color: the tab is
     // naming this instrument, so an achromatic instrument should light the tab
@@ -546,6 +549,18 @@ export function TrackEditor() {
                         )}
                       </>
                     )
+                  }
+                  // Word Formation child track → the arrangement its parent text
+                  // instrument seats words into. Same param binding as a mover
+                  // (geometry lives in inputValues), so a bespoke panel plugs in
+                  // the same way and the generic list is the fallback.
+                  if (track.type === 'wordFormation') {
+                    const formationParameters: UserInterfaceParameter[] = WORD_FORMATION_PARAMS.map((p) => ({
+                      definition: p,
+                      value: track.inputValues?.[p.key] ?? (p.default as number),
+                      setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
+                    }))
+                    return <WordFormationUserInterface targetId={track.id} parameters={formationParameters} />
                   }
                   // Envelope child track → ADSR + depth (+ the value reached at
                   // full gain, except for the reserved Opacity target, which is a

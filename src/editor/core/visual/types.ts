@@ -6,6 +6,7 @@ import type { Matrix4 } from 'three'
 import type { LocalTransform, TransformCtx } from '../../instruments/types'
 import type { AdsrEnvelope, PhotoPad, VideoPad } from '../../types'
 import type { AutomationLane } from './automation'
+import type { ResolvedWordFormation } from './wordFormation'
 import type { MoverOrSplitter } from '../visualCopies/types'
 
 export interface StateVector {
@@ -29,6 +30,16 @@ export interface ResolvedAutomation extends AutomationLane {
    *  place a tf* lane relative to its mover/splitter siblings (resolve.ts's weave
    *  step); consumers sampling the lane never need it. */
   sourceTrackId?: string
+}
+
+/** A resolved `wordFormation` child track: one arrangement a text instrument may
+ *  seat its words into (`settings` against WORD_FORMATION_PARAMS), plus the note
+ *  onsets that say when it is the live one. `automations` are its own automation
+ *  children, sampled into `settings` per frame by computeAtBeat - consumers read
+ *  the settings and never the lanes. Nothing here enters the VisualCopy chain;
+ *  see core/visual/wordFormation.ts for why it can't. */
+export interface ResolvedWordFormationLane extends ResolvedWordFormation {
+  automations: ResolvedAutomation[]
 }
 
 /** A resolved automation lane targeting one effect instance's setting (or its
@@ -104,6 +115,10 @@ export interface ResolvedObject {
    *  instrument's own render consumes these (the code escape hatch). Empty if the
    *  instrument declares no abilities or none have been played. */
   abilityEvents: Map<string, ResolvedNote[]>
+  /** Text-instrument-only: this object's `wordFormation` child lanes - the
+   *  arrangements its words may be seated into, and when each is live. Empty
+   *  (absent) unless the track has such children. */
+  wordFormations?: ResolvedWordFormationLane[]
   /** Automation lanes (from `automation` child tracks) driving this object's params
    *  over time. Sampled per frame in computeAtBeat, overriding the base param value. */
   automations: ResolvedAutomation[]
@@ -180,6 +195,11 @@ export interface ObjectState {
   /** The object's ability-lane notes (absolute beats), keyed by ability key. The
    *  instrument samples these against the current beat to drive its signature move. */
   abilityEvents: Map<string, ResolvedNote[]>
+  /** Text-instrument-only: the object's `wordFormation` lanes, with each lane's
+   *  settings already sampled for THIS beat (so an automated Columns or Radius
+   *  arrives resolved, exactly like `params`). Identity is stable per resolve
+   *  while no lane is automated, which is what keeps the frame skip cheap. */
+  wordFormations?: ResolvedWordFormationLane[]
   /** The object's full resolved note stream (absolute beats, pitch/velocity/duration),
    *  so a pitch-reactive instrument can read it. Static per resolve. */
   notes: ResolvedNote[]

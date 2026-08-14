@@ -149,6 +149,11 @@ export interface ObjectInstrumentDef {
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
+  /** This instrument seats WORDS, so it accepts `wordFormation` child lanes -
+   *  arrangements its words are laid into, sequenced by MIDI
+   *  (core/visual/wordFormation.ts). The add-child menu reads this rather than
+   *  naming instrument ids, so a second text instrument opts in with one flag. */
+  seatsWords?: boolean
   /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
    *  order (first entry renders at the top). Omit for the full piano roll. */
   midiRows?: MidiRowDef[]

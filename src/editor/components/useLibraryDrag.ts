@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent }
 import { resolveNextTrackColor, useProjectStore } from '../store/ProjectStore'
 import { useUIStore } from '../store/UIStore'
 import { hasMoverOrSplitterDefinition } from '../core/visualCopies/registry'
+import { getInstrument } from '../instruments'
 import { flattenVisualRows } from './timeline/trackTree'
 import { selectNewTrack } from '../utils/selection'
 import { computeDropTarget } from './timeline/trackDrop'
@@ -10,7 +11,16 @@ import { PLAYHEAD_TRIANGLE_HALF } from '../constants'
 import { seedSceneBindings } from '../core/directors/sceneBindings'
 import type { Track } from '../types'
 
-type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' }
+type LibraryItem = { id: string; name: string; kind: 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'wordFormation' }
+
+/** A Word Formation card may only land on a track whose instrument seats words
+ *  (Text Display). Anywhere else the lane would resolve and then do nothing, so
+ *  the drop is refused outright rather than leaving a dead row behind. */
+function seatsWords(trackId: string | null | undefined): boolean {
+  if (!trackId) return false
+  const t = useProjectStore.getState().tracks[trackId]
+  return !!t && !!getInstrument(t.instrumentId)?.seatsWords
+}
 
 function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // Movers and splitters resolve through the MoverOrSplitter registry; ignore
@@ -21,16 +31,23 @@ function makeTrack(item: LibraryItem, parentId: string | null): Track {
   // tracks whose instrumentId names a composition def - they just start with
   // seeded scene bindings and always land at the root.
   const isComposition = item.kind === 'director'
+  // A Word Formation card makes a `wordFormation` child lane, not an object.
+  // It is named for its position among its siblings, the way the context menu
+  // names them, because what tells two formations apart is which one you play.
+  const isFormation = item.kind === 'wordFormation'
   const state = useProjectStore.getState()
+  const formationCount = isFormation && parentId
+    ? (state.tracks[parentId]?.childIds ?? []).filter((cid) => state.tracks[cid]?.type === 'wordFormation').length
+    : 0
   return {
     id: crypto.randomUUID(),
-    name: item.name,
-    type: isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
-    instrumentId: isMover || isSplitter ? '' : item.id,
+    name: isFormation ? `Formation ${String.fromCharCode(65 + Math.min(formationCount, 25))}` : item.name,
+    type: isFormation ? 'wordFormation' : isSplitter ? 'splitter' : isMover ? 'mover' : 'base',
+    instrumentId: isMover || isSplitter || isFormation ? '' : item.id,
     moverId: isMover ? item.id : undefined,
     splitterId: isSplitter ? item.id : undefined,
     sceneBindings: isComposition ? seedSceneBindings(state.scenes, state.sceneOrder) : undefined,
-    inputValues: isMover || isSplitter ? {} : undefined,
+    inputValues: isMover || isSplitter || isFormation ? {} : undefined,
     color: resolveNextTrackColor(state, parentId),
     muted: false,
     solo: false,
@@ -108,6 +125,10 @@ export function useLibraryDrag() {
         }
       }
       if (drop && item.kind === 'director') drop = { ...drop, parentId: null, intoId: null }
+      // A formation lane belongs to a text track and nowhere else: refuse any
+      // drop whose parent can't seat words, so the indicator never promises a
+      // landing that would leave an inert row on some other instrument.
+      if (drop && item.kind === 'wordFormation' && !seatsWords(drop.parentId)) drop = null
       target = drop ? { parentId: drop.parentId, index: drop.index } : null
       useUIStore.getState().setTrackDrop(drop ? { line: drop.line, intoId: drop.intoId } : null)
     }

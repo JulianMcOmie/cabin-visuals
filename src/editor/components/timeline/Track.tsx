@@ -202,7 +202,8 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
     }
   }, [track])
   // Automation, envelope and ability sub-rows render darker than their object; mover
-  // (mover) lanes are first-class creative tracks and keep the normal surface.
+  // and word-formation lanes are first-class creative tracks - you sequence them and
+  // they carry their own geometry - so they keep the normal surface.
   const isDarkenedRow = track.type === 'automation' || track.type === 'ability' || track.type === 'envelope'
 
   // While a copy/library drag is in progress, rows shift via liftOffset (with a

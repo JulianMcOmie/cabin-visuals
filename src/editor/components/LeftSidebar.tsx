@@ -10,6 +10,8 @@ import { useUIStore, type LibraryTabId } from '../store/UIStore'
 import { useProjectStore } from '../store/ProjectStore'
 import { listMoverOrSplitterDefinitions } from '../core/visualCopies/registry'
 import { listCompositionInstruments } from '../core/directors'
+import { WORD_FORMATION_LIBRARY_ID } from '../core/visual/wordFormation'
+import { getInstrument } from '../instruments'
 import { canPreview, InstrumentCardPreview, InstrumentPreviewLayer } from './InstrumentHoverPreview'
 import { TEMPLATES, LISTED_TEMPLATES, LYRIC_STYLES, isLyricTemplateId } from '../../templates'
 import { TemplatePreviewVideo } from '../../components/TemplatePreviewVideo'
@@ -20,7 +22,7 @@ import { waitForSaved } from '../../persistence/autosave'
 import { LoadingScreen } from '../../components/LoadingScreen'
 
 /** What dragging an item creates. */
-export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director'
+export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'wordFormation'
 
 export interface InstrumentItem {
   id: string
@@ -443,6 +445,26 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
 // Every library item, flat. The instrument-preview capture page iterates this
 // to know what can be clipped - the picker arrays above stay the single source
 // of what exists in the library.
+// Word Formation is a CHILD LANE, not an object: it renders nothing on its own
+// and only means something under a text instrument. It earns a library card
+// anyway - the library is where people look for things to add, and a
+// right-click-only feature is one nobody finds by browsing - so it behaves like
+// the movers and splitters, which are also cards for things that are not
+// instruments. `isPinnedChildType` keeps it off the root; the drag refuses any
+// parent whose instrument does not declare `seatsWords`. Its preview is Text
+// Display wearing three arrangements in turn (InstrumentHoverPreview), which is
+// also what a captured clip records.
+const WORD_FORMATION_ITEMS = withKind('wordFormation', [
+  { id: WORD_FORMATION_LIBRARY_ID, name: 'Word Formation', description: "Arranges a text instrument's words into a geometry - a grid, a ring, a torus - and seats one word per note until it cycles. Drop it on a Text Display track; add several and play whichever arrangement you want.", icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#e0a33c" strokeWidth="1.1">
+      <rect x="1.2" y="1.2" width="3.6" height="3.6" rx="0.6" />
+      <rect x="7.2" y="1.2" width="3.6" height="3.6" rx="0.6" />
+      <rect x="1.2" y="7.2" width="3.6" height="3.6" rx="0.6" />
+      <rect x="7.2" y="7.2" width="3.6" height="3.6" rx="0.6" fill="#e0a33c" fillOpacity="0.55" />
+    </svg>
+  )},
+])
+
 export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...SCENE_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
@@ -450,6 +472,7 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...ALL_MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
+  ...WORD_FORMATION_ITEMS,
 ]
 
 /** A library folder: a row you click into, holding items and/or subfolders. */
@@ -475,6 +498,7 @@ const SCENE_ITEM_POOL: InstrumentItem[] = [
   ...MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
+  ...WORD_FORMATION_ITEMS,
 ]
 
 const pick = (ids: readonly string[]): InstrumentItem[] =>
@@ -490,7 +514,9 @@ const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldP
 // Orbit sits here rather than beside Camera in Impulse for the same reason:
 // holding a row to swing the rig is the held shape, not a strike that decays.
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
-const UTILITY_IDS = ['video', 'photo', 'textDisplay']
+// Word Formation sits directly under Text Display: it is the one thing you add
+// to a text track, and the pair reads as a unit in the shelf.
+const UTILITY_IDS = ['video', 'photo', 'textDisplay', WORD_FORMATION_LIBRARY_ID]
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
@@ -906,10 +932,24 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
+  const addWordFormationTrack = useProjectStore((s) => s.addWordFormationTrack)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
     if (!selectedTrackId) return
+    // A formation lane is ADDED UNDER the selected text track rather than
+    // converting it - there is nothing to convert, and converting the track you
+    // are pointing at would delete the very text the formation arranges. If the
+    // selection is itself a formation lane, its parent is what we mean.
+    if (item.kind === 'wordFormation') {
+      const state = useProjectStore.getState()
+      const selected = state.tracks[selectedTrackId]
+      const host = selected?.type === 'wordFormation' && selected.parentId
+        ? state.tracks[selected.parentId]
+        : selected
+      if (host && getInstrument(host.instrumentId)?.seatsWords) addWordFormationTrack(host.id)
+      return
+    }
     // Composition instruments (the 'director' library kind) go through the
     // same conversion as any instrument - setTrackInstrument seeds their
     // scene bindings when the Main scene is active.

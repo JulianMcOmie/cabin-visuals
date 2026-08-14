@@ -7,6 +7,7 @@ import type {
   ResolvedAutomation,
   ResolvedEffectAutomation,
   ResolvedEnvelope,
+  ResolvedWordFormationLane,
 } from './types'
 import { DEFAULT_ADSR } from './adsr'
 import { getEffect } from '../../effects'
@@ -23,6 +24,7 @@ import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
+import { WORD_FORMATION_PARAMS, mergeFormationSettings } from './wordFormation'
 
 /** The slice of the project the resolver reads. ProjectStore's state satisfies it
  *  structurally, so the engine never imports the store's internals. */
@@ -327,6 +329,36 @@ function resolveAbilityEvents(track: Track, p: ProjectSnapshot): Map<string, Res
   return events
 }
 
+
+/** Gather an object track's `wordFormation` child lanes: each is one arrangement
+ *  its words can be seated into, and its notes say when that arrangement is live.
+ *  Muted/solo works per-object like the ability lanes - a soloed formation silences
+ *  its siblings, and a lane with no onsets left simply never wins a beat.
+ *
+ *  The onsets are what matter, not the notes: the lane has one thing to say, so
+ *  any pitch counts and duration is ignored (a formation stays up until another
+ *  one takes over, the same way a Text Display word stays up until the next).
+ *  Each lane's OWN automation children ride along unsampled; computeAtBeat folds
+ *  them into `settings` per frame. */
+function resolveWordFormations(track: Track, p: ProjectSnapshot): ResolvedWordFormationLane[] | undefined {
+  const children = (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => !!c && !c.instrumentId && c.type === 'wordFormation')
+  if (children.length === 0) return undefined
+  const anySolo = children.some((c) => c.solo)
+  const out: ResolvedWordFormationLane[] = []
+  for (const child of children) {
+    if (child.muted || (anySolo && !child.solo)) continue
+    const onsets = flattenTrackNotes(child, p).map((n) => n.beat).sort((a, b) => a - b)
+    out.push({
+      trackId: child.id,
+      settings: mergeFormationSettings(child.inputValues),
+      onsets,
+      automations: resolveAutomationLanes(child, WORD_FORMATION_PARAMS, p),
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
 
 /** The definition id a track contributes to the mover-and-splitter chain.
  *  Ids unknown to the registry (e.g. deleted legacy movers in old saved
@@ -724,6 +756,7 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
         localTransform: def?.localTransform,
         notes: flattenTrackNotes(track, p),
         abilityEvents: resolveAbilityEvents(track, p),
+        wordFormations: resolveWordFormations(track, p),
         automations: overlay,
         effectAutomations: resolveEffectAutomations(track, p),
         envelopes: resolveEnvelopes(track, def, p),

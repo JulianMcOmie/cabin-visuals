@@ -8,6 +8,7 @@ import {
   LaserPreviewBloom,
   MoverPreview,
   ObjectPreview,
+  WordFormationPreview,
   setPreviewTimeOverride,
 } from './InstrumentHoverPreview'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
@@ -208,9 +209,11 @@ export function InstrumentPreviewCapture() {
                 <color attach="background" args={['#111318']} />
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[3, 4, 5]} intensity={1.1} />
-                {active.kind === 'object'
-                  ? <ObjectPreview instrumentId={active.id} />
-                  : <MoverPreview moverId={active.id} />}
+                {active.kind === 'wordFormation'
+                  ? <WordFormationPreview />
+                  : active.kind === 'object'
+                    ? <ObjectPreview instrumentId={active.id} />
+                    : <MoverPreview moverId={active.id} />}
                 <LaserPreviewBloom instrumentId={active.kind === 'object' ? active.id : undefined} />
               </Canvas>
             )}

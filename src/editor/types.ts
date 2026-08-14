@@ -34,6 +34,7 @@ export type TrackType =
   | 'audio'
   | 'envelope'
   | 'splitter'
+  | 'wordFormation'
 // 'director' was retired in schema v12: a scene composer is now an ordinary
 // 'base' track whose instrumentId names a composition instrument
 // (core/directors). upgrade.ts rewrites old saves.
@@ -263,7 +264,10 @@ export interface Track {
   /** A composition instrument's MIDI rows bind stable pitches to scene
    *  identities (Main-scene tracks; see core/directors). */
   sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
-  /** Mover/splitter param values, keyed by the definition's param keys. */
+  /** Mover/splitter param values, keyed by the definition's param keys. A
+   *  `wordFormation` lane stores its geometry here too, against
+   *  `core/visual/wordFormation.ts`'s WORD_FORMATION_PARAMS - same field, so
+   *  automation children and the panel's param binding work unchanged. */
   inputValues?: Record<string, number>
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   effects?: EffectInstance[]

@@ -21,6 +21,7 @@ import {
   type Material,
 } from 'three'
 import { useInstrumentFrame, seededRand, paramAtBeat } from '../core/visual/instrumentFrame'
+import { activeFormation, countOnsets, formationSeats, seatWords } from '../core/visual/wordFormation'
 import { ensureFont } from '../core/visual/fonts'
 import {
   MAX_PARTICLES,
@@ -841,6 +842,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const flightSubdivRate = p.flightSubdivRate ?? 8
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
+    const formationLanes = state.wordFormations
     const layoutModeValue = Math.round(p.layoutMode ?? 0)
     const scatterMode = layoutModeValue === 1
     const stackMode = layoutModeValue === 2
@@ -1232,6 +1234,95 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     configureTextMaterial(meshRef.current.material as MeshBasicMaterial, invertInThisPass)
     for (const mesh of echoMeshesRef.current) configureTextMaterial(mesh.material as MeshBasicMaterial, invertInThisPass)
     for (const spr of flightPoolRef.current) configureTextMaterial(spr.mat, invertInThisPass)
+
+    // --- Word Formation layout ---
+    // A `wordFormation` child lane seats the words into a geometry it owns
+    // (core/visual/wordFormation.ts): the lane whose note played most recently
+    // is the live arrangement, each "next word" note takes the next seat, and
+    // the arrangement CYCLES when it runs out. Presence-driven rather than a
+    // fourth Layout option - adding the lane is already the decision, and
+    // asking for a mode switch as well would just be a way to get it wrong.
+    // Before any formation note has played there is no arrangement, so the
+    // ordinary layout below still runs and the lane is inert until you play it.
+    const formation = formationLanes ? activeFormation(formationLanes, currentBeat) : null
+    if (formation) {
+      meshRef.current.visible = false
+      setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
+      for (const mesh of echoMeshesRef.current) mesh.visible = false
+      for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+      for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
+
+      const settings = formation.lane.settings
+      const seats = formationSeats(settings)
+      const carry = (settings.carry ?? 0) >= 0.5
+      const counted = countOnsets(
+        nextWordNotes.map((n) => n.beat),
+        currentBeat,
+        carry ? -Infinity : formation.startBeat,
+      )
+      const placed = seatWords(seats, settings.cycle ?? 0, counted.total, counted.inRun)
+
+      let releaseOpacity = 1
+      if (!sustainWords && !isNoteHeld && lastWordNote) {
+        const releaseAge = (currentBeat - lastWordEndBeat) * secPerBeat
+        releaseOpacity = releaseDuration > 0 ? Math.max(0, 1 - releaseAge / releaseDuration) : 0
+      }
+      const onsetAge = lastWordNote ? (currentBeat - lastWordNote.beat) * secPerBeat : 1
+      const bassPopAge = lastBassNote ? (currentBeat - lastBassNote.beat) * secPerBeat : 1
+      const bassPopDecay = Math.max(0, 1 - bassPopAge / 0.25)
+      const bassPopScale = 1 + 0.25 * bassPopDecay * bassPopDecay
+      const fadeAmount = settings.fade ?? 0.5
+      // Words size to the TIGHTEST gap in the arrangement, so a ring, a torus
+      // and a 4x4 all fit themselves without a per-formation size hunt. Measured
+      // once per frame over the seats (small by construction - MAX_FORMATION_SLOTS).
+      let gap = 3
+      for (let a = 0; a < seats.length; a++) {
+        for (let b2 = a + 1; b2 < seats.length; b2++) {
+          const d = Math.hypot(seats[a].x - seats[b2].x, seats[a].y - seats[b2].y, (seats[a].z - seats[b2].z) * 0.5)
+          if (d < gap) gap = d
+        }
+      }
+      if (seats.length < 2) gap = 2.4
+      gap = Math.max(0.35, Math.min(3, gap))
+      // Slot coordinates are lattice units; one unit lands at 22% of the frame
+      // WIDTH so a default 2x2 fills the frame the way the panel preview shows
+      // it. Width for both axes (world units are square) and screen-relative for
+      // the same reason posX/posY are: it means the same thing at any aspect and
+      // survives an export at another resolution.
+      const slotUnit = viewport.width * 0.22
+
+      if (releaseOpacity > 0) {
+        for (const item of placed) {
+          const entry = entries[item.wordIndex % entries.length]
+          const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
+          configureTextMaterial(spr.mat, invertInThisPass)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+          if (sprKey !== spr.key) {
+            spr.key = sprKey
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+          }
+          const newest = item.age === 0
+          const wordBeat = nextWordNotes[item.wordIndex]?.beat ?? currentBeat
+          const onsetT = newest ? Math.min(onsetAge / 0.12, 1) : 1
+          const popScale = (1 + onsetBounce * 2 * (1 - onsetT)) * (newest ? bassPopScale : 1)
+          // Long words shrink rather than run into the next seat - the same
+          // trade the word canvas already makes when it widens.
+          const lengthFit = Math.min(1, 5 / Math.max(1, entry.text.length))
+          const fontScale = perWordSize ? paramAtBeat(state, 'fontSize', wordBeat) : fontSize
+          const scale = viewport.width * 0.057 * gap * (settings.size ?? 1) * lengthFit * fontScale * popScale
+          spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
+          spr.mesh.position.set(
+            item.slot.x * slotUnit + placeX(wordBeat),
+            item.slot.y * slotUnit + placeY(wordBeat),
+            item.slot.z * slotUnit,
+          )
+          spr.mesh.rotation.set(0, 0, 0)
+          const trail = 1 - Math.min(0.85, item.age * 0.16 * fadeAmount * 2)
+          setAnimatedOpacity(spr.mat, trail * releaseOpacity * textOpacity)
+        }
+      }
+      return
+    }
 
     // --- Scatter layout ---
     // The phrase accumulates as a loose collage: each word lands at a seeded
@@ -1650,6 +1741,9 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
     { pitch: 60, label: 'Word height · bottom' },
   ],
   component: TextDisplayVisual,
+  // Text Display seats words, so it accepts Word Formation child lanes - the
+  // arrangements its words are laid into (core/visual/wordFormation.ts).
+  seatsWords: true,
   // NOT fullFrame: the text lives in world space so movers (and the camera)
   // can act on it - it is deliberately not pinned to the viewport.
   defaultOnTop: true,
