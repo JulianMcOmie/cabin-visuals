@@ -414,9 +414,18 @@ function VisualPanel({
   }
   const clearGlideStyles = (el: HTMLElement) => {
     for (const p of ['position', 'top', 'left', 'width', 'height', 'zIndex', 'transition'] as const) el.style[p] = ''
+    const card = el.closest<HTMLElement>('[data-workspace-card]')
+    if (card) card.style.zIndex = ''
   }
   const beginGlide = (el: HTMLElement, timing: string) => {
-    // z-90: over the whole editor, under modals (z-100).
+    // z-90: over the whole editor, under modals (z-100). But the workspace
+    // card is `isolate` (its own stacking context), so the panel's z-90 only
+    // wins INSIDE the card - the timeline chrome (z up to 80), the split
+    // divider (z-50) and everything else outside it would paint over the
+    // glide. Raise the card itself for the glide's duration so its whole
+    // context - and the panel with it - floats above the rest of the editor.
+    const card = el.closest<HTMLElement>('[data-workspace-card]')
+    if (card) card.style.zIndex = '90'
     el.style.position = 'fixed'
     el.style.zIndex = '90'
     void el.offsetWidth
@@ -1352,7 +1361,11 @@ export default function EditorApp() {
             {/* isolate: the ambient bleed paints at z-index -1, and the card's
                 stacking context keeps that above the card's own background
                 instead of letting it vanish beneath it. */}
-            <div className="relative isolate flex h-full flex-col overflow-hidden">
+            {/* data-workspace-card: VisualPanel's fullscreen glide raises this
+                card's z-index for the glide (see beginGlide) - the isolate
+                stacking context would otherwise trap the gliding panel under
+                the timeline. */}
+            <div data-workspace-card className="relative isolate flex h-full flex-col overflow-hidden">
               <VisualAmbientBleed sourceCanvasRef={visualCanvasRef} />
               <div className="min-h-0 flex-1">
                   <PanelGroup
