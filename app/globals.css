@@ -189,10 +189,7 @@ button, input, select, textarea {
 
    Scoped to `.gsi-host` so it can never reach a Google button somewhere else,
    and keyed off `--gsi-surface` so each host states its own colour (the auth
-   card is --bg-panel, the editor's dialog is #0f1118). Deliberately NOT
-   touching the themed variants - a non-personalized button keeps exactly the
-   pixels Google draws today. The tile behind the G stays white on purpose:
-   that is the brand mark's own background, not our chrome. */
+   card is --bg-panel, the editor's dialog is #0f1118). */
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe {
   background-color: var(--gsi-surface, var(--bg-panel));
   border-color: var(--border);
@@ -210,6 +207,26 @@ button, input, select, textarea {
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:active .nsm7Bb-HzV7m-LgbsSe-MJoBVe,
 .gsi-host .nsm7Bb-HzV7m-LgbsSe.jVeSEe:focus .nsm7Bb-HzV7m-LgbsSe-MJoBVe {
   background: rgba(255, 255, 255, 0.12);
+}
+
+/* The tile behind the G. GSI ships the mark on a white square even in
+   `filled_black`, so a white chip sits at the left end of an otherwise
+   #202124 pill - the one bright thing on a card where everything else is
+   near-black. Transparent hands the mark the button's own surface; the four
+   brand colours carry themselves on #202124.
+
+   The button class has to be in the selector. GSI's own rule is
+   `.nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf` - the same (0,2,0)
+   as `.gsi-host .<tile>`, and its stylesheet is injected at runtime, i.e.
+   AFTER ours, so a tie loses on document order and the chip stays white. The
+   third class wins it without an !important.
+
+   Not scoped to a theme: GSI's rule isn't either, every renderButton call in
+   this app asks for `filled_black` (SignupCard, /signup, /login), and this way
+   it also reaches the PERSONALIZED button, whose markup needs a live Google
+   session to reproduce. A light-themed button here would need a theme scope. */
+.gsi-host .nsm7Bb-HzV7m-LgbsSe .nsm7Bb-HzV7m-LgbsSe-Bz112c-haAclf {
+  background-color: transparent;
 }
 
 /* Blob animations */
