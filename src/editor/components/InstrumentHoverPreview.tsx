@@ -603,6 +603,25 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seedScale: 0.3,
     notes: [holdNote(60, 0, 8), holdNote(62, 8, 8)],
   },
+  // Waypoints sequences ONE object between its laid-out positions, and the
+  // CURVE is the card's story: the same ring phrase (2 -> 3 -> 4 -> home) runs
+  // once per bar while the curve rows latch a different travel each bar -
+  // Snap, then Pop (overshoots past the target), then Spring (rings), then
+  // Glide. Every bar ends back on position 1, which is also the rest position,
+  // so the 16-beat wrap is invisible. Spread is pre-divided by seedScale (the
+  // chain composes in the seed's scaled frame - see the structural note above).
+  waypoints: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.65,
+    settings: { spread: 2, travelBeats: 0.7, bounce: 0.55 },
+    notes: [
+      ...makeLoopNotes([61, 62, 63, 60], 0.4, 1),
+      holdNote(54, 0, 0.25),  // Snap
+      holdNote(56, 4, 0.25),  // Pop
+      holdNote(58, 8, 0.25),  // Spring
+      holdNote(57, 12, 0.25), // Glide
+    ],
+  },
 }
 
 export function MoverPreview({ moverId, notes, sync, inputValues }: { moverId: string; notes?: ResolvedNote[]; sync?: boolean; inputValues?: Record<string, number> }) {

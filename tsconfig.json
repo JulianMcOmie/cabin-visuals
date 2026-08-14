@@ -39,6 +39,7 @@
     ".next-build-3002/types/**/*.ts",
     ".next-build-3004/types/**/*.ts",
     ".next-build-3005/types/**/*.ts",
+    ".next-build-3006/types/**/*.ts",
     ".next-build-3040/types/**/*.ts",
     ".next-build-check/types/**/*.ts",
     ".next-build-commit/types/**/*.ts",
@@ -61,7 +62,7 @@
     ".next-isolated/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-3006/types/**/*.ts"
+    ".next-build-3003/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
