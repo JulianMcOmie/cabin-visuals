@@ -98,6 +98,13 @@ export interface MidiRowDef {
   label: string
   color?: string
   emphasized?: boolean
+  /** Row label rendered in this CSS font stack (a text track's style lanes:
+   *  the gutter IS the legend - what you read is what a note there wears). */
+  fontFamily?: string
+  /** Row label size multiplier (a lane's size knob, clamped by the row). */
+  sizeScale?: number
+  /** The row is a style LANE the editor can open an editor for (row index). */
+  laneIndex?: number
 }
 
 /** An object's transform relative to its parent (identity-ish defaults). Position in
@@ -149,11 +156,6 @@ export interface ObjectInstrumentDef {
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
-  /** This instrument seats WORDS, so it accepts `wordFormation` child lanes -
-   *  arrangements its words are laid into, sequenced by MIDI
-   *  (core/visual/wordFormation.ts). The add-child menu reads this rather than
-   *  naming instrument ids, so a second text instrument opts in with one flag. */
-  seatsWords?: boolean
   /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
    *  order (first entry renders at the top). Omit for the full piano roll. */
   midiRows?: MidiRowDef[]
@@ -163,7 +165,7 @@ export interface ObjectInstrumentDef {
    *  project types; only the row RESOLVER calls it (resolveDeclaredRows.ts) -
    *  the static call sites (`useLoopBlockDrag`, drop-layer defaults) keep
    *  reading `midiRows` and simply see none for such an instrument. */
-  midiRowsFor?: (track: { params?: Record<string, number>; stringParams?: Record<string, string> }) => MidiRowDef[]
+  midiRowsFor?: (track: { params?: Record<string, number>; stringParams?: Record<string, string>; styleLanes?: import('../types').StyleLane[] }) => MidiRowDef[]
   /** This object's transform relative to its parent, per frame. The engine composes
    *  it with its ancestors' transforms; the component renders at the result. Omit for
    *  a non-transforming object (identity). */

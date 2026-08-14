@@ -22,8 +22,8 @@ import { applyMaterialHueShift } from '../core/visual/animatedColor'
 import { flattenTrackNotes as flattenProjectTrackNotes } from '../core/visual/noteFlatten'
 import { useProjectStore } from '../store/ProjectStore'
 import { useTimeStore } from '../store/TimeStore'
-import type { ObjectState, ResolvedNote, ResolvedObject, ResolvedWordFormationLane } from '../core/visual/types'
-import { CYCLE_CLEAR, CYCLE_SCROLL, FILL_CENTER, FILL_ROW, mergeFormationSettings } from '../core/visual/wordFormation'
+import type { ObjectState, ResolvedNote, ResolvedObject } from '../core/visual/types'
+import type { LyricClip } from '../types'
 import { get2DPreview, Preview2D } from './InstrumentPreview2D'
 import { useInstrumentClipUrl } from '../../components/instrumentClipUrl'
 import type { InstrumentItem } from './LeftSidebar'
@@ -118,7 +118,6 @@ export function canPreview(item: InstrumentItem): boolean {
   if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') return !!getMoverOrSplitterDefinition(item.id)
   // A formation lane has no object of its own: it previews as the thing it
   // actually does, which is Text Display wearing three arrangements in turn.
-  if (item.kind === 'wordFormation') return !!getInstrument('textDisplay')
   return false
 }
 
@@ -133,13 +132,10 @@ const OBJECT_NOTES = makeLoopNotes([60, 64, 67, 71, 67, 64], 0.5)
 // in a popup: Text Display defaults to the single word HELLO, which hides its
 // whole point. The Stack layout shows the PHRASE: "text display" stays up the
 // whole loop while the font flicker below carries all the motion.
-const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {
-  textDisplay: { text: 'text display' },
-}
+const PREVIEW_STRING_PARAMS: Record<string, Record<string, string>> = {}
 const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
-  // Stack layout, 2 words per card, held until replaced (no fade dips between
-  // the tightly-spaced preview notes).
-  textDisplay: { layoutMode: 2, stackMaxWords: 2, sustain: 1 },
+  // Held until replaced (no fade dips between the tightly-spaced preview notes).
+  textDisplay: { sustain: 1 },
   // Spin defaults to 0 (still) in real tracks; a static solid makes a dead
   // preview, so the popup shows the classic steady tumble.
   cube: { spinSpeed: 1 },
@@ -147,67 +143,27 @@ const PREVIEW_NUMBER_PARAMS: Record<string, Record<string, number>> = {
 
 // Preview-only per-frame param motion, applied by ObjectPreviewDriver: Text
 // Display rapid-fire flickers through font stacks - system faces only, since
-// the template webfonts gate frames on their loads mid-flicker.
-const TEXT_DISPLAY_FLICKER_FONTS = [0, 1, 2, 10, 13, 14, 11]
-const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {
-  textDisplay: (params, beat) => {
-    params.font = TEXT_DISPLAY_FLICKER_FONTS[Math.floor(beat * 2) % TEXT_DISPLAY_FLICKER_FONTS.length]
-  },
-}
+const PREVIEW_PARAM_ANIMATORS: Record<string, (params: Record<string, number>, beat: number) => void> = {}
 
 // Preview-only note overrides for instruments whose labeled vocabulary the
-// generic arc misses entirely. Text Display renders NOTHING without pitch 48
-// ("Next word") - the 60-71 arc only hits its height lanes, leaving the popup
-// black. Both word notes land at beat 0, so the full phrase is up from the
-// first frame and never rebuilds - the font flicker alone is the animation.
+// generic arc misses entirely. Text Display renders NOTHING without word notes
+// in its style-lane band - the 60-71 arc only grazes it - so the popup plays
+// its two words on two different lanes (TITLE then PLAIN, the height-styles
+// story in one glance).
 const PREVIEW_NOTES: Record<string, ResolvedNote[]> = {
-  textDisplay: Array.from({ length: 2 }, () => ({
+  textDisplay: [60, 58].map((pitch) => ({
     beat: 0,
     blockStartBeat: 0,
     blockEndBeat: 1e9,
-    pitch: 48,
+    pitch,
     velocity: 100,
     durationBeats: 0.4,
   })),
 }
-
-// ── Word Formation preview ──────────────────────────────────────────────────
-// The card's subject is the ARRANGEMENT, so the preview says the same two words
-// over and over and lets the geometry change under them: a 2x2 grid, then a
-// ring, then a tilted 3x2 that scrolls. Onsets are spaced inside the 16-beat
-// preview loop so each arrangement gets time to fill before the next takes over.
-// Settings are preview-tamed - the popup's frame is ~4.4 world units across, a
-// fraction of a real stage - which is the same allowance COMPOUND_MOVER_PREVIEWS
-// makes for movers.
-const WORD_FORMATION_PREVIEW_TEXT = 'WORD FORMATION WORD FORMATION WORD FORMATION WORD FORMATION'
-const WORD_FORMATION_PREVIEW_TRACK_ID = '__word-formation-preview__'
-/** One word per beat across the 16-beat preview loop, so every arrangement is
- *  seen filling rather than already full. */
-const WORD_FORMATION_PREVIEW_NOTES: ResolvedNote[] = Array.from({ length: LOOP_BEATS }, (_, i) => ({
-  beat: i,
-  blockStartBeat: 0,
-  blockEndBeat: 1e9,
-  pitch: 48,
-  velocity: 100,
-  durationBeats: 0.4,
-}))
-
-const wfLane = (trackId: string, onsets: number[], settings: Record<string, number>): ResolvedWordFormationLane => ({
-  trackId,
-  onsets,
-  automations: [],
-  settings: mergeFormationSettings(settings),
-})
-
-const WORD_FORMATION_PREVIEW_LANES: ResolvedWordFormationLane[] = [
-  // Grid: fills centre-out, clears when the fourth word lands.
-  wfLane('__wf-a__', [0], { columns: 2, rows: 2, spacing: 1.25, size: 0.85, fill: FILL_CENTER, cycle: CYCLE_CLEAR, fade: 0.35 }),
-  // Ring: the same words around a circle.
-  wfLane('__wf-b__', [6], { columns: 6, columnsRing: 1, rows: 1, radius: 1.35, size: 0.7, fill: FILL_ROW, cycle: CYCLE_CLEAR, fade: 0.35 }),
-  // Tilted rows that scroll - the arrangement stays full and the oldest word
-  // falls out, which is the behaviour a still frame can't show.
-  wfLane('__wf-c__', [11], { columns: 3, rows: 2, spacing: 1.15, tilt: -16, size: 0.72, fill: FILL_ROW, cycle: CYCLE_SCROLL, fade: 0.5 }),
-]
+// The preview words live where real words do now: on a lyric clip.
+const PREVIEW_LYRIC_CLIPS: Record<string, LyricClip[]> = {
+  textDisplay: [{ id: '__preview-clip__', startBeat: 0, durationBeats: 1e9, words: ['text', 'display'], layout: { kind: 'stack' } }],
+}
 
 function makePreviewState(instrumentId: string): ObjectState {
   const def = getInstrument(instrumentId)
@@ -220,6 +176,7 @@ function makePreviewState(instrumentId: string): ObjectState {
   Object.assign(stringParams, PREVIEW_STRING_PARAMS[instrumentId])
   Object.assign(params, PREVIEW_NUMBER_PARAMS[instrumentId])
   return {
+    lyricClips: PREVIEW_LYRIC_CLIPS[instrumentId],
     beat: 0,
     secPerBeat: 60 / PREVIEW_BPM,
     beatsPerBar: 4,
@@ -244,21 +201,13 @@ function makePreviewState(instrumentId: string): ObjectState {
  *  so the state is registered and ticked ahead of the instrument's read.
  *  Recomputes activeNotes and the decaying energy pulse each frame - the
  *  preview's stand-in for what computeAtBeat derives on the main canvas. */
-function ObjectPreviewDriver({ instrumentId, trackId, notes, sync, wordFormations }: { instrumentId: string; trackId: string; notes?: ResolvedNote[]; sync?: boolean; wordFormations?: ResolvedWordFormationLane[] }) {
+function ObjectPreviewDriver({ instrumentId, trackId, notes, sync }: { instrumentId: string; trackId: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const state = useMemo(() => {
     const s = makePreviewState(instrumentId)
     // Track rows preview their OWN notes rather than the canned arc.
     if (notes && notes.length > 0) s.notes = notes
-    if (wordFormations) {
-      s.wordFormations = wordFormations
-      // The formation card's subject is the arrangement, so the words are the
-      // card's own name and they HOLD (no release fade) - a word that faded out
-      // would leave gaps in an arrangement that is supposed to read as one shape.
-      s.stringParams.text = WORD_FORMATION_PREVIEW_TEXT
-      s.params.sustain = 1
-    }
     return s
-  }, [instrumentId, notes, wordFormations])
+  }, [instrumentId, notes])
   useFrame((root) => {
     const beat = previewBeatNow(root.clock.elapsedTime, sync)
     state.beat = beat
@@ -297,7 +246,7 @@ function FullFramePreviewAnchor({ children }: { children: React.ReactNode }) {
   return <group ref={groupRef}>{children}</group>
 }
 
-export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync, wordFormations }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean; wordFormations?: ResolvedWordFormationLane[] }) {
+export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes, sync }: { instrumentId: string; trackId?: string; notes?: ResolvedNote[]; sync?: boolean }) {
   const def = getInstrument(instrumentId)
   if (!def) return null
   const Comp = def.component
@@ -308,23 +257,9 @@ export function ObjectPreview({ instrumentId, trackId = PREVIEW_TRACK_ID, notes,
   )
   return (
     <>
-      <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} wordFormations={wordFormations} />
+      <ObjectPreviewDriver instrumentId={instrumentId} trackId={trackId} notes={notes} sync={sync} />
       {def.fullFrame ? <FullFramePreviewAnchor>{content}</FullFramePreviewAnchor> : content}
     </>
-  )
-}
-
-/** The Word Formation card's preview: Text Display saying the same two words
- *  while three arrangements take turns under them. */
-export function WordFormationPreview({ sync }: { sync?: boolean }) {
-  return (
-    <ObjectPreview
-      instrumentId="textDisplay"
-      trackId={WORD_FORMATION_PREVIEW_TRACK_ID}
-      notes={WORD_FORMATION_PREVIEW_NOTES}
-      sync={sync}
-      wordFormations={WORD_FORMATION_PREVIEW_LANES}
-    />
   )
 }
 
@@ -1135,8 +1070,6 @@ export function InstrumentPreviewLayer() {
         <directionalLight position={[3, 4, 5]} intensity={1.1} />
         {preview && !draw2d && (projectData
           ? <ProjectTrackPreview key={preview.projectTrackId} data={projectData} sync={preview.sync} />
-          : preview.item.kind === 'wordFormation'
-            ? <WordFormationPreview key={preview.item.id} sync={preview.sync} />
           : preview.item.kind === 'object'
             ? <ObjectPreview key={preview.item.id} instrumentId={preview.item.id} notes={preview.notes} sync={preview.sync} />
             : <MoverPreview key={preview.item.id} moverId={preview.item.id} notes={preview.notes} sync={preview.sync} inputValues={preview.inputValues} />)}

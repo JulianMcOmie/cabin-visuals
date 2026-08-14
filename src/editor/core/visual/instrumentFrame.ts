@@ -106,10 +106,10 @@ export function useInstrumentFrame(trackId: string, cb: (state: ObjectState) => 
     put(state.abilityEvents)
     put(state.videoPads)
     put(state.photoPads)
-    // Stable per resolve unless a formation lane is automated, in which case the
-    // array is rebuilt per frame and this is what repaints the words. Without it
-    // an edit to a formation's geometry while paused would change nothing.
-    put(state.wordFormations)
+    // Document identity: any store edit to the clips or lanes mints fresh
+    // arrays, and this is what repaints the words while paused.
+    put(state.lyricClips)
+    put(state.styleLanes)
     put(state.opacity)
     // Mutated in place each computeAtBeat: compare by element.
     const w = state.world.elements

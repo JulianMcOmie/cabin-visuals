@@ -2,7 +2,6 @@ import { compositionDef } from '../../core/directors'
 import { getPriorVisualCopyCount } from '../../core/visual/resolve'
 import { mergeDefinitionSettings } from '../../core/visualCopies/definitions'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
-import { WORD_FORMATION_PITCH } from '../../core/visual/wordFormation'
 import { getInstrument } from '../../instruments'
 import type { MidiRowDef } from '../../instruments/types'
 import type { Scene, Track } from '../../types'
@@ -40,13 +39,6 @@ export function resolveDeclaredMidiRows(
     const rows = def?.midiRowsFor?.(track) ?? def?.midiRows
       ?? compositionDef(track.instrumentId)?.midiRows(track, project.scenes, project.sceneOrder)
     return rows ? { rows, strict: false } : undefined
-  }
-
-  // A Word Formation lane says exactly one thing - "this arrangement, from
-  // here" - so it gets ONE labelled row rather than a piano. Strict, because a
-  // note anywhere else would look like it meant something different and does not.
-  if (track.type === 'wordFormation') {
-    return { rows: [{ pitch: WORD_FORMATION_PITCH, label: 'Use this formation' }], strict: true }
   }
 
   if (track.type === 'mover' || track.type === 'splitter') {

@@ -52,7 +52,7 @@ export function generateRows(
  * note can silently vanish from the editor.
  */
 export function generateInstrumentRows(
-  defRows: { pitch: number; label: string; color?: string; emphasized?: boolean }[],
+  defRows: { pitch: number; label: string; color?: string; emphasized?: boolean; fontFamily?: string; sizeScale?: number; laneIndex?: number }[],
   notePitches: number[],
   trackColor: string,
 ): MidiRow[] {
@@ -68,6 +68,9 @@ export function generateInstrumentRows(
       // only explicit per-row colors (semantic, e.g. a white flash row) win.
       color: r.color ?? baseColor,
       emphasized: r.emphasized,
+      fontFamily: r.fontFamily,
+      sizeScale: r.sizeScale,
+      laneIndex: r.laneIndex,
     })
   })
   const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)

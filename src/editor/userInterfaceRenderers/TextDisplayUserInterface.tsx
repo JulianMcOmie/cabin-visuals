@@ -1,21 +1,26 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Mic } from 'lucide-react'
+import { Mic, Plus, X } from 'lucide-react'
 import { track as trackEvent } from '../../analytics/analytics'
 import { ensureFont } from '../core/visual/fonts'
 import { isNumberParam } from '../instruments/types'
 import { useProjectStore } from '../store/ProjectStore'
+import { MAX_STYLE_LANES, resolveStyleLanes, styleLanePitch } from '../core/visual/lyricClips'
+import type { LyricClipLayout, LyricLayoutKind, StyleLaneFx } from '../types'
 import { placeTranscription } from '../utils/lyricPlacement'
 import { firstAudioBlock, transcribeActiveSong, type TranscribePhase } from '../utils/transcribeSong'
 import { ParamControl, ParamSlider, ParamToggle } from './ParameterControl'
 import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
 
-// Bespoke settings for the Text Display instrument: the lyric sheet front and
-// center, fonts as specimen buttons, then the animation controls grouped the
-// way you think about them (Type / Color / Motion / Echo / Flight). Gated
-// params (showIf) never reach this component - each group renders whatever of
-// its members are present, so headers stay honest when a toggle is off.
+// Bespoke settings for the Text Display instrument. Since the clips redesign
+// the panel's subjects are the track's STYLE LANES (what each piano-roll row
+// makes a word look like - rendered font cards, swatches, size chips, no
+// sliders) and its LYRIC CLIPS (the words + each clip's layout), then the
+// animation controls grouped the way you think about them (Motion / Echo /
+// Flight / Particles). Gated params (showIf) never reach this component -
+// each group renders whatever of its members are present, so headers stay
+// honest when a toggle is off.
 
 function findParam(parameters: readonly UserInterfaceParameter[], key: string) {
   return parameters.find((candidate) => candidate.definition.key === key)
@@ -105,6 +110,326 @@ function ColorWell({ bound, label, dimmed }: { bound: UserInterfaceParameter | u
       </span>
       <span className="text-[10px] text-[var(--text-3)]">{label}</span>
     </label>
+  )
+}
+
+// ── Style lanes: pitch = lane = look ────────────────────────────────────────
+
+const LANE_COLOR_SWATCHES = ['#ffffff', '#facc15', '#f472b6', '#38bdf8', '#4ade80', '#f87171', '#c084fc', '#9aa1ab']
+const LANE_SIZE_CHIPS = [0.55, 0.8, 1, 1.45, 2.1]
+const LANE_FX: StyleLaneFx[] = ['shake', 'rainbow', 'outline']
+
+function StyleLanesSection({ trackId }: { trackId: string }) {
+  const stored = useProjectStore((s) => s.tracks[trackId]?.styleLanes)
+  const updateStyleLane = useProjectStore((s) => s.updateStyleLane)
+  const addStyleLane = useProjectStore((s) => s.addStyleLane)
+  const removeStyleLane = useProjectStore((s) => s.removeStyleLane)
+  const lanes = resolveStyleLanes(stored)
+  const [openIndex, setOpenIndex] = useState(0)
+  const open = Math.min(openIndex, lanes.length - 1)
+  const lane = lanes[open]
+
+  return (
+    <div className="mb-3">
+      <SectionLabel
+        right={lanes.length < MAX_STYLE_LANES ? (
+          <button
+            onClick={() => addStyleLane(trackId)}
+            title="Add a style lane (a new piano-roll row)"
+            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
+          ><Plus size={11} /></button>
+        ) : undefined}
+      >STYLE LANES</SectionLabel>
+      {/* The lane list IS the roll's gutter: each row rendered in its own look,
+          so what you click here is exactly what a note at that height wears. */}
+      <div className="mb-2 overflow-hidden rounded border border-[var(--border)]">
+        {lanes.map((l, i) => {
+          const preview = FONT_PREVIEWS[l.font]
+          const active = i === open
+          return (
+            <button
+              key={i}
+              onClick={() => setOpenIndex(i)}
+              aria-pressed={active}
+              className={`group flex h-8 w-full cursor-pointer items-center justify-between px-2.5 text-left transition-colors ${active ? 'bg-[var(--bg-elevated)]' : 'bg-[var(--bg-app)] hover:bg-[var(--bg-panel)]'}`}
+            >
+              <span
+                className="truncate text-[13px] leading-none"
+                style={{ fontFamily: preview?.family, color: l.color, fontSize: `${Math.min(17, 10 + l.size * 3.5)}px` }}
+              >{l.name}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-mono text-[9px] text-[var(--text-muted)]">row {styleLanePitch(i)}</span>
+                {active && lanes.length > 1 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); removeStyleLane(trackId, i); setOpenIndex(0) }}
+                    title="Remove this lane (its notes become orphans)"
+                    className="flex h-4 w-4 items-center justify-center rounded text-[var(--text-muted)] hover:text-[#d68383]"
+                  ><X size={10} /></span>
+                )}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {lane && <StyleLaneEditorCard trackId={trackId} laneIndex={open} />}
+    </div>
+  )
+}
+
+/** One lane's style editor - the card the panel embeds AND the piano roll's
+ *  sidecar opens (click a lane row in the gutter). Everything rendered, no
+ *  sliders: font cards, swatches, size chips, fx chips, in-place name. */
+export function StyleLaneEditorCard({ trackId, laneIndex, frameless }: { trackId: string; laneIndex: number; frameless?: boolean }) {
+  const stored = useProjectStore((s) => s.tracks[trackId]?.styleLanes)
+  const updateStyleLane = useProjectStore((s) => s.updateStyleLane)
+  const lanes = resolveStyleLanes(stored)
+  const lane = lanes[Math.min(laneIndex, lanes.length - 1)]
+  const open = Math.min(laneIndex, lanes.length - 1)
+  useEffect(() => {
+    for (const preview of Object.values(FONT_PREVIEWS)) {
+      if (preview.load) ensureFont(preview.load)
+    }
+  }, [])
+  if (!lane) return null
+  const previewFamily = FONT_PREVIEWS[lane.font]?.family
+  const outline = lane.fx?.includes('outline')
+  return (
+    <div className={frameless ? 'p-2' : 'p-1'}>
+      {/* The look IS the name field: the lane's name rendered exactly as a
+          word on this lane renders (font, color, size, outline) - select the
+          text and type to rename the lane. */}
+      <div className="mb-2 flex h-16 items-center justify-center overflow-hidden rounded border border-[var(--border)] bg-black focus-within:border-[var(--border-strong)]">
+        <input
+          value={lane.name}
+          onChange={(e) => updateStyleLane(trackId, open, { name: e.target.value.toUpperCase() })}
+          aria-label="Lane name"
+          spellCheck={false}
+          className="w-full bg-transparent text-center leading-none outline-none"
+          style={{
+            fontFamily: previewFamily,
+            fontSize: `${Math.round(14 + lane.size * 11)}px`,
+            fontWeight: 900,
+            ...(outline
+              ? { WebkitTextStroke: `1.5px ${lane.color}`, color: 'transparent', caretColor: lane.color }
+              : { color: lane.color, caretColor: lane.color }),
+          }}
+        />
+      </div>
+      <div className="mb-2 grid grid-cols-4 gap-1">
+        {Object.entries(FONT_PREVIEWS).map(([value, preview]) => {
+          const v = Number(value)
+          const active = lane.font === v
+          return (
+            <button
+              key={value}
+              onClick={() => updateStyleLane(trackId, open, { font: v })}
+              aria-pressed={active}
+              title={preview.short}
+              className={`flex cursor-pointer flex-col items-center gap-0.5 rounded border py-1.5 transition-colors ${active
+                ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+            >
+              <span className="text-[15px] leading-none" style={{ fontFamily: preview.family }}>Ag</span>
+              <span className="text-[7px] font-semibold tracking-[0.08em]">{preview.short}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {LANE_COLOR_SWATCHES.map((c) => (
+          <button
+            key={c}
+            onClick={() => updateStyleLane(trackId, open, { color: c })}
+            aria-label={`Lane color ${c}`}
+            aria-pressed={lane.color.toLowerCase() === c}
+            className={`h-6 w-6 cursor-pointer rounded border-2 ${lane.color.toLowerCase() === c ? 'border-white' : 'border-transparent'}`}
+            style={{ background: c }}
+          />
+        ))}
+      </div>
+      <div className="mb-2 flex items-end gap-1.5">
+        {LANE_SIZE_CHIPS.map((v) => (
+          <button
+            key={v}
+            onClick={() => updateStyleLane(trackId, open, { size: v })}
+            aria-pressed={Math.abs(lane.size - v) < 0.01}
+            title={`${v}×`}
+            className={`flex cursor-pointer items-end rounded border px-1.5 py-0.5 leading-none text-[var(--text)] ${Math.abs(lane.size - v) < 0.01 ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)]' : 'border-[var(--border)] bg-[var(--bg-app)]'}`}
+            style={{ fontSize: `${8 + v * 7}px` }}
+          >Aa</button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {LANE_FX.map((fx) => {
+          const on = lane.fx?.includes(fx) ?? false
+          return (
+            <button
+              key={fx}
+              onClick={() => {
+                const next = on ? (lane.fx ?? []).filter((f) => f !== fx) : [...(lane.fx ?? []), fx]
+                updateStyleLane(trackId, open, { fx: next })
+              }}
+              aria-pressed={on}
+              className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] capitalize transition-colors ${on
+                ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+            >{fx}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Lyric clips: the words + each clip's layout ─────────────────────────────
+
+const LAYOUT_CARDS: { kind: LyricLayoutKind; label: string; dots: [number, number][]; r?: number }[] = [
+  { kind: 'one', label: 'One at a time', dots: [[22, 14]], r: 3.5 },
+  { kind: 'row', label: 'Row', dots: [[8, 14], [17, 14], [26, 14], [35, 14]] },
+  { kind: 'stack', label: 'Paragraph', dots: [[13, 10], [22, 10], [31, 10], [17, 18], [26, 18]] },
+  { kind: 'scatter', label: 'Scatter', dots: [[10, 9], [30, 7], [20, 16], [34, 19], [13, 21]] },
+  { kind: 'grid', label: 'Grid', dots: [[15, 9], [29, 9], [15, 19], [29, 19]] },
+  { kind: 'circle', label: 'Circle', dots: Array.from({ length: 6 }, (_, i) => { const a = (i / 6) * Math.PI * 2 - Math.PI / 2; return [22 + 9 * Math.cos(a), 14 + 9 * Math.sin(a)] as [number, number] }) },
+]
+
+function GrowingTextarea({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  // Auto-expand: pasted verses are common, a scrollbar inside a 3-row box is not.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight + 2}px`
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={1}
+      spellCheck={false}
+      aria-label={ariaLabel}
+      className="w-full resize-none overflow-hidden rounded border border-[var(--border)] bg-[var(--bg-app)] px-2 py-1.5 font-mono text-[11px] leading-relaxed text-[var(--text)] outline-none focus:border-[var(--accent)]"
+    />
+  )
+}
+
+/** One clip's editor - words + its layout (the per-clip word formation:
+ *  one / row / paragraph / scatter / grid / circle). Embedded per clip in the
+ *  panel's list AND shown alone in the piano roll's sidecar when a clip is
+ *  selected in the sections strip. */
+export function LyricClipEditorCard({ trackId, clipId }: { trackId: string; clipId: string }) {
+  const clip = useProjectStore((s) => s.tracks[trackId]?.lyricClips?.find((c) => c.id === clipId))
+  const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
+  if (!clip) return null
+  const setLayout = (layout: LyricClipLayout) => updateLyricClip(trackId, clip.id, { layout })
+  return (
+    <div>
+      <GrowingTextarea
+        value={clip.words.join(' ')}
+        onChange={(v) => updateLyricClip(trackId, clip.id, { words: v.split(/\s+/).filter(Boolean) })}
+        ariaLabel="Clip words"
+      />
+      <div className="mt-1.5 grid grid-cols-3 gap-1">
+        {LAYOUT_CARDS.map((cardDef) => {
+          const active = (clip.layout?.kind ?? 'one') === cardDef.kind
+          return (
+            <button
+              key={cardDef.kind}
+              onClick={() => setLayout(cardDef.kind === 'grid' ? { kind: 'grid', cols: clip.layout?.cols ?? 2 } : { kind: cardDef.kind })}
+              aria-pressed={active}
+              title={cardDef.label}
+              className={`flex cursor-pointer flex-col items-center rounded border py-1 transition-colors ${active
+                ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
+            >
+              <svg width="44" height="24" viewBox="0 0 44 28">
+                {cardDef.dots.map((d, i) => <circle key={i} cx={d[0].toFixed(1)} cy={d[1].toFixed(1)} r={cardDef.r ?? 2.4} fill="currentColor" />)}
+              </svg>
+              <span className="text-[7px] font-semibold tracking-[0.06em]">{cardDef.label.toUpperCase()}</span>
+            </button>
+          )
+        })}
+      </div>
+      {clip.layout?.kind === 'grid' && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span className="text-[9px] text-[var(--text-muted)]">Columns</span>
+          {[2, 3, 4].map((c) => (
+            <button
+              key={c}
+              onClick={() => setLayout({ kind: 'grid', cols: c })}
+              aria-pressed={(clip.layout?.cols ?? 2) === c}
+              className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] ${(clip.layout?.cols ?? 2) === c
+                ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
+                : 'border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
+            >{c}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LyricClipsSection({ trackId }: { trackId: string }) {
+  const clips = useProjectStore((s) => s.tracks[trackId]?.lyricClips)
+  const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
+  const addLyricClip = useProjectStore((s) => s.addLyricClip)
+  const updateLyricClip = useProjectStore((s) => s.updateLyricClip)
+  const removeLyricClip = useProjectStore((s) => s.removeLyricClip)
+  const sliceLyricsIntoClips = useProjectStore((s) => s.sliceLyricsIntoClips)
+  const [paste, setPaste] = useState('')
+  const ordered = [...(clips ?? [])].sort((a, b) => a.startBeat - b.startBeat)
+
+  const setLayout = (clipId: string, layout: LyricClipLayout) => updateLyricClip(trackId, clipId, { layout })
+
+  return (
+    <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
+      <SectionLabel
+        right={(
+          <button
+            onClick={() => {
+              const last = ordered[ordered.length - 1]
+              addLyricClip(trackId, {
+                startBeat: last ? last.startBeat + last.durationBeats : 0,
+                durationBeats: beatsPerBar,
+                words: [],
+                layout: last?.layout ?? { kind: 'one' },
+              })
+            }}
+            title="Add a lyric clip"
+            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
+          ><Plus size={11} /></button>
+        )}
+      >LYRIC CLIPS</SectionLabel>
+      {ordered.map((clip) => {
+        return (
+          <div key={clip.id} className="mb-2 rounded border border-[var(--border)] bg-[var(--bg-panel)] p-2">
+            <div className="mb-1 flex items-center justify-end">
+              <button
+                onClick={() => removeLyricClip(trackId, clip.id)}
+                title="Remove this clip"
+                className="flex h-4 w-4 cursor-pointer items-center justify-center rounded text-[var(--text-muted)] hover:text-[#d68383]"
+              ><X size={10} /></button>
+            </div>
+            <LyricClipEditorCard trackId={trackId} clipId={clip.id} />
+          </div>
+        )
+      })}
+      {/* Paste a verse → one line becomes one clip, laid down the timeline. */}
+      <GrowingTextarea value={paste} onChange={setPaste} ariaLabel="Paste lyrics, one line per clip" />
+      <button
+        onClick={() => { if (paste.trim()) { sliceLyricsIntoClips(trackId, paste); setPaste('') } }}
+        disabled={!paste.trim()}
+        className={`mt-1 h-6 w-full rounded border text-[10px] font-medium transition-colors ${paste.trim()
+          ? 'cursor-pointer border-[var(--accent-muted)] bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
+          : 'cursor-default border-[var(--border)] bg-[var(--bg-app)] text-[var(--text-muted)]'}`}
+      >↓ Slice into clips (one line each)</button>
+      <p className="mb-1 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
+        A note sings the next word of the clip under it · <span className="font-mono">syl|la|bles</span> · <span className="font-mono">!kept together!</span>
+      </p>
+    </div>
   )
 }
 
@@ -218,20 +543,17 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   // active side is the instrument's own Advance By param; transcribed tracks
   // additionally get their notes + sheet regrouped from the sung timing.
   const hasTiming = useProjectStore((s) => !!s.tracks[targetId]?.lyricTiming?.length)
+  const storedGrouping = useProjectStore((s) => s.tracks[targetId]?.lyricGrouping)
   const setLyricGrouping = useProjectStore((s) => s.setLyricGrouping)
-  const advanceUnit = findParam(parameters, 'advanceUnit')
-  const lyricGrouping: 'words' | 'lines' = numberOf(advanceUnit) >= 0.5 ? 'lines' : 'words'
-  const text = findParam(parameters, 'text')
-  const font = findParam(parameters, 'font')
+  const lyricGrouping: 'words' | 'lines' = storedGrouping ?? 'words'
   const colorMode = findParam(parameters, 'colorMode')
-  const fontIndex = Math.round(numberOf(font))
   const invertBehind = numberOf(colorMode) >= 0.5
 
   const placed = new Set([
-    'text', 'advanceUnit', 'font', 'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
-    'colorMode', 'color', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
-    'posX', 'posY', 'posMode',
-    'onsetBounce', 'zoomFlash', 'sustain', 'releaseDuration', 'heightAmount',
+    'fontSize', 'sizeMode', 'strokeWidth', 'shadow', 'opacity',
+    'colorMode', 'strokeColor', 'hue', 'rainbowEnabled', 'rainbowCycleLength',
+    'posX', 'posY', 'posMode', 'scatterSpread',
+    'onsetBounce', 'zoomFlash', 'sustain', 'releaseDuration',
     'delayTaps', 'delayTime', 'delayScaleFalloff', 'delayOpacityFalloff', 'pingPongEnabled', 'pingPongWidth',
     'flightEnabled', 'flightSpeed', 'flightMaxDepth', 'flightDrift', 'flightTumble', 'flightSubdivRate',
     'particleEnabled', 'particleCount', 'particleSize', 'particleGlow', 'particleOpaque', 'particleMorphBeats',
@@ -241,26 +563,10 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
   const leftovers = parameters.filter((bound) => !placed.has(bound.definition.key))
 
   return (
-    <section data-testid="text-display-user-interface" className="mb-3">
-      {/* --- The lyric sheet: the reason this track exists --- */}
-      <SectionLabel>TEXT</SectionLabel>
-      {text && typeof text.value === 'string' && (
-        <>
-          <textarea
-            value={text.value}
-            onChange={(event) => text.setValue(event.target.value)}
-            rows={5}
-            spellCheck={false}
-            aria-label="Words to display, in order"
-            placeholder="Type the words, in order…"
-            style={{ fontFamily: FONT_PREVIEWS[fontIndex]?.family }}
-            className="min-h-[96px] w-full resize-y rounded border border-[var(--border)] bg-[var(--bg-app)] px-2.5 py-2 text-[13px] leading-snug text-[var(--text)] outline-none focus:border-[var(--accent)]"
-          />
-          <p className="mb-3 mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
-            space = next word · <span className="font-mono">|syl|la|bles|</span> · <span className="font-mono">!kept together!</span>
-          </p>
-        </>
-      )}
+    <section data-testid="text-display-user-interface" className="mb-3 px-2">
+      {/* --- The looks each piano-roll row wears, then the words --- */}
+      <StyleLanesSection trackId={targetId} />
+      <LyricClipsSection trackId={targetId} />
 
       {/* --- Lyrics: how the words hit the screen --- */}
       <div className="mt-1 border-t border-[var(--border-subtle)] pt-3">
@@ -297,29 +603,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         </p>
       </div>
 
-      {/* --- Type: font specimens + the glyph sliders --- */}
-      {font && font.definition.type === 'select' && (
-        <div className="mb-2 grid grid-cols-4 gap-1">
-          {font.definition.options.map((option) => {
-            const preview = FONT_PREVIEWS[option.value]
-            const active = fontIndex === option.value
-            return (
-              <button
-                key={option.value}
-                onClick={() => font.setValue(option.value)}
-                aria-pressed={active}
-                title={option.label}
-                className={`flex flex-col items-center gap-0.5 rounded border py-1.5 transition-colors cursor-pointer ${active
-                  ? 'border-[var(--accent-muted)] bg-[var(--bg-elevated)] text-[var(--text)]'
-                  : 'border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] hover:text-[var(--text-3)]'}`}
-              >
-                <span className="text-[15px] leading-none" style={{ fontFamily: preview?.family }}>Ag</span>
-                <span className="text-[7px] font-semibold tracking-[0.08em]">{preview?.short ?? option.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* --- Type: the glyph sliders (fonts live on the style lanes) --- */}
       <BoundSlider bound={findParam(parameters, 'fontSize')} />
       {(() => {
         // Directly under the Size slider, for the same reason posMode sits under
@@ -363,7 +647,6 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
           </div>
         )}
         <div className="mb-3 flex items-center gap-5" title={invertBehind ? 'Colors are ignored while inverting what is behind the text' : undefined}>
-          <ColorWell bound={findParam(parameters, 'color')} label="Text" dimmed={invertBehind} />
           <ColorWell bound={findParam(parameters, 'strokeColor')} label="Stroke" dimmed={invertBehind} />
         </div>
         <BoundSlider bound={findParam(parameters, 'hue')} />
@@ -402,7 +685,7 @@ export const TextDisplayUserInterfaceRenderer: UserInterfaceRendererDefinition =
         <BoundSlider bound={findParam(parameters, 'zoomFlash')} />
         <BoundToggleRow bound={findParam(parameters, 'sustain')} />
         <BoundSlider bound={findParam(parameters, 'releaseDuration')} />
-        <BoundSlider bound={findParam(parameters, 'heightAmount')} />
+        <BoundSlider bound={findParam(parameters, 'scatterSpread')} />
       </div>
 
       {/* --- Echo (delay taps) - children appear once taps >= 1 --- */}

@@ -4,7 +4,7 @@ import { DEFAULT_SCENE_BACKGROUND, type Scene, type Track, type AudioBlock, type
 import type { AudioClip } from '../editor/store/AudioStore'
 
 /** Bump when the document shape changes, and append the matching step below. */
-export const CURRENT_VERSION = 14
+export const CURRENT_VERSION = 15
 
 type UpgradeStep = (doc: Record<string, unknown>) => Record<string, unknown>
 
@@ -239,7 +239,7 @@ UPGRADES[8] = (doc) => {
       }
       const { baseHue, ...params } = track.params ?? {}
       tracks[trackId] = {
-        ...track,
+        ...(track as unknown as Track),
         params,
         stringParams: {
           ...track.stringParams,
@@ -447,6 +447,149 @@ UPGRADES[13] = (doc) => {
         : track
     }
     scenes[sceneId] = { ...scene, tracks }
+  }
+  return { ...rest, scenes }
+}
+
+// ── v14 → v15 ────────────────────────────────────────────────────────────────
+// The Text Display clips redesign: the instrument no longer holds text. Words
+// move from the `text` string param onto `lyricClips` (one whole-song clip -
+// old projects had one global word stream, so one clip reproduces it exactly);
+// note pitch becomes the STYLE lane (48 "next word" → 58, the PLAIN lane at
+// STYLE_PITCH_TOP - 2), and the 60-72 height band retires (those pitches are
+// lanes now). The old font/color params seed the PLAIN lane so the words keep
+// their authored look. `wordFormation` child lanes retire too: the nearest
+// clip layout replaces the first lane's geometry (grid/circle/stack) and the
+// tracks are dropped. Constants are inlined - an upgrade step is frozen and
+// must not chase the live modules.
+UPGRADES[14] = (doc) => {
+  const rest = doc as { scenes?: Record<string, Scene>; totalBars?: number; beatsPerBar?: number } & Record<string, unknown>
+  const songBeats = Math.max(1, (rest.totalBars ?? 32) * (rest.beatsPerBar ?? 4)) + 64
+
+  // The old sheet grammar, tokenized WITHOUT flattening: `!...!` runs stay one
+  // token (re-wrapped), and `FOO|LIN` syllable words stay one token - clip
+  // entries re-expand both, so note-per-syllable timing survives verbatim.
+  const tokenize = (text: string, byLine: boolean): string[] => {
+    if (byLine) {
+      return text.split(/\r?\n/)
+        .map((l) => l.replace(/[|!]+/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .map((l) => (/\s/.test(l) ? `!${l}!` : l))
+    }
+    const out: string[] = []
+    const parts = text.split('!')
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i].trim()
+      if (!seg) continue
+      if (i % 2 === 1) out.push(`!${seg}!`)
+      else out.push(...seg.split(/\s+/))
+    }
+    return out
+  }
+
+  // Pre-v15 track shapes still carry the retired 'wordFormation' type string.
+  type RawTrack = Omit<Track, 'type'> & { type: string; inputValues?: Record<string, number> }
+
+  const scenes: Record<string, Scene> = {}
+  for (const [sceneId, scene] of Object.entries(rest.scenes ?? {})) {
+    const tracks: Record<string, Track> = {}
+    const dropped = new Set<string>()
+    // First pass: convert every Text Display track, remembering which
+    // formation children die with it.
+    for (const [trackId, raw] of Object.entries(scene.tracks)) {
+      const track = raw as RawTrack
+      if (track.type !== 'base' || track.instrumentId !== 'textDisplay') continue
+
+      const params = { ...track.params }
+      const stringParams = { ...track.stringParams }
+      const text = stringParams.text ?? 'HELLO'
+      const byLine = (params.advanceUnit ?? 0) >= 0.5
+      const words = tokenize(text, byLine)
+
+      // Layout: the old Layout param, unless a formation child says otherwise
+      // (formations were presence-driven geometry - grid and ring map onto the
+      // clip layouts; anything else reads closest as a paragraph card).
+      const layoutMode = Math.round(params.layoutMode ?? 0)
+      let layout: { kind: 'one' | 'row' | 'stack' | 'scatter' | 'grid' | 'circle'; cols?: number } =
+        layoutMode === 1 ? { kind: 'scatter' } : layoutMode === 2 ? { kind: 'stack' } : { kind: 'one' }
+      let tookFormationLayout = false
+      for (const cid of track.childIds ?? []) {
+        const child = scene.tracks[cid] as RawTrack | undefined
+        if (!child || child.type !== 'wordFormation') continue
+        if (!tookFormationLayout) {
+          tookFormationLayout = true
+          const iv = child.inputValues ?? {}
+          const cols = Math.max(1, Math.round(iv.columns ?? 2))
+          const rows = Math.max(1, Math.round(iv.rows ?? 2))
+          if ((iv.columnsRing ?? 0) >= 0.5 || (iv.rowsRing ?? 0) >= 0.5) layout = { kind: 'circle' }
+          else if (cols > 1 && rows > 1) layout = { kind: 'grid', cols }
+          else layout = { kind: 'stack' }
+        }
+        dropped.add(cid)
+      }
+
+      // Revoice the notes: 48 → 58 (PLAIN), height band 60-72 dropped.
+      const blocks = track.blocks.map((b) => ({
+        ...b,
+        notes: b.notes
+          .filter((n) => !(n.pitch >= 60 && n.pitch <= 72))
+          .map((n) => (n.pitch === 48 ? { ...n, pitch: 58 } : n)),
+      }))
+
+      // PLAIN inherits the authored look; the other lanes ship the defaults
+      // (inlined - the live defaults may drift, this step may not).
+      const styleLanes = [
+        { name: 'TITLE', font: 0, color: '#facc15', size: 1.9 },
+        { name: 'ACCENT', font: 6, color: '#f472b6', size: 1.35 },
+        { name: 'PLAIN', font: Math.max(0, Math.round(params.font ?? 0)), color: stringParams.color || '#ffffff', size: 1 },
+        { name: 'WHISPER', font: 1, color: '#9aa1ab', size: 0.65 },
+        { name: 'GLITCH', font: 2, color: '#38bdf8', size: 1, fx: ['shake' as const] },
+      ]
+
+      delete params.layoutMode
+      delete params.phraseGap
+      delete params.stackMaxWords
+      delete params.advanceUnit
+      delete params.font
+      delete params.heightAmount
+      delete stringParams.text
+      delete stringParams.color
+
+      tracks[trackId] = {
+        ...(track as unknown as Track),
+        params,
+        stringParams,
+        blocks,
+        styleLanes,
+        lyricClips: [{
+          id: crypto.randomUUID(),
+          startBeat: 0,
+          durationBeats: songBeats,
+          words,
+          layout,
+        }],
+      }
+    }
+    // Second pass: copy everything else, dropping the dead formation lanes and
+    // any orphaned ones on non-text parents.
+    for (const [trackId, raw] of Object.entries(scene.tracks)) {
+      const track = raw as RawTrack
+      if (tracks[trackId]) continue
+      if (track.type === 'wordFormation') { dropped.add(trackId); continue }
+      tracks[trackId] = track as unknown as Track
+    }
+    if (dropped.size > 0) {
+      for (const [trackId, t] of Object.entries(tracks)) {
+        if (t.childIds?.some((cid) => dropped.has(cid))) {
+          tracks[trackId] = { ...t, childIds: t.childIds.filter((cid) => !dropped.has(cid)) }
+        }
+      }
+    }
+    scenes[sceneId] = {
+      ...scene,
+      tracks,
+      rootTrackIds: scene.rootTrackIds.filter((id) => !dropped.has(id)),
+    }
   }
   return { ...rest, scenes }
 }

@@ -8,8 +8,7 @@ import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transf
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
-import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedWordFormationLane } from './types'
-import { mergeFormationSettings } from './wordFormation'
+import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope } from './types'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack, type CompositionLayer } from '../directors'
@@ -241,32 +240,16 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
         if (inst && env.key !== undefined) env.fxBase = inst.settings[env.key] ?? env.fxBase
       }
     }
-    // Word Formation geometry is knob-driven, so it follows the envelope lanes'
-    // rule and stays live at 60fps instead of waiting for the debounced resolve
-    // (notes - which formation is on when - are structure and do wait).
-    // Replaced rather than mutated: the instrument's frame signature compares
-    // this array BY REFERENCE, so an in-place edit would drag a knob with no
-    // repaint at all while paused.
-    if (obj.wordFormations) {
-      let next: ResolvedWordFormationLane[] | undefined
-      for (let i = 0; i < obj.wordFormations.length; i++) {
-        const lane = obj.wordFormations[i]
-        const fTrack = sceneTracks[lane.trackId]
-        if (!fTrack) continue
-        const settings = mergeFormationSettings(fTrack.inputValues)
-        if (sameSettings(settings, lane.settings)) continue
-        next ??= [...obj.wordFormations]
-        next[i] = { ...lane, settings }
-      }
-      if (next) obj.wordFormations = next
+    // Lyric clips and style lanes are document fields; the store's immutable
+    // updates hand the resolved object a fresh array identity on any edit, so
+    // a paused frame repaints through the frame signature with no work here.
+    if (obj.lyricClips !== sceneTracks[obj.trackId]?.lyricClips && sceneTracks[obj.trackId]) {
+      obj.lyricClips = sceneTracks[obj.trackId].lyricClips
+    }
+    if (obj.styleLanes !== sceneTracks[obj.trackId]?.styleLanes && sceneTracks[obj.trackId]) {
+      obj.styleLanes = sceneTracks[obj.trackId].styleLanes
     }
   }
-}
-
-function sameSettings(a: Record<string, number>, b: Record<string, number>): boolean {
-  for (const k in a) if (a[k] !== b[k]) return false
-  for (const k in b) if (!(k in a)) return false
-  return true
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -476,23 +459,6 @@ export function computeAtBeat(beat: number) {
     // Notes live at this beat - pitch-reactive instruments read them (a zero-length note
     // stays "on" for a hair so single-tick triggers still register).
     const activeNotes = obj.notes.filter((n) => objBeat >= n.beat && objBeat < n.beat + (n.durationBeats || 0.05))
-    // Word Formation lanes carry their own automation children (Columns, Radius,
-    // Spacing...), so their settings are sampled here rather than in the
-    // instrument - the same base ← automation merge params get, in the one place
-    // that already owns per-frame sampling. An un-automated lane is passed by
-    // reference, which keeps both the allocation and the instrument's frame-skip
-    // signature stable per resolve.
-    const wordFormations = obj.wordFormations?.some((lane) => lane.automations.length)
-      ? obj.wordFormations.map((lane) => {
-        if (lane.automations.length === 0) return lane
-        const settings = { ...lane.settings }
-        for (const auto of lane.automations) {
-          const v = sampleAutomationLane(auto, objBeat, settings[auto.param] ?? auto.base ?? 0)
-          if (!Number.isNaN(v)) settings[auto.param] = v
-        }
-        return { ...lane, settings }
-      })
-      : obj.wordFormations
     states.set(obj.trackId, {
       beat: objBeat,
       secPerBeat,
@@ -508,7 +474,8 @@ export function computeAtBeat(beat: number) {
       blackedOut,
       stringParams: obj.stringParams,
       abilityEvents: obj.abilityEvents,
-      wordFormations,
+      lyricClips: obj.lyricClips,
+      styleLanes: obj.styleLanes,
       notes: obj.notes,
       activeNotes,
       // The object's own lanes, by reference (no per-frame allocation). Handed to

@@ -38,9 +38,11 @@ test('declared param identity follows that param on multi-color instruments', ()
   assert.equal(resolveTrackDisplayColor(t), '#2299aa')
 })
 
-test('near-achromatic derived colors fall back to the cycle color', () => {
-  // textDisplay's identity param defaults to pure white - hue is meaningless
-  assert.equal(resolveTrackDisplayColor(baseTrack({ instrumentId: 'textDisplay' })), CYCLE_COLOR)
+test('a fixed identity color wins over the cycle color', () => {
+  // Since the clips redesign textDisplay declares a FIXED identity (the word-note
+  // accent) - word colors live per style lane, so there is no color param left
+  // to follow and the track wears the accent everywhere.
+  assert.equal(resolveTrackDisplayColor(baseTrack({ instrumentId: 'textDisplay' })), '#facc15')
 })
 
 test('audio tracks keep the fixed sapphire identity', () => {
@@ -91,13 +93,10 @@ test('an unresolvable mover id falls through to the cycle color', () => {
 
 // ── Identity color (inspector chrome naming ONE instrument) ─────────────────
 
-test('identity color keeps an achromatic instrument achromatic', () => {
-  // The tab is naming this instrument. Sending white to the cycle color made it
-  // BLUE (the cycle is seeded from the audio sapphire) and the tab then read as
-  // the app accent rather than as Text Display.
+test('a declared fixed identity reaches the inspector chrome verbatim', () => {
   const t = baseTrack({ instrumentId: 'textDisplay' })
-  assert.equal(resolveTrackDisplayColor(t), CYCLE_COLOR)
-  assert.equal(resolveTrackIdentityColor(t), '#ffffff')
+  assert.equal(resolveTrackDisplayColor(t), '#facc15')
+  assert.equal(resolveTrackIdentityColor(t), '#facc15')
 })
 
 test('identity color follows the instrument color param, like the display color', () => {

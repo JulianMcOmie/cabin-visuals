@@ -62,7 +62,10 @@ test('three picked looks become three named scenes and a cycling switcher', () =
     const lyricsId = scene.rootTrackIds.find((tid) => scene.tracks[tid]?.name === 'Lyrics')
     assert.ok(lyricsId, `scene ${i} has a Lyrics track`)
     const lyrics = scene.tracks[lyricsId]
-    assert.match(lyrics.stringParams?.text ?? '', /real words/)
+    // Post-v15: the words live on the track's lyric clips, not a text param.
+    const clipWords = (lyrics.lyricClips ?? []).map((c) => c.words.join(' ')).join(' ')
+    assert.match(clipWords, /real/)
+    assert.match(clipWords, /words/)
     assert.equal(lyrics.lyricTiming?.length, TIMING.length)
   })
 

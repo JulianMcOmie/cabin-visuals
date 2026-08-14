@@ -34,7 +34,6 @@ export type TrackType =
   | 'audio'
   | 'envelope'
   | 'splitter'
-  | 'wordFormation'
   // A folder over member tracks (⌘⇧G). Carries the canonical tf* transform
   // (inherited by the subtree via world-matrix composition), automation lanes
   // on those params, an effect chain broadcast to member objects, and
@@ -46,6 +45,52 @@ export type TrackType =
 // 'director' was retired in schema v12: a scene composer is now an ordinary
 // 'base' track whose instrumentId names a composition instrument
 // (core/directors). upgrade.ts rewrites old saves.
+// 'wordFormation' was retired in schema v15: lyric clips carry a LAYOUT that
+// replaces formation lanes (upgrade.ts converts and drops the child tracks).
+
+/** How a lyric clip arranges its words on screen. An open vocabulary - new
+ *  kinds append here and get a card in the clip editor; the engine treats an
+ *  unknown kind as 'one' so an older build never crashes on a newer save. */
+export type LyricLayoutKind = 'one' | 'row' | 'stack' | 'scatter' | 'grid' | 'circle'
+
+export interface LyricClipLayout {
+  kind: LyricLayoutKind
+  /** Grid only: columns. Absent = 2. */
+  cols?: number
+}
+
+/**
+ * A lyric clip: a span of the timeline that OWNS its words. A Text Display
+ * note takes the next unclaimed word from the clip its beat falls inside -
+ * word binding is local to a phrase, so pasting/moving notes can never shift
+ * lyrics outside their own clip. Words keep Text Display's inline powers
+ * (`!a phrase!` grouping, `|syl|la|bles|`). Beats are ABSOLUTE project beats
+ * (clips are track fields, not block contents).
+ */
+export interface LyricClip {
+  id: string
+  startBeat: number
+  durationBeats: number
+  words: string[]
+  layout: LyricClipLayout
+}
+
+/** Per-lane word effects (applied to every word played on the lane). */
+export type StyleLaneFx = 'shake' | 'rainbow' | 'outline'
+
+/**
+ * One style lane of a Text Display track: a named look that a piano-roll ROW
+ * wears. A note's pitch picks the lane, so note height styles the word.
+ * `font` indexes Text Display's FONT_STACKS; `size` multiplies the track's
+ * Font Size; `color` is the word color (track-level Rainbow/Hue still win).
+ */
+export interface StyleLane {
+  name: string
+  font: number
+  color: string
+  size: number
+  fx?: StyleLaneFx[]
+}
 
 export type SceneId = string
 export const DEFAULT_SCENE_BACKGROUND = '#000000'
@@ -272,11 +317,14 @@ export interface Track {
   /** A composition instrument's MIDI rows bind stable pitches to scene
    *  identities (Main-scene tracks; see core/directors). */
   sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
-  /** Mover/splitter param values, keyed by the definition's param keys. A
-   *  `wordFormation` lane stores its geometry here too, against
-   *  `core/visual/wordFormation.ts`'s WORD_FORMATION_PARAMS - same field, so
-   *  automation children and the panel's param binding work unchanged. */
+  /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>
+  /** Text-Display-only: the lyric clips that own this track's words
+   *  (core/visual/lyricClips.ts resolves notes against them). */
+  lyricClips?: LyricClip[]
+  /** Text-Display-only: the style lanes its piano-roll rows wear (pitch picks
+   *  the lane; absent = the default lane set). */
+  styleLanes?: StyleLane[]
   /** Visual effects applied to this object's rendered output (transform/clone/shader). */
   effects?: EffectInstance[]
   /** Audio-track-only: the positioned clips this lane plays (type === 'audio'). */

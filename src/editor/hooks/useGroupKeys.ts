@@ -24,7 +24,7 @@ export function useGroupKeys() {
           const memberIds = only.childIds.filter((cid) => {
             const c = store.tracks[cid]
             return !!c && c.type !== 'automation' && c.type !== 'ability'
-              && c.type !== 'envelope' && c.type !== 'wordFormation'
+              && c.type !== 'envelope'
           })
           store.ungroupTrack(only.id)
           useUIStore.setState({

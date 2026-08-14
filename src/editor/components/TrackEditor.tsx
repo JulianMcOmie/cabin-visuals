@@ -20,8 +20,6 @@ import { AudioTrackDetail } from './AudioTrackDetail'
 import { SceneSettingsPanel } from './SceneSettingsPanel'
 import { isNumberParam, isStringParam } from '../instruments/types'
 import { getUserInterfaceRenderer, ParamControl, type UserInterfaceParameter } from '../userInterfaceRenderers'
-import { WordFormationUserInterface } from '../userInterfaceRenderers/WordFormationUserInterface'
-import { WORD_FORMATION_PARAMS } from '../core/visual/wordFormation'
 import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceRenderers/bespokeRegistries'
 import { consolePanel } from '../userInterfaceRenderers/console'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
@@ -243,7 +241,6 @@ function panelIdentity(
       : track.type === 'automation' ? 'Automation'
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
-      : track.type === 'wordFormation' ? 'Word Formation'
       : track.type === 'group' ? 'Group'
       : 'Track'
     // The instrument's own color, not the timeline's display color: the tab is
@@ -551,18 +548,6 @@ export function TrackEditor() {
                       </>
                     )
                   }
-                  // Word Formation child track → the arrangement its parent text
-                  // instrument seats words into. Same param binding as a mover
-                  // (geometry lives in inputValues), so a bespoke panel plugs in
-                  // the same way and the generic list is the fallback.
-                  if (track.type === 'wordFormation') {
-                    const formationParameters: UserInterfaceParameter[] = WORD_FORMATION_PARAMS.map((p) => ({
-                      definition: p,
-                      value: track.inputValues?.[p.key] ?? (p.default as number),
-                      setValue: (v) => { if (typeof v === 'number') setMoverInput(track.id, p.key, v) },
-                    }))
-                    return <WordFormationUserInterface targetId={track.id} parameters={formationParameters} />
-                  }
                   // Envelope child track → ADSR + depth (+ the value reached at
                   // full gain, except for the reserved Opacity target, which is a
                   // pure multiplier). Its notes are the gates - drawn in the MIDI
@@ -786,8 +771,12 @@ export function TrackEditor() {
                           the color wheel popover must escape the frame, so inner
                           surfaces carry their own radius instead. */}
                       <div
-                        className="rounded-[10px] border p-3"
-                        style={accent ? {
+                        // Text Display runs FLUSH: its panel is a workspace
+                        // (style lanes, clips), not a framed device, so the
+                        // chassis border+padding drop and the negative margin
+                        // cancels the scroll container's inset.
+                        className={track.instrumentId === 'textDisplay' ? '-mx-3' : 'rounded-[10px] border p-3'}
+                        style={track.instrumentId === 'textDisplay' ? undefined : accent ? {
                           borderColor: withAlpha(accent, 0.22),
                           boxShadow: `0 0 20px ${withAlpha(accent, 0.07)}, 0 4px 18px rgba(0,0,0,0.4)`,
                         } : {

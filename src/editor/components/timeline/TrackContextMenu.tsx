@@ -3,7 +3,6 @@ import { getInstrument } from '../../instruments'
 import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
-import { WORD_FORMATION_PARAMS } from '../../core/visual/wordFormation'
 import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../../core/transform'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
 import { getEffect } from '../../effects'
@@ -30,7 +29,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addAutomationTrack = useProjectStore((s) => s.addAutomationTrack)
   const addEnvelopeTrack = useProjectStore((s) => s.addEnvelopeTrack)
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
-  const addWordFormationTrack = useProjectStore((s) => s.addWordFormationTrack)
   const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
   const ungroupTrack = useProjectStore((s) => s.ungroupTrack)
   const scenes = useProjectStore((s) => s.scenes)
@@ -53,9 +51,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     track.type === 'mover' ? track.moverId : track.type === 'splitter' ? track.splitterId : undefined,
   )
   const abilities = def?.abilities ?? []
-  const nextFormationLetter = String.fromCharCode(65 + Math.min(
-    track.childIds.filter((cid) => tracks[cid]?.type === 'wordFormation').length, 25,
-  ))
   // Only numeric params can be automated (keyframes interpolate a number). Object
   // tracks also offer the canonical transform params (core/transform.ts); SPLITTER
   // tracks offer the spatial ones - such a lane moves the splitter's copies in the
@@ -64,14 +59,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     ? withTransformParams(def.params)
     : moverDef
       ? track.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
-      // A Word Formation lane's geometry automates like a mover's params: the
-      // counts included, because these are not VisualCopies and nothing has to
-      // size a pool ahead of the beat.
-      : track.type === 'wordFormation' ? WORD_FORMATION_PARAMS
-        // A GROUP automates its canonical transform (opacity included) - the
-        // formation-as-one channel, inherited by the whole subtree.
-        : track.type === 'group' ? TRANSFORM_PARAM_DEFS
-          : isComposition ? compositionAutomatableParams(directorDef) : []
+      // A GROUP automates its canonical transform (opacity included) - the
+      // formation-as-one channel, inherited by the whole subtree.
+      : track.type === 'group' ? TRANSFORM_PARAM_DEFS
+        : isComposition ? compositionAutomatableParams(directorDef) : []
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
   // there, and never join the object's chain: under a MOVER a child moves its
@@ -144,15 +135,6 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     : []
 
   const groups: NestedMenuGroup[] = [
-    // Text instruments only: the lane seats WORDS, so it means nothing anywhere
-    // else. Unlike the other groups this one is a single action, not a pick
-    // list - formations are told apart by which one you play, not by a name
-    // chosen up front - so it carries one item.
-    {
-      key: 'wordFormation',
-      label: 'Add word formation',
-      items: def?.seatsWords ? [{ id: 'add', label: `Formation ${nextFormationLetter}` }] : [],
-    },
     {
       key: 'ability',
       label: 'Add ability track',
@@ -215,9 +197,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   ]
 
   const onPick = (groupKey: string, itemId: string) => {
-    if (groupKey === 'wordFormation') {
-      addWordFormationTrack(trackId)
-    } else if (groupKey === 'ability') {
+    if (groupKey === 'ability') {
       const a = abilities.find((ab) => ab.key === itemId)
       if (a) addAbilityTrack(trackId, a.key, a.label)
     } else if (groupKey === 'mover') {

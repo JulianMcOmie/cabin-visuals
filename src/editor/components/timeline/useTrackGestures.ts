@@ -49,9 +49,8 @@ function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   }
   if (copiedRoot.type === 'ability') return track.type === 'base'
   // A formation lane's own params automate, so automation pastes onto one too.
-  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover' || track.type === 'wordFormation' || track.type === 'group'
+  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover' || track.type === 'group'
   if (copiedRoot.type === 'envelope') return track.type === 'base'
-  if (copiedRoot.type === 'wordFormation') return track.type === 'base'
   return true
 }
 

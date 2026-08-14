@@ -21,7 +21,17 @@ import {
   type Material,
 } from 'three'
 import { useInstrumentFrame, seededRand, paramAtBeat } from '../core/visual/instrumentFrame'
-import { activeFormation, countOnsets, formationSeats, seatWords } from '../core/visual/wordFormation'
+import {
+  PITCH_BASS_POP,
+  PITCH_ZOOM_FLASH,
+  clipSlotOffset,
+  laneIndexForPitch,
+  resolveLyricWords,
+  resolveStyleLanes,
+  singleTextEntry,
+  styleLanePitch,
+  type TextEntry,
+} from '../core/visual/lyricClips'
 import { ensureFont } from '../core/visual/fonts'
 import {
   MAX_PARTICLES,
@@ -41,27 +51,17 @@ import { FinalInvertMaskContext } from '../core/visual/finalInvertMask'
 import type { ResolvedNote } from '../core/visual/types'
 import type { ObjectInstrumentDef, ParamDef } from './types'
 
-// Ported from Excellent DAW. Displays text a word at a time, advancing on each MIDI note
-// and filling the frame. Words are rendered to a canvas + CanvasTexture on screen-filling
-// planes. Supports delay echoes, per-note height offset (pitch 60-72), flight mode (words
-// zoom toward the camera), and rainbow hue cycling. Tyler's Google-font loader and palette
-// are dropped; everything (word index, bounce/release/pop ages, echoes, flight sprites)
-// is derived per frame from the resolved note list, so scrub == playback.
-
-// Pitch roles (kept from Tyler): a dedicated "next word" pitch advances the word, a bass
-// "pop" pitch punches the current word, and a 60-72 band sets a vertical height offset.
-const PITCH_BASS_POP = 47
-const PITCH_NEXT_WORD = 48
-// A near-subliminal insert: for ~2 frames the current word renders BLOWN UP
-// then snaps back - the single-frame giant-text flash that punctuates word
-// transitions in fast lyric edits. How big is the `zoomFlash` param: the
-// reference blows up to illegible letterform fragments (~6.5), the default
-// stays readable.
-const PITCH_ZOOM_FLASH = 46
+// Displays text a word at a time, one word per MIDI note. Since the 2026-08 clips
+// redesign the instrument holds NO text: words come from the track's lyric clips
+// (core/visual/lyricClips.ts) - a note takes the next unclaimed word of the clip
+// its beat falls inside - and the note's PITCH picks a style lane (font / color /
+// size / fx), so note height styles the word. The clip also carries a LAYOUT
+// (one / row / stack / scatter / grid / circle) that picks the arrangement below.
+// Everything (word index, bounce/release/pop ages, echoes, flight sprites) is
+// derived per frame from the resolved note list, so scrub == playback.
+// Zoom flash: a near-subliminal insert - for ~2 frames the current word renders
+// BLOWN UP then snaps back (pitch PITCH_ZOOM_FLASH, kept from the old design).
 const ZOOM_FLASH_SECONDS = 0.09
-const PITCH_HEIGHT_MIN = 60 // C4
-const PITCH_HEIGHT_MAX = 72 // C5
-const PITCH_HEIGHT_CENTER = 66 // F#4 = no offset
 const MAX_DELAY_TAPS = 8
 
 // Font stacks. 0-3 are system stacks; the rest are self-hosted template faces
@@ -147,75 +147,6 @@ function configureTextMaterial(material: MeshBasicMaterial, invertBehind: boolea
   material.needsUpdate = true
 }
 
-interface TextEntry {
-  text: string
-  layoutText: string
-  syllableStart: number
-  syllableCount: number
-  cacheKey: string
-}
-
-function singleTextEntry(text: string): TextEntry {
-  return {
-    text,
-    layoutText: text,
-    syllableStart: 0,
-    syllableCount: 1,
-    cacheKey: text,
-  }
-}
-
-function entriesForWord(raw: string): TextEntry[] {
-  if (!raw.includes('|')) return [singleTextEntry(raw)]
-
-  const parts = raw.split('|').filter((p) => p.length > 0)
-  if (parts.length <= 1) return parts.length === 1 ? [singleTextEntry(parts[0])] : []
-
-  const layoutText = parts.join('')
-  const entries: TextEntry[] = []
-  let start = 0
-  for (const part of parts) {
-    entries.push({
-      text: part,
-      layoutText,
-      syllableStart: start,
-      syllableCount: parts.length,
-      cacheKey: `${layoutText}|${start}|${part}`,
-    })
-    start += part.length
-  }
-  return entries
-}
-
-function parsePipeAwareSegment(segment: string): TextEntry[] {
-  const result: TextEntry[] = []
-  let i = 0
-
-  while (i < segment.length) {
-    while (i < segment.length && /\s/.test(segment[i])) i++
-    if (i >= segment.length) break
-
-    if (segment[i] === '|') {
-      const close = segment.indexOf('|', i + 1)
-      if (close !== -1) {
-        const grouped = segment.slice(i + 1, close).trim()
-        if (grouped) {
-          if (/\s/.test(grouped)) result.push(singleTextEntry(grouped))
-          else result.push(...entriesForWord(grouped))
-        }
-        i = close + 1
-        continue
-      }
-    }
-
-    const start = i
-    while (i < segment.length && !/\s/.test(segment[i])) i++
-    result.push(...entriesForWord(segment.slice(start, i)))
-  }
-
-  return result
-}
-
 // Shared canvas cache keyed by (word, stroke, font, color, strokeColor).
 const canvasCache = new Map<string, HTMLCanvasElement>()
 const CANVAS_CACHE_MAX = 64
@@ -229,9 +160,16 @@ function createTextCanvas(
   glow = 0,
   glowContained = false,
   shadow = 0,
+  outline = false,
 ): HTMLCanvasElement {
   const entry = typeof word === 'string' ? singleTextEntry(word) : word
-  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}|${shadow}`
+  // Outline (a style-lane fx): the glyph is stroke-only in the word's color -
+  // force a visible stroke and skip every fill pass below.
+  if (outline) {
+    strokeWidth = Math.max(strokeWidth, 0.06)
+    strokeColor = color
+  }
+  const key = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${color}|${strokeColor}|${glow}|${glowContained}|${shadow}|${outline ? 1 : 0}`
   const cached = canvasCache.get(key)
   if (cached) return cached
 
@@ -352,7 +290,7 @@ function createTextCanvas(
     drawAll(ctx, 'stroke')
   }
   ctx.fillStyle = color
-  if (glow > 0) {
+  if (glow > 0 && !outline) {
     // Projected-light bloom: a wide soft halo, then a tight inner glow, in the
     // text's own color. The plain fill after clears the shadow and lays the
     // bright core on top.
@@ -418,12 +356,12 @@ function createTextCanvas(
   // Soft drop shadow under the final fill - the short-form caption treatment
   // (white bold word floating on footage). Distinct from glow: glow halos in
   // the TEXT's color, shadow grounds it in black.
-  if (shadow > 0) {
+  if (shadow > 0 && !outline) {
     ctx.shadowColor = 'rgba(0,0,0,0.85)'
     ctx.shadowBlur = shadow * fontSize * 0.18
     ctx.shadowOffsetY = shadow * fontSize * 0.07
   }
-  drawAll(ctx, 'fill')
+  if (!outline) drawAll(ctx, 'fill')
   if (shadow > 0) {
     ctx.shadowColor = 'transparent'
     ctx.shadowBlur = 0
@@ -456,35 +394,6 @@ function setTextureCanvas(tex: CanvasTexture, canvas: HTMLCanvasElement) {
   tex.needsUpdate = true
 }
 
-// Parse text into display entries. Whitespace separates words, !...! keeps a
-// phrase together, |inside| a word can split syllables, and |... ...| groups
-// a phrase with spaces into one display entry. `byLine` (the Advance By
-// param) ignores all of that: every newline-separated line of the sheet is
-// one entry, whole.
-function parseTextEntries(text: string, byLine = false): TextEntry[] {
-  if (byLine) {
-    const result: TextEntry[] = []
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.replace(/[|!]+/g, ' ').replace(/\s+/g, ' ').trim()
-      if (!line) continue
-      if (/\s/.test(line)) result.push(singleTextEntry(line))
-      else result.push(...entriesForWord(line))
-    }
-    return result
-  }
-  const result: TextEntry[] = []
-  const parts = text.split('!')
-  for (let i = 0; i < parts.length; i++) {
-    if (i % 2 === 0) {
-      result.push(...parsePipeAwareSegment(parts[i]))
-    } else {
-      const grouped = parts[i].trim()
-      if (grouped) result.push(...entriesForWord(grouped))
-    }
-  }
-  return result
-}
-
 // Flight sprites are pooled: one mesh+texture reused across subdiv indices, retextured
 // only when the (word, styling) key changes.
 interface FlightPooled {
@@ -499,54 +408,11 @@ const MAX_FLIGHT_SPRITES = 128
 const MAX_SCATTER_WORDS = 16
 
 const PARAMS: ParamDef[] = [
-  { key: 'text', label: 'Text', type: 'string', default: 'HELLO', multiline: true },
-  // Line mode: each NEWLINE-separated line of the sheet is one display unit
-  // (one note advance shows the whole line). Word mode keeps the classic
-  // whitespace split with !...! / |...| grouping powers.
-  {
-    key: 'advanceUnit', label: 'Advance By', type: 'select', default: 0, options: [
-      { value: 0, label: 'Word' },
-      { value: 1, label: 'Line' },
-    ],
-  },
-  {
-    key: 'font', label: 'Font', type: 'select', default: 0, options: [
-      { value: 0, label: 'Impact / Sans' },
-      { value: 1, label: 'Serif' },
-      { value: 2, label: 'Monospace' },
-      { value: 3, label: 'Sans-serif' },
-      { value: 4, label: 'Old Press Caps (IM Fell SC)' },
-      { value: 5, label: 'Old Press (IM Fell)' },
-      { value: 6, label: 'Didone (Playfair)' },
-      { value: 7, label: 'Poster (Bebas Neue)' },
-      { value: 8, label: 'Neon (Righteous)' },
-      { value: 9, label: 'Noir (Abril Fatface)' },
-      { value: 10, label: 'Nostalgic (Comic Sans)' },
-      { value: 11, label: 'Script (Brush)' },
-      { value: 12, label: 'Proper (Palatino)' },
-      { value: 13, label: 'Newsprint (Times)' },
-      { value: 14, label: 'Terminal (Consolas)' },
-      { value: 15, label: 'Marker (Permanent Marker)' },
-    ],
-  },
-  {
-    key: 'layoutMode', label: 'Layout', type: 'select', default: 0, options: [
-      { value: 0, label: 'Center' },
-      { value: 1, label: 'Scatter' },
-      // Words of the current phrase accumulate into centered stacked lines
-      // ("WHO" → "WHO YOU" → "WHO YOU / FOOLIN'?"), clearing at phrase gaps -
-      // the lyric-card grammar of fast monochrome edits.
-      { value: 2, label: 'Stack' },
-    ],
-  },
-  // Phrase Gap serves BOTH non-center layouts (it is the card/phrase cutter),
-  // so it gates on "any non-center"; the mode-specific knobs pin to their own
-  // mode - a Scatter Spread slider means nothing while the layout is Stack.
-  { key: 'phraseGap', label: 'Phrase Gap (beats)', min: 0.5, max: 8, step: 0.5, default: 2, showIf: 'layoutMode' },
-  { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6, showIf: 'layoutMode=1' },
-  // Stack cards hold at most this many words before starting a fresh card -
-  // the reference never shows more than 3-4 at once.
-  { key: 'stackMaxWords', label: 'Stack Max Words', min: 1, max: 8, step: 1, default: 4, showIf: 'layoutMode=2' },
+  // Words, fonts and layout live OUTSIDE the instrument since the clips
+  // redesign: lyric clips own the text + arrangement, style lanes own the
+  // look (core/visual/lyricClips.ts). Scatter Spread survives as the one
+  // scatter-layout knob.
+  { key: 'scatterSpread', label: 'Scatter Spread', min: 0.1, max: 1, step: 0.05, default: 0.6 },
   // Where the words sit, as a fraction of the frame from centre: -1/+1 reaches
   // the edge. Screen-relative rather than world units, so it means the same
   // thing at any aspect and survives export at a different resolution.
@@ -592,7 +458,6 @@ const PARAMS: ParamDef[] = [
       { value: 1, label: 'Invert Behind' },
     ],
   },
-  { key: 'color', label: 'Text Color', type: 'color', default: '#ffffff' },
   { key: 'strokeColor', label: 'Stroke Color', type: 'color', default: '#000000' },
   { key: 'fontSize', label: 'Font Size', min: 0.1, max: 5, step: 0.1, default: 1 },
   { key: 'strokeWidth', label: 'Stroke Width', min: 0, max: 0.2, step: 0.01, default: 0.05 },
@@ -605,7 +470,6 @@ const PARAMS: ParamDef[] = [
   // lyric-video hold.
   { key: 'sustain', label: 'Hold Until Next Word', type: 'boolean', default: 0 },
   { key: 'releaseDuration', label: 'Release Fade', min: 0, max: 2, step: 0.05, default: 0.4, showIf: 'sustain=0' },
-  { key: 'heightAmount', label: 'Height Amount', min: 0, max: 1, step: 0.05, default: 0.35 },
   { key: 'onsetBounce', label: 'Onset Bounce', min: 0, max: 0.5, step: 0.01, default: 0.08 },
   // How far the pitch-46 Zoom flash blows the word up for its ~2 frames. 3
   // keeps the word readable on screen; the reference's ~6.5 is pure fragments.
@@ -795,12 +659,25 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       .applyQuaternion(_billboardFace)
 
     const p = state.params
-    const text = state.stringParams.text ?? 'HELLO'
-    const font = fontStack(p.font ?? 0)
+    // Style lanes: pitch picks the lane, the lane owns font/color/size/fx.
+    const lanes = resolveStyleLanes(state.styleLanes)
+    const laneCount = lanes.length
     // A template face that hasn't finished loading yet: retry next frame
     // rather than baking fallback-family canvases into the cache.
-    if (font.load && !ensureFont(font.load)) return false
-    const color = state.stringParams.color || '#ffffff'
+    for (const lane of lanes) {
+      const f = fontStack(lane.font)
+      if (f.load && !ensureFont(f.load)) return false
+    }
+    // The track's word notes (style-lane band) and their clip resolution: the
+    // FULL stream, future included, so layouts can reserve seats (lyric[i]
+    // aligns with allWordNotes[i]).
+    const allWordNotes = state.notes.filter((n) => laneIndexForPitch(n.pitch, laneCount) >= 0)
+    const lyric = resolveLyricWords(allWordNotes, state.lyricClips, laneCount)
+    const laneAt = (i: number) => lanes[lyric[i]?.laneIndex ?? 0] ?? lanes[0]
+    const entryAt = (i: number): TextEntry | null => lyric[i]?.entry ?? null
+    const fontAt = (i: number) => fontStack(laneAt(i).font)
+    const outlineAt = (i: number) => laneAt(i).fx?.includes('outline') ?? false
+    const laneShakeAt = (i: number) => laneAt(i).fx?.includes('shake') ?? false
     const invertBehind = (p.colorMode ?? 0) >= 0.5
     const strokeColor = state.stringParams.strokeColor || ''
     const fontSize = p.fontSize ?? 1
@@ -816,7 +693,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // current word once one has sounded, so "no release" is the whole
     // implementation; block gating still ends everything with the block.
     const sustainWords = (p.sustain ?? 0) >= 0.5
-    const heightAmount = p.heightAmount ?? 0.35
+    // The 60-72 height band retired with the clips redesign (those pitches are
+    // style lanes now); kept as constants so the placement math reads unchanged.
+    const heightAmount = 0
     // Placement latched at the beat a word was placed. With Position automated,
     // this is what stops a word that is still fading from sliding across the frame
     // to follow the live value while the next word is placed somewhere else.
@@ -842,11 +721,6 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     const flightSubdivRate = p.flightSubdivRate ?? 8
     const rainbowEnabled = (p.rainbowEnabled ?? 0) >= 0.5
     const rainbowCycleLength = p.rainbowCycleLength ?? 12
-    const formationLanes = state.wordFormations
-    const layoutModeValue = Math.round(p.layoutMode ?? 0)
-    const scatterMode = layoutModeValue === 1
-    const stackMode = layoutModeValue === 2
-    const phraseGap = p.phraseGap ?? 2
     const scatterSpread = p.scatterSpread ?? 0.6
     const glow = p.glow ?? 0
     const glowContained = (p.glowContained ?? 0) >= 0.5
@@ -867,6 +741,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // was born at instead of resizing under the next word's value.
     const sizeAt = (b: number) => Math.min(viewport.width, viewport.height) * 0.6
       * (perWordSize ? paramAtBeat(state, 'fontSize', b) : fontSize)
+    // Word i's size: the track size at beat b times its lane's multiplier.
+    const sizeForWord = (i: number, b: number) => sizeAt(b) * laneAt(i).size
 
     // --- Particle words ---
     // One frame of the cloud, sharing the text pipeline's font, color (rainbow /
@@ -885,6 +761,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       fromBeat: number
       toBeat: number
       yOffset: number
+      /** The word's lane color (authored; rainbow/invert still win above). */
+      baseColor?: string
     }) => {
       const anchor = particleAnchorRef.current
       if (!anchor) return
@@ -924,7 +802,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const cloudHue = rainbowEnabled ? ((cloudSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
       // Invert mode renders plain white - the invert blending trick is
       // canvas-plane-only, and white additive points read closest to it.
-      const cloudColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(cloudHue, 1, 0.55) : color)
+      const cloudColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(cloudHue, 1, 0.55) : (word?.baseColor ?? '#ffffff'))
       updateParticleCloud(particleCloud, {
         count,
         dotSize: p.particleSize ?? 0.025,
@@ -944,8 +822,6 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     }
     if (!particleMode && particleAnchorRef.current) particleAnchorRef.current.visible = false
     const fieldMode = particleMode && (p.particleField ?? 0) >= 0.5
-
-    const entries = parseTextEntries(text, (p.advanceUnit ?? 0) >= 0.5)
 
     // --- Field mode ---
     // The cloud's sibling behavior: a screen-filling slab of ambient particles
@@ -987,8 +863,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const K = Math.min(density, count)
       const formationFor = (onsetIndex: number, progress: number, release: number): FieldFormation | null => {
         if (onsetIndex < 0) return null
-        const word = entries[onsetIndex % entries.length]
-        const shape = wordShape(word.text, font)
+        const word = entryAt(onsetIndex)
+        if (!word) return null
+        const shape = wordShape(word.text, fontAt(onsetIndex))
         if (!shape) return null
         // Anchor, size and height offset latch at the word's own onset, like
         // the cloud path's per-word latching.
@@ -996,7 +873,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const anchorX = placeX(onsetBeat)
         const anchorY = placeY(onsetBeat) + yOffsetAt(onsetBeat) * viewport.height * heightAmount
         const scale = sizeAt(onsetBeat) * 0.22
-        const key = `${word.text}|${font.css}|${K}|${anchorX.toFixed(2)}|${anchorY.toFixed(2)}|${scale.toFixed(3)}|${ambientKey}`
+        const key = `${word.text}|${fontAt(onsetIndex).css}|${K}|${anchorX.toFixed(2)}|${anchorY.toFixed(2)}|${scale.toFixed(3)}|${ambientKey}`
         let cached = fieldRecruitsRef.current.find((c) => c.key === key)
         if (!cached) {
           cached = { key, map: recruitNearest(ambient, count, K, anchorX, anchorY) }
@@ -1009,7 +886,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       // Same color voice as the cloud path (rainbow / hue / invert-as-white).
       const fieldSubdiv = Math.floor(state.beat * flightSubdivRate)
       const fieldHue = rainbowEnabled ? ((fieldSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
-      const fieldColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(fieldHue, 1, 0.55) : color)
+      const fieldColor = invertBehind ? '#ffffff' : shiftHex(rainbowEnabled ? hslToHex(fieldHue, 1, 0.55) : laneAt(Math.max(0, tl.curIndex)).color)
 
       updateParticleField(particleCloud, {
         beat: state.beat,
@@ -1029,11 +906,11 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       setAnimatedOpacity(particleCloud.points.material as Material, textOpacity)
     }
 
-    if (entries.length === 0) {
+    if (!state.lyricClips?.some((c) => c.words.length > 0)) {
       meshRef.current.visible = false
       if (particleMode) {
         if (fieldMode) driveField([]) // the field is furniture - no words needed
-        else driveCloud(null) // no words on the sheet yet: idle sphere
+        else driveCloud(null) // no clips with words yet: idle sphere
       }
       return
     }
@@ -1043,25 +920,23 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
     // --- Note derivation (pure) ---
     // Every visual below is a function of the beat and the resolved note list: the
-    // word index is the count of past "next word" onsets, and every age (bounce,
-    // release fade, bass pop, sprite flight) is measured from a note's beat.
+    // word index is the count of past word-note onsets (any style-lane pitch),
+    // and every age (bounce, release fade, bass pop, sprite flight) is measured
+    // from a note's beat. nextWordNotes is the SUNG prefix of allWordNotes, so
+    // index i in either aligns with lyric[i].
     const nextWordNotes: ResolvedNote[] = []
-    const heightNotes: ResolvedNote[] = []
     let lastBassNote: ResolvedNote | null = null
     let lastZoomNote: ResolvedNote | null = null
     let lastWordEndBeat = -1
-    for (const n of state.notes) {
+    for (const n of allWordNotes) {
       if (n.beat > currentBeat) break // notes are sorted by beat
-      if (n.pitch === PITCH_NEXT_WORD) {
-        nextWordNotes.push(n)
-        lastWordEndBeat = Math.max(lastWordEndBeat, n.beat + n.durationBeats)
-      } else if (n.pitch === PITCH_BASS_POP) {
-        lastBassNote = n
-      } else if (n.pitch === PITCH_ZOOM_FLASH) {
-        lastZoomNote = n
-      } else if (n.pitch >= PITCH_HEIGHT_MIN && n.pitch <= PITCH_HEIGHT_MAX) {
-        heightNotes.push(n)
-      }
+      nextWordNotes.push(n)
+      lastWordEndBeat = Math.max(lastWordEndBeat, n.beat + n.durationBeats)
+    }
+    for (const n of state.notes) {
+      if (n.beat > currentBeat) break
+      if (n.pitch === PITCH_BASS_POP) lastBassNote = n
+      else if (n.pitch === PITCH_ZOOM_FLASH) lastZoomNote = n
     }
 
     if (nextWordNotes.length === 0) {
@@ -1081,10 +956,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       } else if (particleMode) {
         // Anticipate the FIRST word: the sphere starts morphing into it early
         // enough to land fully formed exactly on its note.
-        let firstNote: ResolvedNote | undefined
-        for (const n of state.notes) {
-          if (n.pitch === PITCH_NEXT_WORD) { firstNote = n; break }
-        }
+        const firstNote: ResolvedNote | undefined = allWordNotes[0]
         const duration = Math.max(0.05, p.particleMorphBeats ?? 2)
         const morphStart = firstNote ? firstNote.beat - duration : Infinity
         if (!firstNote || currentBeat < morphStart) {
@@ -1092,7 +964,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         } else {
           driveCloud({
             prev: SPHERE_SHAPE,
-            cur: wordShape(entries[0].text, font) ?? SPHERE_SHAPE,
+            cur: (entryAt(0) ? wordShape(entryAt(0)!.text, fontAt(0)) : null) ?? SPHERE_SHAPE,
             progress: Math.min(1, (currentBeat - morphStart) / duration),
             morphSeed: 61.7,
             pulseEnv: 0,
@@ -1101,6 +973,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
             fromBeat: morphStart,
             toBeat: firstNote.beat,
             yOffset: 0,
+            baseColor: laneAt(0).color,
           })
         }
       }
@@ -1123,33 +996,32 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       return c
     }
 
-    // Height offset at beat b: the highest held 60-72 pitch, else the last one to
-    // release stays in effect (sticky, like Tyler's ref did).
-    const yOffsetAt = (b: number) => {
-      let heldPitch = -1
-      let sticky: ResolvedNote | null = null
-      for (const n of heightNotes) {
-        if (n.beat > b) break
-        if (b < n.beat + n.durationBeats && n.pitch > heldPitch) heldPitch = n.pitch
-        const end = n.beat + n.durationBeats
-        const stickyEnd = sticky ? sticky.beat + sticky.durationBeats : -Infinity
-        if (end > stickyEnd || (end === stickyEnd && sticky && n.pitch > sticky.pitch)) sticky = n
-      }
-      const pitch = heldPitch >= 0 ? heldPitch : sticky ? sticky.pitch : -1
-      return pitch < 0 ? 0 : (pitch - PITCH_HEIGHT_CENTER) / (PITCH_HEIGHT_MAX - PITCH_HEIGHT_CENTER)
-    }
+    // The height band retired with the clips redesign; every placement site
+    // reads zero through these so the geometry math stays byte-identical.
+    const yOffsetAt = (_b: number) => 0
 
     const wordCount = nextWordNotes.length
     const lastWordNote = wordCount > 0 ? nextWordNotes[wordCount - 1] : null
-    const currentEntry = entries[(Math.max(1, wordCount) - 1) % entries.length] ?? entries[0]
+    const wordIdx = Math.max(1, wordCount) - 1
+    // A starved note (clip ran out / no clip under it) sings nothing: an empty
+    // entry bakes an empty canvas, so the frame math runs and draws blank.
+    const currentEntry = entryAt(wordIdx) ?? singleTextEntry('')
     const isNoteHeld = currentBeat < lastWordEndBeat
     const currentYOffset = yOffsetAt(currentBeat)
+    // The clip owning the CURRENT word picks the arrangement below.
+    const currentLayout = lyric[wordIdx]?.layout ?? { kind: 'one' as const }
+    const currentClipIndex = lyric[wordIdx]?.clipIndex ?? -1
+    const scatterMode = currentLayout.kind === 'scatter'
+    const stackMode = currentLayout.kind === 'stack' || currentLayout.kind === 'row'
+    const seatsMode = (currentLayout.kind === 'grid' || currentLayout.kind === 'circle') && currentClipIndex >= 0
 
-    // Rainbow hue cycles on beat subdivisions.
+    // Rainbow hue cycles on beat subdivisions. Track-level Rainbow paints every
+    // word; a lane's 'rainbow' fx paints just that lane's words.
     const rainbowSubdiv = Math.floor(currentBeat * flightSubdivRate)
-    const rainbowHue = rainbowEnabled ? ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360 : 0
-    const effectiveColor = shiftHex(rainbowEnabled ? hslToHex(rainbowHue, 1, 0.55) : color)
-    const canvasColor = invertBehind ? '#ffffff' : effectiveColor
+    const rainbowHue = ((rainbowSubdiv % rainbowCycleLength) / rainbowCycleLength) * 360
+    const rainbowOn = (i: number) => rainbowEnabled || (laneAt(i).fx?.includes('rainbow') ?? false)
+    const colorAt = (i: number) => shiftHex(rainbowOn(i) ? hslToHex(rainbowHue, 1, 0.55) : laneAt(i).color)
+    const canvasColorAt = (i: number) => (invertBehind ? '#ffffff' : colorAt(i))
     const canvasStrokeColor = invertBehind ? '#ffffff' : strokeColor
 
     // --- Particle words: the cloud replaces every plane-based word visual ---
@@ -1171,7 +1043,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       // to nothing falls back to the sphere.
       const shapeFor = (i: number) => (i < 0
         ? SPHERE_SHAPE
-        : wordShape(entries[i % entries.length].text, font) ?? SPHERE_SHAPE)
+        : (entryAt(i) ? wordShape(entryAt(i)!.text, fontAt(i)) : null) ?? SPHERE_SHAPE)
 
       // Anticipatory morphing: the transition into a word plays out in the gap
       // BEFORE its note and lands exactly ON the beat, rather than starting at
@@ -1181,8 +1053,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       // transition spans the full distance between its two notes, so the cloud
       // is always in motion at whatever speed the lyric is moving.
       let nextNote: ResolvedNote | undefined
-      for (const n of state.notes) {
-        if (n.beat > currentBeat && n.pitch === PITCH_NEXT_WORD) { nextNote = n; break }
+      for (const n of allWordNotes) {
+        if (n.beat > currentBeat) { nextNote = n; break }
       }
       const fillGap = (p.particleFillGap ?? 0) >= 0.5
       const morphStart = nextNote
@@ -1213,6 +1085,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           fromBeat: curNote.beat,
           toBeat: nextNote.beat,
           yOffset: currentYOffset,
+          baseColor: laneAt(curIdx + 1).color,
         })
       } else {
         // Holding the current word, fully formed.
@@ -1225,6 +1098,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           fromBeat: curNote.beat,
           toBeat: curNote.beat,
           yOffset: currentYOffset,
+          baseColor: laneAt(curIdx).color,
         })
       }
       return
@@ -1235,32 +1109,17 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     for (const mesh of echoMeshesRef.current) configureTextMaterial(mesh.material as MeshBasicMaterial, invertInThisPass)
     for (const spr of flightPoolRef.current) configureTextMaterial(spr.mat, invertInThisPass)
 
-    // --- Word Formation layout ---
-    // A `wordFormation` child lane seats the words into a geometry it owns
-    // (core/visual/wordFormation.ts): the lane whose note played most recently
-    // is the live arrangement, each "next word" note takes the next seat, and
-    // the arrangement CYCLES when it runs out. Presence-driven rather than a
-    // fourth Layout option - adding the lane is already the decision, and
-    // asking for a mode switch as well would just be a way to get it wrong.
-    // Before any formation note has played there is no arrangement, so the
-    // ordinary layout below still runs and the lane is inert until you play it.
-    const formation = formationLanes ? activeFormation(formationLanes, currentBeat) : null
-    if (formation) {
+    // --- Seat layouts (grid / circle) ---
+    // The current clip's layout places words by SLOT (clipSlotOffset), so every
+    // word's seat is reserved before it is sung and nothing re-flows as words
+    // land - the same contract Stack has always kept. Only THIS clip's words
+    // are on screen; the previous clip's card cleared when the clip changed.
+    if (seatsMode) {
       meshRef.current.visible = false
       setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
       for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
-
-      const settings = formation.lane.settings
-      const seats = formationSeats(settings)
-      const carry = (settings.carry ?? 0) >= 0.5
-      const counted = countOnsets(
-        nextWordNotes.map((n) => n.beat),
-        currentBeat,
-        carry ? -Infinity : formation.startBeat,
-      )
-      const placed = seatWords(seats, settings.cycle ?? 0, counted.total, counted.inRun)
 
       let releaseOpacity = 1
       if (!sustainWords && !isNoteHeld && lastWordNote) {
@@ -1271,76 +1130,78 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const bassPopAge = lastBassNote ? (currentBeat - lastBassNote.beat) * secPerBeat : 1
       const bassPopDecay = Math.max(0, 1 - bassPopAge / 0.25)
       const bassPopScale = 1 + 0.25 * bassPopDecay * bassPopDecay
-      const fadeAmount = settings.fade ?? 0.5
-      // Words size to the TIGHTEST gap in the arrangement, so a ring, a torus
-      // and a 4x4 all fit themselves without a per-formation size hunt. Measured
-      // once per frame over the seats (small by construction - MAX_FORMATION_SLOTS).
-      let gap = 3
-      for (let a = 0; a < seats.length; a++) {
-        for (let b2 = a + 1; b2 < seats.length; b2++) {
-          const d = Math.hypot(seats[a].x - seats[b2].x, seats[a].y - seats[b2].y, (seats[a].z - seats[b2].z) * 0.5)
-          if (d < gap) gap = d
-        }
-      }
-      if (seats.length < 2) gap = 2.4
-      gap = Math.max(0.35, Math.min(3, gap))
-      // Slot coordinates are lattice units; one unit lands at 22% of the frame
-      // WIDTH so a default 2x2 fills the frame the way the panel preview shows
-      // it. Width for both axes (world units are square) and screen-relative for
-      // the same reason posX/posY are: it means the same thing at any aspect and
+
+      const total = Math.max(1, lyric[wordIdx]?.totalSlots ?? 1)
+      const cols = Math.max(1, Math.round(currentLayout.cols ?? 2))
+      // Lattice unit → world units. Grid cells split the frame width; the
+      // circle's radius fits the shorter axis. Screen-relative for the same
+      // reason posX/posY are: it means the same thing at any aspect and
       // survives an export at another resolution.
-      const slotUnit = viewport.width * 0.22
+      const unitX = currentLayout.kind === 'grid'
+        ? viewport.width * 0.84 / cols
+        : viewport.width * 0.32
+      const unitY = currentLayout.kind === 'grid'
+        ? Math.min(viewport.height * 0.26, unitX * 0.6)
+        : viewport.height * 0.36
 
       if (releaseOpacity > 0) {
-        for (const item of placed) {
-          const entry = entries[item.wordIndex % entries.length]
+        for (let i = 0; i < wordCount; i++) {
+          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+          const entry = entryAt(i)
+          if (!entry) continue
+          const seat = clipSlotOffset(currentLayout, lyric[i].slotIndex, total)
+          if (!seat) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+          const wFont = fontAt(i)
+          const wColor = canvasColorAt(i)
+          const wOutline = outlineAt(i)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
           }
-          const newest = item.age === 0
-          const wordBeat = nextWordNotes[item.wordIndex]?.beat ?? currentBeat
+          const newest = i === wordCount - 1
+          const wordBeat = nextWordNotes[i]?.beat ?? currentBeat
           const onsetT = newest ? Math.min(onsetAge / 0.12, 1) : 1
           const popScale = (1 + onsetBounce * 2 * (1 - onsetT)) * (newest ? bassPopScale : 1)
           // Long words shrink rather than run into the next seat - the same
           // trade the word canvas already makes when it widens.
           const lengthFit = Math.min(1, 5 / Math.max(1, entry.text.length))
           const fontScale = perWordSize ? paramAtBeat(state, 'fontSize', wordBeat) : fontSize
-          const scale = viewport.width * 0.057 * gap * (settings.size ?? 1) * lengthFit * fontScale * popScale
+          const scale = Math.min(viewport.width, viewport.height) * 0.11
+            * lengthFit * fontScale * laneAt(i).size * popScale
+          const shakeOff = laneShakeAt(i)
+            ? (seededRand(Math.floor(currentBeat * 30) * 3 + i * 77) - 0.5) * 0.015 * viewport.width
+            : 0
           spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
           spr.mesh.position.set(
-            item.slot.x * slotUnit + placeX(wordBeat),
-            item.slot.y * slotUnit + placeY(wordBeat),
-            item.slot.z * slotUnit,
+            seat.x * unitX + placeX(wordBeat) + shakeOff,
+            seat.y * unitY + placeY(wordBeat),
+            seat.z * unitX,
           )
           spr.mesh.rotation.set(0, 0, 0)
-          const trail = 1 - Math.min(0.85, item.age * 0.16 * fadeAmount * 2)
-          setAnimatedOpacity(spr.mat, trail * releaseOpacity * textOpacity)
+          setAnimatedOpacity(spr.mat, releaseOpacity * textOpacity)
         }
       }
       return
     }
-
     // --- Scatter layout ---
     // The phrase accumulates as a loose collage: each word lands at a seeded
     // scattered anchor (position, tilt, size all keyed to its word index, so a
     // scrub reproduces the exact arrangement), earlier phrase words stay dimmed,
-    // and a gap of `phraseGap` beats between word onsets hard-clears the canvas
-    // by starting a new phrase. Echo taps and flight mode are Center-layout
-    // features and stay dormant here.
+    // and the CLIP is the phrase cutter - a new clip hard-clears the canvas.
+    // Echo taps and flight mode are Center-layout features and stay dormant here.
     if (scatterMode) {
       meshRef.current.visible = false
       setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, 0)
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
 
-      // Phrase start: the most recent onset gap of phraseGap beats or more.
+      // Phrase = the current CLIP's sung words (the clip is the phrase cutter).
       let phraseStart = 0
-      for (let k = wordCount - 1; k >= 1; k--) {
-        if (nextWordNotes[k].beat - nextWordNotes[k - 1].beat >= phraseGap) { phraseStart = k; break }
+      for (let k = 0; k < wordCount; k++) {
+        if (lyric[k]?.clipIndex === currentClipIndex) { phraseStart = k; break }
       }
       phraseStart = Math.max(phraseStart, wordCount - MAX_SCATTER_WORDS)
 
@@ -1359,13 +1220,18 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       if (releaseOpacity > 0) {
         const placedAnchors: [number, number][] = []
         for (let i = phraseStart; i < wordCount; i++) {
-          const entry = entries[i % entries.length]
+          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+          const entry = entryAt(i)
+          if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+          const wFont = fontAt(i)
+          const wColor = canvasColorAt(i)
+          const wOutline = outlineAt(i)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
           }
 
           const s = i * 131
@@ -1404,7 +1270,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           // This word's own onset - both its latched size and its latched
           // placement are sampled at it.
           const scatterBeat = nextWordNotes[i]?.beat ?? currentBeat
-          const scale = sizeAt(scatterBeat) * 0.55 * sizeJ * popScale
+          const scale = sizeForWord(i, scatterBeat) * 0.55 * sizeJ * popScale
           spr.mesh.scale.set(scale * texAspect(spr.texture), scale, 1)
           spr.mesh.position.set(
             nx * viewport.width * scatterSpread + placeX(scatterBeat),
@@ -1419,9 +1285,9 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     }
 
     // --- Stack layout ---
-    // Words land on centered, stacked CARDS of at most stackMaxWords words:
-    // a new card starts at a phraseGap-sized silence or when the card is
-    // full. The layout is computed over the WHOLE card - future words
+    // Words land on centered, stacked CARDS - one card per lyric CLIP (row
+    // layout is the single-line variant). The layout is computed over the
+    // WHOLE card - future words
     // included, straight from the note list - so every word's place is
     // reserved before it is sung: words never re-flow to make room, each one
     // just takes its spot ("WHO" appears where it will sit once "YOU" and
@@ -1433,24 +1299,18 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       for (const mesh of echoMeshesRef.current) mesh.visible = false
       for (const spr of flightPoolRef.current) { spr.active = false; spr.mesh.visible = false }
 
-      // Cut the FULL word stream (future included) into cards, then find the
-      // card holding the last sung word.
-      const maxWords = Math.max(1, Math.round(p.stackMaxWords ?? 4))
-      const allWordNotes = state.notes.filter((note) => note.pitch === PITCH_NEXT_WORD)
-      let cardStart = 0
+      // The card IS the current clip: every note bound to it (future included,
+      // straight from the resolution) reserves its place before it is sung.
+      let cardStart = -1
       let cardEnd = 0 // exclusive
-      {
-        let start = 0
-        for (let i = 1; i <= allWordNotes.length; i++) {
-          const boundary = i === allWordNotes.length
-            || allWordNotes[i].beat - allWordNotes[i - 1].beat >= phraseGap
-            || i - start >= maxWords
-          if (boundary) {
-            if (wordCount - 1 >= start && wordCount - 1 < i) { cardStart = start; cardEnd = i; break }
-            start = i
-          }
+      for (let i = 0; i < allWordNotes.length; i++) {
+        if (lyric[i]?.clipIndex === currentClipIndex && lyric[i]?.entry) {
+          if (cardStart < 0) cardStart = i
+          cardEnd = i + 1
         }
       }
+      if (cardStart < 0) { cardStart = 0; cardEnd = 0 }
+      const singleLine = currentLayout.kind === 'row'
 
       let releaseOpacity = 1
       if (!sustainWords && !isNoteHeld && lastWordNote) {
@@ -1477,25 +1337,42 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
 
         // Sprites for EVERY card word; future words reserve their place but
         // stay invisible until sung.
-        const sprites: { spr: FlightPooled; width: number; sung: boolean; newest: boolean }[] = []
+        const sprites: { spr: FlightPooled; width: number; scaleMul: number; sung: boolean; newest: boolean }[] = []
         for (let i = cardStart; i < cardEnd; i++) {
-          const entry = entries[i % entries.length]
+          if (lyric[i]?.clipIndex !== currentClipIndex) continue
+          const entry = entryAt(i)
+          if (!entry) continue
           const spr = acquirePooled(scatterPoolRef.current, groupRef.current)
           configureTextMaterial(spr.mat, invertInThisPass)
-          const sprKey = `${entry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+          const wFont = fontAt(i)
+          const wColor = canvasColorAt(i)
+          const wOutline = outlineAt(i)
+          const sprKey = `${entry.cacheKey}|${strokeWidth}|${wFont.css}|${wFont.weight}|${wColor}|${canvasStrokeColor}|${glow}|${shadow}|${wOutline ? 1 : 0}`
           if (sprKey !== spr.key) {
             spr.key = sprKey
-            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+            setTextureCanvas(spr.texture, createTextCanvas(entry, strokeWidth, wFont, wColor, canvasStrokeColor, glow, glowContained, shadow, wOutline))
           }
+          const scaleMul = laneAt(i).size
           sprites.push({
             spr,
-            width: wordScale * texAspect(spr.texture),
+            width: wordScale * scaleMul * texAspect(spr.texture),
+            scaleMul,
             sung: allWordNotes[i].beat <= currentBeat,
             newest: i === wordCount - 1,
           })
         }
 
-        // Greedy line wrap over the whole card.
+        // Row layout: the card is ONE line, shrunk to fit the frame instead of
+        // wrapped. The fit multiplies every sprite (widths and draw scale), so
+        // the line is exactly as violent as its longest phrase and never clips.
+        let fitK = 1
+        if (singleLine) {
+          let total = 0
+          for (let i = 0; i < sprites.length; i++) total += (i > 0 ? spaceW : 0) + sprites[i].width
+          fitK = Math.min(1, maxLineW / Math.max(1e-6, total))
+          for (const sp of sprites) sp.width *= fitK
+        }
+        // Greedy line wrap over the whole card (row mode never overflows).
         const lines: { start: number; end: number; width: number }[] = []
         let lineStart = 0
         let lineWidth = 0
@@ -1521,14 +1398,14 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           const y = cardY + ((lines.length - 1) / 2 - li) * lineGap
           let x = cardX - line.width / 2
           for (let i = line.start; i < line.end; i++) {
-            const { spr, width, sung, newest } = sprites[i]
+            const { spr, width, scaleMul, sung, newest } = sprites[i]
             if (!sung) {
               // Its place is reserved by the layout; it just isn't lit yet.
               spr.mesh.visible = false
               x += width + spaceW
               continue
             }
-            const s = wordScale * (newest ? popScale : 1)
+            const s = wordScale * scaleMul * fitK * (newest ? popScale : 1)
             spr.mesh.scale.set(s * texAspect(spr.texture), s, 1)
             spr.mesh.position.set(x + width / 2, y, -0.0004 * (sprites.length - i))
             spr.mesh.rotation.set(0, 0, 0)
@@ -1542,10 +1419,13 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     for (const spr of scatterPoolRef.current) { spr.active = false; spr.mesh.visible = false }
 
     // Re-render main texture when the word or styling changes.
-    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${canvasColor}|${canvasStrokeColor}|${glow}|${shadow}`
+    const mainFont = fontAt(wordIdx)
+    const mainColor = canvasColorAt(wordIdx)
+    const mainOutline = outlineAt(wordIdx)
+    const renderKey = `${currentEntry.cacheKey}|${strokeWidth}|${mainFont.css}|${mainFont.weight}|${mainColor}|${canvasStrokeColor}|${glow}|${shadow}|${mainOutline ? 1 : 0}`
     if (renderKey !== lastRenderKeyRef.current) {
       lastRenderKeyRef.current = renderKey
-      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+      setTextureCanvas(textureRef.current, createTextCanvas(currentEntry, strokeWidth, mainFont, mainColor, canvasStrokeColor, glow, glowContained, shadow, mainOutline))
       // Invalidate echo caches so they re-render with new styling.
       echoLastWordsRef.current.fill('')
     }
@@ -1567,7 +1447,8 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         if (depth > flightMaxDepth) continue
 
         const sprWordIdx = Math.max(1, wordCountAt(spawnBeat)) - 1
-        const sprEntry = entries[sprWordIdx % entries.length] ?? entries[0]
+        const sprEntry = entryAt(sprWordIdx)
+        if (!sprEntry) continue
         // Placement latches to the WORD's onset, not to this sprite's subdivision.
         // A word held for two beats emits a sprite every subdiv, and latching each
         // one to its own subdiv meant the trail split across a placement change:
@@ -1577,7 +1458,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const sprOnsetBeat = nextWordNotes[sprWordIdx]?.beat ?? spawnBeat
         const sprColor = invertBehind
           ? '#ffffff'
-          : shiftHex(rainbowEnabled ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : color)
+          : shiftHex(rainbowOn(sprWordIdx) ? hslToHex(((k % rainbowCycleLength) / rainbowCycleLength) * 360, 1, 0.55) : laneAt(sprWordIdx).color)
         const seed = k * 13 + 7
         const vx = (seededRand(seed) - 0.5) * flightDrift
         const vy = (seededRand(seed + 1) - 0.5) * flightDrift * 0.6
@@ -1587,10 +1468,12 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
         const spr = acquireFlightSprite(groupRef.current)
         configureTextMaterial(spr.mat, invertInThisPass)
         const sprStrokeColor = invertBehind ? '#ffffff' : strokeColor
-        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${font.css}|${font.weight}|${sprColor}|${sprStrokeColor}|${glow}|${shadow}`
+        const sprFont = fontAt(sprWordIdx)
+        const sprOutline = outlineAt(sprWordIdx)
+        const sprKey = `${sprEntry.cacheKey}|${strokeWidth}|${sprFont.css}|${sprFont.weight}|${sprColor}|${sprStrokeColor}|${glow}|${shadow}|${sprOutline ? 1 : 0}`
         if (sprKey !== spr.key) {
           spr.key = sprKey
-          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, font, sprColor, sprStrokeColor, glow, glowContained, shadow))
+          setTextureCanvas(spr.texture, createTextCanvas(sprEntry, strokeWidth, sprFont, sprColor, sprStrokeColor, glow, glowContained, shadow, sprOutline))
         }
         spr.mesh.position.set(
           vx * ageSec + placeX(sprOnsetBeat),
@@ -1598,7 +1481,7 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
           -depth,
         )
         spr.mesh.rotation.set(tumbleX * ageSec, tumbleY * ageSec, 0)
-        const sprScale = sizeAt(sprOnsetBeat)
+        const sprScale = sizeForWord(sprWordIdx, sprOnsetBeat)
         spr.mesh.scale.set(sprScale * texAspect(spr.texture), sprScale, 1)
         const fadeStart = flightMaxDepth * 0.7
         setAnimatedOpacity(spr.mat, depth > fadeStart
@@ -1635,7 +1518,6 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     setAnimatedOpacity(meshRef.current.material as MeshBasicMaterial, textOpacity * releaseOpacity)
     // Word jitter: hand-set-type imperfection, seeded per word index so a
     // scrub lands on the identical tilt/size/baseline for each word.
-    const wordIdx = wordCount - 1
     const jitterSize = 1 + (seededRand(wordIdx * 131 + 8) - 0.5) * 2 * jitter * 0.18
     const wordOnsetBeat = lastWordNote ? lastWordNote.beat : currentBeat
     // Zoom flash: while its window is open the word renders BLOWN UP, then
@@ -1647,12 +1529,18 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
     // sail off both edges). Applied BEFORE the zoom flash, whose blow-up is
     // an intentional overflow.
     const aspect = texAspect(textureRef.current)
-    const baseScale = sizeAt(wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
+    const baseScale = sizeForWord(wordIdx, wordOnsetBeat) * onsetScale * bassPopScale * jitterSize
     const scale = Math.min(baseScale, (viewport.width * 0.92) / Math.max(0.0001, aspect)) * zoomFlash
     meshRef.current.scale.set(scale * aspect, scale, 1)
     meshRef.current.rotation.z = (seededRand(wordIdx * 131 + 7) - 0.5) * 2 * jitter * 0.12
-    meshRef.current.position.x = shakeX + placeX(wordOnsetBeat)
-    meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY
+    const laneShakeX = laneShakeAt(wordIdx)
+      ? (seededRand(Math.floor(currentBeat * 30) * 3 + wordIdx * 77) - 0.5) * 0.02 * viewport.width
+      : 0
+    const laneShakeY = laneShakeAt(wordIdx)
+      ? (seededRand(Math.floor(currentBeat * 30) * 3 + wordIdx * 77 + 1) - 0.5) * 0.02 * viewport.height
+      : 0
+    meshRef.current.position.x = shakeX + laneShakeX + placeX(wordOnsetBeat)
+    meshRef.current.position.y = currentYOffset * viewport.height * heightAmount + shakeY + laneShakeY
       + placeY(wordOnsetBeat)
       + (seededRand(wordIdx * 131 + 9) - 0.5) * 2 * jitter * viewport.height * 0.04
 
@@ -1679,15 +1567,19 @@ function TextDisplayVisual({ trackId }: { trackId: string }) {
       const echoDuration = heldSec > 0 ? heldSec : delayTime
       if (echoAge > echoDuration) { mesh.visible = false; continue }
 
-      const echoEntry = entries[echoIdx % entries.length]
+      const echoEntry = entryAt(echoIdx)
+      if (!echoEntry) { mesh.visible = false; continue }
       const tex = echoTexturesRef.current[tap]
-      const echoKey = `${echoEntry.cacheKey}|${canvasColor}|${canvasStrokeColor}|${shadow}`
+      const echoFont = fontAt(echoIdx)
+      const echoColor = canvasColorAt(echoIdx)
+      const echoOutline = outlineAt(echoIdx)
+      const echoKey = `${echoEntry.cacheKey}|${echoFont.css}|${echoColor}|${canvasStrokeColor}|${shadow}|${echoOutline ? 1 : 0}`
       if (echoKey !== echoLastWordsRef.current[tap]) {
-        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, font, canvasColor, canvasStrokeColor, glow, glowContained, shadow))
+        setTextureCanvas(tex, createTextCanvas(echoEntry, strokeWidth, echoFont, echoColor, canvasStrokeColor, glow, glowContained, shadow, echoOutline))
         echoLastWordsRef.current[tap] = echoKey
       }
 
-      const tapScale = sizeAt(echoNote.beat) * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
+      const tapScale = sizeForWord(echoIdx, echoNote.beat) * Math.max(0.1, 1 - delayScaleFalloff * tapNum)
       mesh.scale.set(tapScale * texAspect(tex), tapScale, 1)
       mesh.position.x = (pingPongEnabled ? (tapNum % 2 === 1 ? -1 : 1) * pingPongWidth * viewport.width * 0.5 : 0)
         + placeX(echoNote.beat)
@@ -1727,23 +1619,29 @@ export const textDisplayInstrument: ObjectInstrumentDef = {
   id: 'textDisplay',
   name: 'Text Display',
   kind: 'object',
-  identityColor: { param: 'color' },
+  // Words carry per-lane colors now, so the track wears the word-note accent.
+  identityColor: '#facc15',
   userInterfaceRenderer: 'textDisplay',
   params: PARAMS,
-  midiRows: [
-    { pitch: PITCH_NEXT_WORD, label: 'Next word', color: '#facc15', emphasized: true },
+  // The rows ARE the track's style lanes (pitch = lane = look), so the
+  // vocabulary is per-track: rename or restyle a lane and its row follows.
+  midiRowsFor: (track) => [
+    ...resolveStyleLanes(track.styleLanes).map((lane, i) => ({
+      pitch: styleLanePitch(i),
+      label: lane.name,
+      color: lane.color,
+      emphasized: i === 0,
+      // The roll's gutter renders each lane in its own face - the row label
+      // IS the style preview - and carries the index so the editor can open
+      // the lane's style sidecar from the row.
+      fontFamily: fontStack(lane.font).css,
+      sizeScale: lane.size,
+      laneIndex: i,
+    })),
     { pitch: PITCH_BASS_POP, label: 'Bass pop (punch + shake)' },
     { pitch: PITCH_ZOOM_FLASH, label: 'Zoom flash (1 frame)' },
-    { pitch: 72, label: 'Word height · top' },
-    { pitch: 69, label: 'Word height · high' },
-    { pitch: 66, label: 'Word height · center' },
-    { pitch: 63, label: 'Word height · low' },
-    { pitch: 60, label: 'Word height · bottom' },
   ],
   component: TextDisplayVisual,
-  // Text Display seats words, so it accepts Word Formation child lanes - the
-  // arrangements its words are laid into (core/visual/wordFormation.ts).
-  seatsWords: true,
   // NOT fullFrame: the text lives in world space so movers (and the camera)
   // can act on it - it is deliberately not pinned to the viewport.
   defaultOnTop: true,

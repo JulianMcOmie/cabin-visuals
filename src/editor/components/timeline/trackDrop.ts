@@ -23,7 +23,7 @@ export interface DropTarget {
  *  parents (an unknown target param just leaves the lane inert until re-picked),
  *  but never to the root level. */
 export function isPinnedChildType(type: string | undefined): boolean {
-  return type === 'automation' || type === 'ability' || type === 'envelope' || type === 'wordFormation'
+  return type === 'automation' || type === 'ability' || type === 'envelope'
 }
 
 /** Track types that can hold children. Automation/ability/envelope lanes live only

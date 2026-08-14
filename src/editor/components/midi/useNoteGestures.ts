@@ -462,7 +462,7 @@ export function useNoteGestures({
     if (e.button === 2) {
       const rowIndex = yToRowIndex(gridY, rowHeight)
 
-      if (rowIndex >= 0 && rowIndex < rows.length) {
+      if (rowIndex >= 0 && rowIndex < rows.length && !rows[rowIndex].clipRow) {
         const pitch = rows[rowIndex].pitch
         const rawBeat = xToBeat(gridX, pixelsPerBeat)
         const startBeat = roundDownToStep(rawBeat)

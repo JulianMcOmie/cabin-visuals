@@ -34,7 +34,12 @@ import type { ViewAspect } from '../editor/store/ProjectStore'
  * v10 renames the transform param keys onto the canonical tf* set; v11 pins
  * pre-existing Oscilloscopes to full-frame; v12 de-specializes directors -
  * track type 'director' + directorId became type 'base' + a composition
- * instrumentId (sceneBindings unchanged).
+ * instrumentId (sceneBindings unchanged). v14 pins pre-FINISH 3D Shapes to
+ * Gloss. v15 is the Text Display clips redesign: the `text`/`color`/`font`
+ * params move onto per-track `lyricClips` + `styleLanes`, word notes revoice
+ * from pitch 48 onto the style-lane band (PLAIN = 58), the 60-72 height band
+ * retires, and `wordFormation` child tracks are converted to clip layouts and
+ * dropped.
  */
 export interface ProjectDocument {
   schemaVersion: number

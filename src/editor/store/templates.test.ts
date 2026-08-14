@@ -8,9 +8,12 @@ import { silentFilm } from '../../templates/library-silent-film'
 import { getTemplate, GALLERY_TEMPLATES, LYRIC_STYLES } from '../../templates'
 
 // applyTemplate's lyric carry-over contract: switching lyric templates keeps
-// the project's transcribed words (text, word notes, timing) while adopting
-// the incoming template's styling, and trims the template's ceiling-length
-// loop blocks to the song's end when audio is present.
+// the project's transcribed words (lyric clips, word notes, timing) while
+// adopting the incoming template's styling (style lanes + the lead clip's
+// layout), and trims the template's ceiling-length loop blocks to the song's
+// end when audio is present. Template documents are authored at old schemas
+// and upgraded inside applyTemplate, so these tests also cover the v15 text →
+// clips conversion of every shipped style.
 
 const transcribedLyrics = (): Track => ({
   id: 'lyr',
@@ -20,14 +23,16 @@ const transcribedLyrics = (): Track => ({
   color: '#fff',
   muted: false,
   solo: false,
-  stringParams: { text: 'real transcribed words', color: '#123456' },
+  // The project state is post-v15: words live on a lyric clip, word notes on
+  // the style-lane band (58 = PLAIN).
+  lyricClips: [{ id: 'lc1', startBeat: 0, durationBeats: 160, words: ['real', 'transcribed', 'words'], layout: { kind: 'one' } }],
   lyricTiming: [{ word: 'real', start: 0, end: 0.5 }],
   blocks: [{
     id: 'lyr-block',
     startBar: 0,
     durationBars: 40,
     loop: false,
-    notes: [{ id: 'w1', startBeat: 0, durationBeats: 1, pitch: 48, velocity: 100 }],
+    notes: [{ id: 'w1', startBeat: 0, durationBeats: 1, pitch: 58, velocity: 100 }],
   }],
   childIds: [],
 })
@@ -62,15 +67,17 @@ test('applying a lyric template carries the transcribed Lyrics content over', ()
 
   const lyrics = findLyrics()
   // Content is the project's...
-  assert.equal(lyrics.stringParams?.text, 'real transcribed words')
+  assert.deepEqual(lyrics.lyricClips?.map((c) => c.words), [['real', 'transcribed', 'words']])
   assert.equal(lyrics.lyricTiming?.[0]?.word, 'real')
   assert.equal(lyrics.blocks.length, 1)
   assert.equal(lyrics.blocks[0].notes.length, 1)
-  assert.equal(lyrics.blocks[0].notes[0].pitch, 48)
-  // ...styling is the template's (Silent Film: IM Fell SC + Scatter + glow).
-  assert.equal(lyrics.params?.font, 4)
-  assert.equal(lyrics.params?.layoutMode, 1)
-  assert.equal(lyrics.stringParams?.color, '#fdfbfe')
+  assert.equal(lyrics.blocks[0].notes[0].pitch, 58)
+  // ...styling is the template's (Silent Film: the upgraded doc's PLAIN lane
+  // wears IM Fell SC + its color, and the lead clip's Scatter layout restyles
+  // the carried clip).
+  assert.equal(lyrics.styleLanes?.[2]?.font, 4)
+  assert.equal(lyrics.styleLanes?.[2]?.color, '#fdfbfe')
+  assert.equal(lyrics.lyricClips?.[0]?.layout.kind, 'scatter')
 })
 
 test('the template ambience trims to the song end when audio is present', () => {
@@ -169,7 +176,10 @@ test('without an existing Lyrics track the template placeholder ships as-is', ()
   useProjectStore.getState().applyTemplate(silentFilm.document)
 
   const lyrics = findLyrics()
-  assert.ok(lyrics.stringParams?.text?.includes('night'), 'placeholder words remain')
+  assert.ok(
+    lyrics.lyricClips?.some((c) => c.words.join(' ').toLowerCase().includes('night')),
+    'placeholder words remain (as the upgraded template clip)',
+  )
   assert.equal(lyrics.lyricTiming, undefined)
   // No audio: the ceiling loop blocks stay untrimmed for a later transcription.
   const s = useProjectStore.getState()
@@ -188,7 +198,7 @@ test('the Lyric Video template participates in the same carry-over', () => {
   useProjectStore.getState().applyTemplate(lyricVideo.document)
 
   const lyrics = findLyrics()
-  assert.equal(lyrics.stringParams?.text, 'real transcribed words')
+  assert.deepEqual(lyrics.lyricClips?.map((c) => c.words), [['real', 'transcribed', 'words']])
   assert.equal(lyrics.lyricTiming?.[0]?.word, 'real')
 })
 
@@ -263,25 +273,28 @@ test('a particle-words style gets a dash lead-in when the song starts late', () 
   hydrate(emptyDocument())
   useProjectStore.getState().addTrack(audio())
   const late = transcribedLyrics()
-  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 48, velocity: 100 }]
+  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 58, velocity: 100 }]
   useProjectStore.getState().addTrack(late)
 
   const wormholeStyle = getTemplate('wormhole')
   assert.ok(wormholeStyle)
   useProjectStore.getState().applyTemplate(wormholeStyle.document)
 
-  // The cloud opens as a dash and streams into the first sung word.
+  // The cloud opens as a dash (its own little clip before the first sung one)
+  // and streams into the first sung word.
   let lyrics = findLyrics()
-  assert.equal(lyrics.stringParams?.text, '- real transcribed words')
-  let wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 48)
+  assert.deepEqual(lyrics.lyricClips?.[0]?.words, ['-'])
+  assert.equal(lyrics.lyricClips?.length, 2)
+  let wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 58)
   assert.equal(wordNotes.length, 2)
   assert.equal(Math.min(...wordNotes.map((n) => n.startBeat)), 0)
 
   // Idempotent: a re-apply sees the beat-0 note it added and does not stack.
   useProjectStore.getState().applyTemplate(wormholeStyle.document)
   lyrics = findLyrics()
-  assert.equal(lyrics.stringParams?.text, '- real transcribed words')
-  wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 48)
+  assert.deepEqual(lyrics.lyricClips?.[0]?.words, ['-'])
+  assert.equal(lyrics.lyricClips?.length, 2)
+  wordNotes = lyrics.blocks[0].notes.filter((n) => n.pitch === 58)
   assert.equal(wordNotes.length, 2)
 })
 
@@ -293,17 +306,17 @@ test('no dash lead-in when a word already opens the song, nor for plane-text sty
   const wormholeStyle = getTemplate('wormhole')
   assert.ok(wormholeStyle)
   useProjectStore.getState().applyTemplate(wormholeStyle.document)
-  assert.equal(findLyrics().stringParams?.text, 'real transcribed words')
+  assert.deepEqual(findLyrics().lyricClips?.[0]?.words, ['real', 'transcribed', 'words'])
 
   // Plane-text style with a late start: the dash is particle-words-only - a
   // dash hanging on screen at t=0 is noise when words render as glyphs.
   hydrate(emptyDocument())
   useProjectStore.getState().addTrack(audio())
   const late = transcribedLyrics()
-  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 48, velocity: 100 }]
+  late.blocks[0].notes = [{ id: 'w1', startBeat: 13, durationBeats: 1, pitch: 58, velocity: 100 }]
   useProjectStore.getState().addTrack(late)
   useProjectStore.getState().applyTemplate(silentFilm.document)
-  assert.equal(findLyrics().stringParams?.text, 'real transcribed words')
+  assert.deepEqual(findLyrics().lyricClips?.[0]?.words, ['real', 'transcribed', 'words'])
 })
 
 test('the Monochrome invert strobe follows the carried words, not a free clock', () => {
@@ -311,11 +324,17 @@ test('the Monochrome invert strobe follows the carried words, not a free clock',
   useProjectStore.getState().addTrack(audio())
   // Two sung phrases with a long instrumental gap between them.
   const lyrics = transcribedLyrics()
+  // Two phrase CLIPS with a long instrumental gap between them - post-v15 the
+  // clip is the phrase cutter, so the card boundary IS the second clip's start.
+  lyrics.lyricClips = [
+    { id: 'lc1', startBeat: 0, durationBeats: 20, words: ['real', 'transcribed'], layout: { kind: 'one' } },
+    { id: 'lc2', startBeat: 20, durationBeats: 140, words: ['words', 'again'], layout: { kind: 'one' } },
+  ]
   lyrics.blocks[0].notes = [
-    { id: 'w1', startBeat: 0, durationBeats: 1, pitch: 48, velocity: 100 },
-    { id: 'w2', startBeat: 1.2, durationBeats: 1, pitch: 48, velocity: 100 },
-    { id: 'w3', startBeat: 20, durationBeats: 1, pitch: 48, velocity: 100 },
-    { id: 'w4', startBeat: 21.4, durationBeats: 1, pitch: 48, velocity: 100 },
+    { id: 'w1', startBeat: 0, durationBeats: 1, pitch: 58, velocity: 100 },
+    { id: 'w2', startBeat: 1.2, durationBeats: 1, pitch: 58, velocity: 100 },
+    { id: 'w3', startBeat: 20, durationBeats: 1, pitch: 58, velocity: 100 },
+    { id: 'w4', startBeat: 21.4, durationBeats: 1, pitch: 58, velocity: 100 },
   ]
   useProjectStore.getState().addTrack(lyrics)
 
@@ -339,12 +358,12 @@ test('the Monochrome invert strobe follows the carried words, not a free clock',
     assert.ok(inFirst || inSecond, `strobe span ${n.startBeat}-${end} stays inside a sung phrase`)
   }
 
-  // The 1-frame zoom flashes are re-derived at the carried words' card
-  // boundaries (the only boundary here is the big gap before beat 20) -
-  // applying the style must not leave the transition inserts behind.
+  // The 1-frame zoom flashes are re-derived at the carried CLIPS' starts (the
+  // clip is the card now) - applying the style must not leave the previous
+  // style's inserts behind.
   const monoLyrics = findLyrics()
-  const flashes = monoLyrics.blocks[0].notes.filter((n) => n.pitch === 46)
-  assert.deepEqual(flashes.map((n) => n.startBeat), [20], 'one zoom flash, on the card boundary')
+  const flashes = monoLyrics.blocks[0].notes.filter((n) => n.pitch === 46).map((n) => n.startBeat).sort((a, b) => a - b)
+  assert.deepEqual(flashes, [0, 20], 'one zoom flash per card, on the clip starts')
 })
 
 test('switching between lyric styles keeps the words and swaps the look', () => {
@@ -354,16 +373,16 @@ test('switching between lyric styles keeps the words and swaps the look', () => 
 
   // Silent Film, then change your mind and go to Dark Red.
   useProjectStore.getState().applyTemplate(silentFilm.document)
-  assert.equal(findLyrics().params?.font, 4)
+  assert.equal(findLyrics().styleLanes?.[2]?.font, 4)
 
   const darkRed = getTemplate('darkRed')
   assert.ok(darkRed)
   useProjectStore.getState().applyTemplate(darkRed.document)
 
   const lyrics = findLyrics()
-  assert.equal(lyrics.stringParams?.text, 'real transcribed words')
+  assert.deepEqual(lyrics.lyricClips?.map((c) => c.words), [['real', 'transcribed', 'words']])
   assert.equal(lyrics.lyricTiming?.[0]?.word, 'real')
-  assert.equal(lyrics.params?.font, 2) // Dark Red's mono face, not Silent Film's
+  assert.equal(lyrics.styleLanes?.[2]?.font, 2) // Dark Red's mono face, not Silent Film's
   // Silent Film's film layers must not linger under the new style.
   const s = useProjectStore.getState()
   const names = s.rootTrackIds.map((id) => s.tracks[id].name)

@@ -10,11 +10,14 @@ import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
-import { placeTranscription, invertStrobeSpans, stackCardStarts, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
+import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
 import { DEFAULT_SCENE_BACKGROUND, defaultSceneGradient, sceneBackdropMode, type SceneBackdropMode, type SceneGradient, type Scene, type Track, type Block, type Note, type AudioBlock, type AdsrEnvelope, type AutomationMode, type EffectInstance, type InterpolationMode, type VideoPad, type PhotoPad, type Routing } from '../types'
 import type { ProjectDocument } from '../../persistence/types'
+import { upgradeDocument } from '../../persistence/upgrade'
 import { useVideoStore } from './VideoStore'
 import { songEndBars, trimLoopsToSongEnd } from './songEnd'
+import { clipsFromPlacedWords, laneIndexForPitch, MAX_STYLE_LANES, resolveStyleLanes } from '../core/visual/lyricClips'
+import type { LyricClip, StyleLane } from '../types'
 
 export const MIN_BPM = 20
 export const MAX_BPM = 300
@@ -401,7 +404,6 @@ export interface ProjectState {
    *  recent. Unlike the other lane types there is no uniqueness rule - several
    *  formations under one text track is the whole point, and they are told apart
    *  by which one played last. */
-  addWordFormationTrack: (parentId: string) => void
   /** Add an `automation` child track under `parentId`, driving the given param over
    *  time. No-op if one already automates that param. */
   addAutomationTrack: (parentId: string, paramKey: string, paramLabel: string) => void
@@ -495,6 +497,22 @@ export interface ProjectState {
   /** Rebuild a Lyrics track's notes + text from its lyricTiming: word-by-word
    *  (one note per word) or whole lines at once (one note per grouped line). */
   setLyricGrouping: (trackId: string, grouping: 'words' | 'lines') => void
+  // Lyric clips + style lanes (Text Display; core/visual/lyricClips.ts).
+  addLyricClip: (trackId: string, clip: Omit<LyricClip, 'id'>) => void
+  updateLyricClip: (trackId: string, clipId: string, updates: Partial<Omit<LyricClip, 'id'>>) => void
+  removeLyricClip: (trackId: string, clipId: string) => void
+  /** Alt-drag duplicate: copy a clip in place and return the copy's id (the
+   *  gesture then drags the copy). */
+  duplicateLyricClip: (trackId: string, clipId: string) => string | null
+  /** Rewrite ONE word in place (the note-editing path). Writes through to the
+   *  clip's words, padding if a starved note's slot is past the end. */
+  setLyricClipWord: (trackId: string, clipId: string, wordIndex: number, word: string) => void
+  /** Paste-and-slice: one text line → one clip, laid down the timeline from
+   *  `startBeat` (default 0), 1 bar per clip, replacing existing clips. */
+  sliceLyricsIntoClips: (trackId: string, text: string, startBeat?: number) => void
+  updateStyleLane: (trackId: string, index: number, updates: Partial<StyleLane>) => void
+  addStyleLane: (trackId: string) => void
+  removeStyleLane: (trackId: string, index: number) => void
   /** Switch the active scene onto a template: its visual tracks replace the
    *  scene's (audio tracks stay, and with a song present the song's BPM wins
    *  over the template's). Every id is reminted, so re-applying can never
@@ -516,8 +534,9 @@ export interface ProjectState {
 
 export type { LyricWord, TranscribedWord } from '../utils/lyricPlacement'
 
-// Text Display's "advance to the next word" pitch (its PITCH_NEXT_WORD).
-const TEXT_NEXT_WORD_PITCH = 48
+// Text Display's default word pitch: the PLAIN style lane (STYLE_PITCH_TOP - 2;
+// see core/visual/lyricClips.ts - pitch picks the lane, lane styles the word).
+const TEXT_WORD_PITCH = 58
 // Text Display's 1-frame giant-text insert (its PITCH_ZOOM_FLASH).
 const TEXT_ZOOM_FLASH_PITCH = 46
 // Color Filters' Invert row - the Monochrome style's polarity strobe.
@@ -1264,7 +1283,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const t = s.tracks[id]!
         // Lanes live only on their parent and audio is pinned - neither joins.
         if (t.type === 'audio' || t.type === 'automation' || t.type === 'ability'
-          || t.type === 'envelope' || t.type === 'wordFormation') return false
+          || t.type === 'envelope') return false
         // Inside another selected track's subtree: rides along with its ancestor.
         for (let cur = t.parentId; cur != null; cur = s.tracks[cur]?.parentId) {
           if (selected.has(cur)) return false
@@ -1332,7 +1351,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const memberIds = g.childIds.filter((cid) => {
         const c = s.tracks[cid]
         return !!c && c.type !== 'automation' && c.type !== 'ability'
-          && c.type !== 'envelope' && c.type !== 'wordFormation'
+          && c.type !== 'envelope'
       })
       const memberSet = new Set(memberIds)
       const doomed = new Set<string>()
@@ -1522,10 +1541,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
   setMoverInput: (trackId, key, value) =>
     set((s) => {
       const track = s.tracks[trackId]
-      // Word Formation lanes store their geometry in the same `inputValues` field,
-      // so they share this setter (and with it undo, autosave and the panel's
-      // param binding) rather than growing a parallel one.
-      if (!track || (track.type !== 'mover' && track.type !== 'splitter' && track.type !== 'wordFormation')) return s
+      if (!track || (track.type !== 'mover' && track.type !== 'splitter')) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, inputValues: { ...track.inputValues, [key]: value } } } }
     }),
 
@@ -1624,34 +1640,103 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       return { tracks: { ...s.tracks, [trackId]: { ...track, envTarget: value } } }
     }),
 
-  addWordFormationTrack: (parentId) =>
+  addLyricClip: (trackId, clip) =>
     set((s) => {
-      const parent = s.tracks[parentId]
-      if (!parent) return s
-      const id = crypto.randomUUID()
-      // Formations are named by their order under this parent - "Formation A",
-      // "Formation B" - because what distinguishes them is which one you play,
-      // and the timeline row is where you play it.
-      const existing = parent.childIds.filter((cid) => s.tracks[cid]?.type === 'wordFormation').length
-      const track: Track = {
-        id,
-        name: `Formation ${String.fromCharCode(65 + Math.min(existing, 25))}`,
-        type: 'wordFormation',
-        instrumentId: '',
-        color: resolveNextTrackColor(s, parentId),
-        muted: false,
-        solo: false,
-        blocks: [],
-        childIds: [],
-        parentId,
-      }
-      return {
-        tracks: {
-          ...s.tracks,
-          [id]: track,
-          [parentId]: { ...parent, childIds: [...parent.childIds, id] },
-        },
-      }
+      const t = s.tracks[trackId]
+      if (!t || t.instrumentId !== 'textDisplay') return s
+      const next: LyricClip = { ...clip, id: crypto.randomUUID() }
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: [...(t.lyricClips ?? []), next] } } }
+    }),
+
+  updateLyricClip: (trackId, clipId, updates) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t?.lyricClips) return s
+      const lyricClips = t.lyricClips.map((c) => (c.id === clipId ? { ...c, ...updates } : c))
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+    }),
+
+  removeLyricClip: (trackId, clipId) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t?.lyricClips) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: t.lyricClips.filter((c) => c.id !== clipId) } } }
+    }),
+
+  duplicateLyricClip: (trackId, clipId) => {
+    let newId: string | null = null
+    set((s) => {
+      const t = s.tracks[trackId]
+      const src = t?.lyricClips?.find((c) => c.id === clipId)
+      if (!t || !src) return s
+      newId = crypto.randomUUID()
+      const copy: LyricClip = { ...src, id: newId, words: [...src.words], layout: { ...src.layout } }
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips: [...t.lyricClips!, copy] } } }
+    })
+    return newId
+  },
+
+  setLyricClipWord: (trackId, clipId, wordIndex, word) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      const clip = t?.lyricClips?.find((c) => c.id === clipId)
+      if (!t || !clip || wordIndex < 0) return s
+      const words = [...clip.words]
+      while (words.length <= wordIndex) words.push('')
+      words[wordIndex] = word
+      const lyricClips = t.lyricClips!.map((c) => (c.id === clipId ? { ...c, words } : c))
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+    }),
+
+  sliceLyricsIntoClips: (trackId, text, startBeat = 0) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t || t.instrumentId !== 'textDisplay') return s
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      if (lines.length === 0) return s
+      const barBeats = s.beatsPerBar
+      const lyricClips: LyricClip[] = lines.map((line, i) => ({
+        id: crypto.randomUUID(),
+        startBeat: startBeat + i * barBeats,
+        durationBeats: barBeats,
+        words: line.split(/\s+/),
+        layout: t.lyricClips?.[0]?.layout ?? { kind: 'one' },
+      }))
+      return { tracks: { ...s.tracks, [trackId]: { ...t, lyricClips } } }
+    }),
+
+  updateStyleLane: (trackId, index, updates) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t || t.instrumentId !== 'textDisplay') return s
+      // Resolve to the full lane set first so editing lane 3 of a track still
+      // on the defaults stores all five (partial stores would re-default the
+      // rest out from under the edit).
+      const lanes = resolveStyleLanes(t.styleLanes)
+      if (index < 0 || index >= lanes.length) return s
+      const styleLanes = lanes.map((l, i) => (i === index ? { ...l, ...updates } : l))
+      return { tracks: { ...s.tracks, [trackId]: { ...t, styleLanes } } }
+    }),
+
+  addStyleLane: (trackId) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t || t.instrumentId !== 'textDisplay') return s
+      const lanes = resolveStyleLanes(t.styleLanes)
+      if (lanes.length >= MAX_STYLE_LANES) return s
+      const styleLanes = [...lanes, { name: `LANE ${lanes.length + 1}`, font: 0, color: '#ffffff', size: 1 }]
+      return { tracks: { ...s.tracks, [trackId]: { ...t, styleLanes } } }
+    }),
+
+  removeStyleLane: (trackId, index) =>
+    set((s) => {
+      const t = s.tracks[trackId]
+      if (!t || t.instrumentId !== 'textDisplay') return s
+      const lanes = resolveStyleLanes(t.styleLanes)
+      // Never below one lane - a text track with no rows can't sing.
+      if (lanes.length <= 1 || index < 0 || index >= lanes.length) return s
+      const styleLanes = lanes.filter((_, i) => i !== index)
+      return { tracks: { ...s.tracks, [trackId]: { ...t, styleLanes } } }
     }),
 
   addAbilityTrack: (parentId, abilityKey, abilityLabel) =>
@@ -1988,23 +2073,22 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const placed = particleWords && words[0].startBeat > 0.5
         ? [{ word: '-', startBeat: 0, durationBeats: 0.25 }, ...words]
         : words
-      const text = placed.map((w) => w.word).join(' ')
       const lastBeat = Math.max(...placed.map((w) => w.startBeat + w.durationBeats))
       const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
-      // Stack layouts (Monochrome) keep their 1-frame zoom flashes ON the
-      // Lyrics block, so the refill must re-derive them at the real words'
-      // card boundaries - otherwise transcription silently wipes the
-      // transition inserts along with the placeholder notes.
+      // One clip per sung line (clipsFromPlacedWords cuts at punctuation, gaps
+      // and a word cap) - the clip is the phrase, so stack-style cards and
+      // scatter phrases both follow the singing with no extra bookkeeping.
+      // The style's arrangement survives a refill: existing clips' layout is
+      // carried onto the rebuilt ones.
       const existingTrack = existingId ? s.tracks[existingId] : undefined
-      const stackLayout = Math.round(existingTrack?.params?.layoutMode ?? 0) === 2
-      const flashNotes: Note[] = stackLayout
-        ? stackCardStarts(
-            placed,
-            existingTrack?.params?.phraseGap ?? 2,
-            Math.max(1, Math.round(existingTrack?.params?.stackMaxWords ?? 4)),
-          ).map((beat) => ({
+      const carriedLayout = existingTrack?.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+      const lyricClips = clipsFromPlacedWords(placed).map((c) => ({ ...c, layout: carriedLayout }))
+      // Stack arrangements keep their 1-frame zoom flashes on the card
+      // boundaries - which are now simply the clips' starts.
+      const flashNotes: Note[] = carriedLayout.kind === 'stack'
+        ? lyricClips.map((c) => ({
             id: crypto.randomUUID(),
-            startBeat: beat,
+            startBeat: c.startBeat,
             durationBeats: 0.1,
             pitch: TEXT_ZOOM_FLASH_PITCH,
             velocity: 100,
@@ -2020,7 +2104,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             id: crypto.randomUUID(),
             startBeat: w.startBeat,
             durationBeats: w.durationBeats,
-            pitch: TEXT_NEXT_WORD_PITCH,
+            pitch: TEXT_WORD_PITCH,
             velocity: 100,
           })),
           ...flashNotes,
@@ -2078,13 +2162,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         resultId = existingId
         const updated: Track = {
           ...existing,
-          stringParams: { ...existing.stringParams, text },
+          lyricClips,
           lyricTiming: timing ?? existing.lyricTiming,
           // A refill arrives word-per-note, so the grouping resets with it -
-          // a stale 'lines' flag (or Advance By param) would desync the next
-          // rebuild from what's actually on the sheet.
+          // a stale 'lines' flag would desync the next rebuild from the sheet.
           lyricGrouping: 'words',
-          params: { ...existing.params, advanceUnit: 0 },
           blocks: [block],
         }
         return { tracks: { ...trimmedTracks, [existingId]: updated }, totalBars }
@@ -2100,7 +2182,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         color: resolveNextTrackColor(s),
         muted: false,
         solo: false,
-        stringParams: { text },
+        lyricClips,
         lyricTiming: timing,
         lyricGrouping: 'words',
         blocks: [block],
@@ -2115,19 +2197,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     set((s) => {
       const t = s.tracks[trackId]
       if (!t) return s
-      const advanceUnit = grouping === 'lines' ? 1 : 0
-      // Hand-typed tracks (no sung timing): the sheet is already the source of
-      // truth, so flipping the instrument's Advance By param is the whole job -
-      // each newline-separated line becomes one display unit. Notes stay the
-      // user's own.
+      // Hand-typed tracks (no sung timing): clips are already the sheet, so
+      // there is nothing to rebuild - just remember the preference.
       if (!t.lyricTiming?.length || t.blocks.length === 0) {
-        if ((t.params?.advanceUnit ?? 0) === advanceUnit) return s
-        return {
-          tracks: {
-            ...s.tracks,
-            [trackId]: { ...t, lyricGrouping: grouping, params: { ...t.params, advanceUnit } },
-          },
-        }
+        if ((t.lyricGrouping ?? 'words') === grouping) return s
+        return { tracks: { ...s.tracks, [trackId]: { ...t, lyricGrouping: grouping } } }
       }
       if ((t.lyricGrouping ?? 'words') === grouping) return s
       // Same audio anchor the BPM rescale uses: words place relative to the
@@ -2140,23 +2214,26 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const units = grouping === 'lines' ? groupTimingIntoLines(t.lyricTiming) : t.lyricTiming
       const placed = placeTranscription(units, audioBlock ?? { startBar: 0, trimStart: 0 }, s.bpm, s.beatsPerBar, true)
       if (placed.length === 0) return s
-      // Lines mode writes the sheet one line per row and flips the
-      // instrument's Advance By param - the sheet stays human-readable,
-      // no !...! smuggling.
-      const text = placed.map((w) => w.word).join(grouping === 'lines' ? '\n' : ' ')
       const lastBeat = Math.max(...placed.map((w) => w.startBeat + w.durationBeats))
       const durationBars = Math.min(MAX_TOTAL_BARS, Math.max(1, Math.ceil(lastBeat / s.beatsPerBar)))
-      // Stack layouts keep their zoom flashes on card boundaries, re-derived
-      // for the new units (mirrors addLyricTrack's refill).
-      const stackLayout = Math.round(t.params?.layoutMode ?? 0) === 2
-      const flashNotes: Note[] = stackLayout
-        ? stackCardStarts(
-            placed,
-            t.params?.phraseGap ?? 2,
-            Math.max(1, Math.round(t.params?.stackMaxWords ?? 4)),
-          ).map((beat) => ({
+      // Lines grouping: each placed unit IS a line, shown whole on one note -
+      // its clip carries the line as a single !...! grouped entry. Words
+      // grouping re-cuts lines from the placed words. Layout carries over.
+      const carriedLayout = t.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+      const lyricClips = (grouping === 'lines'
+        ? placed.map((w, i) => ({
             id: crypto.randomUUID(),
-            startBeat: beat,
+            startBeat: w.startBeat,
+            durationBeats: Math.max(0.25, (i + 1 < placed.length ? placed[i + 1].startBeat : w.startBeat + w.durationBeats + 2) - w.startBeat),
+            words: [`!${w.word}!`],
+            layout: { kind: 'one' as const },
+          }))
+        : clipsFromPlacedWords(placed)
+      ).map((c) => ({ ...c, layout: carriedLayout }))
+      const flashNotes: Note[] = carriedLayout.kind === 'stack'
+        ? lyricClips.map((c) => ({
+            id: crypto.randomUUID(),
+            startBeat: c.startBeat,
             durationBeats: 0.1,
             pitch: TEXT_ZOOM_FLASH_PITCH,
             velocity: 100,
@@ -2171,7 +2248,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             id: crypto.randomUUID(),
             startBeat: w.startBeat,
             durationBeats: w.durationBeats,
-            pitch: TEXT_NEXT_WORD_PITCH,
+            pitch: TEXT_WORD_PITCH,
             velocity: 100,
           })),
           ...flashNotes,
@@ -2183,8 +2260,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           [trackId]: {
             ...t,
             lyricGrouping: grouping,
-            params: { ...t.params, advanceUnit },
-            stringParams: { ...t.stringParams, text },
+            lyricClips,
             blocks: [block],
           },
         },
@@ -2193,6 +2269,11 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
     }),
 
   applyTemplate: (templateDoc) => {
+    // Templates are authored documents like any save: walk them through the
+    // upgrade chain first, so a template written against an older schema
+    // (text params, formation lanes) arrives converted (clips + style lanes)
+    // and this function only ever sees the current shape.
+    templateDoc = upgradeDocument(templateDoc)
     // The template's content lives in its non-main scene.
     const srcSceneId = templateDoc.sceneOrder.find((id) => !templateDoc.scenes[id]?.isMain)
     const src = srcSceneId ? templateDoc.scenes[srcSceneId] : undefined
@@ -2249,7 +2330,12 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       if (existingLyricsId && templateLyricsId) {
         const existing = s.tracks[existingLyricsId]
         const tplLyrics = cloned[templateLyricsId]
-        let text = existing.stringParams?.text ?? tplLyrics.stringParams?.text ?? ''
+        // The project's WORDS survive; the template's ARRANGEMENT wins - its
+        // lead clip's layout restyles every carried clip, the same way its
+        // style lanes restyle the notes.
+        const carriedLayout = tplLyrics.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+        let lyricClips = (existing.lyricClips?.length ? existing.lyricClips : tplLyrics.lyricClips ?? [])
+          .map((c) => ({ ...c, id: crypto.randomUUID(), layout: carriedLayout }))
         let blocks = existing.blocks.length > 0 ? existing.blocks : tplLyrics.blocks
         // Particle-words styles (wormhole) open on a "-" lead-in: a dash word
         // noted at the very start, so the cloud idles as a dash and streams
@@ -2263,16 +2349,27 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
           && existing.blocks.length > 0 && blocks[0].startBar === 0) {
           const first = blocks[0]
           const firstWordBeat = first.notes.reduce(
-            (m, n) => (n.pitch === TEXT_NEXT_WORD_PITCH ? Math.min(m, n.startBeat) : m),
+            (m, n) => (laneIndexForPitch(n.pitch, MAX_STYLE_LANES) >= 0 ? Math.min(m, n.startBeat) : m),
             Infinity,
           )
           if (firstWordBeat > 0.5 && firstWordBeat !== Infinity) {
-            text = text ? `- ${text}` : '-'
+            // The dash gets its own little clip before the first sung one, so
+            // the note at beat 0 has a word to take without shifting anything.
+            lyricClips = [
+              {
+                id: crypto.randomUUID(),
+                startBeat: 0,
+                durationBeats: Math.max(0.25, (lyricClips[0]?.startBeat ?? firstWordBeat) - 0.01),
+                words: ['-'],
+                layout: carriedLayout,
+              },
+              ...lyricClips,
+            ]
             blocks = [
               {
                 ...first,
                 notes: [
-                  { id: crypto.randomUUID(), startBeat: 0, durationBeats: 0.25, pitch: TEXT_NEXT_WORD_PITCH, velocity: 100 },
+                  { id: crypto.randomUUID(), startBeat: 0, durationBeats: 0.25, pitch: TEXT_WORD_PITCH, velocity: 100 },
                   ...first.notes,
                 ],
               },
@@ -2287,22 +2384,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         if (blocks.length > 0 && blocks[0].startBar === 0) {
           const first = blocks[0]
           const stripped = first.notes.filter((note) => note.pitch !== TEXT_ZOOM_FLASH_PITCH)
-          if (Math.round(tplLyrics.params?.layoutMode ?? 0) === 2) {
-            const carriedWords = stripped
-              .filter((note) => note.pitch === TEXT_NEXT_WORD_PITCH)
-              .map((note) => ({ startBeat: note.startBeat, durationBeats: note.durationBeats }))
-            const flashes = stackCardStarts(
-              carriedWords,
-              tplLyrics.params?.phraseGap ?? 2,
-              Math.max(1, Math.round(tplLyrics.params?.stackMaxWords ?? 4)),
-            )
+          if (carriedLayout.kind === 'stack') {
+            // Card boundaries are simply the carried clips' starts now.
             blocks = [{
               ...first,
               notes: [
                 ...stripped,
-                ...flashes.map((beat) => ({
+                ...lyricClips.filter((c) => c.words.length > 0).map((c) => ({
                   id: crypto.randomUUID(),
-                  startBeat: beat,
+                  startBeat: c.startBeat,
                   durationBeats: 0.1,
                   pitch: TEXT_ZOOM_FLASH_PITCH,
                   velocity: 100,
@@ -2316,10 +2406,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
 
         cloned[templateLyricsId] = {
           ...tplLyrics,
-          stringParams: {
-            ...tplLyrics.stringParams,
-            text,
-          },
+          lyricClips,
           blocks,
           ...(existing.lyricTiming ? { lyricTiming: existing.lyricTiming } : {}),
         }
@@ -2335,7 +2422,7 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         })
         if (strobeCloneId && existing.blocks.length > 0 && blocks[0].startBar === 0) {
           const carriedWords = blocks[0].notes
-            .filter((note) => note.pitch === TEXT_NEXT_WORD_PITCH)
+            .filter((note) => laneIndexForPitch(note.pitch, MAX_STYLE_LANES) >= 0)
             .map((note) => ({ startBeat: note.startBeat, durationBeats: note.durationBeats }))
             .sort((a, b) => a.startBeat - b.startBeat)
           const spans = invertStrobeSpans(carriedWords)
@@ -2548,12 +2635,25 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
             id: crypto.randomUUID(),
             startBeat: w.startBeat,
             durationBeats: w.durationBeats,
-            pitch: TEXT_NEXT_WORD_PITCH,
+            pitch: TEXT_WORD_PITCH,
             velocity: 100,
           })),
         }
+        // Clip beats derive from the sung seconds too, so they rescale with
+        // the notes (layout carried, like the transcription refill).
+        const carriedLayout = t.lyricClips?.[0]?.layout ?? { kind: 'one' as const }
+        const lyricClips = (t.lyricGrouping === 'lines'
+          ? words.map((w, i) => ({
+              id: crypto.randomUUID(),
+              startBeat: w.startBeat,
+              durationBeats: Math.max(0.25, (i + 1 < words.length ? words[i + 1].startBeat : w.startBeat + w.durationBeats + 2) - w.startBeat),
+              words: [`!${w.word}!`],
+              layout: { kind: 'one' as const },
+            }))
+          : clipsFromPlacedWords(words)
+        ).map((c) => ({ ...c, layout: carriedLayout }))
         if (tracks === s.tracks) tracks = { ...s.tracks }
-        tracks[id] = { ...t, blocks: [block] }
+        tracks[id] = { ...t, blocks: [block], lyricClips }
         totalBars = Math.max(totalBars, durationBars)
       }
       return tracks === s.tracks ? { bpm: next } : { bpm: next, tracks, totalBars }
