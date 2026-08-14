@@ -78,9 +78,11 @@ export interface MidiEditorChrome {
   regionEdge: string
   /** Dashed line at each loop repeat inside the block. */
   loopDash: string
-  /** Transport loop band in the ruler's loop lane (enabled state) - a lifted,
-   *  vivid voicing of the track hue, bright enough that the bar numbers still
-   *  invert to black on it. The main timeline keeps the fixed cyan. */
+  /** Transport loop band in the ruler's loop lane (enabled state) - Logic's
+   *  cycle-strip anatomy (solid, saturated, dark numbers on it) voiced from the
+   *  track hue, bright enough that the bar numbers still invert to black on it.
+   *  The main timeline keeps the fixed cyan. Picked from the loop-band mock lab
+   *  2026-08-13. */
   loopBand: string
   loopBandEdge: string
   /** Marquee selection fill + border. */
@@ -99,8 +101,8 @@ export function midiEditorChrome(color: string): MidiEditorChrome {
     regionTint: oklchCss(0.72, chroma(0.17), h, 0.07),
     regionEdge: oklchCss(0.74, chroma(0.17), h, 0.65),
     loopDash: oklchCss(0.74, chroma(0.17), h, 0.5),
-    loopBand: oklchCss(0.88, chroma(0.17), h),
-    loopBandEdge: oklchCss(0.71, chroma(0.11), h),
+    loopBand: oklchCss(0.84, chroma(0.16), h),
+    loopBandEdge: oklchCss(0.62, chroma(0.12), h),
     marqueeFill: oklchCss(0.72, chroma(0.17), h, 0.15),
     marqueeEdge: oklchCss(0.78, chroma(0.17), h, 0.65),
   }
