@@ -52,6 +52,11 @@ interface RulerProps {
   /** Extra content-space layers (e.g. the MIDI editor's block clip header),
    *  rendered between the bar lines and the playhead triangle. */
   children?: ReactNode
+  /** Enabled loop band fill + edge override (the MIDI editor voices these from
+   *  the edited track's hue). Defaults to the timeline's fixed cyan. Any
+   *  override must stay bright enough for the black bar-number inversion. */
+  loopFill?: string
+  loopEdge?: string
 }
 
 /**
@@ -83,6 +88,8 @@ export function Ruler({
   onLoopMoveStart,
   onLoopResizeStart,
   children,
+  loopFill = LOOP_REGION_ENABLED_COLOR,
+  loopEdge = '#3982b3',
 }: RulerProps) {
   const loopRegion = useTimeStore((s) => s.loopRegion)
   const barWidthPx = beatsPerBar * pixelsPerBeat
@@ -170,9 +177,9 @@ export function Ruler({
                 left: loopRegion.startBeat * pixelsPerBeat,
                 width: loopBandWidthPx,
                 height: '50%',
-                backgroundColor: loopRegion.enabled ? LOOP_REGION_ENABLED_COLOR : LOOP_REGION_DISABLED_COLOR,
-                borderLeft: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
-                borderRight: `1px solid ${loopRegion.enabled ? '#3982b3' : 'rgba(155, 155, 155, 0.45)'}`,
+                backgroundColor: loopRegion.enabled ? loopFill : LOOP_REGION_DISABLED_COLOR,
+                borderLeft: `1px solid ${loopRegion.enabled ? loopEdge : 'rgba(155, 155, 155, 0.45)'}`,
+                borderRight: `1px solid ${loopRegion.enabled ? loopEdge : 'rgba(155, 155, 155, 0.45)'}`,
                 zIndex: 5,
               }}
             >

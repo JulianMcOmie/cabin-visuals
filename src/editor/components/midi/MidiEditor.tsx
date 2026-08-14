@@ -380,6 +380,8 @@ export function MidiEditor({
         onLoopDragStart={startLoopDrag}
         onLoopMoveStart={startLoopMove}
         onLoopResizeStart={startLoopResize}
+        loopFill={chrome.loopBand}
+        loopEdge={chrome.loopBandEdge}
       >
         {/* Block clip header: drag the body to move the block, the edges to resize.
             Sits in the bottom half below the triangle (zIndex 10 < 21). */}
