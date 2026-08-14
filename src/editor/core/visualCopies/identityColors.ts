@@ -116,6 +116,11 @@ export const LINE_COLOR = '#95db6c'
 export const WAVE_TERRAIN_COLOR = '#6de18b'
 /** Hue 191° - ice, for the mover that stops time. */
 export const FREEZE_COLOR = '#00c0bb'
+/** Hue 205° - the middle of the ~200-210 band the mover consolidation
+ *  reopened. An arbitrary pick on purpose: the Cosine Palette's subject is
+ *  every hue at once, so no single hue can stand for it and a computed
+ *  `{ param }` identity has no user-picked color to follow. */
+export const COSINE_PALETTE_COLOR = '#00becd'
 /** Hue 247°. */
 export const MOTION_COLOR = '#4eaeff'
 /** Hue 260°. */

@@ -11,6 +11,7 @@ import type { VisualCopy } from './types'
 import { moverDefinition } from './mover'
 import { noteColorizer } from './colorizer'
 import { gradientColorizer } from './gradientColorizer'
+import { cosinePaletteColorizer } from './cosinePalette'
 import { forceFieldPushMover } from './forceFieldPush'
 import { meteorImpactMover } from './meteorImpact'
 import { impactScatterMover } from './impactScatter'
@@ -607,6 +608,7 @@ export const MOVER_OR_SPLITTER_DEFINITIONS: MoverOrSplitterDefinition<any>[] = [
   freezeMover,
   noteColorizer,
   gradientColorizer,
+  cosinePaletteColorizer,
   radialSplitter,
   lineSplitter,
   symmetrySplitter,
