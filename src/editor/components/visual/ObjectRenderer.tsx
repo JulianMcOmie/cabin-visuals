@@ -93,12 +93,17 @@ export function ObjectRenderer({
     (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'shader',
   )
   const scaleInstances = plugins.filter((plugin) => plugin.pluginId === 'scale')
-  // Material effects generate the target's SURFACE, so they must sit innermost -
-  // closest to the meshes - and they apply on both the full-frame and normal paths.
+  // Material effects generate the target's SURFACE and deform effects move its
+  // VERTICES, so both must sit innermost - closest to the meshes - and both apply
+  // on the full-frame and normal paths. They share one wrapper because they share
+  // one `onBeforeCompile` hook: two patchers wrapping the same material would
+  // compile differently depending on which mounted first.
   // Kept mounted while an automated 'enabled' is off, same as shader instances.
-  const materialInstances = plugins.filter(
-    (p) => (p.enabled || fxEnabledAutomated.includes(p.id)) && getEffect(p.pluginId)?.category === 'material',
-  )
+  const materialInstances = plugins.filter((p) => {
+    if (!p.enabled && !fxEnabledAutomated.includes(p.id)) return false
+    const category = getEffect(p.pluginId)?.category
+    return category === 'material' || category === 'deform'
+  })
 
   // Full-frame can be a per-track MODE (Oscilloscope's "Fit to screen"), so the
   // params record is a real dependency here: flipping the mode swaps which of

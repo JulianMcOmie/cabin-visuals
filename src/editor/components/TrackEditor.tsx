@@ -108,6 +108,9 @@ const EFFECT_CATEGORIES: { key: EffectCategory; label: string }[] = [
   // pattern is bolted to the mesh and travels with it), which is what the user is
   // choosing between - not the fact that a three material is what gets patched.
   { key: 'material', label: 'Surface' },
+  // 'Deform' rather than 'Vertex': what the user is choosing is that the MESH
+  // itself bends, as against Transform, which moves the whole object rigidly.
+  { key: 'deform', label: 'Deform' },
   { key: 'shader', label: 'Shader' },
 ]
 const EFFECT_MENU_GROUPS: NestedMenuGroup[] = EFFECT_CATEGORIES.map((c) => ({

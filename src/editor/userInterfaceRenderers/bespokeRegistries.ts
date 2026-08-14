@@ -25,6 +25,7 @@ import { KaleidoSkinEffectUserInterfaceRenderer } from './KaleidoSkinEffectUserI
 import { PixelateEffectUserInterfaceRenderer } from './PixelateEffectUserInterface'
 import { ChromaticAberrationEffectUserInterfaceRenderer } from './ChromaticAberrationEffectUserInterface'
 import { OpacityEffectUserInterfaceRenderer } from './OpacityEffectUserInterface'
+import { DeformEffectUserInterfaceRenderer } from './DeformEffectUserInterface'
 
 // Bespoke settings surfaces for the non-object tracks, mirroring the object
 // registry in index.ts: movers/splitters are keyed by their definition id,
@@ -62,6 +63,7 @@ export const EFFECT_USER_INTERFACES: Partial<Record<string, UserInterfaceRendere
   pixelate: PixelateEffectUserInterfaceRenderer,
   chromaticAberration: ChromaticAberrationEffectUserInterfaceRenderer,
   opacity: OpacityEffectUserInterfaceRenderer,
+  deform: DeformEffectUserInterfaceRenderer,
 }
 
 export function getMoverUserInterface(definitionId: string | undefined): UserInterfaceRendererDefinition | undefined {

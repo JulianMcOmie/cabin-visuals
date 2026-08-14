@@ -12,6 +12,7 @@ import { boilPlugin } from './shaders/boil'
 import { pixelatePlugin } from './shaders/pixelate'
 import { chromaticAberrationPlugin } from './shaders/chromaticAberration'
 import { opacityPlugin } from './shaders/opacity'
+import { deformPlugin } from './deform/deform'
 import type { VisualEffect } from './types'
 
 export type { VisualEffect, EffectCategory } from './types'
@@ -28,6 +29,7 @@ export const EFFECTS: Record<string, VisualEffect> = {
   [opacityPlugin.id]: opacityPlugin,
   [texturizerPlugin.id]: texturizerPlugin,
   [glowPlugin.id]: glowPlugin,
+  [deformPlugin.id]: deformPlugin,
 }
 
 export function getEffect(id: string): VisualEffect | undefined {
