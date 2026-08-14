@@ -25,7 +25,7 @@
 import { Canvas } from '@react-three/fiber'
 import { Grid, OrbitControls } from '@react-three/drei'
 import { useProjectStore } from '../store/ProjectStore'
-import { ColorField, hexToHsv, hsvToHex, withAlpha } from '../userInterfaceRenderers/colorWheel'
+import { ColorField, withAlpha } from '../userInterfaceRenderers/colorWheel'
 import { LaserKnob } from '../userInterfaceRenderers/laserKnob'
 import { defaultSceneGradient, sceneBackdropMode, type Scene, type SceneGradient, type SceneGradientKind } from '../types'
 
@@ -284,13 +284,9 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
   const setSceneBackgroundColor = useProjectStore((s) => s.setSceneBackgroundColor)
   const mode = sceneBackdropMode(scene)
   const gradient = scene.backgroundGradient ?? defaultSceneGradient()
-  // The console's own tint anchors to what the backdrop actually shows: the
-  // flat color, or the gradient's average when that's what the scene wears.
+  // The seam light anchors to what the backdrop actually shows: the flat
+  // color, or the gradient's average when that's what the scene wears.
   const anchor = mode === 'gradient' ? mixHex(gradient.from, gradient.to) : scene.backgroundColor
-  const backdropHsv = hexToHsv(anchor)
-  // Hue-true dark shade of the backdrop for the console (never an alpha tint -
-  // the guide's mud rule), plus the stage's light spilling through the seam.
-  const shade = hsvToHex(backdropHsv.h, Math.min(backdropHsv.s, 0.5), 0.075)
 
   return (
     // -mx-3/-mt-3 cancel the inspector container's padding (full-bleed rule);
@@ -298,12 +294,19 @@ export function SceneSettingsPanel({ scene }: { scene: Scene }) {
     // two stacked fields DO run past the pane's opening height - the sanctioned
     // trade for "both stops visible at once, no selector" (design guide, grid
     // console): the pane scrolls, and it is the caller's explicit ask.
-    <section data-testid="scene-settings-panel" className="-mx-3 -mt-3 -mb-12" style={{ background: shade }}>
+    //
+    // The console surface is deliberately NEUTRAL (Tyler, 2026-08-13): it used
+    // to be a hue-true dark shade of the selected color, which meant the whole
+    // panel re-painted as you dragged the hue rail. Now only the seam wash
+    // below carries the scene's color - light leaking onto neutral material,
+    // never the material itself - and the console sits flush with the
+    // inspector's own chrome like every other settings panel.
+    <section data-testid="scene-settings-panel" className="-mx-3 -mt-3 -mb-12">
       <StagePreview scene={scene} />
       <div
         className="px-4 pt-3 pb-2.5"
         style={mode === 'transparent' ? undefined : {
-          background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(anchor, 0.14)}, transparent)`,
+          background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(anchor, 0.16)}, transparent)`,
         }}
       >
         <BackdropDeck scene={scene} />
