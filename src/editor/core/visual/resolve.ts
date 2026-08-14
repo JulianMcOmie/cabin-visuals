@@ -7,6 +7,7 @@ import type {
   ResolvedAutomation,
   ResolvedEffectAutomation,
   ResolvedEnvelope,
+  ResolvedGroup,
   ResolvedWordFormationLane,
 } from './types'
 import { DEFAULT_ADSR } from './adsr'
@@ -14,7 +15,7 @@ import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationAmount, automationLaneValueBounds, extractBurstGates, extractCycleGates, extractKeyframes, extractNoiseGates, sampleAutomationLane } from './automation'
 import { isNumberParam, type ObjectInstrumentDef, type ParamDef } from '../../instruments/types'
-import { SPATIAL_TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
+import { SPATIAL_TRANSFORM_PARAM_DEFS, TRANSFORM_PARAM_DEFS, transformDefault, withTransformParams } from '../transform'
 import { SPATIAL_TF_PARAMS, tfAutomationChainEntry } from './tfAutomationChain'
 import { getMoverOrSplitterDefinition } from '../visualCopies/registry'
 import { mergeDefinitionSettings } from '../visualCopies/definitions'
@@ -575,19 +576,31 @@ function weaveTfAutomationLanes(
 }
 
 /** True when this mover/splitter belongs to a parent's chain rather than routing
- *  itself: either a LOCAL entry of its parent instrument's chain, or a FRAME
- *  entry of a parent mover/splitter, which moves that parent
- *  (visualCopies/moverFrame.ts). Both are collected by
- *  resolveMoverAndSplitterChain from the parent's childIds, so the same prefix
- *  logic counts either one. Everything else (root level, nested under a plain
- *  group track, or under an instrument the registry no longer knows) is a mover
- *  "without a parent": it routes globally through its `targets`, appended to the
- *  end of each target object's chain. */
+ *  itself: a LOCAL entry of its parent instrument's chain, a FRAME entry of a
+ *  parent mover/splitter (visualCopies/moverFrame.ts), or a GROUP entry - a
+ *  chain child of a group track, broadcast to the member objects above it (the
+ *  group pass in resolveProject). Everything else (root level, or under an
+ *  instrument the registry no longer knows) is a mover "without a parent": it
+ *  routes globally through its `targets`, appended to the end of each target
+ *  object's chain. */
 function isChainChild(track: Track, p: ProjectSnapshot): boolean {
   const parent = track.parentId ? p.tracks[track.parentId] : undefined
   if (!parent) return false
   return !!getInstrument(parent.instrumentId)
     || !!getMoverOrSplitterDefinition(moverOrSplitterId(parent))
+    || parent.type === 'group'
+}
+
+/** Any ancestor GROUP with the given flag set. Mute on a group silences its
+ *  whole subtree; solo on a group solos its member objects (they join the
+ *  object solo pool). Non-group ancestors never propagate either flag - that
+ *  is today's behavior for nested object tracks, kept unchanged. */
+function ancestorGroupFlag(track: Track, p: ProjectSnapshot, flag: 'muted' | 'solo'): boolean {
+  for (let cur = track.parentId; cur != null; cur = p.tracks[cur]?.parentId) {
+    const t = p.tracks[cur]
+    if (t?.type === 'group' && t[flag]) return true
+  }
+  return false
 }
 
 function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapshot): boolean {
@@ -619,6 +632,45 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
   if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
     if (!parent) return 1
+    // A GROUP's chain child broadcasts to the member objects above it; one
+    // MIDI lane must serve all of them, so the row set uses the largest member
+    // count. Per member: its own chain, then this group's entries above the
+    // target. (Entries a nested inner group contributes in between are ignored
+    // here - this is editor row metadata, not playback.)
+    if (parent.type === 'group') {
+      const chainCandidates = (parent.childIds ?? [])
+        .map((id) => p.tracks[id])
+        .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
+      const anySolo = chainCandidates.some((child) => child.solo)
+      const entriesAbove: MoverOrSplitter[] = []
+      const memberObjects: Track[] = []
+      const collectObjects = (id: string) => {
+        const t = p.tracks[id]
+        if (!t) return
+        if (t.instrumentId && getInstrument(t.instrumentId)) memberObjects.push(t)
+        for (const c of t.childIds ?? []) collectObjects(c)
+      }
+      for (const cid of parent.childIds ?? []) {
+        if (cid === trackId) break
+        const child = p.tracks[cid]
+        if (!child) continue
+        if (getMoverOrSplitterDefinition(moverOrSplitterId(child))) {
+          if (child.muted || (anySolo && !child.solo)) continue
+          const resolved = resolveMoverOrSplitterTrack(child, p)
+          if (resolved) entriesAbove.push(resolved)
+        } else {
+          collectObjects(cid)
+        }
+      }
+      let largest = 1
+      for (const member of memberObjects) {
+        largest = Math.max(largest, structuralCopyCount([
+          ...resolveMoverAndSplitterChain(member, p),
+          ...entriesAbove,
+        ]))
+      }
+      return largest
+    }
     const candidates = (parent.childIds ?? [])
       .map((id) => p.tracks[id])
       .filter((child): child is Track => !!child && !!getMoverOrSplitterDefinition(moverOrSplitterId(child)))
@@ -714,19 +766,40 @@ function depsEqual(a: unknown[], b: unknown[]): boolean {
  */
 export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   const objects: ResolvedObject[] = []
+  const groups: ResolvedGroup[] = []
   const tagIndex = new Map<string, string[]>()
 
   // Real solo, scoped to OBJECTS: if any object is soloed, non-soloed objects go off
   // (muted). Child automation keeps its own mute, so soloing an object never
   // disables its automation. Ability-lane solo is
   // separate (per object, in resolveAbilityEvents).
+  // A soloed GROUP joins the pool on behalf of its member objects; a muted
+  // group silences its whole subtree (ancestorGroupFlag).
   const isObjectTrack = (t: Track) => !!t.instrumentId
-  const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && isObjectTrack(t))
-  const objectOff = (track: Track) => !!track.muted || (anyObjectSolo && !track.solo)
+  const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && (isObjectTrack(t) || t.type === 'group'))
+  const objectOff = (track: Track) =>
+    !!track.muted
+    || ancestorGroupFlag(track, p, 'muted')
+    || (anyObjectSolo && !track.solo && !ancestorGroupFlag(track, p, 'solo'))
 
   for (const id of flattenTree(p)) {
     const track = p.tracks[id]
-    if (!track || !track.instrumentId) continue
+    if (!track) continue
+    // A group track resolves to a placement node, not an object: its tf*
+    // params (+ their lanes) compose per frame in computeAtBeat as the parent
+    // of every member's world. Its chain children broadcast in the group pass
+    // below, after all objects exist.
+    if (track.type === 'group') {
+      groups.push({
+        trackId: id,
+        parentId: track.parentId,
+        params: track.params ?? {},
+        automations: resolveAutomationLanes(track, TRANSFORM_PARAM_DEFS, p),
+        afterObjectIndex: objects.length,
+      })
+      continue
+    }
+    if (!track.instrumentId) continue
 
     const tags = track.tags ?? []
     const def = getInstrument(track.instrumentId)
@@ -816,6 +889,52 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
+  // Chain children of a GROUP track broadcast to the group's members: each
+  // mover/splitter child appends to the chain of every OBJECT descended from
+  // the member siblings ABOVE it (children read as a top-to-bottom pipeline,
+  // so an entry applies to what the group has already stacked; an entry above
+  // every member applies to nothing). Entries compose per member in the
+  // member's own frame - "everyone gets the motion", not an orbit of the
+  // group's origin; the group's own tf* transform and lanes are the
+  // formation-as-one channel. Groups process deepest-first (reversed DFS), so
+  // a member's chain reads [own chain, inner group entries, outer group
+  // entries] and the global pass below appends after all of them.
+  for (const gid of flattenTree(p).reverse()) {
+    const g = p.tracks[gid]
+    if (!g || g.type !== 'group') continue
+    const chainChildren = (g.childIds ?? [])
+      .map((cid) => p.tracks[cid])
+      .filter((c): c is Track => !!c && !!getMoverOrSplitterDefinition(moverOrSplitterId(c)))
+    if (chainChildren.length === 0) continue
+    const anySolo = chainChildren.some((c) => c.solo)
+    const membersAbove: ResolvedObject[] = []
+    for (const cid of g.childIds ?? []) {
+      const child = p.tracks[cid]
+      if (!child) continue
+      if (getMoverOrSplitterDefinition(moverOrSplitterId(child))) {
+        if (child.muted || (anySolo && !child.solo)) continue
+        // Same identity-keyed reuse as the global pass: a group entry
+        // re-resolves only when its own subtree changed.
+        const deps = resolveDeps(child, p)
+        const cached = globalMoverResolveCache.get(child)
+        let resolved: MoverOrSplitter | null
+        if (cached && depsEqual(cached.deps, deps)) {
+          resolved = cached.resolved
+        } else {
+          resolved = resolveMoverOrSplitterTrack(child, p)
+          globalMoverResolveCache.set(child, { deps, resolved })
+        }
+        if (!resolved) continue
+        for (const member of membersAbove) member.moverAndSplitterChain.push(resolved)
+      } else {
+        for (const oid of objectsInSubtree(cid)) {
+          const member = objectById.get(oid)
+          if (member) membersAbove.push(member)
+        }
+      }
+    }
+  }
+
   // Movers and splitters WITHOUT a parent instrument are global: they target
   // existing objects by track/tag/subtree and append to moverAndSplitterChain -
   // after every object's local children, in depth-first tree order (roots first,
@@ -873,5 +992,5 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     }
   }
 
-  return { objects, tagIndex }
+  return { objects, groups, tagIndex }
 }

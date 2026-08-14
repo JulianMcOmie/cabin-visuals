@@ -36,6 +36,7 @@ import { SceneTabs } from './components/SceneTabs'
 import { usePlayback } from './hooks/usePlayback'
 import { useTransportKeys } from './hooks/useTransportKeys'
 import { useUndoRedoKeys } from './hooks/useUndoRedoKeys'
+import { useGroupKeys } from './hooks/useGroupKeys'
 import { useProjectPersistence } from './hooks/useProjectPersistence'
 import { useAnonymousAdoption } from './hooks/useAnonymousAdoption'
 import { useSaveStatus } from '../persistence/autosave'
@@ -993,6 +994,7 @@ function Header({
   const { play, pause, reset } = playback
   useTransportKeys({ play, pause, reset })
   useUndoRedoKeys()
+  useGroupKeys()
 
   // Export: capability-gated (Chrome-first - WebCodecs or nothing).
   const [exportOpen, setExportOpen] = useState(false)

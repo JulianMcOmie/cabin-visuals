@@ -8,7 +8,7 @@ import { isIdentityTransform, readTrackTransform, trackOpacity } from '../transf
 import { identityVisualCopy } from '../visualCopies/identityVisualCopy'
 import { resolveVisualCopies, structuralCopyCount, warpChainBeat } from '../visualCopies/resolveVisualCopies'
 import type { VisualCopy } from '../visualCopies/types'
-import type { ResolvedGraph, ObjectState, ResolvedEnvelope, ResolvedWordFormationLane } from './types'
+import type { ResolvedGraph, ResolvedGroup, ObjectState, ResolvedEnvelope, ResolvedWordFormationLane } from './types'
 import { mergeFormationSettings } from './wordFormation'
 import type { ProjectState } from '../../store/ProjectStore'
 import { DEFAULT_SCENE_BACKGROUND, type Scene } from '../../types'
@@ -44,6 +44,11 @@ const states = new Map<string, ObjectState>()
 // World transforms, reused across frames (one Matrix4 per object). Also the source
 // of each object's parent transform during composition.
 const worldMatrices = new Map<string, Matrix4>()
+// Cumulative GROUP tfOpacity down each ancestor chain (opacity has no place in
+// a matrix). Groups multiply their own trackOpacity in; objects pass their
+// parent's value through unchanged - an object's own tfOpacity deliberately
+// does NOT cascade to its children, which is today's nested-track behavior.
+const inheritedOpacities = new Map<string, number>()
 const _local = new Matrix4()
 // Scratch for the canonical track transform (core/transform.ts): composed as the
 // PARENT of the instrument's own localTransform, so panel position/rotation/size
@@ -165,9 +170,14 @@ export function setProject(input: ProjectState | ProjectSnapshot) {
   // and, crucially, the re-publish that would re-render the scene tree.
   if (allReused && graphs.size === prevGraphs.size) return
   // Drop per-object caches for tracks that no longer resolve to an object.
-  const live = new Set([...graphs.values()].flatMap((graph) => graph.objects.map((o) => o.trackId)))
+  const live = new Set([...graphs.values()].flatMap((graph) => [
+    ...graph.objects.map((o) => o.trackId),
+    // Groups own a world matrix + inherited opacity too, so they count as live.
+    ...(graph.groups ?? []).map((g) => g.trackId),
+  ]))
   for (const id of states.keys()) if (!live.has(id)) states.delete(id)
   for (const id of worldMatrices.keys()) if (!live.has(id)) worldMatrices.delete(id)
+  for (const id of inheritedOpacities.keys()) if (!live.has(id)) inheritedOpacities.delete(id)
   for (const id of visualCopiesByTrack.keys()) if (!live.has(id)) visualCopiesByTrack.delete(id)
   for (const id of visualCopyCounts.keys()) if (!live.has(id)) visualCopyCounts.delete(id)
   copyCountWarned.clear()
@@ -203,6 +213,14 @@ export function syncParams(input: ProjectState | ProjectSnapshot) {
   const p = normalizeProject(input)
   project = p
   bpm = p.bpm
+  for (const [sceneId, graph] of graphs) {
+    // Group tf* knobs follow the same 60fps rule as instrument params: the
+    // strip's sliders write params, and the frame after must see them.
+    for (const grp of graph.groups ?? []) {
+      const track = p.scenes[sceneId]?.tracks[grp.trackId]
+      if (track) grp.params = track.params ?? {}
+    }
+  }
   for (const [sceneId, graph] of graphs) for (const obj of graph.objects) {
     const sceneTracks = p.scenes[sceneId]?.tracks ?? {}
     const track = sceneTracks[obj.trackId]
@@ -336,7 +354,19 @@ export function computeAtBeat(beat: number) {
   const activeSceneIds = new Set(compositionLayers.map((layer) => layer.sceneId))
   activeTrackIds = new Set()
   const activeGraphs = [...activeSceneIds].map((id) => graphs.get(id)).filter((graph): graph is ResolvedGraph => !!graph)
-  for (const graph of activeGraphs) for (const obj of graph.objects) {
+  for (const graph of activeGraphs) {
+  // GROUP tracks are placement-only nodes: interleave them among the objects
+  // at their DFS position (afterObjectIndex), so a group's world matrix and
+  // cumulative opacity are always composed before any member reads them -
+  // the same parent-before-child guarantee the objects array itself carries.
+  const groupNodes = graph.groups ?? []
+  let nextGroup = 0
+  for (let objIndex = 0; objIndex <= graph.objects.length; objIndex++) {
+    while (nextGroup < groupNodes.length && groupNodes[nextGroup].afterObjectIndex <= objIndex) {
+      composeGroupPlacement(groupNodes[nextGroup++], beat)
+    }
+    if (objIndex === graph.objects.length) break
+    const obj = graph.objects[objIndex]
     activeTrackIds.add(obj.trackId)
     // A chain entry may remap WHEN this object is evaluated (Freeze; see
     // MoverOrSplitter.warpBeat). Everything below reads objBeat rather than the
@@ -406,7 +436,12 @@ export function computeAtBeat(beat: number) {
       composeMatrix(_tfSV, _tfMat)
       _local.premultiply(_tfMat)
     }
-    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate * trackOpacity(params))
+    // Ancestor GROUP opacity cascades onto members (a matrix can't carry it);
+    // an object passes its parent's value through unchanged - its own
+    // tfOpacity stays local to it, as it always has for nested tracks.
+    const inheritedOpacity = obj.parentId ? inheritedOpacities.get(obj.parentId) ?? 1 : 1
+    inheritedOpacities.set(obj.trackId, inheritedOpacity)
+    const opacity = clampOpacity(obj.scratchBase.opacity * opacityGate * trackOpacity(params) * inheritedOpacity)
     if (parentWorld) world.multiplyMatrices(parentWorld, _local)
     else world.copy(_local)
 
@@ -510,6 +545,36 @@ export function computeAtBeat(beat: number) {
     }
     visualCopiesByTrack.set(obj.trackId, copies)
   }
+  }
+}
+
+/** Compose one group's placement for this frame: its canonical tf* params
+ *  (overlaid by their automation lanes - a pure function of the beat) become a
+ *  matrix parented on the group's own parent, published into worldMatrices for
+ *  member subtrees to inherit; tfOpacity accumulates into inheritedOpacities.
+ *  Groups never warp time - a broadcast Freeze warps each member object. */
+function composeGroupPlacement(grp: ResolvedGroup, beat: number) {
+  let params = grp.params
+  if (grp.automations.length) {
+    params = { ...grp.params }
+    for (const auto of grp.automations) {
+      const v = sampleAutomationLane(auto, beat, params[auto.param] ?? auto.base ?? 0)
+      if (!Number.isNaN(v)) params[auto.param] = v
+    }
+  }
+  let world = worldMatrices.get(grp.trackId)
+  if (!world) { world = new Matrix4(); worldMatrices.set(grp.trackId, world) }
+  if (isIdentityTransform(params)) {
+    _local.identity()
+  } else {
+    localTransformToSV(readTrackTransform(params), _tfSV)
+    composeMatrix(_tfSV, _local)
+  }
+  const parentWorld = grp.parentId ? worldMatrices.get(grp.parentId) : undefined
+  if (parentWorld) world.multiplyMatrices(parentWorld, _local)
+  else world.copy(_local)
+  const parentOpacity = grp.parentId ? inheritedOpacities.get(grp.parentId) ?? 1 : 1
+  inheritedOpacities.set(grp.trackId, parentOpacity * trackOpacity(params))
 }
 
 // Preview objects (instrument-browser hover popups): synthetic states

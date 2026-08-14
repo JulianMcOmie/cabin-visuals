@@ -80,7 +80,9 @@ export function affectedTrackIds(trackId: string): string[] {
   const { tracks } = useProjectStore.getState()
   const ids = [...selectedTrackIds].filter((id) => {
     const t = tracks[id]
-    return !!t && t.type === 'base' && !!t.instrumentId
+    // Groups carry the same canonical tf* params, so a multi-select drag
+    // moves them alongside object tracks.
+    return !!t && ((t.type === 'base' && !!t.instrumentId) || t.type === 'group')
   })
   return ids.length > 0 ? ids : [trackId]
 }

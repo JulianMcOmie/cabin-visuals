@@ -149,8 +149,28 @@ export interface ResolvedObject {
   masksTargets: boolean
 }
 
+/** A resolved GROUP track (a folder over member tracks): no object of its own,
+ *  but a per-frame placement - its canonical tf* params (+ their automation
+ *  lanes) compose a world matrix that member subtrees inherit, and its
+ *  tfOpacity multiplies down onto member objects. Its mover/splitter children
+ *  were already broadcast into member chains at resolve. */
+export interface ResolvedGroup {
+  trackId: string
+  parentId?: string
+  params: Record<string, number>
+  /** Automation lanes on the group's tf* params (opacity included). */
+  automations: ResolvedAutomation[]
+  /** How many resolved objects precede this group in DFS order - computeAtBeat
+   *  interleaves groups among objects on it, so a parent's world matrix is
+   *  always composed before any child (object or group) reads it. */
+  afterObjectIndex: number
+}
+
 export interface ResolvedGraph {
   objects: ResolvedObject[]
+  /** Group tracks in DFS order (see ResolvedGroup). Optional: tests and older
+   *  callers that hand-build graphs simply have no groups. */
+  groups?: ResolvedGroup[]
   /** tag → object trackIds, so tag-scoped mover targets expand to a group. */
   tagIndex: Map<string, string[]>
 }

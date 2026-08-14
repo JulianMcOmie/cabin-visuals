@@ -7,7 +7,7 @@ import { getInstrument } from '../instruments'
 import { isNumberParam } from '../instruments/types'
 import { getMoverOrSplitterDefinition } from '../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../core/directors'
-import { withSpatialTransformParams, withTransformParams } from '../core/transform'
+import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../core/transform'
 import { getEffect } from '../effects'
 import { fxTarget } from '../effects/automation'
 import type { Track } from '../types'
@@ -35,7 +35,10 @@ export function automationTargetsForParent(parent: Track, mainActive: boolean): 
     ? withTransformParams(def.params)
     : moverDef
       ? parent.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
-      : composition ? compositionAutomatableParams(compositionDef(parent.instrumentId)) : []
+      // A GROUP's lanes drive its canonical transform (opacity included).
+      : parent.type === 'group'
+        ? TRANSFORM_PARAM_DEFS
+        : composition ? compositionAutomatableParams(compositionDef(parent.instrumentId)) : []
   ).filter(isNumberParam)
   const fxItems = (parent.effects ?? []).flatMap((inst) => {
     const plugin = getEffect(inst.pluginId)

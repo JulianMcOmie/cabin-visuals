@@ -371,6 +371,16 @@ export interface ProjectState {
    *  ancestor is also moving are skipped (the subtree rides along). One set() =
    *  one undo step. */
   setTracksParent: (trackIds: string[], parentId: string | null, index?: number) => void
+  /** Wrap the given tracks in a new 'group' folder track (⌘⇧G): members
+   *  reparent under it in timeline (DFS) order and the group lands in the
+   *  first member's slot. Lanes and audio never join; a selected track inside
+   *  another selected track's subtree rides along with its ancestor. One
+   *  set() = one undo step. Returns the group's id, or null if nothing
+   *  groupable was selected. */
+  groupTracks: (trackIds: string[]) => string | null
+  /** Dissolve a group: its member tracks splice back into the group's slot in
+   *  order; the group's own lanes (automation on its tf* params) die with it. */
+  ungroupTrack: (trackId: string) => void
   renameTrack: (trackId: string, name: string) => void
   toggleMute: (trackId: string) => void
   toggleSolo: (trackId: string) => void
@@ -1232,6 +1242,129 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         const min = audioPinnedCount(tracks, rootTrackIds)
         const i = index == null ? rootTrackIds.length : Math.max(min, Math.min(rootTrackIds.length, index))
         rootTrackIds.splice(i, 0, ...ids)
+      }
+      return { tracks, rootTrackIds }
+    }),
+
+  groupTracks: (trackIds) => {
+    let newId: string | null = null
+    set((s) => {
+      const selected = new Set(trackIds)
+      // Timeline (DFS) order, so the group's children read in the order the
+      // user sees them, whatever order the selection was clicked in.
+      const ordered: string[] = []
+      const visit = (id: string) => {
+        const t = s.tracks[id]
+        if (!t) return
+        if (selected.has(id)) ordered.push(id)
+        for (const c of t.childIds ?? []) visit(c)
+      }
+      for (const rid of s.rootTrackIds) visit(rid)
+      const members = ordered.filter((id) => {
+        const t = s.tracks[id]!
+        // Lanes live only on their parent and audio is pinned - neither joins.
+        if (t.type === 'audio' || t.type === 'automation' || t.type === 'ability'
+          || t.type === 'envelope' || t.type === 'wordFormation') return false
+        // Inside another selected track's subtree: rides along with its ancestor.
+        for (let cur = t.parentId; cur != null; cur = s.tracks[cur]?.parentId) {
+          if (selected.has(cur)) return false
+        }
+        return true
+      })
+      if (members.length === 0) return s
+      const first = s.tracks[members[0]]!
+      const parentId = first.parentId ?? null
+      const id = crypto.randomUUID()
+      const memberSet = new Set(members)
+      const tracks: Record<string, Track> = { ...s.tracks }
+      let rootTrackIds = [...s.rootTrackIds]
+      // The group's slot: where the first member sat, counted among the
+      // siblings that remain once every member is detached.
+      const siblings = parentId != null ? tracks[parentId]!.childIds : rootTrackIds
+      const firstAt = siblings.indexOf(members[0])
+      const insertAt = siblings
+        .slice(0, firstAt < 0 ? siblings.length : firstAt)
+        .filter((sid) => !memberSet.has(sid)).length
+      for (const mid of members) {
+        const m = tracks[mid]!
+        if (m.parentId != null) {
+          const op = tracks[m.parentId]
+          if (op) tracks[m.parentId] = { ...op, childIds: op.childIds.filter((c) => !memberSet.has(c)) }
+        } else {
+          rootTrackIds = rootTrackIds.filter((rid) => !memberSet.has(rid))
+        }
+        tracks[mid] = { ...m, parentId: id }
+      }
+      tracks[id] = {
+        id,
+        name: 'Group',
+        type: 'group',
+        instrumentId: '',
+        color: resolveNextTrackColor(s, parentId),
+        muted: false,
+        solo: false,
+        blocks: [],
+        parentId: parentId ?? undefined,
+        childIds: members,
+      }
+      if (parentId != null) {
+        const np = tracks[parentId]!
+        const childIds = np.childIds.filter((c) => !memberSet.has(c))
+        childIds.splice(Math.min(insertAt, childIds.length), 0, id)
+        tracks[parentId] = { ...np, childIds }
+      } else {
+        const min = audioPinnedCount(tracks, rootTrackIds)
+        rootTrackIds.splice(Math.max(min, Math.min(insertAt, rootTrackIds.length)), 0, id)
+      }
+      newId = id
+      return { tracks, rootTrackIds }
+    })
+    return newId
+  },
+
+  ungroupTrack: (trackId) =>
+    set((s) => {
+      const g = s.tracks[trackId]
+      if (!g || g.type !== 'group') return s
+      const parentId = g.parentId ?? null
+      // Members splice back where the group was; the group's own lanes are
+      // meaningless without it and are deleted, subtrees included.
+      const memberIds = g.childIds.filter((cid) => {
+        const c = s.tracks[cid]
+        return !!c && c.type !== 'automation' && c.type !== 'ability'
+          && c.type !== 'envelope' && c.type !== 'wordFormation'
+      })
+      const memberSet = new Set(memberIds)
+      const doomed = new Set<string>()
+      const queue = [trackId, ...g.childIds.filter((cid) => !memberSet.has(cid))]
+      while (queue.length) {
+        const id = queue.pop()!
+        if (doomed.has(id) || memberSet.has(id)) continue
+        doomed.add(id)
+        for (const c of s.tracks[id]?.childIds ?? []) queue.push(c)
+      }
+      const tracks: Record<string, Track> = {}
+      for (const [id, t] of Object.entries(s.tracks)) {
+        if (doomed.has(id)) continue
+        tracks[id] = t
+      }
+      for (const mid of memberIds) {
+        const m = tracks[mid]
+        if (m) tracks[mid] = { ...m, parentId: parentId ?? undefined }
+      }
+      let rootTrackIds = [...s.rootTrackIds]
+      if (parentId != null) {
+        const np = tracks[parentId]
+        if (np) {
+          const childIds = [...np.childIds]
+          const at = childIds.indexOf(trackId)
+          childIds.splice(at < 0 ? childIds.length : at, at < 0 ? 0 : 1, ...memberIds)
+          tracks[parentId] = { ...np, childIds: childIds.filter((c) => !doomed.has(c)) }
+        }
+      } else {
+        const at = rootTrackIds.indexOf(trackId)
+        rootTrackIds.splice(at < 0 ? rootTrackIds.length : at, at < 0 ? 0 : 1, ...memberIds)
+        rootTrackIds = rootTrackIds.filter((rid) => !doomed.has(rid))
       }
       return { tracks, rootTrackIds }
     }),

@@ -43,10 +43,13 @@ function rootAncestorId(tracks: Record<string, Track>, id: string): string {
 
 function canPasteChildUnder(track: Track, copiedRoot: Track): boolean {
   if (track.type === 'audio') return false
-  if (copiedRoot.type === 'mover' || copiedRoot.type === 'splitter') return track.type === 'base' && !track.parentId
+  if (copiedRoot.type === 'mover' || copiedRoot.type === 'splitter') {
+    // Groups take chain children too (they broadcast to the members above).
+    return (track.type === 'base' && !track.parentId) || track.type === 'group'
+  }
   if (copiedRoot.type === 'ability') return track.type === 'base'
   // A formation lane's own params automate, so automation pastes onto one too.
-  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover' || track.type === 'wordFormation'
+  if (copiedRoot.type === 'automation') return track.type === 'base' || track.type === 'mover' || track.type === 'wordFormation' || track.type === 'group'
   if (copiedRoot.type === 'envelope') return track.type === 'base'
   if (copiedRoot.type === 'wordFormation') return track.type === 'base'
   return true

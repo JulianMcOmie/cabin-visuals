@@ -20,7 +20,7 @@ import { PHOTO_BASE_PITCH } from '../../core/photo/photoTime'
 import { isNumberParam } from '../../instruments/types'
 import { getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
-import { withSpatialTransformParams, withTransformParams } from '../../core/transform'
+import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../../core/transform'
 import { getEffect } from '../../effects'
 import { parseFxTarget } from '../../effects/automation'
 import { automationMode } from '../../core/visual/automation'
@@ -258,9 +258,12 @@ export function PianoRollPanel({ frozenRef }: { frozenRef?: EditingBlockRef | nu
           // Splitter lanes also target the spatial tf* params (they move the
           // splitter's copies in its own frame - resolve.ts's splitter weave).
           ? parent?.type === 'splitter' ? withSpatialTransformParams(moverDef.params) : moverDef.params
-          : parentComposition
-            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
-            : undefined
+          // A GROUP's lanes drive its canonical transform (opacity included).
+          : parent?.type === 'group'
+            ? TRANSFORM_PARAM_DEFS
+            : parentComposition
+              ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+              : undefined
       const pdef = parentParams?.find((p) => p.key === track.targetParam)
       if (pdef && isNumberParam(pdef)) automation = { paramLabel: pdef.label, paramMin: pdef.min, paramMax: pdef.max, kind: 'value' }
       else if (pdef?.type === 'boolean') automation = { paramLabel: `${pdef.label} · On/Off`, paramMin: 0, paramMax: 1, kind: 'toggle' }

@@ -46,7 +46,34 @@ export function ObjectRenderer({
 }) {
   const def = getInstrument(instrumentId)
   const groupRef = useRef<Group>(null)
-  const plugins = useProjectStore((s) => s.scenes[sceneId]?.tracks[trackId]?.effects) ?? []
+  const ownEffects = useProjectStore((s) => s.scenes[sceneId]?.tracks[trackId]?.effects)
+  // Ancestor GROUP tracks broadcast their effect chains to member objects. A
+  // merged array can't be identity-stable across foreign edits, so this
+  // subscribes to a FINGERPRINT (settings included - knob drags must repaint)
+  // and merges via getState in the memo below; no group ancestors = the empty
+  // string and the own-effects array passes through untouched.
+  const groupFxFingerprint = useProjectStore((s) => {
+    const tracks = s.scenes[sceneId]?.tracks
+    let out = ''
+    for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
+      const t = tracks?.[cur]
+      if (t?.type === 'group' && t.effects?.length) out += JSON.stringify(t.effects)
+    }
+    return out
+  })
+  const plugins = useMemo(() => {
+    const own = ownEffects ?? []
+    if (!groupFxFingerprint) return own
+    const tracks = useProjectStore.getState().scenes[sceneId]?.tracks
+    // Own chain first, then nearest group outward: a group's effects wrap
+    // OUTSIDE the member's own (the group applies after its members).
+    const merged = [...own]
+    for (let cur = tracks?.[trackId]?.parentId; cur != null; cur = tracks?.[cur]?.parentId) {
+      const t = tracks?.[cur]
+      if (t?.type === 'group' && t.effects?.length) merged.push(...t.effects)
+    }
+    return merged
+  }, [ownEffects, groupFxFingerprint, sceneId, trackId])
   // Shader instances whose 'enabled' is automated must stay MOUNTED while their
   // checkbox is off - the automation lane can switch them on mid-project. A
   // stable string of automated instance ids keeps the selector reference-clean.

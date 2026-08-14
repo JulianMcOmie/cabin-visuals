@@ -110,15 +110,18 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
   // and crop-in-a-scene keeps its fader this way).
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const isObjectTrack = track.type === 'base' && !!track.instrumentId && !activeIsMain
+  // Groups wear the same canonical transform strip (their tf* inherits to the
+  // whole subtree); tags and hover previews stay object-only.
+  const hasTransform = isObjectTrack || (track.type === 'group' && !activeIsMain)
   const opacityValue = useProjectStore((s) =>
-    isObjectTrack ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
+    hasTransform ? transformValue(s.tracks[track.id]?.params, TF_OPACITY) : 1,
   )
   const [panelAnchor, setPanelAnchor] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null)
   const [tagsAnchor, setTagsAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   // The fader needs real room: hide it (keeping the opener) when the label
   // column is too narrow for name + fader + buttons, so it never crowds the
   // M/S cluster out of alignment.
-  const showFader = isObjectTrack && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210
+  const showFader = hasTransform && labelWidth - (LABEL_BASE_PX + depth * INDENT_PX) >= 210
 
   // Double-click the name → inline rename. Enter/blur commits, Esc cancels.
   const [renaming, setRenaming] = useState(false)
@@ -468,7 +471,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
               <Tag size={10} />
             </button>
           )}
-          {isObjectTrack && (
+          {hasTransform && (
             <button
               aria-label="Open transform panel"
               title="Transform"
@@ -488,7 +491,7 @@ export const Track = memo(function Track({ track, barWidthPx, timelineWidthPx, p
             </button>
           )}
         </div>
-        {panelAnchor && isObjectTrack && (
+        {panelAnchor && hasTransform && (
           <TrackTransformPanel trackId={track.id} anchor={panelAnchor} onClose={() => setPanelAnchor(null)} />
         )}
         {tagsAnchor && isObjectTrack && (

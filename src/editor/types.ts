@@ -35,6 +35,14 @@ export type TrackType =
   | 'envelope'
   | 'splitter'
   | 'wordFormation'
+  // A folder over member tracks (⌘⇧G). Carries the canonical tf* transform
+  // (inherited by the subtree via world-matrix composition), automation lanes
+  // on those params, an effect chain broadcast to member objects, and
+  // mover/splitter children that append to each member's chain - a chain child
+  // applies to the members ABOVE it in the group's child order (children read
+  // as a top-to-bottom pipeline), composed per member in the member's own
+  // frame. Purely additive in persistence: Track's shape is unchanged.
+  | 'group'
 // 'director' was retired in schema v12: a scene composer is now an ordinary
 // 'base' track whose instrumentId names a composition instrument
 // (core/directors). upgrade.ts rewrites old saves.

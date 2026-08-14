@@ -244,6 +244,7 @@ function panelIdentity(
       : track.type === 'envelope' ? 'Envelope'
       : track.type === 'ability' ? 'Ability'
       : track.type === 'wordFormation' ? 'Word Formation'
+      : track.type === 'group' ? 'Group'
       : 'Track'
     // The instrument's own color, not the timeline's display color: the tab is
     // naming this instrument, so an achromatic instrument should light the tab
@@ -648,9 +649,13 @@ export function TrackEditor() {
                         ? withSpatialTransformParams(getMoverOrSplitterDefinition(parent.splitterId)?.params ?? [])
                         : parent && parent.type === 'mover'
                           ? getMoverOrSplitterDefinition(parent.moverId)?.params ?? []
-                          : parent && isCompositionTrack(parent)
-                            ? compositionAutomatableParams(compositionDef(parent.instrumentId))
-                            : []
+                          // A GROUP's lanes drive its canonical transform - the
+                          // formation-as-one channel (opacity included).
+                          : parent && parent.type === 'group'
+                            ? TRANSFORM_PARAM_DEFS
+                            : parent && isCompositionTrack(parent)
+                              ? compositionAutomatableParams(compositionDef(parent.instrumentId))
+                              : []
                     ).filter(isNumberParam)
                     const fxOptions = (parent?.effects ?? []).flatMap((inst) => {
                       const plugin = getEffect(inst.pluginId)
@@ -696,6 +701,31 @@ export function TrackEditor() {
                         range={track.automationRange}
                         onRange={(range) => setTrackAutomationRange(track.id, range)}
                       />
+                    )
+                  }
+
+                  // Group track → the canonical transform knobs, applied to the
+                  // whole subtree (world-matrix inheritance; tfOpacity cascades
+                  // onto member objects). Movers/effects on the group live in
+                  // their own rows / the Effects tab.
+                  if (track.type === 'group') {
+                    return (
+                      <>
+                        <p className="text-[11px] text-zinc-500 mb-3">
+                          Group: transform applies to every track inside. Mover and
+                          splitter rows added below the members apply to the members
+                          above them; effects broadcast to every member object.
+                        </p>
+                        {TRANSFORM_PARAM_DEFS.map((p) => (
+                          <ParamControl
+                            key={p.key}
+                            param={p}
+                            numValue={track.params?.[p.key] ?? p.default}
+                            strValue={undefined}
+                            onNum={(v) => setTrackParam(track.id, p.key, v)}
+                          />
+                        ))}
+                      </>
                     )
                   }
 
@@ -798,8 +828,10 @@ export function TrackEditor() {
           const fx = track
             ? {
                 effects: track.effects ?? [],
-                // The picker only offers effects where they render: object tracks.
-                canAdd: !!getInstrument(track.instrumentId),
+                // The picker only offers effects where they render: object
+                // tracks, plus GROUP tracks - a group's chain broadcasts to
+                // every member object (ObjectRenderer merges it in).
+                canAdd: !!getInstrument(track.instrumentId) || track.type === 'group',
                 add: (pluginId: string) => addEffect(track.id, pluginId),
                 toggle: (instanceId: string) => toggleEffect(track.id, instanceId),
                 remove: (instanceId: string) => removeEffect(track.id, instanceId),

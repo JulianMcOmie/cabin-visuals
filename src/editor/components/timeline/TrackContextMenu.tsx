@@ -4,7 +4,7 @@ import { isNumberParam } from '../../instruments/types'
 import { listMoverOrSplitterDefinitions, getMoverOrSplitterDefinition } from '../../core/visualCopies/registry'
 import { ENVELOPE_OPACITY_TARGET } from '../../core/visual/resolve'
 import { WORD_FORMATION_PARAMS } from '../../core/visual/wordFormation'
-import { withSpatialTransformParams, withTransformParams } from '../../core/transform'
+import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../../core/transform'
 import { compositionAutomatableParams, compositionDef, isCompositionTrack } from '../../core/directors'
 import { getEffect } from '../../effects'
 import { fxTarget } from '../../effects/automation'
@@ -32,6 +32,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   const addMoverTrack = useProjectStore((s) => s.addMoverTrack)
   const addWordFormationTrack = useProjectStore((s) => s.addWordFormationTrack)
   const moveTrackToScene = useProjectStore((s) => s.moveTrackToScene)
+  const ungroupTrack = useProjectStore((s) => s.ungroupTrack)
   const scenes = useProjectStore((s) => s.scenes)
   const sceneOrder = useProjectStore((s) => s.sceneOrder)
   const activeSceneId = useProjectStore((s) => s.activeSceneId)
@@ -67,7 +68,10 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       // counts included, because these are not VisualCopies and nothing has to
       // size a pool ahead of the beat.
       : track.type === 'wordFormation' ? WORD_FORMATION_PARAMS
-        : isComposition ? compositionAutomatableParams(directorDef) : []
+        // A GROUP automates its canonical transform (opacity included) - the
+        // formation-as-one channel, inherited by the whole subtree.
+        : track.type === 'group' ? TRANSFORM_PARAM_DEFS
+          : isComposition ? compositionAutomatableParams(directorDef) : []
   ).filter(isNumberParam)
   // A mover/splitter track offers movers too, but they mean something different
   // there, and never join the object's chain: under a MOVER a child moves its
@@ -75,10 +79,14 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
   // the splitter's copies in the splitter's own reference frame
   // (core/visualCopies/splitterChildChain.ts). Splitters and colorizers stay an
   // object-track affordance.
-  const newDefs = def || moverDef ? listMoverOrSplitterDefinitions() : []
+  // A GROUP track takes chain children too: they broadcast to the member
+  // objects above them (resolve.ts's group pass), so the full mover/splitter/
+  // colorizer catalog applies.
+  const isGroup = track.type === 'group'
+  const newDefs = def || moverDef || isGroup ? listMoverOrSplitterDefinitions() : []
   const movers = newDefs.filter((d) => d.kind === 'mover')
-  const colorizers = def ? newDefs.filter((d) => d.kind === 'colorizer') : []
-  const splitters = def ? newDefs.filter((d) => d.kind === 'splitter') : []
+  const colorizers = def || isGroup ? newDefs.filter((d) => d.kind === 'colorizer') : []
+  const splitters = def || isGroup ? newDefs.filter((d) => d.kind === 'splitter') : []
   const childTracks = track.childIds.map((cid) => tracks[cid])
   const addedAbilities = new Set(childTracks.filter((c) => c?.type === 'ability').map((c) => c!.abilityKey))
   const automatedParams = new Set(childTracks.filter((c) => c?.type === 'automation').map((c) => c!.targetParam))
@@ -96,8 +104,11 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     : []
 
   // Effect automation targets: per instance, its On/Off pseudo-param plus every
-  // numeric plugin param, addressed by the fx-namespaced targetParam.
-  const fxNumericItems = (track.effects ?? []).flatMap((inst) => {
+  // numeric plugin param, addressed by the fx-namespaced targetParam. Not
+  // offered on a group: its broadcast effects have no engine-side lane
+  // sampling yet, so a lane would be silently inert.
+  const automatableEffects = isGroup ? [] : track.effects ?? []
+  const fxNumericItems = automatableEffects.flatMap((inst) => {
     const plugin = getEffect(inst.pluginId)
     if (!plugin) return []
     return plugin.params.filter(isNumberParam).map((p) => ({
@@ -106,7 +117,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       envTarget: p.max,
     }))
   })
-  const fxItems = (track.effects ?? []).flatMap((inst) => {
+  const fxItems = automatableEffects.flatMap((inst) => {
     const plugin = getEffect(inst.pluginId)
     if (!plugin) return []
     return [
@@ -152,7 +163,7 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
     },
     {
       key: 'mover',
-      label: def ? 'Add mover track' : 'Move this mover with',
+      label: def || isGroup ? 'Add mover track' : 'Move this mover with',
       items: movers.map((d) => ({ id: d.id, label: d.label })),
     },
     {
@@ -194,6 +205,13 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       label: 'Move to scene',
       items: moveDestinations.map((scene) => ({ id: scene.id, label: scene.name })),
     },
+    // Dissolving a group is a single action (⌘⇧G on the selected group does the
+    // same); one item keeps the shared submenu shell.
+    {
+      key: 'ungroup',
+      label: 'Group',
+      items: isGroup ? [{ id: 'ungroup', label: 'Ungroup' }] : [],
+    },
   ]
 
   const onPick = (groupKey: string, itemId: string) => {
@@ -222,6 +240,9 @@ export function TrackContextMenu({ x, y, trackId, onClose }: TrackContextMenuPro
       if (item) addAutomationTrack(trackId, item.key, item.label)
     } else if (groupKey === 'move-scene') {
       moveTrackToScene(trackId, itemId)
+      useUIStore.getState().setSelectedTrackId(null)
+    } else if (groupKey === 'ungroup') {
+      ungroupTrack(trackId)
       useUIStore.getState().setSelectedTrackId(null)
     }
   }
