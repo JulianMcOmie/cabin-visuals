@@ -2,9 +2,9 @@
 // SPLITTER'S REFERENCE FRAME: its motion treats the splitter's own origin as
 // the origin the movement happens about. A rotation child turns the whole
 // formation about the splitter's center (where the same rotation placed BELOW
-// the splitter in the chain spins each copy in place); an oscillator child
-// sways the arrangement together; a scale child breathes the formation toward
-// the splitter's origin. This is the splitter-parent counterpart of
+// the splitter in the chain spins each copy in place); a Symmetric Motion
+// child blooms the formation outward from that center; a scale child breathes
+// it toward the origin. This is the splitter-parent counterpart of
 // moverFrame.ts, which keeps its meaning for mover parents only - a mover's
 // children move its FIELD, a splitter's children move its COPIES.
 //
@@ -18,36 +18,40 @@
 // When the wrapped splitter is the chain's LAST entry the two are the same
 // picture, and `apply` (the immediate fold) returns exactly that.
 //
-// The algebra: the splitter hands each incoming copy `prev` back as
-// `prev · slot_i`. A child's delta D in the splitter's frame belongs BETWEEN
-// those factors - the rendered copy is `prev · D · slot_i`, which no chain
-// position can express (above the splitter D would also see the entries below
-// it; below it D lands in each copy's OWN frame). D is extracted by evaluating
-// the child chain from an IDENTITY copy, exactly as frames do, but PER SLOT
-// with the splitter's output multiplicity as `index`/`count`, so note- and
-// index-phased children (Burst's per-copy directions, a phased oscillator)
-// treat each copy individually while still measuring from the splitter's
-// origin. Split against the frame `prev · slot_i`, the internal remainder is
-// the conjugate `slot_i⁻¹ · D · slot_i`.
+// HOW THE CHILD CHAIN RUNS: on the splitter's own slots, expressed in the
+// splitter's frame (`slot_i = prev⁻¹ · output_i`), with the splitter's output
+// multiplicity as `index`/`count` and the slot set as `formation`. Children
+// therefore see each copy's REAL position - a position-reading mover
+// (Symmetric Motion's out/in, a world-placed field) aims per copy - while a
+// note/index-phased child (Burst's directions, a phased oscillator) still
+// treats each copy individually. What a child's transform CONTRIBUTES is
+// anchored by its declared composition (`MoverOrSplitter.composition`):
+//  - 'chainRoot' entries (Symmetric Motion) pre-multiplied a delta measured on
+//    the frame's fixed axes; it is taken as-is.
+//  - 'local' entries (the default) post-multiplied a delta in the copy's own
+//    frame; it is re-anchored about the SPLITTER's origin (`t⁻¹ · out · t`),
+//    which is what makes a rotation child orbit the formation rather than
+//    spin each copy in place. An undeclared chain-root definition also lands
+//    here - harmless under translation splitters (grids), where the two
+//    anchorings coincide.
+// Every child's delta ends up PRE-composed against the slot - the rendered
+// copy is `prev · deltas · slot_i` - which no chain position can express
+// (above the splitter the delta would re-frame the entries below it; below it
+// it lands in each copy's own frame).
 //
-// Two consequences of the identity-copy evaluation, both deliberate:
-//  - a world-placed child (Impact Scatter, Force Field) measures its field at
-//    the splitter's ORIGIN rather than at each copy's own position - the
-//    formation responds rigidly, like moverFrame's "a field has one position";
-//  - a formation-measuring child (Conveyor) sees a degenerate point formation
-//    and falls back to its own no-lattice behavior.
-//
-// The child chain composes opacity and colorShift as usual - the seed copy
-// carries each slot's values, so a Visibility child gates the splitter's
-// copies and a Colorizer child flashes them; those apply immediately, only the
-// TRANSFORM is split into frame + internal motion. A SPLITTER child fans the
-// whole formation out about the parent's origin (n·m copies, input-major).
+// The child chain composes opacity and colorShift as usual and those apply
+// immediately - a Visibility child gates the splitter's copies, a Colorizer
+// child flashes them; only the TRANSFORM is split into frame + internal
+// motion. A SPLITTER child fans the whole formation out about the parent's
+// origin (n·m copies, input-major).
 
 import { Matrix4 } from 'three'
 import { warpChainBeat } from './resolveVisualCopies'
 import type { FramedVisualCopy, MoverOrSplitter, MoverOrSplitterContext, VisualCopy } from './types'
 
-/** A child result still tied to the parent slot whose frame it moves. */
+/** A child result still tied to the parent slot whose frame it moves: `copy`'s
+ *  transform is the slot's transform in the splitter's frame with every child
+ *  delta pre-composed onto it. */
 interface SlotLocalCopy {
   copy: VisualCopy
   slot: number
@@ -71,19 +75,20 @@ export function splitterWithChildChain(
 ): MoverOrSplitter {
   if (children.length === 0) return splitter
 
-  /** The shared evaluation: the splitter's slots, and per output the child
-   *  chain's delta (from identity, in the splitter's frame) with the child
-   *  chain's opacity/colorShift already folded onto the slot's copy. Returns
-   *  null when the incoming frame is degenerate (a zero scale upstream has no
-   *  inverse to measure slots against) - callers fall back to the bare slots. */
+  /** The shared evaluation: the splitter's slots, and per output the slot's
+   *  transform in the splitter's frame with the child chain's deltas
+   *  pre-composed and its opacity/colorShift folded on. `outputs` is null when
+   *  the incoming frame is degenerate (a zero scale upstream has no inverse to
+   *  express slots in) - callers fall back to the bare slots. */
   function evaluate(visualCopy: VisualCopy, context: MoverOrSplitterContext): {
     slots: VisualCopy[]
-    outputs: { copy: VisualCopy; slot: number; delta: Matrix4 }[] | null
+    outputs: SlotLocalCopy[] | null
   } {
     const slots = splitter.apply(visualCopy, context)
     if (slots.length === 0) return { slots, outputs: [] }
     const previous = visualCopy.transform
     if (isDegenerate(previous)) return { slots, outputs: null }
+    const previousInverse = previous.clone().invert()
     // The splitter's frame in the world: the object's placement composed with
     // everything above the splitter in the chain. World-placed children
     // conjugate their world deltas through it, so the motion they add lands
@@ -91,13 +96,9 @@ export function splitterWithChildChain(
     const childPlacement = context.placementTransform
       ? context.placementTransform.clone().multiply(previous)
       : previous.clone()
-    // Seed one identity-transform copy per slot: the child chain's accumulated
-    // transform is then a pure delta in the splitter's frame, while
-    // opacity/colorShift start from the slot's own values so the children
-    // compose them exactly as chain entries would.
     let locals: SlotLocalCopy[] = slots.map((slot, index) => ({
       copy: {
-        transform: new Matrix4(),
+        transform: previousInverse.clone().multiply(slot.transform),
         opacity: slot.opacity,
         colorShift: { ...slot.colorShift },
       },
@@ -106,8 +107,10 @@ export function splitterWithChildChain(
     for (const child of children) {
       const count = locals.length
       const formation = locals.map((local) => local.copy)
-      locals = locals.flatMap(({ copy, slot }, index) =>
-        child
+      const anchored = child.composition === 'chainRoot'
+      locals = locals.flatMap(({ copy, slot }, index) => {
+        const incoming = copy.transform
+        return child
           .apply(copy, {
             beat: context.beat,
             index,
@@ -115,31 +118,28 @@ export function splitterWithChildChain(
             formation,
             placementTransform: childPlacement,
           })
-          .map((result) => ({ copy: result, slot })),
-      )
+          .map((result) => {
+            // Chain-root deltas are already anchored on the splitter frame's
+            // axes; LOCAL deltas are re-anchored about the splitter's origin
+            // (t⁻¹·out·t) so e.g. a rotation orbits the formation. A
+            // degenerate incoming transform (Approach's scale-zero slots) has
+            // nothing to re-anchor against; the copy is invisible anyway.
+            const transform = anchored || isDegenerate(incoming)
+              ? result.transform
+              : incoming.clone().invert().multiply(result.transform).multiply(incoming)
+            return { copy: { ...result, transform }, slot }
+          })
+      })
     }
-    return {
-      slots,
-      outputs: locals.map(({ copy, slot }) => ({ copy, slot, delta: copy.transform })),
-    }
-  }
-
-  /** `prev · D · slot`, recovering `slot` as `prev⁻¹ · (prev · slot)`: the
-   *  child's delta lands between the splitter's frame and its slot offsets. */
-  function foldedTransform(previous: Matrix4, delta: Matrix4, slotTransform: Matrix4): Matrix4 {
-    return previous
-      .clone()
-      .multiply(delta)
-      .multiply(previous.clone().invert())
-      .multiply(slotTransform)
+    return { slots, outputs: locals }
   }
 
   const wrapper: MoverOrSplitter = {
     apply(visualCopy, context) {
       const { slots, outputs } = evaluate(visualCopy, context)
       if (!outputs) return slots
-      return outputs.map(({ copy, slot, delta }) => ({
-        transform: foldedTransform(visualCopy.transform, delta, slots[slot].transform),
+      return outputs.map(({ copy }) => ({
+        transform: visualCopy.transform.clone().multiply(copy.transform),
         opacity: copy.opacity,
         colorShift: copy.colorShift,
       }))
@@ -147,36 +147,31 @@ export function splitterWithChildChain(
     applyFramed(visualCopy, context) {
       const { slots, outputs } = evaluate(visualCopy, context)
       if (!outputs) return slots.map((copy) => ({ visualCopy: copy }))
-      return outputs.map(({ copy, slot, delta }): FramedVisualCopy => {
+      const previousInverse = visualCopy.transform.clone().invert()
+      return outputs.map(({ copy, slot }): FramedVisualCopy => {
         const frame = slots[slot].transform
-        // The frame is the splitter's own unmoved output; the child's delta
-        // becomes internal motion, re-expressed inside the slot's frame:
-        // frame · internal = prev · D · slot. A degenerate SLOT (Approach
-        // grows copies from scale zero) has no inverse to split against, so
-        // that copy folds immediately - it is invisible at scale zero anyway.
-        if (isDegenerate(frame)) {
+        const slotLocal = previousInverse.clone().multiply(frame)
+        // The frame is the splitter's own unmoved output; the child deltas
+        // become internal motion, re-expressed inside the slot's frame:
+        // frame · internal = prev · deltas · slot. A degenerate SLOT
+        // (Approach grows copies from scale zero) has no inverse to split
+        // against, so that copy folds immediately - invisible at scale zero.
+        if (isDegenerate(slotLocal)) {
           return {
             visualCopy: {
-              transform: foldedTransform(visualCopy.transform, delta, frame),
+              transform: visualCopy.transform.clone().multiply(copy.transform),
               opacity: copy.opacity,
               colorShift: copy.colorShift,
             },
           }
         }
-        const internal = frame
-          .clone()
-          .invert()
-          .multiply(visualCopy.transform)
-          .multiply(delta)
-          .multiply(visualCopy.transform.clone().invert())
-          .multiply(frame)
         return {
           visualCopy: {
             transform: frame.clone(),
             opacity: copy.opacity,
             colorShift: copy.colorShift,
           },
-          internalTransform: internal,
+          internalTransform: slotLocal.clone().invert().multiply(copy.transform),
         }
       })
     },

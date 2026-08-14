@@ -1,6 +1,7 @@
 import * as Tone from 'tone'
 import { getAudioEngine } from './audio/AudioEngine'
 import { shouldLoopWrap, type LoopRegion } from './loopRegion'
+import { effectiveBpm } from './playbackRate'
 
 type BeatChangeCallback = (beat: number) => void
 
@@ -10,6 +11,7 @@ interface EngineCallbacks {
   getBeatsPerBar: () => number
   getMaxBeat: () => number
   getLoopRegion: () => LoopRegion | null
+  getPlaybackRate: () => number
   onEnd: () => void
 }
 
@@ -50,10 +52,11 @@ class PlaybackEngine {
     await Tone.start()
     const bpm = this.callbacks.getBpm()
     const beatsPerBar = this.callbacks.getBeatsPerBar()
+    const rate = this.rate()
 
     const transport = Tone.getTransport()
     transport.stop()
-    transport.bpm.value = bpm
+    transport.bpm.value = effectiveBpm(bpm, rate)
 
     // Position is the single source of truth - set it, don't add it back later.
     transport.position = beatToPosition(startBeat, beatsPerBar)
@@ -61,7 +64,7 @@ class PlaybackEngine {
     // Arm transport + every audio block at the same audio-clock time.
     const when = Tone.now() + AUDIO_LOOKAHEAD
     transport.start(when)
-    getAudioEngine().armAll(startBeat, when, bpm, beatsPerBar)
+    getAudioEngine().armAll(startBeat, when, bpm, beatsPerBar, rate)
 
     this.playing = true
     this.lastTrackedBeat = startBeat
@@ -77,19 +80,42 @@ class PlaybackEngine {
     this.cancelBeatTracking()
   }
 
+  /** The current monitoring speed (1 when nothing has been wired yet). */
+  private rate(): number {
+    return this.callbacks?.getPlaybackRate() ?? 1
+  }
+
   /** Live tempo change: future advancement changes, the position doesn't. Every
    *  audio block's beat window just moved (fixed seconds, new beat mapping), so
    *  re-arm while playing. Audio never time-stretches - it re-anchors.
    *  During a BPM drag the re-arm is deferred to endBpmDrag (see beginBpmDrag). */
   setBpm(bpm: number) {
-    Tone.getTransport().bpm.value = bpm
+    Tone.getTransport().bpm.value = effectiveBpm(bpm, this.rate())
     if (this.bpmDragging) return
     if (this.playing && this.callbacks) {
       const beatsPerBar = this.callbacks.getBeatsPerBar()
       const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
       const when = Tone.now() + AUDIO_LOOKAHEAD
-      getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+      getAudioEngine().armAll(beat, when, bpm, beatsPerBar, this.rate())
     }
+  }
+
+  /**
+   * Shift monitoring gear (½× / ¼× / back to 1×). Retunes the transport - so the
+   * playhead, visuals and MIDI all crawl together - and re-arms audio at the new
+   * rate, which is what makes the clips slow down (and drop in pitch) with them
+   * instead of running on at natural speed against a slowed grid.
+   *
+   * The re-arm is REQUIRED, not just a refresh: a player's stop was scheduled in
+   * wall-clock seconds computed at the old rate, so retuning alone would leave
+   * every sounding clip ending in the wrong place. This is one discrete change
+   * per click, the same shape as endBpmDrag's single re-arm - never a per-move
+   * gesture, so it cannot stack (see beginBpmDrag).
+   */
+  setPlaybackRate(rate: number) {
+    if (!this.callbacks) return
+    Tone.getTransport().bpm.value = effectiveBpm(this.callbacks.getBpm(), rate)
+    this.rearmAudio()
   }
 
   /** Let sounding audio ride out a BPM drag untouched: each move only retunes
@@ -126,7 +152,7 @@ class PlaybackEngine {
     this.lastTrackedBeat = beat
     if (this.playing) {
       const when = Tone.now() + AUDIO_LOOKAHEAD
-      getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+      getAudioEngine().armAll(beat, when, bpm, beatsPerBar, this.rate())
     }
   }
 
@@ -165,7 +191,7 @@ class PlaybackEngine {
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
     const when = Tone.now() + AUDIO_LOOKAHEAD
-    getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+    getAudioEngine().armAll(beat, when, bpm, beatsPerBar, this.rate())
   }
 
   /** Silence audio for the duration of a scrub. The transport keeps running so the
@@ -192,7 +218,7 @@ class PlaybackEngine {
     const beatsPerBar = this.callbacks.getBeatsPerBar()
     const beat = positionToBeat(Tone.getTransport().position, beatsPerBar)
     const when = Tone.now() + AUDIO_LOOKAHEAD
-    getAudioEngine().armAll(beat, when, bpm, beatsPerBar)
+    getAudioEngine().armAll(beat, when, bpm, beatsPerBar, this.rate())
   }
 
   private startBeatTracking() {

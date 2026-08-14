@@ -13,20 +13,44 @@ Per-frame state must never trigger React re-renders; renderers pull it from `use
 
 ## resolve.ts
 
-Flattens each scene's track forest depth-first (cycle-guarded), expands looped blocks' notes (`noteFlatten.ts`), gathers child lanes per object: `automation` (in one of its three modes, below), `envelope` (ADSR), `ability`, effect-automation (`fx:<instanceId>:<key>` targets, parsed by `effects/automation.ts`), and the track's mover/splitter chain. `ProjectSnapshot` is a structural slice of ProjectStore — the engine never imports store internals.
+Flattens each scene's track forest depth-first (cycle-guarded), expands looped blocks' notes (`noteFlatten.ts`), gathers child lanes per object: `automation` (in one of its four modes, below), `envelope` (ADSR), `ability`, effect-automation (`fx:<instanceId>:<key>` targets, parsed by `effects/automation.ts`), and the track's mover/splitter chain. `ProjectSnapshot` is a structural slice of ProjectStore — the engine never imports store internals.
 
-## automation.ts — one lane, three modes
+**Child ORDER routes spatial tf\* lanes** (`weaveTfAutomationLanes` + `tfAutomationChain.ts`, 2026-08): an automation lane on tfX/Y/Z, tfRot\*, or tfSize that sits ABOVE a mover/splitter sibling becomes a count-neutral chain entry post-multiplying each copy with the lane's DELTA from the panel value — so a splitter below it duplicates the already-animated object (a grid under a rotation lane spins every cell in place). A lane BELOW every chain child stays on the params-overlay path, bit-exact with the historical whole-formation behavior. Two traps if you touch it: (1) the lane's slot MIRRORS across the chain (a lane with g chain siblings above lands after chain position n−g), because chain composition frames top-down while the user reads children as a pipeline — inserting the delta at the lane's own position reproduces the old orbit behavior exactly and looks like the feature doesn't work; (2) the delta is RELATIVE to the panel value so inert lanes are no-ops and keyframe values stay absolute, which means the placement path must keep composing the panel pose untouched (never remove the param from placement). tfOpacity and instrument-param lanes are order-free and always overlay. Embedded lanes are absent from `obj.automations`, so the transform panel's slider shows the panel value, not the lane's. **Every push site in `resolveAutomationLanes` must stamp `sourceTrackId`** — a mode added without it silently falls back to the overlay path when its lane sits above a splitter.
 
-An automation child track's notes mean one of three things, and which one is
+**SPLITTER tracks offer the spatial tf\* params to their own lanes too** (`weaveSplitterTfLanes`): such a lane becomes a `tfAutomationChainEntry` woven among the splitter's mover children at the lane's child position — it acts exactly like a mover child in that slot, moving the splitter's copies about the splitter's origin in its reference frame (`visualCopies/splitterChildChain.ts`), count-neutral and never re-framing the chain below. NO mirroring here, unlike the object-track weave — the splitter child chain composes top-down in child order already. Base is the panel value (splitters store no tf\* params, so the transform default), so keyframe values are absolute deltas and inert lanes are no-ops. The UI surfaces offering the list (context menu, piano-roll rows, retarget dropdown) all go through `withSpatialTransformParams` (core/transform.ts) — opacity is excluded, it isn't a transform.
+
+## automation.ts — one lane, four modes
+
+An automation child track's notes mean one of four things, and which one is
 implied by the config the track carries (`automationMode()` owns that precedence;
-burst beats noise if a document somehow has both). All three are pure functions of
-the beat, so the pause invariant holds for every mode:
+burst beats noise beats cycle if a document somehow has several). All four are
+pure functions of the beat, so the pause invariant holds for every mode:
 
 | mode | config | what a note is | between notes |
 |---|---|---|---|
 | curve | `interpolation` | a value keyframe (pitch → value) | interpolated / endpoints held |
 | noise | `Track.noise` | a gate for seeded random wander around its value | **inert** |
 | burst | `Track.burst` | an ADSR burst from the value underneath toward its own pitch-value, velocity = intensity | **inert** |
+| cycle | `Track.cycle` | an ONSET dividing time: the motion curve plays once between each consecutive onset pair, stretched to fit | the cycle itself; **inert** outside the onset span |
+
+**CYCLE mode** (`Track.cycle`): the shape is one cubic bezier y(x) with editable
+ENDPOINT heights — seam continuity is not an option, it is whether the user's
+endpoints match. The earlier onset's pitch-value is the cycle's high (y = 1)
+over a configurable `floor` (default 0); `invert` flips the note to the LOW
+under a constant `ceiling` (default param max). Duration is deliberately
+ignored (onsets only), chords collapse to one boundary keeping the largest
+value, and a lone onset is inert — there is nothing to stretch to. The
+`noteSpan` toggle flips the span rule: each cycle runs onset → its own note's
+END (duration matters again, a lone note cycles, the gap after a note is
+inert, and the newest sounding note wins an overlap — an older longer note
+resumes mid-flight when it ends). Works on `fx:` lanes like burst does
+(`enabled` stays keyframes). Bounds for structural budgets come from the
+bezier's height hull (min/max of the four Ys).
+
+Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
+same one-lane-per-param rule as creation, `automationRange` resets (its
+min/max speak the old param's units), and the lane renames only when it still
+wore the auto-name.
 
 **`sampleAutomationLane(lane, beat, base)` is the only place the mode is read.**
 The engine, the hover preview and `paramAtBeat` all go through it, so they cannot
@@ -39,10 +63,32 @@ Burst reuses `adsr.ts`: `adsrGateGain` is the per-note piece (exported for exact
 this), and overlapping bursts blend toward their gain-weighted target with the
 total travel clamped at 1 — the same sum-and-clamp stacking `evaluateAdsrGain` does.
 
+**Burst SHAPES** (`Track.burst.shape`, absent = 'adsr' for every pre-existing save):
+'bezier' rides a user cubic-bezier — rise 0→1 along the curve over `riseBeats`
+(control Ys past 1 overshoot), hold, play it back over `fallBeats` — and 'spring'
+is a closed-form damped-spring simulation (stiffness/damping/mass, per-beat time
+base; underdamped rings, release springs back seeded with the exact held state).
+Both may return gain > 1, so their travel cap is 2 (the classic ADSR keeps its
+historical cap of 1, bit-identical), and `sampleAutomationLane` clamps the shaped
+result back to the param range. `burstGateGain` is the one shape dispatcher;
+`automationLaneValueBounds` includes the overshoot reach (clamped) for the
+structural budgets. The panel's bezier window is a real control-point editor;
+the spring window plots a demo note through the actual evaluator.
+
 Burst works on `fx:` lanes too, taking the effect's stored setting as its base. The
 `enabled` pseudo-param stays a keyframe lane (a 0/1 toggle has nothing to travel
 through). Noise on `fx:` lanes is NOT wired — such a lane silently behaves as
 keyframes, as it always has.
+
+**ROW SPREAD** (`Track.automationRange`, absent = the frozen historical mapping):
+a lane may reshape how its pitch rows spread onto values - a value SUB-range
+(`min`/`max` inside the param's own bounds), a row COUNT (`rows` 2..49, rows fill
+upward from pitch 36 and the top row IS the max), INTEGER snapping, and a spread
+`curve` ('linear' | 'fineLow' | 'fineHigh' | 'sCurve'). `pitchToValueRanged`
+(core/trackTypes.ts) is the one mapping both the engine (extraction in
+resolve.ts) and the editor (generateValueRows' labels) read, so a note can never
+mean different things in the roll and in playback. The panel's Rows·Range
+console emits a NORMALIZED config - defaults collapse to absence.
 
 **AMOUNT** (`Track.automationAmount`, default 1, 0..`AUTOMATION_AMOUNT_MAX`) is a
 whole-lane output gain, mode-independent: applied at EXTRACTION in resolve.ts (the
@@ -65,6 +111,22 @@ off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
 - `VisualBeatSync.tsx` — mounted once in Canvas; per-frame `computeAtBeat`, plus synchronous `syncParams` on store changes and a debounced (~80ms) structural re-resolve.
 - `pauseCanary.ts` — dev-only: hashes the scene while paused, names any object that moves (backstop for the purity rule).
 - `beatOverride.ts` — export's hook: overrides the beat the engine computes at, bypassing the transport.
+- `wordFormation.ts` — Word Formation lanes: the geometry a text instrument seats its
+  words into. Pure (no three, no store, no React), so it is imported by the resolver,
+  the instrument AND the settings panel — all three read the same `formationSeats`, so
+  the panel's preview cannot drift from what renders. Three things worth knowing:
+  - **It is deliberately NOT a splitter.** A splitter gives geometry without content
+    (`VisualCopy` is content-blind, so all four cells of a 2×2 render the same word) and
+    its copy count may not depend on the beat. Because these are not copies, the COUNTS
+    are freely automatable — nothing has to size a mounted pool ahead of the playhead —
+    which is the one capability the chain could never have given this.
+  - The lanes are gathered in `resolve.ts` (`resolveWordFormations`, mute/solo like the
+    ability lanes) and their settings are sampled per frame in `VisualEngine` beside
+    `params`, so an automated Columns arrives already resolved at the instrument.
+  - **Geometry is knob-driven, so `syncParams` refreshes it at 60fps** like the envelope
+    lanes' sliders — and it REPLACES the lane array rather than mutating it, because
+    `instrumentFrame`'s signature compares it by reference. Mutating in place drags a
+    knob with no repaint at all while paused, which reads exactly like a dead panel.
 - `automation.ts` — the three automation-lane MODES and the one function that dispatches between them.
 - `energy.ts` — the note-pulse "energy" signal instruments receive.
 - `instrumentColor.ts` — applies VisualCopy colorShift to instrument color params (`InstrumentCopyContext`). The only place that knows both the object's own color and the copy's absolute `tint`, so the tint mix happens here, before the relative HSL offsets. `tintPerceptual` chooses how that mix walks: `Color.lerp` (default) runs in LINEAR light and so overshoots perceived brightness at partial amounts, while `mixOklabLinearRgb` tracks it honestly — see the visualCopies guide for why that reads as "the flash goes white". Anything added to `colorShift` must also enter `instrumentFrame`'s signature buffer, or a paused edit won't repaint; `tintPerceptual` is in there for exactly that reason (flipping MIX at a frozen beat has to repaint).

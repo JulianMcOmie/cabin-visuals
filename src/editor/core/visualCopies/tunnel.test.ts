@@ -136,6 +136,35 @@ test('corridor geometry is world-metric: the placement scale is divided out', ()
   assert.deepEqual([e[12], e[13], e[14]].map((n) => Math.round(n * 1e9) / 1e9 || 0), [2, 0, 10])
 })
 
+test('size scales the copies without touching the corridor geometry', () => {
+  const config = settings({ copiesPerRing: 2, rings: 2, radius: 2, depth: 20, nearEnd: 10, speed: 0 })
+  const plain = copiesAt(config, 0)
+  const scaled = copiesAt(settings({ ...config, size: 3 }), 0)
+  // Radius, depth and near end are exactly where the knobs put them - the wrap
+  // stays off-screen however large the copies get...
+  assert.deepEqual(scaled.map(positionOf), plain.map(positionOf))
+  for (const copy of scaled) {
+    const e = copy.transform.elements
+    assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 3) < 1e-9)
+  }
+  for (const copy of plain) {
+    const e = copy.transform.elements
+    assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 1) < 1e-9)
+  }
+
+  // ...and unlike the OFFSETS, size is NOT divided by the placement scale: it
+  // multiplies whatever size the object draws itself at, so a half-size
+  // instrument at size 3 renders at 1.5, not 3.
+  const placementTransform = new Matrix4().makeScale(0.25, 0.25, 0.25)
+  const placed = tunnelSplitter
+    .resolve({ settings: settings({ ...config, size: 3 }), notes: [] })
+    .apply(identityVisualCopy(), { beat: 0, index: 0, count: 1, placementTransform })
+  const e = placementTransform.clone().multiply(placed[0].transform).elements
+  assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 0.75) < 1e-9)
+  // The offset still lands on the configured scene units.
+  assert.deepEqual([e[12], e[13], e[14]].map((n) => Math.round(n * 1e9) / 1e9 || 0), [2, 0, 10])
+})
+
 test('the axis setting redirects the corridor without changing its shape', () => {
   const config = settings({ copiesPerRing: 1, rings: 2, radius: 1, depth: 20, nearEnd: 5, speed: 0 })
   assert.deepEqual(copiesAt(settings({ ...config, axis: 1 }), 0).map(positionOf), [[5, 1, 0], [-5, 1, 0]])

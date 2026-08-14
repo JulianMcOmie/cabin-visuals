@@ -5,9 +5,31 @@ The inspector panel (in `TrackEditor.tsx`) renders a track's settings through a 
 Three registries:
 - **Object instruments** (`index.ts`, keyed by `UserInterfaceRendererId` from `ids.ts`): every instrument def explicitly names one via `userInterfaceRenderer`. `'parameters'` is the generic auto-generated list (`ParametersUserInterface.tsx`); the rest are bespoke (Cube, TextDisplay, Video…).
 - **Movers/splitters and effects** (`bespokeRegistries.ts`, keyed by definition/plugin id): registration is OPTIONAL — a missing entry falls back to the generic ParamControl list in TrackEditor.
-- Envelope tracks use `EnvelopeUserInterface.tsx` directly; automation tracks use `AutomationUserInterface.tsx` directly (both are plain presentational components TrackEditor binds, not registry entries).
+- Envelope tracks use `EnvelopeUserInterface.tsx` directly; automation tracks use `AutomationUserInterface.tsx` directly; word-formation lanes use `WordFormationUserInterface.tsx` directly (all three are plain presentational components TrackEditor binds, not registry entries).
+
+`WordFormationUserInterface.tsx` is Grid's layout-preview pattern applied to a lane that has no definition, which changes exactly one thing: **its accent is the TRACK's own color** (`resolveTrackDisplayColor`), not an `identityColors` constant — same principle (console and notes are one color), different source, because a formation lane is told apart by which one you play rather than by a definition it names. Its window draws the real `formationSeats` numbered in fill order, so the fill-order segments are made legible by looking at the preview rather than by reading their labels.
+
+**`useMemo(() => bind(parameters), [parameters])` is a trap if the panel ALSO subscribes to a store.** The shared `bind` helper (copied across Grid, Tunnel, Approach, Word Formation) *drains* its pool — each `num`/`select` call deletes the key so `rest()` can return the leftovers. Memoizing the binder and calling it during render is fine only while every render brings a fresh `parameters` array. A panel with its own `useProjectStore` subscription re-renders on any store change with the SAME props, gets the memoized, already-drained binder back, and every lookup returns null — so an "all keys present, else ParameterList" check silently renders the generic list, looking exactly like a failed registration. Resolve the bindings INSIDE the memo (return the resolved object, not the binder). Cost half an hour of chasing the wrong thing; the sibling panels are only safe because they subscribe to nothing.
 
 Adding a bespoke instrument UI: add the id to `ids.ts` (union type), create `<Name>UserInterface.tsx`, register in `index.ts`, point the instrument def at it. For movers/effects: just add to the right map in `bespokeRegistries.ts`.
+
+**Start with the console kit (`console/`) — most panels never need more.** The kit is the guide's building blocks as components: `bindPanel` (the one param binder — typed lookups that CLAIM keys, `rest()` for the disclosure, `missing` for the fallback), the accent formulas (`shadeOf`/`spillOf`/`emitterHalo`), the `Console` chassis + `ControlRow`/`GutterRow`, bound `Knob`/`ColorPill`, `Segmented`, `PreviewWindow`, and `More`. A panel states its accent ONCE on `<Console>`; every kit control reads it from context. Two ways in:
+
+1. **A spec** (`console/spec.tsx`): a panel that is pure composition is DATA — accent, an optional preview component, rows of knobs/segments. `consolePanel(spec)` interprets it. An instrument def can carry the spec as `panelSpec` and skip ids.ts/index.ts registration entirely (Laser Line is the reference — its whole console is ~10 lines on the def); a registry entry can also be `consolePanel(spec)` directly (Laser Sphere). The spec's escape hatches are the `preview` slot and `custom` rows (components with a `claims` list so their keys stay out of MORE) — previews and one-off controls are the instrument speaking and stay components on purpose. A panel that outgrows the spec becomes a bespoke file; that is the intended pressure valve.
+2. **A bespoke file composing the kit** (Strobe, Mover, Conveyor…): for panels with view state, derived loops, or bespoke interaction. Deliberately different controls remain first-class — Impact Scatter's overdrive catch-detent knob, Pixel Blast's 8-bit cell meters, the gradient-track sliders (their tracks ARE the value space) — but the chassis, binder, plain knobs and disclosure still come from the kit.
+
+The `showIf` trap below is encoded in the binder: look gated keys up with `{ optional: true }` (string shorthand `'key?'` in a spec).
+
+**Mount an r3f preview through `PreviewCanvas` (console kit), never a bare `<Canvas>`.**
+The inspector is one of the panes the sidebar toggles GLIDE (400ms), so a preview's width
+changes on every frame of an animation, and a bare Canvas gets both failure modes the main
+viewport had: three writes inline px on the canvas element per `setSize` through a
+ResizeObserver → React round-trip, so the element visibly STEPS inside its smoothly-moving
+window; and resizing a WebGL drawing buffer CLEARS it, so a preview that isn't looping
+(see the black-until-play note below) goes black or stale for the rest of the glide.
+`PreviewCanvas` fixes both — `.preview-canvas-smooth` (globals.css) hands the canvas
+geometry to CSS so layout can't lag, and its `ResizeSync` advances THAT root synchronously
+pre-paint on every size change. Same cure as `VisualPanel`'s in editor/App.tsx.
 
 **A panel's live 3D preview may not animate until the transport PLAYS.** Observed 2026-07-29 on both Impact Scatter's and Conveyor's previews: the canvas is created and sized, but `useFrame` never fires while paused, so the window stays BLACK — hitting play starts it, pausing freezes the last frame. Likely because r3f's render loop is global and the main canvas runs `frameloop='demand'` (RenderGovernor), so once the loop stops nothing restarts it for a panel root that mounted later. It is app-wide, not a panel bug: **smoke-test previews with the transport running** before suspecting your own preview code.
 
@@ -20,7 +42,7 @@ Adding a bespoke instrument UI: add the id to `ids.ts` (union type), create `<Na
 - The preview frames by **HEIGHT, not width** — the subject is a disc in a short wide window, and fitting the width pushes the top and bottom off-frame. (Conveyor frames by width for the opposite reason: its subject is a line.) Same per-frame re-derivation from `gl.domElement.client*` as Conveyor, for the same reason.
 - **A stepped (detent) knob is a LaserKnob driven in INDEX units**, not a new control: its spin knobs walk `RADIAL_MOTION_SPIN_DETENTS` by binding `value`/`min`/`max`/`step` to `0…detents.length−1`/`1` and converting index⟷rate in the wrapper's `format`/`onChange` — evenly spaced clicks on the arc regardless of how non-uniform the underlying values are, and `bipolar` still works when the zero detent is the middle index. The keyboard nudge in laserKnob.tsx is `max(3%, one step)` for exactly this case; don't shrink it back.
 
-Building blocks — use these, don't hand-roll controls: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker (also used by SceneSettingsPanel); `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out) — every panel that follows the guide turns the SAME knob, so don't re-derive the arc math. Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
+Building blocks — use these, don't hand-roll controls: **the console kit in `console/` first** (see above), then the plain-value primitives it wraps: `ParameterControl.tsx` exports `ParamControl` (dispatches on param type), `ParamSlider` (drag + curve + fine-step behavior), `ParamToggle`, `ParamStepper` (small integer counts as −/+ around a detent strip — segment/facet counts, where a smooth slider makes the exact value a hunt), `ParamHueSlider` (a radians hue param on a rainbow track); `colorWheel.tsx` is the shared color picker in TWO shapes — `ColorWheelPill` + `ColorWheelPopover` (a swatch that opens a floating HSV wheel: the default, and what the kit's bound `ColorPill` wraps) and **`ColorField`** (the same picker laid FLAT and always open — captioned header with live hex, hue rail, saturation/brightness field; plain values in/out, no bound kit wrapper yet). Reach for the field when the color IS the panel's subject and the popover would cover the very preview you are judging, or when two colors must be editable at once: stacking two `ColorField`s is how SceneSettingsPanel edits a gradient's stops with no selector between them. It costs ~85px per color against the pill's ~50px, so it is a deliberate trade, not the new default; `laserKnob.tsx` is the guide's console knob (`LaserKnob`, plain numbers in/out — the layer to bind when the value is NOT a `UserInterfaceParameter`: an ADSR field, a mover input; otherwise use the kit's bound `Knob`). Two options on it exist for grid panels: **`bipolar`** anchors the arc at 12 o'clock and grows it either way, which is mandatory for a signed rate (a half-lit ring for zero reads as half ON); and passing **`label=""`** drops the caption row entirely, for a panel that labels its rows and columns instead. The kit `Knob` also takes **`detents`** (uneven allowed stops driven in index units — Radial Motion's pattern, folded in). Respect `showIf` gating (already handled if you go through ParamControl). See `docs/instrument-panel-design-guide.md` for the visual language.
 
 **Live shader previews**: `KaleidoSolidUserInterface.tsx` imports the instrument's exported GLSL (`KALEIDO_FIELD_GLSL`) and runs it in a small raw-WebGL canvas, rather than redrawing an impression of it in SVG — so the preview cannot drift from what renders. It evaluates the field over an orthographic sphere: the object-space direction at each pixel of a front-facing sphere is just `(x, y, sqrt(1-x²-y²))`. Three things this depends on:
 
@@ -118,6 +140,29 @@ rAF - no r3f, because a panel `<Canvas>` stays black until the transport plays
 (see above) and a layout is exactly what you dial in while paused. It re-reads
 `clientWidth/Height` per frame instead of using a ResizeObserver (those starve
 in a hidden pane), and drops to a point cloud past a few hundred copies.
+
+**The shared splitter SIZE knob** (`core/visualCopies/splitterSize.ts`, worn by Radial,
+Grid, Line, Symmetry, Polyhedron, Parametric Pattern and Tunnel) lands differently in each
+console, and three things about wiring it are worth copying:
+
+- **Bind it OPTIONALLY**, like a `showIf` param — `bindPanel`'s `num('size', { optional:
+  true })`, or outside the required-keys check on a panel that predates the kit. A console
+  that treats it as required falls back to the generic slider list wholesale the day a
+  definition ships without it.
+- **A preview that frames itself from the copies must include their SCALE in the reach**
+  (`Math.hypot(e[0], e[1], e[2])` — the basis column length), or a large SIZE grows the
+  formation out through the window's edges. Radial's preview always did; Grid's measured
+  bare positions and needed the fix.
+- **A schematic diagram is allowed to ignore it.** Symmetry's fold pad draws one glyph
+  size on purpose — scaling the glyphs by SIZE would bury the mirror lines you drag at the
+  top of the knob's range without saying anything the knob's own readout doesn't. Previews
+  that render the real copies (Grid, Line, Radial, Tunnel) show it for free.
+
+Placement follows the panel's own grammar: Grid pairs SPACING and SIZE in one group (the
+two independent axes of a layout, read together), Line keeps three-knob rows and puts SIZE
+with COPIES/SPACING while GROWTH drops to the modifier row, and Tunnel's geometry row
+gained a fourth knob and therefore `flex-wrap` — four knobs plus its stepper column
+overrun a narrow inspector pane, and a fixed-size knob row CLIPS rather than shrinking.
 
 **Give a stage zone a FIXED width, never a percentage.** The settings panel is
 user-resizable; a `w-[38%]` stage that looked right in a 300px sidebar became a wide

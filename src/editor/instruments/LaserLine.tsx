@@ -40,8 +40,18 @@ export const laserLineInstrument: ObjectInstrumentDef = {
   name: 'Laser Line',
   kind: 'object',
   userInterfaceRenderer: 'parameters',
+  // The settings console, declared as data (console/spec.tsx): the panel
+  // needs no component file and no registry entry. Same family as Laser
+  // Sphere's - the COLOR pill is the emitter, its halo driven by GLOW.
+  panelSpec: {
+    accent: { param: 'color', fallback: DEFAULT_COLOR },
+    testId: 'laser-line-user-interface',
+    rows: [
+      { row: ['length*:LENGTH', 'thickness:THICK', 'glow:GLOW', 'whiteCore:CORE', 'light:LIGHT', { pill: 'color', haloParam: 'glow' }] },
+    ],
+  },
   params: [
-    { key: 'length', label: 'Length', min: 0.25, max: 12, step: 0.05, default: 4 },
+    { key: 'length', label: 'Length', min: 0.25, max: 60, step: 0.05, curve: 2, default: 4 },
     { key: 'thickness', label: 'Thickness', min: 0.01, max: 0.5, step: 0.01, default: 0.06 },
     { key: 'color', label: 'Laser Color', type: 'color', default: DEFAULT_COLOR },
     { key: 'glow', label: 'Glow', min: 1.5, max: 12, step: 0.1, default: 5.5 },

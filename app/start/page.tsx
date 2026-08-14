@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import { CabinLogo } from '@/components/CabinLogo'
 import { LoadingScreen } from '@/components/LoadingScreen'
+import { EditorialSkin, EditorialHeader } from '@/components/landing/editorialTheme'
 import { TemplatePreviewVideo } from '@/components/TemplatePreviewVideo'
 import { TemplateSlideshowPreview } from '@/components/TemplateSlideshowPreview'
 import { TemplateLyricPreview } from '@/components/TemplateLyricPreview'
@@ -95,22 +95,15 @@ export default function StartPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
+    <EditorialSkin className="min-h-screen font-sans text-[var(--text)]">
       {chosen && <LoadingScreen />}
-      <header className="border-b border-[var(--border-subtle)]">
-        <div className="mx-auto flex h-16 max-w-[1200px] items-center px-4 sm:px-6">
-          <Link href="/" className="flex select-none items-center gap-2.5">
-            <CabinLogo className="h-[30px] w-auto flex-shrink-0" />
-            <span className="translate-y-[5px] text-[15px] font-semibold text-[var(--text)]">Cabin Visuals</span>
-          </Link>
-        </div>
-      </header>
+      <EditorialHeader />
 
       {isMobile ? (
         // The phone flow's first step: pick a look, then add the song. The
         // template gallery (slideshow etc.) stays a desktop doorway.
         <main className="mx-auto max-w-[900px] px-4 pb-16 pt-10 text-center">
-          <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a look</h1>
+          <h1 className="m-0 text-[30px] font-normal [font-family:var(--lp-font-display)]">Pick a look</h1>
           <p className="mx-auto mt-2 mb-6 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
             Your lyric video starts from a style - you can change it any time.
           </p>
@@ -146,7 +139,7 @@ export default function StartPage() {
         </main>
       ) : (
       <main className="mx-auto max-w-[900px] px-6 pb-24 pt-14 text-center">
-        <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">Pick a template</h1>
+        <h1 className="m-0 text-[30px] font-normal [font-family:var(--lp-font-display)]">Pick a template</h1>
         <p className="mx-auto mt-2 mb-8 max-w-[420px] text-[13px] leading-relaxed text-[var(--text-3)]">
           Start from a ready-made scene - you can change everything once you&apos;re in.
         </p>
@@ -196,6 +189,6 @@ export default function StartPage() {
         </button>
       </main>
       )}
-    </div>
+    </EditorialSkin>
   )
 }

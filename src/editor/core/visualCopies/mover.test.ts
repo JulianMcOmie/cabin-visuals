@@ -22,6 +22,7 @@ import {
 } from './rotationMovers'
 import {
   MOVER_MODE_BURST,
+  MOVER_DRIVE_MIDI,
   MOVER_MODE_CONSTANT,
   MOVER_MODE_OSCILLATE,
   MOVER_MOTION_ORBIT,
@@ -174,6 +175,30 @@ test('parity: orbit-constant matches the retired Constant Orbit', () => {
 })
 
 // ── The new cells ────────────────────────────────────────────────────────────
+
+test('rotate-constant MIDI-only drive: parked with an empty lane, moved by held notes', () => {
+  const settings = moverSettings({
+    motion: MOVER_MOTION_ROTATE, mode: MOVER_MODE_CONSTANT, drive: MOVER_DRIVE_MIDI,
+    angleX: 120, angleY: 45, angleZ: 300, angle: 1.2, returnBeats: 0.7, ...BASIS,
+  })
+  // Empty lane: no baseline spin - the copy sits exactly where it arrived.
+  const parked = applyAt(moverDefinition, settings, [], 7.3)
+  assertMatrixClose(parked, seededCopy().transform, 'midi-only parked')
+  // A held +X note turns it; travel is kept after release (constant semantics).
+  const held = [note(0, 60, 1, 2)]
+  const during = applyAt(moverDefinition, settings, held, 1)
+  const after = applyAt(moverDefinition, settings, held, 5)
+  assert.ok(!matrixEquals(during, seededCopy().transform), 'held note should rotate')
+  assertMatrixClose(after, applyAt(moverDefinition, settings, held, 2), 'travel kept on release')
+  // Auto drive with the same lane does NOT match - the baseline is real.
+  const auto = applyAt(moverDefinition, { ...settings, drive: 0 }, held, 1)
+  assert.ok(!matrixEquals(auto, during), 'auto keeps its baseline spin')
+})
+
+function matrixEquals(a: Matrix4, b: Matrix4): boolean {
+  for (let i = 0; i < 16; i++) if (Math.abs(a.elements[i] - b.elements[i]) >= 1e-9) return false
+  return true
+}
 
 test('translate-constant: note-gated drift, kept on release, no baseline', () => {
   const settings = moverSettings({

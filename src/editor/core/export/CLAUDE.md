@@ -6,7 +6,7 @@ Export never records playback. It **steps the beat arithmetically** — `beat(i)
 
 - `exportEngine.ts` — the frame loop (`walkFrames`): the ONE place export timing lives. Sink `await`s are the backpressure. Notable: the once-a-second yield uses `MessageChannel`, NOT `setTimeout` — background tabs throttle timers to ≥1s (then ~1/min), which would stall a backgrounded export; MessageChannel tasks are exempt.
   - **Frame preparers** (`registerFramePreparer`): async work that must complete before a frame renders. The Video instrument registers one that seeks its `<video>` to the beat-derived time and resolves on `seeked` — that's what makes exported video frame-exact where live playback merely drift-corrects.
-- `frameDriver.ts` — pins the canvas/engine into export mode and renders one frame per beat (via `core/visual/beatOverride.ts`, bypassing the transport). Pin/unpin brackets the WHOLE export, not each walk.
+- `frameDriver.ts` — pins the canvas/engine into export mode and renders one frame per beat (via `core/visual/beatOverride.ts`, bypassing the transport). Pin/unpin brackets the WHOLE export, not each walk. Also owns the `exportPinned` flag (`isExportPinned`/`subscribeExportPinned`, set by ExportDriver's pin/unpin): VisualScene subscribes to suspend the draft preview-resolution scale, so pinned renders are always full-size.
 - `videoEncode.ts` — WebCodecs encoder session + config; `support.ts` — capability gate (`isExportSupported`, Chrome/Edge) + muxable-chunk check.
 - `mux.ts` — MP4 muxing (`Mp4Writer`, mp4-muxer).
 - `audioRender.ts` — offline audio render into the writer, using `core/audio/placement.ts` with anchor t=0.

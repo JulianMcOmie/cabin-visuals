@@ -15,7 +15,8 @@
 // tail.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { OrbitControls } from '@react-three/drei'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { MeshStandardMaterial } from 'three'
@@ -118,7 +119,7 @@ function FadePreview({ a, d, s, r }: { a: number; d: number; s: number; r: numbe
       className="relative h-[118px] cursor-grab overflow-hidden border-b border-white/[0.06] active:cursor-grabbing"
       style={{ background: ROOM }}
     >
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 1.1, 3.6], fov: 40 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 1.1, 3.6], fov: 40 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <PreviewSubject a={a} d={d} s={s} r={r} />
         <directionalLight position={[3, 5, 4]} intensity={1.2} color="#e8f0ff" />
@@ -138,7 +139,7 @@ function FadePreview({ a, d, s, r }: { a: number; d: number; s: number; r: numbe
           minPolarAngle={0.2}
           maxPolarAngle={Math.PI * 0.62}
         />
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }

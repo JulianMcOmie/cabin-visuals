@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { useProjectStore } from './ProjectStore'
 import { audioPickupBars } from '../utils/audioPickup'
 import type { LoopRegion } from '../core/loopRegion'
+import type { PlaybackRate } from '../core/playbackRate'
 
 interface TimeState {
   currentBeat: number
@@ -9,15 +10,21 @@ interface TimeState {
   // Transport loop region is project-scoped and persisted; currentBeat and
   // isPlaying remain ephemeral session state.
   loopRegion: LoopRegion | null
+  /** Monitoring speed. Session-only ON PURPOSE - it is how you are WATCHING,
+   *  not what the project is, so it is never serialized (serialize.ts picks
+   *  loopRegion out of this store by name) and never reaches an export. */
+  playbackRate: PlaybackRate
   setIsPlaying: (playing: boolean) => void
   setCurrentBeat: (beat: number) => void
   setLoopRegion: (region: LoopRegion | null) => void
+  setPlaybackRate: (rate: PlaybackRate) => void
 }
 
 export const useTimeStore = create<TimeState>((set) => ({
   currentBeat: 0,
   isPlaying: false,
   loopRegion: null,
+  playbackRate: 1,
   setIsPlaying: (playing) => set({ isPlaying: playing }),
   setCurrentBeat: (beat) => {
     // Clamp to the project length (bpm/beatsPerBar/totalBars live in ProjectStore).
@@ -28,4 +35,5 @@ export const useTimeStore = create<TimeState>((set) => ({
     set({ currentBeat: Math.max(minBeat, Math.min(beat, totalBars * beatsPerBar)) })
   },
   setLoopRegion: (region) => set({ loopRegion: region }),
+  setPlaybackRate: (rate) => set({ playbackRate: rate }),
 }))

@@ -9,6 +9,7 @@ import { useTimeStore } from '../../store/TimeStore'
 import { Track } from './Track'
 import { TrackContextMenu } from './TrackContextMenu'
 import { TimelineRuler } from './TimelineRuler'
+import { EmptySceneActions } from './EmptySceneActions'
 import { usePlayhead } from '../../hooks/usePlayhead'
 import { useScrub } from '../../hooks/useScrub'
 import { useLoopDrag, type LoopDragGuide } from '../../hooks/useLoopDrag'
@@ -47,6 +48,11 @@ export function TimelineArea() {
   const rootTrackIds = useProjectStore((s) => s.rootTrackIds)
   const beatsPerBar = useProjectStore((s) => s.beatsPerBar)
   const totalBars = useProjectStore((s) => s.totalBars)
+  // Primitive, never the scenes record - this is a whole-timeline subscriber
+  // and the record's identity changes on every edit (see components/CLAUDE.md).
+  // Only the empty scene's first action reads it, to name what it will add.
+  const activeSceneIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
+  const activeSceneId = useProjectStore((s) => s.activeSceneId)
   const pixelsPerBeat = useUIStore((s) => s.tracksPixelsPerBeat)
   const labelWidth = useUIStore((s) => s.tracksLabelWidth)
   const rowHeight = useUIStore((s) => s.tracksRowHeight)
@@ -356,7 +362,7 @@ export function TimelineArea() {
   }
 
   return (
-    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[var(--bg-timeline)]">
+    <div className="timeline-neon relative flex flex-col h-full border-t border-[var(--border)] bg-[#08090d]">
       {/* Ruler in its own row (not inside the lane scroll container) so the lanes
           own the only scrollbars: the vertical one then ends below the ruler. Its
           content is translated to mirror the lane scroll (onTimelineScroll); the
@@ -396,6 +402,18 @@ export function TimelineArea() {
           overlay to the lane region, so a resize frame where its imperatively-set
           width lags can't spill out and spawn a stray (unstyled) scrollbar. */}
       <div className="relative flex-1 min-h-0 overflow-hidden">
+        {/* The label column's surface and its divider against the lanes, in
+            VIEWPORT space (behind the scroll container, which is transparent).
+            Content space would be wrong: the column is frozen (each row's label
+            is `sticky left-0`), so a content-space fill slides away under
+            horizontal scroll and the strip below the last track - the only place
+            nothing else paints over it - visibly scrolls out from under the
+            frozen labels. Full height also carries the divider past the last
+            row, so the label/lane seam runs the whole pane. */}
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)]"
+          style={{ width: labelWidth }}
+        />
         {/* A loop drag lights the LANES as its drop zone - the mirror of the
             label-column glow an instrument drag gets. */}
         {loopDragging && (
@@ -449,13 +467,18 @@ export function TimelineArea() {
             </div>
           </div>
         )}
-        {rootTrackIds.length === 0 && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <p className="text-xs text-[var(--text-muted)] text-center px-4">
-              No tracks yet. Click <span className="text-[var(--text-3)] text-lg">+</span> to add a track, then right-click a lane to draw blocks.
-            </p>
-          </div>
-        )}
+        {/* Mounted unconditionally: it has an exit animation, so it needs to
+            SEE `empty` go false rather than be unmounted by it (it renders
+            null once the fade is done). Keyed on the scene so switching to a
+            different empty scene replays the entrance - the view genuinely
+            appeared again - instead of silently reusing the settled one. */}
+        <EmptySceneActions
+          key={activeSceneId}
+          empty={rootTrackIds.length === 0}
+          labelWidth={labelWidth}
+          isMain={activeSceneIsMain}
+          onAddTrack={insertTrack}
+        />
         <div
           ref={scrollRef}
           data-tracks-scroll
@@ -466,6 +489,14 @@ export function TimelineArea() {
             className="relative flex flex-col"
             style={{ width: labelWidth + PLAYHEAD_TRIANGLE_HALF + timelineWidthPx, minHeight: '100%' }}
           >
+            {/* The lane surface lives only behind the actual track stack; the
+                area below it keeps the root's darker void. The label column,
+                though, wears its normal color all the way down - painted in
+                viewport space by the frozen strip above this scroll container. */}
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--bg-timeline)]"
+              style={{ height: visualRows.length * rowHeight }}
+            />
             {/* Vertical grid lines aligned to the ruler's divisions (DAW-style).
                 Their height is the visible track stack, rather than the scroll
                 viewport, so they stop at the bottom of the lowest track. First
@@ -585,10 +616,14 @@ export function TimelineArea() {
             )}
             {/* Empty space below the tracks. The label-column portion belongs to the
                 label section - it deselects but is otherwise inert (no marquee); only
-                the lane portion behaves like the grid. */}
-            <div className="flex-1 min-h-0 flex">
+                the lane portion behaves like the grid. Its min-height (not a
+                paddingBottom on the content) is what gives the stack three rows of
+                scroll room past the last track, so this row - and its sticky label
+                strip's border - actually covers that space instead of leaving a
+                padding gap that only a background could reach. */}
+            <div className="flex-1 flex" style={{ minHeight: rowHeight * 3 }}>
               <div
-                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--border)] bg-[var(--bg-track-row)] ${
+                className={`flex-shrink-0 sticky left-0 z-10 border-r border-r-[var(--timeline-row-line,var(--border))] bg-[var(--bg-track-row)] ${
                   rootTrackIds.length > 0 ? 'border-t border-t-[var(--border-subtle)]' : ''
                 }`}
                 style={{ width: labelWidth }}

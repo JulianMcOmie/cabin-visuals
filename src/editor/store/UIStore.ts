@@ -2,14 +2,34 @@ import { create } from 'zustand'
 import { TRACK_LABEL_WIDTH } from '../constants'
 import type { LoopRegion } from '../core/loopRegion'
 
-interface EditingBlockRef {
+export interface EditingBlockRef {
   trackId: string
   blockId: string
 }
 
+/** The library sidebar's tabs. Declared here rather than in LeftSidebar so the
+ *  store can type a request to open one without importing the component. */
+export type LibraryTabId = 'instruments' | 'loops' | 'templates'
+
 // The MIDI editor's vertical zoom range (row height in px), 28 as the default.
 export const MIDI_ROW_HEIGHT_MIN = 14
 export const MIDI_ROW_HEIGHT_MAX = 56
+
+/**
+ * Fast Preview levels, slowest-and-truest first. 'final' is the picture the
+ * export renders; the others buy playback smoothness by rendering fewer pixels.
+ * The ORDER of this array is the cycle order of the toolbar control.
+ */
+export const PREVIEW_QUALITIES = ['final', 'fast', 'fastest'] as const
+export type PreviewQuality = (typeof PREVIEW_QUALITIES)[number]
+
+/** Linear resolution factor each level renders the canvas pipeline at. Fragment
+ *  cost is the SQUARE of this, so 'fastest' is ~16× less pixel work. */
+export const PREVIEW_QUALITY_SCALE: Record<PreviewQuality, number> = {
+  final: 1,
+  fast: 0.5,
+  fastest: 0.25,
+}
 
 interface UIState {
   selectedTrackId: string | null;
@@ -45,6 +65,14 @@ interface UIState {
   tracksRowHeight: number
   setTracksRowHeight: (px: number) => void
 
+  // Fast Preview: how much fidelity the 3D canvas trades for playback speed.
+  // 'final' is what exports; the faster levels shrink every offscreen render
+  // target by PREVIEW_QUALITY_SCALE, so a frame costs scale² of the full
+  // fragment work and the final pass upscales it back to the canvas. Pinned
+  // renders (export, preview capture) always render at 'final' regardless.
+  previewQuality: PreviewQuality
+  setPreviewQuality: (quality: PreviewQuality) => void
+
   // Width of the frozen track-label column (drag its right edge to resize).
   tracksLabelWidth: number
   setTracksLabelWidth: (px: number) => void
@@ -79,6 +107,16 @@ interface UIState {
   // to light up the track-label column as the drop zone.
   libraryDragging: boolean
   setLibraryDragging: (v: boolean) => void
+
+  // A one-shot request to bring the library forward on a given tab - fired by
+  // the empty scene's action list, which offers "start from a template" from a
+  // surface that can't reach either piece of state (the pane's open/closed
+  // lives in App's local state behind the toggle glide, the tab inside
+  // LeftSidebar). Both consumers react to a CHANGE rather than to presence, so
+  // neither has to clear it and there is no race over who clears first; the
+  // nonce is what makes a repeat request re-fire.
+  libraryRequest: { tab: LibraryTabId; nonce: number } | null
+  requestLibraryTab: (tab: LibraryTabId) => void
 
   // Live state of a loop-pattern drag from the library: non-null lights the
   // lane region as the drop zone, and `target` is the row/bar under the
@@ -146,6 +184,9 @@ export const useUIStore = create<UIState>((set) => ({
   setTracksRowHeight: (px) =>
     set({ tracksRowHeight: Math.max(28, Math.min(200, px)) }),
 
+  previewQuality: 'final',
+  setPreviewQuality: (quality) => set({ previewQuality: quality }),
+
   tracksLabelWidth: TRACK_LABEL_WIDTH,
   setTracksLabelWidth: (px) =>
     set({ tracksLabelWidth: Math.max(96, Math.min(480, px)) }),
@@ -171,6 +212,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   libraryDragging: false,
   setLibraryDragging: (v) => set({ libraryDragging: v }),
+
+  libraryRequest: null,
+  requestLibraryTab: (tab) => set({ libraryRequest: { tab, nonce: Date.now() } }),
 
   loopDrag: null,
   setLoopDrag: (v) => set({ loopDrag: v }),

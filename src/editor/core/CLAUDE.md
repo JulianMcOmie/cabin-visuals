@@ -11,6 +11,7 @@ Key behaviors (each has a war-story comment in the file — read before changing
 - **Drag suppression** (`beginBpmDrag`/`beginBlockDrag`/`beginScrub` + matching end): re-arming per pointermove stacks overlapping clip starts inside the lookahead window into a runaway gain sum ("earrape"). Every continuous gesture must silence-or-defer and re-arm ONCE at release. If you add a new continuous gesture that writes audio-affecting state, use this pattern.
 - **Zombie-RAF guard**: an `onBeatChange` subscriber may `pause()` mid-tick; the tick checks `this.playing` before rescheduling.
 - Loop-region wrap lives ONLY in the live RAF tick — export walks straight through it.
+- **Monitoring speed (½× / ¼×) is a transport GEAR, not a document edit** (`playbackRate.ts`: the type, the list, `effectiveBpm`; kept Tone-free so the store, the UI and tests can import it). The transport runs at `bpm × rate`, so everything beat-addressed — visuals, MIDI, automation — slows for free and keeps its musical position; the project bpm is untouched and **export never sees the rate** (it steps beats arithmetically and reads `TimeStore.playbackRate` nowhere). The rate reaches the engine through `getPlaybackRate` on the callbacks, and `setPlaybackRate` must RE-ARM, not just retune: a sounding player's stop was scheduled in wall-clock seconds computed at the old rate. Audio's half of the deal is in `core/audio/CLAUDE.md`.
 
 ## transform.ts — the canonical track transform
 

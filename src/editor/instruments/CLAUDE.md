@@ -11,7 +11,7 @@ No `useFrame`, `performance.now`, `Date.now`, `Math.random`, clock/delta. Per-fr
 1. New file exporting the def: `id`, `name`, `kind: 'object'`, `params: ParamDef[]`, `userInterfaceRenderer`, `component: FC<{trackId}>`, plus optional `localTransform`, `abilities`, `midiRows`, `fullFrame`, `defaultOnTop`.
 2. Register in `index.ts` (`INSTRUMENTS` map).
 3. **Add a picker entry in `components/LeftSidebar.tsx` `ALL_OBJECT_INSTRUMENTS`** — the add-track menu is curated and does NOT read the registry; without this the instrument is registered but unreachable.
-4. Settings UI: `'parameters'` (generic list) or a bespoke renderer — new id in `userInterfaceRenderers/ids.ts` + component + entry in its `index.ts` (see that dir's CLAUDE.md).
+4. Settings UI, cheapest first: a **`panelSpec`** on the def (a declarative console — accent, knob rows, optional preview component; no registration at all, see `userInterfaceRenderers/console/spec.tsx`, Laser Line is the reference), or `'parameters'` (generic list), or a bespoke renderer — new id in `userInterfaceRenderers/ids.ts` + component + entry in its `index.ts` (see that dir's CLAUDE.md).
 5. Preview clip (library hover): `npm run previews:instruments`.
 
 ## Testing an instrument: put the pure math in a `*Core.ts`
@@ -66,8 +66,17 @@ reads solid black — which looks exactly like a compositing bug and is the
 symptom the components guide describes as "a full-frame instrument in the
 front pass hides the whole scene". The fix is one prop:
 `userData={{ [FORCE_TRANSPARENT_KEY]: true }}` on the material (TextDisplay,
-Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall all carry it). Any instrument
-whose material must keep blending at full opacity needs it.
+Scribble, FilmCard, PhotoSlot, PolyFx, FlashWall, MidiRoll all carry it). Any
+instrument whose material must keep blending at full opacity needs it.
+
+A second, sneakier symptom of the same bug (found on MidiRoll 2026-08-12): the
+opaque quad renders each texel's **unpremultiplied rgb at full brightness with
+alpha ignored**, so a canvas texture's near-zero-alpha pixels - soft glow
+falloff especially - show their premultiply-rounding garbage as BRIGHT
+posterized cyan/magenta rings with hard edges. Looks exactly like a broken
+bloom shader; over a black scene with black transparent pixels it is invisible,
+which is why an instrument can carry the bug for weeks until it first draws
+low-alpha color.
 
 ## Keep runtime fallbacks and schema defaults in ONE place
 
@@ -82,12 +91,27 @@ nothing. Read the schema instead: `par[key] ?? paramDefault(theInstrument, key)`
 - `localTransform(ctx)` — position/rotation compose down the hierarchy (movers and children see them); **scale is a mesh property**, applied before movers/children, so layouts stay in unscaled units. The canonical `tf*` track transform (`core/transform.ts`) composes as this transform's PARENT — instruments neither declare nor read `tf*`.
 - `midiRows` — declare a short, fully-labelled row vocabulary ("Warp forward", "Next word"); the editor shows only these rows in order (first = top). Omit for the full piano roll. See `docs/instrument-note-semantics.md`.
 - `abilities` — bespoke MIDI lanes (e.g. Cube's Shatter) rendered as nested sub-rows, expressed inside your component; not attachable to other instruments.
+- `seatsWords` — this instrument lays out WORDS, so it accepts `wordFormation` child lanes (`core/visual/wordFormation.ts`). The add-child menu reads the flag rather than naming instrument ids, so a second text instrument opts in with one line. The layout is **presence-driven**, not a Layout mode: a lane that has played a note wins over Center/Scatter/Stack, and before its first note the ordinary layout still runs — so adding a lane is never destructive and an empty one is inert.
 - `fullFrame` — screen-filling plane; renderer skips placement + transform/clone chain. `defaultOnTop` — depth-ignored overlay by default (Text).
 - **Never read those two flags directly** — go through `isFullFrameTrack(def, params)` / `isOnTopTrack(def, params, track.onTop)` in `types.ts`. Full-frame can also be a per-track MODE via `fullFrameParam: 'someParam'` (Oscilloscope's "Fit to screen"): the track is full-frame while that param is ≥ 0.5, and the on-top pass follows the SAME param, because a screen-pinned overlay that also depth-sorted against scenery would be neither one thing nor the other. ObjectRenderer and VisualScene both resolve through those helpers so they cannot disagree about which pass an object belongs to. Switching an instrument from fixed `fullFrame` to a mode needs a persistence upgrade step that writes the param on existing tracks (see UPGRADES[10]) — otherwise every saved project silently changes look.
 - VisualCopy color shifts arrive via `applyColorShiftToInstrumentParams` / `InstrumentCopyContext` — declare color params properly and this is automatic.
 - `identityColor` — what the track WEARS in the timeline/piano-roll UI (`utils/trackDisplayColor.ts` resolves; OKLCH recipes re-voice it). Movers/splitters/colorizers have their own counterpart - a required `identityColor` on the definition, from `core/visualCopies/identityColors.ts` - and since 2026-07-31 child lanes no longer inherit their instrument's colour at all. A hex literal = fixed identity; `{ param: 'key' }` = follow that color param's current value. Omit it and an instrument with exactly ONE color param follows it automatically; near-achromatic values (white/black text or bg defaults) fall back to the track's hue-cycle color, so a white-defaulting param is safe to point at. Instruments with multiple color params (or an unrepresentative sole one, e.g. a background) must declare explicitly.
 
-Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the six solids — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own). The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
+Shared helpers: `shapes.tsx` (circle/triangle), `specInstrument.tsx` (spec-driven rendering), `laserSphereCore.ts`, `particleWordCloud.ts`, `FundamentalGeometry.tsx` (the solid vocabulary — `FundamentalMesh` for the stock material, `FundamentalGeometryShape` when you bring your own; the id list is APPEND-ONLY because tracks store the id string, and `fundamentalGeometry.test.ts` pins the order. Its surface toggles — reflective/refractive/lit/textured — resolve through the pure `fundamentalMaterialSettings` and land via `applyFundamentalSurface`, shared by Cube and its panel preview so they can't drift; flag flips set `needsUpdate` only when a shader feature actually toggles).
+
+## A param that shapes GEOMETRY is built in the frame callback, not declared
+
+Cube's TUBE (torus family) and SIDES (prism/cone) change constructor args, and the
+component never re-renders on a param edit — `state.params` only reaches the frame
+callback. Declaring `<torusGeometry args={...}>` from a param therefore renders the
+default forever. The pattern (Cube is the reference): mount the mesh with NO
+declarative geometry (`FundamentalMesh` allows omitting `geometry`), and in the
+callback compare the param against a cached last-built value, swap
+`mesh.geometry` via the shared `build*Geometry` helper only when it moved, dispose
+the old one, and dispose the survivors in a `useEffect` cleanup — the imperative
+geometry is invisible to r3f's auto-dispose. Don't subscribe to ProjectStore for
+this: `s.tracks` only carries the ACTIVE scene, so a previewed-but-inactive scene
+would silently render defaults. The camera is an instrument too (`CameraControl`, `CameraOrbit`); full-frame filter instruments: `ColorFilters`, `FilmStock`. Media instruments (`Video`, `Photo`, `PhotoSlot`) delegate time models to `core/video|photo`.
 
 ## Camera instruments own the camera, and only one can
 
@@ -164,6 +188,36 @@ These four render `null` and post-process their scene's render target instead. T
 - **Rate can be the MIDI vocabulary.** Strobe puts its rates on labelled rows instead of a knob, so speed is *played* (the eighths→sixty-fourths build is the gesture) and the panel keeps only real settings. Its phase comes from the ABSOLUTE beat, not the note start, so several strobes stay locked to each other and off-grid notes still flash on the grid. Past ~1/32 the flash outruns a 60fps frame and reads as a shimmer whose texture depends on frame rate — that is the honest ceiling, not a bug to fix.
 - **A row's PITCH is the saved value, so shipped pitches are frozen.** Strobe's straight rows own 68–72 (1/4 … 1/64) and cannot be renumbered: a project stores the pitch, so remapping would silently re-time every existing strobe. Later families were appended *below* that block — triplets at 67–65, frame rows at 64–61 — which keeps pitch monotonically descending down the row list. Extending a row vocabulary means appending new pitches at one end, never resequencing for a tidier order: the same append-only discipline as the shader modes above. A colocated test pins the frozen five.
 - **Wall-clock rates must still be derived FROM the beat.** Strobe's `f` rows are a fixed Hz on a *nominal* 60fps grid (`STROBE_REFERENCE_FPS`), resolved by `strobeCycleBeats(row, secPerBeat)` — seconds = beat × secPerBeat, so they stay a pure function of the playhead. Reading a real frame counter or `performance.now` would be the obvious implementation and would break everything the one rule buys: a paused frame would keep flickering, scrub would not match playback, and a 30 or 120fps export would run at the wrong speed. The cost of doing it properly is that it assumes a constant tempo (fine — one BPM per project; a tempo map would need integrating instead). `strobeGate` is deliberately unit-agnostic (`position / cycleLength`) so the runtime can pass beats and the panel preview seconds without a second copy of the phase logic.
+
+## Screen-space set operations between copies (OverlapShape's stencil recipe)
+
+`OverlapShape.tsx` renders XOR/parity between coplanar copies with a five-pass
+stencil stack (spec + essay in `overlapShapeCore.ts`, pinned by its test). Facts
+that cost time to establish, for the next instrument that wants set operations:
+
+- **Multi-pass = multiple sibling meshes with consecutive `renderOrder`s**, one
+  material each. Because renderOrder interleaves ACROSS objects, the passes
+  compose over every occurrence of every track of the instrument — which is
+  exactly what makes splitter/mover copies interact. Keep all passes in the
+  same render list: leave `transparent` alone and applyMaterialOpacity flips
+  the whole stack between lists together on fades, preserving pass order.
+- **"Same plane only" is `depthFunc: EqualDepth` against a depth prepass** — a
+  colorWrite-false mesh at the first renderOrder. Coplanar surfaces interpolate
+  identical depth per pixel, different depths fail Equal and just occlude.
+- **Stencil needs a stencil buffer on whatever target the meshes rasterize
+  into** — WebGLRenderTarget defaults to `stencilBuffer: false`, and a missing
+  buffer FAILS OPEN (every stencil test passes, writes ignored). VisualScene's
+  per-scene `target` and ShaderWrapper's `src` now carry one; a new offscreen
+  path that renders instrument geometry must too. Order passes so the
+  fail-open degrade is sane (OverlapShape draws its overlap fill BEFORE its
+  base fill so a stencil-less context shows a plain silhouette).
+- The scene loop's `gl.clear(true, true, true)` clears stencil each frame, but
+  leave the buffer zeroed behind you anyway (a final Always/Zero cleanup pass)
+  so the front pass and other tracks start clean.
+- **An even copy count stacked in place is INVISIBLE by design** under parity
+  (6 identical copies = even coverage everywhere = full cutout). It looks
+  exactly like the instrument not rendering; check the copy transforms before
+  suspecting the passes.
 
 ## Generated surfaces (a texture that travels with the mesh)
 

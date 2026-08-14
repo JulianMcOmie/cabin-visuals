@@ -16,5 +16,6 @@
 ## Semantics to preserve
 
 - Audio **never time-stretches**; a BPM change re-anchors (beat window recomputed from fixed seconds). The audible seam at re-anchor is inherent — gestures batch it to release (see playback.ts drag suppression).
+- **Slow monitoring (½× / ¼×) is the one thing that changes a clip's playback speed — and it is VARISPEED, not time-stretch**: the player's `playbackRate` resamples, so the pitch drops an octave per halving (a deliberate product decision, and what the tooltips promise). It is not a tempo change: `blockPlacement` still runs at the PROJECT bpm, so a block's beat window never moves. The rate is spent in exactly two places — `delayAtRate` stretches the wall-clock delay, and the player's own rate stretches the clip — which is what keeps a clip glued to its beats at any speed (`core/playbackRate.test.ts` pins that three-way agreement). `duration` passed to `Player.start` stays in SOURCE seconds: Tone divides it by playbackRate itself. `armAll`'s `rate` defaults to 1, so export (which calls `blockPlacement` directly) is untouched.
 - An `AudioBlock`'s beat window is DERIVED at schedule time from `startBar + trim + tempo`, never stored.
 - Audio tracks are project-level (outside scenes) and pinned to the top of the timeline.

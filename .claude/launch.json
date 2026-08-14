@@ -27,10 +27,52 @@
       "port": 3004
     },
     {
+      "name": "dev-3003",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3003", "npm", "run", "dev", "--", "--port", "3003"],
+      "port": 3003
+    },
+    {
       "name": "dev-3005",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3005", "npm", "run", "dev", "--", "--port", "3005"],
       "port": 3005
+    },
+    {
+      "name": "dev-3006",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3006", "npm", "run", "dev", "--", "--port", "3006"],
+      "port": 3006
+    },
+    {
+      "name": "dev-3040",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3040", "npm", "run", "dev", "--", "--port", "3040"],
+      "port": 3040
+    },
+    {
+      "name": "dev-3041",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3041", "npm", "run", "dev", "--", "--port", "3041"],
+      "port": 3041
+    },
+    {
+      "name": "dev-3051",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3051", "npm", "run", "dev", "--", "--port", "3051"],
+      "port": 3051
+    },
+    {
+      "name": "dev-3050-win",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set NEXT_DIST_DIR=.next-isolated-3050&& npx next dev --turbopack --port 3050"],
+      "port": 3050
+    },
+    {
+      "name": "dev-3052",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3052", "npm", "run", "dev", "--", "--port", "3052"],
+      "port": 3052
     }
   ]
 }

@@ -30,6 +30,7 @@ export type AnalyticsEvent =
   | 'project_opened'
   | 'project_deleted'
   | 'project_duplicated'
+  | 'project_gate_shown' // props: { source: 'create' | 'duplicate' } - a guest at the guest-session cap clicked a create affordance and was shown the signup invitation
   // Auth
   | 'signup_started'
   | 'signup_password_set'
@@ -44,6 +45,8 @@ export type AnalyticsEvent =
   | 'editor_upgrade_clicked'
   | 'editor_discord_clicked'
   | 'export_clicked'
+  | 'export_gate_shown' // a guest reached the final Export click and was shown the keep-&-export signup invitation
+  | 'save_to_cloud_clicked' // props: { from: 'guest' | 'demo' } - the top bar's "Saved locally · Save to cloud" chip
   | 'lyrics_clicked'
   | 'lyrics_transcribe_clicked'
   | 'lyrics_align_clicked'

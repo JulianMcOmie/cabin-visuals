@@ -26,6 +26,24 @@ export function useAuth() {
     // Only pay the network cost once; later mounts already have the cache and
     // stay fresh through the subscription below.
     if (!resolvedOnce) {
+      // Seed from the STORED session before validating it. getSession() reads
+      // local storage, so consumers can fire their own RLS-guarded queries in
+      // the same tick; getUser() then checks that token against the server and
+      // corrects this if it disagrees.
+      //
+      // The order is load-bearing, not stylistic. auth-js runs both behind one
+      // lock (_acquireLock in GoTrueClient) and getUser() holds it across its
+      // network round trip - so calling getUser() first parks the local read,
+      // and onAuthStateChange's INITIAL_SESSION with it, behind a full auth RTT.
+      // That was a whole round trip in front of the projects grid before it
+      // could even ask for the project list.
+      supabase.auth.getSession().then(({ data }) => {
+        // Lost the race to the authoritative answer - don't walk it back.
+        if (resolvedOnce) return
+        cachedUser = data.session?.user ?? null
+        resolvedOnce = true
+        if (mounted) { setUser(cachedUser); setLoading(false) }
+      })
       supabase.auth.getUser().then(({ data }) => {
         cachedUser = data.user
         resolvedOnce = true

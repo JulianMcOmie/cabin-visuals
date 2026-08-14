@@ -3,6 +3,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import type { VisualCopy } from './types'
 import { PARAMETRIC_PATTERN_COLOR } from './identityColors'
 
@@ -22,7 +23,10 @@ export interface ParametricPatternSettings {
   amount: number
   frequencyA: number
   frequencyB: number
+  /** A parameter of the CURVE (petal width, tube thickness…), not a copy size. */
   shape: number
+  /** Uniform scale on each copy, about its own center — independent of radius. */
+  size: number
   phaseDegrees: number
   /** 0 = XY, 1 = XZ, 2 = YZ. */
   plane: number
@@ -199,8 +203,15 @@ function transformsForPattern(
   const positions = Array.from({ length: count }, (_, slot) =>
     parametricPatternPosition(slot, count, settings, midi),
   )
+  // SIZE (the shared splitter knob) post-multiplies each slot, so it grows the
+  // copies without touching the curve they sit on - RADIUS and AMOUNT stay the
+  // pattern's own scale. Note it is unrelated to SHAPE, which is a parameter of
+  // the curve itself.
+  const size = splitterSize(settings.size)
   return positions.map((position, slot) => {
-    if (settings.orientation === 0) return new Matrix4().makeTranslation(position.x, position.y, position.z)
+    if (settings.orientation === 0) {
+      return applySplitterSize(new Matrix4().makeTranslation(position.x, position.y, position.z), size)
+    }
 
     const direction = settings.orientation === 1
       ? position.clone()
@@ -208,7 +219,10 @@ function transformsForPattern(
     if (direction.lengthSq() < 1e-12) direction.copy(X_AXIS)
     else direction.normalize()
     const rotation = new Quaternion().setFromUnitVectors(X_AXIS, direction)
-    return new Matrix4().makeRotationFromQuaternion(rotation).setPosition(position)
+    return applySplitterSize(
+      new Matrix4().makeRotationFromQuaternion(rotation).setPosition(position),
+      size,
+    )
   })
 }
 
@@ -235,6 +249,7 @@ export const parametricPatternSplitter: MoverOrSplitterDefinition<ParametricPatt
     },
     { key: 'copies', label: 'Copies', min: 1, max: MAX_COPIES, step: 1, default: 48 },
     { key: 'radius', label: 'Radius', min: 0, max: 20, step: 0.1, default: 3 },
+    SPLITTER_SIZE_PARAM,
     { key: 'amount', label: 'Amount', min: 0, max: 10, step: 0.05, default: 1 },
     { key: 'frequencyA', label: 'Frequency A', min: 1, max: 32, step: 1, default: 5 },
     { key: 'frequencyB', label: 'Frequency B', min: 1, max: 32, step: 1, default: 2 },

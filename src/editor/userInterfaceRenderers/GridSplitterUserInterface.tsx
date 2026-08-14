@@ -87,7 +87,12 @@ function resolveLayout(settings: GridSettings) {
   const copies = resolveVisualCopies([gridSplitter.resolve({ settings, notes: [] })], 0)
   const matrices = copies.map((copy) => copy.transform.elements)
   let reach = 1
-  for (const e of matrices) reach = Math.max(reach, Math.hypot(e[12], e[13], e[14]) + CUBE_HALF * 2)
+  for (const e of matrices) {
+    // Basis column length = the copy's scale, so a big SIZE stays framed
+    // instead of growing out through the window's edges.
+    const scale = Math.hypot(e[0], e[1], e[2])
+    reach = Math.max(reach, Math.hypot(e[12], e[13], e[14]) + CUBE_HALF * 2 * scale)
+  }
   return { matrices, reach }
 }
 
@@ -431,6 +436,7 @@ interface GridBindings {
   columns: NumBinding
   depth: NumBinding
   spacing: NumBinding
+  size: NumBinding | null
   columnsMode: SelectBinding
   rowsMode: SelectBinding
   depthMode: SelectBinding
@@ -445,10 +451,11 @@ interface GridBindings {
 /** Hooks live here, below the renderer's fallback branch. */
 function GridConsole({ bound }: { bound: GridBindings }) {
   const {
-    rows, columns, depth, spacing, columnsMode, rowsMode, depthMode,
+    rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
     columnsRadius, rowsRadius, depthRadius, plane, indexing, rest,
   } = bound
 
+  const sizeValue = size?.value
   const columnsRadiusValue = columnsRadius?.value
   const rowsRadiusValue = rowsRadius?.value
   const depthRadiusValue = depthRadius?.value
@@ -463,13 +470,14 @@ function GridConsole({ bound }: { bound: GridBindings }) {
     columnsMode: columnsMode.value,
     rowsMode: rowsMode.value,
     depthMode: depthMode.value,
+    ...(sizeValue !== undefined ? { size: sizeValue } : {}),
     ...(columnsRadiusValue !== undefined ? { columnsRadius: columnsRadiusValue } : {}),
     ...(rowsRadiusValue !== undefined ? { rowsRadius: rowsRadiusValue } : {}),
     ...(depthRadiusValue !== undefined ? { depthRadius: depthRadiusValue } : {}),
   }), [
     rows.value, columns.value, depth.value, spacing.value, plane.value, indexing.value,
     columnsMode.value, rowsMode.value, depthMode.value,
-    columnsRadiusValue, rowsRadiusValue, depthRadiusValue,
+    sizeValue, columnsRadiusValue, rowsRadiusValue, depthRadiusValue,
   ])
 
   const [horizontalAxis, verticalAxis] = PLANE_AXES[plane.value] ?? PLANE_AXES[0]
@@ -489,16 +497,33 @@ function GridConsole({ bound }: { bound: GridBindings }) {
         <AxisStrip axis={AXIS_LETTERS[normalAxis]} role="DEPTH" mode={depthMode} count={depth} radius={depthRadius} />
       </div>
       <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1.5">
-        <LaserKnob
-          value={spacing.value}
-          min={spacing.def.min}
-          max={spacing.def.max}
-          step={spacing.def.step}
-          defaultValue={spacing.def.default}
-          label="SPACING"
-          accent={ACCENT}
-          onChange={spacing.set}
-        />
+        {/* The two independent axes of the layout, side by side: SPACING moves
+            the cells apart, SIZE grows them in place. */}
+        <div className="flex items-center gap-3">
+          <LaserKnob
+            value={spacing.value}
+            min={spacing.def.min}
+            max={spacing.def.max}
+            step={spacing.def.step}
+            defaultValue={spacing.def.default}
+            label="SPACING"
+            accent={ACCENT}
+            onChange={spacing.set}
+          />
+          {size && (
+            <LaserKnob
+              value={size.value}
+              min={size.def.min}
+              max={size.def.max}
+              step={size.def.step}
+              defaultValue={size.def.default}
+              label="SIZE"
+              ariaLabel={size.def.label}
+              accent={ACCENT}
+              onChange={size.set}
+            />
+          )}
+        </div>
         <div className="flex flex-col items-end gap-1">
           <IconRadioRow b={plane} glyph={(value) => <PlaneGlyph value={value} />} />
           <IconRadioRow b={indexing} glyph={(value) => <IndexingGlyph value={value} />} />
@@ -519,6 +544,9 @@ export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition 
   const columns = pool.num('columns')
   const depth = pool.num('depth')
   const spacing = pool.num('spacing')
+  // Optional binding, like the radii below: the console must still render if a
+  // definition ever ships without the shared SIZE knob.
+  const size = pool.num('size')
   const columnsMode = pool.select('columnsMode')
   const rowsMode = pool.select('rowsMode')
   const depthMode = pool.select('depthMode')
@@ -537,7 +565,7 @@ export const GridSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition 
 
   return (
     <GridConsole bound={{
-      rows, columns, depth, spacing, columnsMode, rowsMode, depthMode,
+      rows, columns, depth, spacing, size, columnsMode, rowsMode, depthMode,
       columnsRadius, rowsRadius, depthRadius, plane, indexing, rest: pool.rest(),
     }} />
   )

@@ -122,6 +122,32 @@ test('plane and orientation settings change transforms without changing position
   assert.deepEqual(yz.toArray(), [xy.z, xy.x, xy.y])
 })
 
+test('size scales each copy about its own center, leaving the curve alone', () => {
+  for (const orientation of [0, 2]) {
+    const plain = resolveVisualCopies([
+      parametricPatternSplitter.resolve({ settings: settings({ copies: 8, orientation }), notes: [] }),
+    ], 0)
+    const scaled = resolveVisualCopies([
+      parametricPatternSplitter.resolve({ settings: settings({ copies: 8, orientation, size: 2 }), notes: [] }),
+    ], 0)
+    // Same points on the pattern - RADIUS and AMOUNT still own the curve...
+    assert.deepEqual(
+      scaled.map((copy) => copy.transform.elements.slice(12, 15)),
+      plain.map((copy) => copy.transform.elements.slice(12, 15)),
+    )
+    // ...and every copy is twice the size, oriented or not.
+    for (const copy of scaled) {
+      const e = copy.transform.elements
+      assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 2) < 1e-9, `orientation ${orientation}`)
+    }
+    // Default 1 is neutral: a save from before the knob is untouched.
+    for (const copy of plain) {
+      const e = copy.transform.elements
+      assert.ok(Math.abs(Math.hypot(e[0], e[1], e[2]) - 1) < 1e-9)
+    }
+  }
+})
+
 test('MIDI evaluation and generated transforms are scrub-deterministic', () => {
   const resolved = parametricPatternSplitter.resolve({
     settings: settings({ pattern: 2, copies: 12 }),

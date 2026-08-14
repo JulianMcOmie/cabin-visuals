@@ -154,6 +154,20 @@ export interface FramedVisualCopy {
 export interface MoverOrSplitter {
   apply(visualCopy: VisualCopy, context: MoverOrSplitterContext): VisualCopy[]
   /**
+   * OPTIONAL: the composition convention this entry's transform uses, as
+   * documented on `VisualCopy.transform`. 'local' (the default when absent)
+   * post-multiplies (`previous · delta`); 'chainRoot' PRE-multiplies
+   * (`delta · previous`) and may read the incoming copy's chain-frame
+   * position to aim its delta (Symmetric Motion). Ordinary chain evaluation
+   * never consults it - the entry composes its own output - but a splitter's
+   * CHILD chain (splitterChildChain.ts) must re-anchor LOCAL deltas about the
+   * splitter's origin while taking chain-root deltas as-is, since those are
+   * already expressed on the frame's fixed axes. A chain-root definition that
+   * omits this still behaves correctly under translation-only splitters
+   * (grids), where the two anchorings coincide.
+   */
+  composition?: 'local' | 'chainRoot'
+  /**
    * OPTIONAL: like `apply`, but separates each output copy's reference frame
    * from motion internal to it (see `FramedVisualCopy`). The chain kernel
    * prefers this when present, carries each copy's accumulated internal motion

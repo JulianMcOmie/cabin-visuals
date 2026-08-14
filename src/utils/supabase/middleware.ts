@@ -27,15 +27,40 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  // Do not run code between createServerClient and the session read below. A
+  // simple mistake could make it very hard to debug issues with users being
+  // randomly logged out.
 
-  // IMPORTANT: DO NOT REMOVE auth.getUser()
-
+  // getSession(), not getUser(). This runs in front of EVERY full page load -
+  // nothing is sent to the browser until it resolves - and getUser() is
+  // unconditionally a network round trip to the auth server. That is the same
+  // round trip that was taken off the client in "Auth resolves from the stored
+  // session"; leaving it here just moved it from after the HTML to before it,
+  // which is why a client-side navigation to /projects got fast and a refresh
+  // did not.
+  //
+  // Sessions still refresh. The rotation lives in GoTrueClient.__loadSession(),
+  // which both getSession() and getUser() go through, and it is NOT gated on
+  // the `autoRefreshToken: false` that createServerClient sets: a token inside
+  // EXPIRY_MARGIN_MS (90s) of expiring is refreshed there and the rotated
+  // cookies go out through the setAll adapter above on TOKEN_REFRESHED. So the
+  // network cost is paid once an hour when the token actually needs it, instead
+  // of on every request.
+  //
+  // What is given up: getSession() reads the cookie without verifying its
+  // signature, so a forged one is believed HERE. That is deliberate and matches
+  // useAuth/usePlan - this value only decides which way to redirect. Every page
+  // is a client component that re-derives auth for itself, no server component
+  // reads user data, and every API route and server action does its own
+  // getUser(). So the worst a forged cookie buys is the /projects shell instead
+  // of a bounce to /login, where RLS still returns an empty list.
+  //
+  // Read only whether a session EXISTS - never session.user. On the server that
+  // property is behind a Proxy that logs an "insecure" warning on access.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+  const signedIn = !!session
 
   const pathname = request.nextUrl.pathname;
 
@@ -65,7 +90,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = authRoutes.some(path => pathname.startsWith(path));
 
   // Redirect unauthenticated users from *protected* pages to login
-  if (!user && !isPublicPath) {
+  if (!signedIn && !isPublicPath) {
     console.log(`Middleware: Unauthenticated user accessing protected path ${pathname}. Redirecting to login.`);
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -73,7 +98,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users from auth pages (login, signup, reset) to the projects page
-  if (user && isAuthRoute) {
+  if (signedIn && isAuthRoute) {
       console.log(`Middleware: Authenticated user accessing auth route ${pathname}. Redirecting to projects.`);
       const url = request.nextUrl.clone();
       url.pathname = '/projects';

@@ -38,6 +38,7 @@ import type { MidiRowDef } from '../../instruments/types'
 import type { ResolvedNote } from '../visual/types'
 import type { MoverOrSplitterDefinition } from './definitions'
 import { normalizedVelocity } from './motionBasis'
+import { applySplitterSize, splitterSize, SPLITTER_SIZE_PARAM } from './splitterSize'
 import type { VisualCopy } from './types'
 import { TUNNEL_COLOR } from './identityColors'
 
@@ -47,6 +48,9 @@ export interface TunnelSettings {
   /** Ring count down the axis. */
   rings: number
   radius: number
+  /** Uniform scale on each copy, about its own center. Independent of the
+   *  corridor's geometry: radius, depth and near end stay world-metric. */
+  size: number
   /** Axial length the rings are spread over, and the wrap period. */
   depth: number
   /** Axial coordinate copies wrap AT. Keep it at least `fadeDistance` behind
@@ -401,7 +405,13 @@ function slotTransform(
   // by the placement's scale keeps Depth and Near end in scene units. Only the
   // offsets are normalised; each copy still RENDERS at the object's own size.
   position.set(position.x / placementScale[0], position.y / placementScale[1], position.z / placementScale[2])
-  return { transform: transform.setPosition(position), opacity, depthIntoTunnel }
+  // SIZE is the shared splitter knob (splitterSize.ts) and is deliberately NOT
+  // divided by the placement scale: it is a multiplier on whatever size the
+  // object draws itself at, not a world measurement. Post-multiplied, so it
+  // scales the copy about its own center and the corridor's geometry - radius,
+  // depth, near end, and therefore the off-screen wrap - is untouched.
+  const transformed = transform.setPosition(position)
+  return { transform: applySplitterSize(transformed, splitterSize(settings.size)), opacity, depthIntoTunnel }
 }
 
 export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
@@ -416,6 +426,7 @@ export const tunnelSplitter: MoverOrSplitterDefinition<TunnelSettings> = {
     { key: 'copiesPerRing', label: 'Copies per ring', min: 1, max: MAX_COPIES_PER_RING, step: 1, default: 6 },
     { key: 'rings', label: 'Rings', min: 1, max: MAX_RINGS, step: 1, default: 8 },
     { key: 'radius', label: 'Radius', min: 0, max: 20, step: 0.1, default: 3 },
+    SPLITTER_SIZE_PARAM,
     { key: 'depth', label: 'Depth', min: 1, max: 200, step: 1, default: 40 },
     // Default camera z = 5, default fade 6: wrapping at 12 keeps the whole
     // fade-out band (6..12) behind it.

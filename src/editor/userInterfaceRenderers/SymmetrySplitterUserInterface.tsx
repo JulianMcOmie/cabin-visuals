@@ -1,6 +1,8 @@
 'use client'
 
-// Bespoke settings for the Symmetry splitter. The hero is the fold diagram: the
+// Bespoke settings for the Symmetry splitter, migrated to
+// docs/instrument-panel-design-guide.md on the console kit (./console). The
+// hero is the fold window: the
 // mirror lines drawn across the pad, the wedge between the first pair shaded as
 // the fundamental domain, and one deliberately ASYMMETRIC glyph per copy drawn
 // through that copy's own in-plane basis - so reflected copies visibly read as
@@ -13,39 +15,33 @@
 // reads its geometry from the definition's own layout helper.
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { RotateCcw } from 'lucide-react'
 import {
   symmetryLayout,
   symmetryMirrorAngles,
   type SymmetrySettings,
 } from '../core/visualCopies/symmetry'
-import { isNumberParam, type NumberParamDef, type SelectParamDef } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import { SYMMETRY_COLOR } from '../core/visualCopies/identityColors'
+import { SPLITTER_SIZE_DEFAULT } from '../core/visualCopies/splitterSize'
+import type { NumberParamDef } from '../instruments/types'
+import {
+  bindPanel,
+  Console,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  towardWhite,
+  withAlpha,
+  type NumBinding,
+  type SelectBinding,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
-interface NumBinding { def: NumberParamDef; value: number; set: (v: number) => void }
-interface SelectBinding { def: SelectParamDef; value: number; set: (v: number) => void }
-
-function bind(parameters: readonly UserInterfaceParameter[]) {
-  const pool = new Map(parameters.map((p) => [p.definition.key, p]))
-  return {
-    num(key: string): NumBinding | null {
-      const b = pool.get(key)
-      if (!b || !isNumberParam(b.definition) || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    select(key: string): SelectBinding | null {
-      const b = pool.get(key)
-      if (!b || b.definition.type !== 'select' || typeof b.value !== 'number') return null
-      pool.delete(key)
-      return { def: b.definition, value: b.value, set: b.setValue }
-    },
-    rest(): UserInterfaceParameter[] { return [...pool.values()] },
-  }
-}
+// The accent comes FROM THE DEFINITION - the same hue this splitter's timeline
+// blocks and piano-roll notes wear.
+const ACCENT = SYMMETRY_COLOR
 
 // Mirrors the shared splitter MIDI grammar: one row per copy counting down from
 // pitch 127, and a note on hides that copy.
@@ -149,6 +145,7 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
     : `${slots.length} COPIES · ${mirrorAngles.length} ${mirrorAngles.length === 1 ? 'MIRROR' : 'MIRRORS'}`
 
   return (
+    <PreviewWindow height={170} testId="symmetry-fold-window">
     <div
       ref={padRef}
       data-testid="symmetry-fold-pad"
@@ -173,14 +170,13 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
       }}
       onDoubleClick={() => { tilt.set(tilt.def.default); spread.set(spread.def.default) }}
       onKeyDown={onKeyDown}
-      className="relative w-full cursor-crosshair touch-none select-none border-y border-[var(--border)] bg-[var(--bg-canvas)] outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-      style={{ aspectRatio: `${VB_W} / ${VB_H}` }}
+      className="absolute inset-0 cursor-crosshair touch-none select-none outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/50"
     >
       <svg aria-hidden="true" viewBox={`0 0 ${VB_W} ${VB_H}`} className="h-full w-full">
         {/* the reach of the spread drag, plus the plane's axis letters */}
-        <ellipse cx={CX} cy={CY} rx={SPREAD_MAX_PX * view.sx} ry={SPREAD_MAX_PX * view.sy} className="fill-none stroke-[var(--border-subtle)]" strokeWidth="1" />
-        <text x={CX + (SPREAD_MAX_PX + 8) * view.sx} y={CY + 2.5} className="fill-[var(--text-muted)] font-mono text-[7px]">{view.h}</text>
-        <text x={CX} y={CY - (SPREAD_MAX_PX + 6) * view.sy} textAnchor="middle" className="fill-[var(--text-muted)] font-mono text-[7px]">{view.v}</text>
+        <ellipse cx={CX} cy={CY} rx={SPREAD_MAX_PX * view.sx} ry={SPREAD_MAX_PX * view.sy} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        <text x={CX + (SPREAD_MAX_PX + 8) * view.sx} y={CY + 2.5} fill="rgba(255,255,255,0.35)" className="font-mono text-[7px]">{view.h}</text>
+        <text x={CX} y={CY - (SPREAD_MAX_PX + 6) * view.sy} textAnchor="middle" fill="rgba(255,255,255,0.35)" className="font-mono text-[7px]">{view.v}</text>
 
         {/* the fundamental wedge: the slice of the plane every copy is folded
             out of. Shading it makes "one wedge, mirrored around" legible. */}
@@ -188,7 +184,7 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
           const half = 180 / mirrorAngles.length
           const a = project(Math.sin((mirrorAngles[0] * Math.PI) / 180) * spread.def.max, Math.cos((mirrorAngles[0] * Math.PI) / 180) * spread.def.max)
           const b = project(Math.sin(((mirrorAngles[0] + half) * Math.PI) / 180) * spread.def.max, Math.cos(((mirrorAngles[0] + half) * Math.PI) / 180) * spread.def.max)
-          return <path d={`M${CX} ${CY} L${a.x} ${a.y} L${b.x} ${b.y} Z`} className="fill-[var(--accent)] opacity-[0.09]" />
+          return <path d={`M${CX} ${CY} L${a.x} ${a.y} L${b.x} ${b.y} Z`} fill={ACCENT} className="opacity-[0.09]" />
         })()}
 
         {/* the mirror lines themselves, drawn full width through the center */}
@@ -203,13 +199,13 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
               y1={CY - dy}
               x2={CX + dx}
               y2={CY + dy}
-              className={k === 0 ? 'stroke-[var(--accent-muted)]' : 'stroke-[var(--border-strong)]'}
+              stroke={k === 0 ? withAlpha(ACCENT, 0.55) : 'rgba(255,255,255,0.25)'}
               strokeWidth="1"
               strokeDasharray="4 3"
             />
           )
         })}
-        <path d={`M${CX - 4} ${CY}H${CX + 4}M${CX} ${CY - 4}V${CY + 4}`} className="fill-none stroke-[var(--border-strong)]" strokeWidth="1" />
+        <path d={`M${CX - 4} ${CY}H${CX + 4}M${CX} ${CY - 4}V${CY + 4}`} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
 
         {/* one flag per copy, drawn through that copy's own basis */}
         {slots.map((slot) => {
@@ -222,7 +218,8 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
                   cx={slot.x}
                   cy={slot.y}
                   r="8"
-                  className={`fill-none ${active ? 'stroke-[var(--accent-hover)]' : 'stroke-[var(--accent-muted)]'}`}
+                  fill="none"
+                  stroke={active ? towardWhite(ACCENT, 0.3) : withAlpha(ACCENT, 0.55)}
                   strokeWidth="1"
                   strokeDasharray={slot.index === 0 && !active ? '2 2' : undefined}
                 />
@@ -230,22 +227,23 @@ function FoldPad({ settings, tilt, spread, planeLabel, hoveredSlot, onHoverSlot 
               <path
                 d={COPY_GLYPH}
                 transform={slot.matrix}
-                className={slot.index === 0
-                  ? 'fill-[var(--accent)]'
+                fill={slot.index === 0
+                  ? ACCENT
                   : active
-                    ? 'fill-[var(--accent-hover)]'
-                    : slot.mirrored ? 'fill-[var(--text-3)]' : 'fill-[var(--text-muted)]'}
+                    ? towardWhite(ACCENT, 0.3)
+                    : slot.mirrored ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.35)'}
               />
             </g>
           )
         })}
       </svg>
-      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-[var(--text-3)]">
+      <span className="pointer-events-none absolute bottom-1 left-1.5 font-mono text-[8px] tabular-nums text-white/60">
         {tilt.value}° · S {spread.value.toFixed(1)}
       </span>
-      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-[var(--text-muted)]">{planeLabel}</span>
-      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-[var(--text-muted)]">{info}</span>
+      <span className="pointer-events-none absolute right-1.5 top-1 font-mono text-[8px] text-white/30">{planeLabel}</span>
+      <span className="pointer-events-none absolute bottom-1 right-1.5 font-mono text-[8px] tabular-nums text-white/30">{info}</span>
     </div>
+    </PreviewWindow>
   )
 }
 
@@ -256,7 +254,7 @@ function MirrorsStepper({ b }: { b: NumBinding }) {
   const mirrors = clamp(Math.round(b.value), def.min, def.max)
   const commit = (raw: number) => b.set(clamp(Math.round(raw), def.min, def.max))
   const buttonClass =
-    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-sm leading-none text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] active:scale-95 disabled:pointer-events-none disabled:opacity-35'
+    'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm leading-none text-white/70 transition-colors hover:border-white/25 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-35'
 
   return (
     <div className="flex items-stretch gap-1">
@@ -288,10 +286,10 @@ function MirrorsStepper({ b }: { b: NumBinding }) {
           event.preventDefault()
           commit(mirrors + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1))
         }}
-        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--bg-app)] py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+        className="flex flex-1 cursor-ns-resize touch-none select-none items-baseline justify-center gap-1.5 rounded-md border border-white/10 bg-black/25 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-white/50"
       >
-        <span className="font-mono text-[16px] leading-none tabular-nums text-[var(--text)]">{mirrors}</span>
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-muted)]">
+        <span className="font-mono text-[16px] leading-none tabular-nums text-white/90">{mirrors}</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">
           {mirrors === 1 ? 'MIRROR' : 'MIRRORS'}
         </span>
       </div>
@@ -324,9 +322,10 @@ function PlaneSelector({ b }: { b: SelectBinding }) {
             aria-checked={active}
             title={`${b.def.label}: ${option.label}`}
             onClick={() => b.set(option.value)}
-            className={`flex flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${active
-              ? 'border-[var(--accent-muted)] bg-[rgba(53,167,230,0.12)] text-[var(--accent-hover)]'
-              : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text-3)]'}`}
+            className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-md border py-1.5 transition-colors ${
+              active ? '' : 'border-white/[0.07] bg-white/[0.025] text-white/30 hover:bg-white/[0.06] hover:text-white/65'
+            }`}
+            style={active ? { borderColor: withAlpha(ACCENT, 0.4), background: withAlpha(ACCENT, 0.15), color: towardWhite(ACCENT, 0.45) } : undefined}
           >
             <PlaneGlyph value={option.value} />
             <span className="text-[7px] font-semibold tracking-[0.08em]">{option.label}</span>
@@ -346,10 +345,10 @@ function MuteMap({ count, mirroredSlot, hoveredSlot, onHoverSlot }: {
   onHoverSlot: (slot: number | null) => void
 }) {
   return (
-    <div data-testid="symmetry-mute-map" className="rounded-md border border-[var(--border)] bg-[var(--bg-app)] p-1.5">
+    <div data-testid="symmetry-mute-map" className="rounded-md border border-white/[0.06] bg-black/25 p-1.5">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[8px] font-semibold tracking-[0.12em] text-[var(--text-3)] select-none">MUTE MAP</span>
-        <span className="text-[7px] text-[var(--text-muted)] select-none">note on hides the copy</span>
+        <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40 select-none">MUTE MAP</span>
+        <span className="text-[7px] text-white/25 select-none">note on hides the copy</span>
       </div>
       <div className="grid grid-cols-8 gap-[3px]">
         {Array.from({ length: count }, (_, slot) => {
@@ -361,13 +360,12 @@ function MuteMap({ count, mirroredSlot, hoveredSlot, onHoverSlot }: {
               title={`Copy ${slot + 1}${mirroredSlot(slot) ? ' (mirrored)' : ''} · mute with pitch ${pitch} (${noteName(pitch)})`}
               onPointerEnter={() => onHoverSlot(slot)}
               onPointerLeave={() => onHoverSlot(null)}
-              className={`cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors ${hovered
-                ? 'border-[var(--accent)] bg-[rgba(53,167,230,0.14)] text-[var(--accent-hover)]'
+              className="cursor-default rounded-[3px] border py-[3px] text-center font-mono text-[8px] leading-none tabular-nums transition-colors"
+              style={hovered
+                ? { borderColor: ACCENT, background: withAlpha(ACCENT, 0.14), color: towardWhite(ACCENT, 0.3) }
                 : slot === 0
-                  ? 'border-[var(--accent-muted)] text-[var(--text-3)]'
-                  : mirroredSlot(slot)
-                    ? 'border-[var(--border-subtle)] text-[var(--text-muted)]'
-                    : 'border-[var(--border)] text-[var(--text-muted)]'}`}
+                  ? { borderColor: withAlpha(ACCENT, 0.55), color: 'rgba(255,255,255,0.6)' }
+                  : { borderColor: mirroredSlot(slot) ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)' }}
             >
               {pitch}
             </span>
@@ -378,65 +376,35 @@ function MuteMap({ count, mirroredSlot, hoveredSlot, onHoverSlot }: {
   )
 }
 
-function SymmetryGlyph() {
-  return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden="true">
-      <path d="M10 2 V18" className="stroke-current" strokeWidth="1.2" strokeDasharray="2.5 2" fill="none" />
-      <path d="M8.4 6 L3 10 L8.4 14 Z" className="fill-current" />
-      <path d="M11.6 6 L17 10 L11.6 14 Z" className="fill-current opacity-50" />
-    </svg>
-  )
-}
-
 export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [hoveredSlot, setHoveredSlot] = useState<number | null>(null)
-  const pool = bind(parameters)
+  const pool = bindPanel(parameters)
   const mirrors = pool.num('mirrors')
   const tilt = pool.num('tilt')
   const spread = pool.num('spread')
   const plane = pool.select('plane')
+  // Optional: the console must survive a definition without the shared knob.
+  const size = pool.num('size', { optional: true })
 
   if (!mirrors || !tilt || !spread || !plane) return <ParameterList parameters={parameters} />
-  const rest = pool.rest()
 
   const settings: SymmetrySettings = {
     mirrors: clamp(Math.round(mirrors.value), mirrors.def.min, mirrors.def.max),
     tilt: tilt.value,
     spread: spread.value,
+    // The pad draws the FOLD - mirror lines, the fundamental wedge, and each
+    // copy's handedness - so it deliberately draws every copy at one glyph
+    // size. Scaling the glyphs by SIZE would bury the lines you drag at the
+    // top of the knob's range without saying anything the knob doesn't.
+    size: size?.value ?? SPLITTER_SIZE_DEFAULT,
     plane: plane.value,
   }
   const count = settings.mirrors * 2
   const planeLabel = plane.def.options.find((option) => option.value === plane.value)?.label ?? plane.def.options[0]?.label ?? ''
   const safeHover = hoveredSlot != null && hoveredSlot < count ? hoveredSlot : null
-  const resetAll = () => {
-    for (const bound of parameters) bound.setValue(bound.definition.default)
-  }
 
   return (
-    <section
-      data-testid="symmetry-user-interface"
-      className="-mx-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_14px_34px_rgba(0,0,0,.35)]"
-    >
-      <header className="flex h-9 items-center justify-between px-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--accent)]">
-            <SymmetryGlyph />
-          </div>
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text)]">Symmetry</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="rounded border border-[var(--border)] bg-[var(--bg-app)] px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-[var(--text-3)]">{count} ×</span>
-          <button
-            aria-label="Reset all Symmetry parameters"
-            title="Reset all"
-            onClick={resetAll}
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-2)]"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-      </header>
-
+    <Console accent={ACCENT} testId="symmetry-user-interface">
       <FoldPad
         settings={settings}
         tilt={tilt}
@@ -445,9 +413,13 @@ export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
         hoveredSlot={safeHover}
         onHoverSlot={setHoveredSlot}
       />
-
-      <div className="space-y-2 p-2">
+      <div className="flex flex-col gap-2 px-3 pb-3 pt-2">
         <MirrorsStepper b={mirrors} />
+        {size && (
+          <div className="flex justify-center">
+            <Knob b={size} label="SIZE" />
+          </div>
+        )}
         <PlaneSelector b={plane} />
         <MuteMap
           count={count}
@@ -455,12 +427,8 @@ export const SymmetrySplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
           hoveredSlot={safeHover}
           onHoverSlot={setHoveredSlot}
         />
-        {rest.length > 0 && (
-          <div className="border-t border-[var(--border-subtle)] pt-2">
-            <ParameterList parameters={rest} />
-          </div>
-        )}
+        <More parameters={pool.rest()} label="MORE" className="" />
       </div>
-    </section>
+    </Console>
   )
 }

@@ -5,6 +5,7 @@
 
 import type { FC } from 'react'
 import type { UserInterfaceRendererId } from '../userInterfaceRenderers/ids'
+import type { PanelSpec } from '../userInterfaceRenderers/console/spec'
 
 // A param is either numeric-valued (number / select / boolean - stored in track.params)
 // or string-valued (color / string - stored in track.stringParams). The union keeps the
@@ -136,11 +137,23 @@ export interface ObjectInstrumentDef {
    *  values (white/black/grey) also fall back to the cycle - see
    *  utils/trackDisplayColor.ts. */
   identityColor?: string | { param: string }
-  /** Registered settings UI. Every instrument explicitly chooses one. */
+  /** Registered settings UI. Every instrument explicitly chooses one.
+   *  Ignored when `panelSpec` is declared. */
   userInterfaceRenderer: UserInterfaceRendererId
+  /** A declarative console panel (userInterfaceRenderers/console/spec.tsx):
+   *  accent, optional preview component, rows of knobs/segments. Declaring one
+   *  here IS the whole settings UI - no ids.ts entry, no registry entry -
+   *  and it wins over `userInterfaceRenderer`. Type-only import: the def
+   *  carries data, TrackEditor does the rendering. */
+  panelSpec?: PanelSpec
   /** This instrument's signature abilities - each becomes a nested MIDI-lane sub-row
    *  on the track, and its notes are expressed by `component`. Omit for none. */
   abilities?: AbilityLaneDef[]
+  /** This instrument seats WORDS, so it accepts `wordFormation` child lanes -
+   *  arrangements its words are laid into, sequenced by MIDI
+   *  (core/visual/wordFormation.ts). The add-child menu reads this rather than
+   *  naming instrument ids, so a second text instrument opts in with one flag. */
+  seatsWords?: boolean
   /** The instrument's MIDI vocabulary: the ONLY rows its editor shows, in this
    *  order (first entry renders at the top). Omit for the full piano roll. */
   midiRows?: MidiRowDef[]

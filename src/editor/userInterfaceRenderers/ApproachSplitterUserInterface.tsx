@@ -1,10 +1,9 @@
 'use client'
 
-// Bespoke settings for the Approach splitter, following
-// docs/instrument-panel-design-guide.md (Laser Sphere is the reference): a
-// full-bleed panel washed in the splitter's warp-blue shade, a LIVE preview up
-// top, then one row of flat knobs - SPEED, DENSITY, DISTANCE, SIZE - with the
-// two segmented mode selectors on the right.
+// Bespoke settings for the Approach splitter, built from the console kit
+// (./console): a full-bleed panel washed in the splitter's warp-blue shade, a
+// LIVE preview up top, then one row of flat knobs - SPEED, DENSITY, DISTANCE,
+// SIZE - with the two segmented mode selectors on the right.
 //
 // The preview is not a mockup: it feeds the splitter's real resolve() and
 // applies the returned transforms to a field of small gems every frame, from a
@@ -19,10 +18,10 @@
 // actually takes at the current speed, so the last arrival always lands before
 // the loop wraps.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { ChevronDown, ChevronRight, Music, Waves, ZoomIn, ZoomOut } from 'lucide-react'
+import { Music, Waves, ZoomIn, ZoomOut } from 'lucide-react'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
 import {
   APPROACH_CAMERA_Z,
@@ -33,10 +32,20 @@ import {
 } from '../core/visualCopies/approach'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { towardWhite, withAlpha } from './colorWheel'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import {
+  bindPanel,
+  Console,
+  ControlRow,
+  Knob,
+  More,
+  ParameterList,
+  PreviewWindow,
+  spillOf,
+  useConsoleAccent,
+  type SelectBinding,
+  PreviewCanvas,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 import { APPROACH_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -44,7 +53,6 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 // The splitter has no color param (it only moves and scales copies), so the
 // panel wears the sensation it produces: warp-drive blue.
 const WARP = APPROACH_COLOR
-const WARP_SHADE = '#050b14'
 const ROOM = '#03060b'
 
 const MAX_PREVIEW_SLOTS = 48
@@ -164,15 +172,11 @@ function ApproachField({ settings }: { settings: ApproachSettings }) {
 
 function ApproachPreview({ settings }: { settings: ApproachSettings }) {
   return (
-    <div
-      data-testid="approach-preview"
-      className="relative h-[172px] overflow-hidden border-b border-white/[0.06]"
-      style={{ background: ROOM }}
-    >
+    <PreviewWindow height={172} testId="approach-preview">
       {/* The camera sits exactly where the splitter's defaults assume the stage
           camera sits, and does NOT orbit: the whole illusion is defined
           relative to the lens, so a free camera would misrepresent it. */}
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, APPROACH_CAMERA_Z], fov: 55 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <ApproachField settings={settings} />
         <pointLight position={[0, 1.5, APPROACH_CAMERA_Z - 1]} color={WARP} intensity={14} distance={30} decay={2} />
@@ -181,123 +185,30 @@ function ApproachPreview({ settings }: { settings: ApproachSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.16} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
-    </div>
+      </PreviewCanvas>
+    </PreviewWindow>
   )
 }
 
 // ── Controls ─────────────────────────────────────────────────────────────────
 
-/** Flat warp knob per the guide: the value arc IS the beam - a wide soft bloom
- *  under a hot core, white-hot tip dot at the terminus. Vertical drag,
- *  double-click resets, arrows nudge. */
-function WarpKnob({ parameter: bound, label, large = false }: {
-  parameter: UserInterfaceParameter
-  label: string
-  large?: boolean
-}) {
-  const dragRef = useRef<{ y: number; norm: number } | null>(null)
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-
-  const value = bound.value
-  const range = definition.max - definition.min
-  const percent = range === 0 ? 0 : clamp((value - definition.min) / range, 0, 1)
-  const angle = -135 + percent * 270
-
-  const commitNorm = (t: number) => {
-    const raw = definition.min + clamp(t, 0, 1) * range
-    const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-    bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
-  }
-
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    dragRef.current = { y: event.clientY, norm: percent }
-  }
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    commitNorm(dragRef.current.norm + (dragRef.current.y - event.clientY) / 140)
-  }
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].includes(event.key)) return
-    event.preventDefault()
-    const direction = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1
-    commitNorm(percent + direction * 0.03)
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col items-center">
-      <div
-        role="slider"
-        tabIndex={0}
-        aria-label={definition.label}
-        aria-valuemin={definition.min}
-        aria-valuemax={definition.max}
-        aria-valuenow={value}
-        title={`${definition.label} · drag vertically · double-click to reset`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onDoubleClick={() => bound.setValue(definition.default)}
-        onKeyDown={onKeyDown}
-        className={`relative ${large ? 'h-[52px] w-[52px]' : 'h-11 w-11'} cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50`}
-      >
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${WARP} 0deg ${percent * 270}deg, transparent ${percent * 270}deg 360deg)`,
-            filter: 'blur(6px)',
-            transform: 'scale(1.16)',
-            opacity: 0.85,
-          }}
-        />
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(from 225deg, ${towardWhite(WARP, 0.4)} 0deg ${percent * 270}deg, rgba(255,255,255,0.07) ${percent * 270}deg 270deg, transparent 270deg)`,
-          }}
-        />
-        <div className="absolute inset-[3px] rounded-full border border-white/10 bg-[#101720]" />
-        <div className="absolute inset-0" style={{ transform: `rotate(${angle}deg)` }}>
-          <span className="absolute left-1/2 top-[5px] h-2.5 w-[2px] -translate-x-1/2 rounded-full bg-white/90" />
-          <span
-            className="absolute left-1/2 top-[-1px] h-1 w-1 -translate-x-1/2 rounded-full bg-white"
-            style={{ boxShadow: `0 0 5px 1.5px ${WARP}` }}
-          />
-        </div>
-      </div>
-      <span className="mt-1 text-[8px] font-semibold tracking-[0.12em] text-white/40">{label}</span>
-      <span className="font-mono text-[9px] tabular-nums text-white/70">
-        {definition.step >= 1 ? value.toFixed(0) : value.toFixed(2)}
-      </span>
-    </div>
-  )
-}
-
-/** Segmented icon selector for a two-option select param. The icon carries the
- *  meaning and the tooltip carries the words, so the row stays narrow enough to
- *  sit beside the knobs. */
-function IconSegmented({ bound, label, icons, testId }: {
-  bound: UserInterfaceParameter
+/** Segmented icon selector for a two-option select param, in the solid-fill
+ *  family (Colorizer, Bass Ripple): the icon carries the meaning and the
+ *  tooltip carries the words, so the row stays narrow enough to sit beside the
+ *  knobs. */
+function IconSegmented({ b, label, icons, testId }: {
+  b: SelectBinding
   label: string
   icons: Record<number, { icon: typeof Waves; title: string }>
   testId: string
 }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+  const accent = useConsoleAccent()
+  const selected = Math.round(b.value)
 
   return (
     <div className="flex flex-col items-center gap-1" data-testid={testId}>
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
+        {b.def.options.map((option) => {
           const entry = icons[option.value]
           const Icon = entry?.icon
           const active = option.value === selected
@@ -307,11 +218,11 @@ function IconSegmented({ bound, label, icons, testId }: {
               aria-label={option.label}
               aria-pressed={active}
               title={entry?.title ?? option.label}
-              onClick={() => bound.setValue(option.value)}
+              onClick={() => b.set(option.value)}
               className={`flex h-[22px] w-[26px] items-center justify-center transition-colors ${
                 active ? 'text-black' : 'bg-black/25 text-white/40 hover:text-white/70'
               }`}
-              style={active ? { background: WARP } : undefined}
+              style={active ? { background: accent } : undefined}
             >
               {Icon ? <Icon size={12} strokeWidth={2.4} /> : option.label}
             </button>
@@ -325,13 +236,14 @@ function IconSegmented({ bound, label, icons, testId }: {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-const PLACED_KEYS = new Set(['speed', 'density', 'depth', 'size', 'direction', 'spawnMode'])
-const REQUIRED_KEYS = ['speed', 'density', 'depth', 'size', 'direction', 'spawnMode']
-
 export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const [showMore, setShowMore] = useState(false)
-
-  const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
+  const b = bindPanel(parameters)
+  const speed = b.num('speed')
+  const density = b.num('density')
+  const depth = b.num('depth')
+  const size = b.num('size')
+  const direction = b.select('direction')
+  const spawnMode = b.select('spawnMode')
 
   // Memoized on the VALUES, not the parameter objects, so the preview's
   // resolve() reruns only on a real change. Declared before the fallback return
@@ -346,29 +258,22 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuesKey])
 
-  if (REQUIRED_KEYS.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
-
-  const unplaced = parameters.filter((p) => !PLACED_KEYS.has(p.definition.key))
+  if (!speed || !density || !depth || !size || !direction || !spawnMode) {
+    return <ParameterList parameters={parameters} />
+  }
 
   return (
-    <section
-      data-testid="approach-user-interface"
-      className="-mx-3 -mt-3"
-      style={{ background: WARP_SHADE }}
-    >
+    <Console accent={WARP} testId="approach-user-interface">
       <ApproachPreview settings={settings} />
-      <div
-        className="flex flex-col gap-2 pb-3 pt-3"
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(WARP, 0.14)}, transparent)` }}
-      >
-        <div className="flex items-end gap-3 px-4">
-          <WarpKnob parameter={bound.speed} label="SPEED" large />
-          <WarpKnob parameter={bound.density} label="DENSITY" />
-          <WarpKnob parameter={bound.depth} label="DISTANCE" />
-          <WarpKnob parameter={bound.size} label="SIZE" />
+      <div className="flex flex-col gap-2 pb-3 pt-3" style={{ background: spillOf(WARP) }}>
+        <ControlRow className="gap-3 px-4">
+          <Knob b={speed} label="SPEED" large />
+          <Knob b={density} label="DENSITY" />
+          <Knob b={depth} label="DISTANCE" />
+          <Knob b={size} label="SIZE" />
           <div className="ml-auto flex items-end gap-2">
             <IconSegmented
-              bound={bound.direction}
+              b={direction}
               label="DIR"
               testId="approach-direction"
               icons={{
@@ -377,7 +282,7 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
               }}
             />
             <IconSegmented
-              bound={bound.spawnMode}
+              b={spawnMode}
               label="SPAWN"
               testId="approach-spawn"
               icons={{
@@ -386,25 +291,9 @@ export const ApproachSplitterUserInterfaceRenderer: UserInterfaceRendererDefinit
               }}
             />
           </div>
-        </div>
-        {unplaced.length > 0 && (
-          <div className="px-4">
-            <button
-              aria-expanded={showMore}
-              onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
-            >
-              {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-              MORE
-            </button>
-            {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
-                <ParameterList parameters={unplaced} />
-              </div>
-            )}
-          </div>
-        )}
+        </ControlRow>
+        <More parameters={b.rest()} label="MORE" className="px-4" />
       </div>
-    </section>
+    </Console>
   )
 }

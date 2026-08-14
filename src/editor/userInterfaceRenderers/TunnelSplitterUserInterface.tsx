@@ -22,7 +22,8 @@
 // honest numeric readout until the knob is touched and snaps it.
 
 import { useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
+import { PreviewCanvas } from './console'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Color, InstancedMesh, Object3D } from 'three'
@@ -120,7 +121,7 @@ function TunnelPreview({ settings }: { settings: TunnelSettings }) {
       {/* The camera sits exactly where the splitter's defaults assume the stage
           camera sits, and does NOT orbit: the corridor is a camera-relative
           illusion, so a free camera would misrepresent it (the wrap would show). */}
-      <Canvas dpr={[1, 2]} camera={{ position: [0, 0, TUNNEL_CAMERA_Z], fov: 60 }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas dpr={[1, 2]} camera={{ position: [0, 0, TUNNEL_CAMERA_Z], fov: 60 }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <TunnelField settings={settings} />
         <pointLight position={[0, 0, TUNNEL_CAMERA_Z - 2]} color={CORRIDOR} intensity={16} distance={40} decay={2} />
@@ -129,7 +130,7 @@ function TunnelPreview({ settings }: { settings: TunnelSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.55} luminanceThreshold={0.72} luminanceSmoothing={0.16} mipmapBlur radius={0.7} levels={6} />
         </EffectComposer>
-      </Canvas>
+      </PreviewCanvas>
     </div>
   )
 }
@@ -270,10 +271,12 @@ function Segmented({ bound, label, shortLabels, testId }: {
 // Both speed keys are PLACED even though only the active mode's knob renders:
 // the inactive one must not leak into MORE as a stray slider.
 const PLACED_KEYS = new Set([
-  'copiesPerRing', 'rings', 'radius', 'depth', 'twistDegrees',
+  'copiesPerRing', 'rings', 'radius', 'depth', 'size', 'twistDegrees',
   'speedMode', 'speed', 'syncRingsPerBeat', 'midiSpeed', 'orientation',
 ])
-const REQUIRED_KEYS = [...PLACED_KEYS]
+// `size` is placed but NOT required: an older definition without the shared
+// knob should still get the full console rather than the generic list.
+const REQUIRED_KEYS = [...PLACED_KEYS].filter((key) => key !== 'size')
 
 export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
   const [showMore, setShowMore] = useState(false)
@@ -311,9 +314,12 @@ export const TunnelSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
         // room is lit by the splitter, not painted.
         style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(CORRIDOR, 0.13)}, transparent)` }}
       >
-        <div className="flex items-end gap-3 px-4">
+        {/* Four knobs plus the stepper column overrun a narrow inspector pane,
+            so this row WRAPS rather than clipping its right end. */}
+        <div className="flex flex-wrap items-end gap-3 px-4">
           <BoundKnob bound={bound.radius} label="RADIUS" large />
           <BoundKnob bound={bound.depth} label="DEPTH" />
+          {bound.size && <BoundKnob bound={bound.size} label="SIZE" />}
           <BoundKnob bound={bound.twistDegrees} label="TWIST" bipolar />
           <div className="ml-auto flex flex-col items-center gap-2 pb-0.5">
             <CountStepper bound={bound.copiesPerRing} label="SPOKES" />

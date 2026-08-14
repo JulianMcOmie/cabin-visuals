@@ -19,6 +19,13 @@ export interface DropTarget {
   intoId: string | null
 }
 
+/** Track types that live only ON a parent object - they may move/copy between
+ *  parents (an unknown target param just leaves the lane inert until re-picked),
+ *  but never to the root level. */
+export function isPinnedChildType(type: string | undefined): boolean {
+  return type === 'automation' || type === 'ability' || type === 'envelope' || type === 'wordFormation'
+}
+
 /** Track types that can hold children. Automation/ability/envelope lanes live only
  *  on their parent object, and nothing nests under the audio track. */
 function canNestInto(track: Track | undefined): boolean {

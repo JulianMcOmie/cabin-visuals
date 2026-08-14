@@ -24,10 +24,14 @@ interface ProfileData {
   last_name: string | null
 }
 
-const getInitials = (p: ProfileData | null): string => {
+// Signup only collects an email, so most accounts have no name at all - the
+// email's first letter is the avatar for those (names still come from Google
+// sign-in and from accounts created when signup asked for them).
+const getInitials = (p: ProfileData | null, email?: string | null): string => {
   const f = p?.first_name?.[0]?.toUpperCase() || ''
   const l = p?.last_name?.[0]?.toUpperCase() || ''
-  return f && l ? `${f}${l}` : f || l || '?'
+  if (f && l) return `${f}${l}`
+  return f || l || email?.trim()?.[0]?.toUpperCase() || '?'
 }
 
 // Cache the fetched profile per user id. The header remounts on every client
@@ -95,7 +99,7 @@ export function ProfileMenu({ size = 'md' }: { size?: 'sm' | 'md' }) {
         disabled={isLoggingOut}
         className={`flex ${box} cursor-pointer items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--bg-elevated)] font-semibold text-[var(--text-2)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)] data-[state=open]:border-[var(--border-strong)] data-[state=open]:text-[var(--text)]`}
       >
-        {getInitials(profile)}
+        {getInitials(profile, user.email)}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"

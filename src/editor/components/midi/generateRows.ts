@@ -1,5 +1,5 @@
 import type { MidiRow } from './types'
-import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, pitchToValue } from '../../core/trackTypes'
+import { AUTOMATION_PITCH_MIN, AUTOMATION_PITCH_MAX, automationTopPitch, pitchToValue, pitchToValueRanged, type AutomationRange } from '../../core/trackTypes'
 import { midiNoteBaseColor, midiValueColor } from '../../utils/midiEditorPalette'
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -200,9 +200,12 @@ export function generatePhotoRows(
 }
 
 // Value lanes encode a param value in each note's PITCH via pitchToValue over the
-// fixed AUTOMATION_PITCH_MIN..MAX span (core/trackTypes.ts). That mapping is FROZEN -
-// saved projects hold notes at arbitrary pitches in the span - so the editor may only
-// choose WHICH pitches to show as rows, never re-map a pitch to a different value.
+// fixed AUTOMATION_PITCH_MIN..MAX span (core/trackTypes.ts). Absent a per-lane
+// `automationRange`, that mapping is FROZEN - saved projects hold notes at
+// arbitrary pitches in the span - so the editor may only choose WHICH pitches to
+// show as rows, never re-map a pitch to a different value. A lane that DOES carry
+// a range config remaps by design (the engine reads the identical config through
+// pitchToValueRanged, so editor and playback stay one truth).
 // 13 evenly-spaced samples keep the lane readable without a wall of unlabeled rows.
 const VALUE_ROW_STEPS = 12
 
@@ -227,20 +230,26 @@ export function generateValueRows(
   notePitches: number[],
   trackColor: string,
   formatValue?: (value: number) => string,
+  range?: AutomationRange,
 ): MidiRow[] {
-  const rowStep = Math.abs(paramMax - paramMin) / VALUE_ROW_STEPS
+  const valueAt = (pitch: number) => pitchToValueRanged(range, pitch, paramMin, paramMax)
+  const topPitch = automationTopPitch(range)
+  const pitchSpan = topPitch - AUTOMATION_PITCH_MIN
+  const rowStep = range?.integer ? 1 : Math.abs(valueAt(topPitch) - valueAt(AUTOMATION_PITCH_MIN)) / Math.max(1, VALUE_ROW_STEPS)
   const fmt = formatValue ?? ((v: number) => formatValueCompact(v, rowStep))
-  const pitchSpan = AUTOMATION_PITCH_MAX - AUTOMATION_PITCH_MIN
   const rows: MidiRow[] = []
   const known = new Set<number>()
 
-  for (let k = VALUE_ROW_STEPS; k >= 0; k--) {
-    const pitch = Math.round(AUTOMATION_PITCH_MIN + (k / VALUE_ROW_STEPS) * pitchSpan)
+  // An explicit row COUNT shows every row (that IS the ask); the classic
+  // full-span lane keeps its 13 readable samples.
+  const steps = range?.rows ? pitchSpan : VALUE_ROW_STEPS
+  for (let k = steps; k >= 0; k--) {
+    const pitch = Math.round(AUTOMATION_PITCH_MIN + (steps > 0 ? (k / steps) * pitchSpan : 0))
     if (known.has(pitch)) continue // guard: a narrow span could round two samples together
     known.add(pitch)
     const t = pitchSpan > 0 ? (pitch - AUTOMATION_PITCH_MIN) / pitchSpan : 0
-    let label = fmt(pitchToValue(pitch, paramMin, paramMax))
-    if (k === VALUE_ROW_STEPS) label += ' · max'
+    let label = fmt(valueAt(pitch))
+    if (k === steps) label += ' · max'
     if (k === 0) label += ' · min'
     // Lightness encodes the value (dim = min, bright = max) so magnitude
     // reads at a glance while the lane keeps its track's hue.
@@ -248,12 +257,12 @@ export function generateValueRows(
   }
 
   // Orphans keep value labels (not note names): the engine reads them as values,
-  // and pitchToValue clamps, so out-of-span pitches truthfully read as min/max.
+  // and the mapping clamps, so out-of-span pitches truthfully read as min/max.
   const orphans = [...new Set(notePitches)].filter((p) => !known.has(p)).sort((a, b) => b - a)
   for (const pitch of orphans) {
     rows.push({
       pitch,
-      label: fmt(pitchToValue(pitch, paramMin, paramMax)),
+      label: fmt(valueAt(pitch)),
       color: 'hsl(0, 0%, 45%)',
     })
   }

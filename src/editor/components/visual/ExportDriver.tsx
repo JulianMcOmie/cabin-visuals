@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { setBeatOverride } from '../../core/visual/beatOverride'
 import { setMainCompositionOverride } from '../../core/visual/VisualEngine'
-import { registerFrameDriver } from '../../core/export/frameDriver'
+import { registerFrameDriver, setExportPinned } from '../../core/export/frameDriver'
 
 /**
  * Mounted once inside <Canvas>, next to VisualBeatSync. Registers the
@@ -36,6 +36,9 @@ export function ExportDriver() {
         if (saved) return // already pinned
         const s = get()
         saved = { frameloop: s.frameloop, width: s.size.width, height: s.size.height, dpr: s.viewport.dpr }
+        // Before setSize: VisualScene's target-resize effect must see the pin
+        // and stand the draft preview scale down for the export dimensions.
+        setExportPinned(true)
         setMainCompositionOverride(true)
         s.setFrameloop('never')
         s.setDpr(1)
@@ -51,6 +54,7 @@ export function ExportDriver() {
         // render sets it, and a failure before pin() must not leave it stuck.
         setBeatOverride(null)
         setMainCompositionOverride(false)
+        setExportPinned(false)
         if (!saved) return
         const s = get()
         s.setSize(saved.width, saved.height) // also resets the element's CSS box

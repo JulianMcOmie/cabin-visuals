@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { CabinLogo } from "./CabinLogo"
+import { EditorialSkin } from "./landing/editorialTheme"
 
 /**
  * The projects page's loading state, rendered by BOTH the route's loading.tsx
@@ -10,7 +11,7 @@ import { CabinLogo } from "./CabinLogo"
  */
 export function ProjectsSkeleton() {
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
+    <EditorialSkin className="min-h-screen font-sans text-[var(--text)]">
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
           <Link href="/" className="flex select-none items-center gap-2.5">
@@ -29,7 +30,7 @@ export function ProjectsSkeleton() {
 
       <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
+          <h1 className="text-[28px] font-normal [font-family:var(--lp-font-display)]">Projects</h1>
           <div className="h-9 w-[108px] animate-pulse rounded-[5px] bg-[var(--bg-elevated)]" />
         </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
@@ -47,6 +48,6 @@ export function ProjectsSkeleton() {
           ))}
         </div>
       </main>
-    </div>
+    </EditorialSkin>
   )
 }

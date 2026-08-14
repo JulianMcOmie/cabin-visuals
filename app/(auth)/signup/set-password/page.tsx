@@ -40,8 +40,6 @@ function SetPasswordFormInternal() {
   const [formBusy, setFormBusy] = useState(false);
 
   const email = searchParams.get('email');
-  const firstName = searchParams.get('firstName');
-  const lastName = searchParams.get('lastName');
 
   useEffect(() => {
     let mounted = true;
@@ -59,7 +57,7 @@ function SetPasswordFormInternal() {
 
   const handleConvert = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (converting || !email || !firstName || !lastName) return;
+    if (converting || !email) return;
     const form = new FormData(e.currentTarget);
     const password = form.get('password') as string;
     const confirmPassword = form.get('confirmPassword') as string;
@@ -69,11 +67,7 @@ function SetPasswordFormInternal() {
     setConverting(true);
     setErrorMessage(null);
     const supabase = getSupabase();
-    const { error } = await supabase.auth.updateUser({
-      email,
-      password,
-      data: { given_name: firstName, family_name: lastName },
-    });
+    const { error } = await supabase.auth.updateUser({ email, password });
     if (error) {
       setConverting(false);
       if (/already/i.test(error.message)) {
@@ -85,7 +79,7 @@ function SetPasswordFormInternal() {
     }
     // Same uuid - their projects are already theirs. Profiles row is new though.
     await supabase.from('profiles').upsert(
-      { user_id: anonUid, first_name: firstName, last_name: lastName, email },
+      { user_id: anonUid, email },
       { onConflict: 'user_id', ignoreDuplicates: true },
     );
     setConverting(false);
@@ -98,15 +92,15 @@ function SetPasswordFormInternal() {
     if (message) {
         setErrorMessage(message);
     }
-    if (!email || !firstName || !lastName) {
+    if (!email) {
       console.error('Missing user details on password page, redirecting.');
       if (typeof window !== 'undefined') {
          window.location.href = '/signup?message=Something went wrong, please try again.';
       }
     }
-  }, [searchParams, email, firstName, lastName]);
+  }, [searchParams, email]);
 
-  if (!email || !firstName || !lastName) {
+  if (!email) {
       return (<div className="flex min-h-screen items-center justify-center bg-[var(--bg-page)] text-[13px] text-[var(--text-3)]"><p>Loading user details…</p></div>);
   }
 
@@ -156,8 +150,6 @@ function SetPasswordFormInternal() {
         className="flex flex-col gap-[14px]"
       >
         <input type="hidden" name="email" value={email || ''} />
-        <input type="hidden" name="firstName" value={firstName || ''} />
-        <input type="hidden" name="lastName" value={lastName || ''} />
 
         <div>
           <div className="mb-[6px] flex items-baseline justify-between">

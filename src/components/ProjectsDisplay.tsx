@@ -7,6 +7,7 @@ import { Plus, X, FilePlus, LayoutTemplate, ChevronLeft, Copy, Trash2, MoreHoriz
 import type { User } from '@supabase/supabase-js'
 import LogInButton from "./AuthButtons/LogInButton"
 import { CabinLogo } from "./CabinLogo"
+import { EditorialSkin, editorialFontClasses } from "./landing/editorialTheme"
 import { ProfileMenu } from "./ProfileMenu"
 import SignUpButton from "./AuthButtons/SignUpButton"
 import { GALLERY_TEMPLATES, type TemplateDef } from "../templates"
@@ -16,6 +17,8 @@ import { TemplateLyricPreview } from "./TemplateLyricPreview"
 import type { ProjectPreview } from "../persistence/projectStorage"
 import { track } from "../analytics/analytics"
 import { midiBlockPalette } from "../editor/utils/colors"
+import { EditorDialog } from "../editor/components/EditorDialog"
+import { SignupCard } from "../editor/components/SignupCard"
 
 export interface ProjectMetadata {
   id: string
@@ -24,17 +27,16 @@ export interface ProjectMetadata {
   preview?: ProjectPreview
 }
 
-const formatDuration = (seconds?: number): string => {
-  const rounded = Math.max(0, Math.round(seconds ?? 0))
-  const minutes = Math.floor(rounded / 60)
-  const remainingSeconds = rounded % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-}
 
 // Mini timeline of the project's REAL arrangement: one row per root track drawn
 // in that track's own color, blocks positioned/sized as a percentage of the
-// project length (derived server-side in projectStorage.documentToPreview). An
-// empty project (no blocks yet) shows a muted hint instead of fake rows.
+// project length. An empty project (no blocks yet) shows a muted hint instead
+// of fake rows.
+//
+// `rows` is empty for every project at the moment - deriving it needs the whole
+// document, and fetching that per card is what made /projects slow (see
+// projectStorage.list). The branch stays because it is driven by data: once the
+// sketch has a projected column, the cards render it again with no change here.
 function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
   // A real captured frame beats the row sketch whenever the project has one.
   // It spans the full container, letterboxed on black when the aspect ratio
@@ -46,7 +48,7 @@ function ProjectThumbnail({ preview }: { preview?: ProjectPreview }) {
         alt=""
         fill
         unoptimized
-        className="h-full w-full bg-black object-contain"
+        className="h-full w-full bg-[var(--bg-panel-raised)] object-contain"
       />
     )
   }
@@ -134,6 +136,15 @@ function ProjectCard({
   )
 }
 
+// "0:46" from the capture's length - the one number that says what the
+// project IS (a 15s loop vs a full song) at a glance.
+const formatDuration = (seconds?: number): string => {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return '--:--'
+  const m = Math.floor(seconds / 60)
+  const sec = Math.floor(seconds % 60)
+  return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
 interface ProfileData {
   first_name: string | null
   last_name: string | null
@@ -154,6 +165,11 @@ interface ProjectsDisplayProps {
   /** Free-plan limit reached: the create buttons grey out and explain
    *  themselves on hover instead of opening the create flow. */
   createBlocked: boolean
+  /** Guest at the guest-session cap: the create affordances stay LIVE and
+   *  clicking one opens the signup gate instead of the create flow. Never true
+   *  at the same time as `createBlocked` - signing up is the way out here, so
+   *  there is nothing to grey out. */
+  createNeedsSignup: boolean
 }
 
 export default function ProjectsDisplay({
@@ -165,45 +181,41 @@ export default function ProjectsDisplay({
   onDuplicateProject,
   onCreateFromTemplate,
   createBlocked,
+  createNeedsSignup,
 }: ProjectsDisplayProps) {
   const openCreate = () => {
     if (createBlocked) return
+    if (createNeedsSignup) { openSignupGate('create'); return }
     track('new_project_clicked')
     setCreateStep('choice')
   }
+  const openSignupGate = (source: 'create' | 'duplicate') => {
+    track('project_gate_shown', { source })
+    setSignupGate(true)
+  }
   // The hover explanation for a greyed-out create button - a clickable exit
-  // inside (sign up for guests, upgrade for free accounts), so the dead end
-  // has a way out.
-  const isAnonymous = !!user?.is_anonymous
+  // inside (upgrade to Pro), so the dead end has a way out. Guests never see
+  // this: their button still works and the signup gate carries the same words.
   const limitHint = (
     // The offset is PADDING on a hidden wrapper, not a margin - the pointer
     // crossing from the button to the popup never leaves the hover group, so
     // the popup stays put long enough to click the link inside.
     <div className="absolute right-0 top-full z-40 hidden pt-1.5 group-hover:block">
       <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left text-[11px] font-normal leading-relaxed text-[var(--text-2)] shadow-lg shadow-black/50">
-      {isAnonymous ? (
-        <>
-          Guest sessions hold 1 project.{' '}
-          <Link href="/signup" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
-            Sign up
-          </Link>{' '}
-          to get 5 free projects.
-        </>
-      ) : (
-        <>
-          The free plan includes 5 projects.{' '}
-          <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
-            Upgrade to Pro
-          </Link>{' '}
-          for unlimited projects.
-        </>
-      )}
+        The free plan includes 5 projects.{' '}
+        <Link href="/pricing" className="text-[var(--accent)] underline underline-offset-2 hover:text-[var(--accent-hover)]">
+          Upgrade to Pro
+        </Link>{' '}
+        for unlimited projects.
       </div>
     </div>
   )
   // The create flow: closed, the Empty/Template choice, the name entry, or the
   // template catalog.
   const [createStep, setCreateStep] = useState<null | 'choice' | 'name' | 'catalog'>(null)
+  // The guest-cap signup invitation - the same dialog shell and the same form
+  // as the editor's export gate.
+  const [signupGate, setSignupGate] = useState(false)
   // The project pending an in-UI delete confirmation, with the click position
   // to anchor the popover near (null = no popover).
   const [deleteTarget, setDeleteTarget] = useState<{ project: ProjectMetadata; x: number; y: number } | null>(null)
@@ -255,7 +267,7 @@ export default function ProjectsDisplay({
 
   return (
     <MotionConfig reducedMotion="user">
-    <div className="min-h-screen bg-[var(--bg-page)] font-sans text-[var(--text)]">
+    <EditorialSkin className="min-h-screen font-sans text-[var(--text)]">
       <header className="border-b border-[var(--border-subtle)]">
         <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-3 px-4 sm:px-6">
           <Link href="/" className="flex min-w-0 select-none items-center gap-2.5">
@@ -310,6 +322,28 @@ export default function ProjectsDisplay({
         )}
       </AnimatePresence>
 
+      {/* The guest cap is an invitation, not a wall: every create affordance
+          stays live and lands here instead of greying out. Same shell, same
+          form, same voice as the editor's export gate - the sentence the
+          buttons used to whisper on hover is now the subtitle. */}
+      <AnimatePresence>
+        {signupGate && (
+          <EditorDialog
+            title="Sign up to start another project."
+            subtitle="Guest sessions only hold one project. Create an account to create more projects."
+            onClose={() => setSignupGate(false)}
+            variant="prompt"
+            width="w-[400px]"
+            // The portal lands on document.body, outside this page's skin
+            // wrapper - carry the skin across or the card wears the editor's
+            // blue accent on a teal page.
+            portalClassName={`editorial-skin font-sans ${editorialFontClasses}`}
+          >
+            <SignupCard page="projects-gate" />
+          </EditorDialog>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {deleteTarget && (
           <ConfirmDeletePopover
@@ -330,8 +364,11 @@ export default function ProjectsDisplay({
             createBlocked={createBlocked}
             onClose={() => setProjectMenu(null)}
             onDuplicate={() => {
-              onDuplicateProject(projectMenu.project.id)
               setProjectMenu(null)
+              // A copy is a new project, so it meets the same gate the create
+              // buttons do rather than silently doing nothing.
+              if (createNeedsSignup) { openSignupGate('duplicate'); return }
+              onDuplicateProject(projectMenu.project.id)
             }}
             onDelete={() => {
               setDeleteTarget(projectMenu)
@@ -343,12 +380,12 @@ export default function ProjectsDisplay({
 
       <main className="mx-auto max-w-[1200px] px-6 pb-24 pt-10">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-[-0.01em]">Projects</h1>
+          <h1 className="text-[28px] font-normal [font-family:var(--lp-font-display)]">Projects</h1>
           <div className="group relative">
             <button
               onClick={openCreate}
               disabled={createBlocked}
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-40 disabled:hover:bg-[var(--accent)]"
             >
               <Plus size={14} strokeWidth={2.5} />
               New project
@@ -420,7 +457,7 @@ export default function ProjectsDisplay({
           </motion.div>
         </div>
       </main>
-    </div>
+    </EditorialSkin>
     </MotionConfig>
   )
 }
@@ -550,7 +587,7 @@ function CreateProjectModal({
               <button
                 onClick={submitName}
                 disabled={!name.trim()}
-                className="flex h-[36px] cursor-pointer items-center rounded-[5px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
+                className="flex h-[36px] cursor-pointer items-center rounded-[99px] bg-[var(--accent)] px-4 text-[13px] font-bold text-[var(--on-accent)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-default disabled:opacity-50"
               >
                 Create project
               </button>

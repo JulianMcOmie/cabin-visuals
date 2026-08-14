@@ -23,10 +23,9 @@
 // about, so the performance stays out of the way and lets every change read on
 // the next hit.
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useMemo, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   Color,
   Euler,
@@ -49,10 +48,20 @@ import {
 } from '../core/visualCopies/impactScatter'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import type { ResolvedNote } from '../core/visual/types'
-import { isNumberParam } from '../instruments/types'
-import { ParameterList } from './ParametersUserInterface'
-import { towardWhite, withAlpha } from './colorWheel'
-import type { UserInterfaceParameter, UserInterfaceRendererDefinition } from './types'
+import {
+  bindPanel,
+  Console,
+  ControlRow,
+  More,
+  ParameterList,
+  PreviewWindow,
+  spillOf,
+  towardWhite,
+  type NumBinding,
+  type SelectBinding,
+  PreviewCanvas,
+} from './console'
+import type { UserInterfaceRendererDefinition } from './types'
 import { IMPACT_SCATTER_COLOR } from '../core/visualCopies/identityColors'
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -60,7 +69,6 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 // The mover has no color param (its flash is a SHIFT of each object's own
 // colour), so the panel wears the material it evokes: cold kinetic shock.
 const SHOCK = IMPACT_SCATTER_COLOR
-const SHOCK_SHADE = '#08131a'
 const ROOM = '#04070a'
 
 // ── The looping demo performance ─────────────────────────────────────────────
@@ -298,18 +306,14 @@ function ScatterField({ settings }: { settings: ImpactScatterSettings }) {
 
 function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
   return (
-    <div
-      data-testid="impact-scatter-preview"
-      className="relative overflow-hidden border-b border-white/[0.06]"
-      style={{ height: FIELD_HEIGHT, background: ROOM }}
-    >
+    <PreviewWindow height={FIELD_HEIGHT} testId="impact-scatter-preview">
       {/* Orthographic on purpose: the panel is short and very wide, so a
           perspective frustum wide enough to fill it shears the outer columns into
           trapezoids and makes the same throw look bigger at the edges than at the
           middle. Flat projection keeps every piece the same size, which is what
           makes the falloff comparable across the field. The frustum itself is set
           per frame in ScatterField. */}
-      <Canvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 14] }} gl={{ antialias: true, alpha: true }}>
+      <PreviewCanvas orthographic dpr={[1, 2]} camera={{ position: [0, 0, 14] }} gl={{ antialias: true, alpha: true }}>
         <color attach="background" args={[ROOM]} />
         <ScatterField settings={settings} />
         <directionalLight position={[3, 6, 8]} intensity={1.35} color="#dfe8ff" />
@@ -320,8 +324,8 @@ function ScatterPreview({ settings }: { settings: ImpactScatterSettings }) {
         <EffectComposer multisampling={0}>
           <Bloom intensity={0.6} luminanceThreshold={0.7} luminanceSmoothing={0.2} mipmapBlur radius={0.72} levels={6} />
         </EffectComposer>
-      </Canvas>
-    </div>
+      </PreviewCanvas>
+    </PreviewWindow>
   )
 }
 
@@ -350,8 +354,8 @@ const KNOB = 44
 /** Pointer travel needed to break past the detent. */
 const CATCH_PX = 16
 
-function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
-  parameter: UserInterfaceParameter
+function ShockKnob({ b, label, format, size = KNOB, detent }: {
+  b: NumBinding | null
   label: string
   /** Reads the value in the unit a person thinks in (percent, beats, a word). */
   format?: (value: number) => string
@@ -360,10 +364,8 @@ function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
   detent?: number
 }) {
   const dragRef = useRef<{ y: number; norm: number; catchY: number | null } | null>(null)
-  const definition = bound.definition
-  if (!isNumberParam(definition) || typeof bound.value !== 'number') return null
-
-  const value = bound.value
+  if (!b) return null
+  const { def: definition, value } = b
   const range = definition.max - definition.min
   const percent = range === 0 ? 0 : clamp((value - definition.min) / range, 0, 1)
   const angle = -135 + percent * 270
@@ -388,7 +390,7 @@ function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
   const commitNorm = (t: number) => {
     const raw = definition.min + clamp(t, 0, 1) * range
     const snapped = definition.min + Math.round((raw - definition.min) / definition.step) * definition.step
-    bound.setValue(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
+    b.set(clamp(Number(snapped.toFixed(8)), definition.min, definition.max))
   }
   const crosses = (target: number) => detentPercent != null
     && ((percent < detentPercent && target > detentPercent)
@@ -452,7 +454,7 @@ function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onDoubleClick={() => bound.setValue(definition.default)}
+        onDoubleClick={() => b.set(definition.default)}
         onKeyDown={onKeyDown}
         className="relative cursor-ns-resize touch-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         style={{ width: size, height: size }}
@@ -516,12 +518,6 @@ function ShockKnob({ parameter: bound, label, format, size = KNOB, detent }: {
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
-// The four macros. Everything else the definition exposes is placement, and
-// placement belongs in MORE.
-const PLACED_KEYS = new Set(['impact', 'recoverBeats', 'chaos', 'curve'])
-
-const REQUIRED_KEYS = [...PLACED_KEYS]
-
 /** Percent reads as "how much" at a glance; 0.55 does not. Straight off the
  *  value, not off the range, so IMPACT's overdrive shows as 110%. */
 const asPercent = (value: number) => `${Math.round(value * 100)}%`
@@ -540,14 +536,12 @@ const SHAPE_GLYPHS: Record<number, string> = {
   [CURVE_SWELL]: 'M1 11 L3 1 C9 1.4 11 4 15 10.6',
 }
 
-function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
-  const definition = bound.definition
-  if (definition.type !== 'select') return null
-  const selected = typeof bound.value === 'number' ? Math.round(bound.value) : definition.default
+function ShapeSelector({ b }: { b: SelectBinding }) {
+  const selected = Math.round(b.value)
   return (
     <div className="flex w-[58px] flex-col items-center">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {definition.options.map((option) => {
+        {b.def.options.map((option) => {
           const active = option.value === selected
           return (
             <button
@@ -555,7 +549,7 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
               aria-label={option.label}
               aria-pressed={active}
               title={`${option.label} recovery`}
-              onClick={() => bound.setValue(option.value)}
+              onClick={() => b.set(option.value)}
               className={`px-1 pb-0.5 pt-1 transition-colors ${active ? '' : 'bg-black/25 hover:bg-white/5'}`}
               style={active ? { background: SHOCK } : undefined}
             >
@@ -575,16 +569,18 @@ function ShapeSelector({ bound }: { bound: UserInterfaceParameter }) {
         CURVE
       </span>
       <span className="whitespace-nowrap font-mono text-[9px] leading-[12px] text-white/70">
-        {definition.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
+        {b.def.options.find((option) => option.value === selected)?.label.toUpperCase() ?? ''}
       </span>
     </div>
   )
 }
 
 export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefinition = ({ parameters }) => {
-  const [showMore, setShowMore] = useState(false)
-
-  const bound = Object.fromEntries(parameters.map((p) => [p.definition.key, p]))
+  const b = bindPanel(parameters)
+  const impact = b.num('impact')
+  const recoverBeats = b.num('recoverBeats')
+  const chaos = b.num('chaos')
+  const curve = b.select('curve')
 
   // The preview's settings: every bound numeric value over the definition's
   // defaults. Memoized on the VALUES so resolve() reruns only on real change.
@@ -599,54 +595,23 @@ export const ImpactScatterMoverUserInterfaceRenderer: UserInterfaceRendererDefin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valuesKey])
 
-  if (REQUIRED_KEYS.some((key) => !bound[key])) return <ParameterList parameters={parameters} />
-
-  const unplaced = parameters.filter((p) => !PLACED_KEYS.has(p.definition.key))
+  if (!impact || !recoverBeats || !chaos || !curve) return <ParameterList parameters={parameters} />
 
   return (
-    <section
-      data-testid="impact-scatter-user-interface"
-      className="-mx-3 -mt-3"
-      style={{ background: SHOCK_SHADE }}
-    >
+    <Console accent={SHOCK} testId="impact-scatter-user-interface">
       <ScatterPreview settings={settings} />
-      <div
-        className="flex flex-col gap-2 pb-4 pt-3"
-        style={{ background: `radial-gradient(58% 30px at 50% 0, ${withAlpha(SHOCK, 0.13)}, transparent)` }}
-      >
+      <div className="flex flex-col gap-2 pb-4 pt-3" style={{ background: spillOf(SHOCK) }}>
         {/* Laser Sphere's console row: knobs gathered at the left, one step of
             size between the primary param and the rest (52 / 44). IMPACT is the
             subject of the mover; the other three qualify it. */}
-        <div className="flex items-end gap-5 px-4">
-          <ShockKnob
-            parameter={bound.impact}
-            label="IMPACT"
-            format={asPercent}
-            size={PRIMARY_KNOB}
-            detent={IMPACT_DETENT}
-          />
-          <ShockKnob parameter={bound.recoverBeats} label="RECOVER" format={asBeats} size={KNOB} />
-          <ShockKnob parameter={bound.chaos} label="CHAOS" format={asPercent} size={KNOB} />
-          <ShapeSelector bound={bound.curve} />
-        </div>
-        {unplaced.length > 0 && (
-          <div className="px-3">
-            <button
-              aria-expanded={showMore}
-              onClick={() => setShowMore((v) => !v)}
-              className="flex items-center gap-1 text-[8px] font-bold tracking-[0.18em] text-white/30 transition-colors hover:text-white/60"
-            >
-              {showMore ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
-              MORE
-            </button>
-            {showMore && (
-              <div className="mt-1.5 rounded-md border border-white/[0.06] bg-black/25 p-2">
-                <ParameterList parameters={unplaced} />
-              </div>
-            )}
-          </div>
-        )}
+        <ControlRow className="gap-5 px-4">
+          <ShockKnob b={impact} label="IMPACT" format={asPercent} size={PRIMARY_KNOB} detent={IMPACT_DETENT} />
+          <ShockKnob b={recoverBeats} label="RECOVER" format={asBeats} size={KNOB} />
+          <ShockKnob b={chaos} label="CHAOS" format={asPercent} size={KNOB} />
+          <ShapeSelector b={curve} />
+        </ControlRow>
+        <More parameters={b.rest()} label="MORE" className="px-3" />
       </div>
-    </section>
+    </Console>
   )
 }

@@ -116,16 +116,6 @@ function SignupPageContent() {
       {errorMessage && <AuthBanner kind="error">{errorMessage}</AuthBanner>}
 
       <form action={initiateSignup} onSubmit={() => { track('signup_started'); setFormBusy(true) }} className="flex flex-col gap-[14px]">
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label htmlFor="firstName" className={`mb-[6px] block ${authLabelClass}`}>First name</label>
-            <input id="firstName" name="firstName" type="text" required className={authInputClass} placeholder="First name" />
-          </div>
-          <div className="flex-1">
-            <label htmlFor="lastName" className={`mb-[6px] block ${authLabelClass}`}>Last name</label>
-            <input id="lastName" name="lastName" type="text" required className={authInputClass} placeholder="Last name" />
-          </div>
-        </div>
         <div>
           <label htmlFor="email" className={`mb-[6px] block ${authLabelClass}`}>Email</label>
           <input id="email" name="email" type="email" required className={authInputClass} placeholder="you@example.com" />
@@ -144,7 +134,7 @@ function SignupPageContent() {
              behind whatever width GSI decides to render). */}
          {/* w-full so the empty container measures the card's inner width -
              renderButton reads clientWidth before anything is in it. */}
-         <div id="google-signin-button-container" className="flex w-full justify-center"></div>
+         <div id="google-signin-button-container" className="gsi-host flex w-full justify-center"></div>
       </div>
 
       <p className="mt-5 text-center text-[13px] text-[var(--text-3)]">
