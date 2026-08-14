@@ -45,7 +45,7 @@ export function EditorSignupGate() {
     <AnimatePresence>
       {open && (
         <EditorDialog
-          title="Sign in to start composing."
+          title="Sign up to start composing."
           variant="prompt"
           width="w-[400px]"
           dismissible={false}
