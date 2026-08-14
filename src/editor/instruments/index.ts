@@ -44,6 +44,7 @@ import { overlapShapeInstrument } from './OverlapShape'
 import { overlapSolidInstrument } from './OverlapSolid'
 import { cropMaskInstrument } from './Crop'
 import { midiRollInstrument } from './MidiRoll'
+import { wireframeInstrument } from './Wireframe'
 import { paramDefault, type ObjectInstrumentDef } from './types'
 
 export type { ObjectInstrumentDef, ParamDef } from './types'
@@ -90,6 +91,7 @@ export const INSTRUMENTS: Record<string, ObjectInstrumentDef> = {
   [overlapSolidInstrument.id]: overlapSolidInstrument,
   [cropMaskInstrument.id]: cropMaskInstrument,
   [midiRollInstrument.id]: midiRollInstrument,
+  [wireframeInstrument.id]: wireframeInstrument,
 }
 
 export function getInstrument(id: string): ObjectInstrumentDef | undefined {

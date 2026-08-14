@@ -27,3 +27,4 @@ export type UserInterfaceRendererId =
   | 'flashWall'
   | 'overlapShape'
   | 'overlapSolid'
+  | 'wireframe'

@@ -26,6 +26,7 @@ import { EmojiDisplayUserInterfaceRenderer } from './EmojiDisplayUserInterface'
 import { FlashWallUserInterfaceRenderer } from './FlashWallUserInterface'
 import { OverlapShapeUserInterfaceRenderer } from './OverlapShapeUserInterface'
 import { OverlapSolidUserInterfaceRenderer } from './OverlapSolidUserInterface'
+import { WireframeUserInterfaceRenderer } from './WireframeUserInterface'
 import type { UserInterfaceRendererDefinition } from './types'
 import type { UserInterfaceRendererId } from './ids'
 
@@ -62,6 +63,7 @@ export const USER_INTERFACE_RENDERERS: Record<UserInterfaceRendererId, UserInter
   flashWall: FlashWallUserInterfaceRenderer,
   overlapShape: OverlapShapeUserInterfaceRenderer,
   overlapSolid: OverlapSolidUserInterfaceRenderer,
+  wireframe: WireframeUserInterfaceRenderer,
 }
 
 export function getUserInterfaceRenderer(id: UserInterfaceRendererId): UserInterfaceRendererDefinition {

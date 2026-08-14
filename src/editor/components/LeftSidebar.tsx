@@ -161,6 +161,14 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
       <path d="M1 6 H11" stroke="#cffafe" strokeWidth="1" strokeLinecap="round" />
     </svg>
   )},
+  { id: 'wireframe', name: 'Wireframe', description: 'A thin-line shape - circles, platonic solids, torus knots, Möbius strips and friends - with adjustable color, glow and spin, pulsing with every note.', icon: (
+    <svg width="12" height="12" viewBox="0 0 12 12">
+      <g fill="none" stroke="#7dd3fc" strokeWidth="0.8">
+        <path d="M6 1.2 L10.6 3.6 L10.6 8.4 L6 10.8 L1.4 8.4 L1.4 3.6 Z" />
+        <path d="M1.4 3.6 L6 6 L10.6 3.6 M6 6 L6 10.8" />
+      </g>
+    </svg>
+  )},
   { id: 'icosahedronBurst', name: 'Icosahedron Burst', description: 'Each note spawns an expanding, fading wireframe shell.', icon: (
     <svg width="12" height="12" viewBox="0 0 12 12">
       <path d="M6 1 L11 6 L6 11 L1 6 Z" fill="none" stroke="#22d3ee" strokeWidth="1.2" />
@@ -345,7 +353,7 @@ const ALL_OBJECT_INSTRUMENTS = withKind('object', [
 // at the bottom - still available, out of the first impression.
 // Circle and Triangle left the library outright - 3D Shape's geometry picker
 // covers them (the instruments stay registered for old projects).
-const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'shapeFlight', 'particleBurst', 'overlapShape', 'overlapSolid'])
+const CORE_OBJECT_IDS = new Set(['cube', 'kaleidoSolid', 'laserSphere', 'laserLine', 'wireframe', 'shapeFlight', 'particleBurst', 'overlapShape', 'overlapSolid'])
 const OBJECT_INSTRUMENTS = ALL_OBJECT_INSTRUMENTS.filter((i) => CORE_OBJECT_IDS.has(i.id))
 
 // The Instruments folder. These are object instruments like any other; what
