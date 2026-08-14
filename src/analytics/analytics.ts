@@ -45,6 +45,7 @@ export type AnalyticsEvent =
   | 'editor_upgrade_clicked'
   | 'editor_discord_clicked'
   | 'export_clicked'
+  | 'editor_gate_shown' // someone without an account reached the editor and met the un-dismissable signup card
   | 'export_gate_shown' // a guest reached the final Export click and was shown the keep-&-export signup invitation
   | 'save_to_cloud_clicked' // props: { from: 'guest' | 'demo' } - the top bar's "Saved locally · Save to cloud" chip
   | 'lyrics_clicked'

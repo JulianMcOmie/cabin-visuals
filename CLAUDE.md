@@ -14,7 +14,7 @@ A browser DAW for music visuals: MIDI notes drive 3D instruments on a timeline; 
 - `npm run db:generate` / `db:migrate` — Drizzle (needs `DATABASE_URL`).
 - Single test file: `node --import tsx --test --experimental-test-module-mocks path/to/file.test.ts`.
 
-`/editor` runs fully in-memory without Supabase env or `?project=` id — ideal for smoke testing (no login needed).
+`/editor` runs fully in-memory without Supabase env or `?project=` id. **It is no longer a no-login path**: `EditorSignupGate` (src/editor/components) puts an un-dismissable signup card over the editor for anyone without a real account — anonymous sessions included — so smoke-testing it means signing in first, and a `?template=` demo link now gates too. Delete that one component to get the open editor back.
 
 ## The one rule
 

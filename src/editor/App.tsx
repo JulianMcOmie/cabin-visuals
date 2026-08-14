@@ -26,6 +26,7 @@ import { BpmControl } from './components/BpmControl'
 import { PlaybackRateControl } from './components/PlaybackRateControl'
 import { ExportDialog } from './components/ExportDialog'
 import { SaveToCloudDialog } from './components/SaveToCloudDialog'
+import { EditorSignupGate } from './components/EditorSignupGate'
 import { MediaFileDropLayer } from './components/MediaFileDropLayer'
 import { isExportSupported } from './core/export/support'
 import { PianoRollPanel } from './components/midi/PianoRollPanel'
@@ -1285,6 +1286,8 @@ export default function EditorApp() {
       {/* OS-file drops (audio/MIDI/video/photo) land anywhere in the editor. */}
       <MediaFileDropLayer />
       <ConflictDialog />
+      {/* No account, no editor. Mounted at the root so every way in meets it. */}
+      <EditorSignupGate />
       <Header
         libraryOpen={libraryOpen}
         sceneEditorOpen={sceneEditorOpen}

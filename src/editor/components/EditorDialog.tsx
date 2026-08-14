@@ -42,6 +42,7 @@ export function EditorDialog({
   variant = 'chrome',
   scrim = 'page',
   dismissOnScrimClick = true,
+  dismissible = true,
   claimModal = true,
   animated = true,
   closeLabel = 'Close',
@@ -56,7 +57,8 @@ export function EditorDialog({
    * variants - the title stays the sentence you read first.
    */
   subtitle?: ReactNode
-  onClose: () => void
+  /** Optional only because a `dismissible={false}` dialog has nothing to call. */
+  onClose?: () => void
   children: ReactNode
   /** Tailwind width class for the card. */
   width?: string
@@ -72,6 +74,17 @@ export function EditorDialog({
   scrim?: 'page' | 'nested'
   /** False while a run is in flight, so a stray click can't abandon it. */
   dismissOnScrimClick?: boolean
+  /**
+   * False for a GATE - a dialog with no way out. No close square, Escape does
+   * nothing, the scrim ignores clicks, and `onClose` is never called. The only
+   * exits are the ones the body itself offers.
+   *
+   * A dialog you cannot close is a hostile thing, so it needs a reason: the
+   * editor's signup gate (`EditorSignupGate`) is one because dismissing it
+   * would hand over the editor it exists to withhold. Don't reach for this to
+   * stop someone escaping a form.
+   */
+  dismissible?: boolean
   /** False for a dialog opened INSIDE another one - the outer already claimed it. */
   claimModal?: boolean
   /**
@@ -114,10 +127,11 @@ export function EditorDialog({
       if (dialogStack[dialogStack.length - 1] !== id) return
       const t = e.target as HTMLElement | null
       if (t && panelRef.current?.contains(t)) {
-        if (e.key === 'Escape') onClose()
+        if (e.key === 'Escape' && dismissible) onClose?.()
         return
       }
-      if (e.key === 'Escape') { onClose(); return }
+      // A gate still swallows the editor's shortcuts; it just has no exit.
+      if (e.key === 'Escape' && dismissible) { onClose?.(); return }
       e.stopPropagation()
       if (e.code === 'Space' || e.code === 'Enter') e.preventDefault()
     }
@@ -127,7 +141,7 @@ export function EditorDialog({
       const i = dialogStack.indexOf(id)
       if (i >= 0) dialogStack.splice(i, 1)
     }
-  }, [id, onClose, panelRef])
+  }, [id, onClose, panelRef, dismissible])
 
   const nested = scrim === 'nested'
   const chrome = variant === 'chrome'
@@ -147,7 +161,7 @@ export function EditorDialog({
   // repaints it onto this value (see the .gsi-host rules there).
   const panelClass = `relative ${width} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[14px] border border-[rgba(255,255,255,0.1)] bg-[#0f1118] [--gsi-surface:#0f1118] ${pad} shadow-[0_30px_80px_rgba(0,0,0,0.6)]`
   const onScrimDown = (e: { target: EventTarget | null; currentTarget: EventTarget | null }) => {
-    if (dismissOnScrimClick && e.target === e.currentTarget) onClose()
+    if (dismissible && dismissOnScrimClick && e.target === e.currentTarget) onClose?.()
   }
 
   // The margin lives on the wrapper rather than the title row so that adding a
@@ -157,13 +171,15 @@ export function EditorDialog({
     <div className={headRow}>
       <div className="flex items-center justify-between gap-3">
         <span className={titleClass}>{title}</span>
-        <button
-          onClick={onClose}
-          aria-label={closeLabel}
-          className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
-        >
-          <X size={14} />
-        </button>
+        {dismissible && (
+          <button
+            onClick={() => onClose?.()}
+            aria-label={closeLabel}
+            className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[8px] text-[var(--text-3)] transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:text-[var(--text)] cursor-pointer"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
       {subtitle && (
         <p className="mt-2 pr-[38px] text-[13px] leading-relaxed text-[var(--text-3)]">{subtitle}</p>
