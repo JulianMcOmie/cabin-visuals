@@ -533,6 +533,12 @@ const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher'
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
+// The back catalog, declared on the definitions themselves (`legacy`) rather
+// than listed here: the same flag is what keeps them out of the track context
+// menu's add-a-device lists, which have no Extras drawer to demote them into.
+const LEGACY_MOVER_IDS = new Set(
+  listMoverOrSplitterDefinitions().filter((d) => d.legacy).map((d) => d.id),
+)
 // Everything else that moves lives under Motion - the compound movers at its
 // top level, the single-behavior ones in its Extras subfolder.
 const MOTION_ITEMS = MOVER_INSTRUMENTS.filter((m) => !IMPACT_IDS.includes(m.id))
@@ -558,13 +564,13 @@ const SCENE_FOLDERS: LibraryFolder[] = [
     description: 'Movers move, spin, scale, or fade objects - add them under tracks (or drag them onto tracks) and drive them with notes.',
     // The legacy compound movers (All Movers, Motion) are demoted - never
     // deleted - into the Extras shelf; the unified Mover supersedes them.
-    items: MOTION_ITEMS.filter((m) => m.id !== 'allMovers' && m.id !== 'motion'),
+    items: MOTION_ITEMS.filter((m) => !LEGACY_MOVER_IDS.has(m.id)),
     subfolders: [
       {
         id: 'motion-extras',
         title: 'Extras',
         description: 'The legacy compound movers - all fully working, superseded by Mover.',
-        items: MOTION_ITEMS.filter((m) => m.id === 'allMovers' || m.id === 'motion'),
+        items: MOTION_ITEMS.filter((m) => LEGACY_MOVER_IDS.has(m.id)),
       },
     ],
   },

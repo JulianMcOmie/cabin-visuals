@@ -68,6 +68,15 @@ export interface MoverOrSplitterDefinition<Settings> {
    * its own group on the tracks it can actually gate.
    */
   parentGate?: boolean
+  /**
+   * Superseded by another definition, but kept registered so existing projects
+   * keep resolving. The library demotes it to its shelf's Extras folder (still
+   * reachable, out of the first impression) and the track context menu's "Add
+   * mover / colorizer / splitter track" lists drop it outright - a right-click
+   * menu has no Extras drawer to hide it in, so a back-catalog entry there just
+   * competes with the definition that replaced it.
+   */
+  legacy?: boolean
   midiRows?: (settings: Settings, context?: { priorCount: number }) => MidiRowDef[]
   /** Keep the editor to exactly midiRows, even if saved notes use other pitches. */
   strictMidiRows?: boolean

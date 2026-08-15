@@ -49,6 +49,7 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
     palette default) is therefore left unclaimed in `identityColors.ts`. A param that
     resolves near-achromatic falls through to the lane's own cycle colour.
 - `bypass.ts` — the `parentGate` device: notes switch the device it is nested under OFF (or, flipped, on). Not a chain entry — see its own section below.
+- **Demoting a superseded definition is `legacy: true` on the def, not an id list in a picker** (All Movers, Motion). Both pickers read the flag and treat it differently on purpose: the LIBRARY files it into its shelf's Extras folder (`LEGACY_MOVER_IDS` in `LeftSidebar.tsx`, derived from the registry), while the track context menu's "Add mover / colorizer / splitter track" lists drop it entirely — a right-click menu is one flat list per kind, with no Extras drawer to hide a back-catalog entry in, so it would sit right beside the definition that replaced it. Never delete the definition: saved projects still resolve its id.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
 - `copyTargets.ts` — **which of the incoming copies a chain row acts on** (the
   inspector's Targets tab). The whole vocabulary is a slice count plus which slices

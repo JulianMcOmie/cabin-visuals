@@ -156,6 +156,7 @@ export const consolidatedMover: MoverOrSplitterDefinition<ConsolidatedSettings> 
   id: 'allMovers',
   label: 'All Movers',
   kind: 'mover',
+  legacy: true,
   identityColor: CONSOLIDATED_MOVER_COLOR,
   params: CONSOLIDATED_PARAMS,
   midiRows: consolidatedMidiRows,

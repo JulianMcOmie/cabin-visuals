@@ -341,6 +341,7 @@ export const motionMover: MoverOrSplitterDefinition<MotionSettings> = {
   id: 'motion',
   label: 'Motion',
   kind: 'mover',
+  legacy: true,
   identityColor: MOTION_COLOR,
   params: MOTION_PARAMS,
   midiRows: () => MOTION_ROWS,
