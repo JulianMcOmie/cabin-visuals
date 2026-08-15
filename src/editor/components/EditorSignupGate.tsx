@@ -27,6 +27,7 @@ import { DEV_GATES_OFF } from '../devGates'
  * - A dev server stands it down (`DEV_GATES_OFF`), together with the export
  *   gate, so `/editor` stays smoke-testable without an account.
  */
+
 export function EditorSignupGate() {
   const { user, loading, isAnonymous } = useAuth()
   // An anonymous session is signed in for persistence only - it is not an
