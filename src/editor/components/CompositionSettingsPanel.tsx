@@ -44,9 +44,10 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
     <>
       <p className="mb-3 text-[10px] font-semibold tracking-[0.06em] text-[var(--text-muted)] select-none">DIRECTOR</p>
       <p className="mb-4 text-[11px] leading-relaxed text-[var(--text-2)]">
-        {def?.targetsSingleScene
-          ? `${def?.name ?? 'This director'} renders one scene into Main. Its MIDI rows choose which pieces of that scene are visible.`
-          : `${def?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.`}
+        {def?.panelSummary
+          ?? (def?.targetsSingleScene
+            ? `${def?.name ?? 'This director'} renders one scene into Main. Its MIDI rows choose which pieces of that scene are visible.`
+            : `${def?.name ?? 'Unknown director'} renders scene sources into Main. Its MIDI rows choose the scene inputs.`)}
       </p>
       <ParamControl
         param={COMPOSITION_OPACITY_PARAM}
@@ -83,9 +84,11 @@ export function CompositionSettingsPanel({ track }: { track: Track }) {
               ))}
             </div>
             {visualSceneIds.length === 0 && (
-              <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">No visual scenes yet - add one to mask.</p>
+              <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">No visual scenes yet - add one first.</p>
             )}
-            <p className="mt-3 mb-4 text-[10px] leading-relaxed text-[var(--text-muted)]">Every piece shows this scene, cropped. The MIDI rows choose which pieces are visible, not which scene.</p>
+            {def?.sceneChoiceNote && (
+              <p className="mt-3 mb-4 text-[10px] leading-relaxed text-[var(--text-muted)]">{def.sceneChoiceNote}</p>
+            )}
           </>
         )
       })()}

@@ -92,6 +92,16 @@ export interface CompositionInstrumentDef {
    * be whichever one happens to sort first.
    */
   targetsSingleScene?: boolean
+  /**
+   * The sentence the settings panel opens with. The generic fallbacks describe
+   * a partition composer or a crop-shaped masker, so a def whose rows mean
+   * something else says so here rather than letting the panel guess from
+   * `targetsSingleScene` alone.
+   */
+  panelSummary?: string
+  /** The note under the single-scene picker (`targetsSingleScene` only) - what
+   *  the MIDI rows do to the chosen scene, which is different per def. */
+  sceneChoiceNote?: string
   resolve: (track: Track, context: CompositionResolveContext) => CompositionLayer[]
 }
 

@@ -1,3 +1,4 @@
+import { sceneDirector } from './scene'
 import { sceneSwitcherDirector } from './sceneSwitcher'
 import { cutDirector } from './cut'
 import { radialCutDirector } from './radialCut'
@@ -13,7 +14,9 @@ import type { CompositionInstrumentDef } from './types'
 // capability checks and must never pull in instruments/index (components →
 // stores cycle).
 
-const DEFINITIONS: CompositionInstrumentDef[] = [sceneSwitcherDirector, cutDirector, radialCutDirector, cropDirector]
+// Order is the library's order on Main (LeftSidebar derives its card list from
+// listCompositionInstruments), so the plainest composer comes first.
+const DEFINITIONS: CompositionInstrumentDef[] = [sceneDirector, sceneSwitcherDirector, cutDirector, radialCutDirector, cropDirector]
 const BY_ID = new Map(DEFINITIONS.map((def) => [def.id, def]))
 
 export function getCompositionInstrument(id: string | undefined): CompositionInstrumentDef | undefined {

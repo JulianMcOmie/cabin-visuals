@@ -192,6 +192,7 @@ export const cropDirector: CompositionInstrumentDef = {
   params: CROP_PARAMS,
   hideMidiRowsInSettings: true,
   targetsSingleScene: true,
+  sceneChoiceNote: 'Every piece shows this scene, cropped. The MIDI rows choose which pieces are visible, not which scene.',
   midiRows(track): MidiRowDef[] {
     return cropMidiRows(track)
   },

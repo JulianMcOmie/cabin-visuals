@@ -105,6 +105,7 @@ const SCENE_INSTRUMENTS = withKind('object', [
 ])
 
 const DIRECTOR_DESCRIPTIONS: Record<string, string> = {
+  scene: 'Shows one scene, full-frame, for the whole timeline. Add notes to its row and it shows only while one is held.',
   sceneSwitcher: 'Shows the most recently started scene row only while its MIDI note remains held.',
   cut: 'Partitions the frame between held scene rows, with straight or diagonal cuts.',
   radialCut: 'Partitions held scene rows into concentric rings from the center outward.',
@@ -112,6 +113,7 @@ const DIRECTOR_DESCRIPTIONS: Record<string, string> = {
 }
 
 const DIRECTOR_ICON_COLORS: Record<string, string> = {
+  scene: 'text-emerald-400',
   sceneSwitcher: 'text-indigo-400',
   cut: 'text-fuchsia-400',
   radialCut: 'text-cyan-400',
