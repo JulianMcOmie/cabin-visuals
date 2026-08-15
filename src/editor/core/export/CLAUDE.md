@@ -13,8 +13,11 @@ Export never records playback. It **steps the beat arithmetically** — `beat(i)
 - `watermark.ts` — free-plan watermark compositor; `previewCapture.ts` — small deterministic captures (project thumbnails, instrument previews).
 - `types.ts` — `ExportSettings`, `BeatRange`, `makeTimebase`.
 
+`ExportResult.poster` is a still of the MIDDLE encoded frame (data URL), grabbed inside the frame sink — same task as the render, from the same canvas that gets encoded, so it carries the watermark and needs no `preserveDrawingBuffer`. The dialog's completion screen shows it because the running view's rAF monitor can't: complete is a different React subtree (fresh, blank canvas) and the driver is unpinned by then.
+
 ## Rules
 
 - No wall clock, no RAF, no transport anywhere in this path. If a visual looks right live but wrong in export, the instrument is impure (see the root pause invariant) — fix the instrument, don't patch export.
 - Export ignores the loop region on purpose (wrap lives only in playback's RAF tick).
+- Starting an export PAUSES the transport (ExportDialog): playback and the encode share one canvas, so a running transport only steals frames from the render.
 - UI entry: `components/ExportDialog.tsx` + `components/visual/ExportDriver.tsx`.
