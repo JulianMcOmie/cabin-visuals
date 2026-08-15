@@ -133,6 +133,32 @@ two-clock rate: a FREE/SYNC segmented control renders whichever knob the mode re
 and the SYNC knob is a stepped LaserKnob over `TUNNEL_SYNC_DETENTS` in index units —
 Radial Motion's detent pattern, with the readout speaking beats-per-ring ("1/2b").
 
+`CopyTargetsUserInterface.tsx` is the **Targets tab's COPIES console** (which of the
+copies reaching a mover/splitter row it acts on — `core/visualCopies/copyTargets.ts`).
+It is the reference for a panel where **the window IS the readout**: there is
+deliberately no caption line and no n-of-m tally, because the picture says it better
+than words can. Three things it settled:
+
+- **It draws the REAL incoming formation**, from `getPriorChainPrefix(trackId, project)`
+  (core/visual/resolve.ts — the same prefix `getPriorVisualCopyCount` measures, handed
+  over whole). Targeted copies are lit in their slice's hue, skipped ones are hollow
+  rings. That is what earns the window: emission order is raster order, so "every other
+  copy" on an even-width grid is stripes, not a checkerboard — the picture shows it
+  before the user would think to ask, and no wording could.
+- **Build the prefix in a `useMemo` on the document, resolve it in the rAF loop.**
+  Building walks the subtree; `resolveVisualCopies` on the built chain is microseconds.
+  The live beat is read with `useTimeStore.getState()` inside the loop — subscribing
+  would re-render the panel every frame of playback.
+- **The window teaches the controls their range** (`onCount` up from the painted frame).
+  It is the only thing that knows the real copy count, so a 4-copy ring never offers 12
+  slices that could only ever be empty.
+
+The tab itself is conditional (`targetChannels` in TrackEditor): a global mover or a
+Crop gets the OBJECT routing, any mover/splitter row gets the copy console, and a plain
+instrument keeps the two-tab rail rather than gaining a third tab with nothing in it. A
+conditional tab needs the effect that bounces `tab` back to `instrument` when the
+selected track loses it, or the panel renders a body with no tab lit.
+
 **A panel whose subject is a LAYOUT can preview with a plain 2D canvas.**
 `GridSplitterUserInterface` runs the splitter's real `resolve()` (no notes)
 and draws the copies as painter-sorted cube faces on a `<canvas>` with its own

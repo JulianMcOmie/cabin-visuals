@@ -453,6 +453,9 @@ export interface ProjectState {
    *  Clamped to [0, AUTOMATION_AMOUNT_MAX]; 1 is stored as absence. */
   setTrackAutomationAmount: (trackId: string, amount: number) => void
   setTrackTargets: (trackId: string, targets: Track['targets']) => void
+  /** Which copies a mover/splitter row acts on. `undefined` = all of them, which
+   *  is how neutral targeting is stored (see core/visualCopies/copyTargets.ts). */
+  setTrackCopyTargets: (trackId: string, copyTargets: Track['copyTargets']) => void
   setTrackTags: (trackId: string, tags: string[]) => void
   /** Draw this object on top of everything (depth-ignored overlay). */
   setTrackOnTop: (trackId: string, onTop: boolean) => void
@@ -1896,6 +1899,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, targets } } }
+    }),
+
+  setTrackCopyTargets: (trackId, copyTargets) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      return { tracks: { ...s.tracks, [trackId]: { ...track, copyTargets } } }
     }),
 
   setTrackTags: (trackId, tags) =>

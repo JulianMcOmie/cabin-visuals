@@ -40,6 +40,30 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
     palette default) is therefore left unclaimed in `identityColors.ts`. A param that
     resolves near-achromatic falls through to the lane's own cycle colour.
 - `resolveVisualCopies.ts` — evaluates a track's chain into `VisualCopy[]`; `identityVisualCopy.ts` — the 1-copy default.
+- `copyTargets.ts` — **which of the incoming copies a chain row acts on** (the
+  inspector's Targets tab). The whole vocabulary is a slice count plus which slices
+  are on, cut by one of two rules that read only `index`/`count`: `every` interleaves
+  (`index % slices`), `runs` takes contiguous stretches. Four things are load-bearing:
+  - **An untargeted copy is RETURNED UNCHANGED, never hidden or dropped.** A targeted
+    splitter fans out the copies it owns and everything else passes through 1:1, so
+    copy count stays a pure function of settings. `gatedMoverOrSplitter` also gates
+    `structuralVariants`, so the structural probe sizes the mounted pool against what
+    the gate actually produces rather than against the ungated splitter.
+  - **Reading only index/count is what makes it beat-independent for free.** A gate
+    that measured POSITIONS (radius, angle, an axis) would break the copy-count
+    contract the moment a mover above animated one copy across a boundary — that is
+    why the shipped rules are index-only, and why shape-based cutting is a later slot
+    beside them rather than a fourth rule bolted on.
+  - **`warpBeat` is deliberately NOT gated.** A time remap reaches the whole object by
+    contract, so a Freeze with copy targeting still freezes everything.
+  - Neutral targeting is stored as **absence** (`normalizeCopyTargets` collapses "all
+    slices on" to `undefined`), so an untouched device grows no field and every save
+    written before the feature resolves identically. The gate wraps in
+    `resolveMoverOrSplitterTrack` (resolve.ts) around the WHOLE entry, children
+    included — a targeted splitter must not still spin its untargeted copies.
+    `CopyTargetSelection` here is mirrored structurally by `CopyTargets` in
+    editor/types.ts (the document must not depend on the engine); resolve.ts passes one
+    to the other, so a drift is a type error there.
 - `moverFrame.ts` — **frames**: a mover nested under another MOVER moves it (Impact Scatter's blast center can drift) rather than becoming a second chain entry. It works by handing the parent a `placementTransform` pre-multiplied by the frame's inverse, so a world-placed mover reads its own field as moved — no contract change, and the returned transform needs no fixing up. Frames nest, and only movers that actually read `placementTransform` respond; a pure relative displacement (Burst, Motion, the rotations) has no location to move, so a frame under one is a no-op.
 - `splitterSize.ts` — **the shared SIZE knob** every layout splitter wears (`radial`,
   `grid`, `line`, `symmetry`, `polyhedron`, `parametricPattern`, `tunnel`): ONE exported

@@ -24,11 +24,12 @@ import { getEffectUserInterface, getMoverUserInterface } from '../userInterfaceR
 import { consolePanel } from '../userInterfaceRenderers/console'
 import { EnvelopeUserInterface } from '../userInterfaceRenderers/EnvelopeUserInterface'
 import { AutomationUserInterface } from '../userInterfaceRenderers/AutomationUserInterface'
+import { CopyTargetsUserInterface } from '../userInterfaceRenderers/CopyTargetsUserInterface'
 import { resolveTrackDisplayColor, resolveTrackIdentityColor } from '../utils/trackDisplayColor'
 import { withAlpha } from '../userInterfaceRenderers/colorWheel'
 import type { Routing, EffectInstance, Scene, Track } from '../types'
 
-type Tab = 'instrument' | 'effects'
+type Tab = 'instrument' | 'effects' | 'targets'
 
 /** The track's instrument color, if its definition exposes a `color` string
  *  param - the accent that lights the instrument chassis and its effect LEDs.
@@ -224,7 +225,35 @@ function EffectItem({
 const TABS: { id: Tab; label: string; short: string; sceneLabel: string; sceneShort: string }[] = [
   { id: 'instrument', label: 'Instrument', short: 'Inst', sceneLabel: 'Settings', sceneShort: 'Scene' },
   { id: 'effects', label: 'Effects', short: 'FX', sceneLabel: 'Effects', sceneShort: 'FX' },
+  { id: 'targets', label: 'Targets', short: 'Tgt', sceneLabel: 'Targets', sceneShort: 'Tgt' },
 ]
+
+/** What a track can point AT, which is what decides whether the Targets tab is
+ *  offered at all. Two independent channels, either of which earns the tab:
+ *
+ *  - `objects` — the #tag / branch / track routing a GLOBAL mover (one with no
+ *    parent instrument) or a Crop uses to say which objects it reaches.
+ *  - `copies` — which of the copies arriving at a mover/splitter ROW it acts on
+ *    (core/visualCopies/copyTargets.ts). Every chain row has this, wherever it
+ *    sits; the panel itself says so when nothing above it makes copies.
+ *
+ *  A plain instrument track has neither, and gets the two-tab rail it always
+ *  had rather than a third tab with nothing in it. */
+function targetChannels(
+  track: Track | null,
+  parent: Track | undefined,
+): { objects: boolean; copies: boolean } | null {
+  if (!track) return null
+  const isChainRow = track.type === 'mover' || track.type === 'splitter'
+  const objects = track.instrumentId === 'crop'
+    || (isChainRow && (!track.parentId || !parent || !getInstrument(parent.instrumentId)))
+  const copies = isChainRow
+  return objects || copies ? { objects, copies } : null
+}
+
+function tabsFor(channels: { objects: boolean; copies: boolean } | null) {
+  return channels ? TABS : TABS.filter((t) => t.id !== 'targets')
+}
 
 /** What the panel is pointed at, for the identity that shares the tab rail:
  *  the NAME it wears, the KIND behind that name (a tooltip, not a second line -
@@ -416,6 +445,10 @@ export function TrackEditor() {
   // drop zone is visible - the scene's chain when no track is selected.
   useEffect(() => { if (effectDragging && (track || activeScene)) setTab('effects') }, [effectDragging, track, activeScene])
   useEffect(() => { if (!selectedTrackId) setTab('instrument') }, [activeSceneId, selectedTrackId])
+  // Targets is a CONDITIONAL tab, so selecting a track that has none while it is
+  // open would leave the panel showing a body with no tab lit.
+  const channels = targetChannels(track, parent)
+  useEffect(() => { if (tab === 'targets' && !channels) setTab('instrument') }, [tab, channels])
 
   // An audio track has no instrument and no effects - the inspector's usual
   // chrome would be two empty tabs. It gets the whole surface instead: scope on
@@ -453,7 +486,7 @@ export function TrackEditor() {
       )}
 
       <div className="@container flex flex-shrink-0 items-center gap-1 border-b border-[var(--border-subtle)] px-2 py-1.5">
-        {(track || activeScene) ? TABS.map((t) => {
+        {(track || activeScene) ? tabsFor(targetChannels(track, parent)).map((t) => {
           const active = tab === t.id
           return (
             <button
@@ -541,13 +574,8 @@ export function TrackEditor() {
                             ))}
                           </>
                         )}
-                        {/* Movers without a parent instrument route globally
-                            through their targets (appended to each target's
-                            chain); movers under an instrument are local chain
-                            entries and have no targets. */}
-                        {(!track.parentId || !parent || !getInstrument(parent.instrumentId)) && (
-                          <MoverTargets track={track} />
-                        )}
+                        {/* Object routing and copy targeting both live on the
+                            Targets tab now - see TARGET_TABS. */}
                       </>
                     )
                   }
@@ -796,14 +824,6 @@ export function TrackEditor() {
                           />
                         )}
                       </div>
-                      {/* Crop's scope: untargeted, it masks its whole scene;
-                          targeted, it masks exactly those instruments (their
-                          rendered output, via the shader path). */}
-                      {track.instrumentId === 'crop' && (
-                        <div className="mt-4">
-                          <MoverTargets track={track} cropMode />
-                        </div>
-                      )}
                     </>
                   )
                 })()}
@@ -811,6 +831,14 @@ export function TrackEditor() {
             ) : activeScene ? (
               <SceneSettingsPanel scene={activeScene} />
             ) : null}
+          </>
+        )}
+        {tab === 'targets' && track && channels && (
+          <>
+            {/* Objects first: a global mover picks WHICH objects before there is
+                any question of which of their copies. */}
+            {channels.objects && <MoverTargets track={track} cropMode={track.instrumentId === 'crop'} />}
+            {channels.copies && <CopyTargetsUserInterface track={track} />}
           </>
         )}
         {tab === 'effects' && (() => {

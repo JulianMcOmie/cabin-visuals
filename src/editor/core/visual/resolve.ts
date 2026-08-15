@@ -22,6 +22,7 @@ import { framedMoverOrSplitter } from '../visualCopies/moverFrame'
 import { splitterWithChildChain } from '../visualCopies/splitterChildChain'
 import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
+import { gatedMoverOrSplitter } from '../visualCopies/copyTargets'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -403,13 +404,21 @@ function resolveMoverOrSplitterTrack(track: Track, p: ProjectSnapshot): MoverOrS
   const own = resolveOwnMoverOrSplitter(track, p)
   if (!own) return null
   const children = resolveMoverAndSplitterChain(track, p)
-  if (track.type === 'splitter') return splitterWithChildChain(own, weaveSplitterTfLanes(track, children, p))
-  const entry = framedMoverOrSplitter(own, children)
-  // Structural variants stay the BARE resolutions: frames don't change counts,
-  // so they skip the framing wrapper (splitterWithChildChain, whose children DO
-  // change counts, composes its own variants instead).
-  if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
-  return entry
+  let entry: MoverOrSplitter
+  if (track.type === 'splitter') {
+    entry = splitterWithChildChain(own, weaveSplitterTfLanes(track, children, p))
+  } else {
+    entry = framedMoverOrSplitter(own, children)
+    // Structural variants stay the BARE resolutions: frames don't change counts,
+    // so they skip the framing wrapper (splitterWithChildChain, whose children DO
+    // change counts, composes its own variants instead).
+    if (entry !== own && own.structuralVariants) entry.structuralVariants = own.structuralVariants
+  }
+  // Copy targeting wraps the WHOLE entry, children included: "this device acts on
+  // these copies" has to mean its nested frame/child chain too, or a targeted
+  // splitter would still spin its untargeted copies. Absent targeting is the
+  // common case and adds no wrapper at all.
+  return track.copyTargets ? gatedMoverOrSplitter(entry, track.copyTargets) : entry
 }
 
 /** A splitter's own spatial tf* automation lanes (x/y/z, rotations, size): each
@@ -592,15 +601,53 @@ function globalTrackTargetsObject(track: Track, object: Track, p: ProjectSnapsho
  * must serve all of them, so its row set uses the largest target count. Global
  * entries (movers without a parent instrument) apply in depth-first tree order. */
 export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): number {
+  let largest = 1
+  for (const prefix of priorChainPrefixes(trackId, p)) {
+    largest = Math.max(largest, structuralCopyCount(prefix))
+  }
+  return largest
+}
+
+/**
+ * The resolved chain that runs BEFORE one mover/splitter track - the same
+ * prefix `getPriorVisualCopyCount` measures, handed over whole so a caller can
+ * evaluate it itself. The Targets panel resolves it per frame to draw the real
+ * incoming formation, which is what keeps its window from drifting away from
+ * what renders.
+ *
+ * Where several prefixes apply (a group child broadcasting to members, a global
+ * entry hitting several objects) it returns the BUSIEST one, matching the count
+ * the row's MIDI vocabulary is already sized against.
+ *
+ * Editor metadata, not a playback path: building it walks the subtree, so a
+ * caller should memoize on the document rather than call it per frame.
+ */
+export function getPriorChainPrefix(trackId: string, p: ProjectSnapshot): MoverOrSplitter[] {
+  let best: MoverOrSplitter[] = []
+  let bestCount = -1
+  for (const prefix of priorChainPrefixes(trackId, p)) {
+    const count = structuralCopyCount(prefix)
+    if (count > bestCount) {
+      bestCount = count
+      best = prefix
+    }
+  }
+  return best
+}
+
+/** Every chain prefix that can precede one mover/splitter track: the entries
+ *  above it, resolved. Usually exactly one; a group chain child has one per
+ *  member object and a global entry one per targeted object. */
+function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitter[][] {
   const target = p.tracks[trackId]
-  if (!target) return 1
+  if (!target) return []
 
   // A chain child counts the entries above it within its parent's chain -
   // an instrument's local chain, or a parent mover's frame chain; a global entry
   // counts each target's local chain plus every preceding global that hits it.
   if (isChainChild(target, p)) {
     const parent = p.tracks[target.parentId!]
-    if (!parent) return 1
+    if (!parent) return []
     // A GROUP's chain child broadcasts to the member objects above it; one
     // MIDI lane must serve all of them, so the row set uses the largest member
     // count. Per member: its own chain, then this group's entries above the
@@ -631,14 +678,10 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
           collectObjects(cid)
         }
       }
-      let largest = 1
-      for (const member of memberObjects) {
-        largest = Math.max(largest, structuralCopyCount([
-          ...resolveMoverAndSplitterChain(member, p),
-          ...entriesAbove,
-        ]))
-      }
-      return largest
+      return memberObjects.map((member) => [
+        ...resolveMoverAndSplitterChain(member, p),
+        ...entriesAbove,
+      ])
     }
     const candidates = (parent.childIds ?? [])
       .map((id) => p.tracks[id])
@@ -658,17 +701,14 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(child, p)
       if (resolved) prefix.push(resolved)
     }
-    // Structural, not single-beat: an automated entry above this one may breathe
-    // its count with the beat, and the MIDI rows must address the mounted pool.
-    return structuralCopyCount(prefix)
+    return [prefix]
   }
 
   const objects = Object.values(p.tracks).filter(
     (track) => !!track.instrumentId && !!getInstrument(track.instrumentId),
   )
   const targetObjects = objects.filter((object) => globalTrackTargetsObject(target, object, p))
-  let largestCount = 1
-  for (const object of targetObjects) {
+  return targetObjects.map((object) => {
     const prefix = resolveMoverAndSplitterChain(object, p)
     for (const globalId of flattenTree(p)) {
       if (globalId === trackId) break
@@ -682,9 +722,8 @@ export function getPriorVisualCopyCount(trackId: string, p: ProjectSnapshot): nu
       const resolved = resolveMoverOrSplitterTrack(global, p)
       if (resolved) prefix.push(resolved)
     }
-    largestCount = Math.max(largestCount, structuralCopyCount(prefix))
-  }
-  return largestCount
+    return prefix
+  })
 }
 
 // ── Per-track resolve reuse ──────────────────────────────────────────────────

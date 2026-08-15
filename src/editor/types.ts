@@ -207,6 +207,26 @@ export interface Routing {
   amount: number
 }
 
+/**
+ * Which of the copies handed to a mover/splitter row it actually acts on.
+ * Absent = all of them (the default, and what every save written before this
+ * field means). The copies are cut into `slices` by `rule` - `every` interleaves
+ * (`index % slices`), `runs` takes contiguous stretches - and `on` lists the
+ * 0-based slices the device applies to; a copy in any other slice passes through
+ * untouched.
+ *
+ * The semantics and the gate live in `core/visualCopies/copyTargets.ts`, whose
+ * `CopyTargetSelection` this mirrors structurally. It is declared twice on
+ * purpose: the document schema must not depend on the engine (see this file's
+ * header note in editor/CLAUDE.md), and resolve.ts passes one shape to the other
+ * so they cannot drift without a type error there.
+ */
+export interface CopyTargets {
+  rule: 'every' | 'runs'
+  slices: number
+  on: number[]
+}
+
 /** A visual effect plugin attached to a track: which plugin, on/off, param values. */
 export interface EffectInstance {
   id: string
@@ -291,6 +311,9 @@ export interface Track {
   tags?: string[]
   /** Top-level movers only: the objects this mover applies to. */
   targets?: Routing[]
+  /** Mover/splitter rows only: which of the copies reaching this row it acts on.
+   *  Absent = all of them. See `CopyTargets`. */
+  copyTargets?: CopyTargets
   targetParam?: string
   /** Automation-lane only: the target the lane drove before a drag onto a parent
    *  that couldn't take it forced a default (store's remapAutomationTarget).
