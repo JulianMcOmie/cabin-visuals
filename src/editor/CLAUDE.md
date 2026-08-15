@@ -102,28 +102,50 @@ Stores → `store/CLAUDE.md` · engines → `core/*/CLAUDE.md` · UI → `compon
   render (`canvasView === 'main' ? the isMain scene : activeSceneId`) and never stores an
   id, so a deleted scene or a fresh hydrate cannot strand the canvas on a dead one.
   Session-only state: an ephemeral viewing choice never belongs in the document.
-  The chip's VALUE is the viewed scene's own NAME, which is why **the scene tabs carry no
-  eye any more** — the readout and the control are one thing. Predecessors, so they don't
+  The chip's VALUE names the MODE — `Composite` / `Current` — not the scene, which is why
+  **the scene tabs carry no eye any more**: Composite is a tab you can see and Current IS
+  the highlighted tab, so the viewed scene stays derivable from the chip plus the tab strip.
+  It briefly showed the viewed scene's NAME instead; that made the chip a readout but also
+  made it the one control whose width a user sets by typing, which is what forced a
+  truncation ladder and rendered `CHOR…` at narrow widths. The scene's name lives in the
+  hover panel now — the one place it still appears in Current. Predecessors, so they don't
   get reinvented: v1 was a second row of scene names beside the canvas; v2 (commit
   `9061ff3`) was an eye moved only by the scene tab's right-click "View this scene", which
   was undiscoverable and made "edit scene B while watching Main" the silent default.
+  **The chip explains itself with a CSS `group-hover` panel, never a native `title`** — the
+  same call the gated Export button makes, and for the same reasons: a title waits out a
+  dwell, renders as unstyleable OS chrome, and never fires on touch (reported here as "I
+  don't see any tooltip"). Note this pane cannot verify `:hover` at all — it drops the hover
+  state between tool calls — so check a hover panel by forcing it visible and trusting the
+  named-group precedent (`group/zoom` in SceneTabs), and do NOT conclude from
+  `document.styleSheets` that a variant generated no CSS: only ~154 rules are enumerable
+  there, none of them Tailwind's.
 - **The transport strip is three real flex columns** (`flex-1 min-w-0` chips · `flex-shrink-0`
   transport · `flex-1 min-w-0` tempo), NOT a centered band with `absolute left-4`/`right-4`
   clusters beside it. Equal side weights keep the transport exactly centered (verified 0px
   off-centre at every width) while making overlap structurally impossible — the old absolute
   clusters could not see the transport, so the left cluster silently grew *under* the play
   button once the View chip carried a scene name. Chips collapse against the strip as an
-  `@container`: field names (`QUALITY`, `VIEW`) drop first at `@[800px]`, the scene name's
-  cap tightens below that (`max-w-40` → `max-w-24` → `max-w-16`), values last — the library
-  header's collapse order, for the same reason. **800px is measured, not guessed**: the left
-  cluster's natural width with both labels is 331px and each side column gets
-  `(content-box − 120 transport − 24 gaps) / 2`, so labels only fit from ~806px of
-  content-box up; a lower threshold truncates the NAME while the labels still show, which is
-  the collapse order backwards. A container query measures **content-box**, so it fires 32px
-  below the strip's layout width (`px-4` both sides). Re-measure if a chip, the UI font, or
-  the transport's width changes. Thresholds must be literal strings in the class attribute —
+  `@container`, in the library header's order — labels first, values last:
+  field names (`QUALITY`, `VIEW`) drop at `@[670px]`, then the view value swaps to a fixed
+  short form (`Composite`→`Comp`, `Current`→`Curr`) at `@[530px]`, which also tightens the
+  gap and every chip's padding. **The compression is discrete, not a truncation cap**: the
+  values are known words, so a `max-w` ladder could only ever produce `COM…`; below the
+  threshold the word is REPLACED (the tab rail's label/short pattern in `TrackEditor`).
+  **Both thresholds are measured, not guessed**, against the WORST case (`FASTEST` +
+  `COMPOSITE` — tune to the default `FINAL` and switching quality overflows): each side
+  column gets `(content-box − 120 transport − 24 gaps) / 2`, the cluster's natural width is
+  262px with labels and 193px without, so labels need ~668px of content-box and full words
+  need ~530px. A container query measures **content-box**, so each fires 32px below the
+  strip's layout width (`px-4` both sides). Re-measure if a chip, the UI font, or the
+  transport's width changes. Thresholds must be literal strings in the class attribute —
   Tailwind extracts classes by scanning source text, so `@[${CONST}px]:inline` silently
   generates no CSS.
+  **Every chip is `flex-shrink-0` now, so nothing in the cluster absorbs pressure** — that
+  is why the narrow tier tightens padding/gap rather than relying on a shrink. Without it
+  the cluster overflowed its column at ~440px of content-box and painted over the transport
+  again. `overflow-clip` on the column is NOT the fix: the view chip's hover panel is an
+  absolutely-positioned child that must escape upward, and clipping the column eats it.
 - `useVerticalSplit.ts` — the timeline/piano-roll divider.
 - `utils/` — pure helpers: `selection.ts` (track select), `edgeResize.ts` (shared block-edge drag), `snapStep.ts`, `oklch.ts` + `trackColors.ts` (hue-cycled track colors), `trackTags.ts`, `zoomAroundBeat.ts`, `multiStyleApply.ts` (lyric style switching), `midiEditorPalette.ts`.
 - `hooks/` — transport-facing hooks: `usePlayback` (wires PlaybackEngine callbacks), `usePlayhead` (RAF playhead px), `useScrub`, `useTransportKeys` (space/enter/F), `useUndoRedoKeys`, `useProjectPersistence` (load + autosave lifecycle), `useAnonymousAdoption` (anon → signed-in project handoff).

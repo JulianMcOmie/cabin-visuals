@@ -899,9 +899,13 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       : s.activeSceneId
     return s.scenes[id]?.name ?? 'Scene'
   })
+  // No "click to ..." half: that a chip toggles is discoverable by clicking it,
+  // and spending half the panel on it crowds out the part only the panel can
+  // say. In Current the chip reads the MODE, so the panel is the one place the
+  // scene's actual name appears.
   const canvasViewNote = canvasView === 'main'
-    ? 'Showing the Composite: your scenes composed into the final frame. Click to show the scene you are editing.'
-    : `Showing ${viewedSceneName}, the scene you are editing. Click to show the Composite's final frame.`
+    ? 'Rendering the Composite: your scenes composed into the final frame.'
+    : `Rendering ${viewedSceneName}, the scene you are editing.`
 
   return (
     // THREE REAL COLUMNS, not a centered band with absolutely-positioned
@@ -914,13 +918,21 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
     // The strip is the @container the chips collapse against; see the ladder
     // on Quality/View below.
     <div className="@container relative hidden md:flex h-12 flex-shrink-0 items-center gap-3 select-none px-4">
-      {/* Preview aspect + draft resolution + canvas view, bottom-left. */}
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+      {/* Preview aspect + draft resolution + canvas view, bottom-left.
+          Every chip is fixed-width now that the view value is two known words,
+          so nothing in here absorbs pressure by shrinking - which is why the
+          narrow tier tightens the GAP and the chips' padding alongside
+          abbreviating the words. Without that, the cluster overflowed its
+          column at ~440px of content-box and painted over the transport (the
+          bug the three-column layout exists to prevent), and it could not be
+          fixed by clipping this box: the view chip's hover panel is an
+          absolutely-positioned child that has to escape upward. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 @[530px]:gap-1.5">
         <div className="relative flex-shrink-0">
           <button
             onClick={() => setAspectOpen((v) => !v)}
             title="Preview aspect ratio - see the visual as an export at that shape would compose it"
-            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
+            className="flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide text-[var(--text-3)] transition-colors hover:text-[var(--text)] cursor-pointer"
           >
             {aspect === 'fill' ? 'Fill' : aspect}
             <span className="text-[7px] leading-none">▾</span>
@@ -955,7 +967,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             setPreviewQuality(PREVIEW_QUALITIES[(index + 1) % PREVIEW_QUALITIES.length])
           }}
           title="Fast Preview - trades sharpness for smoother playback. Auto softens only while playing. Export always renders final quality."
-          className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+          className="group flex h-7 flex-shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
         >
           {/* The field name is the first thing to go when the strip narrows -
               the VALUE is the payload, and the same collapse order the library
@@ -968,7 +980,7 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
               transport's width changes. Literal variant strings on purpose:
               Tailwind extracts classes by scanning source text, so a threshold
               built from a constant would silently generate no CSS. */}
-          <span className={`hidden @[800px]:inline ${previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
+          <span className={`hidden @[670px]:inline ${previewQuality === 'final' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
             Quality
           </span>
           <span
@@ -984,40 +996,46 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
         {/* Canvas view: the Composite scene's final frame (the deliverable,
             the resting default) or the scene being edited. Same anatomy as
             Quality - field name inside the chip, value lit while off the
-            default - and the value is the viewed scene's own NAME, so the chip
-            doubles as the "what am I looking at" readout (there is no eye on
-            the scene tabs any more). */}
+            default.
+            The value names the MODE, not the scene. It used to be the viewed
+            scene's own name, which made the chip a readout but also made it
+            the one control whose width a user could set by typing - hence a
+            truncation ladder, and "CHOR..." at narrow widths. Two fixed words
+            with fixed abbreviations are legible at every size, and the scene
+            is still identified: Composite is a tab you can see, Current IS the
+            highlighted tab. So the tabs still need no eye. */}
         {/* The explanation is a CSS group-hover panel, NOT a native `title` -
             the same call the gated Export button makes below, for the same
             reasons: a title waits out a dwell nobody sits still for, renders
             as OS chrome nothing here can style, and never appears on touch.
-            This one has a third reason: it is the only place the control still
-            names itself once the label collapses, so it must actually be
-            readable. Both halves say what a mode SHOWS, never what it leaves
-            out - "the Composite doesn't show your scene edits" invites the
-            reader to distrust the picture, when each mode simply shows a
-            different true thing. `aria-label` carries the same sentence,
-            because the visible chip reads only "VIEW COMPOSITE". */}
-        <div className="group/view relative flex min-w-0">
+            It says what the canvas IS rendering, never what a mode leaves out
+            ("the Composite doesn't show your edits" invites the reader to
+            distrust the picture, when each mode simply renders a different
+            true thing), and in Current it is the only place the scene's name
+            appears. `aria-label` carries the same sentence, because the
+            visible chip reads only "VIEW CURRENT". */}
+        <div className="group/view relative flex flex-shrink-0">
           <button
             onClick={() => setCanvasView(canvasView === 'main' ? 'scene' : 'main')}
             aria-label={canvasViewNote}
-            className="group flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
+            className="group flex h-7 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2 @[530px]:px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
           >
-            <span className={`hidden @[800px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
+            <span className={`hidden @[670px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
               View
             </span>
-            {/* The name is user-authored and unbounded, so it is the one chip
-                part that can be squeezed: it keeps a generous cap while there
-                is room and truncates rather than pushing the cluster wider. */}
+            {/* Discrete abbreviation, not a truncation cap: below the
+                threshold the word is REPLACED by a fixed short form (the tab
+                rail's label/short pattern), so the chip never renders a
+                half-word with an ellipsis. */}
             <span
-              className={`max-w-16 truncate @[560px]:max-w-24 @[800px]:max-w-40 ${
+              className={
                 canvasView === 'main'
                   ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
                   : 'text-[var(--accent)]'
-              }`}
+              }
             >
-              {viewedSceneName}
+              <span className="hidden @[530px]:inline">{canvasView === 'main' ? 'Composite' : 'Current'}</span>
+              <span className="@[530px]:hidden">{canvasView === 'main' ? 'Comp' : 'Curr'}</span>
             </span>
           </button>
           {/* Opens UPWARD (the scene tabs sit directly below the strip), and
