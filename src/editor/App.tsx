@@ -899,6 +899,9 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
       : s.activeSceneId
     return s.scenes[id]?.name ?? 'Scene'
   })
+  const canvasViewNote = canvasView === 'main'
+    ? 'Showing the Composite: your scenes composed into the final frame. Click to show the scene you are editing.'
+    : `Showing ${viewedSceneName}, the scene you are editing. Click to show the Composite's final frame.`
 
   return (
     // THREE REAL COLUMNS, not a centered band with absolutely-positioned
@@ -984,35 +987,48 @@ function TransportStrip({ playback }: { playback: PlaybackControls }) {
             default - and the value is the viewed scene's own NAME, so the chip
             doubles as the "what am I looking at" readout (there is no eye on
             the scene tabs any more). */}
-        {/* The tooltip is the only place the control still names itself once
-            the label collapses, so it opens with "Canvas view". Both halves
-            state what a mode SHOWS - never what it leaves out: "the Composite
-            doesn't show your scene edits" invites the reader to distrust the
-            picture, when the honest framing is that each mode shows a
-            different true thing. */}
-        <button
-          onClick={() => setCanvasView(canvasView === 'main' ? 'scene' : 'main')}
-          title={canvasView === 'main'
-            ? 'Canvas view - showing the Composite: your scenes composed into the final frame. Click to show the scene you are editing.'
-            : `Canvas view - showing ${viewedSceneName}, the scene you are editing. Click to show the Composite's final frame.`}
-          className="group flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
-        >
-          <span className={`hidden @[800px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
-            View
-          </span>
-          {/* The name is user-authored and unbounded, so it is the one chip
-              part that can be squeezed: it keeps a generous cap while there is
-              room and truncates rather than pushing the cluster wider. */}
-          <span
-            className={`max-w-16 truncate @[560px]:max-w-24 @[800px]:max-w-40 ${
-              canvasView === 'main'
-                ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
-                : 'text-[var(--accent)]'
-            }`}
+        {/* The explanation is a CSS group-hover panel, NOT a native `title` -
+            the same call the gated Export button makes below, for the same
+            reasons: a title waits out a dwell nobody sits still for, renders
+            as OS chrome nothing here can style, and never appears on touch.
+            This one has a third reason: it is the only place the control still
+            names itself once the label collapses, so it must actually be
+            readable. Both halves say what a mode SHOWS, never what it leaves
+            out - "the Composite doesn't show your scene edits" invites the
+            reader to distrust the picture, when each mode simply shows a
+            different true thing. `aria-label` carries the same sentence,
+            because the visible chip reads only "VIEW COMPOSITE". */}
+        <div className="group/view relative flex min-w-0">
+          <button
+            onClick={() => setCanvasView(canvasView === 'main' ? 'scene' : 'main')}
+            aria-label={canvasViewNote}
+            className="group flex h-7 min-w-0 items-center gap-1.5 rounded-md bg-[var(--bg-elevated)] px-2.5 font-mono text-[9px] uppercase tracking-wide transition-colors cursor-pointer"
           >
-            {viewedSceneName}
-          </span>
-        </button>
+            <span className={`hidden @[800px]:inline ${canvasView === 'main' ? 'text-[var(--text-muted)]' : 'text-[var(--accent-muted)]'}`}>
+              View
+            </span>
+            {/* The name is user-authored and unbounded, so it is the one chip
+                part that can be squeezed: it keeps a generous cap while there
+                is room and truncates rather than pushing the cluster wider. */}
+            <span
+              className={`max-w-16 truncate @[560px]:max-w-24 @[800px]:max-w-40 ${
+                canvasView === 'main'
+                  ? 'text-[var(--text-3)] transition-colors group-hover:text-[var(--text)]'
+                  : 'text-[var(--accent)]'
+              }`}
+            >
+              {viewedSceneName}
+            </span>
+          </button>
+          {/* Opens UPWARD (the scene tabs sit directly below the strip), and
+              the dwell padding rides the hidden wrapper rather than a margin
+              so the pointer never leaves the group on its way across. */}
+          <div className="pointer-events-none absolute bottom-full left-0 z-40 hidden pb-1.5 group-hover/view:block">
+            <div className="w-56 rounded border border-[var(--border)] bg-[var(--bg-elevated)] p-2.5 text-left font-sans text-[11px] font-normal normal-case leading-relaxed tracking-normal text-[var(--text-2)] shadow-lg shadow-black/50">
+              {canvasViewNote}
+            </div>
+          </div>
+        </div>
       </div>
       {/* Transport band - a continuous elevated strip matching the
           display's height and radius. Segment highlights run flush to the
