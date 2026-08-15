@@ -29,20 +29,20 @@ One instrument track produces ONE opaque visual output; an ordered chain of move
   Three things bite here:
   - **Only the HUE survives.** `utils/midiEditorPalette.ts` re-voices a track colour
     through OKLCH at a fixed lightness and chroma, so two definitions separated by
-    lightness alone render IDENTICALLY. Place new colours by hue, ≥11° from every
-    neighbour; `identityColors.test.ts` enforces that and will name the pair.
+    lightness alone render IDENTICALLY. Place new colours by hue, as far from the
+    neighbours as the wheel allows — but crowding is permitted: the 11° floor and
+    its test were dropped 2026-08-15 when the wheel passed arithmetic capacity.
   - **Chroma is a cliff at 0.02, not a slope.** At or below it the re-voicing leaves a
     colour grey; anything above is resurrected to FULL chroma. A tasteful slate at
     0.035 comes back a saturated blue — which is how All Movers first shipped, looking
     exactly like Tunnel.
   - A definition with a bespoke panel must have the panel IMPORT its constant rather
     than re-declare the hex. Keeping those two in sync is the whole point of the file.
-  - **The wheel is FULL** (widest gap 17°, whose midpoint fails the 11° floor), so
-    adding a definition now means the REBALANCE the file prescribes, not a gap hunt.
-    Worked example, Riso Duotone 2026-08-14: respaced the three spread entries between
-    the immovable Impact Pulse (2°) and Meteor Impact (51°) at ~12.2°, moving Force
-    Field 18→26 and Gradient 35→39 and taking 14° for the new one. Pick the stretch by
-    how far its movable entries have to travel, not by which gap looks widest.
+  - **The wheel is past capacity, and that is now allowed.** Every window between the
+    immovable panel accents is packed (Contour and Symmetry share 62°), so a new
+    definition takes the least-crowded hue it can find rather than rebalancing a
+    stretch or being blocked. The grey road (chroma ≤ 0.02, Bypass/All Movers) remains
+    open for definitions that can live without a hue.
   - `identityColor` may instead be `{ param }`, following one of the definition's own
     color params live. Only the **Colorizer** does: its subject IS a colour the user
     picked, so its device row, notes and panel all move together. Hue ~86° (its

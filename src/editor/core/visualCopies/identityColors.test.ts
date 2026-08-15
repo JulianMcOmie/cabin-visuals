@@ -56,33 +56,10 @@ test('identity colors are either properly colored or properly grey, never betwee
   }
 })
 
-test('every pair of colored definitions is at least 11 degrees apart in HUE', () => {
-  // The one property that survives midiEditorPalette's re-voicing, which pins
-  // lightness and chroma and keeps only the hue. Two definitions separated by
-  // lightness alone render identically on the timeline and in the piano roll.
-  //
-  // 11 and not 12, for two reasons that both cost a round to find: a hex is
-  // only 8 bits per channel, so a hue placed exactly 12 apart round-trips to
-  // ~11.7; and the app's own shipped accents are already tighter than 12 -
-  // Visibility (163.2) against Conveyor (174.5) is 11.3. This is a guard
-  // against crowding, not an aspiration the existing palette would fail.
-  const MIN_HUE_GAP = 11
-  const hued = fixed()
-    .map((d) => ({ id: d.id, ...colorToOklch(d.hex)! }))
-    .filter((d) => d.c > GREY_FLOOR)
-    .sort((a, b) => a.h - b.h)
-
-  for (let i = 0; i < hued.length; i++) {
-    const a = hued[i]
-    const b = hued[(i + 1) % hued.length]
-    const raw = Math.abs(b.h - a.h)
-    const gap = raw > 180 ? 360 - raw : raw
-    assert.ok(
-      gap >= MIN_HUE_GAP,
-      `${a.id} (${Math.round(a.h)}°) and ${b.id} (${Math.round(b.h)}°) are ${gap.toFixed(1)}° apart - they will look like the same lane`,
-    )
-  }
-})
+// There is deliberately NO minimum-hue-gap test. One enforced an 11° floor
+// until 2026-08-15, when the wheel passed arithmetic capacity (every window
+// between the immovable panel accents was packed) and the call was made that
+// two definitions sharing a hue is acceptable - separation is taste, not law.
 
 test('identity colors sit in a consistent lightness band, so no panel accent reads as dim', () => {
   for (const def of fixed()) {

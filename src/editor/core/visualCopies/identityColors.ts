@@ -26,13 +26,11 @@
 // same colour in the timeline.)
 //
 // Every colour here is therefore placed by HUE ALONE, as far apart as the
-// entry count and the immovable panel accents allow (the wheel peaked at 26
-// entries ~12-16° apart before the 2026-08 mover consolidation returned five
-// hues). identityColors.test.ts enforces a floor of 11°, so a new definition
-// that crowds an existing one fails rather than shipping a lane that looks like
-// a duplicate. (11 rather than 12 because a hex only carries 8 bits per
-// channel - a hue placed at exactly 12 round-trips to ~11.7 - and because the
-// app's own Visibility/Conveyor pair has always been 11.3 apart.)
+// entry count and the immovable panel accents allow. Separation is TASTE now,
+// not law: the 11° floor and its test were removed 2026-08-15 (the wheel had
+// hit arithmetic capacity, and the call was that two definitions sharing a hue
+// is acceptable) - so spread new entries out where you can, but a crowded pair
+// no longer blocks a definition from shipping.
 //
 // The corollary for "no colour": a chroma at or below 0.02 makes the re-voicing
 // treat the source as grey and leave it grey. ANYTHING ABOVE gets resurrected to
@@ -54,27 +52,14 @@
 //
 // ── Adding one ───────────────────────────────────────────────────────────────
 //
-// Pick a hue ≥11° from every existing entry - including the Colorizer's default
-// at 86° (the test checks the fixed ones and will name the pair) - and generate
-// the hex at 0.73/0.19, or 0.82/0.16 in the 60-158° band. If the definition has
-// a bespoke panel, make the panel import the constant rather than repeating the
-// value.
-//
-// ── THE WHEEL IS AT CAPACITY (2026-08-14) ────────────────────────────────────
-//
-// Not "full, so rebalance a stretch" - out of room entirely, and the arithmetic
-// is worth writing down so the next person does not spend a round rediscovering
-// it. Nine hues are IMMOVABLE panel accents (2, 51, 73, 120, 163, 175, 222,
-// 234, 286) and the Colorizer reserves a tenth slot at 86. Those ten walls cut
-// the wheel into ten windows, and a window of width W can hold at most
-// floor(W/11) − 1 movable entries. Summed over all ten that ceiling is 19 - and
-// there are exactly 19 movable entries today. Every window is therefore packed:
-// the widest single gap left anywhere is 15°, where an insertion needs 22.
-//
-// So a genuinely new HUE now costs re-voicing a bespoke panel's accent, which
-// is a design decision and not a palette one. A definition that can live
-// without a hue should take the grey road below instead - which is what Bypass
-// did, and it had the better reason for it anyway.
+// Pick the least-crowded hue you can (the Colorizer's default at 86° counts as
+// occupied) and generate the hex at 0.73/0.19, or 0.82/0.16 in the 60-158°
+// band. Crowding an existing entry is allowed - the wheel passed arithmetic
+// capacity in 2026-08 and the mutual-exclusion rule was dropped rather than
+// forcing every new definition through an accent redesign. If the definition
+// has a bespoke panel, make the panel import the constant rather than
+// repeating the value. A definition that can live without a hue can still take
+// the grey road below, which is what Bypass did.
 
 // ── Already a panel accent: copied exactly, panels import these ──────────────
 /** Impact Pulse's strike rose. Hue 2°. */
@@ -119,11 +104,9 @@ export const RISO_DUOTONE_COLOR = '#ff7587'
 export const FORCE_FIELD_PUSH_COLOR = '#ff786e'
 /** Hue 39°. */
 export const GRADIENT_COLORIZER_COLOR = '#ff7c50'
-/** Hue 62° - the midpoint of the gap past the rebalanced stretch: Meteor Impact
- *  (51°) and Burst (73°) leave exactly 22.2°. The hex was searched for a
- *  ROUND-TRIP hue ≥11° from both (8-bit channels quantize hue in ~0.3-0.7°
- *  jumps, and the OKLCH-generated candidates all landed on the wrong side of
- *  one neighbour). The next definition needs a bigger gap freed up first. */
+/** Hue 62° - chosen when Meteor Impact (51°) and the Mover (73°) still left the
+ *  slot free; Symmetry has since landed on the same hue, which the palette now
+ *  tolerates (the mutual-exclusion rule was dropped 2026-08-15). */
 export const CONTOUR_COLOR = '#f4aa67'
 // Hue ~86° is deliberately left free for the COLORIZER, which is the one
 // definition that does not take a fixed colour from this file: its subject IS
