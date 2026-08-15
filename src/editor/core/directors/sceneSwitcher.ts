@@ -2,6 +2,7 @@ import { flattenTrackNotes } from '../visual/noteFlatten'
 import type { CompositionInstrumentDef } from './types'
 import { FULL_FRAME } from './types'
 import { orderedSceneBindings } from './sceneBindings'
+import { sceneRowColor } from './sceneRowColor'
 
 export const sceneSwitcherDirector: CompositionInstrumentDef = {
   id: 'sceneSwitcher',
@@ -16,7 +17,11 @@ export const sceneSwitcherDirector: CompositionInstrumentDef = {
       .map((binding, i) => ({
         pitch: binding.pitch,
         label: scenes[binding.sceneId]?.name ?? 'Missing scene',
-        color: `hsl(${(i * 67) % 360}, 65%, 58%)`,
+        // The row IS its scene: it wears that scene's backdrop hue, so writing
+        // notes reads as painting the frames the switcher will cut to. Scenes
+        // with no hue to lend (default black, transparent) keep the old cycle
+        // so their rows still tell each other apart - see sceneRowColor.ts.
+        color: sceneRowColor(scenes[binding.sceneId], `hsl(${(i * 67) % 360}, 65%, 58%)`),
         emphasized: i === 0,
       }))
   },

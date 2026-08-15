@@ -29,11 +29,19 @@ function sourceOklch(color: string): Oklch {
   return parsed.c > 0.02 ? parsed : { ...parsed, c: 0 }
 }
 
+/** The note voice at a given hue. Use this when a HUE is all that carries over
+ *  from the source - a Scene Switcher row wearing its scene's backdrop hue,
+ *  where the backdrop itself may be a near-black navy that would round-trip
+ *  through hex as colorless. Hex, so MidiRow.color stays parseable. */
+export function midiNoteHueColor(hue: number): string {
+  return oklchToHex(NOTE_L, NOTE_C, ((hue % 360) + 360) % 360)
+}
+
 /** The base note/row color for a track: its hue, renormalized to the note
  *  voice's fixed lightness and chroma. Hex, so MidiRow.color stays parseable. */
 export function midiNoteBaseColor(color: string): string {
   const src = sourceOklch(color)
-  return oklchToHex(NOTE_L, src.c === 0 ? 0 : NOTE_C, src.h)
+  return src.c === 0 ? oklchToHex(NOTE_L, 0, src.h) : midiNoteHueColor(src.h)
 }
 
 // Note fills recompute on every render of every note; velocities are integers
