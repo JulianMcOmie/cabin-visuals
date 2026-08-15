@@ -15,6 +15,8 @@ import {
   sampleAutomationLane,
   sampleBurstLane,
   sampleCycleLane,
+  sampleLane,
+  type AutomationKeyframe,
   type AutomationLane,
   type BurstConfig,
   type BurstGate,
@@ -498,4 +500,167 @@ test('cycle noteSpan: the newest sounding note wins; an older long note resumes'
   close(sampleCycleLane(cfg, gates, 2.5, 0, 10), 2)
   // ...and when it ends, the long note's cycle is still mid-flight underneath.
   close(sampleCycleLane(cfg, gates, 4, 0, 10), 5)
+})
+
+// ── Spline interpolation ─────────────────────────────────────────────────────
+// The mode's whole claim is a curve that hits every keyframe with velocity AND
+// acceleration continuous through it, so these tests measure the derivatives
+// numerically rather than trusting the algebra, and they do it on UNEVEN
+// spacing, where the maths stops being symmetric.
+//
+// Which test guards which claim is worth knowing, because it is not what you
+// would guess (established by mutation, 2026-08-15). Continuity is structural -
+// one tangent per KNOT, read by both its segments - so the velocity and
+// acceleration tests survive a wrong tangent FORMULA and only catch a wrong
+// tangent SHAPE. What catches the classic error, a uniform Catmull-Rom tangent
+// that divides by 2 instead of by the spanned time, is the spacing-independence
+// test: the lane stays perfectly smooth and merely rides differently depending
+// on how far apart the notes sit. Don't delete that one as a nicety.
+
+/** `close` with a tolerance: numeric derivatives can't be pinned to 1e-9. */
+function near(actual: number, expected: number, tol = 1e-9) {
+  assert.ok(Math.abs(actual - expected) <= tol, `expected ${expected} +/- ${tol}, got ${actual}`)
+}
+
+/** Keyframes at deliberately uneven spacing - 1, 3 then 0.5 beats apart. */
+const UNEVEN: AutomationKeyframe[] = [
+  { beat: 0, value: 2 },
+  { beat: 1, value: 8 },
+  { beat: 4, value: 3 },
+  { beat: 4.5, value: 6 },
+  { beat: 7, value: 1 },
+]
+
+const at = (beat: number, tension = 1, keys = UNEVEN) => sampleLane(keys, beat, 'spline', tension)
+
+/** One-sided first derivative approaching `beat` from the given side. */
+const slope = (beat: number, side: -1 | 1, tension = 1, keys = UNEVEN, h = 1e-5) =>
+  side < 0
+    ? (at(beat, tension, keys) - at(beat - h, tension, keys)) / h
+    : (at(beat + h, tension, keys) - at(beat, tension, keys)) / h
+
+/** Raw one-sided second difference - O(h) accurate, which is not enough here. */
+const accelRaw = (beat: number, side: -1 | 1, tension: number, keys: AutomationKeyframe[], h: number) =>
+  side < 0
+    ? (at(beat, tension, keys) - 2 * at(beat - h, tension, keys) + at(beat - 2 * h, tension, keys)) / (h * h)
+    : (at(beat, tension, keys) - 2 * at(beat + h, tension, keys) + at(beat + 2 * h, tension, keys)) / (h * h)
+
+/** One-sided second derivative, Richardson-extrapolated to cancel the O(h) term.
+ *  Worth the extra evaluation: across UNEVEN's 0.5-beat segment the third
+ *  derivative is large enough that the raw difference reads ~0.35 where the true
+ *  value is 0, which would look exactly like a broken C2 claim. */
+const accel = (beat: number, side: -1 | 1, tension = 1, keys = UNEVEN, h = 1e-3) =>
+  2 * accelRaw(beat, side, tension, keys, h / 2) - accelRaw(beat, side, tension, keys, h)
+
+test('spline passes exactly through every keyframe', () => {
+  for (const k of UNEVEN) near(at(k.beat), k.value, 1e-9)
+  // And at any tension - the knob moves the curve between the notes, never off them.
+  for (const tension of [0, 0.5, 2]) for (const k of UNEVEN) near(at(k.beat, tension), k.value, 1e-9)
+})
+
+test('spline velocity is continuous across every interior knot, at uneven spacing', () => {
+  for (const k of UNEVEN.slice(1, -1)) {
+    near(slope(k.beat, -1), slope(k.beat, 1), 1e-3)
+  }
+})
+
+test('spline acceleration is continuous across every interior knot', () => {
+  // Pinned to zero on both sides by construction, which is what makes it C2.
+  for (const k of UNEVEN.slice(1, -1)) {
+    near(accel(k.beat, -1), 0, 0.05)
+    near(accel(k.beat, 1), 0, 0.05)
+  }
+})
+
+test('spline leaves the first and last keyframes at rest, so the held flats join without a corner', () => {
+  // sampleLane holds the endpoint values outside the range; only a zero tangent
+  // meets those flat runs smoothly.
+  near(slope(UNEVEN[0].beat, 1), 0, 1e-3)
+  near(slope(UNEVEN[UNEVEN.length - 1].beat, -1), 0, 1e-3)
+  // The held values themselves are unchanged from every other easing.
+  near(at(-5), 2)
+  near(at(99), 1)
+})
+
+test('spline tension scales the crossing speed and vanishes at zero', () => {
+  const knot = UNEVEN[1].beat
+  const base = slope(knot, 1, 1)
+  assert.ok(Math.abs(base) > 0.1, 'tension 1 should cross the knot moving')
+  near(slope(knot, 1, 2), base * 2, 1e-2)
+  near(slope(knot, 1, 0.5), base * 0.5, 1e-2)
+  near(slope(knot, 1, 0), 0, 1e-3)
+})
+
+test('spline at tension 0 is quintic smootherstep between neighbours', () => {
+  const [a, b] = [UNEVEN[1], UNEVEN[2]]
+  for (const u of [0.25, 0.5, 0.75]) {
+    const s = u * u * u * (u * (u * 6 - 15) + 10)
+    near(at(a.beat + u * (b.beat - a.beat), 0), a.value + (b.value - a.value) * s, 1e-9)
+  }
+})
+
+test('spline shape is independent of how far apart the notes sit', () => {
+  const tight: AutomationKeyframe[] = [
+    { beat: 0, value: 2 }, { beat: 1, value: 8 }, { beat: 2, value: 3 }, { beat: 3, value: 6 },
+  ]
+  // The same phrase stretched fourfold: the curve must be the same shape, only slower.
+  const wide = tight.map((k) => ({ beat: k.beat * 4, value: k.value }))
+  for (const u of [0.1, 0.37, 0.5, 0.8]) {
+    for (let seg = 0; seg < 3; seg++) {
+      near(at(seg + u, 1, tight), at((seg + u) * 4, 1, wide), 1e-9)
+    }
+  }
+})
+
+test('spline overshoots between keyframes, and the lane bounds clamp it', () => {
+  // Two equal values either side of a rise: the tangent carries the curve past
+  // them and back. That travel is the mode's point, not a defect.
+  const keys: AutomationKeyframe[] = [
+    { beat: 0, value: 0 }, { beat: 1, value: 5 }, { beat: 2, value: 10 }, { beat: 3, value: 0 },
+  ]
+  const peak = Math.max(...Array.from({ length: 101 }, (_, i) => sampleLane(keys, 1 + i / 100, 'spline', 2)))
+  assert.ok(peak > 10, `expected overshoot past the 10 keyframe, got ${peak}`)
+
+  const lane: AutomationLane = { mode: 'spline', keyframes: keys, splineTension: 2, min: 0, max: 10 }
+  for (let i = 0; i <= 60; i++) {
+    const v = sampleAutomationLane(lane, i / 20, 0)
+    assert.ok(v >= 0 && v <= 10, `sample ${v} escaped the lane bounds`)
+  }
+  // With no bounds declared the value passes through unclamped.
+  const free: AutomationLane = { mode: 'spline', keyframes: keys, splineTension: 2 }
+  assert.ok(Math.max(...Array.from({ length: 101 }, (_, i) => sampleAutomationLane(free, 1 + i / 100, 0))) > 10)
+})
+
+test('spline value bounds cover the real overshoot, so a copy pool is budgeted for it', () => {
+  const keys: AutomationKeyframe[] = [
+    { beat: 0, value: 0 }, { beat: 1, value: 5 }, { beat: 2, value: 10 }, { beat: 3, value: 0 },
+  ]
+  const lane: AutomationLane = { mode: 'spline', keyframes: keys, splineTension: 2 }
+  const bounds = automationLaneValueBounds(lane, 0)
+  let min = Infinity
+  let max = -Infinity
+  for (let i = 0; i <= 300; i++) {
+    const v = sampleLane(keys, (i / 300) * 3, 'spline', 2)
+    min = Math.min(min, v)
+    max = Math.max(max, v)
+  }
+  assert.ok(bounds.min <= min, `bound ${bounds.min} misses the real low ${min}`)
+  assert.ok(bounds.max >= max, `bound ${bounds.max} misses the real high ${max}`)
+  // The lane's own bounds cap the reported reach, matching what sampling emits.
+  const capped = automationLaneValueBounds({ ...lane, min: 0, max: 10 }, 0)
+  assert.deepEqual(capped, { min: 0, max: 10 })
+})
+
+test('spline leaves every other interpolation bit-identical', () => {
+  const keys: AutomationKeyframe[] = [
+    { beat: 0, value: 0 }, { beat: 2, value: 4 }, { beat: 4, value: 1 },
+  ]
+  // A tension argument must not reach a non-spline mode, and declared bounds
+  // must not start clamping lanes that never needed it.
+  for (const mode of ['linear', 'step', 'ease-in', 'ease-out', 'ease-in-out', 'smooth-step', 'exponential'] as const) {
+    for (const beat of [0, 0.5, 1, 2, 3.3, 4]) {
+      near(sampleLane(keys, beat, mode, 2), sampleLane(keys, beat, mode), 0)
+      near(sampleAutomationLane({ mode, keyframes: keys, min: 0, max: 4, splineTension: 2 }, beat, 0), sampleLane(keys, beat, mode), 0)
+    }
+  }
 })

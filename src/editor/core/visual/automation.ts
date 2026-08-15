@@ -558,16 +558,101 @@ export function easeFraction(t: number, mode: InterpolationMode): number {
     case 'ease-in-out': return t * t * (3 - 2 * t) // smoothstep
     case 'smooth-step': return t * t * (3 - 2 * t)
     case 'exponential': return t === 0 ? 0 : Math.pow(2, 10 * (t - 1))
+    // A spline is shaped by its NEIGHBOURS, so it cannot be expressed as a
+    // one-segment easing and sampleLane branches before ever calling here. The
+    // honest value for a caller that only has one segment (a picker glyph) is
+    // the neighbourless limit - tension 0, i.e. quintic smootherstep.
+    case 'spline': return t * t * t * (t * (t * 6 - 15) + 10)
   }
 }
+
+// ── Spline interpolation ─────────────────────────────────────────────────────
+// Every other easing shapes ONE segment in isolation, so the lane reaches each
+// keyframe with whatever velocity that segment ended on and leaves with whatever
+// the next one starts at - a kink at every note. ('ease-in-out' is the extreme
+// case: it arrives dead stopped at every keyframe.) The spline instead fits a
+// single curve through ALL the keyframes with velocity and acceleration
+// continuous everywhere - C2 - so the lane's motion has no corners and no jerk
+// at the notes it passes through.
+//
+// Three choices make that possible together, and the obvious alternatives fail:
+//
+//  - Velocity continuity comes from the STRUCTURE: a tangent belongs to a KNOT,
+//    in value per BEAT, and both segments meeting there read that one number.
+//    Computing a slope per segment from its own two endpoints is what kinks.
+//
+//  - That per-knot tangent is the NON-UNIFORM three-point difference,
+//    tau_i = (v[i+1] - v[i-1]) / (b[i+1] - b[i-1]), scaled by `tension`. Dividing
+//    by the spanned TIME (rather than the uniform Catmull-Rom's constant 2) is
+//    what makes tau a real velocity, and it is also what makes the curve's shape
+//    gap-independent: tau scales as 1/gap while the segment converts it back by
+//    multiplying by the gap, so the ride between two notes is identical whether
+//    they sit a beat or a bar apart. Get this wrong and the lane is still smooth
+//    - it just rides differently depending on the note spacing, which is why the
+//    test that catches it is the spacing one, not the continuity one.
+//
+//  - Each segment is a QUINTIC Hermite with acceleration pinned to 0 at both
+//    knots, not the obvious cubic. A cubic can honour a prescribed tangent or
+//    C2, never both: fixing the tangents leaves acceleration jumping at every
+//    knot, while demanding C2 makes the classic spline SOLVE for the tangents,
+//    which would leave `tension` nothing to act on. The quintic carries
+//    position, velocity and acceleration at each end, so the tangent stays the
+//    user's and both sides of every knot agree on a = 0 by construction.
+//
+// The first and last knots take tau = 0, which is not a shortcut: sampleLane
+// holds the endpoint values flat outside the keyframe range, and only a zero
+// tangent joins those flat runs without a corner. The lane is therefore C2 over
+// ALL beats, not merely between the notes.
+
+/** Tension 1 = the plain three-point tangent. 0 flattens every knot (each
+ *  segment becomes quintic smootherstep); above 1 the lane crosses each note
+ *  faster and swings further past its neighbours before coming back. */
+export const DEFAULT_SPLINE_TENSION = 1
+export const SPLINE_TENSION_MAX = 2
+
+/** The tangent at keyframe `i`, in value per BEAT. Zero at either end. */
+function splineTangent(keyframes: readonly AutomationKeyframe[], i: number, tension: number): number {
+  const prev = keyframes[i - 1]
+  const next = keyframes[i + 1]
+  if (!prev || !next) return 0
+  const span = next.beat - prev.beat
+  return span > 0 ? (tension * (next.value - prev.value)) / span : 0
+}
+
+/** One quintic-Hermite segment with zero end acceleration, over u in 0..1. With
+ *  a0 = a1 = 0 the basis collapses to smootherstep plus the two tangent terms;
+ *  `m0`/`m1` are the end slopes in value per unit u (a per-beat tangent times
+ *  the segment's own span). */
+function quinticHermite(p0: number, p1: number, m0: number, m1: number, u: number): number {
+  const u3 = u * u * u
+  const u4 = u3 * u
+  const u5 = u4 * u
+  const smootherstep = 10 * u3 - 15 * u4 + 6 * u5
+  const h1 = u - 6 * u3 + 8 * u4 - 3 * u5
+  const h4 = -4 * u3 + 7 * u4 - 3 * u5
+  return p0 + (p1 - p0) * smootherstep + m0 * h1 + m1 * h4
+}
+
+/** The most either tangent term can push a segment past its own endpoints: |h1|
+ *  and |h4| both peak near 0.198 inside the segment (they vanish at both ends,
+ *  which is what makes the endpoints exact). Used to bound the spline's
+ *  overshoot without sampling it. */
+const SPLINE_TANGENT_PEAK = 0.2
 
 /**
  * Sample a keyframe lane at `beat`, interpolating per `mode`. Endpoints are held
  * outside the keyframe range (a flat line before the first / after the last). A
  * binary search finds the surrounding pair. Pure function of the beat, so playback
  * and scrubbing produce identical values. Caller guards the empty-lane case.
+ *
+ * `tension` shapes 'spline' only; every other mode ignores it.
  */
-export function sampleLane(keyframes: AutomationKeyframe[], beat: number, mode: InterpolationMode): number {
+export function sampleLane(
+  keyframes: AutomationKeyframe[],
+  beat: number,
+  mode: InterpolationMode,
+  tension = DEFAULT_SPLINE_TENSION,
+): number {
   const n = keyframes.length
   if (n === 0) return NaN
   if (beat <= keyframes[0].beat) return keyframes[0].value
@@ -586,6 +671,18 @@ export function sampleLane(keyframes: AutomationKeyframe[], beat: number, mode: 
   if (mode === 'step') return a.value
   const span = b.beat - a.beat
   const t = span > 0 ? (beat - a.beat) / span : 0
+  if (mode === 'spline') {
+    // Tangents are per BEAT and the segment runs over u, so each converts by
+    // this segment's own span - which is exactly what keeps the shape
+    // gap-independent while the real velocity matches across the knot.
+    return quinticHermite(
+      a.value,
+      b.value,
+      splineTangent(keyframes, lo, tension) * span,
+      splineTangent(keyframes, lo + 1, tension) * span,
+      t,
+    )
+  }
   return a.value + (b.value - a.value) * easeFraction(t, mode)
 }
 
@@ -615,7 +712,9 @@ export interface AutomationLane {
   bursts?: BurstGate[]
   cycle?: CycleConfig
   cycles?: CycleGate[]
-  /** Param range, for noise's deviation scaling. */
+  /** Curve mode on `mode: 'spline'`: the knot tangent gain. Absent = 1. */
+  splineTension?: number
+  /** Param range, for noise's deviation scaling and the spline's overshoot clamp. */
   min?: number
   max?: number
   /** What a burst departs from when nothing underneath has set a value (the
@@ -652,7 +751,14 @@ export function sampleAutomationLane(lane: AutomationLane, beat: number, base: n
       ? sampleCycleLane(lane.cycle, lane.cycles, beat, lane.min ?? 0, lane.max ?? 1)
       : NaN
   }
-  return lane.keyframes.length ? sampleLane(lane.keyframes, beat, lane.mode) : NaN
+  if (!lane.keyframes.length) return NaN
+  const value = sampleLane(lane.keyframes, beat, lane.mode, lane.splineTension)
+  // The spline is the one keyframe mode that can leave its keyframes' own span
+  // (that overshoot IS the tangent doing its job), and the lane's bounds are
+  // still the law - the same clamp cycle and the shaped bursts take. Gated on
+  // the mode so every other easing stays bit-identical to before.
+  if (lane.mode !== 'spline' || lane.min === undefined || lane.max === undefined) return value
+  return Math.max(lane.min, Math.min(lane.max, value))
 }
 
 /**
@@ -728,6 +834,28 @@ export function automationLaneValueBounds(
   for (const k of lane.keyframes) {
     min = Math.min(min, k.value)
     max = Math.max(max, k.value)
+  }
+  if (lane.mode !== 'spline') return { min, max }
+  // A spline segment reaches past its own endpoints by at most
+  // SPLINE_TANGENT_PEAK * (|m0| + |m1|) - the two tangent terms are the only
+  // parts of the basis that leave the p0..p1 interval, and each is bounded by
+  // its peak. Clamped exactly as sampling clamps it, so a mover's copy pool is
+  // budgeted for what actually plays rather than for a reach the lane can't use.
+  const tension = lane.splineTension ?? DEFAULT_SPLINE_TENSION
+  for (let i = 0; i < lane.keyframes.length - 1; i++) {
+    const a = lane.keyframes[i]
+    const b = lane.keyframes[i + 1]
+    const span = b.beat - a.beat
+    const reach = SPLINE_TANGENT_PEAK * span * (
+      Math.abs(splineTangent(lane.keyframes, i, tension))
+      + Math.abs(splineTangent(lane.keyframes, i + 1, tension))
+    )
+    let low = Math.min(a.value, b.value) - reach
+    let high = Math.max(a.value, b.value) + reach
+    if (lane.min !== undefined) low = Math.max(lane.min, low)
+    if (lane.max !== undefined) high = Math.min(lane.max, high)
+    min = Math.min(min, low)
+    max = Math.max(max, high)
   }
   return { min, max }
 }

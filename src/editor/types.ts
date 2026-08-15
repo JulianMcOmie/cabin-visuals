@@ -229,7 +229,11 @@ export interface AudioBlock {
   fadeOut?: number
 }
 
-export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step'
+/** How a curve-mode lane travels between its value keyframes. All but 'spline'
+ *  shape ONE segment in isolation (see `easeFraction`); 'spline' fits a single
+ *  C2-continuous curve through every keyframe at once, shaped by the lane's
+ *  `splineTension` (see `sampleLane` in core/visual/automation.ts). */
+export type InterpolationMode = 'step' | 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'exponential' | 'smooth-step' | 'spline'
 
 /** What an automation lane's notes MEAN: value keyframes joined by a curve, gates
  *  for seeded noise, ADSR bursts, or onset-to-onset cycles of a motion curve.
@@ -373,6 +377,11 @@ export interface Track {
    *  a deliberate retarget (setAutomationTarget) forgets it. */
   previousTargetParam?: string
   interpolation?: InterpolationMode
+  /** Curve-mode lanes on `interpolation: 'spline'`: how hard the curve leans into
+   *  each keyframe's tangent. 1 (absent) is the plain three-point difference; 0
+   *  flattens every knot; above 1 the lane crosses each note faster and swings
+   *  further past its neighbours. Ignored by every other interpolation. */
+  splineTension?: number
   /** For an `ability` child track: which of the parent instrument's abilities it drives
    *  (matches an `AbilityLaneDef.key`). Its blocks/notes are the ability's trigger stream. */
   abilityKey?: string

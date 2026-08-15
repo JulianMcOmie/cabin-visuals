@@ -170,11 +170,16 @@ export function resolveAutomationLanes(track: Track, params: ParamDef[], p: Proj
       })
       continue
     }
+    // min/max ride along for the SPLINE easing, whose tangents may overshoot the
+    // keyframes; every other easing stays inside them and ignores the bounds.
     out.push({
       param,
       sourceTrackId: child.id,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, pdef.min, pdef.max, p.totalBars, amount, child.automationRange),
+      splineTension: child.splineTension,
+      min: bounds.min,
+      max: bounds.max,
     })
   }
   return out
@@ -278,11 +283,16 @@ function resolveEffectAutomations(track: Track, p: ProjectSnapshot): ResolvedEff
       })
       continue
     }
+    // Bounds ride along for the spline's overshoot clamp - see the object-lane
+    // branch above. The `enabled` pseudo-param's 0/1 bounds are its own.
     out.push({
       instanceId: target.instanceId,
       key: target.key,
       mode: child.interpolation ?? 'linear',
       keyframes: extractKeyframes(child.blocks, p.beatsPerBar, min, max, p.totalBars, amount, child.automationRange),
+      splineTension: child.splineTension,
+      min: bounds.min,
+      max: bounds.max,
     })
   }
   return out

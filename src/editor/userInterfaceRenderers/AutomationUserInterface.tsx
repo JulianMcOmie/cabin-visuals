@@ -40,11 +40,15 @@ import {
   DEFAULT_BURST_SPRING,
   DEFAULT_CYCLE,
   DEFAULT_NOISE,
+  DEFAULT_SPLINE_TENSION,
+  SPLINE_TENSION_MAX,
   bezierY,
   burstGateGain,
   cycleShapeY,
   easeFraction,
+  sampleLane,
   sampleNoiseLane,
+  type AutomationKeyframe,
   type BurstConfig,
   type BurstShape,
   type CycleConfig,
@@ -95,7 +99,38 @@ const INTERP_OPTIONS: { value: InterpolationMode; label: string }[] = [
   { value: 'ease-in-out', label: 'Ease In-Out' },
   { value: 'smooth-step', label: 'Smooth Step' },
   { value: 'exponential', label: 'Exponential' },
+  { value: 'spline', label: 'Spline' },
 ]
+
+/** The phrase the spline windows plot. Four keyframes a beat apart that force
+ *  the curve to turn TWICE: every other easing's glyph is a single rise, so a
+ *  rising spline would look like one of them and hide the whole point of the
+ *  mode - that the curve is shaped by the keyframes on either side. The values
+ *  keep headroom at both ends so an ordinary tension stays in frame and only a
+ *  cranked one reaches the bounds. */
+const SPLINE_DEMO: AutomationKeyframe[] = [
+  { beat: 0, value: 0.08 },
+  { beat: 1, value: 0.9 },
+  { beat: 2, value: 0.3 },
+  { beat: 3, value: 0.72 },
+]
+const SPLINE_DEMO_BEATS = SPLINE_DEMO[SPLINE_DEMO.length - 1].beat
+
+/** The real spline through SPLINE_DEMO at this tension, in plot space - drawn by
+ *  the engine's own `sampleLane`, so the picture cannot drift from playback. The
+ *  0..1 clamp stands in for the lane's bounds, which clamp the overshoot the same
+ *  way: a tension the range can't absorb flattens here exactly as it will there. */
+function splinePath(tension: number, x0: number, x1: number, steps = 80, yPeak = Y_PEAK): string {
+  let d = ''
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const value = clamp(sampleLane(SPLINE_DEMO, t * SPLINE_DEMO_BEATS, 'spline', tension), 0, 1)
+    const x = x0 + (x1 - x0) * t
+    const y = Y_BASE - value * (Y_BASE - yPeak)
+    d += `${i === 0 ? 'M' : ' L'} ${x.toFixed(2)} ${y.toFixed(2)}`
+  }
+  return d
+}
 
 /** The path an easing traces from a low keyframe to a high one, in plot space.
  *  Step is its own shape - it HOLDS the old value, then jumps at the keyframe.
@@ -651,8 +686,10 @@ function ModeSegmented({ mode, accent, onMode }: {
 
 /** The curve picker: every easing as its own shape, so the choice is made by
  *  looking rather than by reading a dropdown's option names. */
-function CurveSegmented({ interpolation, accent, onInterpolation }: {
+function CurveSegmented({ interpolation, tension, accent, onInterpolation }: {
   interpolation: InterpolationMode
+  /** Shapes the spline swatch only - the one option whose glyph is a live value. */
+  tension: number
   accent: string
   onInterpolation: (mode: InterpolationMode) => void
 }) {
@@ -682,7 +719,7 @@ function CurveSegmented({ interpolation, accent, onInterpolation }: {
             >
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" className="h-full w-full">
                 <path
-                  d={easePath(option.value, 8, 92, 20)}
+                  d={option.value === 'spline' ? splinePath(tension, 8, 92, 48) : easePath(option.value, 8, 92, 20)}
                   fill="none"
                   stroke={selected ? towardWhite(accent, 0.6) : 'rgba(255,255,255,0.35)'}
                   strokeWidth={selected ? 1.75 : 1.25}
@@ -930,7 +967,7 @@ function RangeConsole({ bounds, range, accent, onRange }: {
 }
 
 export function AutomationUserInterface({
-  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onNoise, onBurst, onCycle, onAmount, onRange,
+  targetLabel, targetKey, targetOptions, onTarget, color, mode, interpolation, tension, noise, burst, cycle, amount, paramBounds, range, onMode, onInterpolation, onTension, onNoise, onBurst, onCycle, onAmount, onRange,
 }: {
   /** What the lane drives - "Size", "Kaleidoscope · Segments". */
   targetLabel: string
@@ -944,6 +981,9 @@ export function AutomationUserInterface({
   color: string
   mode: AutomationMode
   interpolation: InterpolationMode
+  /** Spline tension (Track.splineTension, defaulted to 1). Ignored by every
+   *  other interpolation, so its control only appears on 'spline'. */
+  tension: number
   noise: NoiseConfig | undefined
   burst: BurstConfig | undefined
   cycle: CycleConfig | undefined
@@ -951,6 +991,7 @@ export function AutomationUserInterface({
   amount: number
   onMode: (mode: AutomationMode) => void
   onInterpolation: (mode: InterpolationMode) => void
+  onTension: (tension: number) => void
   onNoise: (noise: NoiseConfig) => void
   onBurst: (burst: BurstConfig) => void
   onCycle: (cycle: CycleConfig) => void
@@ -990,6 +1031,28 @@ export function AutomationUserInterface({
                 amount fader pulls the center down and the wobble in with it). */}
             <line x1={PX0} y1={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} x2={PX1} y2={Y_BASE - clamp(0.5 * amount, 0, 1) * Y_SPAN} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
             <GlowPath d={noisePath(noise, amount)} accent={accent} />
+          </svg>
+        </LaneWindow>
+      ) : interpolation === 'spline' ? (
+        // The spline is the one easing that cannot be shown on a single segment -
+        // its shape anywhere comes from the keyframes on BOTH sides - so its
+        // window plots a whole phrase instead of one hop.
+        <LaneWindow testId="automation-spline-plot" title="One continuous curve through four keyframes - no corner and no jerk at any of them">
+          <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+            <line x1={PX0} y1={Y_BASE} x2={PX1} y2={Y_BASE} stroke="rgba(255,255,255,0.14)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <line x1={PX0} y1={Y_PEAK} x2={PX1} y2={Y_PEAK} stroke="rgba(255,255,255,0.12)" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            <GlowPath d={splinePath(tension, PX0, PX1, 120, yAmountPeak)} accent={accent} />
+            {/* The keyframes it passes exactly through: the tension knob moves the
+                curve BETWEEN them and never these. */}
+            {SPLINE_DEMO.map((k) => (
+              <circle
+                key={k.beat}
+                cx={PX0 + ((PX1 - PX0) * k.beat) / SPLINE_DEMO_BEATS}
+                cy={Y_BASE - clamp(k.value, 0, 1) * (Y_BASE - yAmountPeak)}
+                r={1.6}
+                fill={towardWhite(accent, 0.7)}
+              />
+            ))}
           </svg>
         </LaneWindow>
       ) : (
@@ -1215,7 +1278,23 @@ export function AutomationUserInterface({
         )}
 
         {mode === 'curve' && (
-          <CurveSegmented interpolation={interpolation} accent={accent} onInterpolation={onInterpolation} />
+          <>
+            <CurveSegmented interpolation={interpolation} tension={tension} accent={accent} onInterpolation={onInterpolation} />
+            {/* Spline's one control, and the only easing that has one: how hard
+                the curve leans into each keyframe's tangent. It sits under the
+                picker rather than in the window because the window is a plot
+                here, not an editor - there is no handle to grab on a curve whose
+                shape comes from the notes. */}
+            {interpolation === 'spline' && (
+              <div className="flex justify-center" data-testid="automation-spline-tension">
+                <LaserKnob
+                  value={tension} min={0} max={SPLINE_TENSION_MAX} step={0.05} defaultValue={DEFAULT_SPLINE_TENSION}
+                  label="TENSION" ariaLabel="How fast the curve crosses each keyframe" accent={accent} large
+                  onChange={onTension}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* The lane's master gain, below whichever mode console is up: it
@@ -1256,7 +1335,11 @@ export function AutomationUserInterface({
               exact same wobble.</>
           ) : (
             <>Each note is a keyframe on <span className="text-white/75">{targetLabel}</span> - its row is the value,
-              its position the time. {interpolation === 'step' ? 'Step holds each value until the next.' : 'The curve glides between them.'}</>
+              its position the time. {interpolation === 'step'
+                ? 'Step holds each value until the next.'
+                : interpolation === 'spline'
+                  ? 'One curve runs through every keyframe with no corner and no jerk at any of them - tension sets how fast it crosses each note, and how far it swings past on the way.'
+                  : 'The curve glides between them.'}</>
           )}
         </p>
       </div>

@@ -12,7 +12,7 @@ import { CompositionSettingsPanel } from './CompositionSettingsPanel'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
 import { TRANSFORM_PARAM_DEFS, withSpatialTransformParams, withTransformParams } from '../core/transform'
 import { ENVELOPE_OPACITY_TARGET } from '../core/visual/resolve'
-import { automationMode } from '../core/visual/automation'
+import { DEFAULT_SPLINE_TENSION, automationMode } from '../core/visual/automation'
 import { getEffect, PLUGIN_LIST, type VisualEffect, type EffectCategory } from '../effects'
 import { fxTarget, parseFxTarget } from '../effects/automation'
 import { NestedMenu, type NestedMenuGroup } from './NestedMenu'
@@ -446,6 +446,7 @@ export function TrackEditor() {
   const setEnvelopeDepth = useProjectStore((s) => s.setEnvelopeDepth)
   const setEnvelopeTarget = useProjectStore((s) => s.setEnvelopeTarget)
   const setTrackInterpolation = useProjectStore((s) => s.setTrackInterpolation)
+  const setTrackSplineTension = useProjectStore((s) => s.setTrackSplineTension)
   const setTrackNoise = useProjectStore((s) => s.setTrackNoise)
   const setTrackBurst = useProjectStore((s) => s.setTrackBurst)
   const setTrackCycle = useProjectStore((s) => s.setTrackCycle)
@@ -730,12 +731,14 @@ export function TrackEditor() {
                         color={resolveTrackDisplayColor(track)}
                         mode={automationMode(track)}
                         interpolation={track.interpolation ?? 'linear'}
+                        tension={track.splineTension ?? DEFAULT_SPLINE_TENSION}
                         noise={track.noise}
                         burst={track.burst}
                         cycle={track.cycle}
                         amount={track.automationAmount ?? 1}
                         onMode={(mode) => setAutomationMode(track.id, mode)}
                         onInterpolation={(mode) => setTrackInterpolation(track.id, mode)}
+                        onTension={(tension) => setTrackSplineTension(track.id, tension)}
                         onNoise={(noise) => setTrackNoise(track.id, noise)}
                         onBurst={(burst) => setTrackBurst(track.id, burst)}
                         onCycle={(cycle) => setTrackCycle(track.id, cycle)}

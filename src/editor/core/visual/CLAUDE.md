@@ -53,7 +53,7 @@ pure functions of the beat, so the pause invariant holds for every mode:
 
 | mode | config | what a note is | between notes |
 |---|---|---|---|
-| curve | `interpolation` | a value keyframe (pitch → value) | interpolated / endpoints held |
+| curve | `interpolation` | a value keyframe (pitch → value) | eased per segment, or splined through all of them; endpoints held |
 | noise | `Track.noise` | a gate for seeded random wander around its value | **inert** |
 | burst | `Track.burst` | an ADSR burst from the value underneath toward its own pitch-value, velocity = intensity | **inert** |
 | cycle | `Track.cycle` | an ONSET dividing time: the motion curve plays once between each consecutive onset pair, stretched to fit | the cycle itself; **inert** outside the onset span |
@@ -71,6 +71,51 @@ inert, and the newest sounding note wins an overlap — an older longer note
 resumes mid-flight when it ends). Works on `fx:` lanes like burst does
 (`enabled` stays keyframes). Bounds for structural budgets come from the
 bezier's height hull (min/max of the four Ys).
+
+**SPLINE interpolation** (`interpolation: 'spline'` + `Track.splineTension`) is a
+CURVE-mode easing, not a fifth lane mode — it answers "how do I get from keyframe
+to keyframe", which is exactly what `interpolation` means, so it inherits amount,
+row-spread and retargeting for nothing. It is the only easing that is not a
+per-segment function: every other one shapes one hop in isolation and therefore
+kinks at every note (`ease-in-out` arrives dead stopped at each one). Spline fits
+ONE curve through all the keyframes with velocity **and** acceleration continuous
+everywhere — C2 — which needs two things that are easy to get wrong:
+
+- **A tangent belongs to a KNOT, in value per BEAT**, and both segments meeting
+  there read that one number. That is where continuity comes from; a slope
+  derived per segment from its own endpoints is what kinks.
+- **The segment is a QUINTIC Hermite with acceleration pinned to 0 at each knot,
+  not a cubic.** A cubic can honour a prescribed tangent *or* C2, never both:
+  fix the tangents and acceleration jumps at every knot; demand C2 and the
+  classic spline solves for the tangents, leaving `tension` nothing to act on.
+
+The tangent is the NON-UNIFORM three-point difference, `(v[i+1] - v[i-1]) /
+(b[i+1] - b[i-1])`, times tension. Dividing by the spanned TIME (not the uniform
+Catmull-Rom's constant 2) is what makes it a real velocity and what makes the
+shape gap-independent — the ride between two notes is identical at any spacing.
+**Get that wrong and the lane is still perfectly smooth**, it just rides
+differently as note spacing changes, so the test that catches it is the
+spacing-independence one, not the continuity ones (established by mutation).
+End knots take tangent 0, which is not a shortcut: `sampleLane` holds the
+endpoint values flat outside the keyframe range and only a zero tangent joins
+those flats without a corner, so the lane is C2 over ALL beats.
+
+**It is the default a NEW lane is created with** (`addAutomationTrack` writes
+`interpolation: 'spline'` explicitly). Note what was deliberately *not* done: the
+`?? 'linear'` absence fallbacks in resolve.ts and TrackEditor stayed put. That
+fallback is what every saved lane predating the `interpolation` field reads, so
+moving it would silently re-interpolate already-shipped projects — a document
+whose playback changes under it, with no upgrade step to point at. New lanes get
+the new default; old documents keep their own.
+
+Tension 0 collapses each segment to quintic smootherstep; 1 is neutral (stored
+as absence) and 2 is the max. Spline is the one keyframe easing that can leave
+its keyframes' own span — that overshoot IS the tangent working — so
+`sampleAutomationLane` clamps it to the lane's bounds like cycle and the shaped
+bursts, and `automationLaneValueBounds` widens the keyframe hull by
+`0.2 * (|m0| + |m1|)` per segment (0.198 is where the two tangent basis
+functions peak) so a mover's copy pool is budgeted for the swing. Both are gated
+on the mode, so every other easing stays bit-identical.
 
 Automation lanes are RETARGETABLE from the panel (`setAutomationTarget`):
 same one-lane-per-param rule as creation, `automationRange` resets (its

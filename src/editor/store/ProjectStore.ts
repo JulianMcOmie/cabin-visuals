@@ -12,7 +12,7 @@ import { SWITCHER_MODE_PARAM } from '../core/visualCopies/switcher'
 import { canBeSceneTrackChild, dematerializeSceneTrack, isSceneTrackId, sceneTrackId, sceneTrackView } from '../core/sceneTrack'
 import { loopLengthBeats, tileLoopNotes } from '../core/visual/noteFlatten'
 import { DEFAULT_ADSR } from '../core/visual/adsr'
-import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE } from '../core/visual/automation'
+import { AUTOMATION_AMOUNT_MAX, DEFAULT_BURST, DEFAULT_CYCLE, DEFAULT_NOISE, DEFAULT_SPLINE_TENSION, SPLINE_TENSION_MAX } from '../core/visual/automation'
 import type { ImportedMidiTrack } from '../core/midiImport'
 import type { AspectRatioId } from '../core/aspectRatios'
 import { placeTranscription, invertStrobeSpans, groupTimingIntoLines, type LyricWord, type TranscribedWord } from '../utils/lyricPlacement'
@@ -519,6 +519,9 @@ export interface ProjectState {
   setEnvelopeTarget: (trackId: string, value: number) => void
   /** Set an automation track's interpolation mode between keyframes. */
   setTrackInterpolation: (trackId: string, mode: InterpolationMode) => void
+  /** Set a curve lane's spline tension (the 'spline' interpolation's knot-tangent
+   *  gain). Neutral (1) is stored as field absence. */
+  setTrackSplineTension: (trackId: string, tension: number) => void
   /** Set (or clear, with undefined) an automation track's noise mode. */
   setTrackNoise: (trackId: string, noise: Track['noise'] | undefined) => void
   /** Set (or clear, with undefined) an automation track's burst mode. Setting one
@@ -1809,7 +1812,13 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
         type: 'automation',
         instrumentId: '',
         targetParam: paramKey,
-        interpolation: 'linear',
+        // A new lane rides the spline: one C2 curve through every keyframe is
+        // what a drawn phrase almost always wants, and the per-segment easings
+        // stay one click away. Written EXPLICITLY rather than by moving the
+        // `?? 'linear'` absence fallback - that fallback is what every saved
+        // lane predating this field reads, and moving it would silently
+        // re-interpolate projects that have already shipped.
+        interpolation: 'spline',
         // Param lanes have no definition to declare an identity, so they take
         // their own hue-cycle color - lanes no longer inherit their parent.
         color: resolveNextTrackColor(s, parentId),
@@ -2037,6 +2046,15 @@ export const useProjectStore = create<ProjectState>((rawSet) => {
       const track = s.tracks[trackId]
       if (!track) return s
       return { tracks: { ...s.tracks, [trackId]: { ...track, interpolation: mode } } }
+    }),
+
+  setTrackSplineTension: (trackId, tension) =>
+    set((s) => {
+      const track = s.tracks[trackId]
+      if (!track) return s
+      const clamped = Math.max(0, Math.min(SPLINE_TENSION_MAX, tension))
+      // Neutral tension is stored as absence, like automationAmount.
+      return { tracks: { ...s.tracks, [trackId]: { ...track, splineTension: clamped === DEFAULT_SPLINE_TENSION ? undefined : clamped } } }
     }),
 
   // The non-keyframe modes are mutually exclusive: setting one drops the
