@@ -93,6 +93,14 @@ export interface ResolvedObject {
   /** Hierarchy parent (a track id), for composing transforms down the tree. */
   parentId?: string
   muted: boolean
+  /** Set when a SWITCHER stands anywhere above this object: whether the rack's
+   *  lane is running the row this object descends from, at a given beat. Unlike
+   *  `muted` (a resolve-time constant) this varies with the playhead, which is
+   *  the whole point - but it only ever gates VISIBILITY, never structure: every
+   *  member of a rack stays mounted and the object list is unchanged, exactly as
+   *  a splitter's hidden copies do. Several racks above one object compose by
+   *  AND, so an inner rack cannot re-enable what an outer one switched off. */
+  liveAt?: (beat: number) => boolean
   params: Record<string, number>
   /** String-valued params (color / string), passed straight to the instrument. */
   stringParams: Record<string, string>

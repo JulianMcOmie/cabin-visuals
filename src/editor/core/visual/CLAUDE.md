@@ -19,14 +19,22 @@ Flattens each scene's track forest depth-first (cycle-guarded), expands looped b
 
 **SPLITTER tracks offer the spatial tf\* params to their own lanes too** (`weaveSplitterTfLanes`): such a lane becomes a `tfAutomationChainEntry` woven among the splitter's mover children at the lane's child position — it acts exactly like a mover child in that slot, moving the splitter's copies about the splitter's origin in its reference frame (`visualCopies/splitterChildChain.ts`), count-neutral and never re-framing the chain below. NO mirroring here, unlike the object-track weave — the splitter child chain composes top-down in child order already. Base is the panel value (splitters store no tf\* params, so the transform default), so keyframe values are absolute deltas and inert lanes are no-ops. The UI surfaces offering the list (context menu, piano-roll rows, retarget dropdown) all go through `withSpatialTransformParams` (core/transform.ts) — opacity is excluded, it isn't a transform.
 
-**A BYPASS lane is a chain child that is NOT a chain entry.** `isChainEntryTrack` (a
-definition's `parentGate` flag) is the one predicate every walk over a track's chain
-children shares — `resolveMoverAndSplitterChain` and the two `childIds` re-walks that
-line automation lanes up against the resolved chain. `resolveMoverOrSplitterTrack` lifts
-those lanes out instead and wraps the finished parent in `bypassGated`
-(`visualCopies/bypass.ts`), outermost of the frame / child-chain / copy-target wrappers.
-Add a filter site without the predicate and the lane silently becomes an identity entry
-of its parent's frame, gating nothing — see `bypassRuntime.test.ts`.
+**A chain child contributes 0, 1 or N entries, and `chainEntryCount` is the one place
+that says which.** 0 for a BYPASS lane (a `parentGate` definition — it is not an entry of
+anything; `resolveMoverOrSplitterTrack` lifts it out and wraps the finished parent in
+`bypassGated`, outermost of the frame / child-chain / copy-target wrappers). 1 for an
+ordinary device. **N for a SWITCHER**, which splices its whole rack into the chain it sits
+in, contiguously in child order (`visualCopies/switcher.ts`).
+
+Five walks share that count and they must not disagree by one:
+`resolveMoverAndSplitterChain`, `weaveTfAutomationLanes` (`entriesAbove += n`),
+`weaveSplitterTfLanes` (`chainIndex += n`), `priorChainPrefixes`, and the group/global
+passes — all of which now go through `resolveChainChildEntries` for the resolving half.
+Before switchers this was a hazard; with a child that can own several slots it is a
+certainty, and the failure is silent: every automation lane below the disagreement weaves
+into the wrong slot. `bypassRuntime.test.ts` pins the 0 case, `switcherRuntime.test.ts`
+the N case (including a tf lane weaving against a rack, asserted as transparency rather
+than as an index).
 
 **GROUP tracks** (`type: 'group'`) resolve to placement nodes (`ResolvedGraph.groups`), never objects: per frame `computeAtBeat` interleaves them among the objects at their DFS slot (`afterObjectIndex`) so a group's world matrix (tf\* params + their lanes, sampled per frame) is composed before any member reads it, and its `tfOpacity` accumulates through `inheritedOpacities` onto member objects (objects pass the value through without adding their own — nested-object behavior is unchanged). A group's mover/splitter children broadcast at resolve: each appends to the chain of every member OBJECT above it in the group's child order, per member in the member's own frame (deepest group first, so a member chain reads [own chain, inner group entries, outer group entries, global movers]). `isChainChild` counts group children, so they never route through `targets`. A broadcast Freeze warps each member; the group's own placement always samples the real beat.
 

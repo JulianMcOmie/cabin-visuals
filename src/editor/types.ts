@@ -42,6 +42,15 @@ export type TrackType =
   // as a top-to-bottom pipeline), composed per member in the member's own
   // frame. Purely additive in persistence: Track's shape is unchanged.
   | 'group'
+  // A rack of alternative DEVICES with one MIDI lane over them: each child gets
+  // a row, and the lane says which of them are running at this beat. It splices
+  // its children into the chain it sits in, contiguously and in child order, so
+  // with every row held it is bit-identical to those devices being plain chain
+  // siblings - which is the property the whole design rests on. `params.mode`
+  // picks how notes choose the subset (core/visualCopies/switcher.ts);
+  // `switcherBindings` binds a stable pitch to each child. Purely additive in
+  // persistence, like 'group'.
+  | 'switcher'
 // 'director' was retired in schema v12: a scene composer is now an ordinary
 // 'base' track whose instrumentId names a composition instrument
 // (core/directors). upgrade.ts rewrites old saves.
@@ -340,6 +349,13 @@ export interface Track {
   /** A composition instrument's MIDI rows bind stable pitches to scene
    *  identities (Main-scene tracks; see core/directors). */
   sceneBindings?: Array<{ pitch: number; sceneId: SceneId }>
+  /** A switcher track's MIDI rows bind stable pitches to its CHILD devices, the
+   *  same contract `sceneBindings` keeps for scenes and for the same reason: a
+   *  row's pitch is the saved value, so deriving it from the child's index would
+   *  silently re-time every note on the lane whenever a child is reordered or
+   *  removed. Read it through `orderedSwitcherBindings` (core/switcherBindings.ts),
+   *  which self-heals stale lists rather than trusting them. */
+  switcherBindings?: Array<{ pitch: number; childTrackId: string }>
   /** Mover/splitter param values, keyed by the definition's param keys. */
   inputValues?: Record<string, number>
   /** Text-Display-only: the lyric clips that own this track's words

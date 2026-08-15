@@ -21,7 +21,7 @@ import { waitForSaved } from '../../persistence/autosave'
 import { LoadingScreen } from '../../components/LoadingScreen'
 
 /** What dragging an item creates. */
-export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director'
+export type LibraryKind = 'object' | 'modulator' | 'mover' | 'splitter' | 'colorizer' | 'director' | 'switcher'
 
 export interface InstrumentItem {
   id: string
@@ -457,6 +457,28 @@ const COLORIZER_INSTRUMENTS = withKind('colorizer', listMoverOrSplitterDefinitio
   })))
 
 
+// A card for a CONTAINER, not an instrument or a device: it lands empty and
+// whatever you drop into it becomes a row of its lane. Its own kind, because
+// `makeTrack` has to build a `switcher` track rather than reach for either
+// registry.
+const SWITCHER_ITEMS = withKind('switcher', [
+  {
+    id: 'switcher',
+    name: 'Switcher',
+    description: 'A rack with one MIDI row per track inside it - play a row to switch that instrument, group or device on. Mutually exclusive or several at once.',
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" strokeWidth="1.1" strokeLinecap="round">
+        <path d="M1.5 3h3" stroke="#f0abfc" />
+        <path d="M7.5 3h3" stroke="#52525b" />
+        <circle cx="6" cy="3" r="1.5" fill="none" stroke="#f0abfc" />
+        <path d="M1.5 9h3" stroke="#52525b" />
+        <path d="M7.5 9h3" stroke="#52525b" />
+        <circle cx="6" cy="9" r="1.5" fill="none" stroke="#52525b" />
+      </svg>
+    ),
+  },
+])
+
 export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...SCENE_INSTRUMENTS,
   ...DIRECTOR_INSTRUMENTS,
@@ -464,6 +486,7 @@ export const ALL_LIBRARY_ITEMS: InstrumentItem[] = [
   ...ALL_MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
+  ...SWITCHER_ITEMS,
 ]
 
 /** A library folder: a row you click into, holding items and/or subfolders. */
@@ -489,6 +512,7 @@ const SCENE_ITEM_POOL: InstrumentItem[] = [
   ...MOVER_INSTRUMENTS,
   ...COLORIZER_INSTRUMENTS,
   ...SPLITTER_INSTRUMENTS,
+  ...SWITCHER_ITEMS,
 ]
 
 const pick = (ids: readonly string[]): InstrumentItem[] =>
@@ -504,7 +528,7 @@ const IMPULSE_IDS = ['impactWarp', 'cameraControl', 'meteorImpact', 'forceFieldP
 // Orbit sits here rather than beside Camera in Impulse for the same reason:
 // holding a row to swing the rig is the held shape, not a strike that decays.
 const RUMBLE_IDS = ['bassRipple', 'waveTerrain', 'strobe', 'cameraOrbit']
-const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope']
+const UTILITY_IDS = ['video', 'photo', 'textDisplay', 'oscilloscope', 'switcher']
 const COLOR_IDS = [...COLORIZER_INSTRUMENTS.map((i) => i.id), 'colorFilters']
 
 const IMPACT_IDS = [...IMPULSE_IDS, ...RUMBLE_IDS]
@@ -546,7 +570,7 @@ const SCENE_FOLDERS: LibraryFolder[] = [
   { id: 'objects', title: 'Objects', description: 'Object instruments are visual objects that render in the 3D scene - for example, cubes or spheres.', items: OBJECT_INSTRUMENTS },
   { id: 'instruments', title: 'Instruments', description: 'Played rather than posed: every note spawns its own short-lived event instead of changing a standing shape.', items: INSTRUMENT_FOLDER_ITEMS },
   { id: 'color', title: 'Color', description: 'Recoloring: the Colorizer flashes its objects toward a picked color; Color Filters remap the whole scene.', items: pick(COLOR_IDS) },
-  { id: 'utility', title: 'Utility', description: 'Full-frame media and readouts - video clips, photos, word display, and the audio waveform.', items: pick(UTILITY_IDS) },
+  { id: 'utility', title: 'Utility', description: 'Full-frame media and readouts - video clips, photos, word display, the audio waveform - plus the Switcher rack.', items: pick(UTILITY_IDS) },
   { id: 'extras', title: 'Extras', description: 'The back catalog: older object instruments, all still fully working - just outside the curated folders above.', items: EXTRA_INSTRUMENTS },
 ]
 
@@ -911,6 +935,7 @@ export function LeftSidebar() {
   // Double-click converts the selected track to the item (no-op if nothing selected).
   const setTrackInstrument = useProjectStore((s) => s.setTrackInstrument)
   const setTrackMover = useProjectStore((s) => s.setTrackMover)
+  const wrapTracksInSwitcher = useProjectStore((s) => s.wrapTracksInSwitcher)
   const activeIsMain = useProjectStore((s) => !!s.scenes[s.activeSceneId]?.isMain)
   const onItemDoubleClick = (item: InstrumentItem) => {
     const selectedTrackId = useUIStore.getState().selectedTrackId
@@ -918,7 +943,15 @@ export function LeftSidebar() {
     // Composition instruments (the 'director' library kind) go through the
     // same conversion as any instrument - setTrackInstrument seeds their
     // scene bindings when the Main scene is active.
-    if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
+    // A rack is a CONTAINER, so double-click WRAPS the selection rather than
+    // converting it - converting would destroy the very track you meant to put
+    // in the rack. (Word Formation set the precedent for a card that adds
+    // around/under the selection instead of replacing it.)
+    if (item.kind === 'switcher') {
+      const id = wrapTracksInSwitcher([selectedTrackId])
+      if (id) useUIStore.getState().setSelectedTrackId(id)
+    }
+    else if (item.kind === 'mover' || item.kind === 'splitter' || item.kind === 'colorizer') setTrackMover(selectedTrackId, item.id, item.name)
     else setTrackInstrument(selectedTrackId, item.id, item.name)
   }
 

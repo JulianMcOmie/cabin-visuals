@@ -25,6 +25,14 @@ import type { MoverOrSplitter } from '../visualCopies/types'
 import { structuralCopyCount } from '../visualCopies/resolveVisualCopies'
 import { gatedMoverOrSplitter } from '../visualCopies/copyTargets'
 import { bypassGated } from '../visualCopies/bypass'
+import {
+  liveChildrenAt,
+  switchGated,
+  switcherVariantsFor,
+  SWITCHER_MODE_PARAM,
+  type SwitcherBinding,
+} from '../visualCopies/switcher'
+import { orderedSwitcherBindings } from '../switcherBindings'
 import { identitySV } from './stateVector'
 import { flattenTrackNotes as flattenTrackNotesRaw } from './noteFlatten'
 
@@ -373,22 +381,187 @@ function moverOrSplitterId(track: Track): string | undefined {
   return undefined
 }
 
-/** True for a track that contributes an ENTRY to some mover-and-splitter chain.
+/** How many ENTRIES a track contributes to its parent's mover-and-splitter
+ *  chain. Three answers, and all three are real:
  *
- *  Not every track with a definition does. A `parentGate` definition (Bypass)
- *  acts on the DEVICE it is nested under rather than on copies: it is lifted out
- *  in `resolveMoverOrSplitterTrack` and wrapped around that parent, so it must
- *  never also appear as an entry of the parent's frame or child chain.
+ *   - **0** - a `parentGate` definition (Bypass) acts on the DEVICE it is nested
+ *     under rather than on copies. It is lifted out in
+ *     `resolveMoverOrSplitterTrack` and wrapped around that parent, so it must
+ *     never also appear as an entry of the parent's frame or child chain.
+ *   - **1** - an ordinary mover/splitter/colorizer.
+ *   - **N** - a SWITCHER, which splices its devices into this chain contiguously
+ *     in child order (visualCopies/switcher.ts). Muted/soloed-out devices stay
+ *     in the span as permanently-off entries rather than being removed, so the
+ *     row-to-device mapping cannot shift under an authoring toggle.
  *
- *  EVERY walk over a track's chain children shares this predicate, and that is
+ *  EVERY walk over a track's chain children shares this count, and that is
  *  load-bearing rather than tidy: `weaveSplitterTfLanes` and
  *  `weaveTfAutomationLanes` re-walk `childIds` counting entries to line lanes up
- *  with the already-resolved chain, so a filter that disagreed with
- *  `resolveMoverAndSplitterChain` by one track would silently weave every lane
- *  into the wrong slot. */
-function isChainEntryTrack(track: Track): boolean {
+ *  with the already-resolved chain, so a walk that disagreed with
+ *  `resolveMoverAndSplitterChain` by one entry would silently weave every lane
+ *  into the wrong slot. With switchers in the tree that stopped being a hazard
+ *  and became a certainty, which is why this is a count and not a predicate. */
+function chainEntryCount(track: Track, p: ProjectSnapshot): number {
+  if (track.type === 'switcher') {
+    // Summed, not counted: a rack's rows need not be devices at all. An object
+    // or group row contributes 0 entries (it is gated for visibility instead),
+    // and a nested rack contributes its own span.
+    return switcherChildTracks(track, p)
+      .reduce((n, child) => n + chainEntryCount(child, p), 0)
+  }
   const def = getMoverOrSplitterDefinition(moverOrSplitterId(track))
-  return !!def && !def.parentGate
+  return !!def && !def.parentGate ? 1 : 0
+}
+
+/** True for a track that contributes at least one entry - the filter every
+ *  chain walk applies before counting. A switcher with no devices in it
+ *  contributes nothing and is skipped exactly like an unknown definition. */
+function isChainEntryTrack(track: Track, p: ProjectSnapshot): boolean {
+  return chainEntryCount(track, p) > 0
+}
+
+/**
+ * What a switcher racks up, in child order - **one row each, whatever they are.**
+ *
+ * A rack is deliberately generic: a row may be a DEVICE (it contributes chain
+ * entries, gated by the lane), an OBJECT or a GROUP (its objects are gated for
+ * visibility instead), or a nested SWITCHER (its own span, gated as one row).
+ * Each kind has its own meaning of "off" and the lane does not need to know
+ * which is which - so a MIXED rack works, and switching a cube for a grid of
+ * spheres is the same gesture as switching one mover for another.
+ *
+ * Excluded: the child LANES that live on their parent (automation / ability /
+ * envelope), audio, and Bypass - a `parentGate` lane gates the device it is
+ * nested under and is not a row of anything.
+ */
+export function switcherChildTracks(track: Track, p: ProjectSnapshot): Track[] {
+  return (track.childIds ?? [])
+    .map((cid) => p.tracks[cid])
+    .filter((c): c is Track => {
+      if (!c) return false
+      if (c.type === 'automation' || c.type === 'ability' || c.type === 'envelope'
+        || c.type === 'audio') return false
+      if (c.type === 'switcher' || c.type === 'group' || c.type === 'base') return true
+      const def = getMoverOrSplitterDefinition(moverOrSplitterId(c))
+      return !!def && !def.parentGate
+    })
+}
+
+/**
+ * A switcher's lane, resolved once: its rows and the gate each one answers to.
+ *
+ * Shared by BOTH arms - the chain splice below and the object-visibility pass in
+ * `resolveProject` - so a rack of devices and a rack of objects can never
+ * disagree about what its own notes mean.
+ *
+ * The gate is memoized on the beat because it is asked once per copy per entry
+ * per frame and the mode evaluation walks the note list. One slot is enough:
+ * `warpChainBeat` asks every entry for its remap up front (at the REAL beat) and
+ * the applies follow (at the object beat), so the worst case is one extra
+ * evaluation per frame rather than thrashing.
+ */
+function resolveSwitcherLane(track: Track, p: ProjectSnapshot): {
+  children: Track[]
+  mode: number
+  isLive: (index: number) => (beat: number) => boolean
+  /** True when a row is switched off by AUTHORING (muted, or soloed out by a
+   *  sibling) rather than by the lane - so it can never run at any beat. */
+  isOff: (index: number) => boolean
+} {
+  const children = switcherChildTracks(track, p)
+  const indexByChild = new Map(children.map((child, index) => [child.id, index]))
+  const bindings: SwitcherBinding[] = orderedSwitcherBindings(track, children.map((c) => c.id))
+    .map(({ pitch, childTrackId }) => ({ pitch, index: indexByChild.get(childTrackId)! }))
+  const notes = flattenTrackNotes(track, p)
+  const mode = track.params?.[SWITCHER_MODE_PARAM.key] ?? SWITCHER_MODE_PARAM.default
+
+  let cachedBeat = Number.NaN
+  let cachedLive = new Set<number>()
+  const liveSet = (beat: number): Set<number> => {
+    if (beat !== cachedBeat) {
+      cachedBeat = beat
+      cachedLive = new Set(liveChildrenAt(bindings, notes, { mode }, beat))
+    }
+    return cachedLive
+  }
+
+  // Mute/solo are AUTHORING overrides and beat the lane: a muted row never runs
+  // however it is played, and soloing one is how you audition it on the very
+  // track where MIDI would otherwise be deciding.
+  const anySolo = children.some((child) => child.solo)
+  const isOff = (index: number) => {
+    const child = children[index]
+    return !child || !!child.muted || (anySolo && !child.solo)
+  }
+  return {
+    children,
+    mode,
+    isOff,
+    isLive: (index) => (isOff(index) ? () => false : (beat) => liveSet(beat).has(index)),
+  }
+}
+
+/**
+ * A switcher's devices, resolved and spliced: the entries of every child in
+ * child order, each wrapped in the lane's gate.
+ *
+ * **A ROW may own more than one entry.** A nested switcher is one row of the
+ * outer lane but contributes its whole span, and the outer row gates all of it
+ * together. That is why the gate is per ROW and the splice is a flatten, rather
+ * than one entry per child: collapsing the inner span into a single entry would
+ * mean running a kernel over it, and its entries would then see `index`/`count`/
+ * `formation` describing a private fan-out instead of the real formation - the
+ * exact mistake visualCopies/switcher.ts's header exists to prevent.
+ *
+ * The gate is shared by every entry in the span and memoized on the beat,
+ * because `apply` is called once per copy per entry per frame and the mode
+ * evaluation walks the note list. One slot is enough: `warpChainBeat` asks every
+ * entry for its remap up front (at the REAL beat) and the applies follow (at the
+ * object beat), so the worst case is one extra evaluation per frame rather than
+ * thrashing.
+ */
+function resolveSwitcherEntries(track: Track, p: ProjectSnapshot): MoverOrSplitter[] {
+  const { children, mode, isLive, isOff } = resolveSwitcherLane(track, p)
+  if (children.length === 0) return []
+  const entries: MoverOrSplitter[] = []
+  children.forEach((child, index) => {
+    const rowEntries = resolveChainChildEntries(child, p)
+    if (rowEntries.length === 0) return
+    const gate = isLive(index)
+    // A row that can never run publishes NO structural variants, so it adds
+    // nothing to the mounted copy ceiling - it still keeps its slot in the span,
+    // so pitches and rows never shift under an authoring toggle.
+    const variants = isOff(index) ? [] : null
+    for (const entry of rowEntries) {
+      entries.push(switchGated(
+        entry,
+        gate,
+        variants ?? switcherVariantsFor(entry, mode, index, children.length),
+      ))
+    }
+  })
+  return entries
+}
+
+/** How many copies a switcher's rack can mount at once - the number its panel
+ *  reports, and the one that explains why a rack of splitters got slow. It is a
+ *  property of the MODE as much as of the devices: Gate and Toggle can run
+ *  everything, so the span's reach is the product of their fan-outs, while Solo
+ *  and Latch run at most one and reach only the largest. Editor metadata (it
+ *  resolves the span), so memoize it on the document rather than calling it per
+ *  frame. */
+export function switcherCopyCeiling(track: Track, p: ProjectSnapshot): number {
+  return structuralCopyCount(resolveSwitcherEntries(track, p))
+}
+
+/** One chain child, resolved to the entries it contributes: a switcher's whole
+ *  span, or the single entry every other device is. The one place that decision
+ *  is made, so the five walks that build chains and prefixes cannot disagree
+ *  about how many slots a child owns. */
+function resolveChainChildEntries(track: Track, p: ProjectSnapshot): MoverOrSplitter[] {
+  if (track.type === 'switcher') return resolveSwitcherEntries(track, p)
+  const resolved = resolveMoverOrSplitterTrack(track, p)
+  return resolved ? [resolved] : []
 }
 
 /** The bypass gates a mover/splitter track carries: its `parentGate` children,
@@ -531,7 +704,7 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
   // pool) so the chain entries line up with the walk.
   const chainChildren = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && isChainEntryTrack(c))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c, p))
   const anySolo = chainChildren.some((c) => c.solo)
   const woven: MoverOrSplitter[] = []
   let chainIndex = 0
@@ -542,12 +715,11 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
     if (lane) {
       const base = track.params?.[lane.param] ?? transformDefault(lane.param)
       woven.push(tfAutomationChainEntry(lane, base))
-    } else if (
-      isChainEntryTrack(child) &&
-      !child.muted && (!anySolo || child.solo) &&
-      chainIndex < chain.length
-    ) {
-      woven.push(chain[chainIndex++])
+    } else if (!child.muted && (!anySolo || child.solo)) {
+      // A switcher child occupies SEVERAL slots of `chain` (its spliced span),
+      // so the walk advances by its entry count, not by one.
+      const count = chainEntryCount(child, p)
+      for (let i = 0; i < count && chainIndex < chain.length; i++) woven.push(chain[chainIndex++])
     }
   }
   return woven
@@ -557,17 +729,19 @@ function weaveSplitterTfLanes(track: Track, chain: MoverOrSplitter[], p: Project
  *  childIds order. Muted entries are removed from the chain (a structural
  *  change - the copy count may drop); solo is a pool among the chain children.
  *  Bypass lanes are not entries at all (isChainEntryTrack) - they gate the
- *  device they are nested under, and reach it through resolveBypassGates. */
+ *  device they are nested under, and reach it through resolveBypassGates. A
+ *  SWITCHER child splices its whole span in here instead of one entry
+ *  (visualCopies/switcher.ts), which is what makes its Gate mode with every row
+ *  held identical to those devices being plain siblings. */
 function resolveMoverAndSplitterChain(track: Track, p: ProjectSnapshot): MoverOrSplitter[] {
   const candidates = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && isChainEntryTrack(c))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c, p))
   const anySolo = candidates.some((c) => c.solo)
   const chain: MoverOrSplitter[] = []
   for (const child of candidates) {
     if (child.muted || (anySolo && !child.solo)) continue
-    const resolved = resolveMoverOrSplitterTrack(child, p)
-    if (resolved) chain.push(resolved)
+    chain.push(...resolveChainChildEntries(child, p))
   }
   return chain
 }
@@ -602,7 +776,7 @@ function weaveTfAutomationLanes(
   // pool), so the count lines up with `chain`.
   const chainChildren = (track.childIds ?? [])
     .map((cid) => p.tracks[cid])
-    .filter((c): c is Track => !!c && isChainEntryTrack(c))
+    .filter((c): c is Track => !!c && isChainEntryTrack(c, p))
   const anySolo = chainChildren.some((c) => c.solo)
   const gapByChildId = new Map<string, number>()
   let entriesAbove = 0
@@ -610,10 +784,7 @@ function weaveTfAutomationLanes(
     const child = p.tracks[cid]
     if (!child) continue
     if (!child.instrumentId && child.type === 'automation') gapByChildId.set(cid, entriesAbove)
-    else if (
-      isChainEntryTrack(child) &&
-      !child.muted && (!anySolo || child.solo)
-    ) entriesAbove++
+    else if (!child.muted && (!anySolo || child.solo)) entriesAbove += chainEntryCount(child, p)
   }
   const n = chain.length
   const overlay: ResolvedAutomation[] = []
@@ -644,9 +815,10 @@ function weaveTfAutomationLanes(
 
 /** True when this mover/splitter belongs to a parent's chain rather than routing
  *  itself: a LOCAL entry of its parent instrument's chain, a FRAME entry of a
- *  parent mover/splitter (visualCopies/moverFrame.ts), or a GROUP entry - a
+ *  parent mover/splitter (visualCopies/moverFrame.ts), a GROUP entry - a
  *  chain child of a group track, broadcast to the member objects above it (the
- *  group pass in resolveProject). Everything else (root level, or under an
+ *  group pass in resolveProject) - or a SWITCHER's device, which reaches the
+ *  chain through its rack's span. Everything else (root level, or under an
  *  instrument the registry no longer knows) is a mover "without a parent": it
  *  routes globally through its `targets`, appended to the end of each target
  *  object's chain. */
@@ -656,16 +828,17 @@ function isChainChild(track: Track, p: ProjectSnapshot): boolean {
   return !!getInstrument(parent.instrumentId)
     || !!getMoverOrSplitterDefinition(moverOrSplitterId(parent))
     || parent.type === 'group'
+    || parent.type === 'switcher'
 }
 
-/** Any ancestor GROUP with the given flag set. Mute on a group silences its
- *  whole subtree; solo on a group solos its member objects (they join the
- *  object solo pool). Non-group ancestors never propagate either flag - that
- *  is today's behavior for nested object tracks, kept unchanged. */
+/** Any ancestor CONTAINER (group or switcher) with the given flag set. Mute on
+ *  one silences its whole subtree; solo on one solos its member objects (they
+ *  join the object solo pool). Non-container ancestors never propagate either
+ *  flag - that is today's behavior for nested object tracks, kept unchanged. */
 function ancestorGroupFlag(track: Track, p: ProjectSnapshot, flag: 'muted' | 'solo'): boolean {
   for (let cur = track.parentId; cur != null; cur = p.tracks[cur]?.parentId) {
     const t = p.tracks[cur]
-    if (t?.type === 'group' && t[flag]) return true
+    if (t && (t.type === 'group' || t.type === 'switcher') && t[flag]) return true
   }
   return false
 }
@@ -745,7 +918,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
     if (parent.type === 'group') {
       const chainCandidates = (parent.childIds ?? [])
         .map((id) => p.tracks[id])
-        .filter((child): child is Track => !!child && isChainEntryTrack(child))
+        .filter((child): child is Track => !!child && isChainEntryTrack(child, p))
       const anySolo = chainCandidates.some((child) => child.solo)
       const entriesAbove: MoverOrSplitter[] = []
       const memberObjects: Track[] = []
@@ -759,10 +932,9 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
         if (cid === trackId) break
         const child = p.tracks[cid]
         if (!child) continue
-        if (isChainEntryTrack(child)) {
+        if (isChainEntryTrack(child, p)) {
           if (child.muted || (anySolo && !child.solo)) continue
-          const resolved = resolveMoverOrSplitterTrack(child, p)
-          if (resolved) entriesAbove.push(resolved)
+          entriesAbove.push(...resolveChainChildEntries(child, p))
         } else {
           collectObjects(cid)
         }
@@ -774,7 +946,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
     }
     const candidates = (parent.childIds ?? [])
       .map((id) => p.tracks[id])
-      .filter((child): child is Track => !!child && isChainEntryTrack(child))
+      .filter((child): child is Track => !!child && isChainEntryTrack(child, p))
     const anySolo = candidates.some((child) => child.solo)
     const prefix: MoverOrSplitter[] = []
     // A SPLITTER's child chain runs over the splitter's own copies
@@ -787,8 +959,7 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
     for (const child of candidates) {
       if (child.id === trackId) break
       if (child.muted || (anySolo && !child.solo)) continue
-      const resolved = resolveMoverOrSplitterTrack(child, p)
-      if (resolved) prefix.push(resolved)
+      prefix.push(...resolveChainChildEntries(child, p))
     }
     return [prefix]
   }
@@ -804,12 +975,11 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
       const global = p.tracks[globalId]
       if (
         !global || global.muted ||
-        !isChainEntryTrack(global) ||
+        !isChainEntryTrack(global, p) ||
         isChainChild(global, p) ||
         !globalTrackTargetsObject(global, object, p)
       ) continue
-      const resolved = resolveMoverOrSplitterTrack(global, p)
-      if (resolved) prefix.push(resolved)
+      prefix.push(...resolveChainChildEntries(global, p))
     }
     return prefix
   })
@@ -830,7 +1000,9 @@ function priorChainPrefixes(trackId: string, p: ProjectSnapshot): MoverOrSplitte
 // The shared inner closures are stateful-but-pure (per-beat memos), same as
 // one instance serving several target objects within a single resolve.
 const objectResolveCache = new WeakMap<Track, { deps: unknown[]; entry: ResolvedObject }>()
-const globalMoverResolveCache = new WeakMap<Track, { deps: unknown[]; resolved: MoverOrSplitter | null }>()
+// Keyed on the track, holding the ENTRIES it contributes - a list rather than
+// one entry, because a switcher racks up a whole span.
+const globalMoverResolveCache = new WeakMap<Track, { deps: unknown[]; entries: MoverOrSplitter[] }>()
 
 /** Everything a track's resolvers read, as an identity-comparable list: the
  *  track itself, its whole subtree (DFS), and the tempo fields. */
@@ -873,7 +1045,44 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   // A soloed GROUP joins the pool on behalf of its member objects; a muted
   // group silences its whole subtree (ancestorGroupFlag).
   const isObjectTrack = (t: Track) => !!t.instrumentId
-  const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo && (isObjectTrack(t) || t.type === 'group'))
+  const anyObjectSolo = Object.values(p.tracks).some((t) => t.solo
+    && (isObjectTrack(t) || t.type === 'group' || t.type === 'switcher'))
+
+  // One lane per switcher per resolve, so both arms of a rack - the spliced
+  // device entries and the object visibility gates below - share the same
+  // memoized evaluation and cannot disagree about what its notes mean.
+  const switcherLanes = new Map<string, ReturnType<typeof resolveSwitcherLane>>()
+  const laneFor = (t: Track) => {
+    let lane = switcherLanes.get(t.id)
+    if (!lane) {
+      lane = resolveSwitcherLane(t, p)
+      switcherLanes.set(t.id, lane)
+    }
+    return lane
+  }
+
+  /** The gate an object inherits from every SWITCHER standing above it: which
+   *  row of each rack it descends from, and whether that row is running. Racks
+   *  compose by AND, so an inner one cannot re-enable what an outer one
+   *  switched off. Undefined when no rack stands above the object, which is the
+   *  common case and costs it nothing. */
+  const objectLiveAt = (track: Track): ((beat: number) => boolean) | undefined => {
+    const gates: ((beat: number) => boolean)[] = []
+    let childId = track.id
+    for (let cur = track.parentId; cur != null; cur = p.tracks[cur]?.parentId) {
+      const parent = p.tracks[cur]
+      if (!parent) break
+      if (parent.type === 'switcher') {
+        const lane = laneFor(parent)
+        const index = lane.children.findIndex((c) => c.id === childId)
+        if (index >= 0) gates.push(lane.isLive(index))
+      }
+      childId = cur
+    }
+    if (gates.length === 0) return undefined
+    if (gates.length === 1) return gates[0]
+    return (beat) => gates.every((gate) => gate(beat))
+  }
   const objectOff = (track: Track) =>
     !!track.muted
     || ancestorGroupFlag(track, p, 'muted')
@@ -886,7 +1095,14 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     // params (+ their lanes) compose per frame in computeAtBeat as the parent
     // of every member's world. Its chain children broadcast in the group pass
     // below, after all objects exist.
-    if (track.type === 'group') {
+    //
+    // A SWITCHER resolves to one too, and that is load-bearing rather than a
+    // convenience: `computeAtBeat` composes an object's world from
+    // `worldMatrices.get(obj.parentId)`, so a rack standing between an object
+    // and its group would otherwise have no matrix under that id and the object
+    // would silently LOSE its ancestor's transform. Giving the rack a placement
+    // node fixes that and makes a rack movable as one, exactly like a group.
+    if (track.type === 'group' || track.type === 'switcher') {
       groups.push({
         trackId: id,
         parentId: track.parentId,
@@ -947,6 +1163,10 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     objects.push({
       ...base,
       muted: objectOff(track),
+      // Per-resolve, never cached onto `base`: it closes over this resolve's
+      // lane memos, and the switcher standing above an object is not in that
+      // object's own dependency subtree.
+      liveAt: objectLiveAt(track),
       // Own array per resolve: the global-mover pass below appends into it.
       moverAndSplitterChain: [...base.moverAndSplitterChain],
       scratchBase: identitySV(),
@@ -1002,28 +1222,28 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
     if (!g || g.type !== 'group') continue
     const chainChildren = (g.childIds ?? [])
       .map((cid) => p.tracks[cid])
-      .filter((c): c is Track => !!c && isChainEntryTrack(c))
+      .filter((c): c is Track => !!c && isChainEntryTrack(c, p))
     if (chainChildren.length === 0) continue
     const anySolo = chainChildren.some((c) => c.solo)
     const membersAbove: ResolvedObject[] = []
     for (const cid of g.childIds ?? []) {
       const child = p.tracks[cid]
       if (!child) continue
-      if (isChainEntryTrack(child)) {
+      if (isChainEntryTrack(child, p)) {
         if (child.muted || (anySolo && !child.solo)) continue
         // Same identity-keyed reuse as the global pass: a group entry
         // re-resolves only when its own subtree changed.
         const deps = resolveDeps(child, p)
         const cached = globalMoverResolveCache.get(child)
-        let resolved: MoverOrSplitter | null
+        let entries: MoverOrSplitter[]
         if (cached && depsEqual(cached.deps, deps)) {
-          resolved = cached.resolved
+          entries = cached.entries
         } else {
-          resolved = resolveMoverOrSplitterTrack(child, p)
-          globalMoverResolveCache.set(child, { deps, resolved })
+          entries = resolveChainChildEntries(child, p)
+          globalMoverResolveCache.set(child, { deps, entries })
         }
-        if (!resolved) continue
-        for (const member of membersAbove) member.moverAndSplitterChain.push(resolved)
+        if (entries.length === 0) continue
+        for (const member of membersAbove) member.moverAndSplitterChain.push(...entries)
       } else {
         for (const oid of objectsInSubtree(cid)) {
           const member = objectById.get(oid)
@@ -1041,26 +1261,28 @@ export function resolveProject(p: ProjectSnapshot): ResolvedGraph {
   // entries are skipped; entries with no targets affect nothing.
   for (const trackId of flattenTree(p)) {
     const track = p.tracks[trackId]
-    if (!track || track.muted || !isChainEntryTrack(track)) continue
+    if (!track || track.muted || !isChainEntryTrack(track, p)) continue
     if (isChainChild(track, p)) continue
     // Same identity-keyed reuse as objects: a global entry re-resolves only
     // when its own subtree (settings, notes, automation, frame) changed.
     const deps = resolveDeps(track, p)
     const cached = globalMoverResolveCache.get(track)
-    let resolved: MoverOrSplitter | null
+    let entries: MoverOrSplitter[]
     if (cached && depsEqual(cached.deps, deps)) {
-      resolved = cached.resolved
+      entries = cached.entries
     } else {
-      resolved = resolveMoverOrSplitterTrack(track, p)
-      globalMoverResolveCache.set(track, { deps, resolved })
+      entries = resolveChainChildEntries(track, p)
+      globalMoverResolveCache.set(track, { deps, entries })
     }
-    if (!resolved) continue
+    if (entries.length === 0) continue
     const seenTargets = new Set<string>()
     for (const routing of track.targets ?? []) {
       for (const targetObjectId of objectsForScope(routing.scope)) {
         if (seenTargets.has(targetObjectId)) continue
         seenTargets.add(targetObjectId)
-        objectById.get(targetObjectId)?.moverAndSplitterChain.push(resolved)
+        // A root-level switcher routes its whole span to each target: the rack
+        // IS the device as far as `targets` is concerned.
+        objectById.get(targetObjectId)?.moverAndSplitterChain.push(...entries)
       }
     }
   }
