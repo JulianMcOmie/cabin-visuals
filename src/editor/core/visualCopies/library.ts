@@ -127,6 +127,33 @@ export const burstMover: MoverOrSplitterDefinition<BurstSettings> = {
 // only), chords collapse to one boundary keeping the largest radius, and
 // out-of-span pitches (including the retired mute rows at 122-127) are
 // no-ops, so old saves degrade to their knob radius instead of misreading.
+//
+// The polar options (2026-08) are four knobs on top of that ring, chosen so
+// each one buys a whole family of shapes and every default is the plain ring
+// - an absent key merges to neutral, so no save needed an upgrade:
+//
+// - SWEEP is the arc the copies span, not always a full turn. Under 360 the
+//   copies land on BOTH ends (i/(count-1)), so a 180° sweep is a half-ring
+//   with a copy at each tip; at any whole number of turns they distribute
+//   i/count instead, because the seam would otherwise carry two copies on
+//   top of each other. Fans, arcs and multi-turn windings all come from here.
+// - SHAPE picks circular or SPIRAL, and spiral is where GROWTH applies:
+//   radius · growth^i, a per-copy RATIO anchored at the first copy - Line's
+//   GROWTH convention (a ratio can never cross zero; 1 is neutral). It is a
+//   ratio on the RADIUS, where Line's is on the size.
+// - RISE steps each copy along the ring's own axis - also per copy, so it
+//   reads like Line's spacing. Ring + sweep > 360 + rise = a helix; add
+//   spiral growth and it is a cone or a vortex.
+// - FACING says what each copy's frame does, which is a bigger decision than
+//   it looks: it also picks the axes every mover BELOW the splitter works in.
+//   Outward is the shipped behavior (local +X points away from the center);
+//   Upright cancels the slot rotation so copies keep the object's own
+//   orientation and the movers below get unrotated axes; Along path aims
+//   each copy down the ring's tangent.
+//
+// Everything still composes LOCALLY and the offsets stay inside one
+// translation, so SIZE keeps scaling each copy about its own center and the
+// ring radius stays exactly the sampled radius.
 
 export interface RadialSettings {
   copies: number
@@ -135,6 +162,16 @@ export interface RadialSettings {
   size: number
   /** 0 = XY (about Z), 1 = XZ (about Y), 2 = YZ (about X). */
   plane: number
+  /** Arc the copies span, in degrees. 360 = the full ring. */
+  sweep: number
+  /** 0 = circular (constant radius), 1 = spiral (GROWTH applies). */
+  shape: number
+  /** Per-copy radius ratio in spiral mode, anchored at copy 0. */
+  growth: number
+  /** Per-copy step along the ring's axis, in world units. 0 = flat ring. */
+  rise: number
+  /** 0 = outward, 1 = upright (no slot rotation), 2 = along the path. */
+  facing: number
 }
 
 const RADIAL_MAX_COPIES = 32
@@ -142,6 +179,23 @@ const RADIAL_RADIUS_MIN = 0
 const RADIAL_RADIUS_MAX = 10
 const RADIAL_AXES = [new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 const RADIAL_DIRECTIONS: [number, number, number][] = [[1, 0, 0], [1, 0, 0], [0, 1, 0]]
+export const RADIAL_SHAPE_CIRCULAR = 0
+export const RADIAL_SHAPE_SPIRAL = 1
+export const RADIAL_FACING_OUTWARD = 0
+export const RADIAL_FACING_UPRIGHT = 1
+export const RADIAL_FACING_PATH = 2
+
+/** Where copy `index` sits along the sweep, in [0, 1]. A sweep of a whole
+ *  number of turns is CLOSED - its two ends are the same place, so the copies
+ *  divide it i/count and nothing doubles up at the seam. Any other arc is open
+ *  and puts a copy on each end (i/(count-1)), which is what makes a 180° sweep
+ *  read as a half-ring rather than as a gap-toothed one. */
+export function radialSweepFraction(index: number, count: number, sweepDegrees: number): number {
+  if (count <= 1) return 0
+  const turns = sweepDegrees / 360
+  const closed = Math.abs(turns - Math.round(turns)) < 1e-6 && Math.round(turns) !== 0
+  return closed ? index / count : index / (count - 1)
+}
 
 // Rows span the automation pitch range top-down (top row = full radius,
 // bottom = 0) so the roll reads like an automation lane's value rows.
@@ -176,6 +230,30 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
       ],
       default: 0,
     },
+    {
+      key: 'shape',
+      label: 'Shape',
+      type: 'select',
+      options: [
+        { value: RADIAL_SHAPE_CIRCULAR, label: 'Circular' },
+        { value: RADIAL_SHAPE_SPIRAL, label: 'Spiral' },
+      ],
+      default: RADIAL_SHAPE_CIRCULAR,
+    },
+    { key: 'growth', label: 'Growth', min: 0.5, max: 2, step: 0.01, default: 1 },
+    { key: 'sweep', label: 'Sweep', min: 0, max: 1440, step: 5, default: 360 },
+    { key: 'rise', label: 'Rise', min: -2, max: 2, step: 0.05, default: 0 },
+    {
+      key: 'facing',
+      label: 'Facing',
+      type: 'select',
+      options: [
+        { value: RADIAL_FACING_OUTWARD, label: 'Outward' },
+        { value: RADIAL_FACING_UPRIGHT, label: 'Upright' },
+        { value: RADIAL_FACING_PATH, label: 'Along path' },
+      ],
+      default: RADIAL_FACING_OUTWARD,
+    },
   ],
   midiRows: () => RADIAL_VALUE_ROWS,
   strictMidiRows: true,
@@ -185,10 +263,29 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
     const axis = RADIAL_AXES[plane]
     const direction = RADIAL_DIRECTIONS[plane]
     const size = splitterSize(settings.size)
-    // Structural slot rotations, in slot order (slot 0 is unrotated).
-    const rotations = Array.from({ length: count }, (_, slot) =>
-      new Matrix4().makeRotationAxis(axis, (slot / count) * Math.PI * 2),
-    )
+    const sweep = Math.max(0, settings.sweep ?? 360)
+    const rise = settings.rise ?? 0
+    const growth = settings.shape === RADIAL_SHAPE_SPIRAL ? Math.max(0.05, settings.growth ?? 1) : 1
+    const facing = settings.facing === RADIAL_FACING_UPRIGHT || settings.facing === RADIAL_FACING_PATH
+      ? settings.facing
+      : RADIAL_FACING_OUTWARD
+    // Structural slots, in slot order (slot 0 is unrotated and unscaled - it is
+    // the spiral's anchor and the arc's first end). Everything here is
+    // beat-independent; only the radius the translation is built from moves.
+    const slots = Array.from({ length: count }, (_, slot) => {
+      const angle = radialSweepFraction(slot, count, sweep) * (sweep * Math.PI) / 180
+      const rotation = new Matrix4().makeRotationAxis(axis, angle)
+      // The facing fix rides INSIDE the slot (after the translation), so it
+      // re-aims the copy without moving it: cancelling the slot rotation
+      // leaves the copy wearing the object's own orientation, and a quarter
+      // turn about the axis points it down the tangent.
+      const faceFix = facing === RADIAL_FACING_UPRIGHT
+        ? new Matrix4().makeRotationAxis(axis, -angle)
+        : facing === RADIAL_FACING_PATH
+          ? new Matrix4().makeRotationAxis(axis, Math.PI / 2)
+          : null
+      return { rotation, faceFix, radiusFactor: Math.pow(growth, slot), rise: rise * slot }
+    })
     // Cycle gates: sorted onsets with pitch-mapped radii; simultaneous onsets
     // can't divide time, so chords collapse to one boundary keeping the
     // largest radius (the sort puts it last in the beat group) - the same
@@ -226,15 +323,19 @@ export const radialSplitter: MoverOrSplitterDefinition<RadialSettings> = {
         // Size composes AFTER the translation - R · T(radius) · S(size) - so
         // it scales each copy about its own center and the ring radius stays
         // exactly the sampled radius, whatever the size. (The shared splitter
-        // knob; see splitterSize.ts.)
-        return rotations.map((rotation) => {
+        // knob; see splitterSize.ts.) RISE joins the same translation: the
+        // slot rotation is ABOUT the axis, so the axial component is
+        // untouched by it and one translation says both.
+        return slots.map((slot) => {
+          const slotRadius = radius * slot.radiusFactor
           const transform = visualCopy.transform.clone()
-            .multiply(rotation)
+            .multiply(slot.rotation)
             .multiply(new Matrix4().makeTranslation(
-              direction[0] * radius,
-              direction[1] * radius,
-              direction[2] * radius,
+              direction[0] * slotRadius + axis.x * slot.rise,
+              direction[1] * slotRadius + axis.y * slot.rise,
+              direction[2] * slotRadius + axis.z * slot.rise,
             ))
+          if (slot.faceFix) transform.multiply(slot.faceFix)
           return {
             transform: applySplitterSize(transform, size),
             opacity: visualCopy.opacity,

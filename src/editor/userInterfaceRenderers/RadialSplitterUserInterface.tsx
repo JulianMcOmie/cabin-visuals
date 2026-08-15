@@ -11,8 +11,14 @@
 //    layout is exactly the thing you dial in while paused. Drag orbits it;
 //    until touched it turns on its own. No readouts or captions in the window:
 //    the knobs already say the numbers.
-// 2. One console row: COPIES / RADIUS (primary) / SIZE knobs and the PLANE
-//    segmented control.
+// 2. Three rows, in the order the ring is built: the geometry knobs (COPIES /
+//    RADIUS primary / SIZE), then the polar modifiers (SWEEP / RISE, plus
+//    GROWTH once SHAPE is spiral - the segment is what turns that knob on,
+//    exactly as the definition reads it), then the three KINDS as segmented
+//    controls (SHAPE / PLANE / FACING). Kinds last is Grid's and Line's
+//    grammar: amounts first, modifiers, then the selects. The kinds row wraps
+//    because eight segments overrun a narrow inspector pane, and a fixed row
+//    clips rather than shrinking (Tunnel's lesson).
 //
 // The old drag-the-ring pad, header chrome, reset-all and mute map are gone
 // (2026-08 rework, same pass that turned the lane into a value lane - see the
@@ -24,7 +30,14 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { mergeDefinitionSettings } from '../core/visualCopies/definitions'
 import { RADIAL_COLOR } from '../core/visualCopies/identityColors'
-import { radialSplitter, type RadialSettings } from '../core/visualCopies/library'
+import {
+  RADIAL_FACING_OUTWARD,
+  RADIAL_FACING_PATH,
+  RADIAL_FACING_UPRIGHT,
+  RADIAL_SHAPE_SPIRAL,
+  radialSplitter,
+  type RadialSettings,
+} from '../core/visualCopies/library'
 import { resolveVisualCopies } from '../core/visualCopies/resolveVisualCopies'
 import {
   bindPanel,
@@ -209,11 +222,20 @@ function FormationPreview({ settings }: { settings: RadialSettings }) {
 
 // ── Controls ─────────────────────────────────────────────────────────────────
 
-/** Segmented selector over the plane select's options, in the solid-fill
- *  family (Approach's icon segments are the sibling). */
-function PlaneSegmented({ b }: { b: SelectBinding }) {
+/** Segmented selector over a select param's options, in the solid-fill family
+ *  (Approach's icon segments are the sibling), with its name captioned
+ *  underneath. The three kinds this panel picks - PLANE, SHAPE, FACING - all
+ *  wear it, so the row of them reads as one grammar. */
+function KindSegmented({ b, caption, labels, testId }: {
+  b: SelectBinding
+  caption: string
+  /** Short display labels by option value; the def's own label still speaks
+   *  through aria-label and the tooltip. */
+  labels?: Record<number, string>
+  testId?: string
+}) {
   return (
-    <div className="flex flex-col items-center gap-1" data-testid="radial-plane">
+    <div className="flex flex-col items-center gap-1" data-testid={testId}>
       <div className="flex overflow-hidden rounded-md border border-white/10">
         {b.def.options.map((option) => {
           const active = option.value === b.value
@@ -229,12 +251,12 @@ function PlaneSegmented({ b }: { b: SelectBinding }) {
               }`}
               style={active ? { background: ACCENT } : undefined}
             >
-              {option.label}
+              {labels?.[option.value] ?? option.label}
             </button>
           )
         })}
       </div>
-      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">PLANE</span>
+      <span className="text-[8px] font-semibold tracking-[0.12em] text-white/40">{caption}</span>
     </div>
   )
 }
@@ -246,20 +268,48 @@ interface RadialBindings {
   radius: NumBinding
   size: NumBinding
   plane: SelectBinding
+  sweep: NumBinding | null
+  shape: SelectBinding | null
+  growth: NumBinding | null
+  rise: NumBinding | null
+  facing: SelectBinding | null
   rest: UserInterfaceParameter[]
 }
 
 /** Hooks live here, below the renderer's fallback branch. */
 function RadialConsole({ bound }: { bound: RadialBindings }) {
-  const { copies, radius, size, plane, rest } = bound
+  const { copies, radius, size, plane, sweep, shape, growth, rise, facing, rest } = bound
+  const { value: copiesValue } = copies
+  const { value: radiusValue } = radius
+  const { value: sizeValue } = size
+  const { value: planeValue } = plane
+  // Read the optional bindings' VALUES out here: the memo has to depend on the
+  // numbers, not on the binding objects (a fresh one arrives every render).
+  const sweepValue = sweep?.value
+  const shapeValue = shape?.value
+  const growthValue = growth?.value
+  const riseValue = rise?.value
+  const facingValue = facing?.value
+  const spiral = shapeValue === RADIAL_SHAPE_SPIRAL
 
-  const settings = useMemo(() => ({
-    ...(mergeDefinitionSettings(radialSplitter, undefined) as unknown as RadialSettings),
-    copies: copies.value,
-    radius: radius.value,
-    size: size.value,
-    plane: plane.value,
-  }), [copies.value, radius.value, size.value, plane.value])
+  const settings = useMemo(() => {
+    const base = mergeDefinitionSettings(radialSplitter, undefined) as unknown as RadialSettings
+    return {
+      ...base,
+      copies: copiesValue,
+      radius: radiusValue,
+      size: sizeValue,
+      plane: planeValue,
+      sweep: sweepValue ?? base.sweep,
+      shape: shapeValue ?? base.shape,
+      growth: growthValue ?? base.growth,
+      rise: riseValue ?? base.rise,
+      facing: facingValue ?? base.facing,
+    }
+  }, [
+    copiesValue, radiusValue, sizeValue, planeValue,
+    sweepValue, shapeValue, growthValue, riseValue, facingValue,
+  ])
 
   return (
     <Console accent={ACCENT} testId="radial-user-interface">
@@ -270,8 +320,29 @@ function RadialConsole({ bound }: { bound: RadialBindings }) {
         <Knob b={radius} label="RADIUS" large />
         <Knob b={size} label="SIZE" />
       </ControlRow>
-      <div className="flex justify-center px-4 pb-3 pt-2">
-        <PlaneSegmented b={plane} />
+      {/* The polar modifiers: what the ring does on top of being a ring.
+          GROWTH renders only in spiral mode - the SHAPE segment is what turns
+          it on, matching the definition (a stored growth is inert until then). */}
+      <ControlRow className="justify-center gap-5 px-4 pt-2">
+        <Knob b={sweep} label="SWEEP" format={(v) => `${Math.round(v)}°`} />
+        <Knob b={rise} label="RISE" bipolar />
+        {spiral ? <Knob b={growth} label="GROWTH" /> : null}
+      </ControlRow>
+      <div className="flex flex-wrap items-start justify-center gap-4 px-4 pb-3 pt-2.5">
+        {shape ? <KindSegmented b={shape} caption="SHAPE" testId="radial-shape" /> : null}
+        <KindSegmented b={plane} caption="PLANE" testId="radial-plane" />
+        {facing ? (
+          <KindSegmented
+            b={facing}
+            caption="FACING"
+            labels={{
+              [RADIAL_FACING_OUTWARD]: 'OUT',
+              [RADIAL_FACING_UPRIGHT]: 'UP',
+              [RADIAL_FACING_PATH]: 'PATH',
+            }}
+            testId="radial-facing"
+          />
+        ) : null}
       </div>
       <More parameters={rest} label="MORE" className="px-4 pb-2" />
     </Console>
@@ -284,8 +355,20 @@ export const RadialSplitterUserInterfaceRenderer: UserInterfaceRendererDefinitio
   const radius = pool.num('radius')
   const size = pool.num('size')
   const plane = pool.select('plane')
+  // The polar options bind OPTIONALLY, like the shared SIZE knob: a console
+  // that requires them falls back to the generic slider list wholesale the day
+  // one of them is renamed or retired.
+  const sweep = pool.num('sweep', { optional: true })
+  const shape = pool.select('shape', { optional: true })
+  const growth = pool.num('growth', { optional: true })
+  const rise = pool.num('rise', { optional: true })
+  const facing = pool.select('facing', { optional: true })
 
   if (!copies || !radius || !size || !plane) return <ParameterList parameters={parameters} />
 
-  return <RadialConsole bound={{ copies, radius, size, plane, rest: pool.rest() }} />
+  return (
+    <RadialConsole bound={{
+      copies, radius, size, plane, sweep, shape, growth, rise, facing, rest: pool.rest(),
+    }} />
+  )
 }

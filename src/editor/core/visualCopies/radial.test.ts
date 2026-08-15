@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { ResolvedNote } from '../visual/types'
 import { identityVisualCopy } from './identityVisualCopy'
 import { resolveVisualCopies } from './resolveVisualCopies'
-import { burstMover, radialSplitter, type RadialSettings } from './library'
+import { burstMover, radialSplitter, radialSweepFraction, type RadialSettings } from './library'
 import { getMoverOrSplitterDefinition } from './registry'
 import { mergeDefinitionSettings } from './definitions'
 import type { VisualCopy } from './types'
@@ -22,6 +22,15 @@ function positionOf(copy: VisualCopy): [number, number, number] {
   const e = copy.transform.elements
   const r = (n: number) => Math.round(n * 1e9) / 1e9 || 0
   return [r(e[12]), r(e[13]), r(e[14])]
+}
+
+/** The copy's own +X direction in world axes - what FACING re-aims, and the
+ *  axis a mover below the splitter reads as "right". */
+function localXOf(copy: VisualCopy): [number, number, number] {
+  const e = copy.transform.elements
+  const len = Math.hypot(e[0], e[1], e[2]) || 1
+  const r = (n: number) => Math.round((n / len) * 1e9) / 1e9 || 0
+  return [r(e[0]), r(e[1]), r(e[2])]
 }
 
 /** Per-axis scale: the lengths of the matrix's three basis columns. */
@@ -238,4 +247,147 @@ test('a downstream index-aware mover sees the radial indices', () => {
   ]
   const copies = resolveVisualCopies(chain, 0)
   assert.deepEqual(copies.map((c) => c.opacity), [1, 0, 1])
+})
+
+// ── The polar options ────────────────────────────────────────────────────────
+
+test('the polar options all default to the plain ring, and an old save merges to it', () => {
+  assert.equal(DEFAULTS.sweep, 360)
+  assert.equal(DEFAULTS.shape, 0)
+  assert.equal(DEFAULTS.growth, 1)
+  assert.equal(DEFAULTS.rise, 0)
+  assert.equal(DEFAULTS.facing, 0)
+
+  // A save written before the options existed carries none of the keys; it
+  // must resolve matrix-identical to the ring, which is what lets the four
+  // knobs ship with no persistence upgrade.
+  const legacy = { copies: 5, radius: 2, size: 1, plane: 0 } as RadialSettings
+  const before = resolveVisualCopies([radialSplitter.resolve({ settings: legacy, notes: [] })], 0)
+  const after = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 5, radius: 2 }), notes: [] }),
+  ], 0)
+  assert.equal(before.length, 5)
+  before.forEach((copy, index) => {
+    assert.deepEqual(Array.from(copy.transform.elements), Array.from(after[index].transform.elements))
+  })
+})
+
+test('sweep under a full turn is an OPEN arc with a copy on each end', () => {
+  const copies = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 3, radius: 2, sweep: 180 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(copies.map(positionOf), [
+    [2, 0, 0],
+    [0, 2, 0],
+    [-2, 0, 0],
+  ])
+
+  // A quarter sweep with two copies is the degenerate open case: both ends.
+  const quarter = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 2, radius: 1, sweep: 90 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(quarter.map(positionOf), [[1, 0, 0], [0, 1, 0]])
+})
+
+test('a whole number of turns is CLOSED - nothing doubles up at the seam', () => {
+  // 360 divides i/count (the shipped behavior), and so does 720: four copies
+  // over two turns land 180 deg apart, not 0/240/480/720 with the ends stacked.
+  assert.deepEqual(
+    [0, 1, 2, 3].map((index) => radialSweepFraction(index, 4, 720)),
+    [0, 0.25, 0.5, 0.75],
+  )
+  assert.deepEqual(
+    [0, 1, 2].map((index) => radialSweepFraction(index, 3, 200)),
+    [0, 0.5, 1],
+  )
+  // A sweep of 0 is open (every copy at angle 0) - a straight column when RISE
+  // is on, not a divide-by-zero.
+  assert.equal(radialSweepFraction(1, 4, 0), 1 / 3)
+  const stacked = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 3, radius: 1, sweep: 0 }), notes: [] }),
+  ], 0)
+  for (const copy of stacked) assert.deepEqual(positionOf(copy), [1, 0, 0])
+})
+
+test('spiral growth is a per-copy RADIUS ratio anchored at copy 0, and only in spiral mode', () => {
+  const spiral = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 3, radius: 2, sweep: 0, shape: 1, growth: 1.5 }),
+      notes: [],
+    }),
+  ], 0)
+  // Sweep 0 lines them up so the radii read straight off the X column.
+  assert.deepEqual(spiral.map(positionOf), [[2, 0, 0], [3, 0, 0], [4.5, 0, 0]])
+
+  // The same growth in circular mode is ignored: the mode select is what turns
+  // the knob on, so a stored value can't act until it is asked for.
+  const circular = resolveVisualCopies([
+    radialSplitter.resolve({
+      settings: settings({ copies: 3, radius: 2, sweep: 0, shape: 0, growth: 1.5 }),
+      notes: [],
+    }),
+  ], 0)
+  for (const copy of circular) assert.deepEqual(positionOf(copy), [2, 0, 0])
+
+  // Growth rides on the MIDI-sampled radius, not on the knob: the lane still
+  // owns the ring's size and the spiral keeps its proportions while it swells.
+  const midi = radialSplitter.resolve({
+    settings: settings({ copies: 2, radius: 0, sweep: 0, shape: 1, growth: 2 }),
+    notes: [note(0, 84), note(2, 84)],
+  })
+  assert.deepEqual(resolveVisualCopies([midi], 1).map(positionOf), [[10, 0, 0], [20, 0, 0]])
+})
+
+test('rise steps each copy along the ring axis, per copy, without moving the radius', () => {
+  const helix = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, rise: 0.5 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(helix.map(positionOf), [
+    [2, 0, 0],
+    [0, 2, 0.5],
+    [-2, 0, 1],
+    [0, -2, 1.5],
+  ])
+
+  // The axis follows the plane select - XZ turns about Y, so the rise is Y.
+  const xz = resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 2, radius: 1, plane: 1, rise: -1 }), notes: [] }),
+  ], 0)
+  assert.deepEqual(xz.map(positionOf), [[1, 0, 0], [-1, -1, 0]])
+})
+
+test('facing re-aims each copy without moving it, and picks the frame movers below inherit', () => {
+  const aim = (facing: number) => resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, facing }), notes: [] }),
+  ], 0)
+
+  // Outward (the shipped behavior): local +X points away from the center.
+  assert.deepEqual(aim(0).map(localXOf), [[1, 0, 0], [0, 1, 0], [-1, 0, 0], [0, -1, 0]])
+  // Upright: the slot rotation is cancelled, so every copy keeps the object's
+  // own orientation - the whole matrix is a pure translation.
+  const upright = aim(1)
+  assert.deepEqual(upright.map(localXOf), [[1, 0, 0], [1, 0, 0], [1, 0, 0], [1, 0, 0]])
+  // Along path: a quarter turn on, so local +X is the ring's tangent.
+  assert.deepEqual(aim(2).map(localXOf), [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]])
+
+  // None of it disturbs where the copies actually sit.
+  for (const facing of [0, 1, 2]) {
+    assert.deepEqual(aim(facing).map(positionOf), [[2, 0, 0], [0, 2, 0], [-2, 0, 0], [0, -2, 0]])
+  }
+
+  // The frame is what a mover below reads: an upright ring sends every copy
+  // the SAME way on a +X burst, where the outward ring blooms.
+  const burst = () => burstMover.resolve({
+    settings: { burstBeats: 1, easing: 5, sharpness: 1, distanceX: 1, distanceY: 1, distanceZ: 1, distance: 1 },
+    notes: [note(0, 60)],
+  })
+  assert.deepEqual(resolveVisualCopies([
+    radialSplitter.resolve({ settings: settings({ copies: 4, radius: 2, facing: 1 }), notes: [] }),
+    burst(),
+  ], 5).map(positionOf), [
+    [3, 0, 0],
+    [1, 2, 0],
+    [-1, 0, 0],
+    [1, -2, 0],
+  ])
 })
