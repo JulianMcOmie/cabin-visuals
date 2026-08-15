@@ -254,16 +254,43 @@ const drawVideo: Draw2D = (ctx, w, h, t) => {
   ctx.textBaseline = 'alphabetic'
 }
 
-/** Photo: one still, full stop - a white-bordered print of a landscape with
- *  "photo" centered on it. Nothing animates: a photo doesn't play, and the
- *  stillness against Video's rushing ridges IS the tell. */
+// The Photo card's print is a real photograph (public/library/photo-card.jpg,
+// bundled) - the drawn postcard read as an icon, not "your photos". Loaded
+// lazily; the postcard covers the frames before the bytes land.
+let photoCardImage: HTMLImageElement | undefined
+function photoCardIfLoaded(): HTMLImageElement | undefined {
+  if (typeof Image === 'undefined') return undefined
+  if (!photoCardImage) {
+    photoCardImage = new Image()
+    photoCardImage.src = '/library/photo-card.jpg'
+  }
+  return photoCardImage.complete && photoCardImage.naturalWidth > 0 ? photoCardImage : undefined
+}
+
+/** Photo: one still, full stop - a white-bordered print of a real photograph
+ *  with "photo" centered on it. Nothing animates: a photo doesn't play, and
+ *  the stillness against Video's rushing ridges IS the tell. */
 const drawPhoto: Draw2D = (ctx, w, h) => {
   ctx.fillStyle = '#0b0b0b'
   ctx.fillRect(0, 0, w, h)
   const m = 8
   ctx.fillStyle = '#f8fafc'
   ctx.fillRect(m - 4, m - 4, w - 2 * (m - 4), h - 2 * (m - 4))
-  drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, 2)
+  const img = photoCardIfLoaded()
+  if (img) {
+    // Cover-fit the photograph into the print window.
+    const dw = w - 2 * m
+    const dh = h - 2 * m
+    const scale = Math.max(dw / img.naturalWidth, dh / img.naturalHeight)
+    const sw = dw / scale
+    const sh = dh / scale
+    ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, m, m, dw, dh)
+  } else {
+    drawLandscape(ctx, m, m, w - 2 * m, h - 2 * m, 2)
+    // The reduced-motion path draws exactly once, so repaint when the load
+    // lands; under the rAF loop the next frame would cover this anyway.
+    photoCardImage?.addEventListener('load', () => drawPhoto(ctx, w, h, 0), { once: true })
+  }
   const capSize = h * 0.2
   ctx.font = `900 ${capSize}px "Arial Black", Impact, sans-serif`
   ctx.textAlign = 'center'
