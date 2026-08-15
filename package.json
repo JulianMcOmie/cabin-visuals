@@ -32,6 +32,7 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
+    "@three.ez/instanced-mesh": "^0.3.16",
     "@tonejs/midi": "^2.0.28",
     "@types/lodash": "^4.17.16",
     "@types/three": "^0.175.0",

@@ -1,9 +1,16 @@
 import type { Ref } from 'react'
 import {
+  BoxGeometry,
   CanvasTexture,
+  CapsuleGeometry,
   ConeGeometry,
   CylinderGeometry,
+  DodecahedronGeometry,
+  IcosahedronGeometry,
+  OctahedronGeometry,
   RepeatWrapping,
+  SphereGeometry,
+  TetrahedronGeometry,
   TorusGeometry,
   TorusKnotGeometry,
   type BufferGeometry,
@@ -110,6 +117,32 @@ export function buildSidedGeometry(geometry: 'prism' | 'cone', sides: number): B
   return geometry === 'prism'
     ? new CylinderGeometry(...PRISM_ARGS, n)
     : new ConeGeometry(...CONE_ARGS, n)
+}
+
+/** Imperative build of ANY fundamental solid - the instanced path's single
+ *  live geometry (one InstancedMesh2 holds one geometry at a time, unlike the
+ *  per-copy path's twelve mounted meshes). Must stay in step with the JSX
+ *  `Geometry` switch below: same constructors, same args, so the two render
+ *  paths tessellate identically. The caller owns disposal. */
+export function buildFundamentalGeometry(
+  geometry: FundamentalGeometryId,
+  tube = DEFAULT_TUBE_FRACTION,
+  sides = DEFAULT_SIDES,
+): BufferGeometry {
+  switch (geometry) {
+    case 'tetrahedron': return new TetrahedronGeometry(SOLID_RADIUS, 0)
+    case 'octahedron': return new OctahedronGeometry(SOLID_RADIUS, 0)
+    case 'dodecahedron': return new DodecahedronGeometry(SOLID_RADIUS, 0)
+    case 'icosahedron': return new IcosahedronGeometry(SOLID_RADIUS, 0)
+    case 'sphere': return new SphereGeometry(SOLID_RADIUS, 32, 16)
+    case 'cylinder': return new CylinderGeometry(0.84, 0.84, 2.2, 48)
+    case 'prism': return new CylinderGeometry(...PRISM_ARGS, normalizeSides(sides))
+    case 'cone': return new ConeGeometry(...CONE_ARGS, normalizeSides(sides))
+    case 'capsule': return new CapsuleGeometry(0.62, 1.53, 8, 24)
+    case 'torus':
+    case 'torusKnot': return buildTubedGeometry(geometry, tube)
+    default: return new BoxGeometry(1.6, 1.6, 1.6)
+  }
 }
 
 // ── Surface (the reflective / refractive / lit / textured toggles) ──────────
