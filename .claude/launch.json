@@ -111,6 +111,12 @@
       "port": 3064
     },
     {
+      "name": "physics-preview-3068",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3068", "npm", "run", "dev", "--", "--port", "3068"],
+      "port": 3068
+    },
+    {
       "name": "track-drag-3065",
       "runtimeExecutable": "env",
       "runtimeArgs": ["NEXT_DIST_DIR=.next-isolated-3065", "npm", "run", "dev", "--", "--port", "3065"],

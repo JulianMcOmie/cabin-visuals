@@ -552,6 +552,37 @@ const COMPOUND_MOVER_PREVIEWS: Record<string, CompoundMoverPreview> = {
     seedScale: 0.3,
     notes: [holdNote(60, 0, 8), holdNote(62, 8, 8)],
   },
+  // Physics joins a VALUE lane with real mechanics, and the generic mover arc
+  // barely moves it (pitches 60-65 sit within 0.1 of the lane's 0.5 home), so
+  // the card plays a real phrase on the automation pitch span and demos the LAW
+  // matrix in two 8-beat cells that exactly tile the 16-beat loop: Gravity x
+  // Impulse first - the signature bouncing ball, dropped from its opening value
+  // and kicked to crest at each note, free-bouncing on the lane floor between -
+  // then Spring x Apex swinging through the same values, cresting at rest on
+  // each note. Apex, not Arrive/Strike: strike's solved launch velocity blows
+  // past value 2.3 over these 2-beat intervals (measured) and leaves the frame.
+  // AMOUNT composes in the seed's scaled frame, so 2.8 is a ~1.8-unit world
+  // throw - big enough to read, and it keeps the bounce floor (value 0, half a
+  // span below home) just inside the card's bottom edge under this seed size.
+  physics: {
+    seeds: [[0, 0, 0]],
+    seedScale: 0.65,
+    settings: { amount: 2.8 },
+    notes: [
+      holdNote(77, 0, 0.25), // drop from 0.85
+      holdNote(82, 2, 0.25), // kick to crest at 0.96
+      holdNote(58, 4, 0.25), // 0.46 - below the ball mid-flight, so the fall just continues
+      holdNote(79, 6, 0.25), // kick to crest at 0.90, bouncing out the cell
+      holdNote(60, 7, 0.25), // ease home, so the spring cell isn't parked for beats 6-8
+    ],
+    sequence: {
+      beatsPer: 8,
+      cells: [
+        { law: 0, solve: 2, bounce: 0.75 },
+        { law: 1, solve: 1, damp: 0.25 },
+      ],
+    },
+  },
   // Waypoints sequences ONE object between its laid-out positions, and the
   // CURVE is the card's story: the same ring phrase (2 -> 3 -> 4 -> home) runs
   // once per bar while the curve rows latch a different travel each bar -
