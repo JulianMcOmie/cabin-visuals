@@ -153,6 +153,42 @@ off-switch. Neutral (1) is stored as field absence (`setTrackAutomationAmount`).
 - **Return `false` if you can't apply the frame yet** (refs unattached, canvas not ready). A silent bail eats the change and the object renders stale until the next input change — which may never come while paused (the LaserSphere "params do nothing until remount" bug).
 - Runs after `VisualBeatSync`'s computeAtBeat (mount order), so state is always this frame's.
 
+## instancedFrame.ts — the instanced copy-pool fast path (2026-08)
+
+`useInstancedCopyFrame(trackId, cb)` is the instanced counterpart of
+`useInstrumentFrame`: ONE mount per track draws every VisualCopy occurrence by
+writing per-instance buffers on an `InstancedMesh2` (@three.ez/instanced-mesh),
+instead of VisualScene mounting one ObjectRenderer + instrument component per
+copy. An instrument opts in with `instancedComponent` on its def; Cube is the
+reference port. Facts that cost time to establish:
+
+- **Routing lives in `components/visual/InstancedObjectRenderer.tsx`**, which
+  falls back to the per-copy path whenever the track has ANY effect instance
+  (own or group-broadcast, enabled or not — an `enabled` automation lane can
+  switch a disabled one on), a routed crop mask, or full-frame mode. The
+  fallback keys are byte-identical to the ungrouped mounts, so flipping an
+  effect on/off remounts cleanly.
+- **Deliberately NO signature skip**: copy transforms refresh imperatively in
+  computeAtBeat and aren't identity-comparable, so a skip would eat paused
+  mover-knob drags. The callback runs on every rendered frame; RenderGovernor
+  still gates frames while paused.
+- **Per-instance opacity is the colors texture's alpha**: `setColorAt` writes
+  rgb only (3 floats at offset id*4), `setOpacityAt` owns the 4th — order-free.
+  Mirror applyMaterialOpacity's rule by flipping the shared material's
+  `transparent` when any copy is mid-fade; hide (never just fade) copies at
+  ≤0.001 or the ghost-wall depth artifact returns.
+- **Custom ShaderMaterials CAN instance**: the lib registers global
+  `ShaderChunk['instanced_pars_vertex']` etc. at import, and the mesh's
+  onBeforeCompile injects `USE_INSTANCING_INDIRECT` / `USE_INSTANCING_COLOR_INDIRECT`
+  defines (fires for ShaderMaterial too). Include the chunks, call
+  `getInstancedMatrix()` / `getColorTexture()` — `createInstancedPosterMaterial`
+  in instruments/posterShading.ts is the reference.
+- **Per-copy colorShift on shared materials reaches DIFFUSE only** (instance
+  color): gloss emissive and the unlit-gloss surface carry the track's own
+  color, not the copy's. Documented fidelity trade; the poster path is fully
+  per-copy. The shift math is `applyColorShiftToColor` (instrumentColor.ts),
+  the same function the string-param path uses, so the two paths cannot drift.
+
 ## Supporting files worth knowing
 
 - `VisualBeatSync.tsx` — mounted once in Canvas; per-frame `computeAtBeat`, plus synchronous `syncParams` on store changes and a debounced (~80ms) structural re-resolve.

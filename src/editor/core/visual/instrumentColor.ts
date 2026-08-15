@@ -19,6 +19,36 @@ export const InstrumentCopyContext = createContext<InstrumentCopyContextValue | 
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
+/** The one colorShift application: tint mix FIRST (absolute pull), HSL/OKLCH
+ * offsets on top. `color` is shifted in place and returned. Shared by the
+ * string-param path below and the instanced path's per-instance colors, so a
+ * copy renders the same shifted color whichever renderer draws it. */
+export function applyColorShiftToColor(
+  color: Color,
+  shift: Readonly<VisualCopy['colorShift']>,
+  scratchTint: Color,
+): Color {
+  const tintMix = shift.tint && HEX_COLOR.test(shift.tint)
+    ? Math.max(0, Math.min(1, shift.tintAmount))
+    : 0
+  if (tintMix > 0) {
+    scratchTint.set(shift.tint as string)
+    if (shift.tintPerceptual) mixOklabLinearRgb(color, scratchTint, tintMix)
+    else color.lerp(scratchTint, tintMix)
+  }
+  // `huePerceptual` turns the hue in OKLCH first and leaves offsetHSL only
+  // the saturation and lightness offsets - those are dialled in against HSL's
+  // own scale, so they keep reading it. See the field's note in visualCopies/
+  // types.ts for why an HSL hue sweep pulses in brightness.
+  if (shift.huePerceptual) {
+    rotateHueOklabLinearRgb(color, shift.hue)
+    color.offsetHSL(0, shift.saturation, shift.lightness)
+  } else {
+    color.offsetHSL(shift.hue, shift.saturation, shift.lightness)
+  }
+  return color
+}
+
 /** Rebuilds the string-param view an instrument receives for one visual copy.
  * Only schema-declared color params are changed; text, asset ids, geometry ids,
  * and every other string param pass through byte-for-byte. The output object is
@@ -45,11 +75,6 @@ export function applyColorShiftToInstrumentParams(
   for (const key in output) delete output[key]
   Object.assign(output, stringParams)
 
-  const tintMix = shift.tint && HEX_COLOR.test(shift.tint)
-    ? Math.max(0, Math.min(1, shift.tintAmount))
-    : 0
-  if (tintMix > 0) scratchTint.set(shift.tint as string)
-
   for (const param of colorParams) {
     const hasStoredValue = Object.prototype.hasOwnProperty.call(stringParams, param.key)
     const source = hasStoredValue ? stringParams[param.key] : param.defaultColor
@@ -60,20 +85,7 @@ export function applyColorShiftToInstrumentParams(
       continue
     }
     scratchColor.set(source)
-    if (tintMix > 0) {
-      if (shift.tintPerceptual) mixOklabLinearRgb(scratchColor, scratchTint, tintMix)
-      else scratchColor.lerp(scratchTint, tintMix)
-    }
-    // `huePerceptual` turns the hue in OKLCH first and leaves offsetHSL only
-    // the saturation and lightness offsets - those are dialled in against HSL's
-    // own scale, so they keep reading it. See the field's note in visualCopies/
-    // types.ts for why an HSL hue sweep pulses in brightness.
-    if (shift.huePerceptual) {
-      rotateHueOklabLinearRgb(scratchColor, shift.hue)
-      scratchColor.offsetHSL(0, shift.saturation, shift.lightness)
-    } else {
-      scratchColor.offsetHSL(shift.hue, shift.saturation, shift.lightness)
-    }
+    applyColorShiftToColor(scratchColor, shift, scratchTint)
     output[param.key] = `#${scratchColor.getHexString()}`
   }
   return output

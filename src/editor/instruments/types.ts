@@ -172,6 +172,15 @@ export interface ObjectInstrumentDef {
   localTransform?: (ctx: TransformCtx) => LocalTransform
   /** The R3F visual; pulls its per-frame state by trackId from the engine. */
   component: FC<{ trackId: string }>
+  /** Instanced fast path: ONE mount per track that draws every VisualCopy
+   *  occurrence itself (InstancedMesh2 + core/visual/instancedFrame.ts),
+   *  instead of `component` being mounted once per copy. Declaring it is an
+   *  opt-in; the renderer still falls back to the per-copy path whenever the
+   *  track needs machinery only that path has (effect chains, crop masks,
+   *  full-frame) - see components/visual/InstancedObjectRenderer.tsx. The
+   *  instanced component must render pixel-identically to N mounts of
+   *  `component`, hidden copies included (mounted, invisible). */
+  instancedComponent?: FC<{ trackId: string }>
   /** A full-frame instrument sizes itself to the viewport (a screen-filling plane) rather
    *  than sitting at a 3D position. The renderer skips the placement transform + the
    *  transform/clone effect chain for these. */
