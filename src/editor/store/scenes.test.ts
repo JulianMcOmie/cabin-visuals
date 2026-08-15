@@ -101,6 +101,20 @@ test('scene backdrop gradient: atomic mode switches, config survival, duplicatio
   assert.equal(sceneBackdropMode(useProjectStore.getState().scenes[sceneId]), 'gradient')
 })
 
+test('a scene never starts with effects on it - the chain is opt-in', () => {
+  // Scene FX devices are ADDED by hand, never seeded: a new project, a new
+  // scene and a copy of an empty scene all come up with no chain at all, so
+  // the full-frame passes cost nothing until someone asks for one.
+  hydrate(emptyDocument())
+  for (const scene of Object.values(useProjectStore.getState().scenes)) {
+    assert.equal(scene.effects, undefined, `${scene.name} was seeded with an effect chain`)
+  }
+  const addedId = useProjectStore.getState().addScene()
+  assert.equal(useProjectStore.getState().scenes[addedId].effects, undefined)
+  const copyId = useProjectStore.getState().duplicateScene(addedId)!
+  assert.equal(useProjectStore.getState().scenes[copyId].effects, undefined)
+})
+
 test('scene effect chain edits, reorders, duplicates with fresh ids, and persists with the scene', () => {
   hydrate(emptyDocument())
   const sceneId = useProjectStore.getState().activeSceneId
